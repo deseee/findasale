@@ -1,47 +1,30 @@
 /**
- * Image URL utilities — Phase 14c
+ * Image URL utilities - Phase 14c
  *
  * Cloudinary eager transformations generate three variants at upload time:
- *   thumbnail (200×200 WebP) — grid cards, filmstrips
- *   optimized (800w WebP)    — listing cards, detail pages
- *   full (1600w WebP)        — lightbox / zoom
+ *   thumbnail (200x200 WebP) - grid cards, filmstrips
+ *   optimized (800w WebP)    - listing cards, detail pages
+ *   full (1600w WebP)        - lightbox / zoom
  *
  * Older images only have the original URL. These helpers derive variant URLs
  * from any Cloudinary URL using on-the-fly transformations as a fallback.
  */
 
-/**
- * Detect whether a URL is a Cloudinary URL we can transform.
- */
 const isCloudinaryUrl = (url: string): boolean =>
   url.includes('res.cloudinary.com');
 
-/**
- * Insert a Cloudinary transformation string before /upload/ in the URL.
- * e.g. .../upload/v12345/folder/img.jpg → .../upload/w_800,c_limit,q_auto,f_webp/v12345/folder/img.jpg
- */
 const insertTransform = (url: string, transform: string): string => {
   const uploadIdx = url.indexOf('/upload/');
   if (uploadIdx === -1) return url;
   return url.slice(0, uploadIdx + 8) + transform + '/' + url.slice(uploadIdx + 8);
 };
 
-/**
- * Get a thumbnail URL (200×200 auto-crop, WebP).
- * For grid cards, filmstrip previews, batch queue.
- */
 export const getThumbnailUrl = (url: string): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
   return insertTransform(url, 'w_200,h_200,c_fill,g_auto,q_60,f_webp');
 };
 
-/**
- * Get an optimized URL (800w, WebP, optional quality control).
- * For listing cards, sale detail pages.
- * @param url Image URL
- * @param quality Optional quality (1-100). If not specified, uses q_auto.
- */
 export const getOptimizedUrl = (url: string, quality?: number): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
@@ -49,49 +32,30 @@ export const getOptimizedUrl = (url: string, quality?: number): string => {
   return insertTransform(url, `w_800,c_limit,${qualityParam},f_webp`);
 };
 
-/**
- * Get a full-resolution URL (1600w, WebP).
- * For lightbox, zoom, full-screen preview.
- */
 export const getFullUrl = (url: string): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
   return insertTransform(url, 'w_1600,c_limit,q_auto:good,f_webp');
 };
 
-/**
- * Get a low-quality placeholder (LQIP) — tiny 30px blur for skeleton loading.
- */
 export const getLqipUrl = (url: string): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
   return insertTransform(url, 'w_30,q_20,f_webp,e_blur:400');
 };
 
-/**
- * Get a 4:3 landscape crop for photo reviews and specific display contexts.
- * Uses center crop, 1200px wide, WebP.
- */
 export const getLandscape4x3Url = (url: string): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
   return insertTransform(url, 'c_fill,ar_4:3,w_1200,q_auto,f_webp');
 };
 
-/**
- * Get a 3:4 portrait crop for item detail pages (suits tall estate items).
- * Uses center crop, 800px wide, WebP.
- */
 export const getPortrait3x4Url = (url: string): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
   return insertTransform(url, 'c_fill,ar_3:4,w_800,q_auto,f_webp');
 };
 
-/**
- * eBay CDN domains whose images are blocked by Chrome tracking protection
- * in incognito / private browsing mode.
- */
 const EBAY_IMAGE_DOMAINS = [
   'i.ebayimg.com',
   'ir.ebaystatic.com',
@@ -109,24 +73,6 @@ const isEbayImageUrl = (url: string): boolean => {
   }
 };
 
-/**
- * Returns a safe display URL for any item image.
- * eBay CDN URLs are routed through /api/image-proxy to bypass
- * Chrome Enhanced Tracking Protection in incognito mode.
- * Cloudinary and all other URLs are returned unchanged.
- */
-export const getItemImageUrl = (url: string | null | undefined): string | null => {
-  if (!url) return null;
-  if (isEbayImageUrl(url)) {
-    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
-  }
-  return url;
-};
-
-/**
- * Scraped image domains that block hotlink requests.
- * These are routed through /api/image-proxy to bypass hotlink protection.
- */
 const SCRAPED_IMAGE_DOMAINS = [
   'picturescdn.estatesales.net',
   'estatesales.net',
@@ -146,26 +92,32 @@ const isScrapedImageUrl = (url: string): boolean => {
   }
 };
 
-/**
- * Helper to get a proxied URL for sale card images.
- * Handles both Cloudinary transformations AND scraped CDN proxying.
- * - Cloudinary URLs: apply transformation + return
- * - Scraped CDN URLs: route through proxy endpoint
- * - Other URLs: return as-is
- */
+function getImageProxyUrl(): string {
+  // @ts-ignore - NEXT_PUBLIC_* vars are injected at build time by Next.js
+  const cfProxyUrl = process.env.NEXT_PUBLIC_CF_IMAGE_PROXY_URL;
+  return cfProxyUrl ? cfProxyUrl : '/api/image-proxy';
+}
+
+export const getItemImageUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  if (isEbayImageUrl(url)) {
+    const proxyBase = getImageProxyUrl();
+    return `${proxyBase}?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+};
+
 export const getSaleImageUrl = (url: string | null | undefined, quality?: number): string | null => {
   if (!url) return null;
 
-  // If it's a Cloudinary URL, apply optimization
   if (isCloudinaryUrl(url)) {
     return getOptimizedUrl(url, quality);
   }
 
-  // If it's a scraped CDN URL, route through proxy
-  if (isScrapedImageUrl(url)) {
-    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+  if (isScrapedImageUrl(url) || isEbayImageUrl(url)) {
+    const proxyBase = getImageProxyUrl();
+    return `${proxyBase}?url=${encodeURIComponent(url)}`;
   }
 
-  // All other URLs returned as-is
   return url;
 };

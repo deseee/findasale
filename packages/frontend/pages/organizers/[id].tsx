@@ -11,6 +11,14 @@ import ReputationBadge from '../../components/ReputationBadge'; // Feature #71
 import Skeleton from '../../components/Skeleton';
 import ReviewsSection from '../../components/ReviewsSection';
 
+interface ScrapedMetadata {
+  aiEnriched?: {
+    categories: string[];
+    priceRange: string;
+    summary: string;
+  };
+}
+
 interface Sale {
   id: string;
   title: string;
@@ -24,6 +32,7 @@ interface Sale {
   photoUrls: string[];
   status: string;
   isAuctionSale: boolean;
+  scrapedMetadata?: ScrapedMetadata | null;
 }
 
 interface Badge {
@@ -367,6 +376,21 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
           <h3 className="font-semibold text-sm text-warm-900 dark:text-gray-100 leading-snug line-clamp-1 mb-1">{sale.title}</h3>
           <p className="text-xs text-warm-500 dark:text-gray-400">{formatDate(sale.startDate)}</p>
         </Link>
+        {/* Enriched listing metadata for scraped sales */}
+        {sale.scrapedMetadata?.aiEnriched && (
+          <div className="mt-2 pt-2 border-t border-warm-200 dark:border-gray-700 space-y-1">
+            {sale.scrapedMetadata.aiEnriched.priceRange && (
+              <p className="text-xs text-warm-500 dark:text-gray-400">
+                Typical items: {sale.scrapedMetadata.aiEnriched.priceRange}
+              </p>
+            )}
+            {sale.scrapedMetadata.aiEnriched.summary && (
+              <p className="text-xs text-warm-600 dark:text-gray-350 leading-snug">
+                {sale.scrapedMetadata.aiEnriched.summary}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

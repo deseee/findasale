@@ -1791,6 +1791,10 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     clearTimeout(timeout);
 
     if (!res.ok) {
+      // Return proper 404 so Google doesn't flag as Soft 404
+      if (res.status === 404) {
+        return { notFound: true };
+      }
       return { props: { ogData: null } };
     }
     const sale = await res.json();
