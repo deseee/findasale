@@ -58,7 +58,8 @@ interface EbaySoldItem {
 let cachedToken: { token: string; expires: number } | null = null;
 
 /**
- * Fetch an eBay OAuth token via the Vercel proxy's ?action=token endpoint.
+ * Fetch an eBay OAuth token directly from eBay using Railway's credentials.
+ * Bypasses the Vercel proxy — the backend has EBAY_CLIENT_ID/SECRET directly.
  * Returns the access_token string, or null on failure.
  */
 async function fetchEbayToken(): Promise<string | null> {
@@ -66,26 +67,35 @@ async function fetchEbayToken(): Promise<string | null> {
     return cachedToken.token;
   }
 
-  const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-  const proxySecret = process.env.EBAY_PROXY_SECRET;
+  const clientId = process.env.EBAY_CLIENT_ID;
+  const clientSecret = process.env.EBAY_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    console.error('[MetroSync] EBAY_CLIENT_ID or EBAY_CLIENT_SECRET not set in Railway env');
+    return null;
+  }
+
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
   try {
-    const response = await fetch(`${frontendUrl}/api/proxy/ebay?action=token`, {
-      method: 'GET',
+    const response = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+      method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
+      body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope',
     });
 
     if (!response.ok) {
-      console.error(`[MetroSync] Token fetch failed: ${response.status}`);
+      const body = await response.text();
+      console.error(`[MetroSync] Token fetch failed: ${response.status}`, body.slice(0, 300));
       return null;
     }
 
     const data = (await response.json()) as { access_token?: string; expires_in?: number };
     if (!data.access_token) {
-      console.error('[MetroSync] Token response missing access_token:', JSON.stringify(data).slice(0, 200));
+      console.error('[MetroSync] Token response missing access_token');
       return null;
     }
 
@@ -255,9 +265,9 @@ export function initMetroSyncCron(): void {
     return;
   }
 
-  // TEST: fires at 18:15 UTC (2:15 PM ET) — revert to '0 4 * * *' after confirming token flow works
+  // TEST: fires at 01:45 UTC — revert to '0 4 * * *' after confirming token flow works
   // Cron format: minute hour dayOfMonth month dayOfWeek
-  cron.schedule('15 18 * * *', async () => {
+  cron.schedule('45 1 * * *', async () => {
     await syncAllMetros();
   });
 
