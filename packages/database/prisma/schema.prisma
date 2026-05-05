@@ -4484,7 +4484,6 @@ model EmailSuppression {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
-  @@unique([emailAddress])
   @@index([suppressedAt])
   @@index([bounceHard])
   @@index([complaintEmail])
