@@ -61,7 +61,11 @@ export async function getServerSideProps() {
           .filter((sale: any) => sale.status === 'ACTIVE' || sale.status === 'UPCOMING')
           .map((sale: any) => ({
             loc: `${baseUrl}/sales/${sale.id}`,
-            lastmod: new Date(sale.updatedAt || sale.createdAt || new Date()).toISOString(),
+            lastmod: sale.updatedAt
+              ? new Date(sale.updatedAt).toISOString()
+              : sale.createdAt
+              ? new Date(sale.createdAt).toISOString()
+              : new Date().toISOString(),
             changefreq: 'hourly',
             priority: 0.9,
           }))

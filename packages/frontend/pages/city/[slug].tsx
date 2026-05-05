@@ -120,6 +120,35 @@ export default function CityPage(props: CityPageProps) {
             }),
           }}
         />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                {
+                  '@type': 'ListItem',
+                  position: 1,
+                  name: 'Home',
+                  item: 'https://finda.sale',
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: 'Cities',
+                  item: 'https://finda.sale/cities',
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 3,
+                  name: `${cityName}, ${cityState}`,
+                  item: `https://finda.sale/city/${slug}`,
+                },
+              ],
+            }),
+          }}
+        />
       </Head>
 
       <main className="min-h-screen bg-white dark:bg-slate-900">

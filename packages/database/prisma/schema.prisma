@@ -4462,3 +4462,31 @@ model ShopperOrganizerIntroduction {
   @@index([organizerId])
   @@index([introducedAt])
 }
+
+// Email Suppression — tracks bounces, complaints, opt-outs for outreach pipeline
+model EmailSuppression {
+  id              String   @id @default(cuid())
+  emailAddress    String   @unique
+  
+  bounceHard      Boolean  @default(false)
+  bounceSoft      DateTime?
+  complaintEmail  DateTime?
+  optedOut        DateTime?
+  
+  suppressionReason String?
+  suppressedAt    DateTime @default(now())
+  relatedOrganizerId String?
+  relatedTouchNumber Int?
+  
+  resendEventId   String?
+  resendTimestamp DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([emailAddress])
+  @@index([suppressedAt])
+  @@index([bounceHard])
+  @@index([complaintEmail])
+  @@index([optedOut])
+}

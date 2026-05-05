@@ -1,12 +1,18 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
+import type { GetServerSideProps } from 'next';
 
-// Redirect /shopper/collection → /shopper/explorer-profile
-// Collector passport / collection content lives on the Explorer Profile page
+/**
+ * /shopper/collection — redirects to /shopper/explorer-profile
+ * Collector passport / collection content lives on the Explorer Profile page
+ */
+export const getServerSideProps: GetServerSideProps = async () => {
+  return {
+    redirect: {
+      destination: '/shopper/explorer-profile',
+      permanent: false,
+    },
+  };
+};
+
 export default function ShopperCollectionRedirect() {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace('/shopper/explorer-profile');
-  }, [router]);
   return null;
 }

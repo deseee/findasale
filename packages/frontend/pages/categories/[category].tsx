@@ -7,6 +7,7 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
+import { GetStaticProps, GetStaticPaths } from 'next';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { SkeletonCard } from '../../components/SkeletonCards';
@@ -111,7 +112,15 @@ const TrendingSection: React.FC<{ categorySlug: string; categoryLabel: string }>
   );
 };
 
-const CategoryPage = () => {
+interface CategoryPageProps {
+  initialData?: {
+    category: string;
+    items: any[];
+    pagination: { total: number; page: number; pages: number };
+  };
+}
+
+const CategoryPage = ({ initialData }: CategoryPageProps) => {
   const router = useRouter();
   const { category } = router.query as { category: string };
 
@@ -127,6 +136,7 @@ const CategoryPage = () => {
     },
     enabled: !!category,
     staleTime: 60_000,
+    initialData: initialData && category ? initialData : undefined,
   });
 
   const label = category
@@ -303,3 +313,45 @@ const CategoryPage = () => {
 };
 
 export default CategoryPage;
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const paths = CATEGORIES.map((cat) => ({
+    params: { category: cat },
+  }));
+
+  return {
+    paths,
+    fallback: 'blocking',
+  };
+};
+
+export const getStaticProps: GetStaticProps = async ({ params }) => {
+  const category = params?.category as string;
+
+  try {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.INTERNAL_API_URL || 'http://localhost:4000/api';
+    const res = await fetch(`${apiBaseUrl}/search/categories/${category}`);
+
+    if (!res.ok) {
+      return { notFound: true };
+    }
+
+    const data = await res.json() as {
+      category: string;
+      items: any[];
+      pagination: { total: number; page: number; pages: number };
+    };
+
+    return {
+      props: {
+        initialData: data,
+      },
+      revalidate: 300, // ISR: revalidate every 5 minutes
+    };
+  } catch (error) {
+    console.error(`Error fetching category ${category}:`, error);
+    return {
+      revalidate: 60, // Retry in 1 minute on error
+    };
+  }
+};

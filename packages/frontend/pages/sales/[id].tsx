@@ -691,6 +691,15 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
               'url': `https://finda.sale/sales/${sale.id}`,
               ...(sale.photoUrls && sale.photoUrls[0] ? {
                 'image': sale.photoUrls[0]
+              } : {}),
+              ...(sale.items ? {
+                'offers': {
+                  '@type': 'AggregateOffer',
+                  'url': `https://finda.sale/sales/${sale.id}`,
+                  'priceCurrency': 'USD',
+                  'lowPrice': '0',
+                  'offerCount': (sale as any)._count?.items || sale.items.length || 0
+                }
               } : {})
             })
           }} />
