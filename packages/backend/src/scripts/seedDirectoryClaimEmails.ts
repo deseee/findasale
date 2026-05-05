@@ -35,6 +35,34 @@ const isValidEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
+// Placeholder/template addresses that are syntactically valid but semantically junk.
+// Source: scan of Organizer.contactEmail showed 22 distinct placeholders, 200+ rows.
+const PLACEHOLDER_DOMAINS = new Set([
+  'domain.com', 'domain.org', 'domain.net',
+  'example.com', 'example.org', 'example.net',
+  'yourdomain.com', 'yourdomain.org', 'yourdomain.net',
+  'test.com', 'test.org',
+]);
+
+const PLACEHOLDER_FULL_ADDRESSES = new Set([
+  'name@email.com',
+  'user@email.com',
+  'noreply@gmail.com',
+  'no-reply@gmail.com',
+  'donotreply@gmail.com',
+]);
+
+const isPlaceholderEmail = (email: string): boolean => {
+  const lower = email.toLowerCase().trim();
+  if (PLACEHOLDER_FULL_ADDRESSES.has(lower)) return true;
+  const domain = lower.split('@')[1];
+  if (domain && PLACEHOLDER_DOMAINS.has(domain)) return true;
+  // Wix infrastructure (e.g. sentry-next.wixpress.com — error tracking endpoint, not user email)
+  if (domain && domain.endsWith('.wixpress.com')) return true;
+  // catch local-part-only junk like "info", "call", "3092" already filtered by isValidEmail
+  return false;
+};
+
 async function main() {
   const dryRun = process.env.DRY_RUN === 'true';
   const limit = process.env.LIMIT ? parseInt(process.env.LIMIT, 10) : undefined;
@@ -47,6 +75,7 @@ async function main() {
   let alreadyExists = 0;
   let suppressed = 0;
   let invalidEmail = 0;
+  let placeholder = 0;
   let inserted = 0;
 
   try {
@@ -110,17 +139,30 @@ async function main() {
         continue;
       }
 
-      // Validate email
-      if (!isValidEmail(org.contactEmail)) {
+      // Narrow nullable type — Prisma where: { not: null } does not narrow the result type
+      const email = org.contactEmail;
+      if (!email) {
         invalidEmail++;
-        console.log(`[seedDirectoryClaimEmails] Skipped ${org.id} — invalid email: ${org.contactEmail}`);
+        continue;
+      }
+
+      // Validate email
+      if (!isValidEmail(email)) {
+        invalidEmail++;
+        console.log(`[seedDirectoryClaimEmails] Skipped ${org.id} — invalid email: ${email}`);
+        continue;
+      }
+
+      // Reject template/placeholder addresses (user@domain.com, email@example.com, etc.)
+      if (isPlaceholderEmail(email)) {
+        placeholder++;
         continue;
       }
 
       // Check suppression
-      if (suppressedEmails.has(org.contactEmail.toLowerCase())) {
+      if (suppressedEmails.has(email.toLowerCase())) {
         suppressed++;
-        console.log(`[seedDirectoryClaimEmails] Skipped ${org.id} — suppressed email: ${org.contactEmail}`);
+        console.log(`[seedDirectoryClaimEmails] Skipped ${org.id} — suppressed email: ${email}`);
         continue;
       }
 
@@ -130,7 +172,7 @@ async function main() {
 
       toInsert.push({
         organizerId: org.id,
-        emailAddress: org.contactEmail,
+        emailAddress: email,
         status: 'PENDING',
         attemptCount: 0,
         nextAttemptAt: new Date(), // Ready to send immediately
@@ -173,6 +215,7 @@ async function main() {
     console.log(`  Already exists: ${alreadyExists}`);
     console.log(`  Suppressed: ${suppressed}`);
     console.log(`  Invalid email: ${invalidEmail}`);
+    console.log(`  Placeholder addresses: ${placeholder}`);
     console.log(`  Inserted: ${inserted}`);
     console.log(`[seedDirectoryClaimEmails] Complete`);
   } catch (err) {
