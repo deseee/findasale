@@ -46,7 +46,8 @@ const TOUCH1_TEMPLATE = {
 const renderTemplate = (template: string, vars: Record<string, string>): string => {
   let result = template;
   for (const [k, v] of Object.entries(vars)) {
-    result = result.replace(`[${k}]`, v);
+    // replaceAll — placeholders like [preview link] appear twice (href AND visible text)
+    result = result.split(`[${k}]`).join(v);
   }
   return result;
 };
@@ -157,9 +158,13 @@ async function main() {
     },
   });
 
-  console.log('[e2e] Sending via Gmail SMTP...');
+  // FROM uses OUTREACH_FROM_EMAIL if set, else falls back to the auth username.
+  // Required when the auth username is a Workspace primary mailbox but the brand-facing
+  // FROM is a Workspace alias on a different subdomain (where SPF/DKIM are configured).
+  const fromEmail = process.env.OUTREACH_FROM_EMAIL || process.env.OUTREACH_WORKSPACE_EMAIL;
+  console.log(`[e2e] Sending via Gmail SMTP (from: ${fromEmail})...`);
   const info = await transport.sendMail({
-    from: `The FindA.Sale Team <${process.env.OUTREACH_WORKSPACE_EMAIL}>`,
+    from: `The FindA.Sale Team <${fromEmail}>`,
     to: TEST_EMAIL,
     subject,
     html: htmlWithPixel,
