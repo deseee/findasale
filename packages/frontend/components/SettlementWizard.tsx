@@ -30,6 +30,7 @@ const WIZARD_STEPS = [
 export default function SettlementWizard({ saleId, saleType }: SettlementWizardProps) {
   const [step, setStep] = useState(0);
   const [showDonationModal, setShowDonationModal] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [payoutAmount, setPayoutAmount] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -86,7 +87,7 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
       if (settlement.clientPayout?.amount) {
         // If payout already exists, use that amount
         setPayoutAmount(settlement.clientPayout.amount as unknown as number);
-      } else if (step === 3 && !settlement.clientPayout) {
+      } else if ((step === 3 || step === 4) && !settlement.clientPayout) {
         // If on payout step and no payout exists yet, use netProceeds
         const calculatedPayout = settlement.netProceeds ?? (settlement.totalRevenue - settlement.totalExpenses);
         setPayoutAmount(calculatedPayout as unknown as number);
@@ -153,7 +154,7 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
           <button
             onClick={() => closeMutation.mutate()}
             disabled={closeMutation.isPending}
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+            className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
           >
             {closeMutation.isPending ? 'Closing...' : 'Close Settlement'}
           </button>
@@ -299,13 +300,10 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
 
             <div className="flex gap-2">
               <button
+                disabled={isDownloading}
                 onClick={async () => {
-                  const button = document.activeElement as HTMLButtonElement;
-                  const originalText = button?.textContent || 'Download Receipt';
+                  setIsDownloading(true);
                   try {
-                    if (button) button.disabled = true;
-                    if (button) button.textContent = 'Downloading...';
-
                     const url = `${process.env.NEXT_PUBLIC_API_URL || '/api'}/sales/${saleId}/settlement/receipt`;
                     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
                     const response = await fetch(url, {
@@ -329,15 +327,12 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
                     console.error('Download failed:', error);
                     showToast('Failed to download receipt', 'error');
                   } finally {
-                    if (button) {
-                      button.disabled = false;
-                      button.textContent = originalText;
-                    }
+                    setIsDownloading(false);
                   }
                 }}
                 className="flex-1 text-center py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-colors text-sm disabled:opacity-50"
               >
-                Download Receipt
+                {isDownloading ? 'Downloading...' : 'Download Receipt'}
               </button>
               <button
                 onClick={() => closeMutation.mutate()}
@@ -371,7 +366,7 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
           {step < WIZARD_STEPS.length - 1 && (
             <button
               onClick={() => setStep(step + 1)}
-              className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
             >
               Next →
             </button>
