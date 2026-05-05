@@ -39,11 +39,16 @@ const createTransport = () => {
     host: 'smtp.gmail.com',
     port: 587,
     secure: false,
+    requireTLS: true,
     auth: {
       user: process.env.OUTREACH_WORKSPACE_EMAIL,
       pass: process.env.OUTREACH_WORKSPACE_APP_PASSWORD,
     },
   });
+};
+
+const escapeHtml = (str: string): string => {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 };
 
 const renderTemplate = (template: string, variables: Record<string, string>): string => {
@@ -159,10 +164,13 @@ export const sendOutreachEmails = async (): Promise<void> => {
         const touchNum = determineTouchToSend(record);
         if (!touchNum) continue;
 
+        const outreachSecret = process.env.OUTREACH_SECRET;
+        if (!outreachSecret) throw new Error('OUTREACH_SECRET env var is required');
+
         const trackingPixelId = `${uuid()}:${Buffer.from(record.emailAddress).toString('base64').substring(0, 12)}`;
         const trackingToken = jwt.sign(
           { organizerId: record.organizerId, email: record.emailAddress },
-          process.env.OUTREACH_SECRET || 'default-secret',
+          outreachSecret,
           { expiresIn: '90d' }
         );
 
@@ -174,15 +182,15 @@ export const sendOutreachEmails = async (): Promise<void> => {
         const physicalAddress = process.env.OUTREACH_PHYSICAL_ADDRESS || '123 Main St, Grand Rapids, MI 49503';
 
         const html = renderTemplate(template.html, {
-          'Business Name': record.organizer.businessName || 'Your Business',
+          'Business Name': escapeHtml(record.organizer.businessName || 'Your Business'),
           'preview link': previewLink,
           'video link': videoLink,
           'unsubscribe link': unsubscribeLink,
-          'physical address': physicalAddress,
+          'physical address': escapeHtml(physicalAddress),
         });
 
         const subject = renderTemplate(template.subject, {
-          'Business Name': record.organizer.businessName || 'Your Business',
+          'Business Name': escapeHtml(record.organizer.businessName || 'Your Business'),
         });
 
         // Append tracking pixel — templates don't include <body> tags, so just concat

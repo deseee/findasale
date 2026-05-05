@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
-import { useQuery } from '@tanstack/react-query';
+import { GetServerSideProps } from 'next';
 import api from '../../lib/api';
 import { getOptimizedUrl, getLqipUrl } from '../../lib/imageUtils';
 import BadgeDisplay from '../../components/BadgeDisplay';
@@ -59,21 +58,12 @@ interface OrganizerProfile {
   isUnmanagedListing: boolean;
 }
 
-const OrganizerProfilePage = () => {
-  const router = useRouter();
-  const { id } = router.query;
+interface OrganizerPageProps {
+  organizer: OrganizerProfile | null;
+}
 
-  const { data: organizer, isLoading, isError } = useQuery({
-    queryKey: ['organizer', id],
-    queryFn: async () => {
-      const response = await api.get(`/organizers/${id}`);
-      return response.data as OrganizerProfile;
-    },
-    enabled: !!id,
-  });
-
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  if (isError || !organizer) return (
+const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
+  if (!organizer) return (
     <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
       <div className="text-center px-4 max-w-md">
         <div className="text-5xl mb-4">🏷️</div>
@@ -177,6 +167,13 @@ const OrganizerProfilePage = () => {
                     size="large"
                     showCount={false}
                   />
+                </div>
+              )}
+              {organizer.isUnmanagedListing && (
+                <div className="mb-3 inline-block">
+                  <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 text-xs font-semibold rounded-full">
+                    Unclaimed
+                  </span>
                 </div>
               )}
               {organizer.badges && organizer.badges.length > 0 && (
@@ -372,6 +369,23 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
       </div>
     </div>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<OrganizerPageProps> = async (context) => {
+  const { id } = context.params as { id: string };
+
+  try {
+    const response = await api.get(`/organizers/${id}`);
+    return {
+      props: {
+        organizer: response.data,
+      },
+    };
+  } catch (error) {
+    return {
+      notFound: true,
+    };
+  }
 };
 
 export default OrganizerProfilePage;
