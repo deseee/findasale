@@ -261,6 +261,7 @@ const HomePage = () => {
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="FindA.Sale — Find Sales Near You" />
         <meta name="twitter:description" content="Browse sales near you - estate sales, garage sales, yard sales, auctions, and more. Bid, buy, and discover unique items from local sales." />
+        <link rel="canonical" href="https://finda.sale" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
