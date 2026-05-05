@@ -2583,13 +2583,3 @@ export const getSimilarItems = async (req: Request, res: Response) => {
       photoUrl: item.photoUrls[0] ?? null,
       condition: item.condition,
       saleId: item.saleId!,
-      saleName: item.sale?.title ?? '',
-      city: item.sale?.city ?? '',
-    }));
-
-    res.json({ items, total: items.length });
-  } catch (error) {
-    console.error('[getSimilarItems] Error:', error);
-    res.status(500).json({ message: 'Server error fetching similar items' });
-  }
-};

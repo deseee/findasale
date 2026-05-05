@@ -4331,6 +4331,24 @@ model MetroTopFinds {
   @@index([citySlug, soldAt])
 }
 
+// ADR-074 Phase 2: Category Sync — top eBay items per product category, synced nightly
+model CategoryTopFinds {
+  id              String   @id @default(cuid())
+  categorySlug    String   // e.g., "furniture", "jewelry", "art-decor"
+  categoryDisplay String   // e.g., "Furniture", "Jewelry", "Art & Decor"
+  itemTitle       String
+  itemCategory    String?  // unused (keep for parity with MetroTopFinds); will be null
+  listingPrice    Decimal  @db.Decimal(10, 2)
+  imageUrl        String?
+  ebayListingId   String
+  ebayUrl         String?  // direct eBay listing URL (itemWebUrl from Browse API)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([categorySlug, ebayListingId])
+  @@index([categorySlug, createdAt])
+}
+
 // ADR-073: Scraper audit log — one row per scraper run (restored from 20260501020000_scraper_phase1)
 model ScrapedSalesJob {
   id           Int       @id @default(autoincrement())
