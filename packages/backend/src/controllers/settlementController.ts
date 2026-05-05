@@ -110,11 +110,18 @@ export const createSettlement = async (req: AuthRequest, res: Response) => {
       ? Number(sale.organizer.defaultCommissionRate)
       : null;
 
+    // Compute platformFeeAmount and netProceeds at creation so the wizard never shows $0
+    const commissionFraction = defaultRate != null ? defaultRate / 100 : 0;
+    const platformFeeAmount = totalRevenue * commissionFraction;
+    const netProceeds = totalRevenue - platformFeeAmount;
+
     const settlement = await prisma.saleSettlement.create({
       data: {
         saleId,
         totalRevenue: new Decimal(totalRevenue),
         commissionRate: defaultRate != null ? new Decimal(defaultRate) : null,
+        platformFeeAmount: new Decimal(platformFeeAmount),
+        netProceeds: new Decimal(netProceeds),
         lifecycleStage: 'POST_SALE',
       },
     });
@@ -129,7 +136,10 @@ export const createSettlement = async (req: AuthRequest, res: Response) => {
       id: settlement.id,
       saleId: settlement.saleId,
       totalRevenue: toNumber(settlement.totalRevenue),
+      totalExpenses: 0,
       commissionRate: toNumber(settlement.commissionRate),
+      platformFeeAmount: toNumber(settlement.platformFeeAmount),
+      netProceeds: toNumber(settlement.netProceeds),
       lifecycleStage: settlement.lifecycleStage,
       createdAt: settlement.createdAt.toISOString(),
     });
