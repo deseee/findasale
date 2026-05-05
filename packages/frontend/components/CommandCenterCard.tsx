@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useToast } from './ToastContext';
 import api from '../lib/api';
@@ -21,22 +21,26 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
   const [isCloning, setIsCloning] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
-  const startDate = new Date(sale.startDate);
-  const endDate = new Date(sale.endDate);
-  const formatDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const { startDate, endDate, formatDate, now, displayStatus } = useMemo(() => {
+    const start = new Date(sale.startDate);
+    const end = new Date(sale.endDate);
+    const current = new Date();
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-  // Compute date-aware display status
-  const now = new Date();
-  let displayStatus: 'LIVE' | 'UPCOMING' | 'DRAFT' | 'ENDED';
-  if (sale.status === 'DRAFT') {
-    displayStatus = 'DRAFT';
-  } else if (sale.status === 'PUBLISHED' && now < startDate) {
-    displayStatus = 'UPCOMING';
-  } else if (sale.status === 'PUBLISHED' && now >= startDate && now <= endDate) {
-    displayStatus = 'LIVE';
-  } else {
-    displayStatus = 'ENDED';
-  }
+    // Compute date-aware display status
+    let status: 'LIVE' | 'UPCOMING' | 'DRAFT' | 'ENDED';
+    if (sale.status === 'DRAFT') {
+      status = 'DRAFT';
+    } else if (sale.status === 'PUBLISHED' && current < start) {
+      status = 'UPCOMING';
+    } else if (sale.status === 'PUBLISHED' && current >= start && current <= end) {
+      status = 'LIVE';
+    } else {
+      status = 'ENDED';
+    }
+
+    return { startDate: start, endDate: end, formatDate: fmt, now: current, displayStatus: status };
+  }, [sale.startDate, sale.endDate, sale.status]);
 
   const statusStyles = {
     LIVE: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',

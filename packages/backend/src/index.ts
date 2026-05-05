@@ -160,6 +160,7 @@ import saleWaitlistRoutes from './routes/saleWaitlist';         // Sale Waitlist
 import treasureHuntRoutes from './routes/treasureHunt';         // Daily Treasure Hunt
 import trendingRoutes from './routes/trending';                 // Trending Items & Sales
 import unsubscribeRoutes from './routes/unsubscribe';           // Unsubscribe / Preferences
+import outreachRoutes from './routes/outreach';                      // Phase 1: Cold outreach email pipeline
 import earningsPdfRoutes from './routes/earningsPdf';           // Payout PDF Export
 import abTestRoutes from './routes/abTest';                     // A/B Testing Infrastructure
 import feedbackRoutes from './routes/feedback';                 // User Feedback
@@ -226,6 +227,7 @@ import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Direct
 import { initMetroSyncCron } from './jobs/metroSyncCron'; // ADR-074: Metro Sync — eBay sold items nightly cron
 import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase 2: Category Sync — eBay category items nightly cron
 import { initClaimEmailCron } from './jobs/claimEmailCron'; // ADR-073 Phase 2: Claim Email Pipeline — 3-touch sequence for unmanaged organizers
+import { initOutreachEmailsCron } from './jobs/outreachEmailsCron'; // Phase 1: Cold outreach email pipeline
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
@@ -534,6 +536,7 @@ app.use('/api/trending', trendingRoutes);                              // Trendi
 app.use('/api/cities', citiesRoutes);                                  // ADR-074: Metro Sync city pages
 app.use('/api/categories', categoriesRoutes);                          // ADR-074 Phase 2: Category trending items
 app.use('/api/internal', internalRoutes);                              // ADR-076: Internal scraper endpoint
+app.use('/api/outreach', outreachRoutes);                             // Phase 1: Cold outreach email pipeline
 app.use('/api/unsubscribe', unsubscribeRoutes);                        // Unsubscribe / Preferences
 app.use('/api/earnings', earningsPdfRoutes);                           // Payout PDF Export (/api/earnings/pdf)
 app.use('/api/ab', abTestRoutes);                                      // A/B Testing Infrastructure
@@ -658,13 +661,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-073 Phase 2: Initialize claim email cron (gated by CLAIM_EMAIL_ENABLED env var)
   initClaimEmailCron();
+  initOutreachEmailsCron();
 
   // Log environment variables status for debugging (dev only)
   if (process.env.NODE_ENV !== 'production') {
-    console.log('Environment variables status:');
-    console.log('- STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY ? '✅ Present' : '❌ Missing');
-    console.log('- TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? '✅ Present' : '❌ Missing');
-    console.log('- TWILIO_AUTH_TOKEN:', process.env.TWILIO_AUTH_TOKEN ? '✅ Present' : '❌ Missing');
-    console.log('- DATABASE_URL:', process.env.DATABASE_URL ? '✅ Present' : '❌ Missing');
-  }
-});
