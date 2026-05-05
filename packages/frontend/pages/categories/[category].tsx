@@ -351,6 +351,7 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
   } catch (error) {
     console.error(`Error fetching category ${category}:`, error);
     return {
+      props: {},
       revalidate: 60, // Retry in 1 minute on error
     };
   }
