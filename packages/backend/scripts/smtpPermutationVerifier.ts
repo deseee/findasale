@@ -81,6 +81,12 @@ const PLATFORM_DOMAINS = new Set([
   'linqapp.com',          // Contact link generator — not an email
   'cardscan.com',
   'linktr.ee',
+  'bio.link',
+  'square.site',
+  'squarespace.com',
+  'wixsite.com',
+]);
+
 // Government, institutional, and large-chain domains — not target organizers
 const BLOCKED_EMAIL_SUFFIXES = new Set([
   // US/international government + institutional
@@ -103,11 +109,6 @@ const isBlockedDomain = (email: string): boolean => {
   }
   return false;
 };
-  'bio.link',
-  'square.site',
-  'squarespace.com',
-  'wixsite.com',
-]);
 
 // MX hostnames whose port 25 is reliably blocked from cloud/GitHub Actions runners.
 // Fall back to best-guess info@ rather than burning timeout budget.
