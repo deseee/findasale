@@ -122,3 +122,50 @@ export const getItemImageUrl = (url: string | null | undefined): string | null =
   }
   return url;
 };
+
+/**
+ * Scraped image domains that block hotlink requests.
+ * These are routed through /api/image-proxy to bypass hotlink protection.
+ */
+const SCRAPED_IMAGE_DOMAINS = [
+  'picturescdn.estatesales.net',
+  'estatesales.net',
+  'p1.liveauctioneers.com',
+  'p2.liveauctioneers.com',
+  'photos.liveauctioneers.com',
+];
+
+const isScrapedImageUrl = (url: string): boolean => {
+  try {
+    const { hostname } = new URL(url);
+    return SCRAPED_IMAGE_DOMAINS.some(
+      d => hostname === d || hostname.endsWith('.' + d)
+    );
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Helper to get a proxied URL for sale card images.
+ * Handles both Cloudinary transformations AND scraped CDN proxying.
+ * - Cloudinary URLs: apply transformation + return
+ * - Scraped CDN URLs: route through proxy endpoint
+ * - Other URLs: return as-is
+ */
+export const getSaleImageUrl = (url: string | null | undefined, quality?: number): string | null => {
+  if (!url) return null;
+
+  // If it's a Cloudinary URL, apply optimization
+  if (isCloudinaryUrl(url)) {
+    return getOptimizedUrl(url, quality);
+  }
+
+  // If it's a scraped CDN URL, route through proxy
+  if (isScrapedImageUrl(url)) {
+    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+  }
+
+  // All other URLs returned as-is
+  return url;
+};

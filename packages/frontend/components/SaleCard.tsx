@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { Lock } from 'lucide-react';
-import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
+import { getOptimizedUrl, getLqipUrl, getSaleImageUrl } from '../lib/imageUtils';
 import { formatUnlockTime } from '../lib/rankEarlyAccess';
 import Skeleton from './Skeleton';
 import TierBadge from './TierBadge'; // Phase 22
@@ -68,7 +68,8 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
   const photoUrl = hasPhoto ? sale.photoUrls[0] : null;
   const lqipUrl = photoUrl ? getLqipUrl(photoUrl) : null;
   const imageQuality = isLowBandwidth ? 40 : 75;
-  const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl, imageQuality) : null;
+  // getSaleImageUrl handles both Cloudinary optimization AND scraped CDN proxying
+  const optimizedUrl = photoUrl ? getSaleImageUrl(photoUrl, imageQuality) : null;
 
   useEffect(() => {
     setImgLoaded(false);
