@@ -4,7 +4,23 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S646 — CategoryTopFinds + City Own-Data + Bug Fixes + Backend Crash Restored (COMPLETE)**
+**Latest: S647 — Settlement Hub Fix + Cold Outreach Pipeline + SEO P0/P1 + 75 Guide Drafts (COMPLETE)**
+
+Five tracks shipped:
+
+1. **Settlement Hub (#228)**: `platformFeeAmount` + `netProceeds` computed at creation in `settlementController.ts` (was null → $0 throughout wizard). Orange CTAs in `SettlementWizard.tsx`. Fixed download receipt handler using React `isDownloading` state.
+2. **Cold Outreach Pipeline (#374)**: `EmailSuppression` table + DirectoryClaimEmail touch-tracking columns (migration `20260505000000_add_outreach_pipeline`). New files: `suppressionService.ts` (bounce/complaint/opt-out handlers), `outreachEmailsCron.ts` (every 4 hours, 4-touch sequence, daily quota ramp 20→200/day, Workspace SMTP on smtp.gmail.com:587), `outreach.ts` routes (pixel tracking, click tracking, unsubscribe JWT, Resend bounce webhook). Backend wired at startup. Gated by `OUTREACH_ENABLED=true`.
+3. **Bug fixes (S565)**: Site-wide click failures (#418) fixed — `CommandCenterCard.tsx` was calling `new Date()` at render time causing SSR hydration mismatch; wrapped date logic in `useMemo`. `/shopper/profile` + `/shopper/collection` SSR 404s fixed (converted `useEffect` redirects to `getServerSideProps`). Sale type ordering reordered across 5 UI locations — Yard Sale first (#382).
+4. **SEO P0/P1**: Category pages → `getStaticProps` + ISR (revalidate 300s, Googlebot-visible item grid). Sale pages → Event JSON-LD with AggregateOffer (startDate, endDate, location, item count). City pages → BreadcrumbList JSON-LD. Sitemap `lastmod` now uses `sale.updatedAt`. Homepage canonical `<link>` added.
+5. **Help Library #377**: All 75 guide drafts written + saved to `claude_docs/strategy/guides-drafts/<slug>.md` (47 FRESH, 18 THIN, 10 WRAPPER). 13 sections, ~51,500 words. Complete — #377 ready to mark shipped.
+
+**Files changed:** 20 code/schema files + 75 guide drafts.
+
+**Patrick actions:** Push blocks 1–3 + `prisma migrate deploy` + 5 Railway env vars. See "## Next Session — S648" below.
+
+---
+
+**Previous: S646 — CategoryTopFinds + City Own-Data + Bug Fixes + Backend Crash Restored (COMPLETE)**
 
 Innovation research confirmed: eBay Browse API has no geo filter — all 20 metros return identical items. Elegant split implemented: **eBay → category pages**, **own organizer inventory → city pages**.
 
@@ -145,34 +161,92 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| Sale social previews blank | Likely missing INTERNAL_API_URL in Vercel | Check Vercel env vars; add if missing | S628 |
+| CategoryTopFinds TrendingSection | Cron runs at 05:00 UTC — no data until first run | QA after first nightly run; verify TrendingSection renders on a `/categories/[category]` page with real eBay data | S647 |
+| Outreach pipeline open/click tracking | Can't verify pixel + click routes without real sends | Verify after `OUTREACH_ENABLED=true` + first cron run: check Railway logs for send attempt, confirm tracking pixel route returns 200 | S647 |
 
 ---
 
-## Next Session — S647
+## Next Session — S648
 
-**Primary goal: sale social previews (OG meta blank) — likely missing `INTERNAL_API_URL` in Vercel env vars. 5-minute fix if confirmed.**
+**Primary: Verify S647 work is live.** Check Railway deploy logs for outreach pipeline startup. Confirm `prisma migrate deploy` completed for `20260505000000`. Check Vercel deploy for SEO + hydration fixes.
 
-Check Vercel project env vars for `INTERNAL_API_URL`. If missing, add it pointing to Railway backend URL. Verify in Chrome: share a sale URL → confirm OG image renders. Removes last item from Blocked/Unverified Queue.
+**Secondary tracks (pick one after verifying live):**
+- **Track A** — Shopper SEO P2 fixes: category description text, neighborhood context for city pages, breadcrumb visual component, national neighborhoods expansion. Deferred from S647.
+- **Track B** — Help Library Site Surface (#378): `/guides` route, FAQ inbound links, slot in approved drafts. Blocked on Patrick reviewing the 75 guide drafts first.
+- **Track C** — CategoryTopFinds Chrome QA: after nightly cron has run at 05:00 UTC, QA that TrendingSection renders real eBay data on a category page.
 
-**Secondary tracks (pick one):**
-- **Track A** — Help Library Drafting Cluster 1 (Photo Workflow, 6 drafts). Dispatch `findasale-marketing`. Roadmap #377.
-- **Track B** — Cold Outreach + Shopper SEO Parallel Specs (deferred S642 plan). 4 parallel agents.
-- **Track C** — CategoryTopFinds Chrome QA: confirm TrendingSection renders on a category page with real eBay data after first cron run.
+### Patrick pending actions (S647 wrap)
 
-### Patrick pending actions
-- `prisma migrate deploy` for `20260504120000_add_category_top_finds` migration (if not done)
-- Set `CATEGORY_SYNC_ENABLED=true` in Railway env vars (categorySyncCron won't run without it)
-- Send 19 queued Gmail partnership outreach drafts
-- Provision `outreach@finda.sale` Workspace seat ($6/mo) before any cold-outreach dev work
-- Set profile photo on `outreach@finda.sale`: log into gmail.com directly → Google Account icon → set `icon-72x72.png`
+**Push blocks — run in order:**
+
+**Push Block 1 — Settlement Hub + Sale Type Ordering (7 files)**
+```powershell
+git add packages/backend/src/controllers/settlementController.ts
+git add packages/frontend/components/SettlementWizard.tsx
+git add packages/frontend/components/SearchFilterPanel.tsx
+git add packages/frontend/pages/index.tsx
+git add packages/frontend/pages/organizer/create-sale.tsx
+git add "packages/frontend/pages/organizer/edit-sale/[id].tsx"
+git add packages/frontend/pages/organizer/settings.tsx
+git commit -m "fix(settlement): compute netProceeds at creation, fix download handler (#228) | fix(ui): sale type ordering — yard sale first (#382) | seo: homepage canonical link"
+.\push.ps1
+```
+
+**Push Block 2 — S565 bugs + SEO + cold outreach pipeline (13 files)**
+```powershell
+git add packages/frontend/components/CommandCenterCard.tsx
+git add packages/frontend/pages/shopper/profile.tsx
+git add packages/frontend/pages/shopper/collection.tsx
+git add "packages/frontend/pages/categories/[category].tsx"
+git add "packages/frontend/pages/sales/[id].tsx"
+git add "packages/frontend/pages/city/[slug].tsx"
+git add packages/frontend/pages/server-sitemap.xml.tsx
+git add packages/backend/src/services/suppressionService.ts
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/src/routes/outreach.ts
+git add packages/backend/src/index.ts
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260505000000_add_outreach_pipeline/migration.sql
+git commit -m "fix(s565): hydration mismatch + shopper SSR 404s | seo: category ISR + Event JSON-LD + BreadcrumbList + sitemap lastmod | feat(outreach): pipeline — suppression table, 4-touch cron, tracking routes"
+.\push.ps1
+```
+
+**Push Block 3 — 75 guide drafts + wrap docs**
+```powershell
+git add claude_docs/strategy/guides-drafts/
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "docs: 75 help library guide drafts (#377 complete) | wrap S647"
+.\push.ps1
+```
+
+**After Push Block 2 — Railway migration:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**Railway env vars to set (after Push Block 2 is deployed):**
+- `OUTREACH_ENABLED` = `true`
+- `OUTREACH_WORKSPACE_EMAIL` = `outreach@finda.sale`
+- `OUTREACH_WORKSPACE_APP_PASSWORD` = [Google Workspace App Password for outreach@finda.sale]
+- `OUTREACH_SECRET` = [32-byte random string — generate with: `openssl rand -hex 32`]
+- `OUTREACH_FROM_NAME` = `The FindA.Sale Team` (optional, defaults to this)
+
+**Remaining Patrick actions:**
+- Send 19 queued Gmail partnership outreach drafts (NESA, NAA ×2, NASMM, ISA, Nick Loper, Codie Sanchez)
+- Set profile photo on `outreach@finda.sale`: gmail.com → Google Account icon → upload `icon-72x72.png`
+- Read guide drafts in `claude_docs/strategy/guides-drafts/` and give voice-check thumbs up/down before S648 site-surface dispatch
 
 ### Locked context (don't re-derive)
 - Architecture: eBay → category pages; own organizer inventory → city pages (S646)
 - Verdict: BUILD Workspace + Postgres cron, do NOT sign up for Smartlead/Instantly/Saleshandy/Snov
 - 4 email templates locked S636 (`outreach-email-templates-v4.md`)
-- DNS: SPF (`_spf.google.com`) + DMARC live on `outreach.finda.sale`, DKIM via Workspace keypair (S643)
+- DNS: SPF (`_spf.google.com`) + DMARC live on `outreach.finda.sale`, DKIM via Workspace keypair (S646)
 - Shopper-side SEO is parallel critical infra (memory: feedback_seo_two_sided_distinction.md)
+- `toNumber()` returns `null` for null Decimal (not 0) — anti-pattern to watch in settlement/financial calculations
 
 ---
 
