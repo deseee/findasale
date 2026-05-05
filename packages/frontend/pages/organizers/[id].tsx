@@ -339,6 +339,7 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
             src={optimizedUrl!}
             alt={sale.title}
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+            ref={(el) => { if (el?.complete && el.naturalWidth > 0) setImgLoaded(true); }}
             onLoad={() => setImgLoaded(true)}
             onError={() => setImgError(true)}
             loading="lazy"
