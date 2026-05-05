@@ -4,7 +4,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S644 — SmallScreen Partnership Research + ESN Enrichment Workflow Fix (COMPLETE)**
+**Latest: S645 — MetroSync Fixed + Gmail outreach.finda.sale Activated (COMPLETE)**
+
+MetroSync was returning `total: 0` for all 20 metros. Root cause: double-quoted phrases in the eBay Browse API query (`"estate sale"`) were being sent as literal `%22` characters, causing eBay to search for items with quotation marks in the title — which don't exist. Also removed the `conditions:{USED}` filter which compounded the issue. Fix: unquoted `estate sale OR yard sale OR garage sale OR flea market` with no conditions filter. Confirmed working — 120 items synced across 20 metros. Cron reverted to `0 4 * * *`. Debug logging left in place (useful for monitoring). Structural limitation noted: eBay Browse API has no location filter, so all 20 metros return the same items. Next session: dispatch `findasale-innovation` to redesign MetroTopFinds data source strategy.
+
+Gmail also activated for `outreach.finda.sale` this session: MX record (`outreach → SMTP.GOOGLE.COM priority 1`) added in Vercel DNS, SPF updated from Smartlead to Google (`v=spf1 include:_spf.google.com ~all`), Google Workspace wizard confirmed "Gmail is activated!", `find@outreach.finda.sale` alias created.
+
+**Files changed (1):** `packages/backend/src/jobs/metroSyncCron.ts` (query fix + debug logging + cron schedule)
+
+**Patrick actions:** Push S645 block below.
+
+---
+
+**Previous: S644 — SmallScreen Partnership Research + ESN Enrichment Workflow Fix (COMPLETE)**
 
 SmallScreen Marketing (Winnipeg, CA — talent agency, secondhand/resale niche) reached out via Commonwealth Picker connection. Surfaced Canada expansion plans (roadmap #366–371) and drafted a reply email to Miles Lisan + Jonathan van Ieperen covering: creator roster questions, deal structure, Canadian vs. US audience split, content type (tutorial vs. haul), organizer-creator distinction, target market geography (ON/BC/AB = Phase 1), honest platform status (beta, CAD billing in development), and Canadian tax flags (GST/HST digital services threshold, cross-border affiliate payout withholding, Stripe Tax). Also fixed two bugs in `enrich-sale-details.yml`: (1) `batches` input was wired to nothing — matrix was hardcoded `[0,1,2]`; replaced with a `setup` job that generates the array dynamically via Python and passes it via `fromJSON`. (2) 30-minute timeout too short for 200-sale batches — extended to 60 minutes.
 
@@ -130,7 +142,36 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S645 (CHOICE OF TRACK)
+## Next Session — S646
+
+**Primary goal: dispatch `findasale-innovation` on the MetroTopFinds data source problem.**
+
+MetroSync is now working mechanically (120 items/run, no errors) but all 20 metros return identical items because eBay Browse API has no location filter and only ~6 listings match the current query. The city pages will show the same 6 items for Grand Rapids and Chicago — not useful.
+
+**Dispatch prompt for `findasale-innovation`:**
+"MetroTopFinds (`MetroTopFinds` table, city pages) currently pulls from eBay Browse API with `estate sale OR yard sale OR garage sale OR flea market`. Problem: (1) eBay Browse API has no location filter — all 20 metros return identical national results. (2) Current query returns only ~6 results total. We need city pages to show genuinely interesting, locally-differentiated, regularly-refreshed content that feels like 'what people are finding at sales near you.' Research and propose 2–3 alternatives to eBay Browse API as the data source for MetroTopFinds. Consider: EstateSales.NET scraping (they have location-based sale listings with photos and items), GSALR API, Craigslist free section by metro, Facebook Marketplace estate sales (public), OfferUp or Poshmark location APIs, or a hybrid approach. For each option evaluate: data quality, location specificity, freshness, legal/ToS risk, implementation complexity (days), and cost. Also evaluate: could we enrich the eBay query to return more diverse results by rotating through estate-sale item categories (antiques, jewelry, collectibles, vintage furniture) with category IDs instead of title keywords? Output: ranked recommendation with implementation path."
+
+**Other next session options (choose one to run alongside innovation dispatch):**
+- **Track A** — Help Library Drafting Cluster 1 (Photo Workflow, 6 drafts). Dispatch `findasale-marketing`. Roadmap #377.
+- **Track B** — Cold Outreach + Shopper SEO Parallel Specs (deferred S642 plan). 4 parallel agents.
+- **Track C** — Pre-existing P1 bug fixes (/items/[id] 500, sale social previews, Hunt Pass status, tier-lapse banner).
+
+### Patrick pending actions
+- Push S645 wrap block (below)
+- Choose S646 secondary track (A, B, or C alongside the innovation dispatch)
+- Send 19 queued Gmail partnership outreach drafts
+- Provision `outreach@finda.sale` Workspace seat ($6/mo) before any cold-outreach dev work
+- Set profile photo on `outreach@finda.sale`: log into gmail.com directly with that account → Google Account icon → set `icon-72x72.png` as profile photo (Admin Console doesn't support this)
+
+### Locked context (don't re-derive)
+- Verdict: BUILD Workspace + Postgres cron, do NOT sign up for Smartlead/Instantly/Saleshandy/Snov
+- 4 email templates locked S636 (`outreach-email-templates-v4.md`)
+- DNS: SPF (`_spf.google.com`) + DMARC live on `outreach.finda.sale`, DKIM via Workspace keypair (S643)
+- Shopper-side SEO is parallel critical infra (memory: feedback_seo_two_sided_distinction.md)
+
+---
+
+## Next Session — S645 (CHOICE OF TRACK) [COMPLETED]
 
 **Primary goal options for S645 — Patrick chooses one:**
 

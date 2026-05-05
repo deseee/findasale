@@ -274,7 +274,7 @@ export function initMetroSyncCron(): void {
   }
 
   // Cron format: minute hour dayOfMonth month dayOfWeek
-  cron.schedule('18 3 * * *', async () => {
+  cron.schedule('0 4 * * *', async () => {
     await syncAllMetros();
   });
 

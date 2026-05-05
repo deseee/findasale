@@ -1,6 +1,10 @@
-# Patrick's Dashboard — Week of May 4, 2026 (S644 wrap)
+# Patrick's Dashboard — Week of May 4, 2026 (S645 wrap)
 
 ## What Happened This Week
+
+**S645 — MetroSync Fixed + Gmail outreach.finda.sale Activated.** MetroSync was broken — all 20 metros returning zero items. Root cause: double-quoted search terms (`"estate sale"`) were sending literal `%22` characters to eBay's API, which searched for items with quotation marks in the title — none exist. Fixed by removing the quotes and the `conditions:{USED}` filter. Confirmed: 120 items synced across 20 metros. Cron back on production schedule (04:00 UTC). Structural problem remains — eBay Browse API has no location filter, so all cities show identical items. Innovation dispatch queued for S646 to find a better data source. Gmail for `outreach.finda.sale` also activated this session: MX record added, SPF updated to Google, `find@outreach.finda.sale` alias live.
+
+
 
 **S644 — SmallScreen Partnership Research + ESN Enrichment Fix.** SmallScreen Marketing (Winnipeg talent agency, secondhand/resale niche) reached out. Surfaced full Canada expansion plan (roadmap #366–371 — scrapers already cover 17 Canadian metros, blockers are CAD billing + PIPEDA compliance + Quebec block). Drafted reply email covering creator roster questions, deal structure, CA vs. US audience, and honest platform timeline. Also flagged Canadian tax issues: GST/HST digital services registration threshold, cross-border affiliate withholding. Fixed two bugs in the ESN enrichment workflow: matrix was hardcoded to 3 batches regardless of what you entered in the GitHub UI — now dynamic. Timeout extended 30 → 60 minutes so 200-sale batches don't get killed.
 
@@ -34,20 +38,16 @@
 
 The cold-outreach pipeline still isn't sending — S643 is the build session, then 14-day domain warm-up. Real organizer outreach starts ~3 weeks out. Pre-existing P1 bugs from earlier weeks (broken `/sales/[id]` for scraped listings, blank photos site-wide, dead `/cities/[slug]` from old QA) — verify status during S642 architect spec passes since those are blockers if anyone clicks a real preview link.
 
-## This Week's Priority
+## Next Session Priority (S646)
 
-1. **S644 — Patrick chooses one track:**
-   - **Track A** — Help Library Drafting Cluster 1 (Photo Workflow, 6 drafts including rapidfire mode + lighting/framing). Dispatch `findasale-marketing` skill. ~7,000 words. Read + voice-check before cluster 2.
-   - **Track B** — Cold Outreach + Shopper SEO Parallel Specs (the deferred S642 plan: 4 agents in one message — outreach spec + SEO audit + partnership drafts + LinkedIn pilot setup).
-   - **Track C** — Pre-existing P1 bug fixes (/items/[id] 500, sale social previews, Hunt Pass status, tier-lapse banner).
-2. **Patrick parallel work** (independent of S644 track): send the 19 queued partnership drafts; provision `outreach@finda.sale` Workspace seat.
+1. **Innovation dispatch** — `findasale-innovation` on the MetroTopFinds data source problem. All 20 city pages currently show identical items. Innovation will research alternatives (EstateSales.NET scraping, GSALR, Craigslist, eBay category rotation) and return a ranked recommendation.
+2. **Choose a secondary track** alongside the innovation dispatch: Track A (Help Library drafts), Track B (Cold Outreach + Shopper SEO specs), or Track C (P1 bug fixes).
 
 ## Action Items for Patrick
 
-- [ ] **Push S644 wrap block** (below)
-- [ ] **Send SmallScreen reply email** — draft is in this session's conversation
-- [ ] **Read the help library plan** at `claude_docs/strategy/guide-and-video-library-plan.md` — decide which S645 track to dispatch
-- [ ] **Confirm "build, don't buy" verdict** for cold email — needed if Track B picked
+- [ ] **Push S645 wrap block** (below)
+- [ ] **Set profile photo on `outreach@finda.sale`** — log into gmail.com directly with that account → Google Account icon → upload `icon-72x72.png`
+- [ ] **Choose S646 secondary track** (A, B, or C — runs alongside the innovation dispatch)
 - [ ] **Send 19 queued Gmail partnership outreach drafts** (NESA, NAA ×2, NASMM, ISA, Nick Loper, Codie Sanchez, etc.)
-- [ ] **Provision second Workspace seat** for `outreach@finda.sale` ($6/mo) — needed before any cold-outreach dev work
-- [ ] **Remove `_spf.smartlead.ai` from outreach.finda.sale SPF record** — we are not signing up for Smartlead
+- [ ] **Provision `outreach@finda.sale` Workspace seat** ($6/mo) — needed before cold-outreach dev work
+- [ ] **Confirm "build, don't buy" verdict** for cold email — needed before Track B
