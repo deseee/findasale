@@ -1,6 +1,9 @@
-# Patrick's Dashboard — Week of May 4, 2026 (S643 wrap)
+# Patrick's Dashboard — Week of May 4, 2026 (S644 wrap)
 
 ## What Happened This Week
+
+**S644 — SmallScreen Partnership Research + ESN Enrichment Fix.** SmallScreen Marketing (Winnipeg talent agency, secondhand/resale niche) reached out. Surfaced full Canada expansion plan (roadmap #366–371 — scrapers already cover 17 Canadian metros, blockers are CAD billing + PIPEDA compliance + Quebec block). Drafted reply email covering creator roster questions, deal structure, CA vs. US audience, and honest platform timeline. Also flagged Canadian tax issues: GST/HST digital services registration threshold, cross-border affiliate withholding. Fixed two bugs in the ESN enrichment workflow: matrix was hardcoded to 3 batches regardless of what you entered in the GitHub UI — now dynamic. Timeout extended 30 → 60 minutes so 200-sale batches don't get killed.
+
 
 **S643 — Help Library Plan + Roadmap Entries.** Built `claude_docs/strategy/guide-and-video-library-plan.md` — a 75-guide written + video library covering organizer workflows (rapidfire mode, review queue + pricing, where to post flyers, POS, settlement, eBay, holds, brand kit, promote page), shopper workflows (find-a-sale, holds, condition grades, Hunt Pass, Guild, community), and trust mechanics (organizer reputation, refer-a-friend, introduce-organizer S635). Three parallel research agents mapped 50+ organizer surfaces, 42 shopper surfaces, 11 trust/community features. Existing-coverage audit categorized drafts as **FRESH (47), THIN (18), WRAPPER (10)** — surfaces existing content (`/guide`, `/faq`, `/condition-guide`, `/shopper/guild-primer`) instead of duplicating. Total writing load ~51,500 words. **No phases** — work plan is two flat steps: draft everything first → site prep + slot in approved drafts. Roadmap rows added: **#377** Help Library Drafts (write-only), **#378** Site Surface (`/guides` route + FAQ inbound links + slot in, blocked on #377). v131 entry added.
 
@@ -41,9 +44,10 @@ The cold-outreach pipeline still isn't sending — S643 is the build session, th
 
 ## Action Items for Patrick
 
-- [ ] **Push S643 wrap block** (see push block below) — also pushes S641 cold outreach roadmap + dashboard work that wasn't pushed last session
-- [ ] **Read the help library plan** at `claude_docs/strategy/guide-and-video-library-plan.md` — decide which S644 track to dispatch first
+- [ ] **Push S644 wrap block** (below)
+- [ ] **Send SmallScreen reply email** — draft is in this session's conversation
+- [ ] **Read the help library plan** at `claude_docs/strategy/guide-and-video-library-plan.md` — decide which S645 track to dispatch
 - [ ] **Confirm "build, don't buy" verdict** for cold email — needed if Track B picked
-- [ ] **Send 19 queued Gmail partnership outreach drafts** (NESA, NAA ×2, NASMM, ISA, Nick Loper, Codie Sanchez, etc.) — independent of any S643 track
+- [ ] **Send 19 queued Gmail partnership outreach drafts** (NESA, NAA ×2, NASMM, ISA, Nick Loper, Codie Sanchez, etc.)
 - [ ] **Provision second Workspace seat** for `outreach@finda.sale` ($6/mo) — needed before any cold-outreach dev work
-- [ ] **Remove `_spf.smartlead.ai` from outreach.finda.sale SPF record** during next DNS housekeeping pass (we are not signing up for Smartlead)
+- [ ] **Remove `_spf.smartlead.ai` from outreach.finda.sale SPF record** — we are not signing up for Smartlead
