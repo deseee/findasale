@@ -106,9 +106,9 @@ export const sendOutreachEmails = async (): Promise<void> => {
 
         // Second safety net: skip government/institutional/chain domains
         const emailDomain = record.emailAddress.toLowerCase();
-        const blockedSuffixes = ['.gov', '.edu', '.mil', '.gc.ca', 'gov.bc.ca', 'gov.ab.ca', 
-          'gov.on.ca', 'gov.ns.ca', 'gov.nb.ca', 'gov.pe.ca', 'gov.nl.ca', 'gov.sk.ca', 
-          'gov.mb.ca', 'gov.nt.ca', 'gov.nu.ca', 'gov.yk.ca', 'goodwill.org', 
+        const blockedSuffixes = ['.gov', '.edu', '.mil', '.gc.ca', 'gov.bc.ca', 'gov.ab.ca',
+          'gov.on.ca', 'gov.ns.ca', 'gov.nb.ca', 'gov.pe.ca', 'gov.nl.ca', 'gov.sk.ca',
+          'gov.mb.ca', 'gov.nt.ca', 'gov.nu.ca', 'gov.yk.ca', 'goodwill.org',
           'salvationarmy.org', 'habitatrestore.org', 'municibid.com', 'govplanet.com', 'publicsurplus.com'];
         if (blockedSuffixes.some(s => emailDomain.endsWith(s) || emailDomain.includes(`.${s}`))) {
           console.log(`[OutreachCron] Skipped ${record.emailAddress} — blocked domain`);
@@ -169,3 +169,24 @@ export const sendOutreachEmails = async (): Promise<void> => {
         console.error(`[OutreachCron] Failed to send to ${record.organizerId}:`, err.message);
       }
     }
+
+    console.log(`[OutreachCron] Batch complete: ${sent} sent, ${failed} failed`);
+  } catch (err) {
+    console.error('[OutreachCron] Batch failed:', err);
+  }
+};
+
+export const initOutreachEmailsCron = (): void => {
+  if (process.env.OUTREACH_ENABLED !== 'true') {
+    console.log('[OutreachCron] Disabled (set OUTREACH_ENABLED=true to enable)');
+    return;
+  }
+
+  // Run every 4 hours (6 windows per day)
+  cron.schedule('0 */4 * * *', async () => {
+    console.log('[OutreachCron] Starting scheduled batch');
+    await sendOutreachEmails();
+  });
+
+  console.log('[OutreachCron] Initialized (runs every 4 hours)');
+};
