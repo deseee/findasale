@@ -248,13 +248,25 @@ const OrganizerStorefront = () => {
         <div style={bannerStyle} className="py-12 text-white shadow-sm">
           <div className="max-w-6xl mx-auto px-4">
             <div className="flex items-center gap-6">
-              {/* Logo */}
-              {brandKit.brandLogoUrl && (
+              {/* Profile Photo or Logo */}
+              {brandKit.profilePhoto ? (
+                <img
+                  src={brandKit.profilePhoto}
+                  alt={brandKit.businessName}
+                  className="h-24 w-24 object-cover bg-white dark:bg-gray-800 rounded-full border-2 border-white shadow-lg flex-shrink-0"
+                />
+              ) : brandKit.brandLogoUrl ? (
                 <img
                   src={brandKit.brandLogoUrl}
                   alt={brandKit.businessName}
-                  className="h-24 w-24 object-contain bg-white dark:bg-gray-800 rounded-lg p-2"
+                  className="h-24 w-24 object-contain bg-white dark:bg-gray-800 rounded-lg p-2 flex-shrink-0"
                 />
+              ) : (
+                <div className="h-24 w-24 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0 border-2 border-white/40">
+                  <span className="text-3xl font-bold text-white/60">
+                    {brandKit.businessName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
               )}
 
               {/* Header Info */}
@@ -302,15 +314,18 @@ const OrganizerStorefront = () => {
 
         {/* Main Content */}
         <div className="max-w-6xl mx-auto px-4 py-12">
-          {/* Organizer Info Card */}
+          {/* Organizer Info Card - Show if bio exists or has branding info */}
+          {(brandKit.bio || brandKit.phone || brandKit.address || brandKit.yearFounded || brandKit.website || Object.values({facebook: brandKit.facebook, instagram: brandKit.instagram, etsy: brandKit.etsy, twitterUrl: brandKit.twitterUrl, tiktokUrl: brandKit.tiktokUrl, youtubeUrl: brandKit.youtubeUrl, pinterestUrl: brandKit.pinterestUrl}).some(link => link)) && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-8 mb-12">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Contact & Links */}
               <div>
                 <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-4">About This Organizer</h2>
-                <p className="text-warm-700 dark:text-gray-300 mb-6">
-                  {brandKit.bio || 'A professional sale organizer serving the Grand Rapids area.'}
-                </p>
+                {brandKit.bio ? (
+                  <p className="text-warm-700 dark:text-gray-300 mb-6">{brandKit.bio}</p>
+                ) : (
+                  <div className="h-0" />
+                )}
 
                 {/* Phone */}
                 {brandKit.phone && (
@@ -517,6 +532,7 @@ const OrganizerStorefront = () => {
               )}
             </div>
           </div>
+          )}
 
           {/* Feature #356: Latest Broadcast */}
           {brandKit.latestBroadcast && (
@@ -592,15 +608,22 @@ const OrganizerStorefront = () => {
                       )}
 
                       {/* Sale Image */}
-                      {featuredImage && (
-                        <div className="h-40 overflow-hidden bg-warm-100 dark:bg-gray-700">
+                      <div className="h-40 overflow-hidden bg-gradient-to-br from-warm-100 to-warm-200 dark:from-gray-600 dark:to-gray-700 relative">
+                        {featuredImage ? (
                           <img
                             src={featuredImage}
                             alt={sale.title}
                             className="w-full h-full object-cover hover:scale-105 transition-transform"
                           />
-                        </div>
-                      )}
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-warm-400 dark:text-gray-400">
+                            <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
+                            </svg>
+                            <p className="text-xs font-medium text-center px-2">{sale.title}</p>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Sale Info */}
                       <div className="p-4">
