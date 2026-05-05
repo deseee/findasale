@@ -104,6 +104,17 @@ export const sendOutreachEmails = async (): Promise<void> => {
           continue;
         }
 
+        // Second safety net: skip government/institutional/chain domains
+        const emailDomain = record.emailAddress.toLowerCase();
+        const blockedSuffixes = ['.gov', '.edu', '.mil', '.gc.ca', 'gov.bc.ca', 'gov.ab.ca', 
+          'gov.on.ca', 'gov.ns.ca', 'gov.nb.ca', 'gov.pe.ca', 'gov.nl.ca', 'gov.sk.ca', 
+          'gov.mb.ca', 'gov.nt.ca', 'gov.nu.ca', 'gov.yk.ca', 'goodwill.org', 
+          'salvationarmy.org', 'habitatrestore.org', 'municibid.com', 'govplanet.com', 'publicsurplus.com'];
+        if (blockedSuffixes.some(s => emailDomain.endsWith(s) || emailDomain.includes(`.${s}`))) {
+          console.log(`[OutreachCron] Skipped ${record.emailAddress} — blocked domain`);
+          continue;
+        }
+
         const touchNum = determineTouchToSend(record);
         if (!touchNum) continue;
 
@@ -158,18 +169,3 @@ export const sendOutreachEmails = async (): Promise<void> => {
         console.error(`[OutreachCron] Failed to send to ${record.organizerId}:`, err.message);
       }
     }
-
-    console.log(`[OutreachCron] Batch complete: ${sent} sent, ${failed} failed`);
-  } catch (err: any) {
-    console.error('[OutreachCron] Fatal error:', err.message);
-  }
-};
-
-export const initOutreachEmailsCron = (): void => {
-  if (process.env.OUTREACH_ENABLED !== 'true') {
-    console.log('[OutreachCron] Disabled (set OUTREACH_ENABLED=true to enable)');
-    return;
-  }
-  cron.schedule('0 0,4,8,12,16,20 * * *', sendOutreachEmails);
-  console.log('[OutreachCron] Initialized (runs every 4 hours)');
-};
