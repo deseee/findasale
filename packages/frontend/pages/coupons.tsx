@@ -226,7 +226,7 @@ const CouponsPage = () => {
                 {spendableXp.toLocaleString()} <span className="text-base font-normal">XP</span>
               </p>
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                {xpProfile?.explorerRank} · {huntPassActive ? '🎫 Hunt Pass Active' : 'Hunt Pass Inactive'}
+                {xpProfile?.explorerRank}{huntPassActive ? ' · 🎫 Hunt Pass Active' : ''}
               </p>
             </div>
           </div>
