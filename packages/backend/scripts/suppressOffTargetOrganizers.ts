@@ -50,23 +50,35 @@ async function main() {
   console.log('[Suppress] Starting off-target organizer suppression...\n');
 
   // Dry run: count affected organizers
+  // NOTE: Only suppresses organizers with an EXPLICITLY wrong category (not null).
+  // Null businessCategory = came from EstateSales.NET or other legitimate sources
+  // that don't assign a category — these should remain eligible for outreach.
   console.log('[Suppress] Dry run: counting organizers to suppress...');
+  console.log('[Suppress] NOTE: Only targeting explicitly wrong categories (not null).\n');
+
+  const nullCount = await prisma.organizer.count({
+    where: {
+      isClaimed: false,
+      isUnmanagedListing: true,
+      suppressOutreach: false,
+      businessCategory: null,
+    },
+  });
+
   const offTargetCount = await prisma.organizer.count({
     where: {
       isClaimed: false,
       isUnmanagedListing: true,
-      OR: [
-        { businessCategory: null },
-        {
-          businessCategory: {
-            notIn: VALID_CATEGORIES,
-          },
-        },
-      ],
+      suppressOutreach: false,
+      businessCategory: {
+        not: null,
+        notIn: VALID_CATEGORIES,
+      },
     },
   });
 
-  console.log(`[Suppress] Found ${offTargetCount} organizers with off-target or null businessCategory\n`);
+  console.log(`[Suppress] Null category (skipping — likely EstateSales.NET/legit): ${nullCount}`);
+  console.log(`[Suppress] Explicitly wrong category (will suppress): ${offTargetCount}\n`);
 
   if (offTargetCount === 0) {
     console.log('[Suppress] No organizers to suppress. Exiting.');
@@ -76,27 +88,24 @@ async function main() {
 
   if (!CONFIRM) {
     console.log('[Suppress] DRY RUN ONLY — no changes made.');
-    console.log(`[Suppress] To suppress these ${offTargetCount} organizers, run:`);
+    console.log(`[Suppress] To suppress the ${offTargetCount} explicitly wrong organizers, run:`);
     console.log(`[Suppress]   DATABASE_URL=... CONFIRM=true npx ts-node scripts/suppressOffTargetOrganizers.ts\n`);
     await prisma.$disconnect();
     return;
   }
 
-  // Execute: suppress the organizers
-  console.log(`[Suppress] EXECUTING: suppressing ${offTargetCount} organizers...\n`);
+  // Execute: suppress only explicitly wrong categories (not null)
+  console.log(`[Suppress] EXECUTING: suppressing ${offTargetCount} organizers with wrong category...\n`);
 
   const result = await prisma.organizer.updateMany({
     where: {
       isClaimed: false,
       isUnmanagedListing: true,
-      OR: [
-        { businessCategory: null },
-        {
-          businessCategory: {
-            notIn: VALID_CATEGORIES,
-          },
-        },
-      ],
+      suppressOutreach: false,
+      businessCategory: {
+        not: null,
+        notIn: VALID_CATEGORIES,
+      },
     },
     data: {
       suppressOutreach: true,
