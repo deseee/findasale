@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Craigslist Relay Email Scraper
  *
@@ -89,6 +90,20 @@ function extractPostingMeta(url: string): { postingId: string; category: string 
 
 // ─── Scraper Logic ────────────────────────────────────────────────────────────
 
+async function warmupSession(page: any, area: string): Promise<void> {
+  // Visit a few pages naturally before scraping to establish session trust
+  const warmupUrls = [
+    `https://${area}.craigslist.org`,
+    `https://${area}.craigslist.org/search/gss`, // garage sales section
+  ];
+  console.log('🔥 Warming up session...');
+  for (const url of warmupUrls) {
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
+    await sleep(1500 + Math.floor(Math.random() * 800));
+  }
+  console.log('✅ Session warmed up\n');
+}
+
 async function getListingUrls(page: any, searchUrl: string, max: number): Promise<string[]> {
   console.log('🌐 Loading search page...');
   await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
@@ -121,8 +136,18 @@ async function getListingUrls(page: any, searchUrl: string, max: number): Promis
       .filter((href) => href && href.includes('.html'));
   }, max);
 
-  console.log(`✅ Found ${urls.length} listing URLs`);
-  return urls;
+  // Deduplicate by posting ID (Craigslist promoted listings appear multiple times)
+  const seen = new Set<string>();
+  const deduped = urls.filter((url) => {
+    const match = url.match(/\/(\d+)\.html/);
+    const id = match ? match[1] : url;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
+  console.log(`✅ Found ${deduped.length} unique listing URLs (${urls.length} raw, ${urls.length - deduped.length} duplicates removed)`);
+  return deduped;
 }
 
 async function extractRelayEmail(page: any, listingUrl: string): Promise<{ email: string | null; title: string }> {
@@ -135,78 +160,93 @@ async function extractRelayEmail(page: any, listingUrl: string): Promise<{ email
       return el?.textContent?.trim() ?? 'Untitled';
     });
 
-    // Find and click the reply button
-    const replyClicked = await page.evaluate(() => {
-      // Craigslist reply button: <button class="reply-button">reply</button>
-      const btns = Array.from(document.querySelectorAll('button'));
-      const replyBtn = btns.find(
-        (b) => b.textContent?.trim().toLowerCase() === 'reply' ||
-               b.getAttribute('aria-label')?.toLowerCase().includes('reply')
-      );
-      if (replyBtn) {
-        (replyBtn as HTMLButtonElement).click();
-        return true;
-      }
-      return false;
-    });
+    // ── Step 1: Click the reply button via CSS ElementHandle ─────────────────
+    // page.$(selector).click() sends real Puppeteer mouse events.
+    // Try CSS class first, fall back to finding by text content.
+    let replyEl = await page.$('button.reply-button, [data-action="reply"]');
 
-    if (!replyClicked) {
+    if (!replyEl) {
+      // Find by button text content
+      replyEl = await page.evaluateHandle(() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        return btns.find(
+          (b) => b.textContent?.trim().toLowerCase() === 'reply' ||
+                 b.className?.includes('reply')
+        ) ?? null;
+      }).then((h: any) => h.asElement?.() ?? null).catch(() => null);
+    }
+
+    if (!replyEl) {
       console.warn(`  ⚠️  No reply button found`);
       return { email: null, title };
     }
 
-    // Wait for the email/chat dropdown to appear
-    await sleep(600);
+    await replyEl.click();
+    await sleep(2500); // wait for dropdown + reply API network request
 
-    // Click the "email" row in the dropdown
-    const emailClicked = await page.evaluate(() => {
-      // The email row in the dropdown
-      const allEls = Array.from(document.querySelectorAll('button, li, [role="option"], a'));
-      const emailEl = allEls.find((el) => {
-        const text = el.textContent?.trim().toLowerCase() ?? '';
-        const service = el.getAttribute('data-service') ?? '';
-        return service === 'mailto' || text === 'email';
+    // ── Step 2: Find + click the email option ────────────────────────────────
+    // Try CSS selectors for the email option in the reply dropdown
+    let emailEl =
+      await page.$('[data-service="mailto"]') ||
+      await page.$('li.email, button.email, .reply-option-email');
+
+    if (!emailEl) {
+      // Fallback: find by text content
+      emailEl = await page.evaluateHandle(() => {
+        const allEls = Array.from(document.querySelectorAll('button, li, [role="option"]'));
+        return allEls.find((el) => {
+          const text = el.textContent?.trim().toLowerCase() ?? '';
+          const svc = el.getAttribute('data-service') ?? '';
+          return svc === 'mailto' || text === 'email';
+        }) ?? null;
+      }).then((h: any) => h.asElement?.() ?? null).catch(() => null);
+    }
+
+    if (!emailEl) {
+      // Check what reply options DO exist (chat? phone? none?)
+      const replyOptions: string = await page.evaluate(() => {
+        const dropdown = document.querySelector('.reply-dropdown, .reply-button-w, [class*="reply"]');
+        if (dropdown) return `dropdown found: ${dropdown.textContent?.trim().substring(0, 100)}`;
+        // Look for any button/option that appeared after clicking
+        const btns = Array.from(document.querySelectorAll('button, li')).filter(
+          (el) => (el as HTMLElement).offsetParent !== null
+        );
+        const relevant = btns
+          .map((b) => b.textContent?.trim())
+          .filter((t) => t && t.length < 30 && t.length > 1)
+          .slice(0, 8);
+        return `options visible: ${relevant.join(' | ')}`;
       });
-      if (emailEl) {
-        (emailEl as HTMLElement).click();
-        return true;
-      }
-      return false;
-    });
-
-    if (!emailClicked) {
-      console.warn(`  ⚠️  No email option found in dropdown`);
+      console.warn(`  ⚠️  No email reply available (${replyOptions})`);
       return { email: null, title };
     }
 
-    // Wait for the relay email to render
+    await emailEl.click();
+
+    // ── Step 3: Wait for relay email to appear ────────────────────────────────
     try {
       await page.waitForFunction(
         () => {
           const link = document.querySelector('a[href^="mailto:"]');
           if (link) return true;
-          const body = document.body.innerText;
-          return /[a-f0-9]{32}@sale\.craigslist\.org/.test(body);
+          return /[a-f0-9]{32}@sale\.craigslist\.org/.test(document.body.innerText);
         },
-        { timeout: 5000 }
+        { timeout: 6000 }
       );
     } catch {
       console.warn(`  ⚠️  Timed out waiting for relay email`);
       return { email: null, title };
     }
 
-    // Extract the relay email
+    // ── Step 4: Extract the email ─────────────────────────────────────────────
     const relayEmail: string | null = await page.evaluate(() => {
-      // 1. mailto link
       const mailtoLink = document.querySelector('a[href^="mailto:"]');
       if (mailtoLink) {
         const href = mailtoLink.getAttribute('href') ?? '';
         if (href.startsWith('mailto:')) return href.slice(7).split('?')[0];
       }
-      // 2. .anonemail text
       const anonEl = document.querySelector('.anonemail');
       if (anonEl?.textContent?.includes('@')) return anonEl.textContent.trim();
-      // 3. regex fallback in visible text
       const match = document.body.innerText.match(/[a-f0-9]{32}@sale\.craigslist\.org/);
       return match ? match[0] : null;
     });
@@ -244,6 +284,9 @@ async function main(): Promise<void> {
   try {
     const page = await browser.newPage();
 
+    // Use a realistic desktop viewport so the page renders in desktop layout
+    await page.setViewport({ width: 1280, height: 900 });
+
     await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     );
@@ -254,6 +297,9 @@ async function main(): Promise<void> {
 
     page.setDefaultNavigationTimeout(30000);
     page.setDefaultTimeout(10000);
+
+    // Step 0: Warmup — browse naturally to establish a trusted session
+    await warmupSession(page, args.area);
 
     // Step 1: Get listing URLs from the search page
     const listingUrls = await getListingUrls(page, args.url, args.max);
