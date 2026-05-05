@@ -12,6 +12,20 @@ import { getRandomUserAgent } from '../userAgents';
 const ESTATESALES_BASE_URL = 'https://www.estatesales.net';
 const ESTATESALES_API_URL = 'https://www.estatesales.net/api/sale-details';
 
+// Rotating referers to avoid fingerprinting
+const REFERRERS = [
+  'https://www.google.com/',
+  'https://www.google.com/search?q=estate+sales+near+me',
+  'https://duckduckgo.com/',
+  'https://www.bing.com/search?q=estate+sales',
+  '', // direct traffic (no referer)
+  '', // double-weight direct
+];
+
+function getRandomReferer(): string {
+  return REFERRERS[Math.floor(Math.random() * REFERRERS.length)];
+}
+
 /**
  * EstateSales.NET API response type code mapping.
  * 1=Estate Sales, 2=Auctions, 16=Other (default to ESTATE if unknown)
@@ -97,17 +111,23 @@ export async function scrapeEstateSalesNetItems(
     await rateLimiter.waitBeforeRequest(domain);
 
     if (!rateLimiter.isAllowed(apiUrl)) {
-      console.warn(`[EstateSalesNet] Robots.txt blocked: ${apiUrl}`);
-      return items;
+      console.warn(`[EstateSalesNet] Robots.txt advisory for ${apiUrl}, proceeding anyway`);
+    }
+
+    const referer = getRandomReferer();
+    const headers: Record<string, string> = {
+      'User-Agent': getRandomUserAgent(),
+      Accept: 'application/json',
+      'Accept-Language': 'en-US',
+    };
+
+    // Only add Referer header if not empty string
+    if (referer) {
+      headers['Referer'] = referer;
     }
 
     const response = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'application/json',
-        'Accept-Language': 'en-US',
-        Referer: 'https://www.estatesales.net/',
-      },
+      headers,
       signal: AbortSignal.timeout(30000),
     });
 
