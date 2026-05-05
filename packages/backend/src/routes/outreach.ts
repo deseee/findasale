@@ -70,9 +70,11 @@ router.get('/click', async (req, res) => {
   }
 });
 
-router.get('/unsubscribe', async (req, res) => {
+// Shared handler for GET (link click) and POST (RFC 8058 one-click from Gmail/Yahoo)
+const handleUnsubscribe = async (req: express.Request, res: express.Response) => {
   try {
-    const { token } = req.query;
+    // Token may arrive in query (GET) or body (POST one-click)
+    const token = (req.query.token || req.body?.token) as string | undefined;
     if (!token || typeof token !== 'string') {
       return res.status(400).send('<html><body>Invalid or missing token</body></html>');
     }
@@ -90,7 +92,12 @@ router.get('/unsubscribe', async (req, res) => {
     console.error('[OutreachUnsubscribe] Error:', err.message);
     res.status(500).send('<html><body>Error processing unsubscribe</body></html>');
   }
-});
+};
+
+router.get('/unsubscribe', handleUnsubscribe);
+// RFC 8058 one-click POST — Gmail/Yahoo POST to this when user clicks the inbox unsubscribe button.
+// Body is application/x-www-form-urlencoded with "List-Unsubscribe=One-Click". Token comes from URL query.
+router.post('/unsubscribe', express.urlencoded({ extended: false }), handleUnsubscribe);
 
 router.post('/resend-webhook', async (req, res) => {
   try {

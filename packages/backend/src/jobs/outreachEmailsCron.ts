@@ -198,6 +198,12 @@ export const sendOutreachEmails = async (): Promise<void> => {
           to: process.env.OUTREACH_TEST_EMAIL || record.emailAddress,
           subject,
           html: htmlWithPixel,
+          headers: {
+            // RFC 2369 + RFC 8058: enables Gmail/Yahoo one-click unsubscribe button.
+            // Both mailto and https are required by Gmail's bulk-sender policy.
+            'List-Unsubscribe': `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${unsubscribeLink}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
         });
 
         const updateData: any = { [`touch${touchNum}SentAt`]: new Date(), trackingPixelId, trackingToken };

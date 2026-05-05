@@ -168,6 +168,11 @@ async function main() {
     to: TEST_EMAIL,
     subject,
     html: htmlWithPixel,
+    headers: {
+      // RFC 2369 + RFC 8058: enables Gmail/Yahoo one-click unsubscribe button.
+      'List-Unsubscribe': `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${unsubscribeLink}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
   });
 
   // 7. Mark touch1 sent (mirrors cron behavior)
