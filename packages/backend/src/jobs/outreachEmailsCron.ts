@@ -49,7 +49,8 @@ const createTransport = () => {
 const renderTemplate = (template: string, variables: Record<string, string>): string => {
   let result = template;
   for (const [key, value] of Object.entries(variables)) {
-    result = result.replace(`[${key}]`, value);
+    // replaceAll — placeholders like [preview link] appear twice (href AND visible text)
+    result = result.split(`[${key}]`).join(value);
   }
   return result;
 };
@@ -187,8 +188,13 @@ export const sendOutreachEmails = async (): Promise<void> => {
         // Append tracking pixel — templates don't include <body> tags, so just concat
         const htmlWithPixel = `${html}<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />`;
 
+        // FROM uses OUTREACH_FROM_EMAIL if set, else falls back to auth username.
+        // Required when authenticating as a Workspace primary mailbox (e.g. outreach@finda.sale)
+        // but sending FROM a brand-aligned alias on the subdomain whose SPF/DKIM is configured
+        // (e.g. find@outreach.finda.sale).
+        const fromEmail = process.env.OUTREACH_FROM_EMAIL || process.env.OUTREACH_WORKSPACE_EMAIL;
         await transport.sendMail({
-          from: `The FindA.Sale Team <${process.env.OUTREACH_WORKSPACE_EMAIL}>`,
+          from: `The FindA.Sale Team <${fromEmail}>`,
           to: process.env.OUTREACH_TEST_EMAIL || record.emailAddress,
           subject,
           html: htmlWithPixel,
