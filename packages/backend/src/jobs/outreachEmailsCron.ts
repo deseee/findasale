@@ -184,10 +184,8 @@ export const sendOutreachEmails = async (): Promise<void> => {
           'Business Name': record.organizer.businessName || 'Your Business',
         });
 
-        const htmlWithPixel = html.replace(
-          '</body>',
-          `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" /></body>`
-        );
+        // Append tracking pixel — templates don't include <body> tags, so just concat
+        const htmlWithPixel = `${html}<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />`;
 
         await transport.sendMail({
           from: `The FindA.Sale Team <${process.env.OUTREACH_WORKSPACE_EMAIL}>`,
