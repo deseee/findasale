@@ -4,13 +4,30 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S648 — Outreach Data Quality Gate + suppressOffTargetOrganizers (COMPLETE)**
+**Latest: S649 — Cold Outreach Pipeline Activated + Full Deliverability Stack (COMPLETE — e2e verified)**
 
-Three tracks: (1) Fixed `initOutreachEmailsCron` Railway startup crash — file was truncated in a prior session, missing closing braces + the entire export function. (2) Fixed `smtpPermutationVerifier.ts` TS syntax error — `BLOCKED_EMAIL_SUFFIXES` Set was inserted mid-way through `PLATFORM_DOMAINS` Set. (3) Built full data quality gate for outreach pipeline: BUSINESS_NAME_BLOCKLIST + ACCEPTABLE_GOOGLE_TYPES in googlePlaces.ts (23 queries, up from 11), ingest gate in scraper/index.ts (rejects non-VALID_CATEGORIES at write time), category + suppressOutreach filters added to claimEmailService.ts and outreachEmailsCron.ts, new `suppressOffTargetOrganizers.ts` two-pass cleanup script (Pass 1: category-based, Pass 2: name-based — catches existing junk where Google Places hardcoded a valid category). Dry-run result: 486 name-matched records. False positives caught before execution: `'spa'` matched "Spann"/"Sparrow" estate sale companies; `'realty'` matched auction+realty combo firms (our target market). Both fixed — `'spa'` replaced with specific terms, auction exemption added to realty matching.
+End-to-end activation of the cold outreach pipeline ahead of Wednesday May 6 launch. Five sub-pushes (S649, S649b, S649c, S649d) plus Workspace + DNS configuration. Pipeline is live, deliverability stack is fully aligned, queue is seeded. Wednesday's cron tick (00:00 UTC May 6 = 8pm EDT May 5) starts the 4-touch sequence at the warmup quota of 20/day.
 
-**Files changed:** `googlePlaces.ts`, `scraper/index.ts`, `claimEmailService.ts`, `outreachEmailsCron.ts`, `smtpPermutationVerifier.ts`, `suppressOffTargetOrganizers.ts`
+**Code fixes shipped:**
+- `outreachEmailsCron.ts` — Tracking URLs use RAILWAY_BACKEND_URL → BACKEND_URL → RAILWAY_PUBLIC_DOMAIN cascade with fail-fast (was hardcoded `https://finda.sale`, but `/api/outreach/*` lives on Railway not Vercel). Pixel-append bug fixed (was looking for `</body>` in templates that have no body tags — pixel never reached recipients). renderTemplate fixed (single `replace()` left link visible-text as `[preview link]` placeholder; switched to split/join). OUTREACH_FROM_EMAIL split (auth as primary mailbox, FROM as brand-aligned alias). List-Unsubscribe + List-Unsubscribe-Post headers per RFC 2369 + RFC 8058. WARMUP_START moved 2026-05-08 (Friday) → 2026-05-06 (Wednesday) for B2B engagement window.
+- `seedDirectoryClaimEmails.ts` (NEW) — Populates DirectoryClaimEmail from Organizer.contactEmail for unmanaged organizers. Placeholder filter rejects junk (`@domain.com`, `@example.com`, wixpress.com Sentry endpoints). 3,656 eligible → 3,259 inserted (39 invalid, 316 placeholder). Total queue: 3,301.
+- `triggerOutreachTestEmail.ts` (NEW) — Standalone e2e test creating User+Organizer+DirectoryClaimEmail trio; sends one touch1 via Gmail SMTP using cron's template/URL code; prints verification + cleanup queries. Doesn't touch production queue.
+- `routes/outreach.ts` — Added POST handler for RFC 8058 one-click unsubscribe; refactored to shared `handleUnsubscribe` for both GET (link click) and POST (Gmail/Yahoo inbox button).
 
-**Patrick actions:** Run suppression dry-run after fix (below), then CONFIRM=true if count + examples look clean. Set Railway env vars for outreach pipeline. See "## Next Session — S649" below.
+**Workspace + DNS config:**
+- DKIM activated for outreach.finda.sale (Google Admin → Authenticate email → 2048-bit). TXT `google._domainkey.outreach` added to Vercel DNS. Verified live on Cloudflare + Google resolvers.
+- "Send mail as" registered in `outreach@finda.sale` Gmail Settings → Accounts → `find@outreach.finda.sale` (treated as alias). Without this, Gmail SMTP rewrites the From header to the auth username — breaking DMARC alignment.
+
+**E2E verification (all four levers proven):**
+- Yahoo (deseee@yahoo.com): Primary tab placement, sender displays as `find@outreach.finda.sale`, header-level Unsubscribe button rendered (RFC 8058 recognized).
+- Gmail (deseee@gmail.com): Inbox delivery, `signed-by: outreach.finda.sale` confirmed in expanded headers (DKIM aligned), TLS encryption.
+- Pixel: opens flip `touch1Opened=true` after image render. Unsubscribe (GET): JWT validates, `EmailSuppression` row written. Unsubscribe (POST one-click): route ready.
+
+**Pre-launch Railway env vars set:** OUTREACH_ENABLED, OUTREACH_WORKSPACE_EMAIL=outreach@finda.sale, OUTREACH_FROM_EMAIL=find@outreach.finda.sale, OUTREACH_WORKSPACE_APP_PASSWORD, OUTREACH_SECRET (rotated to 128-char hex), OUTREACH_PHYSICAL_ADDRESS=219 E Michigan Ave, Suite F, Paw Paw, MI 49079.
+
+**Files changed (4):** `outreachEmailsCron.ts`, `seedDirectoryClaimEmails.ts` (NEW), `triggerOutreachTestEmail.ts` (NEW), `routes/outreach.ts`.
+
+**Patrick actions:** Push S649d block + STATE.md + patrick-dashboard.md (below). Run cleanup query for 4 test row sets. Then S650 audit (see "## Next Session" below).
 
 ---
 
@@ -177,35 +194,50 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S649
+## Next Session — S650 (Cold Outreach Pre-Launch Multi-Lens Audit)
 
-**First action:** Load `dev-environment` skill. Then use psycopg2 in the VM to do a full audit and cleanup of junk organizer data before the outreach pipeline fires.
+**First action:** Load `dev-environment` skill. Then dispatch a multi-lens audit of the cold outreach pipeline before Wednesday's first real send. Pipeline is fully aligned (DKIM ✓, SPF ✓, From-alignment ✓, List-Unsubscribe ✓, Yahoo Primary tab on cold recipient ✓), but no human has reviewed it through adversarial / strategic lenses yet.
 
-**Data quality audit (primary goal):**
+**S649 found a P0 product issue at wrap (must address before cron fires):** Patrick visited a test organizer's preview page (`https://finda.sale/organizers/<id>`) and it shows `0 sales`, `No sales listed yet`, `No reviews yet`, `New Organizer` badge. The cold outreach email's value pitch is *"We built [Business Name] a free storefront on FindA.Sale"* — but if 3,301 unmanaged organizers all click through to empty storefronts, the cold pitch flops. Recipients dismiss as low-quality service. **Audit must specifically evaluate what real recipients will see when they click the preview link.**
 
-The outreach pipeline is built and gated behind `OUTREACH_ENABLED=true`. Before flipping that switch, junk organizer records must be purged. The `suppressOffTargetOrganizers.ts` script has a two-pass approach but runs from Patrick's machine. The better path for the audit is psycopg2 directly from the VM — more interactive, Claude executes the cleanup without Patrick touching PowerShell.
+**Three audit lenses (run in parallel where possible):**
 
-Use psycopg2 to:
-1. Connect to Railway DB (public proxy URL in CLAUDE.md credentials)
-2. Query all `isUnmanagedListing=true, isClaimed=false, suppressOutreach=false` organizers
-3. Match `businessName` against the BUSINESS_NAME_BLOCKLIST in `packages/backend/src/services/scraper/sources/googlePlaces.ts`
-4. Show Patrick counts broken down by matched keyword + 20 examples per category
-5. Exempt auction+realty combos (names containing both "realty"/"realtor" AND "auction")
-6. Execute `UPDATE suppressOutreach=true` after Patrick confirms
+1. **Hacker lens** → `findasale-hacker` skill. Red-team the pipeline. Threat model: spoofed unsubscribe tokens, JWT secret rotation gaps, scraper-injected business names that contain HTML/JS payloads in email templates, EmailSuppression race conditions, RFC 8058 POST CSRF surface, tracking pixel ID enumeration, organizer page enumeration via predictable IDs, leak risk of OUTREACH_WORKSPACE_APP_PASSWORD.
 
-**Known false positives to watch for (caught in S648 dry-run):**
-- `'spa'` as substring matches "Spann", "Sparrow", "Spanish" — already fixed in script (replaced with 'day spa', 'massage spa', etc.) but watch for similar short-keyword false positives in the psycopg2 pass
-- `'realty'` + `'auction'` combos are legitimate auction houses — already exempted in script, replicate the exemption logic in the psycopg2 pass
-- `'construction'` is broad — "W a Construction Company Ltd" is clearly not our target, but watch for edge cases like "Construction Equipment Auction"
-- `'auto sale'` may catch car dealers that also auction — flag for Patrick review, don't auto-suppress
+2. **Guru lens (best practices)** → `findasale-advisory-board` skill, route to Risk subcommittee + Go-to-Market subcommittee. Evaluate: deliverability (DKIM-2048 sufficient? DMARC p=none vs p=quarantine?), CAN-SPAM compliance specifics, GDPR for any EU-domiciled organizers we may have scraped, sequence cadence (3/5/7 days appropriate?), template tone given organizer demographics (estate sale operators skew older — does plain text + clear unsubscribe match expectations?), seasonality (May launch — peak estate sale season).
 
-**After suppression cleanup:**
-- Set Railway env vars to activate the pipeline:
-  - `OUTREACH_ENABLED` = `true`
-  - `OUTREACH_WORKSPACE_EMAIL` = `outreach@finda.sale`
-  - `OUTREACH_WORKSPACE_APP_PASSWORD` = [Google Workspace App Password for outreach@finda.sale]
-  - `OUTREACH_SECRET` = [generate with `openssl rand -hex 32`]
-- Then verify pipeline fires by watching Railway logs for the next 4-hour cron tick
+3. **Business strategist lens** → `findasale-advisory-board` skill, route to full board. Evaluate: 20→200/day ramp realistic for solo operator? What's the conversion model (3,301 emails → ? claims)? Should we A/B test subject lines before scaling? What does competitor reaction look like if EstateSales.NET / EstateSales.org notice mass enrollment of their listings? What's the legal exposure of "we built you a storefront" without explicit consent (publicity rights, defamation if business is misrepresented)?
+
+**Recipient preview audit (P0 — required before cron tick):**
+
+Sample organizer pages from each ingest source and screenshot what real recipients will see. Sources to sample:
+- ESN (EstateSales.NET) — pull 3 from current DB by `directorySource='estatesalesnet'`
+- Google Places — pull 3 by `directorySource='google_places'`
+- Foursquare — pull 3 by `directorySource='foursquare'`
+- HERE Places — pull 3 by `directorySource='here_places'`
+
+For each: open the preview URL in Chrome MCP, screenshot. Document what's populated (name, address, photos, sales, reviews) vs. what's empty. Identify the cohort that will get the worst recipient experience and decide: (a) backfill data before launch, (b) suppress those organizers from queue, (c) rewrite the email template's pitch to not promise more than the page delivers.
+
+**Pre-launch gate:** Patrick must approve audit findings before the first real cron tick fires. Cron will tick automatically Wednesday 00:00 UTC May 6 (8pm EDT May 5) unless OUTREACH_ENABLED is set false. Consider temporarily setting `OUTREACH_ENABLED=false` on Railway until audit ships, OR setting `OUTREACH_TEST_EMAIL` to redirect all sends to deseee@yahoo.com while audit runs.
+
+**S649 e2e cleanup (non-blocking, run anytime):**
+```powershell
+@'
+DELETE FROM "EmailSuppression" WHERE "emailAddress" IN ('deseee@yahoo.com','deseee@gmail.com');
+DELETE FROM "DirectoryClaimEmail" WHERE "organizerId" IN (
+  'cmossgqz60002hstogkauqzc4','cmossm21b000212121yz2x4zc',
+  'cmostyqmi0002uga89dgacrwg','cmosumnvf0002m6eo4cc5yz0s','cmosuv1xx000294kuu4vyn6x7'
+);
+DELETE FROM "Organizer" WHERE id IN (
+  'cmossgqz60002hstogkauqzc4','cmossm21b000212121yz2x4zc',
+  'cmostyqmi0002uga89dgacrwg','cmosumnvf0002m6eo4cc5yz0s','cmosuv1xx000294kuu4vyn6x7'
+);
+DELETE FROM "User" WHERE id IN (
+  'cmossgqry0000hstov97xw8xy','cmossm1u600001212cerf3y0o',
+  'cmostyqf40000uga8dhuq45i9','cmosumno80000m6eokv8n0pd9','cmosuv1qm000094ku66ywmyc6'
+);
+'@ | psql $env:DATABASE_URL
+```
 
 **S647 Patrick actions still pending (if not done):**
 - Push Block 1, 2, 3 from S647 (see archived section below)

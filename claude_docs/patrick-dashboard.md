@@ -1,4 +1,51 @@
-# Patrick's Dashboard — May 5, 2026 (S648 wrap)
+# Patrick's Dashboard — May 5, 2026 (S649 wrap)
+
+---
+
+## S649 — Cold Outreach Pipeline Activated. Wednesday Launch Pending Audit.
+
+The full cold outreach stack is built, deliverability-aligned, and end-to-end verified. 3,301 unmanaged organizers are queued. Wednesday's first cron tick fires at 8pm EDT today (May 5) at 20/day warmup quota.
+
+**What's working (proven this session):**
+
+- Yahoo classifies our cold outreach into the **Primary tab** with the inbox-level Unsubscribe button rendered (RFC 8058 one-click recognized — that's the holy grail signal that we're a legitimate bulk sender, not a spammer)
+- Gmail accepts with `signed-by: outreach.finda.sale` confirmed in headers (DKIM aligned, no warnings)
+- Sender displays as `find@outreach.finda.sale` (brand-aligned subdomain — this required a Google Admin "Send mail as" config we didn't realize was needed until mid-session)
+- Tracking pixel fires when recipient opens email → DB updates `touch1Opened=true`
+- GET unsubscribe link validates JWT → writes `EmailSuppression` row
+- POST one-click unsubscribe handler ready (Gmail/Yahoo will POST when user clicks the inbox button)
+
+**What's set on Railway (six env vars):** OUTREACH_ENABLED, OUTREACH_WORKSPACE_EMAIL, OUTREACH_FROM_EMAIL, OUTREACH_WORKSPACE_APP_PASSWORD, OUTREACH_SECRET (rotated to a strong 128-char hex), OUTREACH_PHYSICAL_ADDRESS.
+
+**Gotchas we hit + fixed:**
+
+- Gmail SMTP rewrites the From header to the auth username unless the alias is registered as a "Send mail as" identity. We set this up mid-session.
+- Templates had `[preview link]` and `[video link]` placeholders appearing twice (in the href AND visible text). JavaScript's single-replace caught the href but left visible text as the literal placeholder. Recipients would have seen broken-looking links. Fixed.
+- The tracking pixel was being appended via `html.replace('</body>', ...)` but the templates have no body tags, so the pixel never made it into outgoing emails. Open tracking was silently broken. Fixed.
+
+**P0 finding flagged at wrap (must address before cron fires):**
+
+You visited a test organizer's preview page and it shows `0 sales / No sales listed yet / No reviews yet / New Organizer`. The cold outreach email's pitch is *"We built [Business Name] a free storefront on FindA.Sale"* — but if 3,301 unmanaged organizers all click through to empty storefronts, recipients dismiss us as a low-quality service. **This is the most important thing to evaluate before Wednesday's tick.** S650 audit specifically tasks each lens with reviewing what real recipients see.
+
+---
+
+## S649 → S650 Plan
+
+**S650 is a multi-lens pre-launch audit** — three perspectives running in parallel:
+
+1. **Hacker lens** (`findasale-hacker`) — red-team the pipeline. JWT spoofing, scraper-injected business names with HTML payloads, EmailSuppression races, RFC 8058 POST CSRF, tracking pixel ID enumeration, organizer page enumeration via predictable IDs.
+
+2. **Guru lens** (`findasale-advisory-board` → Risk + GTM committees) — deliverability rigor (DKIM-2048 sufficient? DMARC quarantine vs none?), CAN-SPAM specifics, sequence cadence (3/5/7 days), seasonality (May = peak estate sale season), template tone for the demographic.
+
+3. **Business strategist lens** (`findasale-advisory-board` full board) — conversion model realistic? Should we A/B subject lines first? Competitor reaction if EstateSales.NET / EstateSales.org notice mass enrollment? Legal exposure of "we built you a storefront" without explicit consent.
+
+**Recipient preview audit (P0 within S650):** Sample 3 organizer pages from each ingest source (ESN, Google Places, Foursquare, HERE Places). Screenshot each. Decide cohort-by-cohort whether to: (a) backfill data before launch, (b) suppress those organizers from queue, (c) rewrite the email pitch.
+
+**You can pre-empt the cron** by setting `OUTREACH_ENABLED=false` on Railway right now if you want the audit to run before any real send. Or set `OUTREACH_TEST_EMAIL=deseee@yahoo.com` to redirect all sends to your inbox until audit completes.
+
+---
+
+## Old Status (S648 wrap — superseded)
 
 ---
 
