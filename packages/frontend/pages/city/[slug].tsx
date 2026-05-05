@@ -97,7 +97,7 @@ export default function CityPage(props: CityPageProps) {
                   image: item.photoUrl,
                   offers: {
                     '@type': 'Offer',
-                    price: item.actualPrice.toString(),
+                    price: (item.actualPrice ?? 0).toString(),
                     priceCurrency: 'USD',
                   },
                 },
@@ -218,14 +218,16 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
   const metroFinds = await getMetroTopFinds(apiSlug);
 
   // Transform MetroTopFinds into component format (map eBay data to item structure)
-  const topFinds = metroFinds.map((find) => ({
-    id: find.id,
-    title: find.itemTitle,
-    category: find.itemCategory,
-    actualPrice: parseFloat(find.soldPrice.toString()),
-    photoUrl: find.imageUrl,
-    soldAt: new Date(find.soldAt).toISOString(),
-  }));
+  const topFinds = metroFinds
+    .filter((find) => find.soldPrice != null)
+    .map((find) => ({
+      id: find.id,
+      title: find.itemTitle,
+      category: find.itemCategory,
+      actualPrice: parseFloat(find.soldPrice!.toString()),
+      photoUrl: find.imageUrl,
+      soldAt: find.soldAt ? new Date(find.soldAt).toISOString() : new Date().toISOString(),
+    }));
 
   // Fetch recent sales from FindA.Sale database
   let recentSales: RecentSale[] = [];
