@@ -122,15 +122,17 @@ async function fetchEbaySoldItems(metro: MetroConfig): Promise<EbaySoldItem[]> {
       return [];
     }
 
-    // Build search query: estate sale OR yard sale OR garage sale + location
-    const query = encodeURIComponent(`("estate sale" OR "yard sale" OR "garage sale") location:"${metro.ebayLocation}"`);
+    // Build search query: estate sale OR yard sale OR garage sale
+    // Note: eBay Browse API does not support location: query syntax — city association
+    // is handled at the DB level (citySlug). Results are national listings.
+    const query = encodeURIComponent('"estate sale" OR "yard sale" OR "garage sale" OR "flea market"');
 
     // eBay Browse API endpoint through Vercel proxy
     const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
     const proxySecret = process.env.EBAY_PROXY_SECRET;
 
-    // Browse API: search_for_items_by_keyword (completed items only)
-    const apiPath = `/buy/browse/v1/item_summary/search?q=${query}&filter=conditions:{USED|NOT_SPECIFIED}&sort=newlyListed&limit=12`;
+    // Browse API: active listings matching estate/yard/garage sale keywords
+    const apiPath = `/buy/browse/v1/item_summary/search?q=${query}&filter=conditions:{USED}&sort=newlyListed&limit=12`;
 
     const response = await fetch(
       `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(apiPath)}`,
@@ -265,11 +267,10 @@ export function initMetroSyncCron(): void {
     return;
   }
 
-  // TEST: fires at 01:45 UTC — revert to '0 4 * * *' after confirming token flow works
   // Cron format: minute hour dayOfMonth month dayOfWeek
-  cron.schedule('45 1 * * *', async () => {
+  cron.schedule('0 4 * * *', async () => {
     await syncAllMetros();
   });
 
-  console.log('[MetroSync] Cron registered — runs daily at 04:00 UTC');
+  console.log('[MetroSync] Cron registered — runs daily at 04:00 UTC (midnight EST)');
 }
