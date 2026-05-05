@@ -1066,9 +1066,9 @@ router.get('/:id', async (req: Request, res: Response) => {
       followerCount: (organizer as any)._count?.followers ?? 0,
       isFollowing,
       isClaimed: organizer.isClaimed,
+      isUnmanagedListing: organizer.isUnmanagedListing,
     });
   } catch (error) {
-      isUnmanagedListing: organizer.isUnmanagedListing,
     console.error('Error fetching organizer profile:', error);
     res.status(500).json({ message: 'Server error' });
   }
