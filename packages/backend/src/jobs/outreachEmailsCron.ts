@@ -74,6 +74,14 @@ export const sendOutreachEmails = async (): Promise<void> => {
     console.log(`[OutreachCron] TEST MODE — all sends redirected to ${process.env.OUTREACH_TEST_EMAIL}`);
   }
   try {
+    // Email links must resolve in recipients' inboxes — localhost fallback would silently break in production.
+    // Backend routes (/api/outreach/pixel, /api/outreach/unsubscribe) live on Railway, not Vercel.
+    const backendUrl = process.env.RAILWAY_BACKEND_URL || process.env.BACKEND_URL;
+    if (!backendUrl) {
+      console.error('[OutreachCron] ABORT: RAILWAY_BACKEND_URL (or BACKEND_URL) is not set — cannot generate tracking URLs for outbound emails.');
+      return;
+    }
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     const WARMUP_START = new Date('2026-05-08');
     const today = new Date();
     const daysSinceStart = Math.floor((today.getTime() - WARMUP_START.getTime()) / (1000 * 60 * 60 * 24));
@@ -151,10 +159,10 @@ export const sendOutreachEmails = async (): Promise<void> => {
         );
 
         const template = TEMPLATES[`touch${touchNum}` as keyof typeof TEMPLATES];
-        const previewLink = `https://finda.sale/organizers/${record.organizerId}`;
-        const videoLink = `https://finda.sale/video`;
-        const unsubscribeLink = `https://finda.sale/api/outreach/unsubscribe?token=${trackingToken}`;
-        const trackingPixelUrl = `https://finda.sale/api/outreach/pixel?trackingId=${trackingPixelId}`;
+        const previewLink = `${frontendUrl}/organizers/${record.organizerId}`;
+        const videoLink = `${frontendUrl}/video`;
+        const unsubscribeLink = `${backendUrl}/api/outreach/unsubscribe?token=${trackingToken}`;
+        const trackingPixelUrl = `${backendUrl}/api/outreach/pixel?trackingId=${trackingPixelId}`;
         const physicalAddress = process.env.OUTREACH_PHYSICAL_ADDRESS || '123 Main St, Grand Rapids, MI 49503';
 
         const html = renderTemplate(template.html, {
