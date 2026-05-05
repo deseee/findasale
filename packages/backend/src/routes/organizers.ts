@@ -469,8 +469,9 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     const discountExpiry = (organizer as any).referralDiscountExpiry as Date | null;
     const referralDiscountActive = discountExpiry != null && discountExpiry > new Date();
 
-    // Feature #75: Include subscription lapse status from middleware context
-    const subscriptionLapsed = (req.user as any).subscriptionLapsed ?? false;
+    // Feature #75: Include subscription lapse status — compute from actual subscription status, not cached JWT
+    // Subscription is active only if status is 'active' or 'trialing'. Any other status (past_due, canceled, null) means lapsed.
+    const subscriptionLapsed = organizer.subscriptionStatus !== 'active' && organizer.subscriptionStatus !== 'trialing';
 
     res.json({
       id: organizer.id,

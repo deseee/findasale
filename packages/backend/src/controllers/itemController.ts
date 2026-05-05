@@ -313,10 +313,22 @@ export const getItemById = async (req: Request, res: Response) => {
           select: {
             title: true,
             id: true,
+            description: true,
+            startDate: true,
+            endDate: true,
+            zip: true,
+            address: true,
+            city: true,
             organizerId: true,
             status: true,
             organizer: {
-              select: { userId: true, businessName: true }
+              select: {
+                userId: true,
+                businessName: true,
+                user: {
+                  select: { name: true }
+                }
+              }
             }
           }
         },
