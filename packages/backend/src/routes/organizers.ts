@@ -890,6 +890,7 @@ router.get('/:id', async (req: Request, res: Response) => {
             isPinned: true,
             attendanceCount: true,
             buyersPremiumPct: true,
+            scrapedMetadata: true,
           },
         },
         broadcasts: {
@@ -953,6 +954,7 @@ router.get('/:id', async (req: Request, res: Response) => {
               isPinned: true,
               attendanceCount: true,
               buyersPremiumPct: true,
+              scrapedMetadata: true,
             },
           },
           broadcasts: {
@@ -982,6 +984,41 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     if (!organizer) {
       return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    // Trigger on-demand enrichment for scraped sales (fire-and-forget)
+    if (organizer.sales && organizer.sales.length > 0) {
+      const { enrichScrapedListing } = require('../services/listingEnrichmentService');
+      organizer.sales.forEach((sale: any) => {
+        // Only enrich if it's a scraped listing with no prior enrichment
+        if (
+          sale.scrapedMetadata &&
+          !sale.scrapedMetadata.aiEnriched &&
+          sale.description &&
+          sale.description.length > 50
+        ) {
+          // Fire-and-forget: don't await, let it process in background
+          enrichScrapedListing(sale.description, sale.title)
+            .then(async (enriched: any) => {
+              if (enriched) {
+                // Update the sale's scrapedMetadata with enrichment
+                const currentMetadata = sale.scrapedMetadata || {};
+                await prisma.sale.update({
+                  where: { id: sale.id },
+                  data: {
+                    scrapedMetadata: {
+                      ...currentMetadata,
+                      aiEnriched: enriched,
+                    },
+                  },
+                });
+              }
+            })
+            .catch((err: any) => {
+              console.error(`[enrichment] Failed to enrich sale ${sale.id}:`, err);
+            });
+        }
+      });
     }
 
     // Fetch review count and average rating
