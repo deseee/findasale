@@ -12,8 +12,19 @@ import {
   getBatchOfUnenrichedSales,
   bulkUpsertEnrichedSales,
 } from '../controllers/internalSaleDetailEnrichmentController';
+import { sendOutreachEmails } from '../jobs/outreachEmailsCron';
+import { sendClaimEmailBatch } from '../services/scraper/claimEmailService';
 
 const router = express.Router();
+
+const requireSecret = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+  const secret = req.headers['x-internal-secret'];
+  if (!secret || secret !== process.env.OUTREACH_SECRET) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  next();
+};
 
 // POST /api/internal/scraper/ingest — accept scraped items from GitHub Actions
 router.post('/scraper/ingest', ingestFromGitHubActions);
@@ -32,5 +43,27 @@ router.get('/enrich-sale-details/batch', getBatchOfUnenrichedSales);
 
 // POST /api/internal/enrich-sale-details/bulk — upsert enriched sale details from GitHub Actions
 router.post('/enrich-sale-details/bulk', bulkUpsertEnrichedSales);
+
+// POST /api/internal/outreach/trigger — manual trigger for outreach email cron (protected)
+router.post('/outreach/trigger', requireSecret, async (_req, res) => {
+  try {
+    console.log('[Internal] Manual outreach trigger fired');
+    await sendOutreachEmails();
+    res.json({ ok: true, message: 'Outreach batch complete' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/internal/claim-emails/trigger — manual trigger for claim emails cron (protected)
+router.post('/claim-emails/trigger', requireSecret, async (_req, res) => {
+  try {
+    console.log('[Internal] Manual claim-emails trigger fired');
+    await sendClaimEmailBatch();
+    res.json({ ok: true, message: 'Claim email batch complete' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

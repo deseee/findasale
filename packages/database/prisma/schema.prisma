@@ -4309,8 +4309,35 @@ model DirectoryClaimEmail {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // Outreach touch tracking (added migration 20260505000000)
+  touch1SentAt        DateTime?
+  touch1Opened        Boolean   @default(false)
+  touch1OpenedAt      DateTime?
+  touch1Clicked       Boolean   @default(false)
+  touch1ClickedAt     DateTime?
+  touch2SentAt        DateTime?
+  touch2Opened        Boolean   @default(false)
+  touch2OpenedAt      DateTime?
+  touch2Clicked       Boolean   @default(false)
+  touch2ClickedAt     DateTime?
+  touch3SentAt        DateTime?
+  touch3Opened        Boolean   @default(false)
+  touch3OpenedAt      DateTime?
+  touch3Clicked       Boolean   @default(false)
+  touch3ClickedAt     DateTime?
+  touch4SentAt        DateTime?
+  touch4Opened        Boolean   @default(false)
+  touch4OpenedAt      DateTime?
+  touch4Clicked       Boolean   @default(false)
+  touch4ClickedAt     DateTime?
+  trackingPixelId     String?   @unique
+  trackingToken       String?   @unique
+
   @@index([organizerId])
   @@index([status, nextAttemptAt])
+  @@index([emailAddress])
+  @@index([touch1SentAt, touch1Opened, touch1Clicked])
+  @@index([touch4SentAt])
 }
 
 // ADR-074: Metro Sync — top eBay sold items per metro area, synced nightly by metroSyncCron

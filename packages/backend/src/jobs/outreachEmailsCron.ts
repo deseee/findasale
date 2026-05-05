@@ -54,16 +54,25 @@ const renderTemplate = (template: string, variables: Record<string, string>): st
   return result;
 };
 
+const MIN_DAYS: Record<number, number> = { 2: 3, 3: 5, 4: 7 };
+
 const determineTouchToSend = (record: any): number | null => {
+  const now = new Date();
+  const daysSince = (from: Date | null | undefined): number =>
+    from ? (now.getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24) : Infinity;
+
   if (!record.touch1SentAt) return 1;
-  if (!record.touch2SentAt && !record.touch1Opened) return 2;
-  if (!record.touch3SentAt && record.touch1Opened && !record.touch1Clicked) return 3;
-  if (!record.touch4SentAt && (!record.status || record.status === 'PENDING')) return 4;
+  if (!record.touch2SentAt && daysSince(record.touch1SentAt) >= MIN_DAYS[2]) return 2;
+  if (!record.touch3SentAt && record.touch2SentAt && daysSince(record.touch2SentAt) >= MIN_DAYS[3]) return 3;
+  if (!record.touch4SentAt && record.touch3SentAt && daysSince(record.touch3SentAt) >= MIN_DAYS[4]) return 4;
   return null;
 };
 
-const sendOutreachEmails = async (): Promise<void> => {
+export const sendOutreachEmails = async (): Promise<void> => {
   console.log('[OutreachCron] Starting email batch send');
+  if (process.env.OUTREACH_TEST_EMAIL) {
+    console.log(`[OutreachCron] TEST MODE — all sends redirected to ${process.env.OUTREACH_TEST_EMAIL}`);
+  }
   try {
     const WARMUP_START = new Date('2026-05-08');
     const today = new Date();
@@ -131,7 +140,7 @@ const sendOutreachEmails = async (): Promise<void> => {
 
         await transport.sendMail({
           from: `The FindA.Sale Team <${process.env.OUTREACH_WORKSPACE_EMAIL}>`,
-          to: record.emailAddress,
+          to: process.env.OUTREACH_TEST_EMAIL || record.emailAddress,
           subject,
           html: htmlWithPixel,
         });
