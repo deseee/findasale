@@ -1,4 +1,47 @@
-# Patrick's Dashboard — May 5, 2026 (S649 wrap)
+# Patrick's Dashboard — May 5, 2026 (S650 wrap)
+
+---
+
+## S650 — Image Proxy + Scraper Stealth + robots.txt Fix. S651 Plan Ready.
+
+Three infrastructure fixes shipped this session. The browse page now shows scraped sale photos. The scraper no longer announces itself. Google can now index organizer profile pages.
+
+**What shipped:**
+
+- **Image proxy expanded** — ESN and LiveAuctioneers CDN domains added to `imageProxyController.ts` allowed list. Browse page (`SaleCard.tsx`) now routes all scraped CDN image URLs through `/api/proxy-image` instead of loading directly from ESN/LiveAuctioneers (which hotlink-block external browsers). Cloudinary images unchanged.
+- **`imageUtils.ts` proxy helper** — New `getSaleImageUrl()` detects scraped vs. Cloudinary URLs and routes accordingly. `isScrapedImageUrl()` + `SCRAPED_IMAGE_DOMAINS` constant for future use.
+- **Scraper stealth overhaul** — Bot identity eliminated: rotating browser user-agent pool (5 real Chrome/Firefox UAs), organic-looking Referer pool (Google, DuckDuckGo, Bing, direct), timing jitter (3.75–12.25s range + micro-jitter), 5xx retry with exponential backoff, 429 = abort batch, robots.txt advisory-only (no longer blocks). Applied to both `saleDetailEnrichment.ts` and `estatesalesnet.ts`.
+- **robots.txt organizer fix** — `Disallow: /organizer` (no trailing slash) was prefix-matching `/organizers/[id]` pages, blocking all organizer profiles from Google indexing. Fixed: `Disallow: /organizer/` + added `Allow: /organizers/` to Googlebot and Bingbot sections.
+- **Search Console 5xx context** — The 3 `/sales/cmoezk*` pages returning 5xx were deleted seed sales. Page now renders gracefully. Hit "Validate Fix" in Search Console to trigger re-crawl.
+
+**Files changed (6):**
+- `packages/backend/src/controllers/imageProxyController.ts`
+- `packages/frontend/lib/imageUtils.ts`
+- `packages/frontend/components/SaleCard.tsx`
+- `packages/backend/src/services/scraper/rateLimiter.ts`
+- `packages/backend/src/services/scraper/saleDetailEnrichment.ts`
+- `packages/backend/src/services/scraper/sources/estatesalesnet.ts`
+- `packages/frontend/public/robots.txt`
+
+**Patrick action needed:** Push this session's changes (see push block below, then run S651).
+
+---
+
+## S651 Plan — Search Console Audit + Scraper Stealth Innovations (5 Parallel Agents)
+
+**Next session dispatches:**
+
+- **Track 1 (you in Chrome):** Google Search Console audit — validate fixes on 3 5xx pages + 3 robots.txt-blocked organizer pages, investigate 3 redirect pages, check `/sales/[id]` returns proper 404.
+- **Agent A:** Playwright + playwright-stealth → replaces HTTP fetch in `saleDetailEnrichment.ts` with real Chromium. Defeats TLS fingerprinting at protocol level. Most powerful anti-detection upgrade available.
+- **Agent B:** Cloudflare Workers image proxy → moves image proxy off Railway (static IP) onto free Cloudflare edge (100k req/day, different global IP every request).
+- **Agent C:** Session simulation → builds organic navigation chain before fetching any target URL (homepage → search → target with search page as Referer).
+- **Agent D:** Cache-first conditional GETs → `If-Modified-Since` + `ETag` stored in `scrapedMetadata`, cuts ESN volume 60-80%.
+- **Agent E ⏸ PAUSE:** Residential proxies (Bright Data / Oxylabs / Smartproxy) — most effective long-term tool but ~$50-150/month. Hold until revenue or free trial available.
+- **Agent F:** AI-enriched listing display → auto-tagged categories + estimated price range + 1-sentence sale summary from description, stored in `scrapedMetadata`, displayed on organizer profile + sale detail pages.
+
+---
+
+## Old Status (S649 wrap — superseded)
 
 ---
 

@@ -194,6 +194,41 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
+## Next Session — S651 (Search Console Audit + Scraper Stealth Innovation Dispatch)
+
+**First action:** Load `dev-environment` skill. Then run Search Console audit + dispatch all scraper stealth innovations in parallel.
+
+**Track 1 — Google Search Console full audit (Chrome MCP)**
+Open Search Console at finda.sale. Validate fixes on:
+- Server error (5xx): 3 pages — deleted seed sales, page now shows "Sale not found" correctly. Hit "Validate Fix".
+- Blocked by robots.txt: 3 `/organizers/[id]` pages — fixed this session (robots.txt push live). Hit "Validate Fix".
+- Page with redirect: 3 pages — NOT yet investigated. Drill in, identify URLs, determine if redirects are intentional or broken. Fix if broken.
+Also: check if `/sales/[id]` returns a proper HTTP 404 (not 200 with "Sale not found") — important for SEO. Inspect via URL tool in Search Console.
+
+**Track 2 — Scraper stealth innovations (dispatch ALL in parallel)**
+
+Dispatch these 6 as parallel Agent calls in one message:
+
+**Agent A — Playwright + playwright-stealth for enrichment scraper**
+Replace HTTP fetch in `saleDetailEnrichment.ts` with Playwright Chromium + `playwright-stealth`. Defeats HTTP/2 TLS fingerprinting at the protocol level — no UA rotation can do this. Chromium IS Chrome: TLS handshake, HTTP/2 frame ordering, canvas fingerprint, navigator properties all real. `playwright-stealth` patches webdriver flag and remaining bot signals. Install: `pnpm add playwright playwright-extra playwright-extra-plugin-stealth` in backend. One browser instance per batch, closed after. Read `saleDetailEnrichment.ts` in full first.
+
+**Agent B — Cloudflare Workers image proxy**
+Move `/api/proxy-image` off Railway (static IP) onto a Cloudflare Worker — free tier 100k req/day, every request originates from a different global edge IP. Create `cloudflare/image-proxy/worker.js` with same domain allowlist as `imageProxyController.ts`. Update `imageUtils.ts` `getSaleImageUrl()` to use Worker URL. Patrick deploys via `wrangler deploy`. Read `imageProxyController.ts` + `imageUtils.ts` first.
+
+**Agent C — Session simulation**
+In `saleDetailEnrichment.ts` and `estatesalesnet.ts`, before fetching any target URL, build a real navigation chain: (1) fetch ESN homepage, (2) wait 1-3s random, (3) fetch a search results page, (4) wait 1-3s, (5) fetch target URL with search page as Referer. Organic-looking because it IS organic navigation. Lightweight — existing fetch infrastructure, not Playwright. Add `simulateSession(source: string)` helper.
+
+**Agent D — Cache-first conditional GETs**
+Add `If-Modified-Since` + `ETag` support to `saleDetailEnrichment.ts` + `estatesalesnet.ts`. Store response headers in `Sale.scrapedMetadata`. On re-fetch: send conditional headers. 304 → skip, log "unchanged". Cuts ESN volume 60-80%, looks like a browser with a warm cache. Verify `scrapedMetadata` field exists in schema before writing.
+
+**Agent E — Residential proxy integration** ⏸ PAUSE (paid service — evaluate later)
+Bright Data / Oxylabs / Smartproxy rotate every request through real home internet IPs — the single most effective long-term stealth tool, undetectable at any scale. ~$50-150/month. Hold until revenue or a free trial is available. When ready: build as optional proxy layer gated by `RESIDENTIAL_PROXY_URL` env var in `saleDetailEnrichment.ts` + `estatesalesnet.ts` — if set, proxy; if not, direct. Do NOT dispatch this agent until Patrick confirms budget or trial access.
+
+**Agent F — AI-enriched listing display**
+For scraped sale listings that have a `description` but limited structured data, generate AI-enriched display content: (1) auto-tagged categories from description text using Claude Haiku (reuse existing `cloudAIService.ts` pattern), (2) estimated price range from item types mentioned in description (e.g. "furniture, jewelry, tools" → "Items typically $5–$500"), (3) AI-generated 1-sentence sale summary if description is >100 words. Store in `Sale.scrapedMetadata`. Display on organizer profile page and sale detail page. This makes FindA.Sale listings richer than ESN's own pages. Read `cloudAIService.ts` + `organizers.ts` route + `organizers/[id].tsx` before writing anything. Schema gate: confirm `scrapedMetadata` exists on Sale model.
+
+---
+
 ## Next Session — S650 (Cold Outreach Pre-Launch Multi-Lens Audit)
 
 **First action:** Load `dev-environment` skill. Then dispatch a multi-lens audit of the cold outreach pipeline before Wednesday's first real send. Pipeline is fully aligned (DKIM ✓, SPF ✓, From-alignment ✓, List-Unsubscribe ✓, Yahoo Primary tab on cold recipient ✓), but no human has reviewed it through adversarial / strategic lenses yet.
