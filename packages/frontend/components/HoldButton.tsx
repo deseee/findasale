@@ -136,7 +136,7 @@ const HoldButton: React.FC<HoldButtonProps> = ({
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium transition-colors ${className}`}
+        className={`inline-flex items-center gap-1 px-3 py-2 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium transition-colors min-h-[44px] min-w-[44px] ${className}`}
       >
         <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
           <path

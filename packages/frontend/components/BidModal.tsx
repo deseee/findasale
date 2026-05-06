@@ -2,6 +2,7 @@ import { useState } from 'react';
 import api from '../lib/api';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+import AccessibleModal from './AccessibleModal';
 
 interface Item {
   id: string;
@@ -50,15 +51,16 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
+    <AccessibleModal
+      isOpen={true}
+      onClose={onClose}
+      ariaLabelledBy="bid-modal-title"
     >
       <div
         className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-1">Place a Bid</h2>
+        <h2 id="bid-modal-title" className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-1">Place a Bid</h2>
         <p className="text-sm text-warm-500 mb-4 line-clamp-2">{item.title}</p>
 
         <div className="flex justify-between text-sm text-warm-600 mb-4">
@@ -115,7 +117,8 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
           </form>
         )}
       </div>
-    </div>
+    </AccessibleModal>
+  );
   );
 };
 

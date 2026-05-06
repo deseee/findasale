@@ -40,6 +40,7 @@ import { LowBandwidthProvider } from '../contexts/LowBandwidthContext'; // Featu
 import LowBandwidthBanner from '../components/LowBandwidthBanner'; // Feature #22: Low-Bandwidth Mode
 import { useLowBandwidthInitializer } from '../hooks/useLowBandwidthInitializer'; // Feature #22: Low-Bandwidth Mode
 import { useOfflineSync } from '../hooks/useOfflineSync'; // Feature #69: Local-First Offline Mode
+import CookieConsentBanner from '../components/CookieConsentBanner';
 
 // #63 Dark Mode — Apply theme class on mount to prevent FOUC
 function ThemeInitializer() {
@@ -297,6 +298,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <PosPaymentRequestAlert />
               {/* Explorer's Guild: Rank-up celebration modal */}
               <RankUpManager />
+              {/* Cookie Consent Banner */}
+              <CookieConsentBanner />
               {/* Vercel Analytics + Speed Insights */}
               <Analytics />
               <SpeedInsights />

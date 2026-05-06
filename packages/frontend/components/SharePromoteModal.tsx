@@ -14,6 +14,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { useToast } from './ToastContext';
+import AccessibleModal from './AccessibleModal';
 
 interface Sale {
   id: string;
@@ -390,11 +391,15 @@ ${getHashtagsForSaleType(sale.saleType)} #thrifting #vintagefinds #${sale.city.t
   const showShareButton = ['social', 'threads', 'nextdoor', 'pinterest', 'tiktok'].includes(activeTab);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="share-promote-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-amber-600 to-amber-700 px-6 py-4 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-white">Share & Promote</h2>
+          <h2 id="share-promote-modal-title" className="text-xl font-bold text-white">Share & Promote</h2>
           <button
             onClick={onClose}
             className="text-white hover:bg-amber-800 rounded p-1 transition"
@@ -594,7 +599,7 @@ ${getHashtagsForSaleType(sale.saleType)} #thrifting #vintagefinds #${sale.city.t
           </div>
         </div>
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 

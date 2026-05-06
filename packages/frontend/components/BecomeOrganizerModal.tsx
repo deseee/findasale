@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useOrganizerSetup } from '../hooks/useOrganizerSetup';
+import AccessibleModal from './AccessibleModal';
 
 export interface BecomeOrganizerModalProps {
   isOpen: boolean;
@@ -18,8 +19,6 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
   const [address, setAddress] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  if (!isOpen) return null;
 
   const handleClose = () => {
     // Reset form
@@ -81,29 +80,28 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={handleClose}
+      ariaLabelledBy="become-organizer-modal-title"
+      contentClassName="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full"
     >
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-warm-200 dark:border-gray-700">
-          <h2
-            id="modal-title"
-            className="text-xl font-bold text-warm-900 dark:text-warm-100"
-          >
-            Become an Organizer
-          </h2>
+      {/* Header */}
+      <div className="pb-4 border-b border-warm-200 dark:border-gray-700 mb-6">
+        <h2
+          id="become-organizer-modal-title"
+          className="text-xl font-bold text-warm-900 dark:text-warm-100"
+        >
+          Become an Organizer
+        </h2>
           <p className="text-sm text-warm-600 dark:text-warm-300 mt-1">
             You'll unlock the ability to list items for sale on FindA.Sale. Complete this in
             seconds.
           </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-4">
           {/* Error messages */}
           {(formError || error) && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-200">
@@ -211,10 +209,9 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
             >
               Retry
             </button>
-          )}
-        </form>
-      </div>
-    </div>
+        )}
+      </form>
+    </AccessibleModal>
   );
 };
 

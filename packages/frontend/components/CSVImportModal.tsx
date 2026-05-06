@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../lib/api';
+import AccessibleModal from './AccessibleModal';
 
 interface CSVImportModalProps {
   isOpen: boolean;
@@ -69,10 +70,14 @@ Example Item 3,Another sample item,100.00,,,,SOLD,`;
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="csv-import-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-warm-900 dark:text-warm-100">Import Items from CSV</h3>
+          <h3 id="csv-import-modal-title" className="text-xl font-bold text-warm-900 dark:text-warm-100">Import Items from CSV</h3>
           <button
             onClick={onClose}
             className="text-warm-500 dark:text-warm-400 hover:text-warm-700 dark:hover:text-warm-200"
@@ -151,7 +156,7 @@ Example Item 3,Another sample item,100.00,,,,SOLD,`;
           </button>
         </div>
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 

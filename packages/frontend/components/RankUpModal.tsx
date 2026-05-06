@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { ExplorerRank } from './RankBadge';
 import { X } from 'lucide-react';
+import AccessibleModal from './AccessibleModal';
 
 interface RankUpModalProps {
   rank: ExplorerRank;
@@ -32,20 +33,7 @@ const RANK_BENEFITS: Record<ExplorerRank, string[]> = {
 };
 
 export const RankUpModal: React.FC<RankUpModalProps> = ({ rank, onDismiss }) => {
-  useEffect(() => {
-    // Close on Escape key
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onDismiss();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [onDismiss]);
+  // Escape handling is now managed by AccessibleModal focus trap
 
   const topBenefits = RANK_BENEFITS[rank];
   const emoji = RANK_EMOJIS[rank];
@@ -117,15 +105,12 @@ export const RankUpModal: React.FC<RankUpModalProps> = ({ rank, onDismiss }) => 
       })}
 
       {/* Modal Overlay */}
-      <div
-        className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50"
-        onClick={onDismiss}
+      <AccessibleModal
+        isOpen={true}
+        onClose={onDismiss}
+        ariaLabelledBy="rank-up-modal-title"
+        contentClassName="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-md w-full relative"
       >
-        {/* Modal Card */}
-        <div
-          className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 relative"
-          onClick={(e) => e.stopPropagation()}
-        >
           {/* Close Button */}
           <button
             onClick={onDismiss}
@@ -141,7 +126,7 @@ export const RankUpModal: React.FC<RankUpModalProps> = ({ rank, onDismiss }) => 
           </div>
 
           {/* Celebration Text */}
-          <h2 className="text-3xl font-bold text-center text-warm-900 dark:text-warm-100 mb-2">
+          <h2 id="rank-up-modal-title" className="text-3xl font-bold text-center text-warm-900 dark:text-warm-100 mb-2">
             🎉 You're now a <span className="text-amber-600 dark:text-amber-400">{label}</span>!
           </h2>
 
@@ -186,8 +171,7 @@ export const RankUpModal: React.FC<RankUpModalProps> = ({ rank, onDismiss }) => 
               Keep hunting
             </button>
           </div>
-        </div>
-      </div>
+      </AccessibleModal>
     </>
   );
 };

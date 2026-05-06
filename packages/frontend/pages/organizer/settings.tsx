@@ -73,6 +73,7 @@ const OrganizerSettingsPage = () => {
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
   const [recentBroadcasts, setRecentBroadcasts] = useState<Array<{ id: string; subject: string; sentAt: string; recipientCount: number }>>([]);
+  const [deletePassword, setDeletePassword] = useState('');
 
   // Verification types
   interface GooglePlaceResult {
@@ -184,6 +185,25 @@ const OrganizerSettingsPage = () => {
     onError: (error: any) => {
       const msg = error.response?.data?.message || 'Failed to disconnect eBay account';
       showToast(msg, 'error');
+    }
+  });
+
+  // Account deletion mutation
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (password: string) => {
+      const response = await api.delete('/users/me', {
+        data: { password }
+      });
+      return response.data;
+    },
+    onSuccess: async () => {
+      // Clear auth and redirect to home
+      localStorage.removeItem('authToken');
+      window.location.href = '/';
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to delete account';
+      showToast(message, 'error');
     }
   });
 
@@ -1784,6 +1804,33 @@ const OrganizerSettingsPage = () => {
                     className="bg-sage-600 hover:bg-sage-700 text-white px-4 py-2 rounded font-medium transition"
                   >
                     Open Feedback Form
+                  </button>
+                </div>
+
+                {/* Danger Zone */}
+                <div className="border border-red-200 dark:border-red-800 rounded-lg p-6 bg-red-50 dark:bg-red-900/20">
+                  <h3 className="text-lg font-semibold text-red-900 dark:text-red-100 mb-2">Danger Zone</h3>
+                  <p className="text-sm text-red-700 dark:text-red-300 mb-4">
+                    Permanently delete your account. Your personal information will be anonymized. Transaction records are retained for legal and tax purposes.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const confirmed = confirm(
+                        'Are you sure you want to delete your account? This action cannot be undone. All your personal information will be anonymized, but transaction records will be retained for legal and tax purposes.'
+                      );
+                      if (confirmed) {
+                        // Prompt for password confirmation
+                        const password = prompt('Please enter your password to confirm account deletion:');
+                        if (password) {
+                          setDeletePassword(password);
+                          deleteAccountMutation.mutate(password);
+                        }
+                      }
+                    }}
+                    disabled={deleteAccountMutation.isPending}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete My Account'}
                   </button>
                 </div>
               </div>

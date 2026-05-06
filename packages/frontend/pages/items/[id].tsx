@@ -138,7 +138,23 @@ interface OGItemData {
   };
 }
 
-const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
+// Full item data for JSON-LD structured data
+interface InitialItemData {
+  id: string;
+  title: string;
+  description: string;
+  price: number | null;
+  priceBeforeMarkdown?: number | null;
+  photoUrls: string[];
+  status: string;
+}
+
+interface ItemDetailProps {
+  ogData?: OGItemData | null;
+  initialData?: InitialItemData | null;
+}
+
+const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
@@ -511,6 +527,30 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
           <meta name="twitter:title" content={`${item.title} — ${item.sale?.title || 'FindA.Sale'}`} />
           <meta name="twitter:description" content={item.description} />
           <meta name="twitter:image" content={item.photoUrls[0] || ''} />
+        </Head>
+      )}
+
+      {/* Product schema.org + Offer JSON-LD */}
+      {item && (
+        <Head>
+          <script type="application/ld+json" dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Product',
+              'name': item.title,
+              'description': item.description || undefined,
+              'image': item.photoUrls && item.photoUrls.length > 0 ? item.photoUrls[0] : undefined,
+              'offers': {
+                '@type': 'Offer',
+                'price': item.price?.toString() || '0',
+                'priceCurrency': 'USD',
+                'availability': item.status === 'AVAILABLE'
+                  ? 'https://schema.org/InStock'
+                  : 'https://schema.org/SoldOut',
+                'url': `https://finda.sale/items/${item.id}`,
+              },
+            })
+          }} />
         </Head>
       )}
 
@@ -1153,7 +1193,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     null;
 
   if (!apiUrl) {
-    return { props: { ogData: null } };
+    return { props: { ogData: null, initialData: null } };
   }
 
   try {
@@ -1164,13 +1204,13 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     clearTimeout(timeout);
 
     if (!res.ok) {
-      return { props: { ogData: null } };
+      return { props: { ogData: null, initialData: null } };
     }
     const item = await res.json();
 
     // Safeguard: check that item has required fields for OG data
     if (!item?.id || !item?.title) {
-      return { props: { ogData: null } };
+      return { props: { ogData: null, initialData: null } };
     }
 
     const ogData: OGItemData = {
@@ -1190,10 +1230,21 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       } : undefined,
     };
 
-    return { props: { ogData } };
+    // JSON-LD: Extract full item data for structured data injection
+    const initialData: InitialItemData = {
+      id: item.id,
+      title: item.title || '',
+      description: item.description || '',
+      price: typeof item.price === 'number' ? item.price : null,
+      priceBeforeMarkdown: typeof item.priceBeforeMarkdown === 'number' ? item.priceBeforeMarkdown : null,
+      photoUrls: Array.isArray(item.photoUrls) ? item.photoUrls : [],
+      status: item.status || 'AVAILABLE',
+    };
+
+    return { props: { ogData, initialData } };
   } catch (error) {
     // Fail open — page still works, OG tags fall back to CSR version
     console.error('[items/[id] getServerSideProps error]', error);
-    return { props: { ogData: null } };
+    return { props: { ogData: null, initialData: null } };
   }
 }

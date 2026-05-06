@@ -6,6 +6,7 @@
  */
 
 import React from 'react';
+import AccessibleModal from './AccessibleModal';
 
 interface BulkOperationErrorModalProps {
   isOpen: boolean;
@@ -27,10 +28,14 @@ const BulkOperationErrorModal: React.FC<BulkOperationErrorModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="bulk-operation-error-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl max-h-[80vh] overflow-y-auto border-l-4 border-l-red-600">
         {/* Header */}
-        <h3 className="text-lg font-bold text-red-900 dark:text-red-400 mb-2">{title}</h3>
+        <h3 id="bulk-operation-error-modal-title" className="text-lg font-bold text-red-900 dark:text-red-400 mb-2">{title}</h3>
 
         {/* Message */}
         <p className="text-warm-700 mb-4 text-sm">{message}</p>
@@ -71,7 +76,7 @@ const BulkOperationErrorModal: React.FC<BulkOperationErrorModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 

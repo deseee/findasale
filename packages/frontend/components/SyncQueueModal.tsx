@@ -8,6 +8,7 @@ import { X, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { getPendingSync, clearAllOfflineData, getLastSyncTime } from '../lib/offlineSync';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import { useToast } from './ToastContext';
+import AccessibleModal from './AccessibleModal';
 
 interface SyncQueueModalProps {
   isOpen: boolean;
@@ -74,12 +75,16 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
   const confirmedCount = queueItems.filter(q => q.status === 'CONFIRMED').length;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="sync-queue-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="border-b border-gray-200 p-6 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Offline Sync Queue</h2>
+            <h2 id="sync-queue-modal-title" className="text-2xl font-bold text-gray-900">Offline Sync Queue</h2>
             <p className="text-sm text-gray-500 mt-1">
               {pendingCount} pending • {confirmedCount} confirmed
               {lastSyncTime && ` • Last sync: ${new Date(lastSyncTime).toLocaleTimeString()}`}
@@ -163,6 +168,6 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
           </div>
         </div>
       </div>
-    </div>
+    </AccessibleModal>
   );
 }

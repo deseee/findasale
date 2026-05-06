@@ -58,3 +58,17 @@ export const itemEndpointLimiter = rateLimit({
   standardHeaders: false,
   legacyHeaders: false,
 });
+
+/**
+ * Bulk item operations limiter: 10 operations per hour per authenticated user (P0-S3)
+ * Applied to POST /api/items/bulk and CSV import endpoints
+ */
+export const bulkItemsLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many bulk item operations. Maximum 10 per hour per user.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});

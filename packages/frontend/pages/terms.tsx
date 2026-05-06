@@ -75,6 +75,9 @@ const TermsPage = () => {
               if necessary.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              <strong>Organizer Indemnification:</strong> Organizers agree to indemnify and hold FindA.Sale harmless from any claims, losses, damages, or legal costs arising from disputes over consignment relationships, including claims by consignors that items were sold without proper authorization.
+            </p>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               <strong>Payouts:</strong> Organizers receive proceeds via Stripe Connect Express after the platform fee is
               deducted. Payouts are subject to Stripe's standard processing timelines and{' '}
               <a href="https://stripe.com/legal/connect-account" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">
@@ -119,7 +122,7 @@ const TermsPage = () => {
               <strong>Disputes and Refunds:</strong> If you believe a listing is fraudulent, the item is significantly
               misdescribed, or the Organizer failed to deliver, you must report the issue to{' '}
               <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>{' '}
-              <strong>within 48 hours of your purchase</strong>. Include a description of the issue, photos if available,
+              <strong>within 14 days of your purchase</strong>. Include a description of the issue, photos if available,
               and your order confirmation. FindA.Sale will investigate and contact the Organizer for their response. If
               fraud is confirmed or the Organizer cannot resolve the issue, FindA.Sale will facilitate a refund. All
               disputes are reviewed and resolved within 7 days. If resolution cannot be reached, either party may
@@ -233,7 +236,14 @@ const TermsPage = () => {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">13. Governing Law & Disputes</h2>
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">13. Organizer Dispute Response</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+              Organizers are required to respond to dispute inquiries from FindA.Sale within 48 hours of notification. Failure to respond within this window may result in automatic issuance of a refund to the buyer.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">14. Governing Law & Disputes</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               These Terms are governed by the laws of the State of Michigan, without regard to conflict-of-law
               principles. Any dispute shall be resolved in the state or federal courts located in Kent County, Michigan,
@@ -242,7 +252,7 @@ const TermsPage = () => {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">14. Changes to These Terms</h2>
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">15. Changes to These Terms</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               We may update these Terms at any time. When we do, we will post the revised Terms with an updated
               effective date. Continued use of the Platform after the effective date constitutes acceptance of the
@@ -251,7 +261,7 @@ const TermsPage = () => {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">15. Contact</h2>
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">16. Contact</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               Questions about these Terms? Contact us at{' '}
               <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>.

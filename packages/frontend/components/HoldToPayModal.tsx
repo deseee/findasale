@@ -8,6 +8,7 @@ import { useState } from 'react';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 import { useFeedbackSurvey } from '../hooks/useFeedbackSurvey';
+import AccessibleModal from './AccessibleModal';
 
 interface HoldToPayModalProps {
   itemId: string;
@@ -86,14 +87,16 @@ export default function HoldToPayModal({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 max-h-96 overflow-y-auto">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          Send Payment Request
-        </h2>
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="hold-to-pay-modal-title"
+      contentClassName="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 max-h-96 overflow-y-auto"
+    >
+      <h2 id="hold-to-pay-modal-title" className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+        Send Payment Request
+      </h2>
 
         {/* Item Details */}
         <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
@@ -177,7 +180,6 @@ export default function HoldToPayModal({
             {isLoading ? 'Sending...' : 'Send Invoice'}
           </button>
         </div>
-      </div>
-    </div>
+    </AccessibleModal>
   );
 }

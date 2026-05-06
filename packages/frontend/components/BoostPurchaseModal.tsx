@@ -22,6 +22,7 @@ import {
 } from '@stripe/react-stripe-js';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import AccessibleModal from './AccessibleModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -256,12 +257,16 @@ export default function BoostPurchaseModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <AccessibleModal
+      isOpen={true}
+      onClose={onClose}
+      ariaLabelledBy="boost-purchase-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-warm-100">
+          <h2 id="boost-purchase-modal-title" className="text-lg font-bold text-gray-900 dark:text-warm-100">
             {loading ? 'Loading…' : quote?.label ?? 'Boost'}
           </h2>
           <button
@@ -399,6 +404,7 @@ export default function BoostPurchaseModal({
           </Elements>
         )}
       </div>
-    </div>
+    </AccessibleModal>
+  );
   );
 }

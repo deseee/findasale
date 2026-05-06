@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import api from '../lib/api';
 import { useTaskTemplates, TaskTemplateCategory, TaskTemplate } from '../hooks/useTaskTemplates';
 import Skeleton from './Skeleton';
+import AccessibleModal from './AccessibleModal';
 
 interface Member {
   id: string;
@@ -118,16 +119,19 @@ const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
-      onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="quick-picker-task-modal-title"
+    >
+      ) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100">
+          <h2 id="quick-picker-task-modal-title" className="text-2xl font-bold text-warm-900 dark:text-warm-100">
             Quick Add Tasks
           </h2>
           <button
@@ -348,7 +352,7 @@ const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
           </>
         )}
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 

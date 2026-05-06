@@ -166,7 +166,29 @@ interface OGSaleData {
   };
 }
 
-const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) => {
+// Full sale and organizer data for JSON-LD structured data
+interface InitialSaleData {
+  id: string;
+  title: string;
+  description: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  startDate: string;
+  endDate: string;
+  photoUrls: string[];
+  organizer: {
+    businessName: string;
+  };
+}
+
+interface SaleDetailPageProps {
+  ogData?: OGSaleData | null;
+  initialData?: InitialSaleData | null;
+}
+
+const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) => {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
@@ -1780,7 +1802,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     null;
 
   if (!apiUrl) {
-    return { props: { ogData: null } };
+    return { props: { ogData: null, initialData: null } };
   }
 
   try {
@@ -1795,13 +1817,13 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       if (res.status === 404) {
         return { notFound: true };
       }
-      return { props: { ogData: null } };
+      return { props: { ogData: null, initialData: null } };
     }
     const sale = await res.json();
 
     // Safeguard: check that sale has required fields for OG data
     if (!sale?.id || !sale?.title) {
-      return { props: { ogData: null } };
+      return { props: { ogData: null, initialData: null } };
     }
 
     const ogData: OGSaleData = {
@@ -1820,8 +1842,25 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       } : undefined,
     };
 
-    return { props: { ogData } };
+    // JSON-LD: Extract full sale data for structured data injection
+    const initialData: InitialSaleData = {
+      id: sale.id,
+      title: sale.title || '',
+      description: sale.description || '',
+      address: sale.address || '',
+      city: sale.city || '',
+      state: sale.state || '',
+      zip: sale.zip || '',
+      startDate: sale.startDate || '',
+      endDate: sale.endDate || '',
+      photoUrls: sale.photoUrls || [],
+      organizer: {
+        businessName: sale.organizer?.businessName || '',
+      },
+    };
+
+    return { props: { ogData, initialData } };
   } catch {
-    return { props: { ogData: null } };
+    return { props: { ogData: null, initialData: null } };
   }
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import AccessibleModal from './AccessibleModal';
 
 interface OnboardingModalProps {
   onComplete: () => void;
@@ -63,7 +64,11 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
   const current = STEPS[step];
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+    <AccessibleModal
+      isOpen={true}
+      onClose={onComplete}
+      ariaLabelledBy="onboarding-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
         {/* Step progress dots */}
         <div className="flex justify-center gap-2 mb-6">
@@ -81,7 +86,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
         <div className="text-5xl text-center mb-4">{current.icon}</div>
 
         {/* Content */}
-        <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 text-center mb-3">{current.title}</h2>
+        <h2 id="onboarding-modal-title" className="text-xl font-bold text-warm-900 dark:text-gray-100 text-center mb-3">{current.title}</h2>
         <p className="text-warm-600 dark:text-gray-400 text-center text-sm leading-relaxed mb-6">{current.body}</p>
 
         {/* Buttons */}
@@ -98,7 +103,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
           {current.secondary}
         </button>
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 

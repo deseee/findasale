@@ -11,6 +11,7 @@
  */
 
 import React, { useState } from 'react';
+import AccessibleModal from './AccessibleModal';
 
 interface BulkConfirmModalProps {
   isOpen: boolean;
@@ -66,18 +67,20 @@ const BulkConfirmModal: React.FC<BulkConfirmModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+    <AccessibleModal
+      isOpen={true}
+      onClose={onClose}
+      ariaLabelledBy="bulk-confirm-modal-title"
+    >
       <div
         className={`bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl border-l-4 ${
           isDestructive ? 'border-l-red-600' : 'border-l-amber-600'
         }`}
       >
         {/* Header */}
-        <h3
-          className={`text-lg font-bold mb-2 ${
+        <h3 id="bulk-confirm-modal-title" className={`text-lg font-bold mb-2 ${
             isDestructive ? 'text-red-900' : 'text-warm-900'
-          }`}
-        >
+          }`}>
           Confirm {operationLabel}
         </h3>
 
@@ -146,7 +149,8 @@ const BulkConfirmModal: React.FC<BulkConfirmModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </AccessibleModal>
+  );
   );
 };
 

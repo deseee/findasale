@@ -17,11 +17,20 @@ export interface AuthRequest extends Request {
 
 export const optionalAuthenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    // Try Authorization header first
+    // P0 Security Fix: Try cookie first (httpOnly), then Authorization header, then query param
     let token = null;
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
+
+    // Try httpOnly cookie first
+    if (req.cookies?.accessToken) {
+      token = req.cookies.accessToken;
+    }
+
+    // Fallback to Authorization header
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+      }
     }
 
     // Fallback to query parameter for routes accessed via <a href> (PDF downloads, etc.)
@@ -129,12 +138,25 @@ export const checkTierLapse = async (req: AuthRequest, res: Response, next: Next
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Authentication required' });
+    // P0 Security Fix: Try cookie first (httpOnly), then Authorization header
+    let token = null;
+
+    // Try httpOnly cookie first
+    if (req.cookies?.accessToken) {
+      token = req.cookies.accessToken;
     }
 
-    const token = authHeader.split(' ')[1];
+    // Fallback to Authorization header
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+      }
+    }
+
+    if (!token) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) throw new Error('JWT_SECRET is not set');
     const decoded = jwt.verify(token, jwtSecret) as { id: string; role?: string; roles?: string[]; tokenVersion?: number; organizerTokenVersion?: number };

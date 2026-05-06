@@ -26,6 +26,8 @@ import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; /
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature #XXX: Shopify Cross-Listing
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
+import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService'; // P2-2: Refund cap + logging
+
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -635,11 +637,26 @@ export const webhookHandler = async (req: Request, res: Response) => {
     }
   }
 
+  // P2-7: Idempotency check wrapped in transaction to prevent race conditions
   try {
-    const existingEvent = await prisma.processedWebhookEvent.findUnique({
-      where: { eventId: event.id }
+    const result = await prisma.$transaction(async (tx) => {
+      const existingEvent = await tx.processedWebhookEvent.findUnique({
+        where: { eventId: event.id }
+      });
+      if (existingEvent) {
+        return { isDuplicate: true };
+      }
+      // Record this event as processed
+      await tx.processedWebhookEvent.create({
+        data: {
+          eventId: event.id,
+          eventType: event.type
+        }
+      });
+      return { isDuplicate: false };
     });
-    if (existingEvent) {
+
+    if (result.isDuplicate) {
       console.warn(`[webhook] Duplicate event detected: ${event.id} (type: ${event.type}) — skipping reprocessing`);
       return res.json({ received: true, duplicate: true });
     }
@@ -731,11 +748,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
               }
 
               // Mixed carts: create a misc Purchase for any remainder beyond catalog item prices
+              // P1-2: Use integer cent math to avoid floating-point precision errors
               const realItemsTotal = items.reduce((sum: number, item: { price: number | null }) => sum + (item.price || 0), 0);
-              const miscRemainder = Math.round((posRequest.totalAmountCents / 100 - realItemsTotal) * 100) / 100;
-              const shouldCreateMisc = items.length === 0 || miscRemainder > 0.01;
+              const realItemsTotalCents = Math.round(realItemsTotal * 100);
+              const miscRemainderCents = posRequest.totalAmountCents - realItemsTotalCents;
+              const shouldCreateMisc = items.length === 0 || miscRemainderCents > 1;
               if (shouldCreateMisc) {
-                const miscAmount = items.length === 0 ? posRequest.totalAmountCents / 100 : miscRemainder;
+                const miscAmount = items.length === 0 ? posRequest.totalAmountCents / 100 : miscRemainderCents / 100;
                 try {
                   await prisma.purchase.create({
                     data: {
@@ -1964,16 +1983,32 @@ export const webhookHandler = async (req: Request, res: Response) => {
       }
       break;
     }
+    case 'account.updated': {
+      // P2-1: Stripe Connect onboarding completion — update stripeOnboarded flag
+      const account = event.data.object as any; // Stripe.Account
+
+      if (account.id) {
+        // Check if this account has completed onboarding (charges and payouts enabled)
+        const isOnboarded = account.charges_enabled && account.payouts_enabled;
+
+        try {
+          const organizersUpdated = await prisma.organizer.updateMany({
+            where: { stripeConnectAccountId: account.id },
+            data: { stripeOnboarded: isOnboarded }
+          });
+
+          if (organizersUpdated.count > 0) {
+            console.log(`[stripe-connect] account.updated: stripeOnboarded set to ${isOnboarded} for ${organizersUpdated.count} organizer(s)`);
+          }
+        } catch (err) {
+          console.error(`[stripe-connect] Failed to update stripeOnboarded for account ${account.id}:`, err);
+        }
+      }
+      break;
+    }
+
     default:
       console.warn(`[stripe] Unhandled event type: ${event.type}`);
-  }
-
-  try {
-    await prisma.processedWebhookEvent.create({
-      data: { eventId: event.id }
-    });
-  } catch (err) {
-    console.warn(`[webhook] Failed to record processed event ${event.id}:`, err);
   }
 
   res.json({ received: true });
@@ -2028,7 +2063,7 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Issue a refund (organizer or admin only)
+// Issue a refund (organizer or admin only) — P1-3: Refund endpoint with cap + email
 export const createRefund = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -2042,7 +2077,14 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     const purchase = await prisma.purchase.findUnique({
       where: { id: purchaseId },
       include: {
-        sale: { include: { organizer: { select: { userId: true } } } },
+        user: { select: { id: true, email: true, name: true } },
+        sale: {
+          include: {
+            organizer: { select: { userId: true, businessName: true } },
+            items: { where: { id: purchase.itemId || undefined } }
+          }
+        },
+        item: { select: { title: true } }
       },
     });
 
@@ -2062,15 +2104,71 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No payment intent found for this purchase' });
     }
 
-    await stripe().refunds.create({ payment_intent: purchase.stripePaymentIntentId });
-
-    await prisma.purchase.update({ where: { id: purchaseId }, data: { status: 'REFUNDED' } });
-
-    if (purchase.itemId) {
-      await prisma.item.update({ where: { id: purchase.itemId }, data: { status: 'AVAILABLE' } });
+    // P2-2: Verify purchase is within 30 days
+    const purchaseAgeMs = Date.now() - purchase.createdAt.getTime();
+    const purchaseAgeDays = purchaseAgeMs / (1000 * 60 * 60 * 24);
+    if (purchaseAgeDays > 30) {
+      return res.status(400).json({
+        message: 'Refunds can only be issued within 30 days of purchase',
+        purchaseAgeDays: Math.floor(purchaseAgeDays)
+      });
     }
 
-    res.json({ message: 'Refund issued successfully' });
+    // P2-2: Apply first-month refund cap for new accounts
+    const { cappedAmount, wasCapped } = await applyFirstMonthRefundCap(purchase.userId, purchase.amount);
+    const refundAmount = cappedAmount;
+
+    // Create Stripe refund with capped amount
+    await stripe().refunds.create({
+      payment_intent: purchase.stripePaymentIntentId,
+      amount: Math.round(refundAmount * 100) // Convert to cents
+    });
+
+    // Update purchase status
+    await prisma.purchase.update({
+      where: { id: purchaseId },
+      data: {
+        status: 'REFUNDED',
+        ...(wasCapped && { notes: `Refund capped: $${purchase.amount.toFixed(2)} → $${refundAmount.toFixed(2)} (first-month account)` })
+      }
+    });
+
+    // Restore item to AVAILABLE if it exists
+    if (purchase.itemId) {
+      await prisma.item.update({
+        where: { id: purchase.itemId },
+        data: { status: 'AVAILABLE' }
+      });
+    }
+
+    // Send confirmation email to shopper
+    const resend = getResendClient();
+    if (resend && purchase.user?.email) {
+      const fromEmail = process.env.RESEND_FROM_EMAIL || 'support@finda.sale';
+      const itemTitle = purchase.item?.title || 'your purchase';
+      const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+
+      resend.emails.send({
+        from: fromEmail,
+        to: purchase.user.email,
+        subject: 'Refund processed for your FindA.Sale purchase',
+        html: `
+          <h2>Refund Processed</h2>
+          <p>Hi ${purchase.user.name || 'Shopper'},</p>
+          <p>We've issued a refund of <strong>$${refundAmount.toFixed(2)}</strong> for <strong>${itemTitle}</strong> from <strong>${purchase.sale?.organizer?.businessName || 'a sale'}</strong>.</p>
+          <p>The refund will appear in your original payment method within 1-2 business days.</p>
+          ${wasCapped ? `<p style="color: #ef4444; font-size: 14px;"><strong>Note:</strong> Your refund was capped at 50% because your account is less than 30 days old (Platform Safety Policy #100).</p>` : ''}
+          <p><a href="${baseUrl}/shopper/purchases">View your purchase history</a></p>
+        `,
+      }).catch((err: unknown) => console.warn('[refund] Failed to send confirmation email:', err));
+    }
+
+    res.json({
+      message: 'Refund issued successfully',
+      refundAmount,
+      wasCapped,
+      originalAmount: purchase.amount
+    });
   } catch (error) {
     console.error('createRefund error:', error);
     res.status(500).json({ message: 'Failed to issue refund' });

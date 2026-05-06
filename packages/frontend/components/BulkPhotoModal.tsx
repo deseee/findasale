@@ -9,6 +9,7 @@
  */
 
 import React, { useState } from 'react';
+import AccessibleModal from './AccessibleModal';
 
 interface BulkPhotoModalProps {
   isOpen: boolean;
@@ -86,10 +87,14 @@ const BulkPhotoModal: React.FC<BulkPhotoModalProps> = ({
   const isFormValid = photoUrls.length > 0 && !isApplying && !loading;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="bulk-photo-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <h3 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Manage Photos</h3>
+        <h3 id="bulk-photo-modal-title" className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Manage Photos</h3>
 
         {/* Info */}
         <p className="text-warm-700 mb-4 text-sm">
@@ -223,7 +228,7 @@ const BulkPhotoModal: React.FC<BulkPhotoModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 

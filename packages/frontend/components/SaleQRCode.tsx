@@ -97,10 +97,11 @@ const SaleQRCode: React.FC<SaleQRCodeProps> = ({
   return (
     <div className="flex flex-col items-center gap-3">
       {/* QR Code image */}
-      <div
-        className="border border-warm-200 rounded-xl p-3 bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+      <button
         onClick={() => setEnlarged(true)}
+        className="border border-warm-200 rounded-xl p-3 bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow"
         title="Click to enlarge"
+        aria-label={`Enlarge QR code for ${saleTitle}`}
       >
         <Image
           src={qrSrc}
@@ -109,7 +110,7 @@ const SaleQRCode: React.FC<SaleQRCodeProps> = ({
           height={size}
           className="block"
         />
-      </div>
+      </button>
 
       {showActions && (
         <div className="flex gap-2 flex-wrap justify-center">

@@ -45,12 +45,12 @@ module.exports = {
         },
         // CD1: Brand sage-green — sustainability, calm, secondary accents
         sage: {
-          DEFAULT: '#6B9E7F',
+          DEFAULT: '#4A7A5C',
           50: '#F0F7F3',
           100: '#D9EDE3',
           200: '#B3DAC7',
           300: '#8DC6AB',
-          400: '#6B9E7F',  // brand sage — taglines, secondary accents
+          400: '#4A7A5C',  // brand sage — taglines, secondary accents (WCAG AA 4.5:1 on warm-100)
           500: '#52876A',
           600: '#3E6E53',
           700: '#2D5440',
