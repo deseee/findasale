@@ -175,11 +175,17 @@ const nextConfig = {
   },
 
   // Static HTML rewrites — serve public/*.html files at clean URLs
+  // S651: catch-all /api/:path* proxy → Railway backend.
+  // Next.js API routes (pages/api/*) take precedence over rewrites, so auth, billing,
+  // proxy/ebay, og, share-card are still served by Next.js. All other /api/* calls
+  // (sales, hubs, crews, admin, stripe-connect, etc.) are forwarded to Railway.
   async rewrites() {
+    const railwayApi = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
     return [
-      // S486: Marketing landing page with embedded 38s demo video
-      // Served at finda.sale/video from public/video.html (embeds organizer-video-ad-fas.html)
+      // Marketing landing page
       { source: '/video', destination: '/video.html' },
+      // Proxy unmatched /api/* → Railway (afterFiles: pages/api/* always win)
+      { source: '/api/:path*', destination: `${railwayApi}/:path*` },
     ];
   },
 
