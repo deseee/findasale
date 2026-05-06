@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Resend } from 'resend';
 import crypto from 'crypto';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 
 // Auth validation schemas
@@ -40,7 +40,7 @@ const forgotPasswordLimiter = rateLimit({
 const resetPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5,
-  keyGenerator: (req) => `reset:${req.body?.token || req.params?.token || 'unknown'}:${req.ip}`,
+  keyGenerator: (req) => `reset:${req.body?.token || req.params?.token || 'unknown'}:${ipKeyGenerator(req)}`,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many reset attempts. Please request a new reset link.' },
