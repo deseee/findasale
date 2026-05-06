@@ -182,15 +182,15 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
           </div>
         )}
 
-        {/* Rank-Based Early Access: Lock badge */}
+        {/* Rank-Based Early Access: Lock badge — corner only, never covers photo */}
         {sale.locked && sale.minutesUntilUnlock !== undefined && (
-          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-            <div className="bg-white/95 dark:bg-gray-900/95 rounded-lg px-4 py-3 flex flex-col items-center gap-1 backdrop-blur-sm">
-              <Lock className="w-5 h-5 text-warm-600 dark:text-warm-400" />
-              <p className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
-                Unlocks in {formatUnlockTime(sale.minutesUntilUnlock)}
-              </p>
-            </div>
+          <div className="absolute bottom-2 left-2">
+            <span className="flex items-center gap-1 px-2 py-1 rounded bg-black/60 backdrop-blur-sm text-white text-xs font-semibold">
+              <Lock className="w-3 h-3" />
+              {sale.minutesUntilUnlock > 0
+                ? `Unlocks in ${formatUnlockTime(sale.minutesUntilUnlock)}`
+                : 'Early access'}
+            </span>
           </div>
         )}
       </Link>
