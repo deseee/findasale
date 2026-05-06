@@ -6,7 +6,7 @@
  * Schedule:
  *   00:00 UTC — EstateSalesNet (all metros)
  *   06:00 UTC — GarageSaleFinder (all metros)
- *   12:00 UTC — Craigslist (all metros)
+ *   12:00 UTC — FacebookMarketplace (all metros)
  */
 
 import cron from 'node-cron';
