@@ -140,6 +140,13 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
+    // SECURITY FIX P1: Validate organizer ownership before associating Stripe Connect account
+    // Prevent account takeover by ensuring only the organizer's own user can associate Connect accounts
+    if (organizer.userId !== req.user.id) {
+      console.warn(`[SECURITY] Unauthorized Stripe Connect attempt: userId=${req.user.id} attempted to access organizerId=${organizer.id}`);
+      return res.status(403).json({ message: 'Forbidden. You do not have permission to modify this organizer.' });
+    }
+
     if (organizer.stripeConnectId) {
       try {
         const loginLink = await stripe().accounts.createLoginLink(organizer.stripeConnectId);
@@ -162,6 +169,8 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
           loginError.code === 'account_invalid' ||
           loginError.type === 'invalid_request_error';
         if (!isInvalidAccount) throw loginError;
+        // SECURITY: Log when clearing invalid Stripe Connect account
+        console.warn(`[SECURITY] Invalid Stripe Connect account cleared: organizerId=${organizer.id} oldConnectId=${organizer.stripeConnectId} by userId=${req.user!.id} at ${new Date().toISOString()}`);
         await prisma.organizer.update({
           where: { userId: req.user!.id },
           data: { stripeConnectId: null },
@@ -183,6 +192,10 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
       where: { userId: req.user.id },
       data: { stripeConnectId: account.id }
     });
+
+    // SECURITY: Audit log for Stripe Connect account association
+    console.log(`[SECURITY] Stripe Connect account linked: organizerId=${organizer.id} connectId=${account.id} by userId=${req.user.id} at ${new Date().toISOString()}`);
+    console.info(`[billing] Stripe Connect account created for organizer ${organizer.id}`);
 
     const accountLink = await stripe().accountLinks.create({
       account: account.id,

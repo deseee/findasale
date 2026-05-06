@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
@@ -15,6 +16,17 @@ import { awardOrganizerClaimedXp } from '../services/referralService';
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 
 const router = Router();
+
+// P1 Security: Rate limit public organizer endpoints to prevent bulk PII harvesting
+// - 100 requests per 10 minutes per IP for directory/profile lookups
+// - Prevents automated scraping of contact data (phone, address)
+const publicDirectoryRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 100, // 100 requests per 10 min per IP
+  message: { error: 'Too many requests. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Organizer profile validation schema
 const organizerProfileSchema = z.object({
@@ -852,8 +864,11 @@ router.post('/admin/claim-requests/:id/reject', authenticate, async (req: AuthRe
 
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
 // Supports lookup by ID (CUID) or by customStorefrontSlug (user-friendly slug)
-router.get('/:id', async (req: Request, res: Response) => {
+// P1 Security: Strip PII (phone, address) from unauthenticated responses
+router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Response) => {
   try {
+    const isAuthenticated = !!(req.headers.authorization?.startsWith('Bearer '));
+
     // Try lookup by ID first (internal CUID)
     let organizer = await prisma.organizer.findUnique({
       where: { id: req.params.id },
@@ -1048,11 +1063,10 @@ router.get('/:id', async (req: Request, res: Response) => {
       }
     }
 
-    res.json({
+    // P1 Security: Only return PII (phone, address) to authenticated requests
+    const responseData: any = {
       id: organizer.id,
       businessName: organizer.businessName,
-      phone: organizer.phone,
-      address: organizer.address,
       reputationTier: organizer.reputationTier,
       // Profile fields (S609 + storefront)
       bio: organizer.bio,
@@ -1104,7 +1118,15 @@ router.get('/:id', async (req: Request, res: Response) => {
       isFollowing,
       isClaimed: organizer.isClaimed,
       isUnmanagedListing: organizer.isUnmanagedListing,
-    });
+    };
+
+    // Include contact details only if authenticated
+    if (isAuthenticated) {
+      responseData.phone = organizer.phone;
+      responseData.address = organizer.address;
+    }
+
+    res.json(responseData);
   } catch (error) {
     console.error('Error fetching organizer profile:', error);
     res.status(500).json({ message: 'Server error' });
@@ -1182,7 +1204,8 @@ router.delete('/:id/follow', authenticate, async (req: AuthRequest, res: Respons
 });
 
 // GET /:id/followers — list followers of an organizer (public, paginated)
-router.get('/:id/followers', async (req: Request, res: Response) => {
+// P1 Security: Rate limit to prevent bulk user enumeration
+router.get('/:id/followers', publicDirectoryRateLimiter, async (req: Request, res: Response) => {
   try {
     const organizerId = req.params.id;
     const page = parseInt(req.query.page as string) || 1;

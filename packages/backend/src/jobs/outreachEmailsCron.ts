@@ -191,7 +191,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
         });
 
         const subject = renderTemplate(template.subject, {
-          'Business Name': escapeHtml(record.organizer.businessName || 'Your Business'),
+          'Business Name': escapeHtml((record.organizer.businessName || 'Your Business').replace(/[\r\n\t]/g, ' ')),
         });
 
         // Append tracking pixel — templates don't include <body> tags, so just concat
@@ -215,6 +215,19 @@ export const sendOutreachEmails = async (): Promise<void> => {
           },
         });
 
+        // Log SENT event for CAN-SPAM audit trail
+        try {
+          await prisma.outreachAuditLog.create({
+            data: {
+              organizerId: record.organizerId,
+              event: 'SENT',
+              touchNumber: touchNum,
+            },
+          });
+        } catch (auditErr: any) {
+          console.error('[OutreachAudit] Failed to log SENT event for org:', record.organizerId, '—', auditErr.message);
+        }
+
         const updateData: any = { [`touch${touchNum}SentAt`]: new Date(), trackingPixelId, trackingToken };
         await prisma.directoryClaimEmail.update({
           where: { id: record.id },
@@ -225,7 +238,9 @@ export const sendOutreachEmails = async (): Promise<void> => {
         console.log(`[OutreachCron] Sent Touch ${touchNum} to ${record.organizerId}`);
       } catch (err: any) {
         failed++;
-        console.error(`[OutreachCron] Failed to send to ${record.organizerId}:`, err.message);
+        // SECURITY FIX P3: Only log the error message, not the full error object which may contain transport config with credentials
+        const errorMsg = err.message || 'Unknown error';
+        console.error(`[OutreachCron] Failed to send to ${record.organizerId} — ${errorMsg}`);
       }
     }
 

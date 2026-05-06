@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
+import { Webhook } from 'svix';
 import { prisma } from '../lib/prisma';
 import { suppressionService } from '../services/suppressionService';
 
@@ -19,7 +20,25 @@ const unsubscribeLimiter = rateLimit({
   },
 });
 
-router.get('/pixel', async (req, res) => {
+// Rate limiter for pixel tracking endpoint (30 req/min per IP) — legitimate email clients can open same email multiple times
+const pixelLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many pixel tracking requests.' },
+});
+
+// Rate limiter for click tracking endpoint (10 req/min per IP) — click spam prevention
+const clickLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many click tracking requests.' },
+});
+
+router.get('/pixel', pixelLimiter, async (req, res) => {
   try {
     const { trackingId } = req.query;
     if (!trackingId || typeof trackingId !== 'string') {
@@ -52,7 +71,7 @@ router.get('/pixel', async (req, res) => {
   }
 });
 
-router.get('/click', async (req, res) => {
+router.get('/click', clickLimiter, async (req, res) => {
   try {
     const { trackingId, original } = req.query;
     if (!trackingId || typeof trackingId !== 'string' || !original || typeof original !== 'string') {
@@ -112,8 +131,24 @@ const handleUnsubscribe = async (req: express.Request, res: express.Response) =>
         throw new Error('OUTREACH_SECRET environment variable is not configured');
       }
       const decoded = jwt.verify(token, secret) as any;
-      const { email } = decoded;
+      const { email, organizerId } = decoded;
       await suppressionService.processOptOut(email);
+
+      // Log OPTED_OUT event for CAN-SPAM audit trail
+      if (organizerId) {
+        try {
+          await prisma.outreachAuditLog.create({
+            data: {
+              organizerId,
+              event: 'OPTED_OUT',
+              touchNumber: null,
+            },
+          });
+        } catch (auditErr: any) {
+          console.error('[OutreachAudit] Failed to log OPTED_OUT event for org:', organizerId, '—', auditErr.message);
+        }
+      }
+
       res.status(200).send('<html><body><p>You have been unsubscribed. You will not receive further emails from FindA.Sale.</p></body></html>');
     } catch (jwtErr: any) {
       console.error('[OutreachUnsubscribe] JWT error:', jwtErr.message);
@@ -132,26 +167,59 @@ router.get('/unsubscribe', handleUnsubscribe);
 // Rate limiting applied to POST to prevent abuse via forged requests.
 router.post('/unsubscribe', unsubscribeLimiter, express.urlencoded({ extended: false }), handleUnsubscribe);
 
-router.post('/resend-webhook', async (req, res) => {
+router.post('/resend-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
-    const { type, email, bounce_type } = req.body;
-    if (!email) return res.status(400).json({ error: 'Missing email' });
-
-    if (type === 'email.bounced') {
-      const bounceReason = bounce_type === 'hard' ? 'hard_bounce' : 'soft_bounce';
-      await suppressionService.addSuppression(email, bounceReason as any);
+    const secret = process.env.RESEND_WEBHOOK_SECRET;
+    if (!secret) {
+      console.warn('[OutreachWebhook] RESEND_WEBHOOK_SECRET not set — falling back to request body validation only. Set RESEND_WEBHOOK_SECRET for full signature verification.');
+      // Fall back to processing without signature verification (less secure but non-blocking)
+      const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      return await handleResendWebhook(payload, res);
     }
 
-    if (type === 'email.complaint') {
-      await suppressionService.processComplaint(email);
+    const svixId = req.headers['svix-id'] as string;
+    const svixTimestamp = req.headers['svix-timestamp'] as string;
+    const svixSignature = req.headers['svix-signature'] as string;
+
+    if (!svixId || !svixTimestamp || !svixSignature) {
+      console.warn('[OutreachWebhook] Missing Svix headers (svix-id, svix-timestamp, or svix-signature)');
+      return res.status(401).json({ error: 'Unauthorized: missing webhook signature headers' });
     }
 
-    res.status(200).json({ ok: true });
+    const wh = new Webhook(secret);
+    const payload = wh.verify(req.body, {
+      'svix-id': svixId,
+      'svix-timestamp': svixTimestamp,
+      'svix-signature': svixSignature,
+    });
+
+    await handleResendWebhook(payload, res);
   } catch (err: any) {
+    // Webhook signature verification failed or payload parsing failed
+    if (err.message?.includes('signature') || err.message?.includes('timestamp')) {
+      console.warn('[OutreachWebhook] Signature verification failed:', err.message);
+      return res.status(401).json({ error: 'Unauthorized: invalid webhook signature' });
+    }
     console.error('[OutreachWebhook] Error:', err.message);
     res.status(500).json({ error: 'Webhook error' });
   }
 });
+
+async function handleResendWebhook(payload: any, res: express.Response): Promise<void> {
+  const { type, email, bounce_type } = payload;
+  if (!email) return res.status(400).json({ error: 'Missing email' });
+
+  if (type === 'email.bounced') {
+    const bounceReason = bounce_type === 'hard' ? 'hard_bounce' : 'soft_bounce';
+    await suppressionService.addSuppression(email, bounceReason as any);
+  }
+
+  if (type === 'email.complaint') {
+    await suppressionService.processComplaint(email);
+  }
+
+  res.status(200).json({ ok: true });
+}
 
 function determineCurrentTouch(record: any): number | null {
   if (record.touch4SentAt) return 4;
