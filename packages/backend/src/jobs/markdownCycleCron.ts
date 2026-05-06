@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { prisma } from '../index';
+import { cronGuard } from '../utils/cronGuard';
 
 /**
  * Feature #XXX: Automatic Markdown Cycles (PRO Tier)
@@ -17,19 +18,18 @@ import { prisma } from '../index';
  */
 export function scheduleMarkdownCycleCron(): void {
   // 0 3 * * * = 3:00 AM UTC every day
-  cron.schedule('0 3 * * *', async () => {
-    try {
-      const now = new Date();
+  cron.schedule('0 3 * * *', cronGuard({ jobName: 'markdownCycleCron' }, async () => {
+    const now = new Date();
 
-      // Find all active markdown cycles
-      const cycles = await prisma.markdownCycle.findMany({
-        where: { isActive: true },
-        include: { sale: { select: { id: true, organizerId: true } } },
-      });
+    // Find all active markdown cycles
+    const cycles = await prisma.markdownCycle.findMany({
+      where: { isActive: true },
+      include: { sale: { select: { id: true, organizerId: true } } },
+    });
 
-      if (cycles.length === 0) {
-        // Silent — nothing to do
-        return;
+    if (cycles.length === 0) {
+      // Silent — nothing to do
+      return;
       }
 
       console.log(`[markdown-cycle-cron] Found ${cycles.length} active markdown cycles to process`);
@@ -128,14 +128,10 @@ export function scheduleMarkdownCycleCron(): void {
         }
       }
 
-      if (totalMarkdownsApplied > 0) {
-        console.log(`[markdown-cycle-cron] Total items marked down: ${totalMarkdownsApplied}`);
-      }
-    } catch (error) {
-      console.error('[markdown-cycle-cron] Error in markdown cycle cron:', error);
-      // Continue — don't let cron job crash
+    if (totalMarkdownsApplied > 0) {
+      console.log(`[markdown-cycle-cron] Total items marked down: ${totalMarkdownsApplied}`);
     }
-  });
+  }));
 
   console.log('[markdown-cycle-cron] Registered automatic markdown cycle cron (3:00 AM UTC daily)');
 }

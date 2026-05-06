@@ -4,6 +4,7 @@
  */
 
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { finalizeGracePeriod } from '../services/tierGraceService';
 
@@ -12,7 +13,7 @@ import { finalizeGracePeriod } from '../services/tierGraceService';
  * Runs daily at 02:00 UTC
  */
 export function startTierGraceCron() {
-  cron.schedule('0 2 * * *', async () => {
+  cron.schedule('0 2 * * *', cronGuard({ jobName: 'tierGraceCronJob' }, async () => {
     console.log('[tierGraceCron] Checking for expired grace periods...');
     try {
       const expired = await prisma.organizer.findMany({

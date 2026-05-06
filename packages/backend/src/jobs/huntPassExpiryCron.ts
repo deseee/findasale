@@ -12,26 +12,23 @@
 
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
+import { cronGuard } from '../utils/cronGuard';
 
 // Run at 03:00 UTC daily (staggered from xpExpiryCron at 02:00)
-cron.schedule('0 3 * * *', async () => {
-  try {
-    const result = await prisma.user.updateMany({
-      where: {
-        huntPassActive: true,
-        huntPassExpiry: { lt: new Date() },
-      },
-      data: {
-        huntPassActive: false,
-      },
-    });
+cron.schedule('0 3 * * *', cronGuard({ jobName: 'huntPassExpiryCron' }, async () => {
+  const result = await prisma.user.updateMany({
+    where: {
+      huntPassActive: true,
+      huntPassExpiry: { lt: new Date() },
+    },
+    data: {
+      huntPassActive: false,
+    },
+  });
 
-    if (result.count > 0) {
-      console.log(`[huntPassExpiryCron] Deactivated ${result.count} expired Hunt Pass(es)`);
-    }
-  } catch (err) {
-    console.error('[huntPassExpiryCron] Error expiring Hunt Passes:', err);
+  if (result.count > 0) {
+    console.log(`[huntPassExpiryCron] Deactivated ${result.count} expired Hunt Pass(es)`);
   }
-});
+}));
 
 console.log('[huntPassExpiryCron] Registered — runs daily at 03:00 UTC');

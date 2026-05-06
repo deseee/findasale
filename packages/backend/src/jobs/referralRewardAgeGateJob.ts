@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { awardXp, XP_AWARDS } from '../services/xpService';
 import { getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from '../services/referralFraudService';
@@ -15,7 +16,7 @@ import { getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from '../services/referralFra
 
 export function scheduleReferralRewardAgeGateCron() {
   // 0 2 * * * = every day at 2 AM UTC
-  cron.schedule('0 2 * * *', async () => {
+  cron.schedule('0 2 * * *', cronGuard({ jobName: 'referralRewardAgeGateJob' }, async () => {
     try {
       console.log('[referralRewardAgeGateCron] Starting at', new Date().toISOString());
 

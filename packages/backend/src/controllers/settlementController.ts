@@ -165,33 +165,38 @@ export const updateSettlement = async (req: AuthRequest, res: Response) => {
     const settlement = await prisma.saleSettlement.findUnique({ where: { saleId } });
     if (!settlement) return res.status(404).json({ message: 'No settlement found.' });
 
-    const updateData: Record<string, any> = {};
-    if (notes !== undefined) updateData.notes = notes;
-    if (settlementNotes !== undefined) updateData.settlementNotes = settlementNotes;
-    if (internalNotes !== undefined) updateData.internalNotes = internalNotes;
-    if (commissionRate !== undefined) updateData.commissionRate = new Decimal(commissionRate);
-    if (lifecycleStage !== undefined) {
-      updateData.lifecycleStage = lifecycleStage;
-      // Sync lifecycle stage to Sale model
-      await prisma.sale.update({
-        where: { id: saleId },
-        data: { lifecycleStage },
+    // P1 Race Fix: Wrap entire update in transaction
+    const updated = await prisma.$transaction(async (tx) => {
+      const updateData: Record<string, any> = {};
+      if (notes !== undefined) updateData.notes = notes;
+      if (settlementNotes !== undefined) updateData.settlementNotes = settlementNotes;
+      if (internalNotes !== undefined) updateData.internalNotes = internalNotes;
+      if (commissionRate !== undefined) updateData.commissionRate = new Decimal(commissionRate);
+
+      // Recalculate net proceeds if commission rate changed
+      if (commissionRate !== undefined) {
+        const rate = Number(commissionRate) / 100;
+        const revenue = Number(settlement.totalRevenue);
+        const expenses = Number(settlement.totalExpenses);
+        const commission = revenue * rate;
+        updateData.platformFeeAmount = new Decimal(commission);
+        updateData.netProceeds = new Decimal(revenue - commission - expenses);
+      }
+
+      if (lifecycleStage !== undefined) {
+        updateData.lifecycleStage = lifecycleStage;
+        // Sync lifecycle stage to Sale model within same transaction
+        await tx.sale.update({
+          where: { id: saleId },
+          data: { lifecycleStage },
+        });
+      }
+
+      // Update SaleSettlement within transaction
+      return await tx.saleSettlement.update({
+        where: { id: settlement.id },
+        data: updateData,
       });
-    }
-
-    // Recalculate net proceeds if commission rate changed
-    if (commissionRate !== undefined) {
-      const rate = Number(commissionRate) / 100;
-      const revenue = Number(settlement.totalRevenue);
-      const expenses = Number(settlement.totalExpenses);
-      const commission = revenue * rate;
-      updateData.platformFeeAmount = new Decimal(commission);
-      updateData.netProceeds = new Decimal(revenue - commission - expenses);
-    }
-
-    const updated = await prisma.saleSettlement.update({
-      where: { id: settlement.id },
-      data: updateData,
     });
 
     return res.json({
@@ -231,43 +236,48 @@ export const addExpense = async (req: AuthRequest, res: Response) => {
     const settlement = await prisma.saleSettlement.findUnique({ where: { saleId } });
     if (!settlement) return res.status(404).json({ message: 'No settlement found. Create settlement first.' });
 
-    const expense = await prisma.saleExpense.create({
-      data: {
-        settlementId: settlement.id,
-        category,
-        description,
-        amount: new Decimal(amount),
-        vendorName: vendorName || null,
-        receiptUrl: receiptUrl || null,
-        receiptDate: receiptDate ? new Date(receiptDate) : null,
-      },
-    });
+    // P1 Race Fix: Wrap expense creation and recalculation in single transaction
+    const result = await prisma.$transaction(async (tx) => {
+      const expense = await tx.saleExpense.create({
+        data: {
+          settlementId: settlement.id,
+          category,
+          description,
+          amount: new Decimal(amount),
+          vendorName: vendorName || null,
+          receiptUrl: receiptUrl || null,
+          receiptDate: receiptDate ? new Date(receiptDate) : null,
+        },
+      });
 
-    // Recalculate totals
-    const allExpenses = await prisma.saleExpense.findMany({
-      where: { settlementId: settlement.id, deletedAt: null },
-    });
-    const totalExpenses = allExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
-    const revenue = Number(settlement.totalRevenue);
-    const fees = Number(settlement.platformFeeAmount);
+      // Recalculate totals within transaction to see own write
+      const allExpenses = await tx.saleExpense.findMany({
+        where: { settlementId: settlement.id, deletedAt: null },
+      });
+      const totalExpenses = allExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+      const revenue = Number(settlement.totalRevenue);
+      const fees = Number(settlement.platformFeeAmount);
 
-    await prisma.saleSettlement.update({
-      where: { id: settlement.id },
-      data: {
-        totalExpenses: new Decimal(totalExpenses),
-        netProceeds: new Decimal(revenue - fees - totalExpenses),
-      },
+      const updatedSettlement = await tx.saleSettlement.update({
+        where: { id: settlement.id },
+        data: {
+          totalExpenses: new Decimal(totalExpenses),
+          netProceeds: new Decimal(revenue - fees - totalExpenses),
+        },
+      });
+
+      return { expense, settlement: updatedSettlement };
     });
 
     return res.status(201).json({
-      id: expense.id,
-      category: expense.category,
-      description: expense.description,
-      amount: toNumber(expense.amount),
-      vendorName: expense.vendorName,
-      receiptUrl: expense.receiptUrl,
-      receiptDate: expense.receiptDate?.toISOString() ?? null,
-      createdAt: expense.createdAt.toISOString(),
+      id: result.expense.id,
+      category: result.expense.category,
+      description: result.expense.description,
+      amount: toNumber(result.expense.amount),
+      vendorName: result.expense.vendorName,
+      receiptUrl: result.expense.receiptUrl,
+      receiptDate: result.expense.receiptDate?.toISOString() ?? null,
+      createdAt: result.expense.createdAt.toISOString(),
     });
   } catch (error) {
     console.error('addExpense error:', error);
@@ -290,26 +300,29 @@ export const removeExpense = async (req: AuthRequest, res: Response) => {
     const settlement = await prisma.saleSettlement.findUnique({ where: { saleId } });
     if (!settlement) return res.status(404).json({ message: 'No settlement found.' });
 
-    // Soft delete
-    await prisma.saleExpense.update({
-      where: { id: expenseId },
-      data: { deletedAt: new Date() },
-    });
+    // P1 Race Fix: Wrap expense deletion and recalculation in single transaction
+    await prisma.$transaction(async (tx) => {
+      // Soft delete
+      await tx.saleExpense.update({
+        where: { id: expenseId },
+        data: { deletedAt: new Date() },
+      });
 
-    // Recalculate totals
-    const allExpenses = await prisma.saleExpense.findMany({
-      where: { settlementId: settlement.id, deletedAt: null },
-    });
-    const totalExpenses = allExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
-    const revenue = Number(settlement.totalRevenue);
-    const fees = Number(settlement.platformFeeAmount);
+      // Recalculate totals within transaction
+      const allExpenses = await tx.saleExpense.findMany({
+        where: { settlementId: settlement.id, deletedAt: null },
+      });
+      const totalExpenses = allExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+      const revenue = Number(settlement.totalRevenue);
+      const fees = Number(settlement.platformFeeAmount);
 
-    await prisma.saleSettlement.update({
-      where: { id: settlement.id },
-      data: {
-        totalExpenses: new Decimal(totalExpenses),
-        netProceeds: new Decimal(revenue - fees - totalExpenses),
-      },
+      await tx.saleSettlement.update({
+        where: { id: settlement.id },
+        data: {
+          totalExpenses: new Decimal(totalExpenses),
+          netProceeds: new Decimal(revenue - fees - totalExpenses),
+        },
+      });
     });
 
     return res.json({ message: 'Expense removed.' });

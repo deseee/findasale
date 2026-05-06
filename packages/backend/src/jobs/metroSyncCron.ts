@@ -10,6 +10,7 @@
 import cron from 'node-cron';
 import { Decimal } from '@prisma/client/runtime/library';
 import { prisma } from '../lib/prisma';
+import { cronGuard } from '../utils/cronGuard';
 
 // Phase 1: 20 major metro markets (can expand to 50+ in Phase 2)
 interface MetroConfig {
@@ -413,9 +414,9 @@ export function initMetroSyncCron(): void {
   }
 
   // Cron format: minute hour dayOfMonth month dayOfWeek
-  cron.schedule('0 4 * * *', async () => {
+  cron.schedule('0 4 * * *', cronGuard({ jobName: 'metroSyncCron' }, async () => {
     await syncAllMetros();
-  });
+  }));
 
   console.log('[MetroSync] Cron registered — runs daily at 04:00 UTC');
 }

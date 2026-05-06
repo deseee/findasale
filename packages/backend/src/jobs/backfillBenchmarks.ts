@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
+import { cronGuard } from '../utils/cronGuard';
 
 /**
  * backfillBenchmarks.ts
@@ -271,9 +272,9 @@ export async function runBackfillBenchmarks(): Promise<{
  * Cron: minute hour dayOfMonth month dayOfWeek
  *        0     2    *           *     3 (Wednesday)
  */
-cron.schedule('0 2 * * 3', async () => {
+cron.schedule('0 2 * * 3', cronGuard({ jobName: 'backfillBenchmarks' }, async () => {
   console.log('[backfillBenchmarks] Scheduled job triggered');
   await runBackfillBenchmarks();
-});
+}));
 
 console.log('[backfillBenchmarks] Backfill benchmarks job scheduled (Wednesday 2 AM UTC)');

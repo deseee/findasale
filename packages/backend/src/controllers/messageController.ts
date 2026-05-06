@@ -158,6 +158,20 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
       },
     });
 
+
+    // Guard: reject messages to unmanaged listings
+    if (saleId) {
+      const sale = await prisma.sale.findUnique({
+        where: { id: saleId },
+        select: { id: true, isUnmanagedListing: true }
+      });
+      if (sale?.isUnmanagedListing) {
+        return res.status(403).json({
+          message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
+          code: 'UNMANAGED_LISTING'
+        });
+      }
+    }
     const message = await prisma.message.create({
       data: {
         conversationId: conversation.id,

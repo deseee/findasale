@@ -6,17 +6,14 @@
 
 import cron from 'node-cron';
 import { expireBoosts } from '../services/boostService';
+import { cronGuard } from '../utils/cronGuard';
 
 // Run every hour at :05 past (staggered from reservation expiry at :00)
-cron.schedule('5 * * * *', async () => {
-  try {
-    const count = await expireBoosts();
-    if (count > 0) {
-      console.log(`[boostExpiryJob] Expired ${count} boost purchase(s)`);
-    }
-  } catch (err) {
-    console.error('[boostExpiryJob] Error expiring boosts:', err);
+cron.schedule('5 * * * *', cronGuard({ jobName: 'boostExpiryJob' }, async () => {
+  const count = await expireBoosts();
+  if (count > 0) {
+    console.log(`[boostExpiryJob] Expired ${count} boost purchase(s)`);
   }
-});
+}));
 
 console.log('[boostExpiryJob] Registered — runs hourly at :05');

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { register, login, oauthLogin, redeemInvite, verifyEmail } from '../controllers/authController';
+import { register, login, oauthLogin, redeemInvite, verifyEmail, oauthVerifyAge } from '../controllers/authController';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import bcrypt from 'bcryptjs';
@@ -67,6 +67,7 @@ router.post('/login', loginLimiter, login);
 router.post('/oauth', oauthLogin); // Phase 31: social login token exchange
 router.post('/redeem-invite', authenticate, redeemInvite); // Redeem beta invite for OAuth users
 router.post('/verify-email', verifyEmail); // Security: Email verification gate (P0)
+router.post('/oauth-verify-age', authenticate, oauthVerifyAge); // P0-L1: COPPA compliance — OAuth age verification
 
 // Change password — requires current password for verification
 router.post('/change-password', authenticate, async (req: AuthRequest, res: Response) => {

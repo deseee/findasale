@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import nodemailer from 'nodemailer';
+import { cronGuard } from '../utils/cronGuard';
 import { v4 as uuid } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
@@ -257,10 +258,10 @@ export const initOutreachEmailsCron = (): void => {
   }
 
   // Run every 4 hours (6 windows per day)
-  cron.schedule('0 */4 * * *', async () => {
+  cron.schedule('0 */4 * * *', cronGuard({ jobName: 'outreachEmailsCron' }, async () => {
     console.log('[OutreachCron] Starting scheduled batch');
     await sendOutreachEmails();
-  });
+  }));
 
   console.log('[OutreachCron] Initialized (runs every 4 hours)');
 };

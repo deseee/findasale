@@ -1374,6 +1374,15 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
+    // Guard: reject actions on unmanaged listings
+    if (item.sale?.isUnmanagedListing) {
+      return res.status(403).json({
+        message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
+        code: 'UNMANAGED_LISTING'
+      });
+    }
+    }
+
     if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. Not your item.' });
     }

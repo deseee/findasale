@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { prisma } from '../index';
+import { cronGuard } from '../utils/cronGuard';
 
 /**
  * Auto-apply markdown to items based on sale age.
@@ -14,15 +15,14 @@ import { prisma } from '../index';
  * Runs every 5 minutes.
  */
 export function scheduleMarkdownCron(): void {
-  cron.schedule('*/5 * * * *', async () => {
-    try {
-      const now = new Date();
+  cron.schedule('*/5 * * * *', cronGuard({ jobName: 'markdownCron' }, async () => {
+    const now = new Date();
 
-      // Find all published sales with markdown enabled
-      const salesToProcess = await prisma.sale.findMany({
-        where: {
-          status: 'PUBLISHED',
-          markdownEnabled: true,
+    // Find all published sales with markdown enabled
+    const salesToProcess = await prisma.sale.findMany({
+      where: {
+        status: 'PUBLISHED',
+        markdownEnabled: true,
           startDate: { lte: now },
         },
         select: {
@@ -105,14 +105,10 @@ export function scheduleMarkdownCron(): void {
         }
       }
 
-      if (totalMarkdowns > 0) {
-        console.log(`[markdown-cron] Applied markdown to ${totalMarkdowns} items`);
-      }
-    } catch (error) {
-      console.error('[markdown-cron] Error in markdown cron:', error);
-      // Continue — don't let cron job crash
+    if (totalMarkdowns > 0) {
+      console.log(`[markdown-cron] Applied markdown to ${totalMarkdowns} items`);
     }
-  });
+  }));
 
   console.log('[markdown-cron] Registered auto-markdown cron (every 5 minutes)');
 }

@@ -11,22 +11,22 @@ const router = Router();
 router.use(authenticate);
 
 // POST /api/upload/sale-photos — up to 20 images
-router.post('/sale-photos', upload.array('photos', 20), uploadSalePhotos);
+router.post('/sale-photos', uploadLimiter, upload.array('photos', 20), uploadSalePhotos);
 
 // POST /api/upload/item-photo — single image
-router.post('/item-photo', upload.single('photo'), uploadItemPhoto);
+router.post('/item-photo', uploadLimiter, upload.single('photo'), uploadItemPhoto);
 
 // POST /api/upload/analyze-photo — send image to qwen3-vl:4b, returns { title, description, category, condition, suggestedPrice }
-router.post('/analyze-photo', upload.single('photo'), analyzePhotoWithAI);
+router.post('/analyze-photo', aiAnalyzeLimiter, upload.single('photo'), analyzePhotoWithAI);
 
 // POST /api/upload/rapid-batch — Phase 14: upload + AI in one call (up to 20 images)
-router.post('/rapid-batch', upload.array('photos', 20), rapidBatchUpload);
+router.post('/rapid-batch', uploadLimiter, upload.array('photos', 20), rapidBatchUpload);
 
 // POST /api/upload/rapidfire — Phase 2A: single image, create DRAFT item, queue background AI
 router.post('/rapidfire', upload.single('image'), uploadRapidfire);
 
 // POST /api/upload/batch-analyze — CD2 Phase 2: AI analysis for pre-uploaded Cloudinary URLs (5-20 images)
-router.post('/batch-analyze', batchAnalyzeImages);
+router.post('/batch-analyze', aiAnalyzeLimiter, batchAnalyzeImages);
 
 // CB4: POST /api/upload/ai-feedback — record organizer accept/dismiss/edit on AI suggestion fields
 router.post('/ai-feedback', (req, res) => {

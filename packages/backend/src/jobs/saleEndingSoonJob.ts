@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { Resend } from 'resend';
 import { sendPushNotification } from '../utils/webpush';
@@ -201,7 +202,7 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
 };
 
 // Run every hour to check for sales ending in ~24 hours
-cron.schedule('0 * * * *', async () => {
+cron.schedule('0 * * * *', cronGuard({ jobName: 'saleEndingSoonJob' }, async () => {
   console.log('Running sale ending soon job...');
   try {
     await processSaleEndingSoonNotifications();

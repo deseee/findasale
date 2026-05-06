@@ -4,12 +4,9 @@
 
 import cron from 'node-cron';
 import { sendOrganizerWeeklyDigest } from '../services/organizerAnalyticsService';
+import { cronGuard } from '../utils/cronGuard';
 
-cron.schedule('0 9 * * 1', async () => {
+cron.schedule('0 9 * * 1', cronGuard({ jobName: 'organizerWeeklyDigestJob' }, async () => {
   console.log('📧 Running organizer weekly digest job...');
-  try {
-    await sendOrganizerWeeklyDigest();
-  } catch (err) {
-    console.error('Organizer weekly digest job failed:', err);
-  }
-});
+  await sendOrganizerWeeklyDigest();
+}));

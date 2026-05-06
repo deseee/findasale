@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { buildEmail } from '../services/emailTemplateService';
@@ -140,7 +141,7 @@ export const queueTierLapseWarningsJob = async (): Promise<void> => {
 
 // Run batch lapse processing daily at 11 PM UTC (3 PM EST)
 // Cron format: minute hour day-of-month month day-of-week
-cron.schedule('0 23 * * *', async () => {
+cron.schedule('0 23 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
   console.log('[TierLapse] Running batch tier lapse processing job...');
   try {
     await processBatchTierLapsesJob();
@@ -151,7 +152,7 @@ cron.schedule('0 23 * * *', async () => {
 });
 
 // Run tier-lapse warning queue daily at 8 AM UTC (12 AM EST)
-cron.schedule('0 8 * * *', async () => {
+cron.schedule('0 8 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
   console.log('[TierLapse] Running tier-lapse warning queue job...');
   try {
     await queueTierLapseWarningsJob();

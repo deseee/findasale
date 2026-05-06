@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { detectOffPlatformTransactions } from '../services/fraudService';
+import { cronGuard } from '../utils/cronGuard';
 
 /**
  * Feature #109: Off-Platform Transaction Detection Job
@@ -21,7 +22,7 @@ export async function runFraudDetectionJob(): Promise<void> {
  */
 export async function initFraudDetectionSchedule(): Promise<void> {
   try {
-    cron.schedule('0 2 * * *', () => runFraudDetectionJob()); // 2 AM daily
+    cron.schedule('0 2 * * *', cronGuard({ jobName: 'fraudDetectionJob' }, () => runFraudDetectionJob())); // 2 AM daily
     console.log('[fraudDetectionJob] Scheduled daily off-platform detection at 2 AM');
   } catch (err) {
     console.error('[fraudDetectionJob] Failed to initialize schedule:', err);

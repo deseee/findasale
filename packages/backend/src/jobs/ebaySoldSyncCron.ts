@@ -16,6 +16,7 @@
 
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
+import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken, endEbayListingIfExists } from '../controllers/ebayController';
 
 interface EbayItem {
@@ -297,9 +298,9 @@ async function syncEbaySoldItems(): Promise<void> {
 // Register the cron job to run every 15 minutes
 // Cron expression: */15 * * * *
 export function startEbaySoldSyncCron(): void {
-  cron.schedule('*/15 * * * *', async () => {
+  cron.schedule('*/15 * * * *', cronGuard({ jobName: 'ebaySoldSyncCron' }, async () => {
     console.log('[eBay Sync] Starting 15-minute sync cycle...');
     await syncEbaySoldItems();
-  });
+  }));
   console.log('[eBay Sync] Cron registered — runs every 15 minutes');
 }

@@ -30,16 +30,16 @@ router.post('/create-connect-account', authenticate, createConnectAccount);
 router.get('/account-status', authenticate, getAccountStatus);
 
 // Buyer routes
-router.post('/create-payment-intent', authenticate, createPaymentIntent);
+router.post('/create-payment-intent', authenticate, paymentLimiter, createPaymentIntent);
 router.get('/pending-payment/:purchaseId', authenticate, getPendingPayment);
 // P2 Bug 2: Webhook failure recovery endpoint
-router.post('/recover-payment-intent', authenticate, recoverPaymentIntent);
+router.post('/recover-payment-intent', authenticate, paymentLimiter, recoverPaymentIntent);
 
 // Organizer refund
 router.post('/refund/:purchaseId', authenticate, createRefund);
 
 // Subscription checkout (#23: Pricing page)
-router.post('/checkout-session', authenticate, createCheckoutSession);
+router.post('/checkout-session', authenticate, paymentLimiter, createCheckoutSession);
 
 // V2: Instant payouts — balance + on-demand payouts + schedule management
 router.get('/balance', authenticate, getBalance);
@@ -50,10 +50,10 @@ router.get('/earnings', authenticate, getEarningsBreakdown);
 
 // Terminal POS — organizer-only in-person card payments
 router.post('/terminal/connection-token', authenticate, createConnectionToken);
-router.post('/terminal/payment-intent', authenticate, createTerminalPaymentIntent);
+router.post('/terminal/payment-intent', authenticate, paymentLimiter, createTerminalPaymentIntent);
 router.post('/terminal/capture', authenticate, captureTerminalPaymentIntent);
 router.post('/terminal/cancel', authenticate, cancelTerminalPaymentIntent);
-router.post('/terminal/cash-payment', authenticate, cashPayment);
+router.post('/terminal/cash-payment', authenticate, paymentLimiter, cashPayment);
 
 // Test harness — verify POS + payment flows without real money
 router.post('/test-transaction', authenticate, testTransaction);

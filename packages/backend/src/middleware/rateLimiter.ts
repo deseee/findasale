@@ -72,3 +72,107 @@ export const bulkItemsLimiter = rateLimit({
   standardHeaders: false,
   legacyHeaders: false,
 });
+
+/**
+ * Feed limiter: 100 requests per minute per IP
+ */
+export const feedLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many feed requests from this IP, please try again later.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});
+
+/**
+ * Search limiter: 50 requests per minute per IP
+ */
+export const searchLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 50,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many search requests from this IP, please try again later.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});
+
+/**
+ * Message limiter: 30 requests per hour per user/IP
+ */
+export const messageLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 30,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many message requests, please try again later.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});
+
+/**
+ * Upload limiter: 100 uploads per hour per user/IP
+ */
+export const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 100,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many uploads. Maximum 100 per hour.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});
+
+/**
+ * AI analyze limiter: 50 requests per hour per user/IP (AI inference cost)
+ */
+export const aiAnalyzeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 50,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many AI analysis requests. Maximum 50 per hour.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});
+
+/**
+ * Bid limiter: 60 requests per minute per user/IP
+ */
+export const bidLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many bid requests, please try again later.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});
+
+/**
+ * Payment limiter: 5 requests per minute per user/IP (sensitive operations)
+ */
+export const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many payment requests, please try again later.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});
+
+/**
+ * Support chat limiter: 10 requests per hour per user/IP
+ */
+export const supportChatLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many support requests, please try again later.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});

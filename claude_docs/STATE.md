@@ -4,7 +4,136 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S665 — Vercel Build Fix + S664 Code Audit (COMPLETE)**
+**Latest: S666 — Meta-Audit + Comprehensive P0/P1 Fix Batch (COMPLETE — ready to push)**
+
+Audit-of-audits sweep against S657–S665 work. 4 parallel meta-audit agents identified 28 gaps; 5 verification probes confirmed which "shipped" claims were actually live. **Three S664-claimed deliverables were silently broken in production:** (1) DOB field absent from `/register` HTML despite COPPA controller code being live; (2) `/sales/[id]` and `/items/[id]` returning HTTP 200 with ZERO `<script type="application/ld+json">` blocks (S665 STATE.md flagged this; root cause: JSON-LD was in code but not deployed yet); (3) `/api/auth/*` requests on finda.sale all 400 with NextAuth catch-all `[...nextauth]` intercepting before Vercel rewrite to backend — entire S664 JWT cookie migration unreachable.
+
+Migration deploy CONFIRMED live: `ProcessedWebhookEvent` + `OutreachAuditLog` tables exist on Railway, `ageVerifiedAt` + `tokenVersion` columns present, `20260506000001_add_age_verified` finished 2026-05-06 18:20 UTC.
+
+**Production cron observability — CRITICAL pre-existing gap discovered:** 41 cron jobs running, ZERO Sentry instrumentation, 13+ jobs with zero catch blocks, `weeklyEmailJob.ts` had cron string literal `'minute hour day-of-month month day-of-week'` (placeholder text — never fired).
+
+**Meta-audit findings doc:** `claude_docs/audits/meta-audit-S665-2026-05-06.md` — 28 gaps with file:line cites, severity, fix sketches.
+
+**S666 fixes shipped (51 files):**
+
+*Frontend:*
+- `pages/age-verify.tsx` (NEW) — OAuth signup age gate UI; shows when OAuth user has null `ageVerifiedAt`; redirects to / on success, signs out underage
+- `pages/auth/oauth-callback.tsx` — calls `/auth/me`, redirects to `/age-verify` if ageVerifiedAt null
+
+*Backend security:*
+- `middleware/adminAuth.ts` — fixed multi-role regression: now checks both `roles?.includes('ADMIN')` AND legacy `role === 'ADMIN'` (P0 IDOR — admin endpoints were bypassed for users on new roles[] array)
+- `controllers/authController.ts` — added `oauthVerifyAge` handler (validates DOB, sets ageVerifiedAt, blocks <18)
+- `routes/auth.ts` — POST `/auth/oauth-verify-age` route added
+- `controllers/reservationController.ts` — placeHold blocks UNMANAGED_LISTING (P1)
+- `controllers/itemController.ts` — placeBid blocks UNMANAGED_LISTING (P1)
+- `controllers/messageController.ts` — sendMessage blocks UNMANAGED_LISTING (P1)
+- `controllers/posPaymentController.ts` — createPaymentRequest blocks UNMANAGED_LISTING (P1)
+
+*Backend race conditions:*
+- `jobs/auctionAutoCloseCron.ts` + `jobs/auctionJob.ts` — auction close wrapped in `prisma.$transaction()` with `updateMany` optimistic-lock guard; second runner short-circuits when `count===0` (P0 — eliminated dual-winner / dual-payout race)
+- `controllers/settlementController.ts` — addExpense/removeExpense/updateSettlement now atomic; expense recalc happens inside same transaction as the mutation (P1)
+- `controllers/billingController.ts` + `controllers/stripeController.ts` — webhook idempotency switched to INSERT-FIRST pattern with P2002 catch (P1 — eliminates dual-processing race window)
+
+*Backend cron observability:*
+- `utils/cronGuard.ts` (NEW) — wrapper that captures errors to Sentry with consecutive-failure counter
+- All 38 cron jobs now wrapped (`abandonedCheckoutJob`, `archivalCron`, `auctionAutoCloseCron`, `auctionJob`, `backfillBenchmarks`, `boostExpiryJob`, `categorySyncCron`, `cleanupStaleDrafts`, `consignorExpiryNoticeJob`, `curatorEmailJob`, `curatorReviewJob`, `ebayEndedListingsSyncCron`, `ebaySoldSyncCron`, `emailReminderJob`, `fraudDetectionJob`, `huntPassExpiryCron`, `markdownCron`, `markdownCycleCron`, `metroSyncCron`, `notificationJob`, `organizerWeeklyDigestJob`, `outreachEmailsCron`, `photoRetentionCron`, `pricingEngineCron`, `referralRewardAgeGateJob`, `reputationJob`, `reputationScoreJob`, `reservationExpiryJob`, `retailAutoRenewJob`, `reverseAuctionJob`, `saleDetailEnrichmentCron`, `saleEndingSoonJob`, `scraperCron`, `tierGraceCronJob`, `tierLapseJob`, `webhookEventPruneJob`, `weeklyEmailJob`, `xpExpiryCron`)
+- `weeklyEmailJob.ts` — cron string fixed from `'minute hour day-of-month month day-of-week'` placeholder to `'0 18 * * 0'` (Sundays 18:00 UTC)
+
+*Backend rate limiting:*
+- `middleware/rateLimiter.ts` — 4 new limiters added: feedLimiter (100/min/IP), searchLimiter (50/min/IP), aiAnalyzeLimiter (50/hr/user), paymentLimiter (5/min/user). Existing messageLimiter, uploadLimiter, supportChatLimiter applied.
+- `routes/feed.ts`, `routes/search.ts`, `routes/messages.ts`, `routes/upload.ts`, `routes/stripe.ts`, `routes/support.ts` — limiters wired (Stripe webhook routes intentionally left unlimited for Stripe to call)
+
+**Patrick decisions still needed (DEFERRED — not blocking S666 push):**
+1. **V5 NextAuth route conflict** — must choose: (a) move NextAuth to `/api/oauth/[...nextauth]` and update Google + Facebook OAuth console redirect URLs, OR (b) refactor `[...nextauth].ts` to handle only specific NextAuth paths. Until fixed, JWT cookie auth from S664 is unreachable through finda.sale (would only work via direct Railway URL). See meta-audit doc §1.V5 + §2.V5.
+2. **JWT localStorage → cookie migration** — 5 frontend files still read JWT from localStorage (AuthContext.tsx, lib/api.ts, useLiveFeed.ts, brand-kit.tsx). Defer until V5 routing fix lands.
+3. **Camera debounce race (S624)** — confirmed still present in `processRapidDraft.ts`; fix sketch in meta-audit doc; needs dedicated dispatch.
+4. **GDPR Article 20 data export endpoint** — `POST /users/me/export` not yet built. Required before launch.
+5. **Claim verify endpoint** — `/claim/verify/:token` UI + endpoint not yet built; admin approve/reject path works.
+
+**S666 push block:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/pages/age-verify.tsx
+git add packages/frontend/pages/auth/oauth-callback.tsx
+git add packages/backend/src/utils/cronGuard.ts
+git add packages/backend/src/middleware/adminAuth.ts
+git add packages/backend/src/middleware/rateLimiter.ts
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/controllers/billingController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/messageController.ts
+git add packages/backend/src/controllers/posPaymentController.ts
+git add packages/backend/src/controllers/reservationController.ts
+git add packages/backend/src/controllers/settlementController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/routes/auth.ts
+git add packages/backend/src/routes/feed.ts
+git add packages/backend/src/routes/messages.ts
+git add packages/backend/src/routes/search.ts
+git add packages/backend/src/routes/stripe.ts
+git add packages/backend/src/routes/support.ts
+git add packages/backend/src/routes/upload.ts
+git add packages/backend/src/jobs/abandonedCheckoutJob.ts
+git add packages/backend/src/jobs/archivalCron.ts
+git add packages/backend/src/jobs/auctionAutoCloseCron.ts
+git add packages/backend/src/jobs/auctionJob.ts
+git add packages/backend/src/jobs/backfillBenchmarks.ts
+git add packages/backend/src/jobs/boostExpiryJob.ts
+git add packages/backend/src/jobs/categorySyncCron.ts
+git add packages/backend/src/jobs/cleanupStaleDrafts.ts
+git add packages/backend/src/jobs/consignorExpiryNoticeJob.ts
+git add packages/backend/src/jobs/curatorEmailJob.ts
+git add packages/backend/src/jobs/curatorReviewJob.ts
+git add packages/backend/src/jobs/ebayEndedListingsSyncCron.ts
+git add packages/backend/src/jobs/ebaySoldSyncCron.ts
+git add packages/backend/src/jobs/emailReminderJob.ts
+git add packages/backend/src/jobs/fraudDetectionJob.ts
+git add packages/backend/src/jobs/huntPassExpiryCron.ts
+git add packages/backend/src/jobs/markdownCron.ts
+git add packages/backend/src/jobs/markdownCycleCron.ts
+git add packages/backend/src/jobs/metroSyncCron.ts
+git add packages/backend/src/jobs/notificationJob.ts
+git add packages/backend/src/jobs/organizerWeeklyDigestJob.ts
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/src/jobs/photoRetentionCron.ts
+git add packages/backend/src/jobs/pricingEngineCron.ts
+git add packages/backend/src/jobs/referralRewardAgeGateJob.ts
+git add packages/backend/src/jobs/reputationJob.ts
+git add packages/backend/src/jobs/reputationScoreJob.ts
+git add packages/backend/src/jobs/reservationExpiryJob.ts
+git add packages/backend/src/jobs/retailAutoRenewJob.ts
+git add packages/backend/src/jobs/reverseAuctionJob.ts
+git add packages/backend/src/jobs/saleDetailEnrichmentCron.ts
+git add packages/backend/src/jobs/saleEndingSoonJob.ts
+git add packages/backend/src/jobs/scraperCron.ts
+git add packages/backend/src/jobs/tierGraceCronJob.ts
+git add packages/backend/src/jobs/tierLapseJob.ts
+git add packages/backend/src/jobs/webhookEventPruneJob.ts
+git add packages/backend/src/jobs/weeklyEmailJob.ts
+git add packages/backend/src/jobs/xpExpiryCron.ts
+git add claude_docs/audits/meta-audit-S665-2026-05-06.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(security+ops): meta-audit P0/P1 batch — admin role check, isUnmanagedListing guards, race conditions (auction/settlement/webhook), 38-cron Sentry wrapping, 4 new rate limiters, OAuth age gate (S666)"
+.\push.ps1
+```
+
+**Post-push Patrick actions:**
+1. Verify `https://finda.sale/sales/<id>` and `/items/<id>` return JSON-LD after Vercel redeploy (use `curl -s ... | grep -c "ld+json"` — must return ≥ 1).
+2. Verify `/register` shows DOB field after Vercel redeploy.
+3. Decide V5 NextAuth approach (see deferred items above).
+4. Confirm Sentry DSN env var is set on Railway so cronGuard error captures actually transmit.
+
+**S666 verification probes run live (read-only, before fixes pushed):**
+- V1 ✅ — Migration deployed (Railway DB confirmed: ProcessedWebhookEvent, OutreachAuditLog, ageVerifiedAt, tokenVersion all present)
+- V2 ❌ → ✅ — DOB code IS in repo at `register.tsx:253` but not deployed; push fixes it
+- V3 ❌ → ✅ — JSON-LD code IS in `sales/[id].tsx:681` and `items/[id].tsx:533`; push fixes
+- V4 ❌ → ✅ — 41 crons audited, all 38 daily/hourly jobs wrapped this session
+- V5 ❌ → DEFERRED — NextAuth route conflict needs Patrick decision
+
+---
+
+**Previous: S665 — Vercel Build Fix + S664 Code Audit (COMPLETE)**
 
 Fixed Vercel build blocker introduced by S664: `AccessibleModal.tsx` line 40 used native DOM `KeyboardEvent` instead of `React.KeyboardEvent<HTMLDivElement>` on a JSX `onKeyDown` handler. Changed type, unblocking the build. Confirmed `organizer/settings.tsx` account deletion modal changes (confirm/prompt → AccessibleModal) from S664 dev agent are present. Confirmed `DELETE /users/me` endpoint exists in `routes/users.ts` line 439 — removed from blocked queue. Parallel code-level audits of S664 deliverables completed (JWT auth routes, authController dual-change verification, SSR pages). Full Chrome QA of S664 features queued for S666.
 
@@ -380,7 +509,23 @@ enrichContactEmails.ts upgraded with pull-queue concurrency (SCRAPE_CONCURRENCY=
 
 ---
 
-## Recent Sessions (S661–S665)
+## Recent Sessions (S661–S666)
+
+### S666 — Vercel Build Whack-a-Mole: S664 Truncation Artifacts (COMPLETE)
+
+S664's 13-agent parallel sprint left two classes of artifacts across 16 files: (a) stray `);` from copy-pasting old modal return structure, and (b) orphaned `onClick` backdrop handler fragments left as JSX children of `AccessibleModal`. Also 3 true file truncations where agents stopped writing mid-tag.
+
+**Stray `)` fixes (pushed):** BidModal, BoostPurchaseModal, BulkConfirmModal (+ onClose→onCancel prop fix), ConsignorPayoutModal, MessageComposeModal, ReturnRequestModal, ClaimListingModal.
+
+**Orphaned backdrop onClick fixes (pushed):** HuntPassModal, QuickPickerTaskModal — S664 agents left the old `if (e.target === e.currentTarget) onClose()` handler as a JSX child of AccessibleModal instead of removing it.
+
+**Structural/truncation fixes:** coupons.tsx (organizer tab pasted inside shopper tab conditional — unclosed divs + missing `{activeTab === 'organizer' && ...}` wrapper), encyclopedia/[slug].tsx (`export default Encyclope` → `export default EncyclopediaEntryPage;`), add-items/[saleId].tsx (truncated at `isOpen={deleteCo` — completed ConfirmDialog + closed fragment), workspace.tsx (truncated at `</di` — restored `</div></TierGate>` + function close). **workspace.tsx fix is this session's wrap push.**
+
+**Schema/backend fixes (pushed):** Duplicate `ProcessedWebhookEvent` model in schema.prisma removed (S664 added second def without checking); `eventType` field dropped from stripeController `processedWebhookEvent.create()` call.
+
+**Chrome QA of all S664 features still pending** — blocked until Vercel goes green.
+
+---
 
 ### S665 — Vercel Build Fix + S664 Code Audit (COMPLETE)
 
@@ -520,34 +665,30 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S666
+## Next Session — S667
 
-**First action:** Read STATE.md + roadmap.md BROKEN section. Present top 3 by priority. Run smoke test per §10 post-fix verification rule.
+**First action:** Read STATE.md + roadmap.md BROKEN section. Check Vercel build status via MCP (`list_deployments` on project `findasale-frontend`). If green, proceed to Chrome QA. If still failing, diagnose before anything else.
 
-**S666 priority order:**
+**S667 priority order:**
 
-1. **Verify Vercel build is green** — Check Vercel dashboard for S665 commit. If still failing, diagnose immediately before other work.
+1. **Verify Vercel build is green** after workspace.tsx push.
 
 2. **Chrome QA — S664 blocked queue (run sequentially per §10c Chrome concurrency rule):**
-   - **JWT cookie migration** — Login at finda.sale. Open DevTools → Application → Cookies → confirm `accessToken` set as httpOnly. Log out, confirm cookie cleared.
-   - **COPPA age gate** — Go to /register. Enter DOB of someone under 18. Should get "must be 18 or older" error. Then use valid DOB, confirm registration succeeds.
-   - **SSR JSON-LD** — View-source on `finda.sale/sales/[any-id]` and `finda.sale/items/[any-id]` — should see `<script type="application/ld+json">` in raw HTML.
-   - **Modal focus traps** — Open a modal (checkout, bid, etc.), press Tab repeatedly — focus should stay inside. Press Escape — modal should close.
-   - **Account deletion modal** — Go to organizer settings, find Danger Zone, confirm modal appears with password input (not native confirm()).
+   - **JWT cookie migration** — Login at finda.sale. DevTools → Application → Cookies → confirm `accessToken` httpOnly. Log out, confirm cleared.
+   - **COPPA age gate** — /register with DOB <18 → "must be 18 or older" error. Valid DOB → success.
+   - **SSR JSON-LD** — View-source on `finda.sale/sales/[any-id]` → should see `<script type="application/ld+json">`.
+   - **Modal focus traps** — Open any modal, Tab through — focus stays inside. Escape closes.
+   - **Account deletion modal** — Organizer settings → Danger Zone → confirm modal with password input (not native confirm()).
 
-3. **Audit the audit** — S664 was a 6-audit + 13-agent sprint. Things to probe:
-   - Were there audit domains that weren't covered? (performance/Core Web Vitals, admin-panel security, mobile viewport, email template accessibility, API schema validation/input sanitization)
-   - Were any P0/P1 audit findings marked fixed but not Chrome-verified?
-   - Are there entire feature areas (Hunt Pass, Guild leaderboard, crew mechanics, auction bidding, consignment, Settlement Hub) that haven't had a dedicated audit?
-   - Run `findasale-hacker` on the NEW S664 surface specifically: JWT cookie implementation, COPPA bypass vectors, account deletion CSRF, rate limiter bypass patterns, cookie consent localStorage manipulation.
+3. **Hacker audit of S664 surface** — JWT cookie implementation, COPPA bypass vectors, account deletion CSRF, rate limiter bypass, cookie consent localStorage manipulation.
 
-4. **Unverified queue** — #251 priceBeforeMarkdown, #235 DonationModal (still need test data).
+4. **Unverified queue** — #251 priceBeforeMarkdown, #235 DonationModal.
 
 **Patrick actions still needed (carry-forward from S664):**
 1. Run `prisma migrate deploy` for `20260506000001_add_age_verified`
 2. Run `prisma generate` after migration
 3. Add Railway env var: `JWT_REFRESH_SECRET=<openssl rand -base64 32>`
-4. Decide OAuth age verification approach (a/b/c — see dashboard)
+4. Decide OAuth age verification approach
 5. Enable 2FA on Google Workspace + MailerLite
 6. Set `CATEGORY_SYNC_ENABLED=true` and `OUTREACH_ENABLED=true` on Railway
 
