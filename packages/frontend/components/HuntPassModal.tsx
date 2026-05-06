@@ -42,8 +42,6 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
       onClose={onClose}
       ariaLabelledBy="hunt-pass-modal-title"
     >
-      { if (e.target === e.currentTarget) onClose(); }}
-    >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-5">
           <h2 id="hunt-pass-modal-title" className="text-xl font-bold text-warm-900 dark:text-gray-100">Upgrade to Hunt Pass</h2>
