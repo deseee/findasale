@@ -3,7 +3,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { GetServerSideProps } from 'next';
 import api from '../../lib/api';
-import { getOptimizedUrl, getLqipUrl } from '../../lib/imageUtils';
+import { getSaleImageUrl } from '../../lib/imageUtils';
 import BadgeDisplay from '../../components/BadgeDisplay';
 import FollowButton from '../../components/FollowButton';
 import ReputationTier from '../../components/ReputationTier';
@@ -319,8 +319,8 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
   };
 
   const photoUrl = sale.photoUrls?.[0] ?? null;
-  const lqipUrl = photoUrl ? getLqipUrl(photoUrl) : null;
-  const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl) : null;
+  const optimizedUrl = photoUrl ? getSaleImageUrl(photoUrl) : null;
+  const lqipUrl = optimizedUrl; // proxy URL doubles as LQIP; CSS blur handles visual effect
 
   const isToday = (): boolean => {
     try {
