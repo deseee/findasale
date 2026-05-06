@@ -406,5 +406,4 @@ export default function BoostPurchaseModal({
       </div>
     </AccessibleModal>
   );
-  );
 }

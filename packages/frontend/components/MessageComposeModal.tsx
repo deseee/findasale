@@ -157,7 +157,6 @@ const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
       </div>
     </AccessibleModal>
   );
-  );
 };
 
 export default MessageComposeModal;

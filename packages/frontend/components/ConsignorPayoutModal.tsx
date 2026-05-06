@@ -230,7 +230,6 @@ const ConsignorPayoutModal: React.FC<ConsignorPayoutModalProps> = ({
       </div>
     </AccessibleModal>
   );
-  );
 };
 
 export default ConsignorPayoutModal;

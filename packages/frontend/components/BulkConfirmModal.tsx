@@ -151,7 +151,6 @@ const BulkConfirmModal: React.FC<BulkConfirmModalProps> = ({
       </div>
     </AccessibleModal>
   );
-  );
 };
 
 export default BulkConfirmModal;
