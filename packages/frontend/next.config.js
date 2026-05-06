@@ -95,9 +95,12 @@ const withPWA = require('next-pwa')({
     },
     // HTML pages — network first (Stripe + eBay CDN excluded so SW never intercepts them)
     // i.ebayimg.com excluded: eBay CDN has no CORS headers; any SW fetch() fails.
+    // findasale-image-proxy.findasale.workers.dev excluded: CF Worker proxies ESN/eBay images;
+    //   SW fetch() fails silently for this domain (same pattern as eBay CDN).
+    //   Exclusion lets the browser handle these img requests natively — which works.
     // Unmatched URLs bypass SW entirely and load natively in browser no-cors mode.
     {
-      urlPattern: /^https?:\/\/(?!(?:js|hooks|m|api)\.stripe\.com|i\.ebayimg\.com)[^/]+\/(?!api\/).*/i,
+      urlPattern: /^https?:\/\/(?!(?:js|hooks|m|api)\.stripe\.com|i\.ebayimg\.com|findasale-image-proxy\.findasale\.workers\.dev)[^/]+\/(?!api\/).*/i,
       handler: 'NetworkFirst',
       options: {
         cacheName: 'pages',
