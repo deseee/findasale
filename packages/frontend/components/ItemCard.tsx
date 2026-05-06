@@ -7,6 +7,9 @@ import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import RarityBadge from './RarityBadge';
 import FavoriteButton from './FavoriteButton';
 import BoostBadge from './BoostBadge'; // Phase 2b: Boost badges
+import SocialProofBadge from './SocialProofBadge'; // Feature 67: Social proof metrics
+import CountdownTimer from './CountdownTimer'; // Feature 67: Countdown timer for auctions
+import { useItemSocialProof } from '../hooks/useSocialProof'; // Feature 67: Fetch social proof data
 
 // Unified item type supporting multiple surfaces
 export interface UnifiedItemCardItem {
@@ -112,6 +115,7 @@ export interface ItemCardProps {
   showFavoriteButton?: boolean;
   showFavoriteCount?: boolean;
   showRankingBadge?: boolean;
+  showSocialProof?: boolean; // Feature 67: Show social proof badge
   imageHeight?: 'square' | 'fixed-h48' | 'fixed-h32';
   imageOptimization?: 'advanced' | 'basic' | 'none';
   className?: string;
@@ -134,6 +138,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
   showFavoriteButton = true,
   showFavoriteCount = false,
   showRankingBadge = false,
+  showSocialProof = true, // Feature 67: default to true for most surfaces
   imageHeight = 'square',
   imageOptimization = 'advanced',
   className = '',
@@ -142,6 +147,12 @@ const ItemCard: React.FC<ItemCardProps> = ({
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const { isLowBandwidth } = useNetworkQuality();
+
+  // Feature 67: Fetch social proof metrics for this item
+  const { socialProof, loading: socialProofLoading } = useItemSocialProof(
+    showSocialProof ? item.id : null,
+    showSocialProof
+  );
 
   // Resolve primary photo URL (photoUrls array takes precedence, fallback to photoUrl)
   // Route eBay CDN URLs through /api/image-proxy to bypass Chrome tracking protection in incognito
@@ -168,6 +179,16 @@ const ItemCard: React.FC<ItemCardProps> = ({
     setImgLoaded(false);
     setImgError(false);
   }, [optimizedUrl]);
+
+  // Check if countdown should be displayed (within 24h of auction end)
+  const shouldShowCountdownTimer = (): boolean => {
+    if (!item.auctionEndTime) return false;
+    const endTime = new Date(item.auctionEndTime).getTime();
+    const now = Date.now();
+    const diff = endTime - now;
+    const hoursLeft = diff / (1000 * 60 * 60);
+    return hoursLeft > 0 && hoursLeft <= 24; // Only show countdown for last 24 hours
+  };
 
   const getCountdownText = (): string => {
     if (!item.auctionEndTime) return '';
@@ -322,6 +343,24 @@ const ItemCard: React.FC<ItemCardProps> = ({
             >
               Auto
             </span>
+          )}
+
+          {/* Feature 67: Countdown Timer — centered overlay (only when within 24h) */}
+          {showCountdown && shouldShowCountdownTimer() && item.auctionEndTime && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+              <CountdownTimer targetDate={item.auctionEndTime} />
+            </div>
+          )}
+
+          {/* Feature 67: Social Proof Badge — bottom-left */}
+          {showSocialProof && socialProof && socialProof.totalEngagement > 0 && (
+            <div className="absolute bottom-2 left-2">
+              <SocialProofBadge
+                socialProof={socialProof}
+                loading={socialProofLoading}
+                variant="compact"
+              />
+            </div>
           )}
         </div>
       )}

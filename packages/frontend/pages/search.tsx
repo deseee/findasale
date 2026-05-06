@@ -20,6 +20,7 @@ import { SkeletonGrid } from '../components/SkeletonCards';
 import ItemSearch from '../components/ItemSearch';
 import FilterSidebar from '../components/FilterSidebar';
 import ItemSearchResults from '../components/ItemSearchResults';
+import ItemCard from '../components/ItemCard'; // Feature 67: Use main ItemCard with social proof
 import { getItemImageUrl } from '../lib/imageUtils';
 import {
   useItemSearch,
@@ -31,38 +32,6 @@ import {
 type SearchTab = 'all' | 'sales' | 'items';
 
 const SUGGESTED_CATEGORIES = ['Furniture', 'Antiques', 'Clothing', 'Books', 'Tools', 'Jewelry'];
-
-const ItemCard = ({ item }: { item: any }) => (
-  <Link
-    href={`/items/${item.id}`}
-    className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
-  >
-    {item.photoUrls?.[0] ? (
-      <img
-        key={getItemImageUrl(item.photoUrls[0])}
-        src={getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0]}
-        alt={item.title}
-        className="aspect-square w-full object-cover"
-        loading="lazy"
-      />
-    ) : (
-      <div className="aspect-square bg-warm-200 flex items-center justify-center">
-        <span className="text-warm-400 text-3xl">📦</span>
-      </div>
-    )}
-    <div className="p-3 flex-1 flex flex-col">
-      <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 line-clamp-1 mb-1">{item.title}</h3>
-      {item.price != null && (
-        <p className="text-amber-600 font-bold text-sm">${Number(item.price).toFixed(2)}</p>
-      )}
-      {item.sale && (
-        <p className="text-xs text-warm-500 dark:text-warm-400 mt-auto pt-1 line-clamp-1">
-          {item.sale.title} &middot; {item.sale.city}, {item.sale.state}
-        </p>
-      )}
-    </div>
-  </Link>
-);
 
 interface VisualSearchData {
   detectedLabels: string[];
