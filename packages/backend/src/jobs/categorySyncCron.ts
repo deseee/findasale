@@ -69,6 +69,7 @@ async function syncCategory(slug: string, config: { display: string; ebayIds: st
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
+          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
           ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
         },
       }
