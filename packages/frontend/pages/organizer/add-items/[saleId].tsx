@@ -2650,4 +2650,23 @@ const AddItemsDetailPage = () => {
       />
 
       <ConfirmDialog
-        isOpen={deleteCo
+        isOpen={deleteConfirmId !== null}
+        title="Delete Item?"
+        message={`Are you sure you want to delete "${deleteConfirmTitle}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => {
+          if (deleteConfirmId) handleDeleteDraft(deleteConfirmId);
+          setDeleteConfirmId(null);
+          setDeleteConfirmTitle('');
+        }}
+        onCancel={() => {
+          setDeleteConfirmId(null);
+          setDeleteConfirmTitle('');
+        }}
+      />
+    </>
+  );
+};
+
+export default AddItemsDetailPage;
