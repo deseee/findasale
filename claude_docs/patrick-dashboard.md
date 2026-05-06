@@ -182,3 +182,34 @@ Full doc: `claude_docs/audits/meta-audit-S665-2026-05-06.md`
 
 If a future Claude session reads this and the conversation was compressed:
 The single highest-leverage move is to confirm the Sentry DSN is set on Railway, then push S666 above, then verify V2/V3 fixes via curl. V5 NextAuth fix needs Patrick to choose Option A (move) or Option B (refactor).
+
+---
+
+## 🎯 S667 — Comprehensive Backlog Sweep (full plan in STATE.md "## Next Session — S667")
+
+S666 meta-audit found 28 gaps; 12 shipped this session, 16 remain. S667 dispatches all 16 in 7 parallel dev agents in ONE session. No more deferring.
+
+**Patrick's two pre-dispatch decisions:**
+1. **V5 NextAuth approach** — Option A (move to `/api/oauth/*`, requires updating Google + Facebook OAuth console redirect URLs) or Option B (refactor `[...nextauth].ts` to explicit routes, no console changes). Recommended: A.
+2. **Cron monitoring service** — Sentry Crons (recommended) or Healthchecks.io.
+
+**Patrick console/external actions for S667 push:**
+- Update Google OAuth console redirect URLs (if Option A)
+- Update Facebook OAuth console redirect URLs (if Option A)
+- Enable Stripe Tax in dashboard
+- Provide Slack webhook URL for scraper failure alerts (or accept email)
+- Decide ToS arbitration jurisdiction
+- Run Railway DB backup restore drill (DR test)
+- Carry-forward: enable 2FA on Google Workspace + MailerLite, set `CATEGORY_SYNC_ENABLED` + `OUTREACH_ENABLED` env vars on Railway
+
+**The 7 dispatch batches (full file-cite specs in STATE.md):**
+
+1. **Auth completion** — V5 NextAuth fix + JWT localStorage→cookie migration (5 files) + password change clearCookie + reset-token rate limit + email enumeration patch + reset-password IP/device notification
+2. **GDPR/Legal** — Article 20 data export endpoint + UI + CCPA "Do Not Sell" + CAN-SPAM address render verify + ToS arbitration + 1099-K threshold tracking
+3. **Stripe + auction** — charge.refunded webhook + subscription dunning verify + Stripe Tax + auction snipe protection + negative-bid validation + tz correctness + settlement lifecycle transaction
+4. **SEO + accessibility** — canonical URLs (5 page types) + OG/Twitter cards + sitemap completeness + aria-live form errors + image alt audit + heading hierarchy + prefers-reduced-motion + CSP nonce-based (drop unsafe-eval)
+5. **Operations** — Cron absence-monitoring (Sentry Crons or Healthchecks) + slow-query detection + connection pool + SIGTERM graceful shutdown + cookie secure-flag fix + offlineQueue PII redact + email deliverability monitoring + Patrick DR drill
+6. **Scraper hardening** — address normalization in dedupe + geocoding failure rate audit + GH Actions failure alerts + scraper test suite + camera debounce race S624 fix + migration drift verification
+7. **Claim flow + content + games** — claim verify endpoint + UI + Cloudinary NSFW moderation + Cloudinary orphan cleanup + D-006 "no AI" drift sweep + XP exploit detection + API response-shape audit
+
+**Token budget:** ~1.0-1.4M total. Run all 7 dispatches in one message. Combined push block at end.

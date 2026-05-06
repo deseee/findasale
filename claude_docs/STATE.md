@@ -665,32 +665,115 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S667
+## Next Session — S667 (Meta-Audit Backlog Comprehensive Sweep)
 
-**First action:** Read STATE.md + roadmap.md BROKEN section. Check Vercel build status via MCP (`list_deployments` on project `findasale-frontend`). If green, proceed to Chrome QA. If still failing, diagnose before anything else.
+**First action:** Verify S666 deploy is green on Railway + Vercel. Run the 5-minute live verification probes from `claude_docs/audits/meta-audit-S665-2026-05-06.md` to confirm DOB shows on /register, JSON-LD shows on /sales/[id] and /items/[id], admin endpoints work for `roles=['ADMIN']` users, isUnmanagedListing returns 403, and Sentry is receiving cron heartbeats.
 
-**S667 priority order:**
+**S667 mandate: dispatch ALL backlog items in one session via parallel agents. Do NOT defer items.**
 
-1. **Verify Vercel build is green** after workspace.tsx push.
+The S666 meta-audit identified 28 gaps. 12 shipped in S666. 16 remain. Below is the full parallel dispatch plan — 7 parallel dev agents covering everything, each scoped to file-independent areas so they don't conflict.
 
-2. **Chrome QA — S664 blocked queue (run sequentially per §10c Chrome concurrency rule):**
-   - **JWT cookie migration** — Login at finda.sale. DevTools → Application → Cookies → confirm `accessToken` httpOnly. Log out, confirm cleared.
-   - **COPPA age gate** — /register with DOB <18 → "must be 18 or older" error. Valid DOB → success.
-   - **SSR JSON-LD** — View-source on `finda.sale/sales/[any-id]` → should see `<script type="application/ld+json">`.
-   - **Modal focus traps** — Open any modal, Tab through — focus stays inside. Escape closes.
-   - **Account deletion modal** — Organizer settings → Danger Zone → confirm modal with password input (not native confirm()).
+### Pre-dispatch (Patrick decides first; both options have specs ready)
 
-3. **Hacker audit of S664 surface** — JWT cookie implementation, COPPA bypass vectors, account deletion CSRF, rate limiter bypass, cookie consent localStorage manipulation.
+**A. V5 NextAuth route conflict** — pick before dispatching Batch 1.
+- **Option A (recommended):** Move `pages/api/auth/[...nextauth].ts` to `pages/api/oauth/[...nextauth].ts`. Update Google OAuth console + Facebook OAuth console redirect URLs from `/api/auth/callback/{google,facebook}` to `/api/oauth/callback/{google,facebook}`. Industry standard pattern. Patrick action: update OAuth console URLs after PR lands.
+- **Option B (no console changes):** Refactor `[...nextauth].ts` to handle ONLY NextAuth's required paths (callback, csrf, providers, signin, signout). Other `/api/auth/*` paths fall through to Vercel rewrite. Higher fragility risk but no Patrick action needed.
 
-4. **Unverified queue** — #251 priceBeforeMarkdown, #235 DonationModal.
+**B. Sentry Cron Monitoring vs Healthchecks.io** — pick before Batch 5.
+- Sentry Crons: integrates with existing Sentry setup, ~$0/month at our volume.
+- Healthchecks.io: dedicated dead-man's-switch service, free tier 20 checks.
+- Recommended: Sentry Crons (one less service).
 
-**Patrick actions still needed (carry-forward from S664):**
-1. Run `prisma migrate deploy` for `20260506000001_add_age_verified`
-2. Run `prisma generate` after migration
-3. Add Railway env var: `JWT_REFRESH_SECRET=<openssl rand -base64 32>`
-4. Decide OAuth age verification approach
-5. Enable 2FA on Google Workspace + MailerLite
-6. Set `CATEGORY_SYNC_ENABLED=true` and `OUTREACH_ENABLED=true` on Railway
+### Batch 1 — Auth completion (1 agent, sequential after V5 decision)
+
+Dispatch `findasale-dev` (general-purpose Agent) with full spec:
+1. Implement V5 NextAuth fix per Patrick's choice (A or B)
+2. JWT localStorage→cookie full migration (5 frontend files): `components/AuthContext.tsx`, `lib/api.ts`, `useLiveFeed.ts`, `pages/brand-kit.tsx`, plus search the codebase for any other `localStorage.getItem('token')` callers. Replace with `withCredentials: true` on api calls + read auth state from `/api/auth/me` cookie response.
+3. Password change clearCookie('refreshToken') — `routes/auth.ts` `/change-password` handler must `res.clearCookie('refreshToken', {...})` after `tokenVersion` bump.
+4. Reset-password attempt rate limit — wrap `POST /reset-password/:token` with per-token attempt counter. Add `resetTokenAttempts INT DEFAULT 0` field on User (migration required) OR use Redis counter. Lock after 5 attempts.
+5. Email enumeration on `/verify-email` resend — apply `verifyEmailLimiter` (3/hr/IP). Make response generic ("if account exists, email sent") regardless of state.
+6. Reset-password email — include IP + user-agent in template ("This reset was requested from 203.x on Chrome/macOS. If this wasn't you, ignore this email.").
+
+### Batch 2 — GDPR/Legal completion (parallel agent)
+
+Dispatch dev with full spec:
+1. GDPR Article 20 export endpoint — `GET /api/users/me/export` returns `application/zip` with users.json, items.json, sales.json, purchases.json, bids.json, wishlist.json, reviews.json, notifications.json, holds.json, settlements.json, organizer.json. Include "Download my data" button on `pages/organizer/settings.tsx` AND `pages/shopper/settings.tsx`.
+2. CCPA "Do Not Sell My Personal Information" link — add to `CookieConsentBanner.tsx` and to footer. Wire to a `/do-not-sell` page that toggles a `User.ccpaOptOut` flag (schema migration required).
+3. CAN-SPAM physical address render verification — add a unit test or runtime assertion in `outreachEmailsCron.ts` that the `[physical address]` placeholder is replaced before send. Fail loudly on missing env var.
+4. ToS arbitration clause — add to `pages/terms.tsx` Section 14: "Disputes resolved by binding arbitration under AAA Commercial Rules in [Patrick's preferred jurisdiction]. Class actions waived." Patrick should review with attorney; for now ship the clause.
+5. 1099-K threshold tracking — add `Organizer.annualGrossSales` aggregation cron (monthly recompute). When org crosses $20k + 200 transactions, send notification email + dashboard banner.
+
+### Batch 3 — Stripe + auction completion (parallel agent)
+
+Dispatch dev with full spec:
+1. `charge.refunded` webhook handler — add to `stripeController.ts` webhook switch. When refund is initiated from Stripe Dashboard (not FindA.Sale UI), update internal Purchase status to REFUNDED.
+2. Subscription dunning policy — read existing tier/billing logic. Verify failed renewal: tier should drop to FREE only after Stripe's grace_period (typically 30 days). Currently unverified. If wrong, fix.
+3. Stripe Tax integration — add `automatic_tax: { enabled: true }` to PaymentIntent and Checkout Session creation. Requires Stripe Tax setup in dashboard (Patrick action).
+4. Auction snipe protection — `auctionAutoCloseCron.ts` + `bidController.ts`: if a bid arrives within last 60 seconds of auction, extend `auctionEndTime` by 60 seconds. Standard "soft close" pattern.
+5. Negative-bid validation — `bidController.ts` placeBid: assert `amount > 0 && amount > currentHigh` before write. Return 400 on violation.
+6. Timezone correctness — audit `auctionAutoCloseCron.ts` and `auctionJob.ts` for any `new Date(string)` parsing without explicit UTC handling. Convert all auction times to UTC before comparison.
+7. Settlement lifecycle stage sync transaction — `settlementController.ts:176-179` updates SaleSettlement.lifecycleStage and Sale.lifecycleStage as separate operations. Wrap both in `prisma.$transaction()`.
+
+### Batch 4 — SEO + accessibility (parallel agent)
+
+Dispatch dev with full spec:
+1. Canonical URLs — add `<link rel="canonical" href={...}>` to: `pages/sales/[id].tsx`, `pages/organizers/[slug].tsx`, `pages/categories/[category].tsx`, `pages/neighborhoods/[slug].tsx`, `pages/search.tsx`. Use absolute URL with `process.env.NEXT_PUBLIC_SITE_URL`.
+2. Open Graph + Twitter Card tags — add to all shareable pages (sales, items, organizers, categories, neighborhoods, shopper profiles). Match the existing pattern from `items/[id].tsx`.
+3. Sitemap completeness — read `next-sitemap.config.js` (or whatever sitemap generator is used). Verify it includes all dynamic routes: organizer profiles, all category pages, all neighborhood pages. If missing, add.
+4. aria-live form errors — find every form's error display (search panel, login, register, contact, etc.) and add `<div role="alert" aria-live="polite">{error}</div>`. Audit at least: `SearchFilterPanel.tsx`, `pages/login.tsx`, `pages/register.tsx`, `pages/contact.tsx`.
+5. Image alt text systematic audit — scan `<img>` and `<Image>` usage in dynamic content (item cards, sale cards, organizer avatars). Add `alt={item.title || 'Item photo'}` patterns where missing. Default fallback alt for placeholder SVG.
+6. Heading hierarchy audit — for `pages/sales/[id].tsx`, `pages/items/[id].tsx`, `pages/organizers/[slug].tsx` confirm exactly one `<h1>` and proper h2→h3 nesting. Fix any skipped levels.
+7. `prefers-reduced-motion` — add CSS media query to `tailwind.config.js` or globals.css: `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }`. Audit modals, carousels, countdowns.
+8. CSP `unsafe-eval` removal — switch `next.config.js` CSP to nonce-based. Use Next.js middleware to inject nonce per request. Tighten script-src to `'self' 'nonce-{NONCE}' https://js.stripe.com`. Test thoroughly — Next.js hydration sensitive.
+9. Skip-to-content link — confirmed present in `_app.tsx`. No action needed (V2 probe verified).
+
+### Batch 5 — Operations / observability (parallel agent)
+
+Dispatch dev with full spec, after Patrick's Sentry-vs-Healthchecks decision:
+1. Cron absence-monitoring — wire chosen service into `cronGuard.ts` to ping a check-in URL at start of each job. Sentry Crons: `Sentry.captureCheckIn({monitorSlug: jobName, status: 'in_progress'})` then `'ok'` on success, `'error'` on fail. Healthchecks.io equivalent: HTTP GET to ping URL.
+2. Slow-query detection — Prisma supports `log: ['query']` event. In `prisma.ts` lib, add listener that captures any query >1000ms to Sentry as a performance issue.
+3. Connection pool monitoring — log pool stats (`prisma.$metrics.json()`) every 5 minutes to console + Sentry. Alert if pool waits exceed threshold.
+4. SIGTERM graceful shutdown — `index.ts`: register `process.on('SIGTERM', async () => { ... })` that closes Express server, waits for in-flight requests (max 30s), disconnects Prisma, exits.
+5. Cookie secure flag always true — `authController.ts` `res.cookie()` calls: change `secure: process.env.NODE_ENV === 'production'` to `secure: true`. Use https in dev (`mkcert`) or accept dev cookies don't transmit.
+6. offlineQueue PII audit — `useOfflineMode.ts`: review what's stored. If request bodies include user email, full name, payment info — redact before localStorage write. Replace with opaque references the backend can re-resolve.
+7. Backup/DR test — Patrick action only: download a recent Railway DB backup, restore to a localhost DB, run smoke queries to confirm data integrity. Document restore SOP in `claude_docs/RECOVERY.md`.
+8. Email deliverability monitoring — read existing suppressionService. Add weekly cron that aggregates bounce/complaint counts and posts to Slack/email digest. Alert if >2% bounce rate or any complaint.
+
+### Batch 6 — Scraper hardening (parallel agent)
+
+Dispatch dev with full spec:
+1. Address normalization in dedupe — `services/scraper/dedupe.ts:24-80`: normalize before fuzzy match. Strip "St"/"Street" → "St", "E."/"East" → "E", lowercase, remove punctuation. Apply same to date parsing — convert all source-side timestamps to UTC date before window comparison.
+2. Geocoding failure rate audit — add a query that runs daily: `SELECT source, COUNT(*) FROM "Sale" WHERE lat IS NULL GROUP BY source`. If any source >10% null, alert via existing observability.
+3. GitHub Actions scraper failure alerting — for each `.github/workflows/scrape-*.yml`, add a `notify-on-failure` job that posts to Slack webhook on workflow failure. Patrick provides webhook URL.
+4. Scraper test coverage — create `packages/backend/src/services/scraper/__tests__/`. Add unit tests for `dedupe.checkDuplicate()`, `enrichment.enrichOrganizer()`, address normalization. Use jest.
+5. Camera debounce race S624 — `services/processRapidDraft.ts:159-175`: read `item.updatedAt` at job start as snapshot. In final update at line 160, add `WHERE id AND updatedAt = snapshotTime`. On count===0, re-fetch and merge edits using `userEditedFields` as merge guide (organizer-edited fields win).
+6. Migration drift verification — query Railway `_prisma_migrations` table, compare to local migration files. Flag any local migration not yet deployed OR any deployed migration not in repo.
+
+### Batch 7 — Claim flow + content + games (parallel agent)
+
+Dispatch dev with full spec:
+1. Claim verify endpoint + UI — create `GET /api/claim/verify/:token` and `pages/claim/verify/[token].tsx`. Token check, ownership transfer (Sale.organizerId, Item.organizerId), photo handoff, ClaimRequest cleanup.
+2. Content moderation — integrate Cloudinary's NSFW detection (built-in `categorization: 'aws_rek_tagging'` + moderation flag). On upload, if NSFW score >0.7, flag item with `Item.moderationStatus='REVIEW_REQUIRED'`. Add admin queue at `/admin/moderation-queue`.
+3. Cloudinary orphan cleanup — when `Item` is deleted, call Cloudinary destroy on its photo public_ids. Use existing `cleanupCloudinaryAssets` if present, else create.
+4. D-006 "no AI" drift sweep — grep all user-facing strings (`packages/frontend/components/**/*.tsx`, `packages/frontend/pages/**/*.tsx`) for "AI", "artificial intelligence", "powered by AI". Replace with "Auto", "Smart", "Suggested" per D-006 lock. Comments and code identifiers can stay; only user-visible text matters.
+5. XP exploit detection — query `XPLog` for outliers: users with >3σ above mean for any single XP type. Flag for review. Add admin dashboard widget showing XP velocity by user.
+6. API response-shape consistency — document the standard pagination shape (`{data, cursor, hasMore}` vs `{data, page, total}`) and standard error shape (`{code, message}`) in `claude_docs/API_RESPONSE_FORMAT.md`. Audit 10 endpoints for compliance, fix mismatches.
+7. hreflang tags — only add if FindA.Sale plans to serve UK/Canada. Otherwise note as "US-only, not yet needed" in audit doc and skip.
+
+### Patrick console actions (post-push)
+
+1. Update Google OAuth console redirect URLs (if Option A chosen)
+2. Update Facebook OAuth console redirect URLs (if Option A chosen)
+3. Enable Stripe Tax in Stripe dashboard
+4. Provide Slack webhook URL for scraper failure alerts (or skip and use email)
+5. Run a Railway DB backup restore drill
+6. Decide on jurisdiction for ToS arbitration clause
+7. Enable 2FA on Google Workspace + MailerLite (carry-forward from S664)
+8. Set `CATEGORY_SYNC_ENABLED=true` and `OUTREACH_ENABLED=true` on Railway (carry-forward)
+
+### Token budget for S667
+
+7 parallel dev dispatches × ~150-200k tokens each = ~1.0-1.4M token budget. Run all 7 in one message. After they return, build a single combined push block and update STATE.md + dashboard. If any dispatch fails the tsc check, re-dispatch that one only — don't re-run the whole batch.
 
 ---
 
