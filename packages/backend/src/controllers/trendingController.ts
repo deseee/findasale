@@ -40,11 +40,17 @@ export const getTrendingItems = async (req: Request, res: Response) => {
 export const getTrendingSales = async (req: Request, res: Response) => {
   try {
     const now = new Date();
+    const sixtyDaysOut = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
 
     const sales = await prisma.sale.findMany({
       where: {
         status: 'PUBLISHED',
         endDate: { gte: now },
+        // Only upcoming/current sales — filter out permanent retail businesses
+        // with far-future end dates and no meaningful start date window
+        startDate: { lte: sixtyDaysOut },
+        // Must have at least one item listed — no empty shell sales
+        items: { some: {} },
       },
       include: {
         organizer: { select: { user: { select: { name: true } } } },

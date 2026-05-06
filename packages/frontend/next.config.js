@@ -144,6 +144,8 @@ const nextConfig = {
       // Cloudinary — all subdomains (res.cloudinary.com is primary)
       { protocol: 'https', hostname: 'res.cloudinary.com' },
       { protocol: 'https', hostname: '**.cloudinary.com' },
+      // Cloudflare image proxy — routes estatesales.net, liveauctioneers.com, eBay images
+      { protocol: 'https', hostname: 'findasale-image-proxy.findasale.workers.dev' },
       // External CDNs (placeholder, testing, map tiles, QR code generation)
       { protocol: 'https', hostname: 'picsum.photos' },
       { protocol: 'https', hostname: 'api.qrserver.com' },

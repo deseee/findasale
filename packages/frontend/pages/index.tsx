@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
+import { getItemImageUrl } from '../lib/imageUtils';
 import SaleMap, { SalePin } from '../components/SaleMap';
 import SaleCard from '../components/SaleCard';
 import Skeleton from '../components/Skeleton';
@@ -452,8 +453,8 @@ const HomePage = () => {
                                 <div className="w-full h-48 bg-warm-100 dark:bg-gray-700 relative overflow-hidden">
                                   {item.photoUrls && item.photoUrls.length > 0 ? (
                                     <img
-                                      key={item.photoUrls[0]}
-                                      src={item.photoUrls[0]}
+                                      key={getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0]}
+                                      src={getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0]}
                                       alt={item.title}
                                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                     />
