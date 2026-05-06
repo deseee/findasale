@@ -161,7 +161,7 @@ async function getOrCreateScrapedOrganizer(
 
   if (businessCategory && !VALID_CATEGORIES.has(businessCategory)) {
     console.log(
-      `[Ingest] Rejected organizer "${businessName}" — off-target category: ${businessCategory}`
+      `[Ingest] Rejected organizer — off-target category`
     );
     return null;
   }
@@ -335,7 +335,7 @@ async function getOrCreateScrapedOrganizer(
       throw err;
     }
   }
-  console.log(`[scraper] Created organizer: ${newOrgId} for "${businessName}" (${sourceName})`);
+  console.log(`[scraper] Created organizer: ${newOrgId}`);
 
   // Fire enrichment non-blocking
   enrichOrganizer(newOrgId, businessName, city, state).catch((err) =>

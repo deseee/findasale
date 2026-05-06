@@ -18,6 +18,8 @@ import { v2 as cloudinary } from 'cloudinary';
 import { chromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
+const DEBUG = process.env.LOG_LEVEL === 'debug';
+
 // Register stealth plugin
 chromium.use(StealthPlugin());
 
@@ -153,7 +155,7 @@ async function mirrorImagesToCloudinary(imageUrls: string[], saleId: string): Pr
       });
 
       cloudinaryUrls.push(cloudinaryUrl);
-      console.log(`[SaleDetailEnrichment] Mirrored image ${i + 1} for sale ${saleId}: ${imageUrl} -> ${cloudinaryUrl}`);
+      if (DEBUG) console.log(`[SaleDetailEnrichment] Mirrored image ${i + 1} for sale ${saleId}: ${imageUrl} -> ${cloudinaryUrl}`);
     } catch (error) {
       console.warn(
         `[SaleDetailEnrichment] Failed to mirror image for sale ${saleId}: ${imageUrl}`,
@@ -163,7 +165,7 @@ async function mirrorImagesToCloudinary(imageUrls: string[], saleId: string): Pr
     }
   }
 
-  if (cloudinaryUrls.length > 0) {
+  if (cloudinaryUrls.length > 0 && DEBUG) {
     console.log(`[SaleDetailEnrichment] Successfully mirrored ${cloudinaryUrls.length}/${Math.min(imageUrls.length, maxImages)} images for sale ${saleId}`);
   }
 
@@ -216,7 +218,7 @@ async function fetchSalePageHTML(sourceUrl: string, saleId?: string): Promise<st
       // Playwright doesn't easily support If-Modified-Since headers, so we use a simpler strategy:
       // If we fetched within the last 24h and have cache headers, assume the content is still fresh
       // This avoids unnecessary Playwright browser startup costs
-      console.log(`[SaleDetailEnrichment] Cached headers exist for sale ${saleId}, attempting conditional request`);
+      if (DEBUG) console.log(`[SaleDetailEnrichment] Cached headers exist for sale ${saleId}, attempting conditional request`);
     }
   }
 
@@ -310,7 +312,7 @@ async function fetchSalePageHTML(sourceUrl: string, saleId?: string): Promise<st
 
       if (attempt < maxRetries) {
         const delay = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
-        console.log(
+        if (DEBUG) console.log(
           `[SaleDetailEnrichment] Attempt ${attempt + 1}/${maxRetries + 1} failed for ${sourceUrl}, ` +
           `retrying in ${Math.round(delay / 1000)}s: ${lastError.message}`
         );
@@ -332,14 +334,14 @@ export async function enrichSaleDetails(saleId: string, sourceUrl: string): Prom
 
     const html = await fetchSalePageHTML(sourceUrl, saleId);
     if (!html) {
-      console.log(`[SaleDetailEnrichment] No HTML returned for sale ${saleId}`);
+      if (DEBUG) console.log(`[SaleDetailEnrichment] No HTML returned for sale ${saleId}`);
       return false;
     }
 
     const { description, images } = extractSaleEventData(html);
 
     if (!description && images.length === 0) {
-      console.log(`[SaleDetailEnrichment] No enrichment data found for sale ${saleId}`);
+      if (DEBUG) console.log(`[SaleDetailEnrichment] No enrichment data found for sale ${saleId}`);
       return false;
     }
 
@@ -359,7 +361,7 @@ export async function enrichSaleDetails(saleId: string, sourceUrl: string): Prom
         where: { id: saleId },
         data: updateData as Parameters<typeof prisma.sale.update>[0]['data'],
       });
-      console.log(`[SaleDetailEnrichment] Enriched sale ${saleId}: description=${!!description}, photos=${photoUrls.length}`);
+      if (DEBUG) console.log(`[SaleDetailEnrichment] Enriched sale ${saleId}: description=${!!description}, photos=${photoUrls.length}`);
       return true;
     }
 
@@ -391,7 +393,7 @@ export async function runEnrichmentBatch(options: { limit?: number } = {}): Prom
       take: limit,
     });
 
-    console.log(`[SaleDetailEnrichment] Starting batch enrichment for ${sales.length} sales`);
+    if (DEBUG) console.log(`[SaleDetailEnrichment] Starting batch enrichment for ${sales.length} sales`);
 
     for (const sale of sales) {
       if (!sale.sourceUrl) {
@@ -415,6 +417,6 @@ export async function runEnrichmentBatch(options: { limit?: number } = {}): Prom
     await closePlaywrightBrowser();
   }
 
-  console.log(`[SaleDetailEnrichment] Batch complete: ${result.enriched} enriched, ${result.skipped} skipped of ${result.processed} processed`);
+  if (DEBUG) console.log(`[SaleDetailEnrichment] Batch complete: ${result.enriched} enriched, ${result.skipped} skipped of ${result.processed} processed`);
   return result;
 } 

@@ -6,6 +6,8 @@
 import robotsParser from 'robots-parser';
 import { getRandomUserAgent } from './userAgents';
 
+const DEBUG = process.env.LOG_LEVEL === 'debug';
+
 interface RateLimitConfig {
   requestsPerSecond: number;
   backoffMultiplier: number;
@@ -61,7 +63,7 @@ export class RateLimiter {
       const allowed = robots.isAllowed(userAgent, pathname) !== false;
 
       // robots.txt is advisory only — log but always proceed
-      if (!allowed) {
+      if (!allowed && DEBUG) {
         console.log(`[RateLimiter] robots.txt disallow for ${pathname}, proceeding anyway`);
       }
       return true; // Always return true
@@ -100,7 +102,7 @@ export class RateLimiter {
       : currentBackoff * this.config.backoffMultiplier;
 
     this.backoffDelays.set(domain, newBackoff);
-    console.log(`Backoff applied for ${domain}: ${newBackoff}ms`);
+    if (DEBUG) console.log(`Backoff applied for ${domain}: ${newBackoff}ms`);
   }
 
   /**
