@@ -5,7 +5,7 @@
  */
 import React from 'react';
 import Link from 'next/link';
-import { getThumbnailUrl } from '../lib/imageUtils';
+import { getThumbnailUrl, getItemImageUrl } from '../lib/imageUtils';
 import { ItemSearchResult } from '../hooks/useItemSearch';
 
 // ---------------------------------------------------------------------------
@@ -18,8 +18,8 @@ const ItemCard = ({ item }: { item: ItemSearchResult }) => (
   >
     {item.photoUrls?.[0] ? (
       <img
-        key={getThumbnailUrl(item.photoUrls[0])}
-        src={getThumbnailUrl(item.photoUrls[0])}
+        key={getThumbnailUrl(getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0])}
+        src={getThumbnailUrl(getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0])}
         alt={item.title}
         className="aspect-square w-full object-cover"
         loading="lazy"

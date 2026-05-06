@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { getFullUrl, getThumbnailUrl } from '../lib/imageUtils';
+import { getFullUrl, getThumbnailUrl, getSaleImageUrl } from '../lib/imageUtils';
 
 interface SaleTourGalleryProps {
   photos: string[];           // array of photo URLs
@@ -103,7 +103,7 @@ const SaleTourGallery: React.FC<SaleTourGalleryProps> = ({
     return null;
   }
 
-  const currentPhotoUrl = getFullUrl(photos[currentIndex]) || photos[currentIndex];
+  const currentPhotoUrl = getSaleImageUrl(photos[currentIndex]) || photos[currentIndex];
 
   return (
     <div
@@ -233,7 +233,7 @@ const SaleTourGallery: React.FC<SaleTourGalleryProps> = ({
                 aria-pressed={idx === currentIndex}
               >
                 <img
-                  src={getThumbnailUrl(url) || url}
+                  src={getThumbnailUrl(getSaleImageUrl(url) || url) || url}
                   alt={`Thumbnail ${idx + 1}`}
                   className="h-16 w-16 object-cover rounded"
                   draggable={false}
