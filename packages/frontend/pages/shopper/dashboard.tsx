@@ -619,7 +619,7 @@ const ShopperDashboard = () => {
                 </div>
               ) : holds && holds.length > 0 ? (
                 <div className="space-y-4">
-                  {holds.map((hold) => (
+                  {holds.map((hold: any) => (
                     <div key={hold.id} className="card p-4 border border-warm-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow">
                       <div className="flex gap-4">
                         {hold.item.photoUrls && hold.item.photoUrls.length > 0 && (
