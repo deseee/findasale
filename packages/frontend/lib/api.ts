@@ -46,8 +46,8 @@ api.interceptors.response.use(
         // Retry the original request with the new cookie
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed — redirect to login
-        if (typeof window !== 'undefined') {
+        // Refresh failed — redirect to login (skip if already on login to prevent reload loop)
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
           window.location.href = '/login';
         }
         return Promise.reject(refreshError);
