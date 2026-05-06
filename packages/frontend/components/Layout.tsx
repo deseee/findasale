@@ -724,7 +724,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <div className="relative" onMouseLeave={() => setExploreOpen(false)}>
                 <button
                   onMouseEnter={() => setExploreOpen(true)}
-                  onClick={() => setExploreOpen(prev => !prev)}
+                  onClick={() => setExploreOpen(true)}
                   className="flex items-center gap-1 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400"
                 >
                   Explore
