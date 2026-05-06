@@ -38,23 +38,21 @@ interface FBGraphQLVariable {
 }
 
 interface FBListingNode {
-  node?: {
-    __typename?: string;
-    listing?: {
-      id?: string;
-      marketplace_listing_title?: string;
-      listing_price?: {
-        formatted_amount?: string;
-      };
-      location?: {
-        reverse_geocode?: {
-          city_page?: {
-            display_name?: string;
-          };
+  __typename?: string;
+  listing?: {
+    id?: string;
+    marketplace_listing_title?: string;
+    listing_price?: {
+      formatted_amount?: string;
+    };
+    location?: {
+      reverse_geocode?: {
+        city_page?: {
+          display_name?: string;
         };
       };
-      is_pending?: boolean;
     };
+    is_pending?: boolean;
   };
 }
 
