@@ -4,7 +4,21 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S667 — S666 Backlog Sweep: All 16 Meta-Audit Items Shipped (COMPLETE — ready to push)**
+**Latest: S667 — S666 Backlog Sweep: All 16 Meta-Audit Items Shipped (COMPLETE — pushed)**
+
+S666 deferred 16 items. Patrick decided: (A) NextAuth → `/api/oauth/`, (B) Sentry Crons for observability. All 16 items dispatched via 7 parallel dev agents and verified. All code pushed via `.\push.ps1`.
+
+**Post-session fixes (also pushed via MCP):**
+- `packages/frontend/pages/organizer/settings.tsx` — `link.parentChild` → `link.parentNode` (TS error blocking Vercel build)
+- `packages/backend/src/routes/auth.ts` — `ipKeyGenerator` helper added to `resetPasswordLimiter` (ERR_ERL_KEY_GEN_IPV6 validation warning on Railway startup)
+- `packages/backend/Dockerfile.production` — cache-bust bumped to 2026-05-07 to force Railway rebuild
+- Facebook OAuth redirect URI updated in Meta Developer Console: `/api/auth/callback/facebook` → `/api/oauth/callback/facebook` ✅
+- Google OAuth redirect URI — Patrick updated in Google Cloud Console ✅
+- CCPA migration (`20260507000001_add_ccpa_opt_out`) — Patrick ran `prisma migrate deploy` ✅
+- Stripe Tax (`automatic_tax: {enabled: true}`) — code is wired, NOT activating in Stripe Dashboard. Flag flips activation with zero code changes if ever needed.
+
+**Railway:** ✅ Green (backend active, IPv6 rate-limit warning resolved)
+**Vercel:** ✅ Green (settings.tsx TS error fixed, pnpm lockfile push required if not already done)
 
 S666 deferred 16 items. Patrick decided: (A) NextAuth → `/api/oauth/`, (B) Sentry Crons for observability. All 16 items dispatched via 7 parallel dev agents and verified. Push block below covers all S667 changes.
 
@@ -631,7 +645,17 @@ enrichContactEmails.ts upgraded with pull-queue concurrency (SCRAPE_CONCURRENCY=
 
 ---
 
-## Recent Sessions (S661–S666)
+## Recent Sessions (S662–S667)
+
+### S667 — S666 Backlog Sweep: All 16 Meta-Audit Items Shipped (COMPLETE — pushed)
+
+All 16 items deferred from S666 dispatched in 7 parallel dev agent batches. NextAuth moved to `/api/oauth/[...nextauth].ts` (resolves JWT cookie auth routing conflict). AuthContext + lib/api.ts migrated from localStorage to httpOnly cookie. GDPR data export + CCPA opt-out page + ccpaOptOut schema field + migration. ToS arbitration clause (AAA, Kent County MI). CAN-SPAM address corrected. Stripe refund webhook + dunning grace period. Canonical URLs on 5 page types. `prefers-reduced-motion` CSS. Sentry Cron check-ins on all 38 cron jobs. Slow-query + connection pool monitoring. SIGTERM graceful shutdown. Deliverability monitor cron. Address normalization in scraper dedup (20+ unit tests). Camera race fix (optimistic lock). Geocoding audit cron. Claim verify endpoint + page. NSFW detection on upload (AWS Rekognition via Cloudinary). Cloudinary orphan cleanup on delete. XP velocity admin page + endpoint. D-006: "AI" → "Smart" camera tagging. `API_RESPONSE_FORMAT.md` reference doc.
+
+Post-session fixes: settings.tsx `parentNode` TS fix, `ipKeyGenerator` in rate limiter, Railway cache-bust, Facebook + Google OAuth redirect URIs updated, CCPA migration deployed.
+
+**Files changed (42):** See "## Current Status" for full list.
+
+---
 
 ### S666 — Vercel Build Whack-a-Mole: S664 Truncation Artifacts (COMPLETE)
 
@@ -787,11 +811,29 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S667 (Meta-Audit Backlog Comprehensive Sweep)
+## Next Session — S668 (Multi-Lens Product Audit)
 
-**First action:** Verify S666 deploy is green on Railway + Vercel. Run the 5-minute live verification probes from `claude_docs/audits/meta-audit-S665-2026-05-06.md` to confirm DOB shows on /register, JSON-LD shows on /sales/[id] and /items/[id], admin endpoints work for `roles=['ADMIN']` users, isUnmanagedListing returns 403, and Sentry is receiving cron heartbeats.
+**Mandate:** Audit the product from perspectives that prior sessions have not covered. Dispatch 3–4 parallel auditors simultaneously, each with a specific lens. Collect findings, triage, then dispatch dev fixes for anything P0/P1.
 
-**S667 mandate: dispatch ALL backlog items in one session via parallel agents. Do NOT defer items.**
+### Audit lenses to dispatch in parallel
+
+**Lens 1 — Sales psychology / conversion expert**
+Audit the full buyer and organizer conversion flows through the lens of a sales psychologist or CRO (conversion rate optimization) specialist. Questions to answer: Where does the organizer signup funnel lose people? What friction points exist between shopper discovery and first hold/purchase? Are pricing anchors, scarcity signals, and social proof deployed correctly? Is the XP/badge system being used as a conversion lever or is it invisible? Is there loss aversion language where it should exist (time-limited sales, ending-soon signals)? Deliverable: ranked list of conversion gaps with specific copy/UI/flow fixes.
+
+**Lens 2 — Player psychology / game designer**
+Audit the Explorer's Guild gamification system (XP, ranks, badges, Hunt Pass, leaderboard, crews) through the lens of an experienced game designer or player who cares about systems depth and fairness. Questions: Is the XP curve motivating across all rank tiers or does it flatten and lose players mid-game? Are the sinks (XP expiry, rank resets) punishing or energizing? Is the Hunt Pass perceived as pay-to-win by non-payers? Are there exploits or feel-bad moments in the current design? Do crews have enough mechanical purpose to sustain engagement? Deliverable: specific design gaps and recommendations grounded in player psychology research.
+
+**Lens 3 — Organizer choosing software (competitive buy decision)**
+Roleplay as an estate sale or yard sale organizer evaluating FindA.Sale against EstateSales.NET, EstateSales.org, and any other tools they currently use (Facebook events, HiBid, Estatesale.co, etc.). Walk through the organizer onboarding, sale creation, item upload, POS, and settlement flows. Questions: What would make an organizer choose us over their current tool? What is our clearest differentiator? What's missing that would be an obvious dealbreaker for a professional organizer? What does our pricing page communicate vs. what competitors charge? Deliverable: competitive gap list + a one-paragraph "why switch to FindA.Sale" pitch grounded in the actual product.
+
+**Lens 4 — Recent session audit (S662–S667)**
+Re-audit the last 5 sessions' shipped features for gaps, missed edge cases, or decisions made without full context. Specifically look at: (a) the 16 S667 items — were any partially implemented or shipped with known gaps not flagged? (b) The S666 meta-audit — were all 28 findings addressed or did any fall through? (c) Any "UNVERIFIED" items in the blocked queue that now have enough context to be assessed. Deliverable: list of anything that shipped but isn't actually complete.
+
+### Session start checklist
+1. Read STATE.md + roadmap.md
+2. Verify Railway + Vercel are green (check S667 post-session fixes landed)
+3. Dispatch all 4 lenses in parallel (one Agent call per lens)
+4. When all 4 return: triage findings by severity, dispatch P0/P1 fixes immediately
 
 The S666 meta-audit identified 28 gaps. 12 shipped in S666. 16 remain. Below is the full parallel dispatch plan — 7 parallel dev agents covering everything, each scoped to file-independent areas so they don't conflict.
 
