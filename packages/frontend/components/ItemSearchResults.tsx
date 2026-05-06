@@ -4,60 +4,9 @@
  * empty state, and error state.
  */
 import React from 'react';
-import Link from 'next/link';
 import { getThumbnailUrl, getItemImageUrl } from '../lib/imageUtils';
+import ItemCard from './ItemCard'; // Feature 67: Use main ItemCard with social proof
 import { ItemSearchResult } from '../hooks/useItemSearch';
-
-// ---------------------------------------------------------------------------
-// Item card
-// ---------------------------------------------------------------------------
-const ItemCard = ({ item }: { item: ItemSearchResult }) => (
-  <Link
-    href={`/items/${item.id}`}
-    className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-warm-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow flex flex-col"
-  >
-    {item.photoUrls?.[0] ? (
-      <img
-        key={getThumbnailUrl(getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0])}
-        src={getThumbnailUrl(getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0])}
-        alt={item.title}
-        className="aspect-square w-full object-cover"
-        loading="lazy"
-      />
-    ) : (
-      <div className="aspect-square bg-warm-200 flex items-center justify-center">
-        <span className="text-warm-400 text-3xl" aria-hidden="true">📦</span>
-      </div>
-    )}
-
-    <div className="p-3 flex-1 flex flex-col gap-1">
-      <h3 className="text-sm font-semibold text-warm-900 line-clamp-2 leading-snug">
-        {item.title}
-      </h3>
-
-      {item.price != null && (
-        <p className="text-amber-600 font-bold text-sm">${Number(item.price).toFixed(2)}</p>
-      )}
-
-      <div className="flex flex-wrap gap-1 mt-auto pt-1">
-        {item.category && (
-          <span className="text-xs bg-warm-100 text-warm-700 rounded-full px-2 py-0.5 capitalize">
-            {item.category}
-          </span>
-        )}
-        {item.condition && (
-          <span className="text-xs bg-warm-100 text-warm-600 rounded-full px-2 py-0.5 capitalize">
-            {item.condition}
-          </span>
-        )}
-      </div>
-
-      {item.businessName && (
-        <p className="text-xs text-warm-400 truncate mt-1">{item.businessName}</p>
-      )}
-    </div>
-  </Link>
-);
 
 // ---------------------------------------------------------------------------
 // Skeleton card

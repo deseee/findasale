@@ -36,7 +36,7 @@ const RANK_THRESHOLDS: RankInfo[] = [
   {
     rank: 'SCOUT',
     minXp: 500,
-    maxXp: 1999,
+    maxXp: 1199,
     emoji: '🔍',
     label: 'Scout',
     milestone: 'First milestone',
@@ -44,7 +44,7 @@ const RANK_THRESHOLDS: RankInfo[] = [
   },
   {
     rank: 'RANGER',
-    minXp: 2000,
+    minXp: 1200,
     maxXp: 4999,
     emoji: '🎯',
     label: 'Ranger',
