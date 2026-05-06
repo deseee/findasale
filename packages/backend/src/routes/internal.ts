@@ -35,4 +35,22 @@ router.post('/scraper/enrich-backfill', runEnrichmentBackfill);
 router.post('/enrich-sale-details', triggerSaleDetailEnrichment);
 
 // GET /api/internal/enrich-sale-details/status — check unenriched sales count
-router
+router.get('/enrich-sale-details/status', getSaleDetailEnrichmentStatus);
+
+// GET /api/internal/enrich-sale-details/unenriched — get batch of unenriched sales
+router.get('/enrich-sale-details/unenriched', getBatchOfUnenrichedSales);
+
+// POST /api/internal/enrich-sale-details/bulk-upsert — bulk upsert enriched sale details
+router.post('/enrich-sale-details/bulk-upsert', bulkUpsertEnrichedSales);
+
+// POST /api/internal/outreach/trigger — manually trigger outreach email batch (protected)
+router.post('/outreach/trigger', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await sendOutreachEmails();
+    res.json({ ok: true, message: 'Outreach batch triggered' });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+export default router;
