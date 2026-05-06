@@ -93,7 +93,7 @@ const CITIES = [
   { city: 'Grand Rapids', state: 'MI' },
 ];
 
-const SALE_TYPES = ['estate sale', 'yard sale', 'garage sale', 'flea market', 'consignment sale'];
+const SALE_TYPES = ['yard sale', 'garage sale', 'estate sale', 'flea market', 'consignment sale'];
 
 const slugify = (text: string): string => text.toLowerCase().replace(/\s+/g, '-');
 

@@ -929,7 +929,7 @@ const OrganizerDashboard = () => {
                   Create Your First Sale
                 </Link>
                 <p className="text-sm text-warm-600 dark:text-warm-400">
-                  <Link href="#" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 underline">Watch a quick tour</Link>
+                  <Link href="/guide" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 underline">View Getting Started Guide</Link>
                 </p>
               </div>
 

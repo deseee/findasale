@@ -7,16 +7,19 @@ const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
 
     try {
       await api.post('/auth/forgot-password', { email });
       setSubmitted(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send reset email:', error);
+      setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -35,7 +38,13 @@ const ForgotPasswordPage = () => {
               Enter your email and we'll send you a link to reset your password.
             </p>
 
-            {submitted ? (
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+                <p className="text-red-800 dark:text-red-200 font-medium">{error}</p>
+              </div>
+            )}
+
+            {submitted && !error ? (
               <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
                 <p className="text-green-800 dark:text-green-200 font-medium mb-2">Check your email</p>
                 <p className="text-green-700 text-sm">

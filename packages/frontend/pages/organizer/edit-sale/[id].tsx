@@ -475,6 +475,24 @@ const EditSalePage = () => {
 
       <div className="min-h-screen bg-white dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 py-8">
+          {/* No items yet banner */}
+          {sale && sale.items && sale.items.length === 0 && (
+            <div className="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg flex items-start gap-3">
+              <span className="text-xl flex-shrink-0">📦</span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                  Your sale has no items yet
+                </p>
+                <Link
+                  href={`/organizer/add-items/${sale.id}`}
+                  className="inline-block text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 hover:underline"
+                >
+                  Add Items Now →
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Feature #249: Tier limit error modal */}
           {tierLimitError && (
             <div className="mb-8 p-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
@@ -803,7 +821,7 @@ const EditSalePage = () => {
                 {entrancePinTooFar && (
                   <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
                     <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                      ⚠️ Entrance pin is far from the sale address. Make sure this is correct.
+                      ⚠️ Your entrance pin is far from the sale address — shoppers may have trouble finding you. Drag the pin to adjust.
                     </p>
                   </div>
                 )}

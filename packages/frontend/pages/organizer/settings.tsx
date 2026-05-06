@@ -572,7 +572,7 @@ const OrganizerSettingsPage = () => {
           <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-8">Settings</h1>
 
           {/* Tabs */}
-          <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
+          <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto flex-nowrap">
             {['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'ebay', 'help'].map((tab) => {
               const tabLabel = tab === 'verification' ? 'Get Verified' : tab.charAt(0).toUpperCase() + tab.slice(1);
               return (
@@ -583,7 +583,7 @@ const OrganizerSettingsPage = () => {
                     e.preventDefault();
                     setActiveTab(tab as any);
                   }}
-                  className={`pb-2 font-medium whitespace-nowrap ${
+                  className={`pb-2 font-medium whitespace-nowrap flex-shrink-0 ${
                     activeTab === tab
                       ? 'border-b-2 border-amber-600 text-amber-600'
                       : 'text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200'

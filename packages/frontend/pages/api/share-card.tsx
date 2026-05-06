@@ -618,7 +618,6 @@ export default async function handler(req: Request) {
     const organizer = orgRes.ok ? await orgRes.json() : null;
 
     // XP gate deferred — guildXp not available via Authorization header auth
-    // TODO: fetch user XP from backend when endpoint is available
 
     // Format dates
     const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {

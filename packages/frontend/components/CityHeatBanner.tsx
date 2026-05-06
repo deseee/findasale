@@ -19,6 +19,7 @@ const CityHeatBanner: React.FC = () => {
   const [data, setData] = useState<CityHeatResponse | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     // Check if user dismissed banner
@@ -27,6 +28,23 @@ const CityHeatBanner: React.FC = () => {
       setDismissed(true);
       setLoading(false);
       return;
+    }
+
+    // Get user location
+    if (navigator.geolocation) {
+      navigator.permissions
+        ?.query({ name: 'geolocation' as PermissionName })
+        .then((result) => {
+          if (result.state === 'granted') {
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+              },
+              () => {}
+            );
+          }
+        })
+        .catch(() => {});
     }
 
     // Fetch city heat data
@@ -47,11 +65,34 @@ const CityHeatBanner: React.FC = () => {
     setDismissed(true);
   };
 
+  // Helper to calculate distance between two lat/lng points (Haversine formula)
+  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 3959; // Earth radius in miles
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
   if (loading || dismissed || !data || !data.cities || data.cities.length === 0) {
     return null;
   }
 
   const topCity = data.cities[0];
+
+  // Only show banner if user's location is near the featured city (within 50 miles)
+  // or if we don't have user location yet (fallback to showing it)
+  const isNearUser = userLocation
+    ? calculateDistance(userLocation.lat, userLocation.lng, topCity.lat, topCity.lng) <= 50
+    : true;
+
+  if (!isNearUser) {
+    return null;
+  }
+
   const trendEmoji = topCity.trend === 'up' ? '📈' : topCity.trend === 'down' ? '📉' : '➡️';
 
   return (

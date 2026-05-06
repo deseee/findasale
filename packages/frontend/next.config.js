@@ -181,17 +181,26 @@ const nextConfig = {
 
   // Static HTML rewrites — serve public/*.html files at clean URLs
   // S651: catch-all /api/:path* proxy → Railway backend.
-  // Next.js API routes (pages/api/*) take precedence over rewrites, so auth, billing,
-  // proxy/ebay, og, share-card are still served by Next.js. All other /api/* calls
-  // (sales, hubs, crews, admin, stripe-connect, etc.) are forwarded to Railway.
+  // S660 FIX: Railway proxy MUST be in `fallback` (not flat array / afterFiles).
+  // Next.js routing order: beforeFiles → filesystem/static → afterFiles → dynamic routes → fallback.
+  // Dynamic API routes like pages/api/auth/[...nextauth].ts are step 6 (dynamic routes).
+  // An afterFiles rewrite runs at step 5 and intercepts BEFORE dynamic API routes — breaking NextAuth.
+  // Using `fallback` ensures all pages/api/* routes (including dynamic catch-alls) are checked first.
   async rewrites() {
     const railwayApi = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
-    return [
-      // Marketing landing page
-      { source: '/video', destination: '/video.html' },
-      // Proxy unmatched /api/* → Railway (afterFiles: pages/api/* always win)
-      { source: '/api/:path*', destination: `${railwayApi}/:path*` },
-    ];
+    return {
+      // afterFiles: static file rewrites (no API involvement)
+      afterFiles: [
+        // Marketing landing page
+        { source: '/video', destination: '/video.html' },
+      ],
+      // fallback: only reached if no pages/api/* route matched — safe for Railway proxy
+      fallback: [
+        // Proxy unmatched /api/* → Railway (fallback ensures all Next.js API routes win first,
+        // including dynamic catch-alls like pages/api/auth/[...nextauth].ts)
+        { source: '/api/:path*', destination: `${railwayApi}/:path*` },
+      ],
+    };
   },
 
   // Security + performance headers on every response

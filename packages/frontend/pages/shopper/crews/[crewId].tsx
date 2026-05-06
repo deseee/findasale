@@ -160,7 +160,7 @@ const CrewProfilePage = () => {
                   {crew.name}
                 </h1>
                 <p className="text-warm-600 dark:text-warm-400">
-                  Founded by {crew.founder.name}
+                  Organized by {crew.founder.name}
                 </p>
               </div>
               <div className="text-right">

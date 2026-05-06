@@ -211,7 +211,7 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
               {/* Go to Checkout (TBD) */}
               <button
                 onClick={() => {
-                  // TODO: Navigate to hold-to-pay flow with pre-selected items
+                  // TODO (post-launch): Integrate hold-to-pay checkout flow
                   showToast('Checkout feature coming soon', 'info');
                 }}
                 className="w-full bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors"

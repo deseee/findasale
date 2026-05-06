@@ -17,6 +17,10 @@ import Image from 'next/image';
 
 const DISMISS_KEY = 'findasale_install_dismissed_until';
 const DISMISS_DAYS = 7;
+const SHOWN_KEY = 'findasale_install_shown';
+const VISITS_KEY = 'findasale_install_visits';
+const MIN_VISITS = 3;
+const SHOW_DELAY_MS = 5000; // Don't show within first 5 seconds
 
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -51,10 +55,41 @@ function setDismissed() {
   }
 }
 
+function trackPageVisit() {
+  try {
+    const visits = parseInt(localStorage.getItem(VISITS_KEY) || '0', 10) + 1;
+    localStorage.setItem(VISITS_KEY, String(visits));
+    return visits;
+  } catch {
+    return 0;
+  }
+}
+
+function hasShownThisSession(): boolean {
+  try {
+    return sessionStorage.getItem(SHOWN_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function setShownThisSession() {
+  try {
+    sessionStorage.setItem(SHOWN_KEY, 'true');
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showAndroid, setShowAndroid] = useState(false);
   const [showIOS, setShowIOS] = useState(false);
+
+  useEffect(() => {
+    // Track page visit on mount
+    trackPageVisit();
+  }, []);
 
   useEffect(() => {
     // Check dismissal and standalone status on mount
@@ -64,23 +99,36 @@ export default function InstallPrompt() {
       return;
     }
 
-    if (isIOS()) {
-      // Show the iOS instructions tooltip once per dismissal period
-      setShowIOS(true);
+    // Already shown in this session — don't show again
+    if (hasShownThisSession()) {
       return;
     }
 
-    const handler = (e: Event) => {
-      e.preventDefault();
-      // Check localStorage (7-day dismissal)
-      if (!isDismissed()) {
-        setDeferredPrompt(e);
-        setShowAndroid(true);
+    // Wait 5 seconds before allowing the prompt to show
+    const showTimer = setTimeout(() => {
+      if (isIOS()) {
+        // Show the iOS instructions tooltip once per dismissal period
+        setShowIOS(true);
+        setShownThisSession();
+        return;
       }
-    };
 
-    window.addEventListener('beforeinstallprompt', handler as EventListener);
-    return () => window.removeEventListener('beforeinstallprompt', handler as EventListener);
+      const handler = (e: Event) => {
+        e.preventDefault();
+        // Check: dismissal, min visits, and not already shown
+        const visits = parseInt(localStorage.getItem(VISITS_KEY) || '0', 10);
+        if (!isDismissed() && visits >= MIN_VISITS && !hasShownThisSession()) {
+          setDeferredPrompt(e);
+          setShowAndroid(true);
+          setShownThisSession();
+        }
+      };
+
+      window.addEventListener('beforeinstallprompt', handler as EventListener);
+      return () => window.removeEventListener('beforeinstallprompt', handler as EventListener);
+    }, SHOW_DELAY_MS);
+
+    return () => clearTimeout(showTimer);
   }, []);
 
   const handleInstall = async () => {

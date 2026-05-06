@@ -249,7 +249,7 @@ export default function WorkspaceSettingsPage() {
       return;
     }
     try {
-      // TODO: Implement delete endpoint
+      // TODO (post-launch): Implement workspace deletion endpoint
       showToast('Workspace deletion not yet implemented', 'info');
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to delete workspace', 'error');

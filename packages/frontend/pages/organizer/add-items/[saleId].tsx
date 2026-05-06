@@ -192,9 +192,8 @@ async function checkImageQuality(blob: Blob): Promise<ImageQualityResult> {
   });
 }
 
-// TODO: Implement face detection with @tensorflow-models/coco-ssd
-// Patrick: run `pnpm add @tensorflow/tfjs @tensorflow-models/coco-ssd` in packages/frontend
-// then replace this stub with real detection
+// TODO (post-launch): Implement face detection with @tensorflow-models/coco-ssd
+// Requires: pnpm add @tensorflow/tfjs @tensorflow-models/coco-ssd
 async function detectFace(_blob: Blob): Promise<boolean> {
   return false;
 }
@@ -268,7 +267,6 @@ const emptyForm = {
   category: '',
   condition: '',
   price: '',
-  quantity: 1,
   listingType: 'FIXED',
   startingBid: '',
   reservePrice: '',
@@ -1465,9 +1463,9 @@ const AddItemsDetailPage = () => {
                   activeTab === tab
                     ? 'bg-amber-600 text-white'
                     : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400'
-                }`}
+                } ${tab === 'camera' ? 'sm:order-first order-first font-semibold text-base sm:text-base' : ''}`}
               >
-                {tab === 'camera' ? 'Camera' : tab === 'batch' ? 'Batch Upload' : 'Manual Entry'}
+                {tab === 'camera' ? '📷 Camera' : tab === 'batch' ? 'Batch Upload' : 'Manual Entry'}
               </button>
             ))}
             <button
@@ -2308,7 +2306,18 @@ const AddItemsDetailPage = () => {
             </div>
           ) : (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700">
-              <p className="text-warm-600 dark:text-warm-400 text-lg">No items yet. Use the tabs above to get started.</p>
+              <p className="text-2xl mb-3">📷</p>
+              <p className="text-warm-900 dark:text-warm-100 font-semibold text-lg mb-2">No items added yet</p>
+              <p className="text-warm-600 dark:text-warm-400 mb-6">Use the Camera or Manual tab to add your first item.</p>
+              <button
+                onClick={() => {
+                  setActiveTab('camera');
+                  setFormData(emptyForm);
+                }}
+                className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                Start with Camera
+              </button>
             </div>
           )}
         </div>

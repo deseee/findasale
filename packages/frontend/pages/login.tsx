@@ -179,25 +179,15 @@ const LoginPage = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                name="remember-me"
-                type="checkbox"
-                className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-warm-900 dark:text-warm-100">
-                Remember me
-              </label>
-            </div>
-
+          <div className="flex items-center justify-end">
             <div className="text-sm">
               <Link href="/forgot-password" className="font-medium text-amber-600 hover:text-amber-500">
                 Forgot your password?
               </Link>
             </div>
           </div>
+
+          {/* TODO: Implement extended JWT expiry for "Remember me" — requires backend support */}
 
           <div>
             <button
