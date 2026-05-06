@@ -84,7 +84,7 @@ export default function SalesPage() {
     <>
       <Head>
         <title>Browse Sales · FindA.Sale</title>
-        <meta name="description" content="Discover upcoming estate sales, auctions, and yard sales in your area." />
+        <meta name="description" content="Discover upcoming estate sales, garage sales, yard sales, auctions, flea markets, and more in your area." />
       </Head>
 
       <div className="bg-white dark:bg-gray-900 min-h-screen">

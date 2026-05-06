@@ -68,7 +68,7 @@ export function CityNearbyLinks({
         {/* Footer Meta */}
         <div className="mt-12 pt-8 border-t border-slate-200 dark:border-slate-700">
           <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-            Powered by real estate sale data | Last updated daily
+            Powered by local sale listings | Last updated daily
           </p>
           <div className="text-center mt-4">
             <Link

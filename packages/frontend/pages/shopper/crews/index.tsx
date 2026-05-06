@@ -38,7 +38,7 @@ const CrewsPage = () => {
                 What are Crews?
               </h2>
               <p className="text-warm-700 dark:text-warm-300 text-lg leading-relaxed mb-6">
-                Crews are social groups for shoppers to coordinate hunts, share finds, and build collections together. Create or join a crew to connect with collectors who share your interests—whether you're hunting vintage furniture, collectibles, or hidden gems at estate sales.
+                Crews are social groups for shoppers to coordinate hunts, share finds, and build collections together. Create or join a crew to connect with collectors who share your interests—whether you're hunting vintage furniture, collectibles, or hidden gems at estate sales, garage sales, auctions, and more.
               </p>
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
                 <p className="text-warm-700 dark:text-warm-300">

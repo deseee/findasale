@@ -35,7 +35,7 @@ export default function ReferralsPage() {
 
   const handleShare = (platform: string) => {
     const link = data?.referralLink || '';
-    const message = encodeURIComponent('Join me on FindA.Sale to discover great deals at estate sales, yard sales, and more!');
+    const message = encodeURIComponent('Join me on FindA.Sale to discover great deals at estate sales, garage sales, yard sales, auctions, flea markets, and more!');
 
     let shareUrl = '';
     switch (platform) {

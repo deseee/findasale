@@ -40,7 +40,7 @@ export function CityTopFinds({ citySlug, items }: CityTopFindsProps) {
           Top Finds This Week
         </h2>
         <p className="text-slate-600 dark:text-slate-400 mb-8">
-          Best-valued items from recent estate sales, sorted by savings percentage
+          Best-valued items from local sales, sorted by savings percentage
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

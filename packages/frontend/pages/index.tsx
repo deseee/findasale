@@ -272,7 +272,7 @@ const HomePage = () => {
               name: 'FindA.Sale',
               url: 'https://finda.sale',
               logo: 'https://finda.sale/icons/icon-512x512.png',
-              description: 'Secondary sales marketplace — browse, buy, and sell items from estate sales, garage sales, and auctions online',
+              description: 'Secondary sales marketplace — browse, buy, and sell items from estate sales, garage sales, yard sales, auctions, flea markets, and more',
               address: {
                 '@type': 'PostalAddress',
                 addressLocality: defaultCity,

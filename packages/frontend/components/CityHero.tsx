@@ -26,7 +26,7 @@ export function CityHero({
     <section className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4 md:px-8">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white mb-3">
-          Top Estate Sale Finds in {city.name}, {city.state}
+          Top Deals &amp; Finds in {city.name}, {city.state}
         </h1>
         <p className="text-lg text-slate-600 dark:text-slate-300 mb-6">
           Estate sales, yard sales, auctions, flea markets, and more — discover
