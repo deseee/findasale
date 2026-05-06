@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth';
+import { messageLimiter } from '../middleware/rateLimiter';
 import {
   getConversations,
   getThread,

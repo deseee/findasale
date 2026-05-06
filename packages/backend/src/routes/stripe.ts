@@ -22,6 +22,7 @@ import {
   cashPayment,
 } from '../controllers/terminalController';
 import { authenticate } from '../middleware/auth';
+import { paymentLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 

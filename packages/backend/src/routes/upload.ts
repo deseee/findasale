@@ -3,6 +3,7 @@ import { upload, uploadSalePhotos, uploadItemPhoto, analyzePhotoWithAI, rapidBat
 import { batchAnalyzeImages } from '../controllers/batchAnalyzeController';
 import { authenticate } from '../middleware/auth';
 import { requireAdmin } from '../middleware/adminAuth';
+import { uploadLimiter, aiAnalyzeLimiter } from '../middleware/rateLimiter';
 import { recordAIFeedback, getAIFeedbackStats } from '../services/cloudAIService';
 
 const router = Router();
