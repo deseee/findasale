@@ -62,9 +62,8 @@ export default function SalesPage() {
       try {
         setLoading(true);
         setError(null);
-        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
         const response = await fetch(
-          `${apiBase}/sales?status=PUBLISHED&page=${page}&limit=${ITEMS_PER_PAGE}`
+          `/api/sales?status=PUBLISHED&page=${page}&limit=${ITEMS_PER_PAGE}`
         );
         if (!response.ok) throw new Error('Failed to fetch sales');
         const data: ApiResponse = await response.json();
