@@ -253,15 +253,15 @@ const HomePage = () => {
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <Head>
         <title>FindA.Sale - Find Sales Near You</title>
-        <meta name="description" content="Find sales near you - browse estate sales, garage sales, yard sales, auctions, flea markets, and more" />
+        <meta name="description" content="Find sales near you - browse yard sales, garage sales, estate sales, flea markets, auctions, and more" />
         <meta property="og:title" content="FindA.Sale — Find Sales Near You" />
-        <meta property="og:description" content="Browse sales near you - estate sales, garage sales, yard sales, auctions, flea markets, and more. Bid, buy, and discover unique items from local sales." />
+        <meta property="og:description" content="Browse sales near you - yard sales, garage sales, estate sales, auctions, flea markets, and more. Bid, buy, and discover unique items from local sales." />
         <meta property="og:url" content="https://finda.sale" />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="FindA.Sale — Find Sales Near You" />
-        <meta name="twitter:description" content="Browse sales near you - estate sales, garage sales, yard sales, auctions, and more. Bid, buy, and discover unique items from local sales." />
+        <meta name="twitter:description" content="Browse sales near you - yard sales, garage sales, estate sales, auctions, and more. Bid, buy, and discover unique items from local sales." />
         <link rel="canonical" href="https://finda.sale" />
         <script
           type="application/ld+json"
@@ -272,7 +272,7 @@ const HomePage = () => {
               name: 'FindA.Sale',
               url: 'https://finda.sale',
               logo: 'https://finda.sale/icons/icon-512x512.png',
-              description: 'Secondary sales marketplace — browse, buy, and sell items from estate sales, garage sales, yard sales, auctions, flea markets, and more',
+              description: 'Secondary sales marketplace — browse, buy, and sell items from yard sales, garage sales, estate sales, flea markets, auctions, and more',
               address: {
                 '@type': 'PostalAddress',
                 addressLocality: defaultCity,
@@ -307,7 +307,7 @@ const HomePage = () => {
             <div className="max-w-3xl">
               <h1 className="font-heading text-5xl md:text-6xl font-bold mb-4 leading-tight">Discover Amazing Deals</h1>
               <p className="font-body text-lg md:text-xl text-white/90 mb-8 max-w-2xl">
-                Discover unique finds from sales near you. Browse estate sales, garage sales, yard sales, auctions, flea markets, and more.
+                Discover unique finds from sales near you. Browse yard sales, garage sales, estate sales, flea markets, auctions, and more.
               </p>
               {/* Search Bar */}
               <div className="relative max-w-xl">
