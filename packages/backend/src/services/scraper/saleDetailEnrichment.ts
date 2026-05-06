@@ -15,12 +15,11 @@ import { defaultRateLimiter } from './rateLimiter';
 import { getCachedHeaders, setCachedHeaders, extractCacheHeaders } from './httpCache';
 import axios from 'axios';
 import { v2 as cloudinary } from 'cloudinary';
-import playwright from 'playwright-extra';
+import { chromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
 // Register stealth plugin
-playwright.use(StealthPlugin());
-const chromium = playwright.chromium;
+chromium.use(StealthPlugin());
 
 // Rotating referers to avoid fingerprinting
 const REFERRERS = [
