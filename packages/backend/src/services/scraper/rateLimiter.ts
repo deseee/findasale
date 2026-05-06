@@ -4,19 +4,7 @@
  */
 
 import robotsParser from 'robots-parser';
-
-// Rotating browser user-agents to avoid bot detection
-const BROWSER_USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-];
-
-function getRandomUserAgent(): string {
-  return BROWSER_USER_AGENTS[Math.floor(Math.random() * BROWSER_USER_AGENTS.length)];
-}
+import { getRandomUserAgent } from './userAgents';
 
 interface RateLimitConfig {
   requestsPerSecond: number;
@@ -45,7 +33,10 @@ export class RateLimiter {
     try {
       const url = new URL(baseUrl);
       const robotsUrl = `${url.protocol}//${url.host}/robots.txt`;
-      const response = await fetch(robotsUrl, { signal: AbortSignal.timeout(5000) });
+      const response = await fetch(robotsUrl, {
+        headers: { 'User-Agent': getRandomUserAgent() },
+        signal: AbortSignal.timeout(5000),
+      });
       if (response.ok) {
         const text = await response.text();
         this.robotsTxt.set(url.host, robotsParser(robotsUrl, text));
@@ -60,7 +51,7 @@ export class RateLimiter {
    * Check if a path is allowed by robots.txt
    * robots.txt is advisory only — always returns true (proceeds regardless)
    */
-  isAllowed(url: string, userAgent: string = 'FindASaleBot/1.0'): boolean {
+  isAllowed(url: string, userAgent: string = getRandomUserAgent()): boolean {
     try {
       const parsed = new URL(url);
       const robots = this.robotsTxt.get(parsed.host);
