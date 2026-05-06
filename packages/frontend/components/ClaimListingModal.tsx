@@ -66,7 +66,6 @@ export default function ClaimListingModal({ organizerId, onClose }: ClaimListing
         </div>
     </AccessibleModal>
   );
-    );
   }
 
   return (
