@@ -5,6 +5,7 @@
 import cron from 'node-cron';
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
+import { cronGuard } from '../utils/cronGuard';
 import { regionConfig } from '../config/regionConfig';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -188,11 +189,7 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
 
 // ─── Schedule: every Monday at 8 AM ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-cron.schedule('0 8 * * 1', async () => {
+cron.schedule('0 8 * * 1', cronGuard({ jobName: 'curatorEmailJob' }, async () => {
   console.log('📧 Running weekly curator email digest…');
-  try {
-    await sendWeeklyCuratorDigest();
-  } catch (err) {
-    console.error('Weekly curator email job failed:', err);
-  }
-});
+  await sendWeeklyCuratorDigest();
+}));

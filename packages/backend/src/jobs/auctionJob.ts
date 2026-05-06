@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { getStripe } from '../utils/stripe';
 import { Resend } from 'resend';
+import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from '../services/xpService'; // Explorer's Guild XP awards
 const stripe = () => getStripe();
@@ -38,93 +39,130 @@ export const endAuctions = async () => {
     console.log(`Found ${endedAuctions.length} auctions to process`);
 
     for (const item of endedAuctions) {
-      const highestBid = await prisma.bid.findFirst({
-        where: { itemId: item.id },
-        orderBy: { amount: 'desc' },
-        include: { user: { select: { email: true } } },
-      });
+      // P0 Race Fix: Wrap entire auction close logic in transaction with optimistic lock
+      const result = await prisma.$transaction(async (tx) => {
+        // 1. Atomic update with WHERE-clause guard: only process if not already closed
+        const updated = await tx.item.updateMany({
+          where: {
+            id: item.id,
+            status: 'AVAILABLE',
+            auctionEndTime: { not: null, lt: new Date() }
+          },
+          data: { status: 'AUCTION_ENDED' } // Mark as processing
+        });
 
-      if (highestBid) {
-        const price = highestBid.amount; // Bid.amount is Float → always number
-
-        // Pass 1: Reserve price check — if set and not met, end auction without payment intent
-        const reserveMet = !item.auctionReservePrice || highestBid.amount >= item.auctionReservePrice;
-        if (!reserveMet) {
-          // Mark ended, notify organizer, skip PaymentIntent
-          await prisma.item.update({
-            where: { id: item.id },
-            data: { status: 'AUCTION_ENDED', auctionClosed: true },
-          });
-          console.log(
-            `Auction ended for item ${item.id} (reserve not met). Highest bid: $${price.toFixed(2)}, Reserve: $${item.auctionReservePrice?.toFixed(2) || 'N/A'}`
-          );
-          // TODO Phase 2: organizer dashboard UI to approve/relist
-          continue;
+        if (updated.count === 0) {
+          console.log(`[endAuctions] Item ${item.id} already processed by another job, skipping`);
+          return null;
         }
 
-        // Mark as AUCTION_ENDED — switches to SOLD only once Stripe webhook confirms payment
-        await prisma.item.update({
+        // 2. Fetch highest bid and item details within transaction
+        const highestBid = await tx.bid.findFirst({
+          where: { itemId: item.id },
+          orderBy: { amount: 'desc' },
+          include: { user: { select: { email: true } } },
+        });
+
+        const currentItem = await tx.item.findUnique({
           where: { id: item.id },
-          data: { status: 'AUCTION_ENDED', currentBid: price, auctionClosed: true },
+          include: { sale: { include: { organizer: { select: { stripeConnectId: true } } } } }
+        });
+
+        if (!currentItem) return null;
+
+        const price = highestBid?.amount ?? 0;
+
+        // Pass 1: Reserve price check
+        const reserveMet = !currentItem.auctionReservePrice || price >= currentItem.auctionReservePrice;
+        if (!reserveMet) {
+          // Update to AUCTION_ENDED without payment (reserve not met)
+          await tx.item.update({
+            where: { id: currentItem.id },
+            data: { auctionClosed: true },
+          });
+          console.log(
+            `Auction ended for item ${currentItem.id} (reserve not met). Highest bid: $${price.toFixed(2)}, Reserve: $${currentItem.auctionReservePrice?.toFixed(2) || 'N/A'}`
+          );
+          return { status: 'RESERVE_NOT_MET', item: currentItem };
+        }
+
+        // Reserve met: update item and prepare payment
+        await tx.item.update({
+          where: { id: currentItem.id },
+          data: { currentBid: price, auctionClosed: true },
         });
 
         // QA: Fee rate now read from FeeStructure table at transaction time
-        const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
+        const feeStructure = await tx.feeStructure.findFirst({ where: { listingType: '*' } });
         const feePercent = feeStructure?.feeRate ?? 0.10; // Default to 10% if no FeeStructure row found
 
         let stripePaymentIntentId: string | null = null;
 
-        if (item.sale!.organizer.stripeConnectId) {
+        if (currentItem.sale!.organizer.stripeConnectId && highestBid) {
           try {
             const feeAmount = Math.round(price * 100 * feePercent);
             const paymentIntent = await stripe().paymentIntents.create({
               amount: Math.round(price * 100),
               currency: 'usd',
-              metadata: { itemId: item.id, saleId: item.sale!.id, userId: highestBid.userId },
+              metadata: { itemId: currentItem.id, saleId: currentItem.sale!.id, userId: highestBid.userId },
               application_fee_amount: feeAmount,
-              on_behalf_of: item.sale!.organizer.stripeConnectId,
-              transfer_data: { destination: item.sale!.organizer.stripeConnectId },
+              on_behalf_of: currentItem.sale!.organizer.stripeConnectId,
+              transfer_data: { destination: currentItem.sale!.organizer.stripeConnectId },
             });
             stripePaymentIntentId = paymentIntent.id;
           } catch (err) {
-            console.error(`Stripe PaymentIntent creation failed for item ${item.id}:`, err);
+            console.error(`Stripe PaymentIntent creation failed for item ${currentItem.id}:`, err);
           }
-        } else {
-          console.warn(`Organizer for item ${item.id} has no Stripe account — skipping payment intent`);
+        } else if (!currentItem.sale!.organizer.stripeConnectId) {
+          console.warn(`Organizer for item ${currentItem.id} has no Stripe account — skipping payment intent`);
         }
 
         const platformFeeAmount = Math.round(price * 100 * feePercent) / 100;
-        await prisma.purchase.create({
-          data: {
-            userId: highestBid.userId,
-            itemId: item.id,
-            saleId: item.sale!.id,
-            amount: price,
-            platformFeeAmount,
-            stripePaymentIntentId,
-            // Only mark PAID when there's no Stripe (organizer not onboarded)
-            status: stripePaymentIntentId ? 'PENDING' : 'PAID',
-          },
-        });
+        if (highestBid) {
+          await tx.purchase.create({
+            data: {
+              userId: highestBid.userId,
+              itemId: currentItem.id,
+              saleId: currentItem.sale!.id,
+              amount: price,
+              platformFeeAmount,
+              stripePaymentIntentId,
+              // Only mark PAID when there's no Stripe (organizer not onboarded)
+              status: stripePaymentIntentId ? 'PENDING' : 'PAID',
+            },
+          });
+        }
 
-        // Award XP to shopper for winning auction — flat 20 XP, no value multiplier (D-XP-009)
+        return { status: 'SUCCESS', item: currentItem, highestBid, stripePaymentIntentId, price };
+      });
+
+      // All transaction-critical operations complete. Now handle post-transaction side effects.
+      if (!result) continue; // Another process already handled this item
+
+      if (result.status === 'RESERVE_NOT_MET') {
+        // TODO Phase 2: organizer dashboard UI to approve/relist
+        continue;
+      }
+
+      // Award XP to shopper for winning auction — flat 20 XP, no value multiplier (D-XP-009)
+      if (result.highestBid) {
         const baseXp = XP_AWARDS.AUCTION_WIN;
         // Apply Hunt Pass 1.5x multiplier if active
-        const totalXp = await applyHuntPassMultiplier(highestBid.userId, baseXp);
+        const totalXp = await applyHuntPassMultiplier(result.highestBid.userId, baseXp);
 
         // Check monthly cap for AUCTION awards
         try {
-          const monthlyRemaining = await checkMonthlyXpCap(highestBid.userId, 'AUCTION');
+          const monthlyRemaining = await checkMonthlyXpCap(result.highestBid.userId, 'AUCTION');
           if (monthlyRemaining > 0) {
             const xpToAward = Math.min(totalXp, monthlyRemaining);
-            await awardXp(highestBid.userId, 'AUCTION_WIN', xpToAward, { itemId: item.id, saleId: item.sale!.id });
+            await awardXp(result.highestBid.userId, 'AUCTION_WIN', xpToAward, { itemId: result.item.id, saleId: result.item.sale!.id });
           }
         } catch (err) {
           console.error('[XP] Failed to award XP for auction win:', err);
         }
 
         // Email the winner with a payment link
-        if (stripePaymentIntentId && highestBid.user?.email) {
+        if (result.stripePaymentIntentId && result.highestBid.user?.email) {
           const resend = getResendClient();
           if (resend) {
             const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@finda.sale';
@@ -132,12 +170,12 @@ export const endAuctions = async () => {
             try {
               await resend.emails.send({
                 from: fromEmail,
-                to: highestBid.user.email,
-                subject: `You won: ${item.title}`,
+                to: result.highestBid.user.email,
+                subject: `You won: ${result.item.title}`,
                 html: `
                   <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
                     <h2>Congratulations — you won the auction!</h2>
-                    <p>Your winning bid of <strong>$${price.toFixed(2)}</strong> was accepted for <strong>${item.title}</strong>.</p>
+                    <p>Your winning bid of <strong>$${result.price.toFixed(2)}</strong> was accepted for <strong>${result.item.title}</strong>.</p>
                     <p>Please complete your payment within 48 hours to secure the item.</p>
                     <a href="${payUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;margin-top:16px">
                       Complete Payment
@@ -153,19 +191,12 @@ export const endAuctions = async () => {
             }
           }
         }
-
-        console.log(
-          `Auction ended for item ${item.id}. Winner: user ${highestBid.userId}, $${price}. ` +
-          `Payment: ${stripePaymentIntentId ? 'PENDING (intent created)' : 'PAID (no Stripe account)'}`
-        );
-      } else {
-        await prisma.item.update({
-          where: { id: item.id },
-          data: { status: 'AUCTION_ENDED' },
-        });
-        console.log(`Auction ended for item ${item.id} with no bids`);
       }
-    }
+
+      console.log(
+        `Auction ended for item ${result.item.id}. Winner: user ${result.highestBid?.userId || 'none'}, $${result.price}. ` +
+        `Payment: ${result.stripePaymentIntentId ? 'PENDING (intent created)' : 'PAID (no Stripe account)'}`
+      );
   } catch (error) {
     console.error('Error in auction end job:', error);
   }
@@ -173,4 +204,4 @@ export const endAuctions = async () => {
 
 
 // Run every 5 minutes — checks for auctions that have passed their end time
-cron.schedule('*/5 * * * *', endAuctions);
+cron.schedule('*/5 * * * *', cronGuard({ jobName: 'auctionJob' }, endAuctions));

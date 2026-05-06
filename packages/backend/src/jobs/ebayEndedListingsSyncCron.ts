@@ -13,6 +13,7 @@
 
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
+import { cronGuard } from '../utils/cronGuard';
 import { syncEndedListingsForOrganizer } from '../controllers/ebayController';
 
 /**
@@ -64,9 +65,9 @@ async function ebayEndedListingsSync(): Promise<void> {
 
 // Register the cron job to run every 4 hours (0 */4 * * *)
 export function startEbayEndedListingsSyncCron(): void {
-  cron.schedule('0 */4 * * *', async () => {
+  cron.schedule('0 */4 * * *', cronGuard({ jobName: 'ebayEndedListingsSyncCron' }, async () => {
     console.log('[eBay EndedSync] Starting 4-hour sync cycle...');
     await ebayEndedListingsSync();
-  });
+  }));
   console.log('[eBay EndedSync] Cron registered — runs every 4 hours');
 }

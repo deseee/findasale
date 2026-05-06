@@ -10,6 +10,7 @@
  */
 
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { runScrapeRun } from '../services/scraper';
 
 /**
@@ -481,7 +482,7 @@ export function initScraperCron(): void {
   // ADR-076: EstateSalesNet: daily at 00:00 UTC (gated by USE_GH_ACTIONS_ESTATESALESNET)
   // If GitHub Actions handles EstateSalesNet, skip the Railway cron
   if (process.env.USE_GH_ACTIONS_ESTATESALESNET !== 'true') {
-    cron.schedule('0 0 * * *', async () => {
+    cron.schedule('0 0 * * *', cronGuard({ jobName: 'scraperCron' }, async () => {
       console.log('[scraperCron] EstateSalesNet daily run starting');
       await runSourceAcrossMetros('EstateSalesNet').catch((err) =>
         console.error('[scraperCron] EstateSalesNet run error:', err)
@@ -492,7 +493,7 @@ export function initScraperCron(): void {
   }
 
   // GarageSaleFinder: daily at 06:00 UTC (offset to avoid simultaneous runs)
-  cron.schedule('0 6 * * *', async () => {
+  cron.schedule('0 6 * * *', cronGuard({ jobName: 'scraperCron' }, async () => {
     console.log('[scraperCron] GarageSaleFinder daily run starting');
     await runSourceAcrossMetros('GarageSaleFinder').catch((err) =>
       console.error('[scraperCron] GarageSaleFinder run error:', err)
@@ -500,7 +501,7 @@ export function initScraperCron(): void {
   });
 
   // FacebookMarketplace: daily at 12:00 UTC (offset to avoid simultaneous runs)
-  cron.schedule('0 12 * * *', async () => {
+  cron.schedule('0 12 * * *', cronGuard({ jobName: 'scraperCron' }, async () => {
     console.log('[scraperCron] FacebookMarketplace daily run starting');
     await runSourceAcrossMetros('FacebookMarketplace').catch((err) =>
       console.error('[scraperCron] FacebookMarketplace run error:', err)

@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 
 /**
@@ -172,9 +173,9 @@ export const retailAutoRenew = async (): Promise<void> => {
  * Cron pattern: '0 1 * * *' = every day at 01:00 UTC
  */
 export const scheduleRetailAutoRenewCron = (): void => {
-  cron.schedule('0 1 * * *', () => {
+  cron.schedule('0 1 * * *', cronGuard({ jobName: 'retailAutoRenewJob' }, async () => {
     console.log('[retailAutoRenew] Running scheduled retail auto-renewal job...');
     retailAutoRenew();
-  });
+  }));
   console.log('[retailAutoRenew] Scheduled retail auto-renewal job registered (daily at 01:00 UTC)');
 };

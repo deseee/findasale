@@ -1,5 +1,6 @@
 import { Router, Response, Request } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { feedLimiter } from '../middleware/rateLimiter';
 import { getPersonalizedFeed } from '../services/discoveryService';
 import { regionConfig } from '../config/regionConfig';
 
@@ -21,7 +22,7 @@ const router = Router();
  *
  * Response includes `personalized` flag so frontend can render appropriate label.
  */
-router.get('/', async (req: AuthRequest | Request, res: Response) => {
+router.get('/', feedLimiter, async (req: AuthRequest | Request, res: Response) => {
   try {
     const userId = (req as AuthRequest).user?.id ?? null;
     const lat = req.query.lat ? parseFloat(req.query.lat as string) : undefined;

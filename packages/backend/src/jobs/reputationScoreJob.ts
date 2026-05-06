@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { referralTrancheService } from '../services/referralTrancheService';
 
 /**
@@ -29,9 +30,9 @@ export const recomputeReputationScores = async (): Promise<void> => {
  * Cron pattern: '0 2 * * *' = every day at 02:00 UTC
  */
 export const scheduleReputationScoreCron = (): void => {
-  cron.schedule('0 2 * * *', () => {
+  cron.schedule('0 2 * * *', cronGuard({ jobName: 'reputationScoreJob' }, async () => {
     console.log('[reputationScoreJob] Running scheduled reputation score recomputation job...');
     recomputeReputationScores();
-  });
+  }));
   console.log('[reputationScoreJob] Scheduled reputation score job registered (daily at 02:00 UTC)');
 };

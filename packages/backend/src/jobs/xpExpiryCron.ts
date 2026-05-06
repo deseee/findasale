@@ -27,6 +27,7 @@
  */
 
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 
 async function processXpExpiry(): Promise<void> {
@@ -146,9 +147,9 @@ async function processXpExpiry(): Promise<void> {
 // Run daily at 02:00 UTC (= 21:00 ET, 22:00 CT, 00:00 PT)
 // Format: minute hour day month dayOfWeek
 // 0 2 * * * = every day at 2:00 AM UTC
-cron.schedule('0 2 * * *', async () => {
+cron.schedule('0 2 * * *', cronGuard({ jobName: 'xpExpiryCron' }, async () => {
   console.log('[xpExpiryCron] Starting XP expiry and warning batch...');
   await processXpExpiry();
-});
+}));
 
 console.log('[xpExpiryCron] Registered — runs daily at 02:00 UTC');

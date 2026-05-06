@@ -41,7 +41,7 @@ const randomQuerySchema = z.object({
  * GET /api/search?q=&type=all|sales|items&page=&limit=&priceMin=&priceMax=&condition=&category=&saleStatus=&sortBy=
  * Phase 29: Full-text search across published sales and available items with advanced filters.
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', searchLimiter, async (req: Request, res: Response) => {
   try {
     const validatedQuery = searchQuerySchema.parse(req.query);
     const { q, type, page, limit, priceMin, priceMax, condition, category, saleStatus, sortBy } = validatedQuery;

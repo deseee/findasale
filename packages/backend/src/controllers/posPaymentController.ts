@@ -132,6 +132,14 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       select: { id: true, status: true, organizerId: true, title: true, address: true, city: true, state: true },
     });
 
+
+    // Guard: reject POS on unmanaged listings
+    if (sale?.isUnmanagedListing) {
+      return res.status(403).json({
+        message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
+        code: 'UNMANAGED_LISTING'
+      });
+    }
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
     if (sale.status !== 'PUBLISHED') {
       return res.status(400).json({ message: 'Sale is not published' });

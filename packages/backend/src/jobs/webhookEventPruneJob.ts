@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../index';
 
 /**
@@ -12,7 +13,7 @@ import { prisma } from '../index';
 
 export function scheduleWebhookEventPruneJob(): void {
   // Daily at 3:00 AM UTC
-  cron.schedule('0 3 * * *', async () => {
+  cron.schedule('0 3 * * *', cronGuard({ jobName: 'webhookEventPruneJob' }, async () => {
     try {
       const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
       console.log('[webhook-prune] Starting webhook event pruning job (cutoff:', cutoff.toISOString(), ')');

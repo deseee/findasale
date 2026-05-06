@@ -4,6 +4,7 @@
  */
 
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { enrichSaleDetails } from '../services/scraper/saleDetailEnrichment';
 
 /**
@@ -11,7 +12,7 @@ import { enrichSaleDetails } from '../services/scraper/saleDetailEnrichment';
  */
 export function scheduleSaleDetailEnrichmentCron(): void {
   // Every 4 hours: 0 */4 * * * (at 0, 4, 8, 12, 16, 20 UTC)
-  cron.schedule('0 */4 * * *', async () => {
+  cron.schedule('0 */4 * * *', cronGuard({ jobName: 'saleDetailEnrichmentCron' }, async () => {
     const startTime = Date.now();
     const batchSize = parseInt(process.env.ESN_DETAIL_BATCH_SIZE || '75', 10);
 

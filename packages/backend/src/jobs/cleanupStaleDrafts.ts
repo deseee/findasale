@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
+import { cronGuard } from '../utils/cronGuard';
 
 /**
  * Phase 2B: Cleanup stale draft items job.
@@ -76,9 +77,9 @@ export const cleanupStaleDrafts = async (): Promise<void> => {
  * Cron pattern: '0 2 * * *' = every day at 02:00 UTC
  */
 export const scheduleCleanupCron = (): void => {
-  cron.schedule('0 2 * * *', () => {
+  cron.schedule('0 2 * * *', cronGuard({ jobName: 'cleanupStaleDrafts' }, async () => {
     console.log('[cleanupStaleDrafts] Running scheduled cleanup job...');
-    cleanupStaleDrafts();
-  });
+    await cleanupStaleDrafts();
+  }));
   console.log('[cleanupStaleDrafts] Scheduled cleanup job registered (daily at 02:00 UTC)');
 };

@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { recalculateShopperRating } from '../services/reputationService';
 
@@ -74,6 +75,6 @@ export const recalculateOrganizerTiers = async (): Promise<void> => {
 };
 
 // Schedule: every Monday at 2:00 AM
-cron.schedule('0 2 * * 1', () => {
+cron.schedule('0 2 * * 1', cronGuard({ jobName: 'reputationJob' }, async () => {
   recalculateOrganizerTiers();
-});
+}));

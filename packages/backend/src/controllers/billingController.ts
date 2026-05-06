@@ -108,12 +108,20 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Webhook signature verification failed' });
     }
 
-    const alreadyProcessed = await prisma.processedWebhookEvent.findUnique({
-      where: { eventId: event.id },
-    });
-
-    if (alreadyProcessed) {
-      return res.json({ received: true });
+    // P0 Race Fix: INSERT-FIRST pattern for idempotency
+    // Try to insert immediately. If duplicate key (eventId already exists), catch and return 200.
+    let isIdempotentRun = false;
+    try {
+      await prisma.processedWebhookEvent.create({
+        data: { eventId: event.id },
+      });
+    } catch (e: any) {
+      // Unique constraint violation = event already processed by another request
+      if (e.code === 'P2002') {
+        console.log(`[webhook] Event ${event.id} already processed (idempotent retry)`);
+        return res.json({ received: true });
+      }
+      throw e;
     }
 
     switch (event.type) {
@@ -333,10 +341,7 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         break;
     }
 
-    await prisma.processedWebhookEvent.create({
-      data: { eventId: event.id },
-    });
-
+    // Already recorded in INSERT-FIRST check above
     res.json({ received: true });
   } catch (error) {
     console.error('Webhook processing error:', error);

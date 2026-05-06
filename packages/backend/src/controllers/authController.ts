@@ -1064,3 +1064,54 @@ export const verifyEmail = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error during email verification' });
   }
 };
+
+// P0-L1: OAuth Age Verification — COPPA compliance for OAuth users
+export const oauthVerifyAge = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    const { dateOfBirth } = req.body;
+
+    if (!dateOfBirth) {
+      return res.status(400).json({ message: 'Date of birth is required.' });
+    }
+
+    // Validate age
+    try {
+      const dob = new Date(dateOfBirth);
+      const today = new Date();
+      const age = (today.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+
+      if (age < 18) {
+        return res.status(400).json({ message: 'You must be 18 or older to use FindA.Sale.' });
+      }
+    } catch (error) {
+      return res.status(400).json({ message: 'Invalid date of birth format.' });
+    }
+
+    // Update user's ageVerifiedAt timestamp
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ageVerifiedAt: new Date()
+      }
+    });
+
+    const userWithoutPassword = Object.fromEntries(
+      Object.entries(user).filter(([key]) => key !== 'password')
+    );
+
+    res.json({
+      success: true,
+      message: 'Age verified successfully',
+      user: userWithoutPassword
+    });
+  } catch (error) {
+    console.error('OAuth age verification error:', error);
+    res.status(500).json({ message: 'Server error during age verification' });
+  }
+};

@@ -64,6 +64,12 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       },
     });
     if (!item) return res.status(404).json({ message: 'Item not found' });
+    if (item.sale?.isUnmanagedListing) {
+      return res.status(403).json({
+        message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
+        code: 'UNMANAGED_LISTING'
+      });
+    }
 
     // If item is RESERVED, check whether the active reservation has actually expired.
     // The cron job runs every 10 min — don't block new holds on a stale status.

@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 
 /**
@@ -9,7 +10,7 @@ import { prisma } from '../lib/prisma';
  * - Sends push notifications to users who favorited the item
  */
 
-const job = cron.schedule('0 6 * * *', async () => {
+const job = cron.schedule('0 6 * * *', cronGuard({ jobName: 'reverseAuctionJob' }, async () => {
   try {
     console.log('[reverseAuctionJob] Starting daily price drop processing...');
 

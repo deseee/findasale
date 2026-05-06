@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { prisma } from '../index';
+import { cronGuard } from '../utils/cronGuard';
 
 /**
  * Quarterly soft-delete of old sales and items.
@@ -8,43 +9,38 @@ import { prisma } from '../index';
  */
 export function scheduleArchivalCron(): void {
   // First day of each quarter (Jan 1, Apr 1, Jul 1, Oct 1) at 02:00 UTC
-  cron.schedule('0 2 1 1,4,7,10 *', async () => {
-    try {
-      const now = new Date();
-      const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
+  cron.schedule('0 2 1 1,4,7,10 *', cronGuard({ jobName: 'archivalCron' }, async () => {
+    const now = new Date();
+    const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
 
-      console.log(`[archival-cron] Starting quarterly archival (cutoff: ${twoYearsAgo.toISOString()})`);
+    console.log(`[archival-cron] Starting quarterly archival (cutoff: ${twoYearsAgo.toISOString()})`);
 
-      // Soft-delete old ENDED sales
-      const archivedSales = await prisma.sale.updateMany({
-        where: {
+    // Soft-delete old ENDED sales
+    const archivedSales = await prisma.sale.updateMany({
+      where: {
+        endDate: { lt: twoYearsAgo },
+        deletedAt: null,
+        status: { not: 'DRAFT' }
+      },
+      data: { deletedAt: now }
+    });
+
+    console.log(`[archival-cron] Archived ${archivedSales.count} old sales`);
+
+    // Soft-delete old items from archived sales
+    const archivedItems = await prisma.item.updateMany({
+      where: {
+        sale: {
           endDate: { lt: twoYearsAgo },
-          deletedAt: null,
-          status: { not: 'DRAFT' }
+          deletedAt: { not: null }
         },
-        data: { deletedAt: now }
-      });
+        deletedAt: null
+      },
+      data: { deletedAt: now }
+    });
 
-      console.log(`[archival-cron] Archived ${archivedSales.count} old sales`);
-
-      // Soft-delete old items from archived sales
-      const archivedItems = await prisma.item.updateMany({
-        where: {
-          sale: {
-            endDate: { lt: twoYearsAgo },
-            deletedAt: { not: null }
-          },
-          deletedAt: null
-        },
-        data: { deletedAt: now }
-      });
-
-      console.log(`[archival-cron] Archived ${archivedItems.count} old items`);
-
-    } catch (error) {
-      console.error('[archival-cron] Error in archival cron:', error);
-    }
-  });
+    console.log(`[archival-cron] Archived ${archivedItems.count} old items`);
+  }));
 
   console.log('[archival-cron] Registered quarterly archival cron (1st of quarter at 02:00 UTC)');
 }

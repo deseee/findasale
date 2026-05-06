@@ -24,6 +24,29 @@ const OAuthCallbackPage = () => {
         return;
       }
 
+      // P0-L1: Check if user needs to verify age (new OAuth user)
+      try {
+        const meResponse = await fetch('/api/auth/me', {
+          method: 'GET',
+          credentials: 'include',
+        });
+
+        if (meResponse.ok) {
+          const meData = await meResponse.json();
+          const user = meData.user;
+
+          // If user has no ageVerifiedAt, redirect to age-verify page
+          if (!user.ageVerifiedAt) {
+            const returnTo = router.query.returnTo || '/organizer/dashboard';
+            router.push(`/age-verify?returnTo=${encodeURIComponent(returnTo as string)}`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error checking user age verification status:', err);
+        // Continue — don't block on age check error
+      }
+
       // Check for pending invite code in sessionStorage
       const inviteCode = typeof window !== 'undefined' ? sessionStorage.getItem('pendingInviteCode') : null;
 
@@ -34,6 +57,7 @@ const OAuthCallbackPage = () => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ inviteCode }),
+            credentials: 'include',
           });
 
           if (!response.ok) {

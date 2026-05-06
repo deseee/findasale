@@ -637,29 +637,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
     }
   }
 
-  // P2-7: Idempotency check wrapped in transaction to prevent race conditions
+  // P0 Race Fix: INSERT-FIRST idempotency — try to insert immediately, catch duplicate
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const existingEvent = await tx.processedWebhookEvent.findUnique({
-        where: { eventId: event.id }
-      });
-      if (existingEvent) {
-        return { isDuplicate: true };
-      }
-      // Record this event as processed
-      await tx.processedWebhookEvent.create({
-        data: {
-          eventId: event.id
-        }
-      });
-      return { isDuplicate: false };
+    await prisma.processedWebhookEvent.create({
+      data: { eventId: event.id }
     });
-
-    if (result.isDuplicate) {
+  } catch (err: any) {
+    // Unique constraint violation = event already processed by another request
+    if (err.code === 'P2002') {
       console.warn(`[webhook] Duplicate event detected: ${event.id} (type: ${event.type}) — skipping reprocessing`);
       return res.json({ received: true, duplicate: true });
     }
-  } catch (err) {
+    // Other errors: log and continue (non-blocking)
     console.warn(`[webhook] Failed to check idempotency for event ${event.id}:`, err);
   }
 

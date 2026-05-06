@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { prisma } from '../index';
 import axios from 'axios';
+import { cronGuard } from '../utils/cronGuard';
 
 /**
  * Photo Retention Cron — Feature #103
@@ -85,9 +86,8 @@ async function deleteFromCloudinary(publicId: string): Promise<boolean> {
 
 export function schedulePhotoRetentionCron(): void {
   // Daily at 3:00 AM UTC (adjustable via cron expression)
-  cron.schedule('0 3 * * *', async () => {
-    try {
-      const now = new Date();
+  cron.schedule('0 3 * * *', cronGuard({ jobName: 'photoRetentionCron' }, async () => {
+    const now = new Date();
       const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
       const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
@@ -188,12 +188,8 @@ export function schedulePhotoRetentionCron(): void {
         );
       }
 
-      console.log('[photo-cron] Photo retention job completed');
-    } catch (error) {
-      console.error('[photo-cron] Error in photo retention cron:', error);
-      // Continue — don't let cron job crash
-    }
-  });
+    console.log('[photo-cron] Photo retention job completed');
+  }));
 
   console.log('[photo-cron] Registered photo retention cron (daily at 3 AM UTC)');
 }

@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
+import { cronGuard } from '../utils/cronGuard';
 import { buildEmail } from '../services/emailTemplateService';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -115,12 +116,8 @@ export const processAbandonedCheckouts = async (): Promise<void> => {
 };
 
 // Run every hour to check for abandoned checkouts
-cron.schedule('0 * * * *', async () => {
+cron.schedule('0 * * * *', cronGuard({ jobName: 'abandonedCheckoutJob' }, async () => {
   console.log('[AbandonedCheckout] Running abandoned checkout recovery job...');
-  try {
-    await processAbandonedCheckouts();
-    console.log('[AbandonedCheckout] Abandoned checkout recovery job completed successfully');
-  } catch (error) {
-    console.error('[AbandonedCheckout] Abandoned checkout recovery job failed:', error);
-  }
-});
+  await processAbandonedCheckouts();
+  console.log('[AbandonedCheckout] Abandoned checkout recovery job completed successfully');
+}));

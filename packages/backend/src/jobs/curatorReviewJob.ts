@@ -13,6 +13,7 @@
 import cron from 'node-cron';
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
+import { cronGuard } from '../utils/cronGuard';
 
 const BATCH_SIZE = 20;
 const WIKIPEDIA_DELAY_MS = 500; // Be a good citizen to Wikipedia API
@@ -365,9 +366,9 @@ export async function runCuratorReviewSingle(entryId: string): Promise<{
 /**
  * Schedule the curator review job to run weekly on Sunday at 3am UTC.
  */
-cron.schedule('0 3 * * 0', async () => {
+cron.schedule('0 3 * * 0', cronGuard({ jobName: 'curatorReviewJob' }, async () => {
   console.log('[curatorReview] Scheduled job triggered');
   await runCuratorReview();
-});
+}));
 
 console.log('[curatorReview] Curator review job scheduled (Sunday 3am UTC)');

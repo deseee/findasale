@@ -1,16 +1,17 @@
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 import { sendConsignorExpiryNotice } from '../services/consignorEmailService';
+import { cronGuard } from '../utils/cronGuard';
 
 /**
  * Daily cron job (2 AM UTC) to send expiry notices for consigned items at 60 days
  */
 export const scheduleConsignorExpiryNoticeCron = (): void => {
   // Run daily at 2 AM UTC
-  cron.schedule('0 2 * * *', async () => {
+  cron.schedule('0 2 * * *', cronGuard({ jobName: 'consignorExpiryNoticeJob' }, async () => {
     console.log('[consignor-expiry-cron] Starting consignor expiry notice job...');
     await processConsignorExpiryNotices();
-  });
+  }));
 };
 
 export const processConsignorExpiryNotices = async (): Promise<void> => {

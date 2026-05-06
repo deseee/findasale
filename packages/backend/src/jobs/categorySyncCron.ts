@@ -6,6 +6,7 @@
 import cron from 'node-cron';
 import { Decimal } from '@prisma/client/runtime/library';
 import { prisma } from '../lib/prisma';
+import { cronGuard } from '../utils/cronGuard';
 
 const CATEGORY_EBAY_MAP: Record<string, { display: string; ebayIds: string[] }> = {
   'furniture':      { display: 'Furniture',       ebayIds: ['3199'] },
@@ -123,8 +124,6 @@ export function initCategorySyncCron(): void {
     console.log('[CategorySync] Disabled (set CATEGORY_SYNC_ENABLED=true to enable)');
     return;
   }
-  cron.schedule('0 5 * * *', () => {
-    runCategorySync().catch(err => console.error('[CategorySync] Cron error:', err));
-  }, { timezone: 'UTC' });
+  cron.schedule('0 5 * * *', cronGuard({ jobName: 'categorySyncCron' }, () => runCategorySync()), { timezone: 'UTC' });
   console.log('[CategorySync] Scheduled: 05:00 UTC daily');
 }

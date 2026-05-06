@@ -12,11 +12,12 @@ const router = express.Router();
 
 // All message routes require auth
 router.use(authenticate);
+router.post('/', messageLimiter, sendMessage);
 
 router.get('/', getConversations);              // list conversations
 router.get('/unread-count', getUnreadCount);   // unread badge count
 router.get('/:conversationId', getThread);     // full thread
-router.post('/', sendMessage);                 // start/continue conversation
+                 // start/continue conversation
 router.post('/:conversationId/reply', replyInThread); // reply in thread
 
 export default router;

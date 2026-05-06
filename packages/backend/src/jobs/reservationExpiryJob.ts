@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 
 /**
@@ -40,6 +41,6 @@ export const expireStaleHolds = async (): Promise<void> => {
 };
 
 // Feature #121: Run every 10 minutes (was 30 min) for faster expiry
-cron.schedule('*/10 * * * *', () => {
+cron.schedule('*/10 * * * *', cronGuard({ jobName: 'reservationExpiryJob' }, async () => {
   expireStaleHolds();
-});
+}));
