@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { getItemImageUrl } from '../lib/imageUtils';
 
 interface TopFindItem {
   id: string;
@@ -52,7 +53,7 @@ export function CityTopFinds({ citySlug, items }: CityTopFindsProps) {
               <div className="relative aspect-video bg-slate-100 dark:bg-slate-600 overflow-hidden">
                 {item.photoUrl ? (
                   <Image
-                    src={item.photoUrl}
+                    src={getItemImageUrl(item.photoUrl) || item.photoUrl}
                     alt={item.title}
                     fill
                     className="object-cover group-hover:scale-105 transition-transform"

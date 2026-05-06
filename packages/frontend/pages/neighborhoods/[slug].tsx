@@ -10,6 +10,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { GetServerSideProps } from 'next';
 import { GRAND_RAPIDS_NEIGHBORHOODS } from './index';
+import { getSaleImageUrl } from '../../lib/imageUtils';
 
 interface NeighborhoodSale {
   id: string;
@@ -140,8 +141,8 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
                     <div className="w-28 h-28 flex-shrink-0 bg-warm-100 dark:bg-gray-700">
                       {sale.photoUrls?.[0] ? (
                         <img
-                          key={sale.photoUrls[0]}
-                          src={sale.photoUrls[0]}
+                          key={getSaleImageUrl(sale.photoUrls[0]) || sale.photoUrls[0]}
+                          src={getSaleImageUrl(sale.photoUrls[0]) || sale.photoUrls[0]}
                           alt={sale.title}
                           className="w-full h-full object-cover"
                         />

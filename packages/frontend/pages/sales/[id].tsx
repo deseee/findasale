@@ -26,7 +26,7 @@ import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 3
 import AuctionCountdown from '../../components/AuctionCountdown';
 import PhotoLightbox from '../../components/PhotoLightbox';
 import SaleTourGallery from '../../components/SaleTourGallery';
-import { getThumbnailUrl, getOptimizedUrl, getLqipUrl, getSaleImageUrl } from '../../lib/imageUtils';
+import { getThumbnailUrl, getOptimizedUrl, getLqipUrl, getSaleImageUrl, getItemImageUrl } from '../../lib/imageUtils';
 import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
 import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
@@ -1316,8 +1316,8 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
                     <Link href={`/items/${item.id}`} className="block h-full">
                       {item.photoUrls.length > 0 ? (
                         <img
-                          key={getOptimizedUrl(item.photoUrls[0])}
-                          src={getOptimizedUrl(item.photoUrls[0])}
+                          key={getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0]}
+                          src={getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0]}
                           alt={item.title}
                           className="w-full h-full object-cover hover:opacity-90 transition"
                          loading="lazy"/>

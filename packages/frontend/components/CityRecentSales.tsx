@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { getSaleImageUrl } from '../lib/imageUtils';
 
 interface RecentSale {
   id: string;
@@ -76,7 +77,7 @@ export function CityRecentSales({ citySlug, sales }: CityRecentSalesProps) {
                 {sale.photoUrl ? (
                   <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 relative rounded-md overflow-hidden bg-slate-200 dark:bg-slate-700">
                     <Image
-                      src={sale.photoUrl}
+                      src={getSaleImageUrl(sale.photoUrl) || sale.photoUrl}
                       alt={sale.title}
                       fill
                       className="object-cover"

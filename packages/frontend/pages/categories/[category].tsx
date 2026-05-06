@@ -11,6 +11,7 @@ import { GetStaticProps, GetStaticPaths } from 'next';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { SkeletonCard } from '../../components/SkeletonCards';
+import { getItemImageUrl } from '../../lib/imageUtils';
 
 const CATEGORIES = [
   'furniture', 'clothing', 'electronics', 'books', 'antiques',
@@ -282,7 +283,7 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
                 <div className="aspect-square bg-warm-100 dark:bg-gray-700 overflow-hidden">
                   {item.photoUrls && item.photoUrls[0] ? (
                     <img
-                      src={item.photoUrls[0]}
+                      src={getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0]}
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />

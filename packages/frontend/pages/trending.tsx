@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
+import { getSaleImageUrl, getItemImageUrl } from '../lib/imageUtils';
 import ItemCard from '../components/ItemCard';
 import { SkeletonCard, SkeletonSaleCard } from '../components/SkeletonCards';
 
@@ -86,8 +87,8 @@ export default function TrendingPage() {
                       <div className="relative h-36 bg-warm-100 dark:bg-gray-700 border border-warm-200 dark:border-gray-600">
                         {sale.photoUrls?.[0] ? (
                           <Image
-                            key={sale.photoUrls[0]}
-                            src={sale.photoUrls[0]}
+                            key={getSaleImageUrl(sale.photoUrls[0]) || sale.photoUrls[0]}
+                            src={getSaleImageUrl(sale.photoUrls[0]) || sale.photoUrls[0]}
                             alt={sale.title}
                             fill
                             className="object-cover group-hover:scale-105 transition-transform duration-300"
