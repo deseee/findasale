@@ -430,7 +430,7 @@ model Organizer {
   // Feature: Shopper Organizer Introductions — shoppers who introduced this organizer to FindA.Sale
   shopperIntroductions     ShopperOrganizerIntroduction[] @relation("OrganizerIntroductions")
   // CAN-SPAM Compliance: Audit log for outreach events
-  outreachAuditLogs        OutreachAuditLog[]
+  outreachAuditLogs        OutreachAuditLog[] @relation("OutreachAuditLogs")
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 
