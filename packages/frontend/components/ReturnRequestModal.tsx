@@ -110,5 +110,4 @@ export default function ReturnRequestModal({
       </div>
     </AccessibleModal>
   );
-  );
 }
