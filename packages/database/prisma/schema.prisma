@@ -4540,17 +4540,6 @@ model OutreachAuditLog {
   @@index([organizerId, event])
 }
 
-// Platform Safety #P2-7: Stripe Webhook Idempotency — prevents duplicate processing
-// Tracks which Stripe events have been processed to guard against webhook retries
-model ProcessedWebhookEvent {
-  id        String   @id @default(cuid())
-  eventId   String   @unique // Stripe event ID
-  eventType String   // e.g. payment_intent.succeeded, account.updated
-  processedAt DateTime @default(now())
-
-  @@index([eventId])
-  @@index([processedAt])
-}
 
 enum OutreachAuditEvent {
   SENT
