@@ -38,8 +38,8 @@ const ResetPasswordPage = () => {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
 
@@ -54,7 +54,14 @@ const ResetPasswordPage = () => {
     }
   };
 
-  if (!token) return <div>Loading...</div>;
+  if (!token) return (
+    <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800 flex items-center justify-center px-4">
+      <div className="flex items-center justify-center p-8 text-gray-400 dark:text-gray-500">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-amber-600 border-t-transparent mr-3" />
+        Verifying your link...
+      </div>
+    </div>
+  );
 
   return (
     <>

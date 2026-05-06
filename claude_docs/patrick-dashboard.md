@@ -1,57 +1,97 @@
-# Patrick's Dashboard — May 6, 2026 (S661 wrap)
+# Patrick's Dashboard — May 6, 2026 (S662 wrap)
 
 ---
 
-## ✅ Actions needed from you
+## 🚀 PUSH THIS NOW — Pre-Launch Fix Batch (23 files)
 
-**1. Set Railway env vars (both still needed):**
-- `CATEGORY_SYNC_ENABLED=true` — category pages still empty until this is set + sync runs
-- `OUTREACH_ENABLED=true` — 3,298 organizers queued, pipeline fully hardened
+All P0–P2 audit fixes are on disk. Push this block before going live:
 
-**2. Push S661 wrap docs:**
 ```powershell
+git add packages/frontend/pages/index.tsx
+git add packages/frontend/components/CityHeatBanner.tsx
+git add packages/frontend/components/SaleCard.tsx
+git add "packages/frontend/pages/items/[id].tsx"
+git add packages/frontend/components/HoldButton.tsx
+git add packages/frontend/pages/forgot-password.tsx
+git add packages/frontend/pages/reset-password.tsx
+git add packages/frontend/pages/login.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add "packages/frontend/pages/organizer/edit-sale/[id].tsx"
+git add packages/frontend/components/InstallPrompt.tsx
+git add "packages/frontend/pages/shopper/crews/[crewId].tsx"
+git add packages/frontend/scripts/generate-seo-index.ts
+git add packages/frontend/pages/organizer/settings.tsx
+git add packages/frontend/pages/api/share-card.tsx
+git add packages/frontend/pages/shopper/dashboard.tsx
+git add packages/frontend/pages/organizer/workspace.tsx
+git add "packages/frontend/pages/encyclopedia/[slug].tsx"
+git add packages/frontend/components/ShopperCartDrawer.tsx
+git add packages/frontend/next.config.js
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/supportController.ts
+git add packages/backend/src/config/affiliateConfig.ts
+git add packages/backend/src/controllers/adminController.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: wrap S661 — Chrome QA #228 ✅ #94 ✅"
+git commit -m "fix: pre-launch audit — 23 files, P0–P2 fixes (S662)"
 .\push.ps1
 ```
 
 ---
 
-## S661 — Chrome QA Results
+## ✅ Actions needed from you
 
-**#228 Settlement Hub — ✅ VERIFIED**
-Logged in as `artifactmi@gmail.com`. Navigated to Settlement Hub for ENDED sale. All 4 wizard steps render correctly. $0.00 values are expected (no real revenue on test sale). Bug is closed.
+**1. Set Railway env vars (still needed before launch):**
+- `CATEGORY_SYNC_ENABLED=true` — category pages still empty without it
+- `OUTREACH_ENABLED=true` — 3,298 organizers queued, pipeline fully hardened
 
-**#94 /admin/bid-review — ✅ VERIFIED**
-Logged in as `user1@example.com` (admin / Seedy2025!). Page loads, shows "No bid IP records — All clear ✅". No 500 error. Bug is closed.
-
-**#251 priceBeforeMarkdown — ⚠️ UNVERIFIED**
-Code is correct. No production item has `markdownApplied=true` — the strikethrough price UI can't be visually confirmed without one. Queued for S662.
-
-**#235 DonationModal — ⚠️ UNVERIFIED**
-Code is complete. Needs a PRO organizer sale with a `SaleDonation` record AND unsold items to trigger the "Donate Items & Get Tax Receipt" button. Queued for S662.
-
-**Artifact items mystery — SOLVED**
-Items are on a third sale ("Artifact Downtown Paw Paw" — `cmom7h73l000hz36wzbruoa64`). No data loss. The organizer profile page shows "1 sale" when there are at least 3 — that's a minor display bug (ENDED sales not counted in profile sale count).
+**2. Do not push the scratch files** at project root (`GROUP5_CHANGED_FILES.txt`, `IMPLEMENTATION_SUMMARY_GROUP5.md`, `PRICING_ENGINE_UPDATES_SUMMARY.txt`). Those are subagent leftovers — ignore them.
 
 ---
 
-## S660 — P0 Google Login Fix (COMPLETE ✅)
+## S662 — Pre-Launch Sitewide Audit Fixes (COMPLETE)
 
-Google login broken → fixed. `next.config.js` rewrites moved to `fallback` so NextAuth handles all `/api/auth/*` requests before the Railway proxy. Deployed SHA `2d6935c` → verified in Chrome.
+24 issues found and addressed across 6 parallel fix batches. Key fixes:
+
+**P0/P1 (user-facing blockers):**
+- Live feed returning 500 on all sale pages → fixed (null ref + ENDED guard)
+- Next.js Railway proxy was intercepting NextAuth → moved to `fallback`
+- Broken sale card images now show placeholder instead of broken icon
+- Hold button gave zero feedback → now shows toast + waits 1.5s before closing
+- Forgot-password showed "Check your email" even when API failed → fixed
+- Reset-password bare loading div → styled spinner, dark-mode compatible
+- "Remember me" checkbox was dead UI → removed (erodes trust)
+- Organizer tour CTA went to `#` → now goes to `/guide`
+- Add-items page had no empty state and invalid schema field → fixed
+- Edit-sale page gave no warning when sale had 0 items → orange banner added
+
+**P2 (polish):**
+- Condition/category label wrapping on item detail → inline spans
+- PWA install prompt was showing too aggressively → sessionStorage throttle
+- "Founded by" crew language → "Organized by"
+- SEO sale type ordering → yard sale first throughout
+- Settings tabs overflow on mobile → horizontal scroll preserved
+- CityHeatBanner now only shows if you're within 50 miles of the featured city
+- Support controller was saying "contact Patrick directly" → now says "support@finda.sale"
+- TODO placeholder language cleaned across 5 files
+- Affiliate config had PLACEHOLDER language → removed
 
 ---
 
-## S659 — CategorySync Debugging (re-test needed)
+## S661 — Chrome QA (COMPLETE)
 
-Cron fixed and re-triggered. DB rows not yet verified. Set `CATEGORY_SYNC_ENABLED=true` on Railway to enable nightly runs.
+- **#228 Settlement Hub — ✅ VERIFIED**
+- **#94 /admin/bid-review — ✅ VERIFIED**
+- **#251 priceBeforeMarkdown — ⚠️ UNVERIFIED** (no production item with markdownApplied=true)
+- **#235 DonationModal — ⚠️ UNVERIFIED** (needs PRO sale with SaleDonation record)
 
 ---
 
-## Next Session — S662 Priorities
+## Next Session Priorities
 
-1. **CategoryTopFinds verify** — open `finda.sale/categories/clothing` and confirm TrendingSection renders
-2. **Outreach verification** — check Railway logs for `[OutreachCron] Sent Touch 1` (once OUTREACH_ENABLED=true)
-3. **#251 and #235** — seed markdown item / test DonationModal
-4. **Roadmap BROKEN items** — next priority after the above
+1. **Push the S662 block above** if not done
+2. **CategoryTopFinds verify** — open `finda.sale/categories/clothing`, confirm TrendingSection renders (requires `CATEGORY_SYNC_ENABLED=true` first)
+3. **Outreach verify** — check Railway logs for `[OutreachCron] Sent Touch 1` (requires `OUTREACH_ENABLED=true`)
+4. **#251 and #235** — seed markdown item / test DonationModal
+5. **Roadmap BROKEN items** — next priority after above

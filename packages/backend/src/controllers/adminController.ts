@@ -639,17 +639,12 @@ export const resetCloudinaryUsage = async (req: AuthRequest, res: Response) => {
 };
 
 // GET /api/admin/bid-review — #94 Admin Bid Review Queue (fraud detection)
+
 export const getBidReviewQueue = async (req: AuthRequest, res: Response) => {
   try {
     const records = await prisma.bidIpRecord.findMany({
       take: 100,
       orderBy: { createdAt: 'desc' },
-      where: {
-        bid: {
-          user: { id: { not: '' } },
-          item: { id: { not: '' } },
-        },
-      },
       select: {
         id: true,
         bidId: true,

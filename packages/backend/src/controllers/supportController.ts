@@ -120,7 +120,7 @@ export const postSupportChat = async (req: AuthRequest, res: Response) => {
 
 You help both Organizers (who list sales) and Shoppers (who attend sales).
 
-Respond concisely and helpfully. If you don't know the answer, suggest contacting Patrick directly at support@finda.sale.
+Respond concisely and helpfully. If you don't know the answer, suggest contacting support@finda.sale.
 
 Context about the user:
 - Name: ${user.name}

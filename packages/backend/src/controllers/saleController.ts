@@ -385,7 +385,8 @@ export const getSale = async (req: Request, res: Response) => {
             auctionStartPrice: true, auctionReservePrice: true, currentBid: true, bidIncrement: true,
             auctionEndTime: true, auctionClosed: true, listingType: true,
             status: true, photoUrls: true, category: true, condition: true,
-            organizerDiscountAmount: true, organizerDiscountXp: true
+            organizerDiscountAmount: true, organizerDiscountXp: true,
+            priceBeforeMarkdown: true, markdownApplied: true
           }
         }
       }
@@ -1190,6 +1191,24 @@ export const getSaleActivity = async (req: Request, res: Response) => {
       return;
     }
 
+    // Fetch sale status to filter ENDED sales
+    const sale = await prisma.sale.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    // Return empty activities for ended sales
+    if (sale.status === 'ENDED') {
+      return res.json({
+        activities: [],
+        viewCount: 0,
+      });
+    }
+
     // Query for recent favorites on items in this sale
     const recentFavorites = await prisma.favorite.findMany({
       where: {
@@ -1218,12 +1237,12 @@ export const getSaleActivity = async (req: Request, res: Response) => {
       take: 10,
     });
 
-    // Build activities array
+    // Build activities array — guard against null user references
     const activities = [
       ...recentFavorites.map((fav) => ({
         id: fav.id,
         type: 'save' as const,
-        message: `${fav.user.name || 'Someone'} just saved ${fav.item?.title || 'an item'}`,
+        message: `${fav.user?.name || 'Someone'} just saved ${fav.item?.title || 'an item'}`,
         timestamp: fav.createdAt.toISOString(),
       })),
       ...recentPurchases.map((purch) => ({

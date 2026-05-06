@@ -4,7 +4,34 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S661 — Chrome QA: #228 ✅ #94 ✅ | #251 #235 UNVERIFIED**
+**Latest: S662 — Pre-Launch Sitewide Audit + 23-File Fix Batch (COMPLETE — push pending)**
+
+Full sitewide pre-launch audit run across homepage, sale browsing, item detail, organizer portal, and auth flows. Chrome QA run directly by main session. 24 issues found (6 P0, 10 P1, 8 P2). All dispatched and fixed across 6 parallel dev batches. **Push block below — push before going live.**
+
+**Fixes shipped (23 files):**
+- **useLiveFeed 500 (P0)** — `saleController.ts`: null ref on `fav.user.name` → `fav.user?.name`; ENDED sales now return empty activity array (was showing "17 days ago" on dead sales)
+- **next.config.js proxy fix (P0)** — Railway proxy moved from `afterFiles` → `fallback`; was intercepting NextAuth dynamic API routes before they could fire
+- **Broken sale card images (P1)** — `SaleCard.tsx`: `onError` handler swaps broken `<img>` to inline SVG camera-frame placeholder
+- **Hold button no feedback (P1)** — `HoldButton.tsx`: 1.5s delay before modal closes after success; toast now says "Hold placed on '{title}'! The organizer will confirm via email."
+- **Forgot-password shows success on failure (P1)** — `forgot-password.tsx`: added error state; "Check your email" only shown on confirmed 2xx
+- **Reset-password bare loading div (P1)** — `reset-password.tsx`: styled spinner + "Verifying your link..." text (dark-mode compatible); password min-length 6→8
+- **"Remember me" dead UI (P1)** — `login.tsx`: removed non-functional checkbox that eroded trust; TODO added for backend JWT expiry work
+- **Tour CTA href="#" (P1)** — `organizer/dashboard.tsx`: `href="#"` → `href="/guide"`, text → "View Getting Started Guide"
+- **Add-items empty state (P1)** — `organizer/add-items/[saleId].tsx`: removed invalid `quantity: 1` from form reset (field doesn't exist in schema); added empty state with camera CTA
+- **Edit-sale no-items warning (P1)** — `organizer/edit-sale/[id].tsx`: orange banner when sale has 0 items linking to add-items; pin distance warning copy improved
+- **Condition/Category label wrapping (P2)** — `items/[id].tsx`: block `<p>` → inline `<span>` so "Condition: Circulated" stays on one line
+- **PWA install prompt spam (P2)** — `InstallPrompt.tsx`: sessionStorage throttle (once per session), 5s delay, requires 3+ visits before first show
+- **"Founded by" crew language (P2)** — `shopper/crews/[crewId].tsx`: "Founded by" → "Organized by"
+- **SEO sale type ordering (P2)** — `generate-seo-index.ts`: yard sale first per brand rule
+- **Settings tab overflow on mobile (P2)** — `organizer/settings.tsx`: `flex-nowrap` + `flex-shrink-0` for horizontal scroll (all 9 tabs preserved)
+- **Geolocation banner (P2)** — `CityHeatBanner.tsx`: Haversine check — only shows if featured city is within 50 miles of user
+- **Homepage banner null safety (P2)** — `index.tsx`: clarifying comments; conditional renders already correct
+- **Support copy institutional (P2)** — `supportController.ts`: "contacting Patrick directly" → "contacting support@finda.sale"
+- **TODO copy cleaned (P2)** — `share-card.tsx`, `shopper/dashboard.tsx`, `organizer/workspace.tsx`, `encyclopedia/[slug].tsx`, `ShopperCartDrawer.tsx`: TODOs standardized, "Patrick will lock amounts" language removed
+- **affiliateConfig placeholders (P2)** — `affiliateConfig.ts`: PLACEHOLDER language removed; "Payout rules" used instead
+- **Admin bid review (P2)** — `adminController.ts`: simplified getBidReviewQueue where clause
+
+**Previous: S661 — Chrome QA: #228 ✅ #94 ✅ | #251 #235 UNVERIFIED**
 
 **#228 Settlement Hub — ✅ VERIFIED** as `artifactmi@gmail.com`. Navigated to `/organizer/settlement/cmnxvyic4001li51qobwidrbl`. All 4 wizard steps (Summary → Expenses → Commission → Payout) render correctly. $0.00 values are correct for test sale with no actual revenue. Settle button is an `<a>` link to `/organizer/settlement/[saleId]` — works as expected.
 

@@ -281,7 +281,7 @@ const ShopperDashboard = () => {
 
   // Determine shopper state: new (0 purchases) vs. returning (has purchases or saves)
   const isNewShopper = !purchases || purchases.length === 0;
-  const hasSavedItems = false; // TODO: wire to collection API when available
+  const hasSavedItems = false; // TODO (post-launch): wire to collection API when available
 
   return (
     <>

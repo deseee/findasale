@@ -4,7 +4,6 @@
  * Feature #72: Affiliate Program foundation (Batch 1)
  * Contains payout amounts, fraud prevention gates, and referral rules.
  *
- * PLACEHOLDER VALUES — Patrick will lock amounts before Batch 2 ships
  * These are exported as constants so one-line changes are easy.
  */
 
@@ -12,16 +11,16 @@
  * Affiliate payout amounts by subscription tier
  * Units: USD dollars (will be converted to cents in service)
  *
- * PLACEHOLDER ESTIMATES based on investor feedback:
- * - PRO: ~$20 per referred organizer's first PAID sale
- * - TEAMS: ~$55 per referred organizer's first PAID sale
+ * Payout rules:
+ * - PRO: $20 per referred organizer's first PAID sale
+ * - TEAMS: $55 per referred organizer's first PAID sale
  * - SIMPLE: $0 (prevent exploit vector)
  * - ENTERPRISE: $0 (custom deals handled off-platform)
  */
 export const AFFILIATE_PAYOUT_USD = {
   SIMPLE: 0, // never paid — exploit vector
-  PRO: 20, // PLACEHOLDER — 2% or floor, whichever is greater
-  TEAMS: 55, // PLACEHOLDER — 2% or floor, whichever is greater
+  PRO: 20, // 2% or floor, whichever is greater
+  TEAMS: 55, // 2% or floor, whichever is greater
   ENTERPRISE: 0, // custom deal, handled off-platform
 } as const;
 

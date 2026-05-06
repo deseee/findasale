@@ -685,12 +685,12 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
               {/* Condition & Category */}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-500 dark:text-gray-400">Condition:</span>
-                  <p className="font-semibold text-gray-900 dark:text-gray-100">{item.condition}</p>
+                  <span className="text-gray-500 dark:text-gray-400">Condition: </span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{item.condition}</span>
                 </div>
                 <div>
-                  <span className="text-gray-500 dark:text-gray-400">Category:</span>
-                  <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCategoryLabel(item.category) || '—'}</p>
+                  <span className="text-gray-500 dark:text-gray-400">Category: </span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCategoryLabel(item.category) || '—'}</span>
                 </div>
               </div>
 

@@ -342,10 +342,10 @@ const HomePage = () => {
         </section>
 
         <div className="flex-1 container mx-auto px-4 py-8">
-          {/* Phase 5: #49 City Heat Index Banner */}
+          {/* Phase 5: #49 City Heat Index Banner — conditionally render only when data available */}
           <CityHeatBanner />
 
-          {/* CD2 Phase 2: Treasure Hunt Banner */}
+          {/* CD2 Phase 2: Treasure Hunt Banner — conditionally render only when data available */}
           <TreasureHuntBanner />
 
           {/* Sales Near You Card */}

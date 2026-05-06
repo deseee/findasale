@@ -113,16 +113,16 @@ const HoldButton: React.FC<HoldButtonProps> = ({
       }
 
       const resp = await api.post('/reservations', payload);
-      showToast(`Hold placed on "${item.title}"!`, 'success');
-      setIsOpen(false);
+      showToast(`Hold placed on "${item.title}"! The organizer will confirm via email.`, 'success');
       setNote('');
       onHoldPlaced?.();
       // Immediately refresh cart icon — don't wait for the 30s poll
       queryClient.invalidateQueries({ queryKey: ['my-holds-full'] });
+      // Close modal after brief delay so user sees success state
+      setTimeout(() => setIsOpen(false), 1500);
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Failed to place hold';
       showToast(msg, 'error');
-      setIsOpen(false);
     } finally {
       setIsLoading(false);
     }
