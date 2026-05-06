@@ -119,7 +119,6 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
       </div>
     </AccessibleModal>
   );
-  );
 };
 
 export default BidModal;
