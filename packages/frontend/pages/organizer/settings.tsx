@@ -1809,6 +1809,37 @@ const OrganizerSettingsPage = () => {
                   </button>
                 </div>
 
+                {/* Data & Privacy */}
+                <div className="border border-amber-200 dark:border-amber-700 rounded-lg p-6 bg-amber-50 dark:bg-amber-900/20">
+                  <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100 mb-2">Your Data</h3>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
+                    Download a copy of your account data (GDPR Article 20). Limited to once per 24 hours.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const response = await api.get('/users/me/export', {
+                          responseType: 'blob',
+                        });
+                        const url = window.URL.createObjectURL(new Blob([response.data]));
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', `findasale-data-export-${new Date().toISOString().split('T')[0]}.json`);
+                        document.body.appendChild(link);
+                        link.click();
+                        link.parentChild?.removeChild(link);
+                        showToast('Data export downloaded successfully', 'success');
+                      } catch (error: any) {
+                        const msg = error.response?.data?.error || 'Failed to download data export';
+                        showToast(msg, 'error');
+                      }
+                    }}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-sm transition"
+                  >
+                    Download My Data
+                  </button>
+                </div>
+
                 {/* Danger Zone */}
                 <div className="border border-red-200 dark:border-red-800 rounded-lg p-6 bg-red-50 dark:bg-red-900/20">
                   <h3 className="text-lg font-semibold text-red-900 dark:text-red-100 mb-2">Danger Zone</h3>

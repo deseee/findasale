@@ -515,6 +515,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
         // CSR fallback — used only when getServerSideProps didn't return ogData
         <Head>
           <title>{item.title} - FindA.Sale</title>
+          <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/items/${item.id}`} />
           <meta name="description" content={item.description} />
           <meta property="og:title" content={`${item.title} — ${item.sale?.title || 'FindA.Sale'}`} />
           <meta property="og:description" content={item.description} />

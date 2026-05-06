@@ -175,8 +175,11 @@ model User {
   foundedCrews      Crew[]        @relation("CrewFounder")
   crewMemberships   CrewMember[]  @relation("CrewMemberships")
 
-  // Platform Safety #99: Export Rate Limiting (1 per month per account)
+  // Platform Safety #99: Export Rate Limiting (1 per 24h per account)
   lastExportAt DateTime?
+
+  // Platform Safety #100: CCPA Opt-Out for California users
+  ccpaOptOut Boolean @default(false)
 
   // Feature #84: Approach Notes — push notification tracking
   pushNotificationLogs PushNotificationLog[]
@@ -1035,6 +1038,8 @@ model Item {
   lotNumber                  String?
   // ADR-073: scraped item dedup (restored — field already in DB via 20260501020000_scraper_phase1)
   sourceItemId               String?                // Source platform's item ID for dedup
+  // Content Moderation: NSFW detection status
+  moderationStatus           String                 @default("APPROVED") // APPROVED | REJECTED
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 

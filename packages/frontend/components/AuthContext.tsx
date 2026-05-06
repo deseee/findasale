@@ -49,92 +49,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // P0 Security Fix: Try to restore session from httpOnly cookie first
+        // P0 Security Fix: Restore session from httpOnly cookie on mount
         const meResponse = await api.get('/auth/me');
         if (meResponse.data?.user) {
           // Session restored from cookie successfully
           const user = meResponse.data.user;
-          // Decode the JWT from any token returned to get full user data with roles
-          // If no token in response, we already have user from /auth/me
-          const token = localStorage.getItem('token');
-          if (token) {
-            try {
-              const payload = JSON.parse(atob(token.split('.')[1]));
-              api.defaults.headers.Authorization = `Bearer ${token}`;
-            } catch (e) {
-              // Failed to decode stored token, but /auth/me succeeded — use cookie session
-            }
-          }
-
-          // Use user data from /auth/me response, falling back to decode from localStorage token if available
-          const decodedToken = token ? JSON.parse(atob(token.split('.')[1])) : null;
           setUser({
-            id: user.id || decodedToken?.id,
-            email: user.email || decodedToken?.email,
-            name: user.name || decodedToken?.name,
-            firstName: user.firstName || decodedToken?.firstName || '',
-            businessName: user.businessName || decodedToken?.businessName || '',
-            role: user.role || decodedToken?.role,
-            roles: user.roles || decodedToken?.roles || [user.role || decodedToken?.role],
-            points: user.points || decodedToken?.points || 0,
-            guildXp: user.guildXp || decodedToken?.guildXp || 0,
-            referralCode: user.referralCode || decodedToken?.referralCode || '',
-            huntPassActive: user.huntPassActive || decodedToken?.huntPassActive,
-            huntPassExpiry: user.huntPassExpiry || decodedToken?.huntPassExpiry,
-            organizerTier: user.organizerTier || decodedToken?.subscriptionTier || 'SIMPLE',
-            subscriptionStatus: user.subscriptionStatus !== undefined ? user.subscriptionStatus : decodedToken?.subscriptionStatus ?? null,
-            subscriptionLapsed: user.subscriptionLapsed !== undefined ? user.subscriptionLapsed : decodedToken?.subscriptionLapsed ?? false,
-            onboardingComplete: user.onboardingComplete !== undefined ? user.onboardingComplete : decodedToken?.onboardingComplete ?? false,
-            teamsOnboardingComplete: user.teamsOnboardingComplete !== undefined ? user.teamsOnboardingComplete : decodedToken?.teamsOnboardingComplete ?? false,
-            createdAt: user.createdAt || decodedToken?.createdAt,
-            emailVerified: user.emailVerified !== undefined ? user.emailVerified : decodedToken?.emailVerified ?? true,
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            firstName: user.firstName || '',
+            businessName: user.businessName || '',
+            role: user.role,
+            roles: user.roles || [user.role],
+            points: user.points || 0,
+            guildXp: user.guildXp || 0,
+            referralCode: user.referralCode || '',
+            huntPassActive: user.huntPassActive,
+            huntPassExpiry: user.huntPassExpiry,
+            organizerTier: user.organizerTier || 'SIMPLE',
+            subscriptionStatus: user.subscriptionStatus ?? null,
+            subscriptionLapsed: user.subscriptionLapsed ?? false,
+            onboardingComplete: user.onboardingComplete ?? false,
+            teamsOnboardingComplete: user.teamsOnboardingComplete ?? false,
+            createdAt: user.createdAt,
+            emailVerified: user.emailVerified ?? true,
           });
           setIsLoading(false);
           return;
         }
-      } catch (err) {
-        // Cookie session failed or not available — fall through to localStorage
+      } catch (err: any) {
+        // 401: Not authenticated (no valid cookie)
+        if (err.response?.status === 401) {
+          setIsLoading(false);
+          return;
+        }
+        // Other errors: log and continue
+        console.error('[AuthContext] Session restore failed:', err?.message);
       }
 
-      // Fallback: check localStorage for token (backward compatibility during grace period)
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          // E7: Detect expired token before making any API calls — clears stale auth state cleanly
-          if (payload.exp && payload.exp * 1000 < Date.now()) {
-            localStorage.removeItem('token');
-            setIsLoading(false);
-            return;
-          }
-          api.defaults.headers.Authorization = `Bearer ${token}`;
-          setUser({
-            id: payload.id,
-            email: payload.email,
-            name: payload.name,
-            firstName: payload.firstName || '',
-            businessName: payload.businessName || '',
-            role: payload.role,
-            roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
-            points: payload.points || 0,
-            guildXp: payload.guildXp || 0, // Phase 2a: Explorer's Guild XP
-            // explorerRank removed: fetch fresh from /api/xp/profile instead
-            referralCode: payload.referralCode || '',
-            huntPassActive: payload.huntPassActive,
-            huntPassExpiry: payload.huntPassExpiry,
-            organizerTier: payload.subscriptionTier || 'SIMPLE',
-            subscriptionStatus: payload.subscriptionStatus ?? null,
-            subscriptionLapsed: payload.subscriptionLapsed ?? false, // Feature #75: Tier lapse state
-            onboardingComplete: payload.onboardingComplete ?? false,
-            teamsOnboardingComplete: payload.teamsOnboardingComplete ?? false,
-            createdAt: payload.createdAt,
-            emailVerified: payload.emailVerified ?? true, // S512: default true for old tokens
-          });
-        } catch (e) {
-          console.error('Failed to decode token', e);
-          localStorage.removeItem('token');
-        }
-      }
       setIsLoading(false);
     };
 
@@ -142,9 +95,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = useCallback((token: string) => {
-    localStorage.setItem('token', token);
-    api.defaults.headers.Authorization = `Bearer ${token}`;
-    // Decode token to get user info
+    // Note: Token is now stored in httpOnly cookie by backend /login endpoint
+    // No longer storing in localStorage for security
+    // Decode token to get user info for immediate context update
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       setUser({
@@ -154,20 +107,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         firstName: payload.firstName || '',
         businessName: payload.businessName || '',
         role: payload.role,
-        roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
+        roles: payload.roles || [payload.role],
         points: payload.points || 0,
-        guildXp: payload.guildXp || 0, // Phase 2a: Explorer's Guild XP
-        // explorerRank removed: fetch fresh from /api/xp/profile instead
+        guildXp: payload.guildXp || 0,
         referralCode: payload.referralCode || '',
         huntPassActive: payload.huntPassActive,
         huntPassExpiry: payload.huntPassExpiry,
         organizerTier: payload.subscriptionTier || 'SIMPLE',
         subscriptionStatus: payload.subscriptionStatus ?? null,
-        subscriptionLapsed: payload.subscriptionLapsed ?? false, // Feature #75: Tier lapse state
+        subscriptionLapsed: payload.subscriptionLapsed ?? false,
         onboardingComplete: payload.onboardingComplete ?? false,
         teamsOnboardingComplete: payload.teamsOnboardingComplete ?? false,
         createdAt: payload.createdAt,
-        emailVerified: payload.emailVerified ?? true, // S512: default true for old tokens
+        emailVerified: payload.emailVerified ?? true,
       });
     } catch (e) {
       console.error('Failed to decode token', e);
@@ -183,9 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Continue with client-side cleanup even if request fails
     }
 
-    localStorage.removeItem('token');
     localStorage.removeItem('fas_shopper_cart');
-    delete api.defaults.headers.Authorization;
     setUser(null);
   }, []);
 

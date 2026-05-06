@@ -98,11 +98,35 @@ const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<Cloud
       {
         resource_type: 'image', // P1 SECURITY FIX: Restrict to 'image' instead of 'auto' to prevent non-image uploads
         folder,
+        // Content Moderation: AWS Rekognition tagging for NSFW detection
+        categorization: 'aws_rek_tagging',
+        auto_tagging: 0.7,
         // Note: not using eager transforms — transformation URLs are generated on-the-fly
         // from the original URL to ensure public_id is always preserved
       },
-      (error, result) => {
+      async (error, result) => {
         if (error || !result) return reject(error ?? new Error('No result from Cloudinary'));
+
+        // Content Moderation: Check for NSFW content
+        const awsRekTags = (result as any).info?.categorization?.aws_rek_tagging?.data;
+        if (awsRekTags) {
+          for (const tag of awsRekTags) {
+            // Check for explicit/suggestive labels with high confidence
+            if ((tag.name === 'Explicit Nudity' || tag.name === 'Suggestive') && tag.confidence > 0.8) {
+              // Delete the uploaded image from Cloudinary
+              try {
+                const publicId = (result as any).public_id;
+                await cloudinary.uploader.destroy(publicId);
+              } catch (deleteError) {
+                console.error('Error deleting NSFW image from Cloudinary:', deleteError);
+              }
+              return reject({
+                code: 'NSFW_DETECTED',
+                message: 'Image was rejected for policy violation',
+              });
+            }
+          }
+        }
 
         // Track Cloudinary serve for bandwidth monitoring (#105)
         // Use original URL only — avoid eager transformation URLs which may be incomplete
@@ -152,14 +176,31 @@ export const uploadSalePhotos = async (req: Request, res: Response): Promise<voi
     const urls: string[] = [];
     const imageVariants: CloudinaryUrls[] = [];
     const partialErrors: string[] = [];
+    let nsfwDetected = false;
+
     results.forEach((r, i) => {
       if (r.status === 'fulfilled') {
         urls.push(r.value.original); // backward-compat: flat URL array
         imageVariants.push(r.value);
       } else {
-        partialErrors.push(`File ${i + 1}: ${(r.reason as Error)?.message ?? 'upload failed'}`);
+        const reason = r.reason as any;
+        if (reason?.code === 'NSFW_DETECTED') {
+          nsfwDetected = true;
+          partialErrors.push(`File ${i + 1}: ${reason.message}`);
+        } else {
+          partialErrors.push(`File ${i + 1}: ${(reason as Error)?.message ?? 'upload failed'}`);
+        }
       }
     });
+
+    // If NSFW detected, return early with specific error
+    if (nsfwDetected) {
+      return res.status(400).json({
+        error: 'NSFW_DETECTED',
+        message: 'One or more images were rejected for policy violation',
+        partialErrors,
+      });
+    }
 
     // P0-1: Validate that all returned URLs are non-empty strings
     const invalidUrls = imageVariants

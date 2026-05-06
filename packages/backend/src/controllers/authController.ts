@@ -432,7 +432,7 @@ export const register = async (req: Request, res: Response) => {
 
     res.cookie('accessToken', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/',
       maxAge: 15 * 60 * 1000, // 15 minutes
@@ -440,7 +440,7 @@ export const register = async (req: Request, res: Response) => {
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/auth/refresh',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -619,7 +619,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
 
     res.cookie('accessToken', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/',
       maxAge: 15 * 60 * 1000, // 15 minutes
@@ -627,7 +627,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/auth/refresh',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -825,7 +825,7 @@ export const login = async (req: Request, res: Response) => {
 
     res.cookie('accessToken', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/',
       maxAge: 15 * 60 * 1000, // 15 minutes
@@ -833,7 +833,7 @@ export const login = async (req: Request, res: Response) => {
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/auth/refresh',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -991,7 +991,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
 
     res.cookie('accessToken', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/',
       maxAge: 15 * 60 * 1000, // 15 minutes
@@ -999,7 +999,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/auth/refresh',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days

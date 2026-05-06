@@ -185,7 +185,8 @@ export const updateSettlement = async (req: AuthRequest, res: Response) => {
 
       if (lifecycleStage !== undefined) {
         updateData.lifecycleStage = lifecycleStage;
-        // Sync lifecycle stage to Sale model within same transaction
+        // Atomic sync: update both Sale and SaleSettlement lifecycle stage together
+        // Ensures no race condition where one model is updated but not the other
         await tx.sale.update({
           where: { id: saleId },
           data: { lifecycleStage },

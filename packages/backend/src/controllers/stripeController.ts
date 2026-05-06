@@ -484,6 +484,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const basePaymentIntentData = {
       amount: finalPriceCents,
       currency: 'usd',
+      // Patrick: enable Stripe Tax in Stripe Dashboard (Stripe Tax product) for this to take effect
+      automatic_tax: { enabled: true },
       metadata: {
         itemId: item.id,
         saleId: item.sale!.id,
@@ -1903,6 +1905,23 @@ export const webhookHandler = async (req: Request, res: Response) => {
       }
       break;
     }
+    case 'charge.refunded': {
+      // Handle refunded charge — update all purchases to REFUNDED status
+      const charge = event.data.object as Stripe.Charge;
+      const paymentIntentId = charge.payment_intent as string | undefined;
+      if (paymentIntentId) {
+        try {
+          const result = await prisma.purchase.updateMany({
+            where: { stripePaymentIntentId: paymentIntentId },
+            data: { status: 'REFUNDED' },
+          });
+          console.log(`[stripe] charge.refunded: updated ${result.count} purchase(s) for PI ${paymentIntentId} to REFUNDED`);
+        } catch (err) {
+          console.error(`[stripe] charge.refunded: failed to update purchases for PI ${paymentIntentId}:`, err);
+        }
+      }
+      break;
+    }
     case 'charge.failed': {
       // Hold-to-Pay Phase 2: Handle failed charge for hold invoices
       const charge = event.data.object;
@@ -2203,10 +2222,12 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
     }
 
     // Create Checkout Session
+    // Patrick: enable Stripe Tax in Stripe Dashboard (Stripe Tax product) for this to take effect
     const session = await stripe().checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'subscription',
       customer: stripeCustomerId,
+      automatic_tax: { enabled: true },
       line_items: [
         {
           price: priceId,
@@ -2302,10 +2323,12 @@ export const createAlaCarteCheckout = async (req: AuthRequest, res: Response) =>
     }
 
     // Create one-time checkout for $9.99
+    // Patrick: enable Stripe Tax in Stripe Dashboard (Stripe Tax product) for this to take effect
     const session = await stripe().checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
       customer: customerId,
+      automatic_tax: { enabled: true },
       line_items: [
         {
           price_data: {

@@ -11,6 +11,7 @@ export function scheduleAuctionAutoCloseCron() {
   // Run every 5 minutes
   const intervalId = setInterval(cronGuard({ jobName: 'auctionAutoCloseCron' }, async () => {
     // Find all auctions that have expired and are not yet closed
+    // UTC: auctionEndTime is stored as UTC in DB — comparisons use new Date() (current UTC time)
     const expiredAuctions = await prisma.item.findMany({
       where: {
         listingType: 'AUCTION',

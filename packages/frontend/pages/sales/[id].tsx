@@ -662,6 +662,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
         sale ? (
           <Head>
             <title>{sale.title} – FindA.Sale</title>
+            <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} />
             <meta name="description" content={`${sale.saleType || 'Sale'} in ${sale.city}, ${sale.state} — browse items and get directions on FindA.Sale.`} />
             <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
             <meta property="og:description" content={sale.description} />

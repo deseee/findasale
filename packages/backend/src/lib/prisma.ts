@@ -1,4 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+import * as Sentry from '@sentry/node';
 
 /**
  * Shared Prisma singleton — import this everywhere instead of creating new PrismaClient().
@@ -19,6 +20,7 @@ const baseClient = new PrismaClient({
     maxWait: 5000,  // ms to wait for a transaction slot
     timeout: 10000, // ms before a transaction is aborted
   },
+  log: [{ level: 'query', emit: 'event' }],
 });
 
 export const prisma = baseClient.$extends({
@@ -47,6 +49,47 @@ export const prisma = baseClient.$extends({
     },
   },
 });
+
+// Slow-query detection — log and alert on queries >1000ms
+baseClient.$on('query', (e: Prisma.QueryEvent) => {
+  if (e.duration > 1000) {
+    const msg = `Slow DB query (${e.duration}ms): ${e.query.substring(0, 200)}`;
+    console.warn('[prisma:slow]', msg);
+    try {
+      Sentry.captureMessage(msg, 'warning');
+    } catch (_err) {
+      // Sentry not initialized yet — continue
+    }
+  }
+});
+
+// Connection pool monitoring — alert if pool pressure is high (>8 busy connections)
+const poolMonitorInterval = setInterval(async () => {
+  try {
+    const metrics = await (baseClient as any).$metrics?.json?.();
+    if (metrics) {
+      const busyConnections = metrics.gauges?.find((g: any) => g.key === 'prisma_pool_connections_busy')?.value ?? 0;
+      if (busyConnections > 8) {
+        const msg = `DB pool pressure: ${busyConnections} busy connections`;
+        console.warn('[prisma:pool]', msg);
+        try {
+          Sentry.captureMessage(msg, 'warning');
+        } catch (_err) {
+          // Sentry not initialized — continue
+        }
+      }
+    }
+  } catch (_err) {
+    // Metrics unavailable — continue
+  }
+}, 5 * 60 * 1000); // every 5 minutes
+
+// Cleanup on exit
+if (typeof process !== 'undefined') {
+  process.on('exit', () => {
+    clearInterval(poolMonitorInterval);
+  });
+}
 
 // Graceful shutdown: ensure connection pool is drained on process exit
 if (typeof process !== 'undefined') {

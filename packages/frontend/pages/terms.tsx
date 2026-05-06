@@ -252,7 +252,28 @@ const TermsPage = () => {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">15. Changes to These Terms</h2>
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">15. Dispute Resolution and Arbitration</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed font-semibold mb-3">
+              PLEASE READ THIS SECTION CAREFULLY. IT AFFECTS YOUR LEGAL RIGHTS.
+            </p>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              Any dispute, claim, or controversy arising out of or relating to these Terms or the use of FindA.Sale shall be resolved by binding arbitration administered by the American Arbitration Association under its Commercial Arbitration Rules, rather than in court, except that you may assert claims in small claims court if your claims qualify.
+            </p>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              The Federal Arbitration Act governs the interpretation and enforcement of this arbitration agreement. The arbitration will be conducted in Kent County, Michigan.
+            </p>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              <strong>Class Action Waiver:</strong> You and FindA.Sale agree that each may bring claims against the other only in your or its individual capacity, and not as a plaintiff or class member in any purported class or representative proceeding.
+            </p>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+              You may opt out of this arbitration agreement by sending written notice to{' '}
+              <a href="mailto:legal@finda.sale" className="text-amber-600 hover:underline">legal@finda.sale</a>{' '}
+              within 30 days of first using FindA.Sale.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">16. Changes to These Terms</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               We may update these Terms at any time. When we do, we will post the revised Terms with an updated
               effective date. Continued use of the Platform after the effective date constitutes acceptance of the
@@ -261,7 +282,7 @@ const TermsPage = () => {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">16. Contact</h2>
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">17. Contact</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               Questions about these Terms? Contact us at{' '}
               <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>.

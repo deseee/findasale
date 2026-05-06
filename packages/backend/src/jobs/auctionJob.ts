@@ -18,6 +18,7 @@ export const endAuctions = async () => {
   try {
     console.log('Running auction end job...');
 
+    // UTC: auctionEndTime is stored as UTC in DB — comparisons use new Date() (current UTC time)
     const endedAuctions = await prisma.item.findMany({
       where: {
         AND: [

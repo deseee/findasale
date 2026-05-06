@@ -35,12 +35,39 @@ export function cronGuard(
 ): () => Promise<void> {
   return async () => {
     const startTime = Date.now();
+
+    // Generate monitor slug: max 50 chars, URL-safe (alphanumeric + hyphen)
+    const monitorSlug = opts.jobName.toLowerCase().replace(/[^a-z0-9-]/g, '-').substring(0, 50);
+
+    // Send check-in: mark job as in-progress
+    let checkInId: string | undefined;
+    try {
+      checkInId = Sentry.captureCheckIn({
+        monitorSlug,
+        status: 'in_progress',
+      });
+    } catch (_err) {
+      // Sentry not initialized yet — continue without check-in
+    }
+
     try {
       await fn();
       // Reset failure count on success
       failureCounters.set(opts.jobName, 0);
       const duration = Date.now() - startTime;
       console.log(`[CRON OK] ${opts.jobName} completed in ${duration}ms`);
+
+      // Send check-in: mark job as successful
+      try {
+        Sentry.captureCheckIn({
+          monitorSlug,
+          status: 'ok',
+          checkInId,
+          duration: duration,
+        });
+      } catch (_err) {
+        // Sentry check-in failed — continue
+      }
     } catch (err) {
       const count = (failureCounters.get(opts.jobName) || 0) + 1;
       failureCounters.set(opts.jobName, count);
@@ -49,6 +76,18 @@ export function cronGuard(
         `[CRON FAIL #${count}] ${opts.jobName} failed after ${duration}ms:`,
         err instanceof Error ? err.message : String(err)
       );
+
+      // Send check-in: mark job as failed
+      try {
+        Sentry.captureCheckIn({
+          monitorSlug,
+          status: 'error',
+          checkInId,
+          duration: duration,
+        });
+      } catch (_err) {
+        // Sentry check-in failed — continue
+      }
 
       // Capture to Sentry if available
       try {

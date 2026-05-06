@@ -206,6 +206,7 @@ import './jobs/fraudDetectionJob'; // Feature #73: Daily off-platform transactio
 import './jobs/boostExpiryJob';   // Phase 2b: Expire stale ACTIVE BoostPurchase records hourly
 import './jobs/xpExpiryCron';      // D-XP-002: XP expiry system — daily at 02:00 UTC with warning flags
 import './jobs/huntPassExpiryCron'; // Hunt Pass: deactivate expired passes daily at 03:00 UTC
+import './jobs/deliverabilityMonitorJob'; // Email deliverability monitoring — Sundays 19:00 UTC
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
 import { scheduleAuctionAutoCloseCron } from './jobs/auctionAutoCloseCron'; // ADR-013 Phase 2: Auto-close expired auctions + notify winners
@@ -230,6 +231,7 @@ import { initMetroSyncCron } from './jobs/metroSyncCron'; // ADR-074: Metro Sync
 import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase 2: Category Sync — eBay category items nightly cron
 import { initOutreachEmailsCron } from './jobs/outreachEmailsCron'; // Phase 1: Cold outreach email pipeline
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
+import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -577,20 +579,37 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
   res.status(status).json({ message: err.message || 'Internal server error' });
 });
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('Shutting down gracefully...');
-  await prisma.$disconnect();
-  httpServer.close();
-  process.exit(0);
-});
+// Graceful shutdown handler — shared between SIGINT and SIGTERM
+const gracefulShutdown = async (signal: string) => {
+  console.log(`[${signal}] Graceful shutdown initiated`);
 
-process.on('SIGTERM', async () => {
-  console.log('Shutting down gracefully...');
-  await prisma.$disconnect();
-  httpServer.close();
-  process.exit(0);
-});
+  // Close HTTP server first — stops accepting new requests
+  httpServer.close(async () => {
+    console.log('[shutdown] HTTP server closed');
+
+    // Disconnect Prisma — ensures all DB connections are cleanly closed
+    try {
+      await prisma.$disconnect();
+      console.log('[shutdown] Prisma disconnected');
+    } catch (err) {
+      console.error('[shutdown] Error disconnecting Prisma:', err);
+    }
+
+    process.exit(0);
+  });
+
+  // Force exit if graceful shutdown takes too long (30 seconds)
+  const forceExitTimeout = setTimeout(() => {
+    console.error('[shutdown] Forced exit after timeout (30s)');
+    process.exit(1);
+  }, 30000);
+
+  // Clear timeout if graceful shutdown completes in time
+  httpServer.once('close', () => clearTimeout(forceExitTimeout));
+};
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 // V1: Listen on the HTTP server (not app.listen) so Socket.io shares the same port
 httpServer.listen(PORT, '0.0.0.0', () => {
@@ -641,6 +660,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // Phase S574: Register pricing engine crons (quota reset at 3 AM, recovery at 4 AM UTC)
   scheduleQuotaResetCron();
   scheduleCircuitBreakerRecoveryCron();
+
+  // ADR-073: Geocoding success rate audit cron (daily at 6 AM UTC)
+  scheduleGeocodingAuditCron();
 
   // Feature #75: Tier grace period finalization cron
   startTierGraceCron();
