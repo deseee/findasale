@@ -23,6 +23,7 @@ import VerifiedBadge from '../../components/VerifiedBadge';
 import PasskeyManager from '../../components/PasskeyManager';
 import FeedbackMenu from '../../components/FeedbackMenu';
 import BroadcastSection from '../../components/BroadcastSection';
+import AccessibleModal from '../../components/AccessibleModal';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -74,6 +75,7 @@ const OrganizerSettingsPage = () => {
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
   const [recentBroadcasts, setRecentBroadcasts] = useState<Array<{ id: string; subject: string; sentAt: string; recipientCount: number }>>([]);
   const [deletePassword, setDeletePassword] = useState('');
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Verification types
   interface GooglePlaceResult {
@@ -1814,19 +1816,7 @@ const OrganizerSettingsPage = () => {
                     Permanently delete your account. Your personal information will be anonymized. Transaction records are retained for legal and tax purposes.
                   </p>
                   <button
-                    onClick={() => {
-                      const confirmed = confirm(
-                        'Are you sure you want to delete your account? This action cannot be undone. All your personal information will be anonymized, but transaction records will be retained for legal and tax purposes.'
-                      );
-                      if (confirmed) {
-                        // Prompt for password confirmation
-                        const password = prompt('Please enter your password to confirm account deletion:');
-                        if (password) {
-                          setDeletePassword(password);
-                          deleteAccountMutation.mutate(password);
-                        }
-                      }
-                    }}
+                    onClick={() => setIsDeleteModalOpen(true)}
                     disabled={deleteAccountMutation.isPending}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed transition"
                   >
@@ -1841,6 +1831,64 @@ const OrganizerSettingsPage = () => {
 
       {/* Feedback Menu Modal */}
       <FeedbackMenu isOpen={isFeedbackMenuOpen} onClose={() => setIsFeedbackMenuOpen(false)} />
+
+      {/* Delete Account Modal */}
+      <AccessibleModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeletePassword('');
+        }}
+        modalId="delete-account-modal"
+        ariaLabelledBy="delete-modal-title"
+      >
+        <h2 id="delete-modal-title" className="text-2xl font-bold text-red-900 dark:text-red-100 mb-4">
+          Delete Account
+        </h2>
+        <p className="text-red-700 dark:text-red-300 mb-6">
+          This action cannot be undone. Your personal information will be anonymized, but transaction records will be retained for legal and tax purposes.
+        </p>
+        <div className="mb-6">
+          <label htmlFor="delete-password-input" className="block text-sm font-medium text-warm-900 dark:text-gray-100 mb-2">
+            Enter your password to confirm:
+          </label>
+          <input
+            id="delete-password-input"
+            type="password"
+            value={deletePassword}
+            onChange={(e) => setDeletePassword(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && deletePassword.trim()) {
+                deleteAccountMutation.mutate(deletePassword);
+              }
+            }}
+            placeholder="Enter password"
+            className="w-full px-4 py-2 border border-red-300 dark:border-red-700 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500"
+            autoFocus
+          />
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              deleteAccountMutation.mutate(deletePassword);
+            }}
+            disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
+            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete My Account'}
+          </button>
+          <button
+            onClick={() => {
+              setIsDeleteModalOpen(false);
+              setDeletePassword('');
+            }}
+            disabled={deleteAccountMutation.isPending}
+            className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-gray-100 font-medium hover:bg-warm-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </AccessibleModal>
     </>
   );
 };
