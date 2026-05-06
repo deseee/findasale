@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import AccessibleModal from './AccessibleModal';
 
 interface OrganizerOnboardingModalProps {
   onDismiss: () => void;
@@ -87,7 +88,11 @@ const OrganizerOnboardingModal: React.FC<OrganizerOnboardingModalProps> = ({ onD
   const current = STEPS[step];
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+    <AccessibleModal
+      isOpen={true}
+      onClose={onDismiss}
+      ariaLabelledBy="organizer-onboarding-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-8">
         {/* Step progress dots */}
         <div className="flex justify-center gap-2 mb-8">
@@ -105,7 +110,7 @@ const OrganizerOnboardingModal: React.FC<OrganizerOnboardingModalProps> = ({ onD
         {current.visual}
 
         {/* Headline */}
-        <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 text-center mb-3">{current.headline}</h2>
+        <h2 id="organizer-onboarding-modal-title" className="text-2xl font-bold text-warm-900 dark:text-gray-100 text-center mb-3">{current.headline}</h2>
 
         {/* Subtext */}
         <p className="text-warm-600 dark:text-gray-400 text-center text-sm leading-relaxed mb-8">{current.subtext}</p>
@@ -126,7 +131,7 @@ const OrganizerOnboardingModal: React.FC<OrganizerOnboardingModalProps> = ({ onD
           {step === STEPS.length - 1 ? 'Skip for now' : 'Skip'}
         </button>
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 

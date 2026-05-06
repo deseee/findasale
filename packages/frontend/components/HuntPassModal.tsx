@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import AccessibleModal from './AccessibleModal';
 
 interface HuntPassModalProps {
   isOpen: boolean;
@@ -36,13 +37,16 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="hunt-pass-modal-title"
+    >
+      { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-5">
-          <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100">Upgrade to Hunt Pass</h2>
+          <h2 id="hunt-pass-modal-title" className="text-xl font-bold text-warm-900 dark:text-gray-100">Upgrade to Hunt Pass</h2>
           <button
             onClick={onClose}
             className="text-warm-400 hover:text-warm-600 text-2xl leading-none"
@@ -120,7 +124,7 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
           </button>
         </div>
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 

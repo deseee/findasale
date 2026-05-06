@@ -14,6 +14,7 @@ const RegisterPage = () => {
     password: '',
     confirmPassword: '',
     name: '',
+    dateOfBirth: '',
     role: 'USER',
     businessName: '',
     phone: '',
@@ -22,6 +23,7 @@ const RegisterPage = () => {
     affiliateReferralCode: '',
     inviteCode: '',
   });
+  const [ageError, setAgeError] = useState('');
   const [organizerEmailConsent, setOrganizerEmailConsent] = useState(false);
   const [shopperEmailConsent, setShopperEmailConsent] = useState(false);
   const [error, setError] = useState('');
@@ -42,10 +44,24 @@ const RegisterPage = () => {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
+
+    // P0-L1: Validate age on DOB change
+    if (name === 'dateOfBirth' && value) {
+      const dob = new Date(value);
+      const today = new Date();
+      const age = (today.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+
+      if (age < 18) {
+        setAgeError('You must be 18 or older to use FindA.Sale.');
+      } else {
+        setAgeError('');
+      }
+    }
   };
 
   // Platform Safety #118: Generate device fingerprint for fraud detection
@@ -90,6 +106,18 @@ const RegisterPage = () => {
     setLoading(true);
     setError('');
 
+    // P0-L1: Validate age before submission
+    if (!formData.dateOfBirth) {
+      setError('Date of birth is required.');
+      setLoading(false);
+      return;
+    }
+    if (ageError) {
+      setError(ageError);
+      setLoading(false);
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match.');
       setLoading(false);
@@ -109,6 +137,7 @@ const RegisterPage = () => {
         email: formData.email,
         password: formData.password,
         name: formData.name,
+        dateOfBirth: formData.dateOfBirth, // P0-L1: COPPA compliance
         role: formData.role,
         referralCode: formData.referralCode || undefined,
         affiliateReferralCode: formData.affiliateReferralCode || undefined,
@@ -219,6 +248,23 @@ const RegisterPage = () => {
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                 placeholder="Email address"
               />
+            </div>
+            <div>
+              <label htmlFor="dateOfBirth" className="sr-only">
+                Date of Birth
+              </label>
+              <input
+                id="dateOfBirth"
+                name="dateOfBirth"
+                type="date"
+                required
+                value={formData.dateOfBirth}
+                onChange={handleChange}
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
+              />
+              {ageError && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{ageError}</p>
+              )}
             </div>
             <div>
               <label htmlFor="password" className="sr-only">

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { GetStaticProps } from 'next';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { getItemImageUrl } from '../lib/imageUtils';
@@ -89,7 +90,11 @@ const SaleCardSkeleton = () => (
   </div>
 );
 
-const HomePage = () => {
+interface HomePageProps {
+  initialSalesData?: any;
+}
+
+const HomePage = ({ initialSalesData }: HomePageProps) => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
   const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || '';
 
@@ -128,6 +133,7 @@ const HomePage = () => {
       }
     },
     retry: 1,
+    initialData: initialSalesData,
   });
 
   const sales = feedData?.sales as Sale[] | undefined;
@@ -582,6 +588,21 @@ const HomePage = () => {
         </div>
     </>
   );
+};
+
+export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/feed?limit=12&status=upcoming`);
+    const data = res.ok ? await res.json() : null;
+    return {
+      props: { initialSalesData: data },
+      revalidate: 300, // 5 minutes ISR
+    };
+  } catch (error) {
+    return { props: { initialSalesData: null }, revalidate: 60 };
+  }
 };
 
 export default HomePage;

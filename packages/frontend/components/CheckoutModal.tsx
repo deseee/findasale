@@ -8,6 +8,7 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import api from '../lib/api';
+import AccessibleModal from './AccessibleModal';
 
 // Lazy-initialize Stripe on client-side only to avoid SSR errors
 let stripePromise: Promise<Stripe | null> | null = null;
@@ -355,115 +356,116 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
     onSuccess();
   };
 
+  const isOpen = true; // This modal is shown conditionally by parent
+
   return (
-    // Backdrop
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="checkout-modal-title"
+      contentClassName="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6"
     >
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
-        <div className="flex justify-between items-center mb-5">
-          <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100">Complete Purchase</h2>
-          <button
-            onClick={onClose}
-            className="text-warm-400 hover:text-warm-600 text-2xl leading-none"
-            aria-label="Close"
-          >
-            &times;
-          </button>
-        </div>
-
-        {/* Sprint 3: Coupon entry step — shown before payment form loads */}
-        {!started && !purchaseId && (
-          <div>
-            <div className="mb-5">
-              <label className="block text-sm font-medium text-warm-700 mb-1">
-                Have a coupon code? <span className="text-warm-400 font-normal">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={couponInput}
-                onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                placeholder="e.g. A3F2C891"
-                maxLength={8}
-                className="w-full px-3 py-2 border border-warm-300 rounded-lg font-mono tracking-widest text-warm-900 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
-              />
-              <p className="text-xs text-warm-400 mt-1">
-                Coupons are issued after each completed purchase.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => setStarted(true)}
-                className="flex-1 py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded"
-              >
-                Continue to Pay
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Payment intent loading / error / form */}
-        {started && (
-          <>
-            {loadError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm mb-4">
-                <p className="mb-2">{loadError}</p>
-                {/* Allow user to retry — clears error and reloads payment intent */}
-                <button
-                  className="block text-xs underline text-red-600 hover:text-red-800 font-medium"
-                  onClick={() => { setLoadError(null); }}
-                >
-                  Try Again
-                </button>
-                {/* Allow user to retry without coupon if coupon was the issue */}
-                {couponInput && loadError.toLowerCase().includes('coupon') && (
-                  <button
-                    className="block mt-1 text-xs underline text-red-600 hover:text-red-800"
-                    onClick={() => { setCouponInput(''); setLoadError(null); setStarted(false); }}
-                  >
-                    Remove coupon and restart
-                  </button>
-                )}
-              </div>
-            )}
-
-            {!loadError && !clientSecret && (
-              <div className="py-8 text-center text-warm-500">Loading payment form...</div>
-            )}
-
-            {clientSecret && (
-              <Elements stripe={getStripePromise()} options={{ clientSecret }}>
-                <PaymentForm
-                  itemTitle={resolvedTitle}
-                  itemPrice={itemPrice}
-                  originalAmount={originalAmount}
-                  platformFee={platformFee}
-                  discountApplied={discountApplied}
-                  buyerPremium={buyerPremium}
-                  buyerPremiumRate={buyerPremiumRate}
-                  isAuction={listingType === 'AUCTION'}
-                  purchaseId={purchaseId}
-                  saleName={saleName}
-                  saleAddress={saleAddress}
-                  saleDates={saleDates}
-                  onClose={onClose}
-                  onSuccess={handleSuccess}
-                />
-              </Elements>
-            )}
-          </>
-        )}
+      <div className="flex justify-between items-center mb-5">
+        <h2 id="checkout-modal-title" className="text-xl font-bold text-warm-900 dark:text-gray-100">Complete Purchase</h2>
+        <button
+          onClick={onClose}
+          className="text-warm-400 hover:text-warm-600 text-2xl leading-none"
+          aria-label="Close"
+        >
+          &times;
+        </button>
       </div>
-    </div>
+
+      {/* Sprint 3: Coupon entry step — shown before payment form loads */}
+      {!started && !purchaseId && (
+        <div>
+          <div className="mb-5">
+            <label className="block text-sm font-medium text-warm-700 mb-1">
+              Have a coupon code? <span className="text-warm-400 font-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={couponInput}
+              onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+              placeholder="e.g. A3F2C891"
+              maxLength={8}
+              className="w-full px-3 py-2 border border-warm-300 rounded-lg font-mono tracking-widest text-warm-900 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
+            />
+            <p className="text-xs text-warm-400 mt-1">
+              Coupons are issued after each completed purchase.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => setStarted(true)}
+              className="flex-1 py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded"
+            >
+              Continue to Pay
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Payment intent loading / error / form */}
+      {started && (
+        <>
+          {loadError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm mb-4">
+              <p className="mb-2">{loadError}</p>
+              {/* Allow user to retry — clears error and reloads payment intent */}
+              <button
+                className="block text-xs underline text-red-600 hover:text-red-800 font-medium"
+                onClick={() => { setLoadError(null); }}
+              >
+                Try Again
+              </button>
+              {/* Allow user to retry without coupon if coupon was the issue */}
+              {couponInput && loadError.toLowerCase().includes('coupon') && (
+                <button
+                  className="block mt-1 text-xs underline text-red-600 hover:text-red-800"
+                  onClick={() => { setCouponInput(''); setLoadError(null); setStarted(false); }}
+                >
+                  Remove coupon and restart
+                </button>
+              )}
+            </div>
+          )}
+
+          {!loadError && !clientSecret && (
+            <div className="py-8 text-center text-warm-500">Loading payment form...</div>
+          )}
+
+          {clientSecret && (
+            <Elements stripe={getStripePromise()} options={{ clientSecret }}>
+              <PaymentForm
+                itemTitle={resolvedTitle}
+                itemPrice={itemPrice}
+                originalAmount={originalAmount}
+                platformFee={platformFee}
+                discountApplied={discountApplied}
+                buyerPremium={buyerPremium}
+                buyerPremiumRate={buyerPremiumRate}
+                isAuction={listingType === 'AUCTION'}
+                purchaseId={purchaseId}
+                saleName={saleName}
+                saleAddress={saleAddress}
+                saleDates={saleDates}
+                onClose={onClose}
+                onSuccess={handleSuccess}
+              />
+            </Elements>
+          )}
+        </>
+      )}
+    </AccessibleModal>
   );
 };
 

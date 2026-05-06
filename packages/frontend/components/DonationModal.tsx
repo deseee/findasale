@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
+import AccessibleModal from './AccessibleModal';
 
 interface DonationModalProps {
   saleId: string;
@@ -106,11 +107,15 @@ export default function DonationModal({
   // PRO gate
   if (!isProOrTeams) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-            Charity Close — PRO Feature
-          </h2>
+      <AccessibleModal
+        isOpen={true}
+        onClose={onClose}
+        ariaLabel="Charity Close upgrade required"
+        contentClassName="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full"
+      >
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+          Charity Close — PRO Feature
+        </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
             Generate professional tax receipts for donated items. Upgrade to PRO or TEAMS to unlock this feature.
           </p>
@@ -130,26 +135,30 @@ export default function DonationModal({
               Upgrade Now
             </button>
           </div>
-        </div>
-      </div>
+      </AccessibleModal>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Donate Unsold Items</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none"
-          >
-            ×
-          </button>
-        </div>
+    <AccessibleModal
+      isOpen={true}
+      onClose={onClose}
+      ariaLabelledBy="donation-modal-title"
+      contentClassName="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+    >
+      {/* Header */}
+      <div className="flex justify-between items-center pb-4 border-b border-gray-200 dark:border-gray-700 mb-6">
+        <h2 id="donation-modal-title" className="text-xl font-bold text-gray-900 dark:text-white">Donate Unsold Items</h2>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none"
+          aria-label="Close"
+        >
+          ×
+        </button>
+      </div>
 
-        <div className="p-6">
+      <div>
           {/* Step indicator */}
           <div className="flex gap-2 mb-6">
             {[0, 1, 2].map((s) => (
@@ -349,8 +358,7 @@ export default function DonationModal({
               </div>
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </AccessibleModal>
   );
 }

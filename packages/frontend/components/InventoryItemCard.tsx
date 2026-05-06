@@ -172,6 +172,7 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
             disabled={isLoading}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 rounded transition-colors disabled:opacity-50"
             title="View price history"
+            aria-label="View price history"
           >
             <Clock size={16} />
           </button>
@@ -181,6 +182,7 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
             disabled={isLoading}
             className="p-2 hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 rounded transition-colors disabled:opacity-50"
             title="Remove from inventory"
+            aria-label="Remove item from inventory"
           >
             <Trash2 size={16} />
           </button>

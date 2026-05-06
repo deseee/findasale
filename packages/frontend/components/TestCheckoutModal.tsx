@@ -7,6 +7,7 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import api from '../lib/api';
+import AccessibleModal from './AccessibleModal';
 
 // Must use the TEST publishable key — clientSecret comes from a test-mode PaymentIntent.
 // Live key + test clientSecret = mismatch error. Set NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY on Vercel.
@@ -139,14 +140,15 @@ const TestCheckoutModal = ({ saleId, onClose, onDone }: TestCheckoutModalProps) 
   }, [saleId]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <AccessibleModal
+      isOpen={true}
+      onClose={onClose}
+      ariaLabelledBy="test-checkout-modal-title"
     >
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h2 className="text-base font-semibold text-warm-900 dark:text-warm-100">Test In-App Checkout</h2>
+            <h2 id="test-checkout-modal-title" className="text-base font-semibold text-warm-900 dark:text-warm-100">Test In-App Checkout</h2>
             <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">This is the exact form your shoppers see — $1.00, no real charge</p>
           </div>
           <button
@@ -177,7 +179,7 @@ const TestCheckoutModal = ({ saleId, onClose, onDone }: TestCheckoutModalProps) 
           </Elements>
         )}
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 

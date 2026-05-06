@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 import { useXpSink } from '@/hooks/useXpSink';
+import AccessibleModal from './AccessibleModal';
 
 interface Sale {
   id: string;
@@ -81,11 +82,15 @@ export const RarityBoostModal: React.FC<RarityBoostModalProps> = ({
   const hasEnoughXp = userXp >= RARITY_BOOST_COST;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="rarity-boost-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-warm-100">
+            <h2 id="rarity-boost-modal-title" className="text-2xl font-bold text-gray-900 dark:text-warm-100">
               ✨ Rarity Boost
             </h2>
             <button
@@ -175,6 +180,6 @@ export const RarityBoostModal: React.FC<RarityBoostModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </AccessibleModal>
   );
 };

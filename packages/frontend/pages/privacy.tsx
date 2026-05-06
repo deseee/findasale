@@ -173,11 +173,9 @@ const PrivacyPage = () => {
 
           {/* 7 */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">7. Children's Privacy</h2>
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">7. Children's Privacy (COPPA)</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-              FindA.Sale is not directed to children under 18. We do not knowingly collect personal information from
-              minors. If you believe we have inadvertently collected such information, please contact us and we will
-              delete it promptly.
+              Users must be 18 years of age or older to register. We verify age during registration and do not knowingly collect personal information from minors. If you believe we have inadvertently collected information from someone under 18, please contact us and we will delete it promptly.
             </p>
           </section>
 

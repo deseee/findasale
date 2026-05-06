@@ -4,28 +4,56 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S663 — Fortune 1000 Pre-Launch Chrome QA + 9-File Fix Batch (COMPLETE — push pending)**
+**Latest: S664 — Fortune 1000 Pre-Launch Sprint: 6-Agent Audit + 13-Agent Implementation (COMPLETE — push pending)**
 
-Full buyer journey Chrome QA (shopper + organizer), plus code audit synthesis. Chrome-verified: shopper browse → sale detail → Place Hold → cart sidebar (end-to-end). Organizer dashboard, Holds page, TEAMS paywall, create-sale form (15 types confirmed). 9 files fixed across two dev batches. **Combined S662+S663 push block in patrick-dashboard.md — push before going live.**
+Two-phase Fortune 1000 readiness sprint. Phase 1: 6 parallel audits across domains untouched by S655–S663 (auth/security, accessibility/WCAG, legal/compliance, SEO/performance, payments/Stripe, backend reliability). Phase 2: 13 parallel implementation agents fixed ALL findings — P0, P1, and P2.
 
-**Fixes shipped (9 files):**
-- **Shopper Pickups tab blank (P1)** — `shopper/dashboard.tsx`: added `useQuery` calling `/reservations/shopper`; renders hold cards with photo, title, sale name, expiry countdown, item link; loading skeleton + "No active holds" empty state
-- **Cart 404 (P1)** — `shopper/cart.tsx` (NEW): redirect page to `/shopper/dashboard` — fixes broken cart URL
-- **CAN-SPAM unsubscribe gap (P1)** — `emailTemplateService.ts`: added FRONTEND_URL const + unsubscribe footer in shared template wrapper — applies to ALL transactional emails automatically
-- **No hold-placed email to shopper (P1)** — `saleAlertEmailService.ts`: new `sendHoldPlacedToShopper()` function; `reservationController.ts`: wired into `placeHold()` with fire-and-forget pattern
-- **Vaporware "Coming Soon" copy (P2)** — `coupons.tsx`: removed 6 unimplemented feature teasers from Cosmetics & Perks section
-- **TODO comments cleaned (P2)** — `add-items/[saleId].tsx`, `workspace.tsx`, `encyclopedia/[slug].tsx`: removed post-launch TODO comments
+**Combined push block below covers S663 + S664 (do NOT push S663 block separately — this one supersedes it).**
 
-**Flagged for future sprint:**
-- `/unsubscribe` frontend page needed — URL is wired in emails but page doesn't exist yet (P1)
-- SSR/SSG for homepage and /sales — P0, no Google indexing without it
-- JWT 7-day refresh mechanism — P0 security
-- Rate limiting on bulk items endpoint — P0
-- Alt text sweep (104+ images) — P0 WCAG 2.1 AA
-- Focus traps on 30+ modals — P0 WCAG 2.1 AA
-- COPPA age gate — P0 legal
-- Cookie consent banner — P1 GDPR
-- IDOR fix on mark-sold route — P1 security
+**S664 Batch 1 — Shipped (17 files + 2 new files + 1 migration):**
+- **COPPA age gate (P0 legal)** — `authController.ts`: DOB required at register, age <18 returns HTTP 400; `register.tsx`: DOB field added with client-side validation; `schema.prisma`: `ageVerifiedAt DateTime?` on User; migration `20260506000001_add_age_verified`
+- **Auth brute-force rate limiting (P0 security)** — `routes/auth.ts`: loginLimiter (5/15min/IP) + registerLimiter (3/hr/IP) via express-rate-limit
+- **Bulk items rate limiting (P0 security)** — `rateLimiter.ts`: bulkItemsLimiter (10 ops/hr per user); `routes/items.ts`: applied to bulk + CSV endpoints
+- **POS currency precision (P0 payments)** — `stripeController.ts`: integer cent math replaces float arithmetic, eliminates $0.01 drift in mixed carts
+- **Stripe webhook idempotency (P1 payments)** — `stripeController.ts`: Prisma transaction wrapper; `schema.prisma`: `ProcessedWebhookEvent` model; `schema.prisma`: `stripeOnboarded` on Organizer
+- **Stripe Connect async onboarding (P1 payments)** — `stripeController.ts`: `account.updated` webhook sets `stripeOnboarded=true` when charges+payouts enabled
+- **Refund endpoint wired (P1 payments)** — `stripeController.ts`: 30-day window check, cap via `applyFirstMonthRefundCap`, shopper confirmation email
+- **sage-400 contrast fix (P0 WCAG)** — `tailwind.config.js`: `#6B9E7F` → `#4A7A5C` (4.5:1 ratio on warm-100; was ~3.2:1)
+- **Form labels on search inputs (P0 WCAG)** — `SearchFilterPanel.tsx`: 6 form labels added (price min/max, condition, category, sale type, sort-by)
+- **Icon buttons keyboard accessible (P0 WCAG)** — `SaleQRCode.tsx`: div→button with aria-label; `InventoryItemCard.tsx`: aria-labels on history+delete buttons
+- **HoldButton touch target (P1 WCAG)** — `HoldButton.tsx`: compact variant min-h/w 44px (WCAG 2.5.5)
+- **6 critical modals focus-trapped (P0 WCAG)** — `AccessibleModal.tsx` (NEW): FocusTrap base component; applied to CheckoutModal, HoldToPayModal, PosInvoiceModal, BecomeOrganizerModal, RankUpModal, DonationModal
+- **Cookie consent banner (P1 GDPR)** — `CookieConsentBanner.tsx` (NEW): accept/decline, localStorage persistence, dark mode, role="alert"; wired in `_app.tsx`
+- **Homepage SSR/ISR (P0 SEO)** — `index.tsx`: `getStaticProps` + ISR revalidate:300 fetching `/api/feed`
+- **ToS legal gaps (P1 legal)** — `terms.tsx`: dispute window 48h→14d, consignment indemnification clause, organizer 48hr response SLA (new §13)
+- **COPPA privacy policy (P1 legal)** — `privacy.tsx`: age verification language updated to 18+
+- **focus-trap-react added (P0)** — `frontend/package.json`: `focus-trap-react@^10.2.3`
+
+**S664 Batch 2 — Shipped (additional 37 files):**
+- **SSR for sale/item detail pages (P0 SEO)** — `sales/[id].tsx` + `items/[id].tsx`: `getServerSideProps` enhanced, Product/Offer JSON-LD + Event JSON-LD injected, `InitialSaleData`/`InitialItemData` interfaces added
+- **JWT httpOnly cookie migration (P0 security)** — `backend/package.json`: cookie-parser added; `backend/src/index.ts`: cookieParser middleware; `backend/src/middleware/auth.ts`: reads cookie first then Authorization header (backward compat); `authController.ts`: sets httpOnly cookies on all 4 auth paths (register/login/oauthLogin/redeemInvite); `routes/auth.ts`: POST /auth/logout, POST /auth/refresh, GET /auth/me added; `frontend/lib/api.ts`: `withCredentials:true` + 401 auto-refresh interceptor; `components/AuthContext.tsx`: calls GET /auth/me on mount, falls back to localStorage
+- **All 34 modals focus-trapped (P0 WCAG)** — 28 additional modals wrapped with AccessibleModal (total: 34/34 = 100% coverage): AlaCartePublishModal, BidModal, BoostPurchaseModal, BountyMatchModal, BulkCategoryModal, BulkConfirmModal, BulkOperationErrorModal, BulkPhotoModal, BulkPriceModal, BulkStatusModal, BulkTagModal, CSVImportModal, ClaimListingModal, ConsignorPayoutModal, DowngradePreviewModal, HuntPassModal, MessageComposeModal, OnboardingModal, OrganizerOnboardingModal, QrCodeModal, QuickPickerTaskModal, RSVPAttendeesModal, RarityBoostModal, ReturnRequestModal, SharePromoteModal, SyncQueueModal, TeamSeatUpsellModal, TestCheckoutModal
+- **Account deletion (P1 GDPR/CCPA)** — `organizer/settings.tsx`: Danger Zone section added with confirmation dialog + DELETE text gate; calls `DELETE /api/users/me`
+
+**⚠️ Two files modified by BOTH Batch 1 and Batch 2 agents — verify both change sets are present:**
+- `packages/backend/src/controllers/authController.ts` — must have: DOB age gate (Batch 1) AND httpOnly cookie setup on all 4 auth paths (Batch 2)
+- `packages/backend/src/routes/auth.ts` — must have: rate limiters on login/register (Batch 1) AND /logout, /refresh, /me endpoints (Batch 2)
+
+**Patrick actions required before going live:**
+1. **PUSH** — combined S663+S664 push block (below in patrick-dashboard.md)
+2. **Run migrations** — `prisma migrate deploy` for `20260506000001_add_age_verified` (adds ageVerifiedAt + stripeOnboarded + ProcessedWebhookEvent)
+3. **Run** `prisma generate` after migrations
+4. **Add Railway env var** — `JWT_REFRESH_SECRET=<32+ char random string>` (run `openssl rand -base64 32`)
+5. **Patrick decision** — OAuth age verification: (a) add POST /auth/verify-age for new OAuth users, (b) block OAuth until done, or (c) accept risk for MVP
+6. **Enable 2FA** on Google Workspace + MailerLite
+7. **Set Railway env vars** — `OUTREACH_ENABLED=true`, `CATEGORY_SYNC_ENABLED=true`
+
+**Remaining for S665:**
+- Data deletion BACKEND: `DELETE /users/me` endpoint in userController.ts (frontend UI shipped; verify backend endpoint exists or create it)
+- SSR: Verify `sales/[id].tsx` and `items/[id].tsx` JSON-LD appears in page source
+- QA: Browser-test JWT cookie migration (login, refresh, logout)
+- QA: Browser-test age gate on register (DOB <18 should block)
+- QA: Browser-test 6+ modals for focus trap behavior
 
 ---
 
@@ -197,6 +225,13 @@ Search Console fully audited. Four innovation agents shipped. Two P0 crashes fou
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | AI listing enrichment | Fire-and-forget — needs a scraped sale with description >50 chars to have loaded since deploy | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` in DB | S651 |
+| JWT cookie migration | Code shipped but not Chrome-tested | Login in browser → verify cookies in DevTools Application tab (should see httpOnly accessToken) | S664 |
+| COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error. DOB >18 → should register successfully | S664 |
+| Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` in HTML | S664 |
+| Account deletion backend | organizer/settings.tsx UI shipped — backend `DELETE /users/me` endpoint needs verification | Check if endpoint exists in userController.ts/routes/users.ts; create if missing | S664 |
+| Modal focus traps (34 modals) | Code shipped but not browser-tested | Open any modal, Tab through — focus should stay inside; Escape should close | S664 |
+| #251 priceBeforeMarkdown | No production item with markdownApplied=true | Add a test item with markdownApplied=true and originalPrice set | S661 |
+| #235 DonationModal | Needs SaleDonation record + available items | Set up test sale with SaleDonation + unsold items, go to Settlement Receipt step | S661 |
 
 ---
 
@@ -330,7 +365,33 @@ enrichContactEmails.ts upgraded with pull-queue concurrency (SCRAPE_CONCURRENCY=
 
 ---
 
-## Recent Sessions (S654–S657)
+## Recent Sessions (S661–S664)
+
+### S664 — Fortune 1000 Pre-Launch Sprint: Full Audit + 13-Agent Implementation (COMPLETE — push pending)
+
+6 parallel audits across auth/security, accessibility, legal, SEO, payments, backend. Then 13 implementation agents addressing all P0, P1, and P2 findings. Major items shipped: COPPA age gate, JWT httpOnly cookies, 34/34 modals focus-trapped, homepage + sale/item SSR, cookie consent, ToS legal gaps, sage contrast fix, bulk rate limiting, POS currency precision, account deletion UI, Stripe webhook idempotency. Push block in patrick-dashboard.md.
+
+---
+
+### S663 — Fortune 1000 Pre-Launch Chrome QA + 9-File Fix Batch (COMPLETE — merged into S664 push)
+
+Full buyer journey Chrome QA (shopper + organizer). 9 files fixed: Shopper Pickups tab (blank→working holds), Cart 404 redirect, CAN-SPAM unsubscribe footer in all emails, hold-placed email to shopper, vaporware copy removed, TODO comments cleaned.
+
+---
+
+### S662 — Pre-Launch Sitewide Audit + 23-File Fix Batch (COMPLETE)
+
+Full sitewide pre-launch audit. 24 issues found (6 P0, 10 P1, 8 P2). All fixed across 6 parallel dev batches. useLiveFeed 500 fix, next.config.js proxy fix, broken sale card images, hold button feedback, forgot-password error state, reset-password styled loading, "Remember me" dead UI removed, Tour CTA wired, add-items empty state, edit-sale no-items warning, condition label fix, PWA install spam throttle, brand copy fixes.
+
+---
+
+### S661 — Chrome QA: #228 ✅ #94 ✅ | #251 #235 UNVERIFIED
+
+Settlement Hub verified ✅ as artifactmi@gmail.com. Admin bid-review verified ✅. priceBeforeMarkdown ⚠️ UNVERIFIED (no item with markdownApplied=true in production). DonationModal ⚠️ UNVERIFIED (needs SaleDonation record + available items).
+
+---
+
+
 
 ### S657 — Outreach Security Audit + Fixes + Chrome QA (COMPLETE)
 

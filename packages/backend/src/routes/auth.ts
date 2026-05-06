@@ -3,6 +3,7 @@ import { register, login, oauthLogin, redeemInvite, verifyEmail } from '../contr
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { Resend } from 'resend';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
@@ -35,6 +36,24 @@ const forgotPasswordLimiter = rateLimit({
   message: { error: 'Too many password reset attempts. Please try again in an hour.' },
 });
 
+// L1: Login rate limiter — 5 attempts per 15 minutes per IP (P0-S2: COPPA compliance)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+});
+
+// L2: Register rate limiter — 3 attempts per hour per IP (P0-S2: COPPA compliance)
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many registration attempts.' },
+});
+
 let _resend: any = null;
 const getResend = () => {
   if (!_resend && process.env.RESEND_API_KEY) _resend = new Resend(process.env.RESEND_API_KEY);
@@ -43,8 +62,8 @@ const getResend = () => {
 
 const router = Router();
 
-router.post('/register', register);
-router.post('/login', login);
+router.post('/register', registerLimiter, register);
+router.post('/login', loginLimiter, login);
 router.post('/oauth', oauthLogin); // Phase 31: social login token exchange
 router.post('/redeem-invite', authenticate, redeemInvite); // Redeem beta invite for OAuth users
 router.post('/verify-email', verifyEmail); // Security: Email verification gate (P0)
@@ -165,6 +184,61 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     console.error('Reset password error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error.' });
   }
+});
+
+// P0 Security Fix: POST /auth/logout — clears both accessToken and refreshToken cookies
+router.post('/logout', (req: AuthRequest, res: Response) => {
+  res.clearCookie('accessToken', { path: '/' });
+  res.clearCookie('refreshToken', { path: '/auth/refresh' });
+  res.json({ message: 'Logged out' });
+});
+
+// P0 Security Fix: POST /auth/refresh — issues new access token using refresh token
+router.post('/refresh', (req: AuthRequest, res: Response) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'No refresh token' });
+    }
+
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return res.status(500).json({ error: 'JWT_SECRET not configured' });
+    }
+
+    const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || jwtSecret) as any;
+
+    const newAccessToken = jwt.sign(
+      {
+        id: payload.id,
+        email: payload.email,
+        role: payload.role,
+        roles: payload.roles || [payload.role],
+      },
+      jwtSecret,
+      { expiresIn: '15m' }
+    );
+
+    res.cookie('accessToken', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.json({ token: newAccessToken });
+  } catch (error) {
+    // Refresh token invalid or expired — clear both cookies and return 401
+    res.clearCookie('accessToken', { path: '/' });
+    res.clearCookie('refreshToken', { path: '/auth/refresh' });
+    return res.status(401).json({ error: 'Invalid or expired refresh token' });
+  }
+});
+
+// P0 Security Fix: GET /auth/me — returns current user from authenticated session (cookie or header)
+router.get('/me', authenticate, (req: AuthRequest, res: Response) => {
+  res.json({ user: req.user });
 });
 
 export default router;

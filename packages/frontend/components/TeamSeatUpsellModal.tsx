@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import AccessibleModal from './AccessibleModal';
 
 interface TeamSeatUpsellModalProps {
   isOpen: boolean;
@@ -65,11 +66,15 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="team-seat-upsell-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+          <h2 id="team-seat-upsell-modal-title" className="text-xl font-bold text-gray-900 dark:text-white">
             Team at Capacity
           </h2>
           <button
@@ -124,7 +129,7 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 

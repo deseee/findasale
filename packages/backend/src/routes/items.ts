@@ -36,7 +36,7 @@ import { prisma } from '../lib/prisma';
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
 import { accountAgeGate } from '../middleware/accountAgeGate'; // #93: Account age gate
 import { bidRateLimiter } from '../middleware/bidRateLimiter'; // #95: Bidding velocity limits
-import { itemEndpointLimiter } from '../middleware/rateLimiter'; // #111: Bot rate limiting
+import { itemEndpointLimiter, bulkItemsLimiter } from '../middleware/rateLimiter'; // #111: Bot rate limiting, P0-S3: Bulk operations rate limiting
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
@@ -123,7 +123,8 @@ router.get('/:id/similar', getSimilarItems);
 // Frontend (add-items.tsx) uses this for delete / status / category / price_adjust / isActive / price / tags.
 // All operations verify organizer ownership + status-safe constraints before mutating.
 // #65 Sprint 2: Gated to SIMPLE tier (paid) — publishing is a basic need for all organizers
-router.post('/bulk', authenticate, requireTier('SIMPLE'), async (req, res) => {
+// P0-S3: Apply bulk rate limiter (10 ops/hour per user)
+router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, async (req, res) => {
   try {
     const authReq = req as AuthRequest;
     const hasOrganizerRole = authReq.user?.roles?.includes('ORGANIZER') || authReq.user?.role === 'ORGANIZER';
@@ -784,7 +785,8 @@ router.delete('/:id/photos/:photoIndex', authenticate, removeItemPhoto);
 router.patch('/:id/photos/reorder', authenticate, reorderItemPhotos);
 
 // CSV import endpoint
-router.post('/:saleId/import-items', authenticate, upload.single('csv'), importItemsFromCSV);
+// P0-S3: Apply bulk rate limiter (10 ops/hour per user) to CSV import
+router.post('/:saleId/import-items', authenticate, bulkItemsLimiter, upload.single('csv'), importItemsFromCSV);
 
 // CD2 Phase 3: AI Price suggestions
 router.post('/ai/price-suggest', authenticate, async (req, res) => {

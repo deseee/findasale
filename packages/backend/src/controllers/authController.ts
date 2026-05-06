@@ -34,7 +34,7 @@ const isValidRedirectUri = (uri: string | null | undefined): boolean => {
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint } = req.body;
+    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint, dateOfBirth } = req.body;
 
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
     const email = rawEmail?.trim().toLowerCase();
@@ -77,6 +77,23 @@ export const register = async (req: Request, res: Response) => {
       }
     }
 
+    // P0-L1: COPPA Compliance — Age verification (18+ required)
+    if (!dateOfBirth) {
+      return res.status(400).json({ message: 'Date of birth is required.' });
+    }
+
+    try {
+      const dob = new Date(dateOfBirth);
+      const today = new Date();
+      const age = (today.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+
+      if (age < 18) {
+        return res.status(400).json({ message: 'You must be 18 or older to use FindA.Sale.' });
+      }
+    } catch (error) {
+      return res.status(400).json({ message: 'Invalid date of birth format.' });
+    }
+
     // Hash password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -110,6 +127,7 @@ export const register = async (req: Request, res: Response) => {
           deviceFingerprint: hashedFingerprint,
           emailVerified: false, // New accounts must verify email
           emailVerificationToken, // Store token for verification link
+          ageVerifiedAt: new Date(), // P0-L1: COPPA compliance — age verified at registration
         }
       });
 
@@ -399,7 +417,36 @@ export const register = async (req: Request, res: Response) => {
       { expiresIn: '7d' }
     );
 
-    // Return user without password
+    // P0 Security Fix: Set httpOnly cookies for secure token storage
+    const refreshToken = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        roles: userRoles,
+      },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    res.cookie('accessToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    // Return user without password. Still include token in body for backward compatibility during transition
     const { password: _, ...userWithoutPassword } = user;
     res.status(201).json({ user: userWithoutPassword, token });
   } catch (error) {
@@ -556,6 +603,35 @@ export const oauthLogin = async (req: Request, res: Response) => {
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
+
+    // P0 Security Fix: Set httpOnly cookies for secure token storage
+    const refreshToken = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        roles: userRoles,
+      },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    res.cookie('accessToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
 
     const { password: _, ...userWithoutPassword } = user;
 
@@ -734,7 +810,36 @@ export const login = async (req: Request, res: Response) => {
       { expiresIn: '7d' }
     );
 
-    // Return user without password
+    // P0 Security Fix: Set httpOnly cookies for secure token storage
+    const refreshToken = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        roles: userRoles,
+      },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    res.cookie('accessToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    // Return user without password. Still include token in body for backward compatibility during transition
     const { password: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword, token });
 
@@ -870,6 +975,35 @@ export const redeemInvite = async (req: Request, res: Response) => {
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
+
+    // P0 Security Fix: Set httpOnly cookies for secure token storage
+    const refreshToken = jwt.sign(
+      {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: 'ORGANIZER',
+        roles: userRoles,
+      },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    res.cookie('accessToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
 
     const { password: _, ...userWithoutPassword } = updatedUser;
 

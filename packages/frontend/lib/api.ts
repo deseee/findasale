@@ -5,6 +5,8 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // P0 Security Fix: Enable automatic cookie sending/receiving (httpOnly JWT)
+  withCredentials: true,
 });
 
 // Add a request interceptor to include the auth token and CSRF token
@@ -37,7 +39,26 @@ api.interceptors.request.use(
 // Add a response interceptor to handle auth errors and surface Zod validation messages
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config as any;
+
+    // P0 Security Fix: Auto-refresh expired access token using refresh token
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        // Call the refresh endpoint to get a new access token
+        await api.post('/auth/refresh');
+        // Retry the original request with the new cookie
+        return api(originalRequest);
+      } catch (refreshError) {
+        // Refresh failed — redirect to login
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(refreshError);
+      }
+    }
+
     // Public endpoints (like GET /api/items/:id) allow 401 to propagate — auth is optional for these routes.
     // Only redirect if the request was intended to be authenticated (indicated by presence of auth token).
     // Do NOT redirect from public item viewing — let the page gracefully handle unauthenticated state.

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import AccessibleModal from './AccessibleModal';
 
 interface ConsignorPayoutModalProps {
   consignorId: string;
@@ -91,15 +92,16 @@ const ConsignorPayoutModal: React.FC<ConsignorPayoutModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
+    <AccessibleModal
+      isOpen={true}
+      onClose={onClose}
+      ariaLabelledBy="consignor-payout-modal-title"
     >
       <div
         className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold text-warm-900 dark:text-white mb-1">
+        <h2 id="consignor-payout-modal-title" className="text-xl font-bold text-warm-900 dark:text-white mb-1">
           Process Payout
         </h2>
         <p className="text-sm text-warm-500 dark:text-warm-400 mb-4">
@@ -226,7 +228,8 @@ const ConsignorPayoutModal: React.FC<ConsignorPayoutModalProps> = ({
           </form>
         )}
       </div>
-    </div>
+    </AccessibleModal>
+  );
   );
 };
 

@@ -56,6 +56,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 import * as Sentry from '@sentry/node';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
@@ -399,6 +400,9 @@ app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 // JSON parser with 1 MB body size limit to prevent payload attacks
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// P0 Security Fix: Parse httpOnly cookies for JWT authentication
+app.use(cookieParser());
 
 // #104: CSRF protection — set token on all requests, validate on state-mutating routes
 app.use(csrfTokenCookie);

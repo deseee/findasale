@@ -6,6 +6,7 @@
  */
 
 import React, { useState } from 'react';
+import AccessibleModal from './AccessibleModal';
 
 interface BulkStatusModalProps {
   isOpen: boolean;
@@ -56,10 +57,14 @@ const BulkStatusModal: React.FC<BulkStatusModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="bulk-status-modal-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm mx-4 shadow-xl">
         {/* Header */}
-        <h3 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Set Status</h3>
+        <h3 id="bulk-status-modal-title" className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Set Status</h3>
 
         {/* Info */}
         <p className="text-warm-700 mb-4 text-sm">
@@ -120,7 +125,7 @@ const BulkStatusModal: React.FC<BulkStatusModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </AccessibleModal>
   );
 };
 
