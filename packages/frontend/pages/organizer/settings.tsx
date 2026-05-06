@@ -1827,7 +1827,7 @@ const OrganizerSettingsPage = () => {
                         link.setAttribute('download', `findasale-data-export-${new Date().toISOString().split('T')[0]}.json`);
                         document.body.appendChild(link);
                         link.click();
-                        link.parentChild?.removeChild(link);
+                        link.parentNode?.removeChild(link);
                         showToast('Data export downloaded successfully', 'success');
                       } catch (error: any) {
                         const msg = error.response?.data?.error || 'Failed to download data export';
