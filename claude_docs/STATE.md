@@ -4,7 +4,23 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S652 — CF Image Proxy End-to-End Verified (COMPLETE)**
+**Latest: S653 — Sitewide Image Proxy Audit + Security Hardening (COMPLETE)**
+
+Full sitewide audit of scraped photo proxy bypass. Root cause confirmed: `OrganizerSaleCard.tsx` was correctly using `getSaleImageUrl`, but the trending page rendered its own inline card with raw `sale.photoUrls[0]` — never going through the proxy. Fixed all 19 locations across the frontend. Also fixed trending algorithm pulling permanent retail businesses, three security vulnerabilities in the outreach system, and deprecated `onLoadingComplete` across all `<Image>` components.
+
+**Shipped:**
+- **Trending page broken images** — `trending.tsx` was using `src={sale.photoUrls[0]}` raw (no proxy). Added `getSaleImageUrl` import and wrapping. Root cause of the "A WHALE" and "Hammonton" broken images confirmed.
+- **P0/P1 public discovery pages** — `neighborhoods/[slug].tsx`, `CityRecentSales.tsx`, `CityTopFinds.tsx`, `index.tsx`, `categories/[category].tsx`, `sales/[id].tsx` item photos (was using Cloudinary-only `getOptimizedUrl` for eBay items) — all now proxied correctly.
+- **P2 logged-in account pages** (12 files) — `shopper/wishlist.tsx`, `profile.tsx`, `purchases/[id].tsx`, `shopper/bids.tsx`, `shopper/checkout-success.tsx`, `shopper/loot-legend.tsx`, `shopper/history.tsx`, `shopper/explorer-profile.tsx`, `shopper/early-access-cache/items.tsx`, `organizer/add-items/[saleId].tsx`, `organizer/sales/[id]/index.tsx`, `shopper/holds.tsx` — all item photoUrls now use `getItemImageUrl`.
+- **Trending algorithm** — `trendingController.ts`: added `endDate <= 90 days out` + `startDate <= 60 days out` filters. Permanent retail businesses (barber shop, Goodwill, consignment stores) had far-future end dates and were flooding "Hot Sales" due to RSVP tie at 0. First version also added `items: { some: {} }` which was too aggressive (scraped sales have no items in DB) — revised to endDate window only.
+- **Security P0s** — `outreach.ts`: removed `|| 'default-secret'` JWT fallback (now throws if `OUTREACH_SECRET` missing), added rate limiter (10/hr) to POST `/unsubscribe`. `outreachEmailsCron.ts`: removed base64-encoded email from tracking pixel ID (PII leak — email was visible in server logs and referrer headers).
+- **`onLoadingComplete` deprecation** — removed across all `<Image>` components (Next.js 14 deprecated; replaced with `onLoad`). Zero remaining instances.
+
+**Files changed (24):** `pages/trending.tsx`, `pages/neighborhoods/[slug].tsx`, `components/CityRecentSales.tsx`, `components/CityTopFinds.tsx`, `pages/index.tsx`, `pages/categories/[category].tsx`, `pages/sales/[id].tsx`, `next.config.js`, `components/OrganizerSaleCard.tsx`, `pages/shopper/wishlist.tsx`, `pages/profile.tsx`, `pages/purchases/[id].tsx`, `pages/shopper/bids.tsx`, `pages/shopper/checkout-success.tsx`, `pages/shopper/loot-legend.tsx`, `pages/shopper/history.tsx`, `pages/shopper/explorer-profile.tsx`, `pages/shopper/early-access-cache/items.tsx`, `pages/organizer/add-items/[saleId].tsx`, `pages/organizer/sales/[id]/index.tsx`, `pages/shopper/holds.tsx`, `backend/controllers/trendingController.ts`, `backend/routes/outreach.ts`, `backend/jobs/outreachEmailsCron.ts`
+
+---
+
+**Previous: S652 — CF Image Proxy End-to-End Verified (COMPLETE)**
 
 ESN scraped sale photos now load on both browse and detail pages. Root cause of detail page failure was the PWA service worker intercepting requests to `findasale-image-proxy.findasale.workers.dev` and failing silently (same pattern as the documented i.ebayimg.com issue). Fixed by excluding the CF Worker domain from the SW catch-all rule in `next.config.js`. Verified in Chrome with new SW active: main gallery + all 5 thumbnails rendering on the Dudley Donahue Estate auction detail page.
 
@@ -232,6 +248,17 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 | CategoryTopFinds TrendingSection | Cron runs at 05:00 UTC — no data until first run | QA after first nightly run; verify TrendingSection renders on a `/categories/[category]` page with real eBay data | S647 |
 | Outreach pipeline open/click tracking | Can't verify pixel + click routes without real sends | Verify after `OUTREACH_ENABLED=true` + first cron run: check Railway logs for send attempt, confirm tracking pixel route returns 200 | S647 |
 | suppressOffTargetOrganizers cleanup | Dry-run shows ~400+ records (after false-positive fixes) — not yet executed | Run dry-run in new session, confirm examples look clean, execute with CONFIRM=true | S648 |
+
+---
+
+## Next Session — S654
+
+**First action:** Verify S653 push landed. Check Vercel deploy — confirm trending page photos load and Hot Sales no longer shows barber shops/Goodwill.
+
+**Recommended work:**
+- Chrome QA: `/trending` (photos loading, Hot Sales content quality), `/neighborhoods/[slug]`, homepage widgets (CityRecentSales, CityTopFinds) — verify proxied photos render
+- Recipient preview audit (still in Blocked/Unverified Queue from S650) — sample organizer pages from each ingest source, screenshot what cold outreach recipients will see
+- `suppressOffTargetOrganizers` dry-run — ~400+ records flagged, not yet executed
 
 ---
 

@@ -1,4 +1,43 @@
-# Patrick's Dashboard — May 5, 2026 (S652 wrap)
+# Patrick's Dashboard — May 5, 2026 (S653 wrap)
+
+---
+
+## S653 — Sitewide Image Proxy + Security Hardening. 24 files.
+
+Full sitewide audit of the CF proxy bypass gap. Every page that showed scraped photos raw is now fixed. Trending data quality also fixed. Three security vulnerabilities in the outreach system patched.
+
+**What shipped:**
+
+- **Trending broken images** — root cause was the trending page rendering its own inline card with raw ESN URLs (not using OrganizerSaleCard). Fixed.
+- **19 total image locations** across public discovery pages, sale detail page, and all logged-in account pages — all scraped/eBay photos now route through CF proxy.
+- **Trending algorithm** — barber shop, Goodwill, Candy Shop no longer show as "#1 HOT". Now requires `endDate <= 90 days` + `startDate <= 60 days` — real sale events only.
+- **Security P0s** — JWT secret no longer has `|| 'default-secret'` fallback (would've let anyone forge unsubscribe tokens if env var ever went missing). Rate limiter on POST unsubscribe. Email removed from tracking pixel ID (was leaking PII in server logs).
+- **`onLoadingComplete` deprecation** — fully purged from the codebase.
+
+**Push block (add to the S653 commit you already have, or run as separate commit):**
+```powershell
+git add packages/frontend/pages/shopper/wishlist.tsx
+git add packages/frontend/pages/profile.tsx
+git add "packages/frontend/pages/purchases/[id].tsx"
+git add packages/frontend/pages/shopper/bids.tsx
+git add packages/frontend/pages/shopper/checkout-success.tsx
+git add packages/frontend/pages/shopper/loot-legend.tsx
+git add packages/frontend/pages/shopper/history.tsx
+git add packages/frontend/pages/shopper/explorer-profile.tsx
+git add "packages/frontend/pages/shopper/early-access-cache/items.tsx"
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add "packages/frontend/pages/organizer/sales/[id]/index.tsx"
+git add packages/frontend/pages/shopper/holds.tsx
+git add packages/frontend/components/OrganizerSaleCard.tsx
+git add packages/backend/src/routes/outreach.ts
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(images): proxy scraped photos on all account pages | fix(security): remove default-secret, add rate limit, remove PII from pixel | fix(onLoad): deprecation | wrap S653"
+.\push.ps1
+```
+
+*(The trending + public discovery files from earlier in the session go in the commit before this one — see push block above.)*
 
 ---
 
