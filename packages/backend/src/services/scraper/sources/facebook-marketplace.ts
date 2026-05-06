@@ -7,7 +7,7 @@
 import axios from 'axios';
 import { RateLimiter } from '../rateLimiter';
 import { ingestScrapedListing, ScrapedItem } from '../index';
-import { jitterDelay } from '../userAgents';
+import { jitterDelay, getRandomUserAgent, getRandomReferer } from '../userAgents';
 
 const FB_GRAPHQL_ENDPOINT = 'https://www.facebook.com/api/graphql/';
 const FB_DOC_ID = '7111939778879383';
@@ -252,11 +252,11 @@ export async function scrapeFacebookMarketplace(
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
               'sec-fetch-site': 'same-origin',
-              'User-Agent':
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.74 Safari/537.36',
+              'User-Agent': getRandomUserAgent(),
               'Accept': '*/*',
               'Origin': 'https://www.facebook.com',
-              'Referer': 'https://www.facebook.com/marketplace/',
+              'Referer': getRandomReferer() || 'https://www.facebook.com/marketplace/',
+              'Accept-Encoding': 'gzip, deflate, br',
             },
             timeout: 20000,
           }

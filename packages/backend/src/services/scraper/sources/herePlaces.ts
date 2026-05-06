@@ -12,6 +12,7 @@
 
 import { ScrapedItem } from '../index';
 import { PLACES_QUERIES, GOOGLE_PLACES_METROS } from './googlePlaces';
+import { getRandomUserAgent } from '../userAgents';
 
 const HERE_API_BASE = 'https://discover.search.hereapi.com/v1/discover';
 const MAX_PAGES = 2;
@@ -74,7 +75,10 @@ async function fetchHEREPage(
     url.searchParams.set('offset', String(offset));
     url.searchParams.set('apiKey', apiKey);
 
-    const response = await fetch(url.toString(), { signal: AbortSignal.timeout(12000) });
+    const response = await fetch(url.toString(), {
+      signal: AbortSignal.timeout(12000),
+      headers: { 'User-Agent': getRandomUserAgent() },
+    });
     if (!response.ok) return null;
     return (await response.json()) as HEREDiscoverResponse;
   } catch {
@@ -113,7 +117,10 @@ async function geocodeWithHERE(location: string, apiKey: string): Promise<{ lat:
   }
   try {
     const url = `https://geocode.search.hereapi.com/v1/geocode?q=${encodeURIComponent(location)}&apiKey=${apiKey}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+      headers: { 'User-Agent': getRandomUserAgent() },
+    });
     if (!response.ok) {
       geocodeCache.set(location, null);
       return null;

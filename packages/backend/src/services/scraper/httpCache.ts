@@ -11,6 +11,8 @@
 
 import { prisma } from '../../lib/prisma';
 
+const DEBUG = process.env.LOG_LEVEL === 'debug';
+
 interface HttpCacheHeaders {
   etag?: string;
   lastModified?: string;
@@ -42,7 +44,7 @@ export async function getCachedHeaders(saleId: string): Promise<HttpCacheHeaders
 
     return httpCache || {};
   } catch (error) {
-    console.warn(`[HttpCache] Failed to read cached headers for sale ${saleId}:`, error);
+    if (DEBUG) console.warn(`[HttpCache] Failed to read cached headers for sale ${saleId}:`, error);
     return {};
   }
 }
@@ -75,7 +77,7 @@ export async function setCachedHeaders(
       data: { scrapedMetadata: updatedMetadata },
     });
   } catch (error) {
-    console.warn(`[HttpCache] Failed to cache headers for sale ${saleId}:`, error);
+    if (DEBUG) console.warn(`[HttpCache] Failed to cache headers for sale ${saleId}:`, error);
     // Non-fatal: cache write failure should not block enrichment
   }
 }
@@ -150,7 +152,7 @@ export async function fetchWithConditionalHeaders(
       statusCode: response.status,
     };
   } catch (error) {
-    console.warn(`[HttpCache] Fetch error for ${url}:`, error);
+    if (DEBUG) console.warn(`[HttpCache] Fetch error:`, error);
     throw error;
   }
 }

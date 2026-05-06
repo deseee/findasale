@@ -6,6 +6,8 @@
 import { prisma } from '../../lib/prisma';
 import { getRandomUserAgent, getRandomReferer } from './userAgents';
 
+const DEBUG = process.env.LOG_LEVEL === 'debug';
+
 // In-memory cache for Google Place lookups — 30-day TTL
 const placeIdCache = new Map<string, { placeId: string; cachedAt: number }>();
 const PLACE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -56,7 +58,7 @@ export async function enrichOrganizer(
 
     // Skip only if fully enriched: Google lookup done, no ESN data pending, contact email found
     if (organizer.googlePlaceId && !organizer.esnOrgId && organizer.contactEmail) {
-      console.info(`[Enrichment] Already fully enriched — skipping: ${organizerId}`);
+      if (DEBUG) console.info(`[Enrichment] Already fully enriched — skipping: ${organizerId}`);
       return;
     }
 
@@ -117,7 +119,7 @@ export async function enrichOrganizer(
           select: { id: true },
         });
         if (alreadyOwned) {
-          console.info(`[Enrichment] googlePlaceId ${placeId} already owned by ${alreadyOwned.id} — skipping for ${organizerId}`);
+          if (DEBUG) console.info(`[Enrichment] googlePlaceId ${placeId} already owned by ${alreadyOwned.id} — skipping for ${organizerId}`);
         } else {
           updateData.googlePlaceId = placeId;
         }
@@ -167,11 +169,11 @@ export async function enrichOrganizer(
         where: { id: organizerId },
         data: updateData,
       });
-      console.info(
+      if (DEBUG) console.info(
         `[Enrichment] Updated organizer ${organizerId}: ${Object.keys(updateData).join(', ')}`
       );
     } else {
-      console.info(`[Enrichment] No enrichment data found for ${organizerId}`);
+      if (DEBUG) console.info(`[Enrichment] No enrichment data found for ${organizerId}`);
     }
   } catch (error) {
     console.error(
