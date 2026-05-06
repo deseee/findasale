@@ -130,7 +130,7 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
               className={`object-cover transition-opacity duration-300 ${
                 imgLoaded ? 'opacity-100' : 'opacity-0'
               }`}
-              onLoadingComplete={() => setImgLoaded(true)}
+              onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
               loading="lazy"
               priority={false}

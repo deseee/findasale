@@ -17,6 +17,7 @@ import EmptyState from '../../components/EmptyState';
 import { useFollows } from '../../hooks/useFollows';
 import { useToast } from '../../components/ToastContext';
 import WishlistAlertForm from '../../components/WishlistAlertForm';
+import { getItemImageUrl } from '../../lib/imageUtils';
 
 interface FavoriteItem {
   id: string;
@@ -247,7 +248,7 @@ const WishlistPage = () => {
                             {item.photoUrls?.[0] ? (
                               <img
                                 key={item.photoUrls[0]}
-                                src={item.photoUrls[0]}
+                                src={getItemImageUrl(item.photoUrls[0]) ?? item.photoUrls[0]}
                                 alt={item.title}
                                 className="w-20 h-20 object-cover rounded-lg flex-shrink-0 bg-warm-100 dark:bg-gray-700"
                               />
@@ -328,7 +329,7 @@ const WishlistPage = () => {
                                   {wItem.item.photoUrls?.[0] ? (
                                     <img
                                       key={wItem.item.photoUrls[0]}
-                                      src={wItem.item.photoUrls[0]}
+                                      src={getItemImageUrl(wItem.item.photoUrls[0]) ?? wItem.item.photoUrls[0]}
                                       alt={wItem.item.title}
                                       className="w-full h-24 object-cover bg-warm-100 dark:bg-gray-700 group-hover:opacity-80 transition-opacity"
                                     />
