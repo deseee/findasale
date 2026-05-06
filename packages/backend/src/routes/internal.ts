@@ -13,6 +13,7 @@ import {
   bulkUpsertEnrichedSales,
 } from '../controllers/internalSaleDetailEnrichmentController';
 import { sendOutreachEmails } from '../jobs/outreachEmailsCron';
+import { runCategorySync } from '../jobs/categorySyncCron';
 
 const router = express.Router();
 
@@ -42,6 +43,16 @@ router.get('/enrich-sale-details/unenriched', getBatchOfUnenrichedSales);
 
 // POST /api/internal/enrich-sale-details/bulk-upsert — bulk upsert enriched sale details
 router.post('/enrich-sale-details/bulk-upsert', bulkUpsertEnrichedSales);
+
+// POST /api/internal/category-sync/trigger — manually trigger eBay category sync (public eBay data, no auth required)
+router.post('/category-sync/trigger', async (req: express.Request, res: express.Response) => {
+  try {
+    runCategorySync().catch(err => console.error('[CategorySync] Trigger error:', err));
+    res.json({ ok: true, message: 'Category sync started' });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // POST /api/internal/outreach/trigger — manually trigger outreach email batch (protected)
 router.post('/outreach/trigger', requireSecret, async (req: express.Request, res: express.Response) => {
