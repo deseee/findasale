@@ -6,6 +6,7 @@ import { getVisionLabels } from '../services/cloudAIService';
 import { upload } from '../controllers/uploadController';
 import { searchItems } from '../services/itemSearchService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
+import { searchLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 

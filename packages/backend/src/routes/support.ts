@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { supportChatLimiter } from '../middleware/rateLimiter';
 import { postSupportChat, getFAQCategory } from '../controllers/supportController';
 
 const router = Router();
