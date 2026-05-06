@@ -124,10 +124,6 @@ const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
       onClose={onClose}
       ariaLabelledBy="quick-picker-task-modal-title"
     >
-      ) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
