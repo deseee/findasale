@@ -684,6 +684,159 @@ export const getUserQRData = async (req: Request, res: Response) => {
   }
 };
 
+export const exportMyData = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Check rate limit: 24h between exports
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { lastExportAt: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.lastExportAt) {
+      const hoursSinceLastExport = (Date.now() - user.lastExportAt.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceLastExport < 24) {
+        return res.status(429).json({
+          error: 'Data export only available once every 24 hours',
+          nextAvailableAt: new Date(user.lastExportAt.getTime() + 24 * 60 * 60 * 1000),
+        });
+      }
+    }
+
+    // Fetch all user data
+    const userData = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        role: true,
+        roles: true,
+        createdAt: true,
+        updatedAt: true,
+        referralCode: true,
+        categoryInterests: true,
+        organizerCredits: true,
+        guildXp: true,
+        explorerRank: true,
+        streakPoints: true,
+        visitStreak: true,
+        profileSlug: true,
+        purchasesVisible: true,
+      },
+    });
+
+    const [sales, items, bids, purchases, favorites, notifications] = await Promise.all([
+      prisma.sale.findMany({
+        where: { organizerId: req.user.id },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          startDate: true,
+          endDate: true,
+          address: true,
+          city: true,
+          state: true,
+          zip: true,
+          createdAt: true,
+        },
+        take: 1000,
+      }),
+      prisma.item.findMany({
+        where: { sale: { organizerId: req.user.id } },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          category: true,
+          price: true,
+          condition: true,
+          createdAt: true,
+        },
+        take: 1000,
+      }),
+      prisma.bid.findMany({
+        where: { userId: req.user.id },
+        select: {
+          id: true,
+          amount: true,
+          itemId: true,
+          status: true,
+          createdAt: true,
+        },
+        take: 1000,
+      }),
+      prisma.purchase.findMany({
+        where: { userId: req.user.id },
+        select: {
+          id: true,
+          itemId: true,
+          saleId: true,
+          amount: true,
+          status: true,
+          createdAt: true,
+        },
+        take: 1000,
+      }),
+      prisma.favorite.findMany({
+        where: { userId: req.user.id },
+        select: {
+          id: true,
+          saleId: true,
+          createdAt: true,
+        },
+        take: 1000,
+      }),
+      prisma.notification.findMany({
+        where: { userId: req.user.id },
+        select: {
+          id: true,
+          title: true,
+          body: true,
+          type: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+    ]);
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      userProfile: userData,
+      organizedSales: sales,
+      itemsListed: items,
+      bids: bids,
+      purchases: purchases,
+      favorites: favorites,
+      notifications: notifications,
+    };
+
+    // Update lastExportAt
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { lastExportAt: new Date() },
+    });
+
+    // Return as downloadable JSON file
+    res.setHeader('Content-Disposition', `attachment; filename="findasale-data-export-${req.user.id}.json"`);
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(exportData, null, 2));
+  } catch (error) {
+    console.error('Error exporting user data:', error);
+    res.status(500).json({ message: 'Server error while exporting data' });
+  }
+};
+
 export const deleteAccount = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {

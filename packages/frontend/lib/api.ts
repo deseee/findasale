@@ -9,16 +9,11 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Add a request interceptor to include the auth token and CSRF token
+// Add a request interceptor to include CSRF token
+// P0 Security Fix: JWT now comes from httpOnly cookie, no longer from localStorage
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
-      // #1: Include JWT bearer token for authentication
-      const token = localStorage.getItem('token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-
       // #104: CSRF Protection - include CSRF token from cookie in header for state-mutating requests
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(config.method?.toUpperCase() || '')) {
         const csrfToken = document.cookie

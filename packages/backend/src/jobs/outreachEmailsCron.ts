@@ -181,7 +181,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
         const videoLink = `${frontendUrl}/video`;
         const unsubscribeLink = `${backendUrl}/api/outreach/unsubscribe?token=${trackingToken}`;
         const trackingPixelUrl = `${backendUrl}/api/outreach/pixel?trackingId=${trackingPixelId}`;
-        const physicalAddress = process.env.OUTREACH_PHYSICAL_ADDRESS || '123 Main St, Grand Rapids, MI 49503';
+        const physicalAddress = process.env.OUTREACH_PHYSICAL_ADDRESS || '219 E Michigan Ave, Suite F, Paw Paw, MI 49079';
 
         const html = renderTemplate(template.html, {
           'Business Name': escapeHtml(record.organizer.businessName || 'Your Business'),

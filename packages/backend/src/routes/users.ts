@@ -8,7 +8,8 @@ import {
   getBadges,
   activateHuntPassTrial,
   getUserQRData,
-  deleteAccount
+  deleteAccount,
+  exportMyData
 } from '../controllers/userController';
 import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controllers/brandFollowController';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -105,6 +106,31 @@ router.get('/xp-status', authenticate, async (req: AuthRequest, res: Response) =
 });
 
 router.get('/leaderboard', getLeaderboard);
+
+// GDPR Article 20: Data Export
+router.get('/me/export', authenticate, exportMyData);
+
+// CCPA Opt-Out
+router.post('/me/do-not-sell', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { ccpaOptOut: true },
+    });
+
+    res.json({
+      success: true,
+      message: 'Your preference has been recorded.',
+    });
+  } catch (error) {
+    console.error('Error setting CCPA opt-out:', error);
+    res.status(500).json({ message: 'Server error while recording your preference' });
+  }
+});
 
 // Public endpoint: Shopper QR code data for POS scanning
 // Must come before /:id catch-all to avoid route stealing

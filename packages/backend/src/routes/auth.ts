@@ -36,6 +36,25 @@ const forgotPasswordLimiter = rateLimit({
   message: { error: 'Too many password reset attempts. Please try again in an hour.' },
 });
 
+// P0 Security Fix Item 4: Rate limit for reset-password endpoint (per token, 5 attempts)
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  keyGenerator: (req) => `reset:${req.body?.token || req.params?.token || 'unknown'}:${req.ip}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many reset attempts. Please request a new reset link.' },
+});
+
+// P0 Security Fix Item 5: Email verification resend rate limiter (3 requests/hour/IP)
+const verifyEmailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification requests. Please try again in an hour.' },
+});
+
 // L1: Login rate limiter — 5 attempts per 15 minutes per IP (P0-S2: COPPA compliance)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -67,6 +86,63 @@ router.post('/login', loginLimiter, login);
 router.post('/oauth', oauthLogin); // Phase 31: social login token exchange
 router.post('/redeem-invite', authenticate, redeemInvite); // Redeem beta invite for OAuth users
 router.post('/verify-email', verifyEmail); // Security: Email verification gate (P0)
+router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res: Response) => {
+  // P0 Security Fix Item 5: Email verification resend endpoint with enumeration prevention
+  try {
+    const { email: rawEmail } = req.body;
+    const email = rawEmail?.trim().toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    // Generic response regardless of whether email exists (prevents enumeration)
+    const genericResponse = { message: 'If that email exists and hasn\'t been verified, a verification link has been sent.' };
+
+    if (!user) {
+      return res.json(genericResponse);
+    }
+
+    // If email is already verified, also return generic response
+    if (user.emailVerified) {
+      return res.json(genericResponse);
+    }
+
+    // Send verification email
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const verifyUrl = `${frontendUrl}/verify-email?token=${user.emailVerificationToken}`;
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+    const resend = getResend();
+
+    if (resend && user.emailVerificationToken) {
+      try {
+        await resend.emails.send({
+          from: fromEmail,
+          to: email,
+          subject: 'Verify your FindA.Sale email address',
+          html: `
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
+              <h2 style="color:#2563eb;">Verify your email</h2>
+              <p>Click the button below to verify your email address and complete your FindA.Sale account setup.</p>
+              <a href="${verifyUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin:16px 0;">Verify Email</a>
+              <p style="color:#6b7280;font-size:13px;">This link will expire in 24 hours.</p>
+              <p style="color:#6b7280;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+            </div>
+          `,
+        });
+      } catch (emailError) {
+        console.error('[Email Verification Resend] Failed to send email:', emailError);
+      }
+    }
+
+    res.json(genericResponse);
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    res.status(500).json({ message: 'Server error processing your request' });
+  }
+});
 router.post('/oauth-verify-age', authenticate, oauthVerifyAge); // P0-L1: COPPA compliance — OAuth age verification
 
 // Change password — requires current password for verification
@@ -91,6 +167,10 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
       where: { id: req.user.id },
       data: { password: hashed, tokenVersion: { increment: 1 } }
     });
+
+    // P0 Security Fix Item 3: Clear access and refresh cookies on password change
+    res.clearCookie('accessToken', { httpOnly: true, secure: true, sameSite: 'strict', path: '/' });
+    res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'strict', path: '/' });
 
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
@@ -120,6 +200,10 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
       data: { resetToken: token, resetTokenExpiry: expiry },
     });
 
+    // P0 Security Fix Item 6: Include IP and User-Agent context in password reset email
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
@@ -137,6 +221,8 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
             <a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin:16px 0;">Reset Password</a>
             <p style="color:#6b7280;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
             <p style="color:#9ca3af;font-size:12px;">Link expires: ${expiry.toUTCString()}</p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;">
+            <p style="color:#9ca3af;font-size:11px;">For your security, this request was made from IP <code>${clientIp}</code> using <code>${userAgent.substring(0, 60)}...</code>. If this wasn't you, you can ignore this email and your password will remain unchanged.</p>
           </div>
         `,
       });
@@ -154,8 +240,8 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
   }
 });
 
-// POST /api/auth/reset-password — verify token and set new password
-router.post('/reset-password', async (req: Request, res: Response) => {
+// POST /api/auth/reset-password — verify token and set new password (with rate limiting)
+router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: Response) => {
   try {
     const validatedData = resetPasswordSchema.parse(req.body);
     const { token, newPassword } = validatedData;
@@ -222,7 +308,7 @@ router.post('/refresh', (req: AuthRequest, res: Response) => {
 
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/',
       maxAge: 15 * 60 * 1000, // 15 minutes

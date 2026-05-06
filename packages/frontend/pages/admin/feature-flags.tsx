@@ -26,7 +26,7 @@ const SUGGESTED_FLAGS = [
   },
   {
     key: 'ai_camera_enabled',
-    description: 'Enable AI camera tagging',
+    description: 'Enable Smart camera tagging',
   },
   {
     key: 'vision_api_enabled',

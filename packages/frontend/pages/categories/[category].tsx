@@ -151,6 +151,7 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>{label} — FindA.Sale</title>
+        <link rel="canonical" href={`https://finda.sale/categories/${category}`} />
         <meta
           name="description"
           content={`Browse ${label} items from estate sales, auctions, yard sales, and consignment near you. New listings added daily.`}

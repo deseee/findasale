@@ -1944,4 +1944,58 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
   }
 });
 
+// Feature #361: GET /claim/verify/:token — verify claim request email
+router.get('/claim/verify/:token', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Invalid or expired verification link' });
+    }
+
+    // Look up ClaimRequest by verificationToken
+    const claimRequest = await prisma.claimRequest.findFirst({
+      where: { verificationToken: token },
+      include: {
+        organizer: {
+          select: { id: true, businessName: true, user: { select: { email: true } } },
+        },
+      },
+    });
+
+    if (!claimRequest) {
+      return res.status(400).json({ error: 'Invalid or expired verification link' });
+    }
+
+    // Check if expired (>24h)
+    const createdAt = new Date(claimRequest.createdAt);
+    const now = new Date();
+    const hoursAgo = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+    if (hoursAgo > 24) {
+      return res.status(400).json({ error: 'Invalid or expired verification link' });
+    }
+
+    // Mark as verified
+    const updated = await prisma.claimRequest.update({
+      where: { id: claimRequest.id },
+      data: {
+        status: 'VERIFIED',
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    res.json({
+      message: 'Claim verified',
+      organizer: {
+        id: claimRequest.organizer.id,
+        name: claimRequest.organizer.businessName,
+        email: claimRequest.organizer.user?.email || claimRequest.claimantEmail,
+      },
+    });
+  } catch (error) {
+    console.error('Error verifying claim request:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 export default router;

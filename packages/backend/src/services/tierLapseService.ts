@@ -174,14 +174,41 @@ export async function queueTierLapseWarnings() {
 
 /**
  * Batch process: Check all lapsed subscriptions and downgrade to SIMPLE
+ * Applies grace period: only downgrade if failure/lapse was at least TIER_GRACE_DAYS ago
  * (Also mark for notification email)
  */
 export async function processBatchTierLapses() {
   const lapsed = await getLapsedSubscriptions();
 
+  // Grace period: wait N days before downgrading (default 7)
+  const GRACE_DAYS = parseInt(process.env.TIER_GRACE_DAYS || '7', 10);
+  const gracePeriodMs = GRACE_DAYS * 24 * 60 * 60 * 1000;
+  const now = new Date();
+
   const results = [];
   for (const sub of lapsed) {
     try {
+      // Check if grace period has elapsed
+      // tierLapseWarning is set when we first detect the lapse, so use that timestamp
+      const lapsedAt = sub.tierLapseWarning || sub.trialEndsAt || new Date();
+      const timeSinceLapse = now.getTime() - new Date(lapsedAt).getTime();
+
+      if (timeSinceLapse < gracePeriodMs) {
+        // Grace period still active — skip downgrade for now
+        console.log(
+          `[tierLapse] Grace period active for ${sub.user.email}: ${Math.ceil((gracePeriodMs - timeSinceLapse) / (24 * 60 * 60 * 1000))} days remaining`
+        );
+        results.push({
+          status: 'grace_active',
+          subscriptionId: sub.id,
+          userId: sub.userId,
+          email: sub.user.email,
+          daysRemaining: Math.ceil((gracePeriodMs - timeSinceLapse) / (24 * 60 * 60 * 1000)),
+        });
+        continue;
+      }
+
+      // Grace period expired — proceed with downgrade
       const updated = await processTierLapse(sub.id);
       results.push({
         status: 'success',

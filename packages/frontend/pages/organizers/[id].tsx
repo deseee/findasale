@@ -142,6 +142,7 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>{organizer.businessName} – FindA.Sale</title>
+        <link rel="canonical" href={`https://finda.sale/organizers/${organizer.id}`} />
         <meta name="description" content={`Browse upcoming estate sales, auctions, yard sales, and more from ${organizer.businessName}${locationSuffix} — FindA.Sale.`} />
         <meta property="og:title" content={`${organizer.businessName} | FindA.Sale`} />
         <meta property="og:image" content="https://finda.sale/og-image.png" />

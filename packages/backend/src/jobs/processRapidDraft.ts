@@ -156,25 +156,63 @@ export async function processRapidDraft(itemId: string): Promise<void> {
 
       // Success: Update item with AI tags and set to PENDING_REVIEW
       // D-006: Respect organizer-edited fields — do NOT overwrite fields in userEditedFields array
+      // S624 Camera Debounce Race Fix: Use optimistic lock to detect if organizer edited while AI was processing
       const userEdited = item.userEditedFields || [];
-      await prisma.item.update({
-        where: { id: itemId },
-        data: {
-          title: !userEdited.includes('title') ? (aiResult.title || item.title) : item.title,
-          description: !userEdited.includes('description') ? (aiResult.description || item.description) : item.description,
-          category: !userEdited.includes('category') ? (aiResult.category || item.category) : item.category,
-          condition: !userEdited.includes('condition') ? (aiResult.condition || item.condition) : item.condition,
-          brand: !userEdited.includes('brand') ? (aiResult.brand || item.brand) : item.brand,
-          conditionGrade: aiResult.suggestedConditionGrade || item.conditionGrade,
-          price: !userEdited.includes('price') ? (refinedPrice ?? item.price) : item.price,
-          tags: aiResult.tags || [],
-          isAiTagged: true,
-          aiConfidence: aiResult.confidence ?? 0.5,
-          draftStatus: 'PENDING_REVIEW'
-        }
+      const snapshotUpdatedAt = item.updatedAt;
+
+      const updateData = {
+        title: !userEdited.includes('title') ? (aiResult.title || item.title) : item.title,
+        description: !userEdited.includes('description') ? (aiResult.description || item.description) : item.description,
+        category: !userEdited.includes('category') ? (aiResult.category || item.category) : item.category,
+        condition: !userEdited.includes('condition') ? (aiResult.condition || item.condition) : item.condition,
+        brand: !userEdited.includes('brand') ? (aiResult.brand || item.brand) : item.brand,
+        conditionGrade: aiResult.suggestedConditionGrade || item.conditionGrade,
+        price: !userEdited.includes('price') ? (refinedPrice ?? item.price) : item.price,
+        tags: aiResult.tags || [],
+        isAiTagged: true,
+        aiConfidence: aiResult.confidence ?? 0.5,
+        draftStatus: 'PENDING_REVIEW' as const,
+      };
+
+      // Optimistic lock: include updatedAt in where clause to detect concurrent edits
+      const result = await prisma.item.updateMany({
+        where: { id: itemId, updatedAt: snapshotUpdatedAt },
+        data: updateData,
       });
 
-      console.log(`[rapidfire] Item ${itemId} processed successfully. Status: PENDING_REVIEW`);
+      if (result.count === 0) {
+        // Optimistic lock failed — organizer edited item while AI was processing
+        // Re-fetch organizer's current values and merge intelligently
+        console.log(`[rapidfire] Optimistic lock failed for item ${itemId} — organizer edited while AI was processing`);
+        const freshItem = await prisma.item.findUnique({ where: { id: itemId } });
+        if (freshItem) {
+          // Build merged update: only apply AI suggestions where organizer hasn't set a value
+          const mergedData: Record<string, unknown> = {};
+          for (const [key, aiValue] of Object.entries(updateData)) {
+            // Only use AI value if organizer's current value is null/empty/default
+            const freshValue = freshItem[key as keyof typeof freshItem];
+            // Skip if organizer has explicitly edited this field
+            if (!freshItem.userEditedFields?.includes(key as string)) {
+              // Use AI value only if fresh item's value is falsy (null, empty string, default)
+              if (!freshValue) {
+                mergedData[key] = aiValue;
+              }
+            }
+          }
+          // Always set draftStatus to PENDING_REVIEW regardless
+          mergedData.draftStatus = 'PENDING_REVIEW';
+
+          if (Object.keys(mergedData).length > 0) {
+            await prisma.item.update({
+              where: { id: itemId },
+              data: mergedData,
+            });
+            console.log(`[rapidfire] Item ${itemId} merged after race condition. Applied ${Object.keys(mergedData).length} AI suggestions (organizer values preserved).`);
+          }
+        }
+      } else {
+        console.log(`[rapidfire] Item ${itemId} processed successfully. Status: PENDING_REVIEW`);
+      }
     } catch (aiError) {
       // AI processing failed — log error to aiErrorLog, keep DRAFT status
       const errorMessage = aiError instanceof Error ? aiError.message : String(aiError);

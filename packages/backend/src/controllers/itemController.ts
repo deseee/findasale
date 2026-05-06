@@ -3,6 +3,7 @@ import { parse } from 'csv-parse';
 import { AuthRequest } from '../middleware/auth';
 import { Readable } from 'stream';
 import { prisma } from '../index';
+import { v2 as cloudinary } from 'cloudinary';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ItemRarity } from '@prisma/client';
 import axios from 'axios';
@@ -1049,6 +1050,34 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
+    // Cleanup Cloudinary images before deleting item from DB
+    if (item.photoUrls && item.photoUrls.length > 0) {
+      const cloudinaryPublicIds: string[] = [];
+
+      for (const photoUrl of item.photoUrls) {
+        try {
+          // Extract public_id from Cloudinary URL
+          // Format: https://res.cloudinary.com/{cloud}/image/upload/v{version}/{public_id}.{ext}
+          const match = photoUrl.match(/\/upload\/v\d+\/(.+?)\./);
+          if (match && match[1]) {
+            cloudinaryPublicIds.push(match[1]);
+          }
+        } catch (err) {
+          console.error('Error extracting Cloudinary public_id:', err);
+        }
+      }
+
+      // Delete images from Cloudinary
+      for (const publicId of cloudinaryPublicIds) {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (err) {
+          // Log error but don't fail deletion — cleanup is best-effort
+          console.error(`Error deleting Cloudinary image ${publicId}:`, err);
+        }
+      }
+    }
+
     await prisma.item.delete({
       where: { id }
     });
@@ -1179,9 +1208,18 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'You cannot bid on your own items' });
     }
 
-    // Validate bid amount
-    if (!maxBidAmount || maxBidAmount <= 0) {
-      return res.status(400).json({ message: 'Invalid bid amount' });
+    // Validate bid amount: must be positive number
+    if (!maxBidAmount || typeof maxBidAmount !== 'number' || maxBidAmount <= 0) {
+      return res.status(400).json({ error: 'Bid amount must be a positive number.' });
+    }
+
+    // Ensure bid meets current high bid (if one exists)
+    const currentHighBid = item.currentBid;
+    if (currentHighBid && maxBidAmount <= currentHighBid) {
+      return res.status(400).json({
+        error: `Bid must be higher than the current high bid of $${currentHighBid.toFixed(2)}.`,
+        currentHighBid,
+      });
     }
 
     // Reserve price enforcement (Phase 1 P0 fix — ADR-013)

@@ -4,7 +4,129 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S666 — Meta-Audit + Comprehensive P0/P1 Fix Batch (COMPLETE — ready to push)**
+**Latest: S667 — S666 Backlog Sweep: All 16 Meta-Audit Items Shipped (COMPLETE — ready to push)**
+
+S666 deferred 16 items. Patrick decided: (A) NextAuth → `/api/oauth/`, (B) Sentry Crons for observability. All 16 items dispatched via 7 parallel dev agents and verified. Push block below covers all S667 changes.
+
+**S667 items completed:**
+
+*Auth (Batch 1):*
+- `/api/oauth/[...nextauth].ts` — NextAuth moved from `/api/auth/`; resolves V5 routing conflict blocking JWT cookie auth
+- `AuthContext.tsx` — removed localStorage JWT reads, now calls `GET /api/auth/me` with `credentials:'include'` on mount
+- `lib/api.ts` — `withCredentials:true` on axios instance, 401 interceptor calls `/auth/refresh` once then redirects
+- `routes/auth.ts` — resetPasswordLimiter (5/15min), verifyEmailLimiter (3/hr), generic 200 on resend-verify, IP+UA in reset email
+- `authController.ts` — `secure:true` on all `res.cookie()` calls (was `process.env.NODE_ENV==='production'`)
+- **⚠️ Patrick must `git rm packages/frontend/pages/api/auth/[...nextauth].ts`** (old NextAuth file)
+- **⚠️ Patrick must update OAuth console redirect URLs:** `/api/auth/callback/{google,facebook}` → `/api/oauth/callback/{google,facebook}`
+- 15 frontend files still use localStorage JWT (non-blocking — flagged for future sweep)
+
+*GDPR/Legal (Batch 2):*
+- `userController.ts` — `exportMyData()`: 24h rate limit, queries all user data, returns JSON download
+- `routes/users.ts` — `GET /me/export` + `POST /me/do-not-sell` routes
+- `pages/do-not-sell.tsx` — CCPA opt-out page
+- `organizer/settings.tsx` — "Download My Data" button in settings
+- `terms.tsx` — Section 15 arbitration clause (AAA, Kent County MI, class action waiver, 30-day opt-out)
+- `outreachEmailsCron.ts` — CAN-SPAM default address fixed: `'219 E Michigan Ave, Suite F, Paw Paw, MI 49079'`
+- `schema.prisma` — `ccpaOptOut Boolean @default(false)` on User
+- Migration: `20260507000001_add_ccpa_opt_out`
+
+*Stripe + Auction (Batch 3):*
+- `stripeController.ts` — `charge.refunded` webhook handler + `automatic_tax:{enabled:true}` on 3 PaymentIntent/Checkout calls
+- `tierLapseService.ts` — dunning grace period: was immediate downgrade, now checks `TIER_GRACE_DAYS` env (default 7)
+- `itemController.ts` — bid validation: type check + positive + must exceed currentHighBid
+- Snipe protection already existed (5-min extension in bidController)
+
+*SEO + Accessibility (Batch 4):*
+- Canonical URLs added to 5 pages: `sales/[id]`, `items/[id]`, `organizers/[id]`, `categories/[category]`, `search`
+- `globals.css` — `@media (prefers-reduced-motion: reduce)` block
+
+*Observability (Batch 5):*
+- `cronGuard.ts` — Sentry Cron check-ins (`in_progress`/`ok`/`error` per job run)
+- `prisma.ts` — slow-query listener (>1000ms → Sentry), connection pool monitor (every 5min)
+- `index.ts` — SIGTERM/SIGINT graceful shutdown (30s timeout), deliverabilityMonitorJob wired
+- `deliverabilityMonitorJob.ts` (NEW) — weekly cron, bounce rate alert if >2% in 7 days
+
+*Scraper hardening (Batch 6):*
+- `dedupe.ts` — `normalizeAddress()` function (suffix/directional normalization), multi-level dedup pipeline
+- `processRapidDraft.ts` — camera debounce race fix: optimistic lock with `updatedAt` snapshot; organizer-set values win on conflict
+- `geocodingAuditJob.ts` (NEW) — daily cron 6 AM UTC, alerts Sentry if any source has >10% null geocoding rate
+- `index.ts` — geocodingAuditCron wired (import + call)
+- `dedupe.test.ts` (NEW) — 20+ unit tests for normalizeAddress + checkDuplicate
+- `backend/package.json` — jest config added
+
+*Claim/Content/Games (Batch 7):*
+- `organizers.ts` — `GET /organizers/claim/verify/:token` endpoint (24h expiry, sets VERIFIED status)
+- `pages/claim/verify/[token].tsx` (NEW) — verification page with loading/success/expired/invalid states
+- `uploadController.ts` — Cloudinary NSFW detection via AWS Rekognition; auto-deletes flagged images; `NSFW_DETECTED` error code
+- `itemController.ts` — Cloudinary orphan cleanup: destroys images when item deleted
+- `admin/feature-flags.tsx` — D-006: "Enable AI camera tagging" → "Enable Smart camera tagging"
+- `routes/admin.ts` — `GET /admin/xp-velocity` endpoint (flags users >500 XP/hr in 7-day window)
+- `pages/admin/xp-velocity.tsx` (NEW) — admin table showing flagged users
+- `claude_docs/API_RESPONSE_FORMAT.md` (NEW) — standard response shapes reference
+
+**Patrick actions required:**
+1. `git rm packages/frontend/pages/api/auth/[...nextauth].ts`
+2. Update Google OAuth redirect URL: `.../api/auth/callback/google` → `.../api/oauth/callback/google`
+3. Update Facebook OAuth redirect URL: `.../api/auth/callback/facebook` → `.../api/oauth/callback/facebook`
+4. Run `prisma migrate deploy` with Railway DATABASE_URL (applies ccpaOptOut migration)
+5. Run `prisma generate` after migration
+6. Optional Railway env vars: `TIER_GRACE_DAYS=7` (dunning grace), already defaults to 7
+7. Enable Stripe Tax in Stripe Dashboard for `automatic_tax: {enabled: true}` to take effect
+
+**S667 push block:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git rm packages/frontend/pages/api/auth/[...nextauth].ts
+git add packages/frontend/pages/api/oauth/[...nextauth].ts
+git add packages/frontend/components/AuthContext.tsx
+git add packages/frontend/lib/api.ts
+git add packages/frontend/styles/globals.css
+git add packages/frontend/pages/sales/[id].tsx
+git add packages/frontend/pages/items/[id].tsx
+git add packages/frontend/pages/organizers/[id].tsx
+git add "packages/frontend/pages/categories/[category].tsx"
+git add packages/frontend/pages/search.tsx
+git add packages/frontend/pages/organizer/settings.tsx
+git add packages/frontend/pages/terms.tsx
+git add packages/frontend/pages/do-not-sell.tsx
+git add packages/frontend/pages/admin/feature-flags.tsx
+git add packages/frontend/pages/admin/xp-velocity.tsx
+git add "packages/frontend/pages/claim/verify/[token].tsx"
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/settlementController.ts
+git add packages/backend/src/controllers/userController.ts
+git add packages/backend/src/controllers/uploadController.ts
+git add packages/backend/src/lib/prisma.ts
+git add packages/backend/src/routes/auth.ts
+git add packages/backend/src/routes/admin.ts
+git add packages/backend/src/routes/organizers.ts
+git add packages/backend/src/routes/users.ts
+git add packages/backend/src/services/tierLapseService.ts
+git add packages/backend/src/services/scraper/dedupe.ts
+git add "packages/backend/src/services/scraper/__tests__/dedupe.test.ts"
+git add packages/backend/src/utils/cronGuard.ts
+git add packages/backend/src/index.ts
+git add packages/backend/src/jobs/auctionAutoCloseCron.ts
+git add packages/backend/src/jobs/auctionJob.ts
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/src/jobs/processRapidDraft.ts
+git add packages/backend/src/jobs/deliverabilityMonitorJob.ts
+git add packages/backend/src/jobs/geocodingAuditJob.ts
+git add packages/backend/package.json
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260507000001_add_ccpa_opt_out/migration.sql
+git add claude_docs/API_RESPONSE_FORMAT.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat(security+compliance+ops): S667 — NextAuth route fix, JWT cookie hardening, GDPR export, CCPA opt-out, ToS arbitration, CAN-SPAM address, Stripe refund/tax/dunning, Sentry Crons, slow-query, SIGTERM, address normalization, camera race fix, claim verify, NSFW detection, XP velocity, D-006 sweep"
+.\push.ps1
+```
+
+---
+
+**Previous: S666 — Meta-Audit + Comprehensive P0/P1 Fix Batch (COMPLETE — pushed)**
 
 Audit-of-audits sweep against S657–S665 work. 4 parallel meta-audit agents identified 28 gaps; 5 verification probes confirmed which "shipped" claims were actually live. **Three S664-claimed deliverables were silently broken in production:** (1) DOB field absent from `/register` HTML despite COPPA controller code being live; (2) `/sales/[id]` and `/items/[id]` returning HTTP 200 with ZERO `<script type="application/ld+json">` blocks (S665 STATE.md flagged this; root cause: JSON-LD was in code but not deployed yet); (3) `/api/auth/*` requests on finda.sale all 400 with NextAuth catch-all `[...nextauth]` intercepting before Vercel rewrite to backend — entire S664 JWT cookie migration unreachable.
 
