@@ -38,6 +38,7 @@ jobs:
 
       - name: Run Facebook Events search scraper
         env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
           BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
