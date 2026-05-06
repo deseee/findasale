@@ -7,25 +7,11 @@
 
 import { RateLimiter } from '../rateLimiter';
 import { ingestScrapedListing, ScrapedItem } from '../index';
-import { getRandomUserAgent } from '../userAgents';
+import { getRandomUserAgent, getRandomReferer } from '../userAgents';
 import { getCachedHeaders, setCachedHeaders, fetchWithConditionalHeaders, extractCacheHeaders } from '../httpCache';
 
 const ESTATESALES_BASE_URL = 'https://www.estatesales.net';
 const ESTATESALES_API_URL = 'https://www.estatesales.net/api/sale-details';
-
-// Rotating referers to avoid fingerprinting
-const REFERRERS = [
-  'https://www.google.com/',
-  'https://www.google.com/search?q=estate+sales+near+me',
-  'https://duckduckgo.com/',
-  'https://www.bing.com/search?q=estate+sales',
-  '', // direct traffic (no referer)
-  '', // double-weight direct
-];
-
-function getRandomReferer(): string {
-  return REFERRERS[Math.floor(Math.random() * REFERRERS.length)];
-}
 
 /**
  * EstateSales.NET API response type code mapping.
@@ -121,6 +107,7 @@ export async function scrapeEstateSalesNetItems(
       'User-Agent': getRandomUserAgent(),
       Accept: 'application/json',
       'Accept-Language': 'en-US',
+      'Accept-Encoding': 'gzip, deflate, br',
     };
 
     // Only add Referer header if not empty string
