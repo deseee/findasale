@@ -31,6 +31,7 @@ import NextImage from 'next/image';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
+import { getItemImageUrl } from '../../../lib/imageUtils';
 import CSVImportModal from '../../../components/CSVImportModal';
 import SmartInventoryUpload from '../../../components/SmartInventoryUpload';
 import { useAuth } from '../../../components/AuthContext';
@@ -2175,7 +2176,7 @@ const AddItemsDetailPage = () => {
                         >
                           {item.photoUrls && item.photoUrls.length > 0 ? (
                             <img
-                              src={item.photoUrls[0]}
+                              src={getItemImageUrl(item.photoUrls[0]) ?? item.photoUrls[0]}
                               alt={item.title}
                               className="w-14 h-14 object-cover rounded border border-warm-200 dark:border-gray-700 hover:ring-2 hover:ring-amber-400"
                               referrerPolicy="no-referrer"

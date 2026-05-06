@@ -167,7 +167,8 @@ export const sendOutreachEmails = async (): Promise<void> => {
         const outreachSecret = process.env.OUTREACH_SECRET;
         if (!outreachSecret) throw new Error('OUTREACH_SECRET env var is required');
 
-        const trackingPixelId = `${uuid()}:${Buffer.from(record.emailAddress).toString('base64').substring(0, 12)}`;
+        // Use opaque UUID only (no PII in URLs — email goes in signed JWT token instead)
+        const trackingPixelId = uuid();
         const trackingToken = jwt.sign(
           { organizerId: record.organizerId, email: record.emailAddress },
           outreachSecret,

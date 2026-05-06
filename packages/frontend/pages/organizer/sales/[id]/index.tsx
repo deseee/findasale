@@ -17,6 +17,7 @@ import { PostSaleEbayPanel } from '../../../../components/PostSaleEbayPanel';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../../components/Skeleton';
+import { getItemImageUrl } from '../../../../lib/imageUtils';
 
 interface Item {
   id: string;
@@ -251,7 +252,7 @@ const SaleDetailPage = () => {
                   {item.photoUrls?.[0] && (
                     <div className="aspect-square bg-gray-100 dark:bg-gray-700 overflow-hidden">
                       <img
-                        src={item.photoUrls[0]}
+                        src={getItemImageUrl(item.photoUrls[0]) ?? item.photoUrls[0]}
                         alt={item.title}
                         className="w-full h-full object-cover"
                       />

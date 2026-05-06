@@ -16,6 +16,7 @@ import { useAuth } from '@/components/AuthContext';
 import { RankBadge } from '@/components/RankBadge';
 import { useMyAchievements } from '@/hooks/useAchievements';
 import { AchievementBadgesSection } from '@/components/AchievementBadgesSection';
+import { getItemImageUrl } from '@/lib/imageUtils';
 
 const CATEGORIES = [
   'Furniture',
@@ -313,7 +314,7 @@ function ExplorerProfilePage() {
                       {item.photoUrls[0] ? (
                         <img
                           key={item.photoUrls[0]}
-                          src={item.photoUrls[0]}
+                          src={getItemImageUrl(item.photoUrls[0]) ?? item.photoUrls[0]}
                           alt={item.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         />
