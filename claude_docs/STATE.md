@@ -4,9 +4,34 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S662 — Pre-Launch Sitewide Audit + 23-File Fix Batch (COMPLETE — push pending)**
+**Latest: S663 — Fortune 1000 Pre-Launch Chrome QA + 9-File Fix Batch (COMPLETE — push pending)**
 
-Full sitewide pre-launch audit run across homepage, sale browsing, item detail, organizer portal, and auth flows. Chrome QA run directly by main session. 24 issues found (6 P0, 10 P1, 8 P2). All dispatched and fixed across 6 parallel dev batches. **Push block below — push before going live.**
+Full buyer journey Chrome QA (shopper + organizer), plus code audit synthesis. Chrome-verified: shopper browse → sale detail → Place Hold → cart sidebar (end-to-end). Organizer dashboard, Holds page, TEAMS paywall, create-sale form (15 types confirmed). 9 files fixed across two dev batches. **Combined S662+S663 push block in patrick-dashboard.md — push before going live.**
+
+**Fixes shipped (9 files):**
+- **Shopper Pickups tab blank (P1)** — `shopper/dashboard.tsx`: added `useQuery` calling `/reservations/shopper`; renders hold cards with photo, title, sale name, expiry countdown, item link; loading skeleton + "No active holds" empty state
+- **Cart 404 (P1)** — `shopper/cart.tsx` (NEW): redirect page to `/shopper/dashboard` — fixes broken cart URL
+- **CAN-SPAM unsubscribe gap (P1)** — `emailTemplateService.ts`: added FRONTEND_URL const + unsubscribe footer in shared template wrapper — applies to ALL transactional emails automatically
+- **No hold-placed email to shopper (P1)** — `saleAlertEmailService.ts`: new `sendHoldPlacedToShopper()` function; `reservationController.ts`: wired into `placeHold()` with fire-and-forget pattern
+- **Vaporware "Coming Soon" copy (P2)** — `coupons.tsx`: removed 6 unimplemented feature teasers from Cosmetics & Perks section
+- **TODO comments cleaned (P2)** — `add-items/[saleId].tsx`, `workspace.tsx`, `encyclopedia/[slug].tsx`: removed post-launch TODO comments
+
+**Flagged for future sprint:**
+- `/unsubscribe` frontend page needed — URL is wired in emails but page doesn't exist yet (P1)
+- SSR/SSG for homepage and /sales — P0, no Google indexing without it
+- JWT 7-day refresh mechanism — P0 security
+- Rate limiting on bulk items endpoint — P0
+- Alt text sweep (104+ images) — P0 WCAG 2.1 AA
+- Focus traps on 30+ modals — P0 WCAG 2.1 AA
+- COPPA age gate — P0 legal
+- Cookie consent banner — P1 GDPR
+- IDOR fix on mark-sold route — P1 security
+
+---
+
+**Previous: S662 — Pre-Launch Sitewide Audit + 23-File Fix Batch (COMPLETE — merged into S663 push block)**
+
+Full sitewide pre-launch audit run across homepage, sale browsing, item detail, organizer portal, and auth flows. Chrome QA run directly by main session. 24 issues found (6 P0, 10 P1, 8 P2). All dispatched and fixed across 6 parallel dev batches.
 
 **Fixes shipped (23 files):**
 - **useLiveFeed 500 (P0)** — `saleController.ts`: null ref on `fav.user.name` → `fav.user?.name`; ENDED sales now return empty activity array (was showing "17 days ago" on dead sales)

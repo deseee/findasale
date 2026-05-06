@@ -8,6 +8,8 @@
 
 import { regionConfig } from '../config/regionConfig';
 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
+
 export interface EmailOptions {
   preheader?: string;          // Preview text shown in email clients (50-100 chars recommended)
   headline: string;            // Large heading inside email
@@ -114,9 +116,13 @@ export function buildEmail(options: EmailOptions): string {
           <!-- Footer -->
           <tr>
             <td style="padding: 20px 32px; background-color: #f9f7f4; border-top: 1px solid #e5e7eb; text-align: center;">
-              <p style="font-size: 12px; color: #9ca3af; margin: 0; line-height: 1.6;">
+              <p style="font-size: 12px; color: #9ca3af; margin: 0 0 12px; line-height: 1.6;">
                 © 2026 FindA.Sale · ${regionConfig.city}, ${regionConfig.stateAbbrev}<br />
                 This is a transactional email related to your activity on FindA.Sale.
+              </p>
+              <!-- CAN-SPAM Compliance: Unsubscribe Link -->
+              <p style="font-size: 11px; color: #a1a1a1; margin: 0; line-height: 1.5;">
+                To manage your email preferences or unsubscribe, <a href="${FRONTEND_URL}/unsubscribe" style="color: #666; text-decoration: underline;">click here</a> or reply with "Unsubscribe" in the subject line.
               </p>
             </td>
           </tr>

@@ -4,7 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
 import { pushSaleStatus } from '../services/saleStatusService';
-import { sendHoldPlacedAlert, sendHoldStatusToShopper } from '../services/saleAlertEmailService';
+import { sendHoldPlacedAlert, sendHoldPlacedToShopper, sendHoldStatusToShopper } from '../services/saleAlertEmailService';
 import { checkForFraud, calculateConfidenceScore } from '../services/fraudDetectionService';
 import { getRankBenefits, calculateRankFromXp } from '../utils/rankUtils';
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
@@ -310,6 +310,28 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       }
     } catch (err) {
       console.error('[alert] Exception when creating organizer notification:', err);
+    }
+
+    // Feature #14: Send shopper hold-placed confirmation email (fire-and-forget)
+    try {
+      const shopper = await prisma.user.findUnique({
+        where: { id: req.user!.id },
+        select: { id: true, email: true, name: true },
+      });
+      if (shopper) {
+        setImmediate(() => {
+          sendHoldPlacedToShopper({
+            shopperEmail: shopper.email,
+            shopperName: shopper.name,
+            itemTitle: item.title,
+            itemId: item.id,
+            saleTitle: (item.sale as any)?.title || 'Sale',
+            expiresAt: reservation.expiresAt,
+          }).catch(err => console.warn('[alert] Failed to send hold placed confirmation to shopper:', err));
+        });
+      }
+    } catch (err) {
+      console.error('[alert] Exception when sending shopper hold notification:', err);
     }
 
     res.status(201).json(reservation);

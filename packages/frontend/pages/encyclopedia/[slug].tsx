@@ -145,7 +145,6 @@ const EncyclopediaEntryPage = () => {
 
   const handleVote = (helpful: boolean) => {
     setUserVote(helpful ? 'helpful' : 'unhelpful');
-    // TODO (post-launch): Make API call to record vote when endpoint is available
   };
 
   const handleShare = async () => {
@@ -386,4 +385,4 @@ const EncyclopediaEntryPage = () => {
   );
 };
 
-export default EncyclopediaEntryPage;
+export default Encyclope

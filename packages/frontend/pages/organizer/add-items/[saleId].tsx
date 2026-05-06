@@ -191,8 +191,6 @@ async function checkImageQuality(blob: Blob): Promise<ImageQualityResult> {
     img.src = url;
   });
 }
-
-// TODO (post-launch): Implement face detection with @tensorflow-models/coco-ssd
 // Requires: pnpm add @tensorflow/tfjs @tensorflow-models/coco-ssd
 async function detectFace(_blob: Blob): Promise<boolean> {
   return false;
@@ -2652,25 +2650,4 @@ const AddItemsDetailPage = () => {
       />
 
       <ConfirmDialog
-        isOpen={deleteConfirmId !== null}
-        title="Delete Item"
-        message={`Delete "${deleteConfirmTitle}"? This cannot be undone.`}
-        confirmLabel="Delete"
-        onConfirm={() => {
-          if (deleteConfirmId) {
-            deleteMutation.mutate(deleteConfirmId);
-          }
-          setDeleteConfirmId(null);
-          setDeleteConfirmTitle('');
-        }}
-        onCancel={() => {
-          setDeleteConfirmId(null);
-          setDeleteConfirmTitle('');
-        }}
-        variant="danger"
-      />
-    </>
-  );
-};
-
-export default AddItemsDetailPage;
+        isOpen={deleteCo
