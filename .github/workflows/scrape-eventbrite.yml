@@ -34,6 +34,7 @@ jobs:
 
       - name: Run Eventbrite scraper
         env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
           EVENTBRITE_API_KEY: ${{ secrets.EVENTBRITE_API_KEY }}
