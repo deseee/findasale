@@ -127,7 +127,7 @@ export async function fetchWithConditionalHeaders(
       // Detect content type and parse accordingly
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        data = await response.json();
+        data = (await response.json()) as Record<string, any>;
       } else {
         data = await response.text();
       }
