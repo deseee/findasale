@@ -4,7 +4,23 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S664 — Fortune 1000 Pre-Launch Sprint: 6-Agent Audit + 13-Agent Implementation (COMPLETE — push pending)**
+**Latest: S665 — Vercel Build Fix + S664 Code Audit (COMPLETE)**
+
+Fixed Vercel build blocker introduced by S664: `AccessibleModal.tsx` line 40 used native DOM `KeyboardEvent` instead of `React.KeyboardEvent<HTMLDivElement>` on a JSX `onKeyDown` handler. Changed type, unblocking the build. Confirmed `organizer/settings.tsx` account deletion modal changes (confirm/prompt → AccessibleModal) from S664 dev agent are present. Confirmed `DELETE /users/me` endpoint exists in `routes/users.ts` line 439 — removed from blocked queue. Parallel code-level audits of S664 deliverables completed (JWT auth routes, authController dual-change verification, SSR pages). Full Chrome QA of S664 features queued for S666.
+
+**S665 push block:**
+```powershell
+git add packages/frontend/components/AccessibleModal.tsx
+git add packages/frontend/pages/organizer/settings.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(build): correct KeyboardEvent type in AccessibleModal; settings account deletion modal (S665)"
+.\push.ps1
+```
+
+---
+
+**Previous: S664 — Fortune 1000 Pre-Launch Sprint: 6-Agent Audit + 13-Agent Implementation (COMPLETE — pushed)**
 
 Two-phase Fortune 1000 readiness sprint. Phase 1: 6 parallel audits across domains untouched by S655–S663 (auth/security, accessibility/WCAG, legal/compliance, SEO/performance, payments/Stripe, backend reliability). Phase 2: 13 parallel implementation agents fixed ALL findings — P0, P1, and P2.
 
@@ -228,7 +244,6 @@ Search Console fully audited. Four innovation agents shipped. Two P0 crashes fou
 | JWT cookie migration | Code shipped but not Chrome-tested | Login in browser → verify cookies in DevTools Application tab (should see httpOnly accessToken) | S664 |
 | COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error. DOB >18 → should register successfully | S664 |
 | Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` in HTML | S664 |
-| Account deletion backend | organizer/settings.tsx UI shipped — backend `DELETE /users/me` endpoint needs verification | Check if endpoint exists in userController.ts/routes/users.ts; create if missing | S664 |
 | Modal focus traps (34 modals) | Code shipped but not browser-tested | Open any modal, Tab through — focus should stay inside; Escape should close | S664 |
 | #251 priceBeforeMarkdown | No production item with markdownApplied=true | Add a test item with markdownApplied=true and originalPrice set | S661 |
 | #235 DonationModal | Needs SaleDonation record + available items | Set up test sale with SaleDonation + unsold items, go to Settlement Receipt step | S661 |
@@ -365,9 +380,17 @@ enrichContactEmails.ts upgraded with pull-queue concurrency (SCRAPE_CONCURRENCY=
 
 ---
 
-## Recent Sessions (S661–S664)
+## Recent Sessions (S661–S665)
 
-### S664 — Fortune 1000 Pre-Launch Sprint: Full Audit + 13-Agent Implementation (COMPLETE — push pending)
+### S665 — Vercel Build Fix + S664 Code Audit (COMPLETE)
+
+Fixed Vercel build blocker: `AccessibleModal.tsx` `handleKeyDown` had native DOM `KeyboardEvent` type on a React JSX handler — changed to `React.KeyboardEvent<HTMLDivElement>`. Confirmed `organizer/settings.tsx` account deletion modal from S664 dev agent is present. Confirmed `DELETE /users/me` in `routes/users.ts` line 439 — removed from blocked queue. Parallel code audits verified: JWT cookies on all 4 auth paths ✅, loginLimiter+registerLimiter + /logout+/refresh+/me ✅, sales/[id] + items/[id] SSR + JSON-LD ✅. Chrome QA of all S664 features still pending (blocked until Vercel build goes green).
+
+**Files changed:** `packages/frontend/components/AccessibleModal.tsx`, `packages/frontend/pages/organizer/settings.tsx`
+
+---
+
+### S664 — Fortune 1000 Pre-Launch Sprint: Full Audit + 13-Agent Implementation (COMPLETE — pushed)
 
 6 parallel audits across auth/security, accessibility, legal, SEO, payments, backend. Then 13 implementation agents addressing all P0, P1, and P2 findings. Major items shipped: COPPA age gate, JWT httpOnly cookies, 34/34 modals focus-trapped, homepage + sale/item SSR, cookie consent, ToS legal gaps, sage contrast fix, bulk rate limiting, POS currency precision, account deletion UI, Stripe webhook idempotency. Push block in patrick-dashboard.md.
 
@@ -497,19 +520,36 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S662
+## Next Session — S666
 
-**First action:** Read STATE.md + roadmap.md BROKEN section. Present top 3 by priority.
+**First action:** Read STATE.md + roadmap.md BROKEN section. Present top 3 by priority. Run smoke test per §10 post-fix verification rule.
 
-**S662 priority order:**
-1. **CategoryTopFinds verify** — Query `CategoryTopFinds` count in DB. If >0 rows, open `finda.sale/categories/clothing` in Chrome and confirm TrendingSection renders with eBay items. If 0 rows, re-trigger sync and check Railway logs.
-2. **Outreach first-send verification** — Check Railway logs for `[OutreachCron] Sent Touch 1` — `OUTREACH_ENABLED=true` should be set by Patrick this session.
-3. **#251 and #235** — Seed or find a markdown item to verify priceBeforeMarkdown; test DonationModal on PRO organizer with unsold items.
-4. **Roadmap BROKEN items** — read roadmap.md BROKEN section, advance next priority.
+**S666 priority order:**
 
-**Patrick must-do before S662:**
-1. Set `CATEGORY_SYNC_ENABLED=true` on Railway
-2. Set `OUTREACH_ENABLED=true` on Railway
+1. **Verify Vercel build is green** — Check Vercel dashboard for S665 commit. If still failing, diagnose immediately before other work.
+
+2. **Chrome QA — S664 blocked queue (run sequentially per §10c Chrome concurrency rule):**
+   - **JWT cookie migration** — Login at finda.sale. Open DevTools → Application → Cookies → confirm `accessToken` set as httpOnly. Log out, confirm cookie cleared.
+   - **COPPA age gate** — Go to /register. Enter DOB of someone under 18. Should get "must be 18 or older" error. Then use valid DOB, confirm registration succeeds.
+   - **SSR JSON-LD** — View-source on `finda.sale/sales/[any-id]` and `finda.sale/items/[any-id]` — should see `<script type="application/ld+json">` in raw HTML.
+   - **Modal focus traps** — Open a modal (checkout, bid, etc.), press Tab repeatedly — focus should stay inside. Press Escape — modal should close.
+   - **Account deletion modal** — Go to organizer settings, find Danger Zone, confirm modal appears with password input (not native confirm()).
+
+3. **Audit the audit** — S664 was a 6-audit + 13-agent sprint. Things to probe:
+   - Were there audit domains that weren't covered? (performance/Core Web Vitals, admin-panel security, mobile viewport, email template accessibility, API schema validation/input sanitization)
+   - Were any P0/P1 audit findings marked fixed but not Chrome-verified?
+   - Are there entire feature areas (Hunt Pass, Guild leaderboard, crew mechanics, auction bidding, consignment, Settlement Hub) that haven't had a dedicated audit?
+   - Run `findasale-hacker` on the NEW S664 surface specifically: JWT cookie implementation, COPPA bypass vectors, account deletion CSRF, rate limiter bypass patterns, cookie consent localStorage manipulation.
+
+4. **Unverified queue** — #251 priceBeforeMarkdown, #235 DonationModal (still need test data).
+
+**Patrick actions still needed (carry-forward from S664):**
+1. Run `prisma migrate deploy` for `20260506000001_add_age_verified`
+2. Run `prisma generate` after migration
+3. Add Railway env var: `JWT_REFRESH_SECRET=<openssl rand -base64 32>`
+4. Decide OAuth age verification approach (a/b/c — see dashboard)
+5. Enable 2FA on Google Workspace + MailerLite
+6. Set `CATEGORY_SYNC_ENABLED=true` and `OUTREACH_ENABLED=true` on Railway
 
 ---
 
