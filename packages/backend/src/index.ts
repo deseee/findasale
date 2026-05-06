@@ -209,6 +209,7 @@ import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cl
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
 import { scheduleAuctionAutoCloseCron } from './jobs/auctionAutoCloseCron'; // ADR-013 Phase 2: Auto-close expired auctions + notify winners
 import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
+import { scheduleWebhookEventPruneJob } from './jobs/webhookEventPruneJob'; // Webhook event pruning (30-day retention)
 import { scheduleArchivalCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly)
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
 import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
@@ -599,6 +600,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #103: Register photo retention cron
   schedulePhotoRetentionCron();
+
+  // Webhook event pruning (30-day retention)
+  scheduleWebhookEventPruneJob();
 
   // #112: Register quarterly archival cron
   scheduleArchivalCron();

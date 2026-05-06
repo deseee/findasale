@@ -429,6 +429,8 @@ model Organizer {
   claimRequests            ClaimRequest[]
   // Feature: Shopper Organizer Introductions — shoppers who introduced this organizer to FindA.Sale
   shopperIntroductions     ShopperOrganizerIntroduction[] @relation("OrganizerIntroductions")
+  // CAN-SPAM Compliance: Audit log for outreach events
+  outreachAuditLogs        OutreachAuditLog[]
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 
@@ -4515,4 +4517,30 @@ model EmailSuppression {
   @@index([bounceHard])
   @@index([complaintEmail])
   @@index([optedOut])
+}
+
+// CAN-SPAM Compliance: Audit trail for outreach events (SENT, OPTED_OUT, etc.)
+// Used to prove opt-outs are honored within 10 business days
+model OutreachAuditLog {
+  id           String   @id @default(cuid())
+  organizerId  String
+  event        OutreachAuditEvent
+  touchNumber  Int?
+  metadata     Json?    @default("{}")
+  createdAt    DateTime @default(now())
+
+  organizer    Organizer @relation("OutreachAuditLogs", fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId])
+  @@index([createdAt])
+  @@index([organizerId, event])
+}
+
+enum OutreachAuditEvent {
+  SENT
+  OPENED
+  CLICKED
+  BOUNCED
+  OPTED_OUT
+  SUPPRESSED
 }

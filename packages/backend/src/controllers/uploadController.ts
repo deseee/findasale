@@ -14,8 +14,43 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// P1 SECURITY FIX: MIME type whitelist for image uploads (prevents SVG/HTML injection)
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
+
+// P1 SECURITY FIX: Magic bytes validation function (server-side file signature check)
+function validateImageMagicBytes(buffer: Buffer): boolean {
+  if (buffer.length < 4) return false;
+
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return true;
+  // PNG: 89 50 4E 47
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return true;
+  // GIF: 47 49 46 38
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) return true;
+  // WebP: 52 49 46 46 ... 57 45 42 50
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+      buffer.length > 11 && buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) return true;
+  // HEIC/HEIF: check for 'ftyp' at offset 4
+  if (buffer.length > 11 && buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70) return true;
+
+  return false;
+}
+
 // Multer — memory storage (buffers go straight to Cloudinary, no disk writes)
-export const upload = multer({ storage: multer.memoryStorage() });
+// P1 SECURITY FIX: Added fileFilter to enforce MIME type whitelist
+export const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max
+  },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type: ${file.mimetype}. Only JPEG, PNG, WebP, GIF, HEIC allowed.`));
+    }
+  },
+});
 
 // Debounce AI analysis to allow "+" button usage (multi-photo grouping)
 export const rapidfireAIDebounce = new Map<string, ReturnType<typeof setTimeout>>();
@@ -51,11 +86,17 @@ interface CloudinaryUrls {
 
 // Upload a single buffer to Cloudinary — returns multi-res URLs
 // Also tracks bandwidth usage (#105)
+// P1 SECURITY FIX: Validates magic bytes before upload, resource_type restricted to 'image'
 const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<CloudinaryUrls> =>
   new Promise((resolve, reject) => {
+    // P1 SECURITY FIX: Server-side file signature validation (magic bytes check)
+    if (!validateImageMagicBytes(buffer)) {
+      return reject(new Error('Invalid image file: magic bytes validation failed. File may not be a valid image.'));
+    }
+
     const stream = cloudinary.uploader.upload_stream(
       {
-        resource_type: 'auto',
+        resource_type: 'image', // P1 SECURITY FIX: Restrict to 'image' instead of 'auto' to prevent non-image uploads
         folder,
         // Note: not using eager transforms — transformation URLs are generated on-the-fly
         // from the original URL to ensure public_id is always preserved
