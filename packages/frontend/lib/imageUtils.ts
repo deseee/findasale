@@ -95,7 +95,8 @@ const isScrapedImageUrl = (url: string): boolean => {
 function getImageProxyUrl(): string {
   // @ts-ignore - NEXT_PUBLIC_* vars are injected at build time by Next.js
   const cfProxyUrl = process.env.NEXT_PUBLIC_CF_IMAGE_PROXY_URL;
-  return cfProxyUrl ? cfProxyUrl : '/api/image-proxy';
+  // CF Worker listens at /proxy — append the path. Fallback to Railway route.
+  return cfProxyUrl ? `${cfProxyUrl.replace(/\/$/, '')}/proxy` : '/api/proxy-image';
 }
 
 export const getItemImageUrl = (url: string | null | undefined): string | null => {

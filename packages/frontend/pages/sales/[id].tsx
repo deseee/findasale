@@ -26,7 +26,7 @@ import OrganizerTierBadge from '../../components/OrganizerTierBadge'; // Phase 3
 import AuctionCountdown from '../../components/AuctionCountdown';
 import PhotoLightbox from '../../components/PhotoLightbox';
 import SaleTourGallery from '../../components/SaleTourGallery';
-import { getThumbnailUrl, getOptimizedUrl, getLqipUrl } from '../../lib/imageUtils';
+import { getThumbnailUrl, getOptimizedUrl, getLqipUrl, getSaleImageUrl } from '../../lib/imageUtils';
 import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
 import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
@@ -975,8 +975,8 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
                   onClick={() => setLightboxOpen(true)}
                 >
                   <img
-                    key={getThumbnailUrl(sale.photoUrls[currentPhotoIndex])}
-                    src={getThumbnailUrl(sale.photoUrls[currentPhotoIndex])}
+                    key={getSaleImageUrl(sale.photoUrls[currentPhotoIndex]) || sale.photoUrls[currentPhotoIndex]}
+                    src={getSaleImageUrl(sale.photoUrls[currentPhotoIndex]) || sale.photoUrls[currentPhotoIndex]}
                     alt={`Sale photo ${currentPhotoIndex + 1}`}
                     className="w-full h-full object-cover hover:opacity-90 transition"
                   />
@@ -991,7 +991,7 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
                     {sale.photoUrls.map((url, idx) => (
                       <div key={idx} className="relative group">
                         <img
-                          src={getThumbnailUrl(url)}
+                          src={getSaleImageUrl(url) || url}
                           alt={`Thumbnail ${idx + 1}`}
                           className={`h-20 w-20 object-cover rounded cursor-pointer transition ${
                             idx === currentPhotoIndex ? 'ring-2 ring-amber-600' : ''
