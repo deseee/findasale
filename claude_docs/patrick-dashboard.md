@@ -1,4 +1,25 @@
-# Patrick's Dashboard — May 5, 2026 (S651 wrap)
+# Patrick's Dashboard — May 5, 2026 (S652 wrap)
+
+---
+
+## S652 — ESN Photos Fixed. Browse ✅ + Detail ✅.
+
+ESN scraped sale photos now load correctly on both pages. Root cause: the PWA service worker was intercepting requests to the Cloudflare Worker image proxy and failing silently — same documented issue as i.ebayimg.com. Fixed by adding `findasale-image-proxy.findasale.workers.dev` to the SW exclusion list in `next.config.js`. Verified in Chrome with the new SW active: the Dudley Donahue Estate auction detail page shows all 5 farm equipment photos.
+
+**What was fixed:**
+- `packages/frontend/next.config.js` — CF Worker domain excluded from SW catch-all NetworkFirst rule
+- `packages/frontend/lib/imageUtils.ts` (S651) — hardcoded CF Worker URL as fallback so it works even if Vercel env var isn't baked into the build
+
+**Push block:**
+```powershell
+git add packages/frontend/next.config.js
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(pwa): exclude CF image proxy from SW interception — detail page photos now load | wrap S652"
+.\push.ps1
+```
+
+**Reminder:** Revoke the Cloudflare API token that was pasted in chat: [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)
 
 ---
 

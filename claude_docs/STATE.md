@@ -4,7 +4,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S651 — Search Console Audit + Scraper Stealth Innovations + P0 Fix (COMPLETE)**
+**Latest: S652 — CF Image Proxy End-to-End Verified (COMPLETE)**
+
+ESN scraped sale photos now load on both browse and detail pages. Root cause of detail page failure was the PWA service worker intercepting requests to `findasale-image-proxy.findasale.workers.dev` and failing silently (same pattern as the documented i.ebayimg.com issue). Fixed by excluding the CF Worker domain from the SW catch-all rule in `next.config.js`. Verified in Chrome with new SW active: main gallery + all 5 thumbnails rendering on the Dudley Donahue Estate auction detail page.
+
+**Previous: S651 — Search Console Audit + Scraper Stealth Innovations + P0 Fix (COMPLETE)**
 
 Search Console fully audited. Four innovation agents shipped. Two P0 crashes found and fixed. Backend is green.
 
@@ -34,7 +38,6 @@ Search Console fully audited. Four innovation agents shipped. Two P0 crashes fou
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | AI listing enrichment | Fire-and-forget — needs a scraped sale with description >50 chars to have loaded since deploy | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` in DB | S651 |
-| CF image proxy end-to-end | Vercel env var set but redeploy was still BUILDING at wrap | Reload any organizer page with scraped images, confirm requests route to `findasale-image-proxy.findasale.workers.dev` | S651 |
 
 ---
 
