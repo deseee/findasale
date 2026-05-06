@@ -77,7 +77,20 @@ router.get('/click', async (req, res) => {
       }
     }
 
-    res.redirect(302, decodeURIComponent(original));
+    // Open-redirect guard: only allow redirects to finda.sale domains
+    const decodedUrl = decodeURIComponent(original);
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(decodedUrl);
+    } catch {
+      return res.status(400).json({ error: 'Invalid URL' });
+    }
+    const allowedHosts = ['finda.sale', 'www.finda.sale'];
+    if (!allowedHosts.includes(parsedUrl.hostname)) {
+      return res.status(400).json({ error: 'Redirect destination not allowed' });
+    }
+
+    res.redirect(302, decodedUrl);
   } catch (err: any) {
     console.error('[OutreachClick] Error:', err.message);
     res.status(500).json({ error: 'Redirect error' });
