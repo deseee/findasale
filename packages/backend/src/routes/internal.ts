@@ -13,7 +13,6 @@ import {
   bulkUpsertEnrichedSales,
 } from '../controllers/internalSaleDetailEnrichmentController';
 import { sendOutreachEmails } from '../jobs/outreachEmailsCron';
-import { sendClaimEmailBatch } from '../services/scraper/claimEmailService';
 
 const router = express.Router();
 
@@ -36,34 +35,4 @@ router.post('/scraper/enrich-backfill', runEnrichmentBackfill);
 router.post('/enrich-sale-details', triggerSaleDetailEnrichment);
 
 // GET /api/internal/enrich-sale-details/status — check unenriched sales count
-router.get('/enrich-sale-details/status', getSaleDetailEnrichmentStatus);
-
-// GET /api/internal/enrich-sale-details/batch — fetch paginated batch of unenriched sales for GitHub Actions
-router.get('/enrich-sale-details/batch', getBatchOfUnenrichedSales);
-
-// POST /api/internal/enrich-sale-details/bulk — upsert enriched sale details from GitHub Actions
-router.post('/enrich-sale-details/bulk', bulkUpsertEnrichedSales);
-
-// POST /api/internal/outreach/trigger — manual trigger for outreach email cron (protected)
-router.post('/outreach/trigger', requireSecret, async (_req, res) => {
-  try {
-    console.log('[Internal] Manual outreach trigger fired');
-    await sendOutreachEmails();
-    res.json({ ok: true, message: 'Outreach batch complete' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/internal/claim-emails/trigger — manual trigger for claim emails cron (protected)
-router.post('/claim-emails/trigger', requireSecret, async (_req, res) => {
-  try {
-    console.log('[Internal] Manual claim-emails trigger fired');
-    await sendClaimEmailBatch();
-    res.json({ ok: true, message: 'Claim email batch complete' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-export default router;
+router
