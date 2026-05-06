@@ -1,26 +1,51 @@
-# Patrick's Dashboard — May 6, 2026 (S656 wrap)
+# Patrick's Dashboard — May 6, 2026 (S657 wrap)
 
 ---
 
-## ✅ Two actions needed from you
+## ✅ Actions needed from you
 
-**1. Push S656 code** — see push block at the bottom of this section.
+**1. Push S657 security fixes** (2 files — outreach pipeline):
+```powershell
+git add packages/backend/src/routes/outreach.ts
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(security): block open redirect in outreach click route; remove email PII from Railway logs; wrap S657"
+.\push.ps1
+```
 
-**2. Set Railway env vars:**
-- `OUTREACH_ENABLED=true` — outreach queue is clean, 3,298 eligible organizers. Fires every 4 hours at 20/day warmup.
-- `CATEGORY_SYNC_ENABLED=true` — CategoryTopFinds cron has never run. TrendingSection on `/categories/[type]` pages is empty until this is set and the 05:00 UTC nightly cron runs.
+**2. Set Railway env vars (if not done from S656):**
+- `OUTREACH_ENABLED=true` — pipeline is now security-hardened. 3,298 organizers queued. Fires every 4 hours at 20/day warmup.
+- `CATEGORY_SYNC_ENABLED=true` — TrendingSection on category pages empty until this is set.
+
+**3. Verify Settlement Hub manually (Chrome QA blocked — need your login):**
+Log in as `artifactmi@gmail.com` → Organizer Dashboard → Sales → click the ENDED sale → open Settlement Hub → confirm payout amount shows at step 2. Let me know the result so I can mark #228 ✅ or ❌.
+
+---
+
+## S657 — Outreach Security Audit + Fixes + Chrome QA
+
+**What shipped:**
+
+- **Open redirect fix (HIGH)** — `/api/outreach/click` was accepting any URL in the `original` query param and redirecting recipients to it. An attacker could craft `finda.sale/api/outreach/click?...&original=https://phishing-site.com` and use our domain to validate a phishing link. Added URL parse + hostname allowlist (`finda.sale`, `www.finda.sale`). Non-`finda.sale` destinations now return HTTP 400.
+- **PII in Railway logs fix (MEDIUM)** — Two log lines in `outreachEmailsCron.ts` were printing raw email addresses when skipping suppressed or blocked-domain organizers. Replaced with `organizerId` (opaque, safe to log).
+- **Pipeline confirmed clean:** Tracking pixel uses UUID (no PII in URLs ✅), JWT secret throws hard if missing ✅, `escapeHtml()` on all business names before template render ✅.
+
+**Chrome QA completed:**
+- **#382 Sale Type Ordering — ✅ VERIFIED** — Homepage hero, /about, /terms (3 locations), Footer all confirmed "yard sales, garage sales, estate sales..." order.
+- **#228 Settlement Hub — UNVERIFIED** — Code fix is live in GitHub but browser test requires your `artifactmi@gmail.com` login (only account with ENDED sales in production).
+- **#379 Craigslist comment — ✅ (code-level fix only)**
 
 ---
 
 ## S656 — Settlement Hub Fix + Sale Type Ordering + Craigslist Cleanup
 
 **What shipped:**
+- **Settlement Hub (#228) P1 fixed** — `payoutAmount` useEffect now triggers from step 2 (was step 3–4). Payout and Receipt tab auto-populate as you advance through the wizard.
+- **Sale type ordering (#382)** — 5 files reordered: About, Homepage, Onboarding modal, Terms (4 locations), Footer. "Yard Sales" now leads everywhere.
+- **Craigslist ghost cleanup (#379)** — Stale cron comment corrected.
 
-- **Settlement Hub (#228) P1 fixed** — Receipt tab was showing $0.00 "Client/Executor Receives" and Payout tab started at $0. Root cause: `payoutAmount` useEffect only triggered at step 3–4. Fixed to trigger from step 2 (Commission tab) onward. The payout amount now auto-populates as you advance through the wizard and flows through to the Receipt tab. Chrome QA needed to confirm end-to-end.
-- **Sale type ordering (#382)** — 5 files reordered so "Yard Sales" leads the list instead of "Estate Sales": About page, Homepage (meta/OG/hero/schema), Onboarding modal, Terms of Service (4 locations), Footer. Closes out the D-001 brand drift audit for non-body-copy locations.
-- **Craigslist ghost cleanup (#379)** — `scraperCron.ts` had a stale comment saying "12:00 UTC — Craigslist" but the actual job was already running FacebookMarketplace. Comment corrected.
-
-**Push block (S656):**
+**Push block (S656 — if not pushed yet, combine with S657 block above):**
 ```powershell
 git add packages/frontend/components/SettlementWizard.tsx
 git add packages/frontend/pages/about.tsx
@@ -30,19 +55,16 @@ git add packages/frontend/pages/terms.tsx
 git add packages/frontend/components/Layout.tsx
 git add packages/backend/src/jobs/scraperCron.ts
 git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "fix #228 Settlement Hub payout pre-fill; fix #382 sale type ordering; fix #379 stale Craigslist comment; wrap S656"
-.\push.ps1
 ```
 
 ---
 
-## Next Session — S657 Priorities
+## Next Session — S658 Priorities
 
-1. **Chrome QA — Settlement Hub** — `/organizer/settlement/[saleId]` → run wizard → verify Payout tab pre-populated → Receipt tab shows correct amount → Download Receipt fires.
-2. **CategoryTopFinds QA** — after setting `CATEGORY_SYNC_ENABLED=true`, verify `/categories/estate-sales` shows TrendingSection with real items after 05:00 UTC nightly run.
-3. **Next roadmap BROKEN items** — see roadmap Building section for items marked ❌ (priceBeforeMarkdown #251, Charity Close #235). Also #336 Rapidfire organizer-intent-wins (P1 D-006 violation — needs Architect spec before dispatch).
+1. **Confirm outreach first send** — set `OUTREACH_ENABLED=true`, watch Railway logs for `[OutreachCron] Sent Touch 1`. Cron fires every 4 hours.
+2. **#228 Settlement Hub QA** — Patrick checks `artifactmi@gmail.com` account, reports result.
+3. **CategoryTopFinds QA** — verify `/categories/estate-sales` TrendingSection after `CATEGORY_SYNC_ENABLED=true` + first nightly run.
+4. **Next roadmap BROKEN items** — roadmap.md has the queue.
 
 ---
 

@@ -4,19 +4,25 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S656 — Settlement Hub P1 Fix + Sale Type Order + Craigslist Stub Cleanup (COMPLETE)**
+**Latest: S657 — Outreach Security Audit + Fixes + Chrome QA (COMPLETE)**
 
-Continued from S655. Fixed 3 roadmap items: Settlement Hub P1 payout display bug (#228), sale type ordering brand drift (#382), and dead Craigslist cron comment (#379). No migrations required.
+Full security pre-launch audit of cold outreach pipeline. Two vulnerabilities found and fixed. Chrome QA completed for S656 items.
 
 **Shipped:**
-- **#228 Settlement Hub P1 bugs fixed** — `SettlementWizard.tsx`: `payoutAmount` useEffect trigger changed from `step===3||4` to `step>=2`. Now auto-populates Payout tab and Receipt tab "Client/Executor Receives" from Commission calculation. Roadmap: ❌ P1 BUGS → FIXED S656, Pending Chrome QA.
-- **#382 Sale Type Ordering** — 5 files reordered to "Yard Sales, Garage Sales, Estate Sales, Flea Markets, Auctions" (estate sales no longer first): `about.tsx`, `index.tsx` (meta+OG+Twitter+schema+hero), `OnboardingModal.tsx`, `terms.tsx` (4 locations), `Layout.tsx` footer.
-- **#379 Craigslist ghost stub** — `scraperCron.ts` had stale comment saying "12:00 UTC — Craigslist" but actual cron entry was already FacebookMarketplace. Comment corrected. (VALID_SOURCES was already correct — no Craigslist entry to remove.)
+- **Outreach security fix — Open redirect (HIGH)** — `/api/outreach/click` route accepted any `original` URL and redirected without validation — exploitable as a phishing proxy via `finda.sale` domain. Added hostname allowlist (`finda.sale`, `www.finda.sale`) with URL parse validation. Rejects non-`finda.sale` destinations with HTTP 400.
+- **Outreach security fix — PII in Railway logs (MEDIUM)** — Two skip-log lines in `outreachEmailsCron.ts` logged raw email addresses to Railway. Replaced `record.emailAddress` with `record.organizerId` in suppressed/blocked-domain log lines.
+- **Outreach audit findings (clean):** Tracking pixel uses opaque UUID (no PII in URL ✅), `OUTREACH_SECRET` throws hard if missing (no fallback ✅), `escapeHtml()` applied to businessName before template rendering ✅, JWT payload carries email only for RFC 8058 compliance (LOW risk, unavoidable).
+
+**Chrome QA results:**
+- **#382 Sale Type Ordering — ✅ VERIFIED** — Homepage hero, /about, /terms (3 occurrences), footer all confirmed "yard sales, garage sales, estate sales..." (ss_87027k9va, ss_36987t75u)
+- **#228 Settlement Hub payout fix — UNVERIFIED** — Code fix confirmed in GitHub (commit e59df721). Browser test requires logging in as `artifactmi@gmail.com` (only account with ENDED sales in production). See Blocked Queue.
+- **#379 Craigslist comment fix — ✅ VERIFIED** (code-level — comment fix, no user-visible behavior)
 
 **Patrick actions needed:**
-1. Push S656 block (below)
-2. Set `OUTREACH_ENABLED=true` on Railway (carried from S655 — suppression clean, 3,298 eligible organizers ready)
+1. Push S657 block (outreach security fixes — see pushblock below)
+2. Set `OUTREACH_ENABLED=true` on Railway — 3,298 organizers queued, pipeline is secure and ready
 3. Set `CATEGORY_SYNC_ENABLED=true` on Railway (CategoryTopFinds cron has never run — TrendingSection on category pages is empty)
+4. To verify #228: log in as `artifactmi@gmail.com` → Organizer Dashboard → Sales → open ENDED sale (`cmnxvyic4001li51qobwidrbl`) → Settlement Hub → confirm payout amount populates at step 2
 
 ---
 
@@ -219,7 +225,15 @@ enrichContactEmails.ts upgraded with pull-queue concurrency (SCRAPE_CONCURRENCY=
 
 ---
 
-## Recent Sessions (S653–S656)
+## Recent Sessions (S654–S657)
+
+### S657 — Outreach Security Audit + Fixes + Chrome QA (COMPLETE)
+
+Pre-launch security audit of cold outreach pipeline. Two vulnerabilities fixed: (1) open redirect in `/api/outreach/click` — added `finda.sale` allowlist with URL parse + hostname check; (2) email PII in Railway logs — replaced `record.emailAddress` with `record.organizerId` in two skip-log lines. Chrome QA: #382 Sale Type Ordering fully verified ✅ (homepage, /about, /terms, footer). #228 Settlement Hub UNVERIFIED — code confirmed in GitHub, needs `artifactmi@gmail.com` login with ENDED sale to browser-test.
+
+**Files changed (2):** `packages/backend/src/routes/outreach.ts`, `packages/backend/src/jobs/outreachEmailsCron.ts`
+
+---
 
 ### S656 — Settlement Hub P1 Fix + Sale Type Ordering + Craigslist Stub (COMPLETE)
 
@@ -311,27 +325,30 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 |---------|--------|---------------|---------------|
 | CategoryTopFinds TrendingSection | Cron runs at 05:00 UTC — no data until first run | QA after first nightly run; verify TrendingSection renders on a `/categories/[category]` page with real eBay data | S647 |
 | Outreach pipeline open/click tracking | Can't verify pixel + click routes without real sends | Verify after `OUTREACH_ENABLED=true` + first cron run: check Railway logs for send attempt, confirm tracking pixel route returns 200 | S647 |
-| suppressOffTargetOrganizers | ✅ Executed S655 — 3 records suppressed, queue clean | — | S648 → DONE S655 |
+| #228 Settlement Hub payout fix | Only `artifactmi@gmail.com` has ENDED sales in production — no credentials available | Log in as `artifactmi@gmail.com` → Organizer Dashboard → Sales → sale `cmnxvyic4001li51qobwidrbl` → Settlement Hub → confirm payout amount populates at step 2 | S657 |
+| AI listing enrichment | Fire-and-forget — needs a scraped sale with description >50 chars to have loaded since deploy | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` in DB | S651 |
 
 ---
 
-## Next Session — S656
+## Next Session — S658
 
-**First action:** Read STATE.md. Set `OUTREACH_ENABLED=true` on Railway if Patrick confirms (suppression is clean). Then roadmap work.
+**First action:** Read STATE.md. Confirm Patrick pushed S657 outreach security fixes. Check Railway logs for first `[OutreachCron]` batch (OUTREACH_ENABLED=true needed).
 
-**Patrick must-do before S656:**
-- Set `OUTREACH_ENABLED=true` on Railway (go to Railway → backend service → Variables). Suppression is clean — 3,298 eligible organizers in queue.
-- Watch first cron tick in Railway logs (`[OutreachCron]` prefix) — cron fires every 4 hours.
+**Patrick must-do before S658:**
+1. Push S657 block (outreach.ts + outreachEmailsCron.ts — see pushblock below)
+2. Set `OUTREACH_ENABLED=true` on Railway
+3. Set `CATEGORY_SYNC_ENABLED=true` on Railway
 
-**Roadmap work (S656 priority order):**
-1. **CategoryTopFinds QA** — verify `/categories/estate-sales` or `/categories/antiques` renders the TrendingSection with real eBay data (cron has been running nightly at 05:00 UTC since S646 deploy). Check Railway logs for `[categorySyncCron]` if data is missing.
-2. **Roadmap BROKEN items** — read `claude_docs/strategy/roadmap.md`, prioritize items marked BROKEN or Pending Chrome QA.
-3. **Outreach tracking verification** — after first cron tick, confirm Railway logs show send attempts + tracking pixel returning 200.
-4. **D-003 / D-004 deferred from brand audit** — Empty state CTAs (D-003) and mobile viewport (D-004) — both need Chrome QA. Noted in `claude_docs/audits/brand-drift-2026-05-05.md`.
+**S658 priority order:**
+1. **Outreach first-send verification** — check Railway logs for `[OutreachCron] Sent Touch 1` after OUTREACH_ENABLED=true. Confirm pixel route returns 200.
+2. **#228 Settlement Hub QA** — Patrick logs in as `artifactmi@gmail.com`, verifies payout amount at step 2, reports result. Mark ✅ or ❌.
+3. **CategoryTopFinds QA** — verify `/categories/estate-sales` renders TrendingSection with eBay data.
+4. **Roadmap BROKEN items** — read roadmap.md, advance next priority item.
 
 **Blocked/Unverified carry-forward:**
-- AI listing enrichment — needs a scraped sale with description >50 chars to have loaded. Check `[listingEnrichmentService]` in Railway logs.
-- CategoryTopFinds TrendingSection — verify first nightly run populated data.
+- #228 Settlement Hub — needs `artifactmi@gmail.com` login (see Blocked Queue)
+- AI listing enrichment — needs scraped sale with description >50 chars. Check `[listingEnrichmentService]` in Railway logs.
+- CategoryTopFinds TrendingSection — verify after CATEGORY_SYNC_ENABLED=true first nightly run.
 
 ---
 
