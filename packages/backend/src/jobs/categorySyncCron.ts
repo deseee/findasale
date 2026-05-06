@@ -108,7 +108,7 @@ async function syncCategory(slug: string, config: { display: string; ebayIds: st
   } catch (err) { console.error(`[CategorySync] Error for ${slug}:`, err); }
 }
 
-async function runCategorySync(): Promise<void> {
+export async function runCategorySync(): Promise<void> {
   console.log('[CategorySync] Starting...');
   for (const [slug, config] of Object.entries(CATEGORY_EBAY_MAP)) {
     await syncCategory(slug, config);
