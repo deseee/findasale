@@ -4,7 +4,34 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S657 — Outreach Security Audit + Fixes + Chrome QA (COMPLETE)**
+**Latest: S658 — Comprehensive Pre-Outreach Security Audit + 15 Fixes (COMPLETE)**
+
+Two full hacker audit passes (outreach pipeline + full stack). 15 security items addressed. Migration deployed. Outreach cleared for launch.
+
+**Shipped (code):**
+- **Resend webhook signature verification (P1)** — `outreach.ts`: added svix signature check on `/resend-webhook`. Unauthenticated POSTs can no longer suppress organizer emails. `svix` added to `backend/package.json`.
+- **Image upload: MIME whitelist + magic bytes + Cloudinary resource_type (P1)** — `uploadController.ts`: multer fileFilter rejects non-image MIME types; magic bytes validation checks actual file signatures (JPEG/PNG/GIF/WebP/HEIC); Cloudinary changed from `resource_type: 'auto'` to `'image'`. All 5 upload endpoints protected.
+- **Organizer API: rate limiting + PII stripping (P1)** — `organizers.ts`: 100 req/10min rate limiter on public directory; email/address stripped from unauthenticated responses. Phone/address only returned for authenticated callers.
+- **Stripe Connect ownership validation + audit logging (P1)** — `stripeController.ts`: explicit `organizer.userId !== req.user.id` ownership check; `[SECURITY]` audit log on every Connect account link and invalid account clear.
+- **Outreach tracking rate limits (P2)** — `outreach.ts`: pixel endpoint 30 req/min, click endpoint 10 req/min.
+- **Error log credential redaction (P2)** — `outreachEmailsCron.ts`: catch blocks now log `err.message` only, not full error object (prevents Nodemailer transport config leaking auth details).
+- **Subject line newline injection (P3)** — `outreachEmailsCron.ts`: `\r\n\t` stripped from business names before subject rendering.
+- **CAN-SPAM audit trail (P2)** — `schema.prisma`: `OutreachAuditLog` model + `OutreachAuditEvent` enum added. `SENT` event wired into cron after successful send. `OPTED_OUT` event wired into unsubscribe handler. Migration `20260506000000_add_outreach_audit_log` deployed to Railway ✅.
+- **processedWebhookEvent pruning (P2)** — `webhookEventPruneJob.ts` (NEW): daily at 3am UTC, deletes events >30 days old. Wired into `index.ts`.
+
+**Already secure (no change needed):** Password reset token invalidation ✅, suppression table UPSERT ✅, unsubscribe rate limit ✅, JWT role validation (DB-side) ✅, email verify token cleared after use ✅, CORS ✅, `OUTREACH_ENABLED` gate ✅.
+
+**CLAUDE.md credential check:** Project git is clean (no credentials committed). Global CLAUDE.md with Railway creds is local-only on Patrick's machine — never committed, properly .gitignore'd.
+
+**Patrick actions still needed:**
+1. **Enable 2FA on Google Workspace and MailerLite** — outreach infrastructure; compromise = campaign destroyed
+2. **Set `OUTREACH_ENABLED=true` on Railway** — pipeline is hardened, 3,298 organizers queued
+3. **Set `CATEGORY_SYNC_ENABLED=true` on Railway** — TrendingSection on category pages still empty
+4. **Verify #228 Settlement Hub** — log in as `artifactmi@gmail.com`, open ENDED sale, check payout populates at step 2
+
+---
+
+**Previous: S657 — Outreach Security Audit + Fixes + Chrome QA (COMPLETE)**
 
 Full security pre-launch audit of cold outreach pipeline. Two vulnerabilities found and fixed. Chrome QA completed for S656 items.
 

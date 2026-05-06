@@ -1,25 +1,44 @@
-# Patrick's Dashboard — May 6, 2026 (S657 wrap)
+# Patrick's Dashboard — May 6, 2026 (S658 wrap)
 
 ---
 
 ## ✅ Actions needed from you
 
-**1. Push S657 security fixes** (2 files — outreach pipeline):
+**1. Push wrap docs:**
 ```powershell
-git add packages/backend/src/routes/outreach.ts
-git add packages/backend/src/jobs/outreachEmailsCron.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix(security): block open redirect in outreach click route; remove email PII from Railway logs; wrap S657"
+git commit -m "docs: wrap S658 — comprehensive security audit + 15 fixes"
 .\push.ps1
 ```
 
-**2. Set Railway env vars (if not done from S656):**
-- `OUTREACH_ENABLED=true` — pipeline is now security-hardened. 3,298 organizers queued. Fires every 4 hours at 20/day warmup.
-- `CATEGORY_SYNC_ENABLED=true` — TrendingSection on category pages empty until this is set.
+**2. Enable 2FA on Google Workspace + MailerLite** — If compromised, your outreach campaign collapses and your sender reputation is destroyed. Do this before you flip outreach on.
 
-**3. Verify Settlement Hub manually (Chrome QA blocked — need your login):**
-Log in as `artifactmi@gmail.com` → Organizer Dashboard → Sales → click the ENDED sale → open Settlement Hub → confirm payout amount shows at step 2. Let me know the result so I can mark #228 ✅ or ❌.
+**3. Set Railway env vars:**
+- `OUTREACH_ENABLED=true` — pipeline is hardened and migration is deployed. 3,298 organizers queued.
+- `CATEGORY_SYNC_ENABLED=true` — TrendingSection on category pages is still empty until this is set.
+
+**4. Verify Settlement Hub (#228):**
+Log in as `artifactmi@gmail.com` → Organizer Dashboard → Sales → open ENDED sale → Settlement Hub → confirm payout amount shows at step 2.
+
+---
+
+## S658 — Comprehensive Pre-Outreach Security Audit + 15 Fixes
+
+Two hacker audit passes. 15 security items reviewed. 9 new fixes shipped. Migration deployed.
+
+**What shipped:**
+- **Resend webhook now signed** (P1) — fake bounce events can no longer suppress organizer emails
+- **Image upload hardened** (P1) — MIME whitelist + magic bytes check + Cloudinary type restriction on all 5 upload endpoints
+- **Organizer API locked down** (P1) — rate limiting + email/address stripped from public unauthenticated responses
+- **Stripe Connect ownership validated** (P1) — audit logging on all Connect account changes
+- **Tracking endpoint rate limits** (P2) — pixel 30/min, click 10/min
+- **Credential redaction in error logs** (P2) — Nodemailer auth can no longer appear in Railway logs
+- **CAN-SPAM audit trail built** (P2) — `OutreachAuditLog` table live, SENT + OPTED_OUT events wired, migration deployed ✅
+- **Webhook event pruning job** (P2) — daily cleanup prevents unbounded table growth
+- **Subject line injection hardened** (P3)
+
+**Also verified clean (no change needed):** Password reset flow ✅, suppression UPSERT ✅, unsubscribe rate limit ✅, JWT role validation ✅, CLAUDE.md not in git ✅.
 
 ---
 
