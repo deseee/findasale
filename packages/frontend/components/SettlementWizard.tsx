@@ -87,13 +87,14 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
       if (settlement.clientPayout?.amount) {
         // If payout already exists, use that amount
         setPayoutAmount(settlement.clientPayout.amount as unknown as number);
-      } else if ((step === 3 || step === 4) && !settlement.clientPayout) {
-        // If on payout step and no payout exists yet, use netProceeds
+      } else if (!settlement.clientPayout && step >= 2) {
+        // Calculate payout from commission tab onwards (step 2 = commission, step 3+ = payout/receipt)
+        // Use commissionRate if available, otherwise calculate from netProceeds
         const calculatedPayout = settlement.netProceeds ?? (settlement.totalRevenue - settlement.totalExpenses);
         setPayoutAmount(calculatedPayout as unknown as number);
       }
     }
-  }, [step, settlement]);
+  }, [step, settlement, settlement?.commissionRate]);
 
   const closeMutation = useMutation({
     mutationFn: () =>
@@ -366,7 +367,7 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
           {step < WIZARD_STEPS.length - 1 && (
             <button
               onClick={() => setStep(step + 1)}
-              className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
             >
               Next →
             </button>
