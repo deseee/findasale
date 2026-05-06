@@ -23,6 +23,15 @@ interface HoldPlacedAlertData {
   saleId: string;
 }
 
+interface HoldPlacedShopperData {
+  shopperEmail: string;
+  shopperName: string | null;
+  itemTitle: string;
+  itemId: string;
+  saleTitle: string;
+  expiresAt: Date;
+}
+
 interface ItemSoldAlertData {
   organizerEmail: string;
   organizerName: string;
@@ -68,6 +77,44 @@ export const sendHoldPlacedAlert = async (data: HoldPlacedAlertData): Promise<vo
     console.log(`[saleAlert] Hold placed alert sent to ${data.organizerEmail}`);
   } catch (err) {
     console.error('[saleAlert] Failed to send hold placed alert:', err);
+    // Don't throw — this is a best-effort notification
+  }
+};
+
+/**
+ * Send "hold placed" confirmation email to the shopper
+ * Confirms their hold was successfully placed and shows expiry time
+ * Fire-and-forget: errors are logged but don't block
+ */
+export const sendHoldPlacedToShopper = async (data: HoldPlacedShopperData): Promise<void> => {
+  try {
+    const itemLink = `${FRONTEND_URL}/items/${data.itemId}`;
+    const name = data.shopperName || 'there';
+
+    // Format expiry time in user-friendly format
+    const formatted = data.expiresAt.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    });
+
+    const html = buildEmail({
+      preheader: `Your hold on ${data.itemTitle} is confirmed`,
+      headline: `Hold confirmed ✓`,
+      body: `<p>Hi ${name},</p><p>Your hold on <strong>${data.itemTitle}</strong> from <em>${data.saleTitle}</em> has been successfully placed!</p><p>Your hold expires at <strong>${formatted}</strong>. Complete your purchase before then to secure this item.</p><p>If the organizer confirms your hold, you'll receive another email with additional details.</p>`,
+      ctaText: 'View Item',
+      ctaUrl: itemLink,
+      accentColor: '#8FB897', // sage-green
+    });
+
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: data.shopperEmail,
+      subject: `Your hold on "${data.itemTitle}" is confirmed`,
+      html,
+    });
+
+    console.log(`[saleAlert] Hold placed confirmation sent to ${data.shopperEmail}`);
+  } catch (err) {
+    console.error('[saleAlert] Failed to send hold placed confirmation to shopper:', err);
     // Don't throw — this is a best-effort notification
   }
 };

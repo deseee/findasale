@@ -384,56 +384,6 @@ const CouponsPage = () => {
                 </div>
               </div>
 
-              {/* Coming Soon: Cosmetics & Perks */}
-              <div>
-                <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">
-                  Coming Soon
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Hunt Pass Discount */}
-                  <ComingSoonCard
-                    title="Hunt Pass Discount"
-                    description="Reduce the cost of Hunt Pass renewal"
-                    cost={100}
-                  />
-                  {/* Haul Visibility Boost */}
-                  <ComingSoonCard
-                    title="Haul Visibility Boost"
-                    description="Boost your haul post to the top of the feed for 24 hours"
-                    cost={80}
-                  />
-                  {/* Seasonal Challenge Access */}
-                  <ComingSoonCard
-                    title="Seasonal Challenge Access"
-                    description="Unlock bonus seasonal challenge track"
-                    cost={250}
-                  />
-                  {/* Username Color */}
-                  <ComingSoonCard
-                    title="Username Color"
-                    description="Custom color for your username in the Guild"
-                    cost={1000}
-                  />
-                  {/* Frame Badge */}
-                  <ComingSoonCard
-                    title="Frame Badge"
-                    description="Exclusive profile frame visible on your public profile"
-                    cost={2500}
-                  />
-                  {/* Crew Creation */}
-                  <ComingSoonCard
-                    title="Crew Creation"
-                    description="Found a crew and recruit members"
-                    cost={500}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ORGANIZER TAB */}
-        {activeTab === 'organizer' && (
           <div className="mb-10">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">

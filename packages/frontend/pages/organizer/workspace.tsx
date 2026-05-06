@@ -249,7 +249,6 @@ export default function WorkspaceSettingsPage() {
       return;
     }
     try {
-      // TODO (post-launch): Implement workspace deletion endpoint
       showToast('Workspace deletion not yet implemented', 'info');
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to delete workspace', 'error');
@@ -655,7 +654,4 @@ export default function WorkspaceSettingsPage() {
             </div>
           )}
         </div>
-      </div>
-    </TierGate>
-  );
-}
+      </di

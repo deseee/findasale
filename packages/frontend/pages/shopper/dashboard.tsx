@@ -15,6 +15,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
+import { formatDistanceToNow, parseISO } from 'date-fns';
 import Link from 'next/link';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
@@ -193,7 +194,19 @@ const ShopperDashboard = () => {
     enabled: !!user?.id,
   });
 
-  // Fetch XP profile for rank progress
+
+
+  // Fetch shopper holds for Pickups tab
+  const { data: holds = [], isLoading: holdsLoading } = useQuery({
+    queryKey: ['shopper-holds'],
+    queryFn: async () => {
+      const response = await api.get('/reservations/shopper');
+      return response.data || [];
+    },
+    enabled: !!user?.id,
+  });
+
+    // Fetch XP profile for rank progress
   const { data: xpProfile, isLoading: xpLoading } = useXpProfile(!!user?.id);
 
   // Rank threshold configuration — must match backend xpService.ts RANK_THRESHOLDS
@@ -585,6 +598,73 @@ const ShopperDashboard = () => {
                   <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No organizers followed yet</h3>
                   <p className="text-warm-600 dark:text-warm-400 mb-6">
                     Follow an organizer from any sale page to see their upcoming sales here.
+                  </p>
+                  <Link
+                    href="/"
+                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+                  >
+                    Browse Sales
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pickups Tab */}
+          {activeTab === 'pickups' && (
+            <div>
+              {holdsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}
+                </div>
+              ) : holds && holds.length > 0 ? (
+                <div className="space-y-4">
+                  {holds.map((hold) => (
+                    <div key={hold.id} className="card p-4 border border-warm-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow">
+                      <div className="flex gap-4">
+                        {hold.item.photoUrls && hold.item.photoUrls.length > 0 && (
+                          <img
+                            src={hold.item.photoUrls[0]}
+                            alt={hold.item.title}
+                            className="w-20 h-20 object-cover rounded-md flex-shrink-0"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">
+                            {hold.item.title}
+                          </h3>
+                          <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">
+                            {hold.item.sale?.title}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {hold.expiresAt && (
+                              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                Expires in{' '}
+                                {formatDistanceToNow(parseISO(hold.expiresAt), { addSuffix: true })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2 flex-shrink-0">
+                          {hold.item.id && (
+                            <Link
+                              href={`/items/${hold.item.id}`}
+                              className="text-sm font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
+                            >
+                              View Item
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <p className="text-5xl mb-4">🎁</p>
+                  <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No active holds</h3>
+                  <p className="text-warm-600 dark:text-warm-400 mb-6">
+                    When you place a hold on an item at a sale, it will appear here.
                   </p>
                   <Link
                     href="/"
