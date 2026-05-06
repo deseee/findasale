@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '../../lib/prisma';
-import { getRandomUserAgent } from './userAgents';
+import { getRandomUserAgent, getRandomReferer } from './userAgents';
 
 // In-memory cache for Google Place lookups — 30-day TTL
 const placeIdCache = new Map<string, { placeId: string; cachedAt: number }>();
@@ -313,7 +313,7 @@ async function lookupESNCompanyProfile(
         'User-Agent': getRandomUserAgent(),
         Accept: 'application/json',
         'Accept-Language': 'en-US',
-        Referer: 'https://www.estatesales.net/',
+        Referer: getRandomReferer() || 'https://www.estatesales.net/',
       },
       signal: AbortSignal.timeout(10000),
     });
