@@ -654,4 +654,7 @@ export default function WorkspaceSettingsPage() {
             </div>
           )}
         </div>
-      </di
+      </div>
+  </TierGate>
+  );
+}
