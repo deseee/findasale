@@ -177,7 +177,7 @@ export default function WorkspaceSettingsPage() {
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 px-4 py-12">
           <div className="max-w-4xl mx-auto">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
-              <p className="text-gray-600 dark:text-gray-300 mb-4">No workspace found. Create one first.</p>
+              <p className="text-gray-600 dark:bg-gray-300 mb-4">No workspace found. Create one first.</p>
               <Link href="/organizer/workspace">
                 <a className="text-sage-600 hover:text-sage-700 font-semibold">Go back</a>
               </Link>
@@ -655,6 +655,6 @@ export default function WorkspaceSettingsPage() {
           )}
         </div>
       </div>
-  </TierGate>
+    </TierGate>
   );
 }
