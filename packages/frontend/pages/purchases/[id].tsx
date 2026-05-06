@@ -14,6 +14,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Head from 'next/head';
 import Skeleton from '../../components/Skeleton';
+import { getItemImageUrl } from '../../lib/imageUtils';
 
 const PurchaseConfirmationPage = () => {
   const router = useRouter();
@@ -158,7 +159,7 @@ const PurchaseConfirmationPage = () => {
             <div className="mb-10">
               <img
                 key={item.photoUrls[0]}
-                src={item.photoUrls[0]}
+                src={getItemImageUrl(item.photoUrls[0]) ?? item.photoUrls[0]}
                 alt={item.title}
                 className="w-full max-h-56 object-cover rounded-lg shadow-md dark:shadow-lg"
               />

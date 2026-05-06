@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 import { useToast } from '@/components/ToastContext';
 import api from '@/lib/api';
+import { getItemImageUrl } from '@/lib/imageUtils';
 
 interface LootItem {
   id: string;
@@ -177,7 +178,7 @@ function LootLegendPage() {
                   {purchase.item.photoUrls && purchase.item.photoUrls[0] && (
                     <img
                       key={purchase.item.photoUrls[0]}
-                      src={purchase.item.photoUrls[0]}
+                      src={getItemImageUrl(purchase.item.photoUrls[0]) ?? purchase.item.photoUrls[0]}
                       alt={purchase.item.title}
                       className="w-full h-full object-cover"
                     />

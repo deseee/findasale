@@ -17,6 +17,7 @@ import { useFeedbackSurvey } from '../../hooks/useFeedbackSurvey';
 import Head from 'next/head';
 import Skeleton from '../../components/Skeleton';
 import PickupBookingCard from '../../components/PickupBookingCard';
+import { getItemImageUrl } from '../../lib/imageUtils';
 
 const CheckoutSuccessPage = () => {
   const router = useRouter();
@@ -179,7 +180,7 @@ const CheckoutSuccessPage = () => {
             <div className="mb-10">
               <img
                 key={item.photoUrls[0]}
-                src={item.photoUrls[0]}
+                src={getItemImageUrl(item.photoUrls[0]) ?? item.photoUrls[0]}
                 alt={item.title}
                 className="w-full max-h-56 object-cover rounded-lg shadow-md dark:shadow-lg"
               />

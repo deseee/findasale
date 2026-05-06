@@ -7,6 +7,7 @@ import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
 import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
+import { getItemImageUrl } from '../../lib/imageUtils';
 
 interface Bid {
   id: string;
@@ -161,7 +162,7 @@ export default function BidsPage() {
                     {bid.item.photoUrls && bid.item.photoUrls.length > 0 && bid.item.photoUrls[0] ? (
                       <img
                         key={bid.item.photoUrls[0]}
-                        src={bid.item.photoUrls[0]}
+                        src={getItemImageUrl(bid.item.photoUrls[0]) ?? bid.item.photoUrls[0]}
                         alt={bid.item.title}
                         className="w-full h-full object-cover"
                       />

@@ -11,6 +11,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../../components/AuthContext';
 import api from '../../../lib/api';
+import { getItemImageUrl } from '../../../lib/imageUtils';
 
 interface Item {
   id: string;
@@ -147,7 +148,7 @@ const EarlyAccessItemsPage = () => {
                       {item.photoUrls && item.photoUrls.length > 0 ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={item.photoUrls[0]}
+                          src={getItemImageUrl(item.photoUrls[0]) ?? item.photoUrls[0]}
                           alt={item.title}
                           className="w-full h-full object-cover hover:scale-105 transition-transform"
                         />

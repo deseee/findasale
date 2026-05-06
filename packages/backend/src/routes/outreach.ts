@@ -1,9 +1,23 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { prisma } from '../lib/prisma';
 import { suppressionService } from '../services/suppressionService';
 
 const router = express.Router();
+
+// Rate limiter for unsubscribe endpoint — prevents abuse (10 per hour per IP)
+const unsubscribeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many unsubscribe requests. Please try again later.' },
+  skip: (req) => {
+    // Only apply rate limit to POST requests (GET unsubscribes are links, not programmatic)
+    return req.method !== 'POST';
+  },
+});
 
 router.get('/pixel', async (req, res) => {
   try {
@@ -80,7 +94,11 @@ const handleUnsubscribe = async (req: express.Request, res: express.Response) =>
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.OUTREACH_SECRET || 'default-secret') as any;
+      const secret = process.env.OUTREACH_SECRET;
+      if (!secret) {
+        throw new Error('OUTREACH_SECRET environment variable is not configured');
+      }
+      const decoded = jwt.verify(token, secret) as any;
       const { email } = decoded;
       await suppressionService.processOptOut(email);
       res.status(200).send('<html><body><p>You have been unsubscribed. You will not receive further emails from FindA.Sale.</p></body></html>');
@@ -97,7 +115,9 @@ const handleUnsubscribe = async (req: express.Request, res: express.Response) =>
 router.get('/unsubscribe', handleUnsubscribe);
 // RFC 8058 one-click POST — Gmail/Yahoo POST to this when user clicks the inbox unsubscribe button.
 // Body is application/x-www-form-urlencoded with "List-Unsubscribe=One-Click". Token comes from URL query.
-router.post('/unsubscribe', express.urlencoded({ extended: false }), handleUnsubscribe);
+// Security: token validation is the auth mechanism. Explicit token required in query or body.
+// Rate limiting applied to POST to prevent abuse via forged requests.
+router.post('/unsubscribe', unsubscribeLimiter, express.urlencoded({ extended: false }), handleUnsubscribe);
 
 router.post('/resend-webhook', async (req, res) => {
   try {
