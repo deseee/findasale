@@ -383,7 +383,12 @@ const CouponsPage = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
 
+        {/* ORGANIZER TAB */}
+        {activeTab === 'organizer' && (
           <div className="mb-10">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">
