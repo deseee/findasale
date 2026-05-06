@@ -32,27 +32,22 @@ let cachedToken: { token: string; expires: number } | null = null;
 
 async function fetchEbayToken(): Promise<string | null> {
   if (cachedToken && cachedToken.expires > Date.now()) return cachedToken.token;
-  const clientId = process.env.EBAY_CLIENT_ID;
-  const clientSecret = process.env.EBAY_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    console.error('[CategorySync] EBAY_CLIENT_ID or EBAY_CLIENT_SECRET not set');
-    return null;
-  }
-  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  // Fetch token via Vercel proxy — avoids needing EBAY_CLIENT_ID/SECRET on Railway
+  const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+  const proxySecret = process.env.EBAY_PROXY_SECRET;
   try {
-    const res = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+    const res = await fetch(`${frontendUrl}/api/proxy/ebay?action=token`, {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${credentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
+        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
       },
-      body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope',
     });
     if (!res.ok) { console.error(`[CategorySync] Token fetch failed: ${res.status}`); return null; }
     const data = await res.json() as { access_token?: string; expires_in?: number };
-    if (!data.access_token) return null;
+    if (!data.access_token) { console.error('[CategorySync] No access_token in response'); return null; }
     cachedToken = { token: data.access_token, expires: Date.now() + ((data.expires_in ?? 7200) - 300) * 1000 };
-    console.log('[CategorySync] eBay OAuth token fetched');
+    console.log('[CategorySync] eBay OAuth token fetched via proxy');
     return data.access_token;
   } catch (err) { console.error('[CategorySync] Token fetch error:', err); return null; }
 }
