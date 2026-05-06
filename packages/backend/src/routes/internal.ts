@@ -38,11 +38,11 @@ router.post('/enrich-sale-details', triggerSaleDetailEnrichment);
 // GET /api/internal/enrich-sale-details/status — check unenriched sales count
 router.get('/enrich-sale-details/status', getSaleDetailEnrichmentStatus);
 
-// GET /api/internal/enrich-sale-details/unenriched — get batch of unenriched sales
-router.get('/enrich-sale-details/unenriched', getBatchOfUnenrichedSales);
+// GET /api/internal/enrich-sale-details/batch — get batch of unenriched sales (called by enrich-sale-details.yml workflow)
+router.get('/enrich-sale-details/batch', getBatchOfUnenrichedSales);
 
-// POST /api/internal/enrich-sale-details/bulk-upsert — bulk upsert enriched sale details
-router.post('/enrich-sale-details/bulk-upsert', bulkUpsertEnrichedSales);
+// POST /api/internal/enrich-sale-details/bulk — bulk upsert enriched sale details (called by enrich-sale-details.yml workflow)
+router.post('/enrich-sale-details/bulk', bulkUpsertEnrichedSales);
 
 // POST /api/internal/category-sync/trigger — manually trigger eBay category sync (public eBay data, no auth required)
 router.post('/category-sync/trigger', async (req: express.Request, res: express.Response) => {
