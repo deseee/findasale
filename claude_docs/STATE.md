@@ -4,7 +4,23 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S653 — Sitewide Image Proxy Audit + Security Hardening (COMPLETE)**
+**Latest: S654 — Scraper Hardening + Crash Fix + Nav Bug (COMPLETE)**
+
+Scraper security and stealth improvements, removal of orphaned claim email system, P0 backend crash fix, and Explore nav dropdown repaired.
+
+**Shipped:**
+- **Scraper fingerprint hardening** — UA pool updated to Chrome 134/135, Firefox 135/136, Safari 18.3. `getRandomReferer()` centralized in `userAgents.ts` (was duplicated in 3 files). `Accept-Encoding: gzip, deflate, br` added to all HTTP scraper requests. `FindASaleBot/1.0` removed from all fallbacks.
+- **Log suppression** — Two identity-leaking log lines in `scraper/index.ts` scrubbed (businessName removed from output). Verbose logs across `httpCache.ts`, `saleDetailEnrichment.ts`, `enrichment.ts` gated behind `LOG_LEVEL=debug`.
+- **GitHub Actions DATABASE_URL fix** — Added `DATABASE_URL: ${{ secrets.DATABASE_URL }}` to 4 workflow files (`scrape-estatesalesnet.yml`, `scrape-eventbrite.yml`, `scrape-facebook-events.yml`, `scrape-newspaper-rss.yml`). Previously missing — httpCache conditional GETs were silently failing in Actions (Prisma couldn't initialize).
+- **Removed orphaned claim email system** — Deleted `claimEmailService.ts` + `claimEmailCron.ts`. Removed wiring from `index.ts` and `internal.ts`. Decision: one pipeline (`outreachEmailsCron.ts`) is correct. Two cold systems = split deliverability reputation + suppression gap risk.
+- **P0 backend crash fix** — `routes/internal.ts` was truncated (pre-existing, introduced in a prior session) — file ended at bare `router` with no routes registered and no `export default`. `app.use('/api/internal', undefined)` caused `TypeError: Router.use() requires a middleware function` crash loop. Restored complete file with all routes + export.
+- **Explore nav dropdown** — Two bugs fixed: (1) hover sets open=true, then click was toggling true→false (immediate close). Changed onClick to always open. (2) `mt-1` gap between button and dropdown was triggering `onMouseLeave` mid-hover. Fixed with invisible bridge div covering the gap.
+
+**Files changed:** `userAgents.ts`, `rateLimiter.ts`, `estatesalesnet.ts`, `enrichment.ts`, `facebook-marketplace.ts`, `herePlaces.ts`, `httpCache.ts`, `saleDetailEnrichment.ts`, `scraper/index.ts`, `scrape-estatesalesnet.yml`, `scrape-eventbrite.yml`, `scrape-facebook-events.yml`, `scrape-newspaper-rss.yml`, `internal.ts` (crash fix + claim removal), `index.ts` (claim removal), `claimEmailService.ts` (deleted), `claimEmailCron.ts` (deleted), `Layout.tsx` (nav fix)
+
+---
+
+**Previous: S653 — Sitewide Image Proxy Audit + Security Hardening (COMPLETE)**
 
 Full sitewide audit of scraped photo proxy bypass. Root cause confirmed: `OrganizerSaleCard.tsx` was correctly using `getSaleImageUrl`, but the trending page rendered its own inline card with raw `sale.photoUrls[0]` — never going through the proxy. Fixed all 19 locations across the frontend. Also fixed trending algorithm pulling permanent retail businesses, three security vulnerabilities in the outreach system, and deprecated `onLoadingComplete` across all `<Image>` components.
 
@@ -251,14 +267,21 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S654
+## Next Session — S655
 
-**First action:** Verify S653 push landed. Check Vercel deploy — confirm trending page photos load and Hot Sales no longer shows barber shops/Goodwill.
+**First action:** Read STATE.md. Then Chrome QA the S654 fixes before starting new work.
 
-**Recommended work:**
-- Chrome QA: `/trending` (photos loading, Hot Sales content quality), `/neighborhoods/[slug]`, homepage widgets (CityRecentSales, CityTopFinds) — verify proxied photos render
-- Recipient preview audit (still in Blocked/Unverified Queue from S650) — sample organizer pages from each ingest source, screenshot what cold outreach recipients will see
-- `suppressOffTargetOrganizers` dry-run — ~400+ records flagged, not yet executed
+**QA targets (do these first):**
+1. Explore nav dropdown — hover opens, move to dropdown items without close, click item navigates. Test on finda.sale in Chrome.
+2. Trending page (`/trending`) — photos load (not broken), Hot Sales shows real time-limited sales (no barber shops, Goodwill, Candy Shop).
+3. Homepage — CityRecentSales + CityTopFinds widgets load with proxied photos.
+4. Backend health — confirm no crash loop in Railway logs (internal.ts fix).
+
+**After QA — roadmap work:**
+- `suppressOffTargetOrganizers` execution — dry-run already done (486 records, false positives corrected). Ready to execute with CONFIRM=true via psycopg2. Do this before outreach is re-enabled.
+- Re-enable outreach — once suppression is clean, set `OUTREACH_ENABLED=true` on Railway and watch first cron tick.
+- Brand drift batch (8 copy-only single-line fixes, already audited in S648 — see patrick-dashboard.md for the file list).
+- Roadmap audit — read `claude_docs/strategy/roadmap.md` for next BROKEN/PENDING items.
 
 ---
 

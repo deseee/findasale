@@ -1,4 +1,28 @@
-# Patrick's Dashboard — May 5, 2026 (S653 wrap)
+# Patrick's Dashboard — May 6, 2026 (S654 wrap)
+
+---
+
+## S654 — Scraper Hardening + P0 Crash Fix + Nav Bug. 18 files.
+
+**What shipped:**
+
+- **Scraper stealth** — UA pool current (Chrome 134/135, Firefox 135/136, Safari 18.3). Referer rotation centralized. `Accept-Encoding` headers added. `FindASaleBot/1.0` identity removed everywhere.
+- **Log suppression** — Business names no longer appear in Railway logs during scrapes. Verbose debug logs gated behind `LOG_LEVEL=debug` env var.
+- **GitHub Actions DATABASE_URL** — Four scraper workflows were silently broken (Prisma couldn't connect → httpCache conditional GETs never worked). Fixed.
+- **Claim email system removed** — Two cold outreach systems existed. Removed the old Resend/branded one (`claimEmailService.ts`). `outreachEmailsCron.ts` is the one correct pipeline. Plain-text style is right for cold; branded HTML goes to Promotions.
+- **P0 crash fixed** — `internal.ts` was truncated in a prior session — backend was crash-looping with `Router.use() requires a middleware function but got undefined`. Restored complete file. Backend is green.
+- **Explore dropdown fixed** — Hover + click conflict caused immediate close. Gap between button and dropdown triggered premature mouseleave. Both fixed.
+
+**No action needed from you — all pushed.**
+
+---
+
+## Next Session — What to Do First
+
+1. **Chrome QA** — Explore dropdown (hover + move to items without close), trending page photos, homepage widgets.
+2. **suppressOffTargetOrganizers** — dry-run is done, 486 records, false positives corrected. Execute with CONFIRM=true via psycopg2 before re-enabling outreach.
+3. **Re-enable outreach** — once suppression runs, set `OUTREACH_ENABLED=true` on Railway.
+4. **Brand drift batch** — 8 single-line copy fixes already identified (see S648 section below).
 
 ---
 
