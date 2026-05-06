@@ -60,8 +60,11 @@ async function syncCategory(slug: string, config: { display: string; ebayIds: st
 
   const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
   const proxySecret = process.env.EBAY_PROXY_SECRET;
-  const ids = config.ebayIds.join(',');
-  const apiPath = `/buy/browse/v1/item_summary/search?category_ids=${ids}&sort=newlyListed&limit=12`;
+  // eBay filter syntax requires {id1|id2} — braces must be pre-encoded so Akamai
+  // doesn't reject the raw HTTP path. The Vercel proxy decodes req.query.path once,
+  // leaving %7B/%7C/%7D intact when forwarded to eBay via https.request.
+  const ids = config.ebayIds.join('%7C'); // %7C = pipe (eBay OR separator)
+  const apiPath = `/buy/browse/v1/item_summary/search?filter=categoryIds%3A%7B${ids}%7D&sort=newlyListed&limit=12`;
 
   try {
     const res = await fetch(
