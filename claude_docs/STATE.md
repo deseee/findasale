@@ -4,20 +4,29 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S659 — CategorySync Debugging (COMPLETE — awaiting re-test)**
+**Latest: S661 — Chrome QA: #228 ✅ #94 ✅ | #251 #235 UNVERIFIED**
 
-Diagnosed and fixed a multi-layer failure chain in `categorySyncCron.ts` that was keeping CategoryTopFinds empty. Four pushes this session:
-1. Added manual trigger endpoint `POST /api/internal/category-sync/trigger` (no auth — eBay public data)
-2. Added `X-EBAY-C-MARKETPLACE-ID: EBAY_US` header to Browse API search calls (required by eBay)
-3. Reverted `fetchEbayToken` to call eBay OAuth directly — Railway has `EBAY_CLIENT_ID`/`EBAY_CLIENT_SECRET`; routing through Vercel proxy was returning 500
-4. **Final fix (deployed, not yet verified):** Pre-encoded curly braces in filter syntax — `filter=categoryIds%3A%7B${ids}%7D` with `%7C` pipe separator. Root cause: Akamai rejects raw `{` `}` in HTTP paths; `category_ids=id1,id2` only works for single IDs
-5. Fixed pnpm-lock.yaml out of sync (`svix` was in package.json but missing from lockfile)
+**#228 Settlement Hub — ✅ VERIFIED** as `artifactmi@gmail.com`. Navigated to `/organizer/settlement/cmnxvyic4001li51qobwidrbl`. All 4 wizard steps (Summary → Expenses → Commission → Payout) render correctly. $0.00 values are correct for test sale with no actual revenue. Settle button is an `<a>` link to `/organizer/settlement/[saleId]` — works as expected.
 
-**S659 status:** Code deployed, Railway green. CategoryTopFinds still empty — next session must re-trigger sync and confirm rows populate.
+**#94 /admin/bid-review — ✅ VERIFIED** as `user1@example.com` (ADMIN / Seedy2025!). Page loads at `/admin/bid-review`, shows "No bid IP records — All clear ✅". No 500 error.
+
+**#251 priceBeforeMarkdown — ⚠️ UNVERIFIED** — Code confirmed correct (`priceBeforeMarkdown: true, markdownApplied: true` in saleController getSale select). No production item currently has `markdownApplied=true`, so the strikethrough price UI cannot be visually verified. Queued.
+
+**#235 DonationModal — ⚠️ UNVERIFIED** — Code complete. DonationModal is triggered in SettlementWizard when `availableItems.length > 0` at the Receipt step. Needs a sale with a `SaleDonation` record AND available (unsold) items to test the "Donate Items & Get Tax Receipt" button.
+
+**Organizer profile sale count bug found:** Artifact organizer at `/organizers/artifact` shows "1 sale" but has at least 3 sales in DB (IDs: `cmnxvyic4001li51qobwidrbl`, `cmoarye3d0009ryn9vlqo05i2`, `cmom7h73l000hz36wzbruoa64`). The third sale ("Artifact Downtown Paw Paw") has 80+ items confirmed showing on the sale page. Profile page sale count likely filtering by active/upcoming only — ENDED sales not counted. Low priority.
+
+**CategoryTopFinds sync:** Re-triggered in S660 (returned `{"ok":true}`). Rows not yet verified in DB.
 
 **Patrick actions needed:**
-1. Set `CATEGORY_SYNC_ENABLED=true` on Railway — nightly cron won't fire without it
-2. (Optional) Trigger sync manually via: `POST https://backend-production-153c9.up.railway.app/api/internal/category-sync/trigger`
+1. Set `CATEGORY_SYNC_ENABLED=true` on Railway (nightly cron won't fire without it)
+2. Set `OUTREACH_ENABLED=true` on Railway (3,298 organizers queued)
+
+---
+
+**Previous: S659 — CategorySync Debugging (COMPLETE)**
+
+Diagnosed and fixed multi-layer failure in `categorySyncCron.ts`. Four pushes: manual trigger endpoint, eBay marketplace header, direct OAuth revert, pre-encoded filter syntax for Akamai. pnpm-lock.yaml fixed (svix out of sync). CategoryTopFinds still empty — re-triggered in S660.
 
 ---
 
@@ -369,28 +378,25 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 |---------|--------|---------------|---------------|
 | CategoryTopFinds TrendingSection | Cron runs at 05:00 UTC — no data until first run | QA after first nightly run; verify TrendingSection renders on a `/categories/[category]` page with real eBay data | S647 |
 | Outreach pipeline open/click tracking | Can't verify pixel + click routes without real sends | Verify after `OUTREACH_ENABLED=true` + first cron run: check Railway logs for send attempt, confirm tracking pixel route returns 200 | S647 |
-| #228 Settlement Hub payout fix | Only `artifactmi@gmail.com` has ENDED sales in production — no credentials available | Log in as `artifactmi@gmail.com` → Organizer Dashboard → Sales → sale `cmnxvyic4001li51qobwidrbl` → Settlement Hub → confirm payout amount populates at step 2 | S657 |
+| #251 priceBeforeMarkdown | No production item has `markdownApplied=true` — strikethrough UI cannot be visually confirmed | Find or seed an item with a markdown applied, then verify crossed-out price renders on sale detail page | S661 |
+| #235 DonationModal | Needs a Settlement flow with SaleDonation record + AVAILABLE items | Test as PRO organizer with a sale that has a SaleDonation record + unsold items — verify "Donate Items & Get Tax Receipt" button appears at Receipt step | S661 |
 | AI listing enrichment | Fire-and-forget — needs a scraped sale with description >50 chars to have loaded since deploy | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` in DB | S651 |
 
 ---
 
-## Next Session — S660
+## Next Session — S662
 
-**First action (mandatory):** Re-trigger category sync and verify DB rows.
-```
-POST https://backend-production-153c9.up.railway.app/api/internal/category-sync/trigger
-```
-Then query `CategoryTopFinds` count — should show ~12 rows per category (108 total). Check Vercel logs for `/api/proxy/ebay` 200s (not 400s). If 200s appear → open `finda.sale/categories/clothing` and confirm TrendingSection shows eBay items.
+**First action:** Read STATE.md + roadmap.md BROKEN section. Present top 3 by priority.
 
-**S660 priority order:**
-1. **Re-test CategoryTopFinds sync** (first action above)
-2. **Outreach first-send verification** — check Railway logs for `[OutreachCron] Sent Touch 1` (requires `OUTREACH_ENABLED=true`)
-3. **#228 Settlement Hub QA** — Patrick logs in as `artifactmi@gmail.com` → ENDED sale → Settlement Hub → confirm payout at step 2
-4. **Roadmap BROKEN items** — read roadmap.md, advance next priority
+**S662 priority order:**
+1. **CategoryTopFinds verify** — Query `CategoryTopFinds` count in DB. If >0 rows, open `finda.sale/categories/clothing` in Chrome and confirm TrendingSection renders with eBay items. If 0 rows, re-trigger sync and check Railway logs.
+2. **Outreach first-send verification** — Check Railway logs for `[OutreachCron] Sent Touch 1` — `OUTREACH_ENABLED=true` should be set by Patrick this session.
+3. **#251 and #235** — Seed or find a markdown item to verify priceBeforeMarkdown; test DonationModal on PRO organizer with unsold items.
+4. **Roadmap BROKEN items** — read roadmap.md BROKEN section, advance next priority.
 
-**Patrick must-do before S660:**
+**Patrick must-do before S662:**
 1. Set `CATEGORY_SYNC_ENABLED=true` on Railway
-2. Set `OUTREACH_ENABLED=true` on Railway (if not already done)
+2. Set `OUTREACH_ENABLED=true` on Railway
 
 ---
 
