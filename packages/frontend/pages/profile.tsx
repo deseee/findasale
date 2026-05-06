@@ -7,6 +7,7 @@ import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import ReferralWidget from '../components/ReferralWidget';
+import { getItemImageUrl } from '../lib/imageUtils';
 
 interface Bid {
   id: string;
@@ -308,7 +309,7 @@ const ProfilePage = () => {
                               {bid.item.photoUrls && bid.item.photoUrls.length > 0 ? (
                                 <img
                                   key={bid.item.photoUrls[0]}
-                                  src={bid.item.photoUrls[0]}
+                                  src={getItemImageUrl(bid.item.photoUrls[0]) ?? bid.item.photoUrls[0]}
                                   alt={bid.item.title}
                                   className="h-10 w-10 rounded-md object-cover"
                                   loading="lazy"/>
@@ -351,7 +352,7 @@ const ProfilePage = () => {
                       <div className="flex items-start gap-3 mb-3">
                         {bid.item.photoUrls && bid.item.photoUrls.length > 0 ? (
                           <img
-                            src={bid.item.photoUrls[0]}
+                            src={getItemImageUrl(bid.item.photoUrls[0]) ?? bid.item.photoUrls[0]}
                             alt={bid.item.title}
                             className="h-16 w-16 rounded-md object-cover flex-shrink-0"
                             loading="lazy"/>
