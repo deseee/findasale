@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
-import { getOptimizedUrl, getLqipUrl } from '../lib/imageUtils';
+import { getSaleImageUrl } from '../lib/imageUtils';
 import Skeleton from './Skeleton';
 import api from '../lib/api';
 import RSVPAttendeesModal from './RSVPAttendeesModal';
@@ -59,8 +59,8 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
   // Calculate image URLs
   const photoUrl = sale.photoUrls?.[0] ?? null;
   const hasPhoto = !!photoUrl;
-  const lqipUrl_calc = photoUrl ? getLqipUrl(photoUrl) : null;
-  const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl) : null;
+  const optimizedUrl = photoUrl ? getSaleImageUrl(photoUrl) : null;
+  const lqipUrl_calc = photoUrl ? getSaleImageUrl(photoUrl, 20) : null;
 
   // Reset image loading state when the photo URL changes
   // This ensures new images load even if the component instance is reused

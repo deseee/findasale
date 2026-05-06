@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import ConditionBadge from './ConditionBadge';
-import { getThumbnailUrl } from '../lib/imageUtils';
+import { getThumbnailUrl, getItemImageUrl } from '../lib/imageUtils';
 
 interface SimilarItemsProps {
   itemId: string;
@@ -66,8 +66,8 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category }) => {
               <div className="relative w-full aspect-square bg-gray-200 dark:bg-gray-700 rounded-t-lg overflow-hidden">
                 {item.photoUrl ? (
                   <img
-                    key={getThumbnailUrl(item.photoUrl)}
-                    src={getThumbnailUrl(item.photoUrl)}
+                    key={getThumbnailUrl(getItemImageUrl(item.photoUrl) || item.photoUrl)}
+                    src={getThumbnailUrl(getItemImageUrl(item.photoUrl) || item.photoUrl)}
                     alt={item.title}
                     className="w-full h-full object-cover"
                   />
@@ -108,8 +108,8 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category }) => {
                 <div className="relative w-full aspect-square bg-gray-200 dark:bg-gray-700 overflow-hidden">
                   {item.photoUrl ? (
                     <img
-                      key={getThumbnailUrl(item.photoUrl)}
-                      src={getThumbnailUrl(item.photoUrl)}
+                      key={getThumbnailUrl(getItemImageUrl(item.photoUrl) || item.photoUrl)}
+                      src={getThumbnailUrl(getItemImageUrl(item.photoUrl) || item.photoUrl)}
                       alt={item.title}
                       className="w-full h-full object-cover"
                     />

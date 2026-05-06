@@ -20,6 +20,7 @@ import { SkeletonGrid } from '../components/SkeletonCards';
 import ItemSearch from '../components/ItemSearch';
 import FilterSidebar from '../components/FilterSidebar';
 import ItemSearchResults from '../components/ItemSearchResults';
+import { getItemImageUrl } from '../lib/imageUtils';
 import {
   useItemSearch,
   useFilterSync,
@@ -38,8 +39,8 @@ const ItemCard = ({ item }: { item: any }) => (
   >
     {item.photoUrls?.[0] ? (
       <img
-        key={item.photoUrls[0]}
-        src={item.photoUrls[0]}
+        key={getItemImageUrl(item.photoUrls[0])}
+        src={getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0]}
         alt={item.title}
         className="aspect-square w-full object-cover"
         loading="lazy"
