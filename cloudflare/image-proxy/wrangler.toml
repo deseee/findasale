@@ -1,20 +1,3 @@
 name = "findasale-image-proxy"
 main = "worker.js"
 compatibility_date = "2026-05-05"
-type = "javascript"
-
-# Cloudflare Pages Functions are cheaper than Workers, but Workers offer more control.
-# This is a Workers script, not Pages Functions.
-
-# Account/zone details are configured via `wrangler.toml` at deploy time.
-# Run: wrangler publish --account-id <ID>
-# Or set CLOUDFLARE_ACCOUNT_ID env var.
-
-[env.production]
-name = "findasale-image-proxy"
-route = "findasale-image-proxy.workers.dev"
-
-[build]
-command = ""
-cwd = "./"
-watch_paths = ["worker.js"]

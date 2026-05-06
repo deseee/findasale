@@ -263,4 +263,159 @@ async function fetchSalePageHTML(sourceUrl: string, saleId?: string): Promise<st
       });
 
       // Navigate with timeout
-      const response = 
+      const response = await page.goto(sourceUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+
+      if (!response) {
+        throw new Error('No response from Playwright page.goto()');
+      }
+
+      const status = response.status();
+
+      if (status === 429) {
+        console.warn(`[SaleDetailEnrichment] 429 Too Many Requests for ${sourceUrl} — aborting`);
+        await page.close();
+        return null;
+      }
+
+      if (status >= 400 && status < 500) {
+        console.warn(`[SaleDetailEnrichment] ${status} client error for ${sourceUrl} — skipping`);
+        await page.close();
+        return null;
+      }
+
+      if (status >= 500) {
+        throw new Error(`HTTP ${status} server error from ${sourceUrl}`);
+      }
+
+      const html = await page.content();
+      await page.close();
+
+      // Store conditional GET cache headers for future requests
+      if (saleId && capturedResponseHeaders) {
+        const cacheHeaders = extractCacheHeaders(capturedResponseHeaders);
+        if (cacheHeaders.etag || cacheHeaders.lastModified) {
+          await setCachedHeaders(saleId, cacheHeaders);
+        }
+      }
+
+      return html;
+
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (page) {
+        try { await page.close(); } catch (_) {}
+      }
+
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
+        console.log(
+          `[SaleDetailEnrichment] Attempt ${attempt + 1}/${maxRetries + 1} failed for ${sourceUrl}, ` +
+          `retrying in ${Math.round(delay / 1000)}s: ${lastError.message}`
+        );
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+
+  console.error(`[SaleDetailEnrichment] All ${maxRetries + 1} attempts failed for ${sourceUrl}:`, lastError?.message);
+  return null;
+}
+
+/**
+ * Enrich a single sale with description + photos from its sourceUrl
+ */
+export async function enrichSaleDetails(saleId: string, sourceUrl: string): Promise<boolean> {
+  try {
+    await defaultRateLimiter.waitForSlot(sourceUrl);
+
+    const html = await fetchSalePageHTML(sourceUrl, saleId);
+    if (!html) {
+      console.log(`[SaleDetailEnrichment] No HTML returned for sale ${saleId}`);
+      return false;
+    }
+
+    const { description, images } = extractSaleEventData(html);
+
+    if (!description && images.length === 0) {
+      console.log(`[SaleDetailEnrichment] No enrichment data found for sale ${saleId}`);
+      return false;
+    }
+
+    // Mirror images to Cloudinary
+    let photoUrls: string[] = [];
+    if (images.length > 0) {
+      photoUrls = await mirrorImagesToCloudinary(images, saleId);
+    }
+
+    // Update sale in database
+    const updateData: Record<string, unknown> = {};
+    if (description) updateData.description = description;
+    if (photoUrls.length > 0) updateData.photoUrls = photoUrls;
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.sale.update({
+        where: { id: saleId },
+        data: updateData as Parameters<typeof prisma.sale.update>[0]['data'],
+      });
+      console.log(`[SaleDetailEnrichment] Enriched sale ${saleId}: description=${!!description}, photos=${photoUrls.length}`);
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error(`[SaleDetailEnrichment] Error enriching sale ${saleId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Run a batch of enrichments for scraped sales missing description or photos
+ */
+export async function runEnrichmentBatch(options: { limit?: number } = {}): Promise<EnrichmentResult> {
+  const limit = options.limit ?? 50;
+  const result: EnrichmentResult = { processed: 0, enriched: 0, skipped: 0, aborted: false };
+
+  try {
+    const sales = await prisma.sale.findMany({
+      where: {
+        directorySource: { not: null },
+        sourceUrl: { not: null },
+        OR: [
+          { description: null },
+          { photoUrls: { isEmpty: true } },
+        ],
+      },
+      select: { id: true, sourceUrl: true },
+      take: limit,
+    });
+
+    console.log(`[SaleDetailEnrichment] Starting batch enrichment for ${sales.length} sales`);
+
+    for (const sale of sales) {
+      if (!sale.sourceUrl) {
+        result.skipped++;
+        continue;
+      }
+
+      const enriched = await enrichSaleDetails(sale.id, sale.sourceUrl);
+      result.processed++;
+
+      if (enriched) {
+        result.enriched++;
+      } else {
+        result.skipped++;
+      }
+    }
+  } catch (error) {
+    console.error('[SaleDetailEnrichment] Batch enrichment error:', error);
+    result.aborted = true;
+  } finally {
+    await closePlaywrightBrowser();
+  }
+
+  console.log(`[SaleDetailEnrichment] Batch complete: ${result.enriched} enriched, ${result.skipped} skipped of ${result.processed} processed`);
+  return result;
+} 
