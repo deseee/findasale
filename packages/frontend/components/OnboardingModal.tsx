@@ -8,7 +8,7 @@ const STEPS = [
   {
     icon: '🏠',
     title: 'Welcome to FindA.Sale!',
-    body: 'Discover estate sales, garage sales, and auctions near you. Browse hundreds of items and find amazing deals in your area.',
+    body: 'Discover estate sales, garage sales, yard sales, auctions, flea markets, and more near you. Browse items and find amazing deals in your area.',
     cta: 'Show me around',
     secondary: 'Skip',
   },
