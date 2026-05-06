@@ -4,7 +4,45 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S649 — Cold Outreach Pipeline Activated + Full Deliverability Stack (COMPLETE — e2e verified)**
+**Latest: S651 — Search Console Audit + Scraper Stealth Innovations + P0 Fix (COMPLETE)**
+
+Search Console fully audited. Four innovation agents shipped. Two P0 crashes found and fixed. Backend is green.
+
+**Shipped:**
+- **Soft 404 fix** — `pages/sales/[id].tsx` now returns `{ notFound: true }` for HTTP 404 API responses (was returning HTTP 200 with null props → Google flagged as Soft 404). ✅ Verified in Chrome: `finda.sale/sales/999999999` returns proper 404 page.
+- **Playwright stealth scraper** — `saleDetailEnrichment.ts` replaced HTTP fetch with Playwright Chromium + puppeteer-extra-plugin-stealth. Defeats TLS fingerprinting. Import: `import { chromium } from 'playwright-extra'` (named import — default import caused P0 crash, fixed S651).
+- **Conditional GETs** — `httpCache.ts` (NEW) stores ETag + Last-Modified in `Sale.scrapedMetadata.httpCache`. `estatesalesnet.ts` sends conditional headers on re-fetch; handles 304 by skipping. Expected 60–80% ESN request reduction.
+- **AI listing enrichment** — `listingEnrichmentService.ts` (NEW) calls Claude Haiku to extract categories + price range + 1-sentence summary from scraped sale descriptions. Fire-and-forget trigger in `organizers.ts`. Display in `organizers/[id].tsx` (gray text, scraped sales only). UNVERIFIED — needs a scraped sale with description >50 chars to trigger and populate.
+- **Cloudflare Worker image proxy** — `cloudflare/image-proxy/worker.js` (NEW). Deployed at `https://findasale-image-proxy.findasale.workers.dev`. `imageUtils.ts` updated with `getImageProxyUrl()` helper; falls back to Railway if `NEXT_PUBLIC_CF_IMAGE_PROXY_URL` not set. Vercel env var set by Patrick — triggers Vercel redeploy. UNVERIFIED end-to-end until redeploy completes.
+- **package.json fix** — Removed `playwright-extra-plugin-stealth@^1.2.4` (nonexistent package) and corrected `playwright-extra` to `^4.3.6`. Lockfile regenerated.
+- **wrangler.toml cleanup** — Removed deprecated `type` and `[build]` fields.
+
+**Search Console audit findings:**
+- robots.txt: ✅ validated (no blocks on key pages)
+- 5xx validation: ✅ validated
+- Redirects: intentional www/http variants — no action needed
+- Soft 404: ❌ found → fixed same session (above)
+
+**P0 crashes fixed this session:**
+1. `saleDetailEnrichment.ts` truncated at line 266 (`const response =`) — Agent A agent truncation. Completed missing ~150 lines.
+2. `playwright-extra` default import (`import playwright from 'playwright-extra'`) compiles to `.default.use()` in CJS which throws `TypeError: playwright_extra_1.default.use is not a function`. Fixed to named import `{ chromium }`.
+
+**Files changed:** `packages/backend/src/services/scraper/saleDetailEnrichment.ts`, `packages/backend/src/services/scraper/httpCache.ts` (NEW), `packages/backend/src/services/scraper/sources/estatesalesnet.ts`, `packages/backend/src/services/listingEnrichmentService.ts` (NEW), `packages/backend/src/routes/organizers.ts`, `packages/frontend/pages/organizers/[id].tsx`, `packages/frontend/lib/imageUtils.ts`, `packages/frontend/pages/sales/[id].tsx`, `packages/backend/package.json`, `pnpm-lock.yaml`, `cloudflare/image-proxy/worker.js` (NEW), `cloudflare/image-proxy/wrangler.toml`
+
+## Blocked/Unverified Queue
+
+| Feature | Reason | What's Needed | Session Added |
+|---------|--------|---------------|---------------|
+| AI listing enrichment | Fire-and-forget — needs a scraped sale with description >50 chars to have loaded since deploy | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` in DB | S651 |
+| CF image proxy end-to-end | Vercel env var set but redeploy was still BUILDING at wrap | Reload any organizer page with scraped images, confirm requests route to `findasale-image-proxy.findasale.workers.dev` | S651 |
+
+---
+
+**Previous: S650 — Image Proxy + Scraper Stealth + robots.txt Fix (COMPLETE)**
+
+---
+
+**Previous: S649 — Cold Outreach Pipeline Activated + Full Deliverability Stack (COMPLETE — e2e verified)**
 
 End-to-end activation of the cold outreach pipeline ahead of Wednesday May 6 launch. Five sub-pushes (S649, S649b, S649c, S649d) plus Workspace + DNS configuration. Pipeline is live, deliverability stack is fully aligned, queue is seeded. Wednesday's cron tick (00:00 UTC May 6 = 8pm EDT May 5) starts the 4-touch sequence at the warmup quota of 20/day.
 
