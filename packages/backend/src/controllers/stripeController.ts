@@ -649,8 +649,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // Record this event as processed
       await tx.processedWebhookEvent.create({
         data: {
-          eventId: event.id,
-          eventType: event.type
+          eventId: event.id
         }
       });
       return { isDuplicate: false };

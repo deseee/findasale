@@ -69,7 +69,7 @@ const BulkConfirmModal: React.FC<BulkConfirmModalProps> = ({
   return (
     <AccessibleModal
       isOpen={true}
-      onClose={onClose}
+      onClose={onCancel}
       ariaLabelledBy="bulk-confirm-modal-title"
     >
       <div
