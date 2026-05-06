@@ -226,7 +226,6 @@ import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Ph
 import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Directory scraper national cron
 import { initMetroSyncCron } from './jobs/metroSyncCron'; // ADR-074: Metro Sync — eBay sold items nightly cron
 import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase 2: Category Sync — eBay category items nightly cron
-import { initClaimEmailCron } from './jobs/claimEmailCron'; // ADR-073 Phase 2: Claim Email Pipeline — 3-touch sequence for unmanaged organizers
 import { initOutreachEmailsCron } from './jobs/outreachEmailsCron'; // Phase 1: Cold outreach email pipeline
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
@@ -658,10 +657,6 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-074 Phase 2: Initialize category sync cron (gated by CATEGORY_SYNC_ENABLED env var)
   initCategorySyncCron();
-
-  // ADR-073 Phase 2: Initialize claim email cron (gated by CLAIM_EMAIL_ENABLED env var)
-  initClaimEmailCron();
-  initOutreachEmailsCron();
 
   // Log environment variables status for debugging (dev only)
   if (process.env.NODE_ENV !== 'production') {
