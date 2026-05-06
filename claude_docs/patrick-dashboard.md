@@ -1,4 +1,4 @@
-# Patrick's Dashboard — May 6, 2026 (S658 wrap)
+# Patrick's Dashboard — May 6, 2026 (S659 wrap)
 
 ---
 
@@ -8,18 +8,29 @@
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: wrap S658 — comprehensive security audit + 15 fixes"
+git commit -m "docs: wrap S659 — category sync debug"
 .\push.ps1
 ```
 
-**2. Enable 2FA on Google Workspace + MailerLite** — If compromised, your outreach campaign collapses and your sender reputation is destroyed. Do this before you flip outreach on.
+**2. Set Railway env vars (both still needed):**
+- `CATEGORY_SYNC_ENABLED=true` — category pages still empty until this is set + sync re-runs
+- `OUTREACH_ENABLED=true` — 3,298 organizers queued, pipeline fully hardened
 
-**3. Set Railway env vars:**
-- `OUTREACH_ENABLED=true` — pipeline is hardened and migration is deployed. 3,298 organizers queued.
-- `CATEGORY_SYNC_ENABLED=true` — TrendingSection on category pages is still empty until this is set.
-
-**4. Verify Settlement Hub (#228):**
+**3. Verify Settlement Hub (#228):**
 Log in as `artifactmi@gmail.com` → Organizer Dashboard → Sales → open ENDED sale → Settlement Hub → confirm payout amount shows at step 2.
+
+---
+
+## S659 — CategorySync Debugging (code deployed, re-test needed next session)
+
+Four-push debugging chain on `categorySyncCron.ts`. Root causes found and fixed:
+
+- **Missing marketplace header** — eBay Browse API requires `X-EBAY-C-MARKETPLACE-ID: EBAY_US` (was absent → all searches returned 400)
+- **Wrong token path** — routing token fetch through Vercel proxy returned 500; reverted to direct eBay OAuth (Railway already has the credentials)
+- **Invalid URL characters** — `filter=categoryIds:{3199}` has raw curly braces that Akamai rejects in HTTP paths; `category_ids=id1,id2` only works for single IDs; final fix pre-encodes as `filter=categoryIds%3A%7B3199%7D` with `%7C` pipe separator
+- **Lockfile mismatch** — `svix` was in package.json but missing from pnpm-lock.yaml → Railway build failure; fixed
+
+**Final state:** Railway green. Sync logic is correct. Just needs triggering to populate the DB.
 
 ---
 

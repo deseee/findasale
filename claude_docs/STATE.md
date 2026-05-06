@@ -4,7 +4,24 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S658 — Comprehensive Pre-Outreach Security Audit + 15 Fixes (COMPLETE)**
+**Latest: S659 — CategorySync Debugging (COMPLETE — awaiting re-test)**
+
+Diagnosed and fixed a multi-layer failure chain in `categorySyncCron.ts` that was keeping CategoryTopFinds empty. Four pushes this session:
+1. Added manual trigger endpoint `POST /api/internal/category-sync/trigger` (no auth — eBay public data)
+2. Added `X-EBAY-C-MARKETPLACE-ID: EBAY_US` header to Browse API search calls (required by eBay)
+3. Reverted `fetchEbayToken` to call eBay OAuth directly — Railway has `EBAY_CLIENT_ID`/`EBAY_CLIENT_SECRET`; routing through Vercel proxy was returning 500
+4. **Final fix (deployed, not yet verified):** Pre-encoded curly braces in filter syntax — `filter=categoryIds%3A%7B${ids}%7D` with `%7C` pipe separator. Root cause: Akamai rejects raw `{` `}` in HTTP paths; `category_ids=id1,id2` only works for single IDs
+5. Fixed pnpm-lock.yaml out of sync (`svix` was in package.json but missing from lockfile)
+
+**S659 status:** Code deployed, Railway green. CategoryTopFinds still empty — next session must re-trigger sync and confirm rows populate.
+
+**Patrick actions needed:**
+1. Set `CATEGORY_SYNC_ENABLED=true` on Railway — nightly cron won't fire without it
+2. (Optional) Trigger sync manually via: `POST https://backend-production-153c9.up.railway.app/api/internal/category-sync/trigger`
+
+---
+
+**Previous: S658 — Comprehensive Pre-Outreach Security Audit + 15 Fixes (COMPLETE)**
 
 Two full hacker audit passes (outreach pipeline + full stack). 15 security items addressed. Migration deployed. Outreach cleared for launch.
 
@@ -357,25 +374,23 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S658
+## Next Session — S660
 
-**First action:** Read STATE.md. Confirm Patrick pushed S657 outreach security fixes. Check Railway logs for first `[OutreachCron]` batch (OUTREACH_ENABLED=true needed).
+**First action (mandatory):** Re-trigger category sync and verify DB rows.
+```
+POST https://backend-production-153c9.up.railway.app/api/internal/category-sync/trigger
+```
+Then query `CategoryTopFinds` count — should show ~12 rows per category (108 total). Check Vercel logs for `/api/proxy/ebay` 200s (not 400s). If 200s appear → open `finda.sale/categories/clothing` and confirm TrendingSection shows eBay items.
 
-**Patrick must-do before S658:**
-1. Push S657 block (outreach.ts + outreachEmailsCron.ts — see pushblock below)
-2. Set `OUTREACH_ENABLED=true` on Railway
-3. Set `CATEGORY_SYNC_ENABLED=true` on Railway
+**S660 priority order:**
+1. **Re-test CategoryTopFinds sync** (first action above)
+2. **Outreach first-send verification** — check Railway logs for `[OutreachCron] Sent Touch 1` (requires `OUTREACH_ENABLED=true`)
+3. **#228 Settlement Hub QA** — Patrick logs in as `artifactmi@gmail.com` → ENDED sale → Settlement Hub → confirm payout at step 2
+4. **Roadmap BROKEN items** — read roadmap.md, advance next priority
 
-**S658 priority order:**
-1. **Outreach first-send verification** — check Railway logs for `[OutreachCron] Sent Touch 1` after OUTREACH_ENABLED=true. Confirm pixel route returns 200.
-2. **#228 Settlement Hub QA** — Patrick logs in as `artifactmi@gmail.com`, verifies payout amount at step 2, reports result. Mark ✅ or ❌.
-3. **CategoryTopFinds QA** — verify `/categories/estate-sales` renders TrendingSection with eBay data.
-4. **Roadmap BROKEN items** — read roadmap.md, advance next priority item.
-
-**Blocked/Unverified carry-forward:**
-- #228 Settlement Hub — needs `artifactmi@gmail.com` login (see Blocked Queue)
-- AI listing enrichment — needs scraped sale with description >50 chars. Check `[listingEnrichmentService]` in Railway logs.
-- CategoryTopFinds TrendingSection — verify after CATEGORY_SYNC_ENABLED=true first nightly run.
+**Patrick must-do before S660:**
+1. Set `CATEGORY_SYNC_ENABLED=true` on Railway
+2. Set `OUTREACH_ENABLED=true` on Railway (if not already done)
 
 ---
 
