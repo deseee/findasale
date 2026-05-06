@@ -59,7 +59,7 @@ async function syncCategory(slug: string, config: { display: string; ebayIds: st
   const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
   const proxySecret = process.env.EBAY_PROXY_SECRET;
   const ids = config.ebayIds.join(',');
-  const apiPath = `/buy/browse/v1/item_summary/search?filter=categoryIds:{${ids}}&sort=newlyListed&limit=12`;
+  const apiPath = `/buy/browse/v1/item_summary/search?category_ids=${ids}&sort=newlyListed&limit=12`;
 
   try {
     const res = await fetch(
