@@ -385,4 +385,4 @@ const EncyclopediaEntryPage = () => {
   );
 };
 
-export default Encyclope
+export default EncyclopediaEntryPage;
