@@ -725,7 +725,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <button
                   onMouseEnter={() => setExploreOpen(true)}
                   onClick={() => setExploreOpen(true)}
-                  className="flex items-center gap-1 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400"
+                  className="flex items-center gap-1 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 pb-2"
                 >
                   Explore
                   <svg className="w-3 h-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -733,7 +733,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </svg>
                 </button>
                 {exploreOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-44 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-warm-200 dark:border-gray-700 py-1 z-50">
+                  <div className="absolute top-full left-0 w-44 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-warm-200 dark:border-gray-700 py-1 z-50">
                     <Link href="/feed" onClick={() => setExploreOpen(false)}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700">
                       <Zap size={14} className="text-amber-500" /> Feed
