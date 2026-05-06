@@ -1,4 +1,48 @@
-# Patrick's Dashboard — May 6, 2026 (S654 wrap)
+# Patrick's Dashboard — May 6, 2026 (S656 wrap)
+
+---
+
+## ✅ Two actions needed from you
+
+**1. Push S656 code** — see push block at the bottom of this section.
+
+**2. Set Railway env vars:**
+- `OUTREACH_ENABLED=true` — outreach queue is clean, 3,298 eligible organizers. Fires every 4 hours at 20/day warmup.
+- `CATEGORY_SYNC_ENABLED=true` — CategoryTopFinds cron has never run. TrendingSection on `/categories/[type]` pages is empty until this is set and the 05:00 UTC nightly cron runs.
+
+---
+
+## S656 — Settlement Hub Fix + Sale Type Ordering + Craigslist Cleanup
+
+**What shipped:**
+
+- **Settlement Hub (#228) P1 fixed** — Receipt tab was showing $0.00 "Client/Executor Receives" and Payout tab started at $0. Root cause: `payoutAmount` useEffect only triggered at step 3–4. Fixed to trigger from step 2 (Commission tab) onward. The payout amount now auto-populates as you advance through the wizard and flows through to the Receipt tab. Chrome QA needed to confirm end-to-end.
+- **Sale type ordering (#382)** — 5 files reordered so "Yard Sales" leads the list instead of "Estate Sales": About page, Homepage (meta/OG/hero/schema), Onboarding modal, Terms of Service (4 locations), Footer. Closes out the D-001 brand drift audit for non-body-copy locations.
+- **Craigslist ghost cleanup (#379)** — `scraperCron.ts` had a stale comment saying "12:00 UTC — Craigslist" but the actual job was already running FacebookMarketplace. Comment corrected.
+
+**Push block (S656):**
+```powershell
+git add packages/frontend/components/SettlementWizard.tsx
+git add packages/frontend/pages/about.tsx
+git add packages/frontend/pages/index.tsx
+git add packages/frontend/components/OnboardingModal.tsx
+git add packages/frontend/pages/terms.tsx
+git add packages/frontend/components/Layout.tsx
+git add packages/backend/src/jobs/scraperCron.ts
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix #228 Settlement Hub payout pre-fill; fix #382 sale type ordering; fix #379 stale Craigslist comment; wrap S656"
+.\push.ps1
+```
+
+---
+
+## Next Session — S657 Priorities
+
+1. **Chrome QA — Settlement Hub** — `/organizer/settlement/[saleId]` → run wizard → verify Payout tab pre-populated → Receipt tab shows correct amount → Download Receipt fires.
+2. **CategoryTopFinds QA** — after setting `CATEGORY_SYNC_ENABLED=true`, verify `/categories/estate-sales` shows TrendingSection with real items after 05:00 UTC nightly run.
+3. **Next roadmap BROKEN items** — see roadmap Building section for items marked ❌ (priceBeforeMarkdown #251, Charity Close #235). Also #336 Rapidfire organizer-intent-wins (P1 D-006 violation — needs Architect spec before dispatch).
 
 ---
 
@@ -14,15 +58,6 @@
 - **Explore dropdown fixed** — Hover + click conflict caused immediate close. Gap between button and dropdown triggered premature mouseleave. Both fixed.
 
 **No action needed from you — all pushed.**
-
----
-
-## Next Session — What to Do First
-
-1. **Chrome QA** — Explore dropdown (hover + move to items without close), trending page photos, homepage widgets.
-2. **suppressOffTargetOrganizers** — dry-run is done, 486 records, false positives corrected. Execute with CONFIRM=true via psycopg2 before re-enabling outreach.
-3. **Re-enable outreach** — once suppression runs, set `OUTREACH_ENABLED=true` on Railway.
-4. **Brand drift batch** — 8 single-line copy fixes already identified (see S648 section below).
 
 ---
 

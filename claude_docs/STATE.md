@@ -4,7 +4,23 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S654 — Scraper Hardening + Crash Fix + Nav Bug (COMPLETE)**
+**Latest: S656 — Settlement Hub P1 Fix + Sale Type Order + Craigslist Stub Cleanup (COMPLETE)**
+
+Continued from S655. Fixed 3 roadmap items: Settlement Hub P1 payout display bug (#228), sale type ordering brand drift (#382), and dead Craigslist cron comment (#379). No migrations required.
+
+**Shipped:**
+- **#228 Settlement Hub P1 bugs fixed** — `SettlementWizard.tsx`: `payoutAmount` useEffect trigger changed from `step===3||4` to `step>=2`. Now auto-populates Payout tab and Receipt tab "Client/Executor Receives" from Commission calculation. Roadmap: ❌ P1 BUGS → FIXED S656, Pending Chrome QA.
+- **#382 Sale Type Ordering** — 5 files reordered to "Yard Sales, Garage Sales, Estate Sales, Flea Markets, Auctions" (estate sales no longer first): `about.tsx`, `index.tsx` (meta+OG+Twitter+schema+hero), `OnboardingModal.tsx`, `terms.tsx` (4 locations), `Layout.tsx` footer.
+- **#379 Craigslist ghost stub** — `scraperCron.ts` had stale comment saying "12:00 UTC — Craigslist" but actual cron entry was already FacebookMarketplace. Comment corrected. (VALID_SOURCES was already correct — no Craigslist entry to remove.)
+
+**Patrick actions needed:**
+1. Push S656 block (below)
+2. Set `OUTREACH_ENABLED=true` on Railway (carried from S655 — suppression clean, 3,298 eligible organizers ready)
+3. Set `CATEGORY_SYNC_ENABLED=true` on Railway (CategoryTopFinds cron has never run — TrendingSection on category pages is empty)
+
+---
+
+**Previous: S654 — Scraper Hardening + Crash Fix + Nav Bug (COMPLETE)**
 
 Scraper security and stealth improvements, removal of orphaned claim email system, P0 backend crash fix, and Explore nav dropdown repaired.
 
@@ -203,6 +219,38 @@ enrichContactEmails.ts upgraded with pull-queue concurrency (SCRAPE_CONCURRENCY=
 
 ---
 
+## Recent Sessions (S653–S656)
+
+### S656 — Settlement Hub P1 Fix + Sale Type Ordering + Craigslist Stub (COMPLETE)
+
+Three roadmap items fixed. #228 Settlement Hub: `SettlementWizard.tsx` payoutAmount useEffect now triggers from step≥2 (was step===3|4) — fixes $0.00 on Receipt tab and empty Payout field. #382 Sale Type Ordering: 5 files reordered so "Yard Sales" leads (About, index, OnboardingModal, terms, Layout footer). #379: Craigslist cron comment corrected (was stale — cron entry was already FacebookMarketplace). All TS checks clean, zero errors.
+
+**Files changed (8):** `SettlementWizard.tsx`, `about.tsx`, `index.tsx`, `OnboardingModal.tsx`, `terms.tsx`, `Layout.tsx`, `scraperCron.ts`, `roadmap.md`
+
+**Patrick actions:** Push S656 block. Set `OUTREACH_ENABLED=true` + `CATEGORY_SYNC_ENABLED=true` on Railway.
+
+---
+
+### S655 — Brand Drift D-001 Remediation + suppressOffTargetOrganizers (COMPLETE)
+
+3 organizers suppressed via suppressOffTargetOrganizers (prior sessions had cleared ~486 bulk). Chrome QA passed on all S654 fixes. 8 D-001 brand drift violations fixed across 9 files — "estate-sale only" framing removed from all public copy. CityHero H1 + CityNearbyLinks footer verified live in Chrome. Vercel deploy READY confirmed via MCP.
+
+**Files changed (9):** `CityHero.tsx`, `CityTopFinds.tsx`, `CityNearbyLinks.tsx`, `OnboardingModal.tsx`, `pages/sales/index.tsx`, `pages/shopper/crews/index.tsx`, `pages/index.tsx`, `referral-dashboard.tsx`, `shopper/referrals.tsx`
+
+---
+
+### S654 — Scraper Hardening + Crash Fix + Nav Bug (COMPLETE)
+
+UA pool updated (Chrome 134/135, Firefox 135/136, Safari 18.3). Log fingerprinting scrubbed. GitHub Actions DATABASE_URL fix (4 workflows). Orphaned claim email system removed (claimEmailService + claimEmailCron). P0 crash fix in `routes/internal.ts` (truncated file → crash loop). Explore nav dropdown fixed (click toggle + hover gap).
+
+---
+
+### S653 — CF Image Proxy Audit + Security Hardening + Proxy Sitewide Audit (COMPLETE)
+
+19 image proxy locations fixed across frontend. Trending algorithm fixed (permanent retail businesses flooding "Hot Sales"). Three security P0s fixed (JWT fallback, rate limiter, PII in pixel ID). `onLoadingComplete` deprecated across all `<Image>` components.
+
+---
+
 ## Recent Sessions (S636–S639)
 
 ### S637 — Email Acquisition Pipeline: Concurrency + SMTP Verifier
@@ -263,25 +311,27 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 |---------|--------|---------------|---------------|
 | CategoryTopFinds TrendingSection | Cron runs at 05:00 UTC — no data until first run | QA after first nightly run; verify TrendingSection renders on a `/categories/[category]` page with real eBay data | S647 |
 | Outreach pipeline open/click tracking | Can't verify pixel + click routes without real sends | Verify after `OUTREACH_ENABLED=true` + first cron run: check Railway logs for send attempt, confirm tracking pixel route returns 200 | S647 |
-| suppressOffTargetOrganizers cleanup | Dry-run shows ~400+ records (after false-positive fixes) — not yet executed | Run dry-run in new session, confirm examples look clean, execute with CONFIRM=true | S648 |
+| suppressOffTargetOrganizers | ✅ Executed S655 — 3 records suppressed, queue clean | — | S648 → DONE S655 |
 
 ---
 
-## Next Session — S655
+## Next Session — S656
 
-**First action:** Read STATE.md. Then Chrome QA the S654 fixes before starting new work.
+**First action:** Read STATE.md. Set `OUTREACH_ENABLED=true` on Railway if Patrick confirms (suppression is clean). Then roadmap work.
 
-**QA targets (do these first):**
-1. Explore nav dropdown — hover opens, move to dropdown items without close, click item navigates. Test on finda.sale in Chrome.
-2. Trending page (`/trending`) — photos load (not broken), Hot Sales shows real time-limited sales (no barber shops, Goodwill, Candy Shop).
-3. Homepage — CityRecentSales + CityTopFinds widgets load with proxied photos.
-4. Backend health — confirm no crash loop in Railway logs (internal.ts fix).
+**Patrick must-do before S656:**
+- Set `OUTREACH_ENABLED=true` on Railway (go to Railway → backend service → Variables). Suppression is clean — 3,298 eligible organizers in queue.
+- Watch first cron tick in Railway logs (`[OutreachCron]` prefix) — cron fires every 4 hours.
 
-**After QA — roadmap work:**
-- `suppressOffTargetOrganizers` execution — dry-run already done (486 records, false positives corrected). Ready to execute with CONFIRM=true via psycopg2. Do this before outreach is re-enabled.
-- Re-enable outreach — once suppression is clean, set `OUTREACH_ENABLED=true` on Railway and watch first cron tick.
-- Brand drift batch (8 copy-only single-line fixes, already audited in S648 — see patrick-dashboard.md for the file list).
-- Roadmap audit — read `claude_docs/strategy/roadmap.md` for next BROKEN/PENDING items.
+**Roadmap work (S656 priority order):**
+1. **CategoryTopFinds QA** — verify `/categories/estate-sales` or `/categories/antiques` renders the TrendingSection with real eBay data (cron has been running nightly at 05:00 UTC since S646 deploy). Check Railway logs for `[categorySyncCron]` if data is missing.
+2. **Roadmap BROKEN items** — read `claude_docs/strategy/roadmap.md`, prioritize items marked BROKEN or Pending Chrome QA.
+3. **Outreach tracking verification** — after first cron tick, confirm Railway logs show send attempts + tracking pixel returning 200.
+4. **D-003 / D-004 deferred from brand audit** — Empty state CTAs (D-003) and mobile viewport (D-004) — both need Chrome QA. Noted in `claude_docs/audits/brand-drift-2026-05-05.md`.
+
+**Blocked/Unverified carry-forward:**
+- AI listing enrichment — needs a scraped sale with description >50 chars to have loaded. Check `[listingEnrichmentService]` in Railway logs.
+- CategoryTopFinds TrendingSection — verify first nightly run populated data.
 
 ---
 
