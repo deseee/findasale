@@ -146,7 +146,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
       try {
         const isSuppressed = await suppressionService.isSuppressed(record.emailAddress);
         if (isSuppressed) {
-          console.log(`[OutreachCron] Skipped ${record.emailAddress} (suppressed)`);
+          console.log(`[OutreachCron] Skipped org:${record.organizerId} (suppressed)`);
           continue;
         }
 
@@ -157,7 +157,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
           'gov.mb.ca', 'gov.nt.ca', 'gov.nu.ca', 'gov.yk.ca', 'goodwill.org',
           'salvationarmy.org', 'habitatrestore.org', 'municibid.com', 'govplanet.com', 'publicsurplus.com'];
         if (blockedSuffixes.some(s => emailDomain.endsWith(s) || emailDomain.includes(`.${s}`))) {
-          console.log(`[OutreachCron] Skipped ${record.emailAddress} — blocked domain`);
+          console.log(`[OutreachCron] Skipped org:${record.organizerId} — blocked domain`);
           continue;
         }
 
