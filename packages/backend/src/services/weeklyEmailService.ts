@@ -202,9 +202,9 @@ const sendWeeklyPicksEmail = async (email: string, userId: string, name: string,
       subject: `${picks.length} New Sale Finds This Week (New Arrivals)`,
       html,
     });
-    console.log(`\u2713 Weekly picks email sent to ${email}`);
+    console.log(`✓ Weekly picks email sent to ${email}`);
   } catch (err) {
-    console.error(`\u2717 Failed to send weekly picks email to ${email}:`, err);
+    console.error(`✗ Failed to send weekly picks email to ${email}:`, err);
     throw err;
   }
 };
