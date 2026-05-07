@@ -297,9 +297,33 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
               url: 'https://finda.sale',
               potentialAction: {
                 '@type': 'SearchAction',
-                target: 'https://finda.sale/search?q={search_term_string}',
+                target: 'https://finda.sale/sales?q={search_term_string}',
                 'query-input': 'required name=search_term_string',
               },
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'LocalBusiness',
+              name: 'FindA.Sale',
+              url: 'https://finda.sale',
+              description: 'Community marketplace for buying and selling items from yard sales, garage sales, estate sales, auctions, flea markets, and consignment shops',
+              image: 'https://finda.sale/icons/icon-512x512.png',
+              sameAs: [
+                'https://www.facebook.com/findasale',
+                'https://twitter.com/findasale',
+                'https://instagram.com/findasale'
+              ],
+              contactPoint: {
+                '@type': 'ContactPoint',
+                contactType: 'Customer Service',
+                email: 'support@finda.sale',
+                url: 'https://finda.sale/contact'
+              }
             }),
           }}
         />
