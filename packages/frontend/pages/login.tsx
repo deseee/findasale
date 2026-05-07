@@ -106,13 +106,13 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-warm-50 dark:bg-gray-900 py-6 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8">
       <Head>
         <title>Login - FindA.Sale</title>
         <meta name="description" content="Login to your FindA.Sale account" />
       </Head>
 
-      <div className="max-w-md w-full space-y-8">
+      <div className="max-w-md w-full mx-auto space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-warm-900 dark:text-warm-100">
             Sign in to your account
