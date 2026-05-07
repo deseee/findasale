@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S673 Wrap
+# Patrick's Dashboard — S674 Wrap
 
 ---
 
@@ -6,58 +6,50 @@
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/api/auth/[...nextauth].ts
 git add packages/frontend/pages/_app.tsx
-git add packages/frontend/lib/api.ts
+git add packages/frontend/hooks/useRankUp.ts
+git add packages/frontend/pages/index.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix(auth): browser-side OAuth cookie exchange + homepage 401 redirect fix + S673 wrap"
+git commit -m "fix: OAuth redirect, incognito 401 loop, empty homepage feed, onboarding modal conflict
+
+- OAuthBridge: role-based redirect after token exchange (organizers → /organizer/dashboard)
+- useRankUp: gate useXpProfile behind !!user to stop unauthenticated 401 redirect loop
+- index.tsx: remove initialData from feed query (getStaticProps returns null at build time)
+- dashboard.tsx: suppress OnboardingWizard when dashboardState=new (FocusTrap conflict fix)"
 .\push.ps1
 ```
 
-If Dockerfile cache-bust not yet pushed separately:
+If S673 files haven't been pushed yet (api/auth/[...nextauth].ts, lib/api.ts, Dockerfile):
 ```powershell
+git add packages/frontend/pages/api/auth/[...nextauth].ts
+git add packages/frontend/lib/api.ts
 git add packages/backend/Dockerfile.production
-git commit -m "chore: cache-bust Railway rebuild S673"
+git commit -m "fix(auth): browser-side OAuth cookie exchange + Path C + S673 wrap"
 .\push.ps1
 ```
 
-### Also pending
+### Also still pending
 - Add `MAILERLITE_ORGANIZERS_GROUP_ID` env var in Railway (pending since S668)
 
 ---
 
-## 📋 What happened in S673
+## 📋 What happened in S674
 
-| Item | Result |
-|---|---|
-| Path C: NextAuth → standard `/api/auth/[...nextauth].ts` | ✅ Shipped |
-| `beforeFiles` rewrites protecting 14 backend routes | ✅ Shipped (MCP pushed) |
-| OAuthBridge: browser-side cookie exchange | ✅ Shipped |
-| Homepage redirect bug (all 401s → /login) | ✅ Fixed |
-| Dockerfile cache-bust (Railway rebuild) | ✅ Pushed |
-| Old `/api/oauth/[...nextauth].ts` | ✅ Deleted |
-| Google OAuth verified working | ❌ Still broken at wrap |
+| Bug | Root Cause | Fix |
+|---|---|---|
+| Google OAuth → login screen | OAuthBridge never redirected after token exchange | Added `router.replace()` with role-based destination |
+| Incognito homepage → /login | `useXpProfile()` fired unauthenticated → 401 → interceptor redirect | `useXpProfile(!!user)` in `useRankUp.ts` |
+| Homepage: "No sales yet" | `getStaticProps` returns null at build time → `initialData:null` skips fetch | Removed `initialData` from feed useQuery |
+| Modal won't close (Skip/Verify Email frozen) | `OnboardingWizard` + `OrganizerOnboardingModal` both rendered; FocusTrap in underlying modal locked wizard buttons | Added `dashboardState !== 'new'` guard to wizard condition |
 
 ---
 
-## 🔬 OAuth Status
+## 🔜 S675 priorities
 
-**Last known working: before S655.**
-
-Root cause of current failure: unknown. S673 fixed the architecture (browser-side cookie exchange, beforeFiles routing), but OAuth is still not completing. Next session will use Vercel + Railway MCP logs to trace exactly where the flow breaks.
-
-**What to check in S674:**
-1. Vercel runtime logs — does `/api/auth/callback/google` land? Does OAuthBridge POST to `/api/auth/oauth`?
-2. Railway logs — does `POST /auth/oauth` arrive? What does it return?
-3. Git history S655→S667 — find the commit that broke it
-
----
-
-## 🔜 S674 priorities
-
-1. **OAuth investigation** — Vercel + Railway MCP log trace
-2. **P0: Product JSON-LD** on `/items/[id]` (still missing from S669 audit)
+1. **Verify S674 fixes in Chrome** — confirm OAuth redirect, homepage sales, incognito, modal close all work
+2. **P0: Product JSON-LD on `/items/[id]`** (S669 audit item, still open)
 3. **Add `MAILERLITE_ORGANIZERS_GROUP_ID`** in Railway
 4. **Chrome authenticated audit** — organizer dashboard, rapid capture, pricing funnel
 
@@ -67,11 +59,13 @@ Root cause of current failure: unknown. S673 fixed the architecture (browser-sid
 
 | Layer | Status |
 |---|---|
-| Railway (backend) | ✅ Rebuilding with cache-bust |
+| Railway (backend) | ✅ Green |
 | Vercel (frontend) | ✅ Green |
 | Email/password login | ✅ VERIFIED in Chrome S670 |
-| Google/Facebook OAuth | ❌ UNVERIFIED — still broken |
-| Homepage unauthenticated | ✅ Fixed (no longer redirects to login) |
+| Google OAuth | ⚠️ Fix shipped S674, needs Chrome verification |
+| Homepage (unauthenticated) | ⚠️ Feed fix shipped S674, needs Chrome verification |
+| Incognito redirect loop | ⚠️ Fix shipped S674, needs Chrome verification |
+| Organizer onboarding modal | ⚠️ Fix shipped S674, needs Chrome verification |
 | LCP / PWA offline.html | ✅ Fixed + deployed |
-| Email compliance (unsubscribe PII) | ✅ Fixed + deployed |
+| Email compliance | ✅ Fixed + deployed |
 | MailerLite organizer enrollment | ⚠️ Needs `MAILERLITE_ORGANIZERS_GROUP_ID` in Railway |

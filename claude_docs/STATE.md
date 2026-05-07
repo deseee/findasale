@@ -4,7 +4,29 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S673 — OAuth Path C Implemented (INCOMPLETE — Google OAuth still broken at wrap)**
+**Latest: S674 — Post-S673 Bug Fixes: OAuth redirect, incognito loop, empty homepage, frozen modal (COMPLETE)**
+
+S673 shipped the OAuth architecture but left 3 live bugs and a 4th was found during S674. All 4 fixed:
+
+1. **Google OAuth lands on login screen** — OAuthBridge exchanged the token but never redirected. Fixed: added `router.replace(destination)` in `_app.tsx` after `login(data.token)`, with role-based routing (organizers → `/organizer/dashboard`, shoppers → `/`).
+
+2. **Incognito homepage → login redirect** — `useRankUp` called `useXpProfile()` without an `enabled` gate, firing an authenticated query for unauthenticated users → 401 → interceptor → `/login`. Fixed: `useXpProfile(!!user)` in `useRankUp.ts`.
+
+3. **Homepage shows "No sales yet"** — `getStaticProps` can't reach Railway at Vercel build time (uses `localhost:3001` fallback) → returns `initialSalesData: null` → react-query treated null as valid cached data, skipped the `/api/feed` fetch entirely. Fixed: removed `initialData: initialSalesData` from the useQuery options in `index.tsx`.
+
+4. **OrganizerOnboardingModal can't be closed** — Both `OrganizerOnboardingModal` (wraps in `FocusTrap` via `AccessibleModal`) and `OnboardingWizard` rendered simultaneously for new organizers. `OnboardingWizard` (later in DOM, same `z-50`) painted on top visually; FocusTrap from the underlying modal locked input on the wizard's buttons. Fixed: added `dashboardState !== 'new'` guard to `OnboardingWizard` render condition — new organizers only see `OrganizerOnboardingModal`.
+
+**S674 files changed:**
+- `packages/frontend/pages/_app.tsx` — OAuthBridge: role-based redirect after token exchange
+- `packages/frontend/hooks/useRankUp.ts` — gate `useXpProfile(!!user)`
+- `packages/frontend/pages/index.tsx` — remove `initialData: initialSalesData` from feed useQuery
+- `packages/frontend/pages/organizer/dashboard.tsx` — add `dashboardState !== 'new'` to OnboardingWizard condition
+
+TS check: zero errors. Not yet pushed.
+
+---
+
+**Previous: S673 — OAuth Path C Implemented (INCOMPLETE — Google OAuth still broken at wrap)**
 
 Path C fully shipped: NextAuth moved to standard `/api/auth/[...nextauth].ts`. `beforeFiles` rewrites in `next.config.js` protect 14 backend `/api/auth/*` paths from the NextAuth catch-all. OAuth exchange moved from server-side (Vercel→Railway, cookies never reach browser) to browser-side (OAuthBridge POSTs to `/api/auth/oauth` with `credentials:'include'`). Homepage redirect bug fixed (api.ts 401 interceptor now guards `/auth/me`). Dockerfile cache-bust pushed to force Railway rebuild. All code shipped and deployed. Patrick confirmed at wrap: "still the same error with google oauth."
 
@@ -275,7 +297,13 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 ---
 
-## Recent Sessions (S669–S673)
+## Recent Sessions (S670–S674)
+
+### S674 — Post-S673 Bug Fixes: OAuth redirect + incognito loop + empty homepage + frozen modal (COMPLETE — not yet pushed)
+
+4 live bugs found and fixed. (1) Google OAuth post-login landed back on `/login` — OAuthBridge exchanged token but never redirected; added role-based `router.replace()` after `login()`. (2) Incognito homepage redirected to `/login` — `useRankUp` called `useXpProfile()` with no auth gate, triggering 401 → interceptor → redirect for unauthenticated users; fixed by passing `!!user` to `useXpProfile`. (3) Homepage showed "No sales yet" despite active sales — `getStaticProps` returns `initialSalesData: null` at Vercel build time; `initialData: null` made react-query skip the `/api/feed` fetch; fixed by removing `initialData` from useQuery. (4) OrganizerOnboardingModal buttons frozen — `OnboardingWizard` and `OrganizerOnboardingModal` both rendered at `z-50`; wizard is on top visually, FocusTrap from underlying modal locked wizard buttons; fixed by adding `dashboardState !== 'new'` guard to wizard render condition. TS: zero errors.
+
+---
 
 ### S673 — OAuth Path C Implementation (INCOMPLETE — OAuth still broken at wrap)
 
@@ -405,40 +433,37 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S674
+## Next Session — S675
 
-**Patrick actions before S674 (wrap push):**
+**Patrick actions — S674 wrap push:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/api/auth/[...nextauth].ts
 git add packages/frontend/pages/_app.tsx
-git add packages/frontend/lib/api.ts
+git add packages/frontend/hooks/useRankUp.ts
+git add packages/frontend/pages/index.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix(auth): browser-side OAuth cookie exchange + homepage 401 redirect fix + S673 wrap"
+git commit -m "fix: OAuth redirect, incognito 401 loop, empty homepage feed, onboarding modal conflict
+
+- OAuthBridge: role-based redirect after token exchange (organizers → /organizer/dashboard)
+- useRankUp: gate useXpProfile behind !!user to stop unauthenticated 401 redirect loop
+- index.tsx: remove initialData from feed query (getStaticProps returns null at build time)
+- dashboard.tsx: suppress OnboardingWizard when dashboardState=new (FocusTrap conflict fix)"
 .\push.ps1
 ```
 
-Also push the Dockerfile cache-bust if not already pushed:
+**Also still pending from S673 (if not yet pushed):**
 ```powershell
+git add packages/frontend/pages/api/auth/[...nextauth].ts
+git add packages/frontend/lib/api.ts
 git add packages/backend/Dockerfile.production
-git commit -m "chore: cache-bust Railway rebuild S673"
+git commit -m "fix(auth): browser-side OAuth cookie exchange + Path C + S673 wrap"
 .\push.ps1
 ```
 
-**S674 FIRST ACTION: OAuth investigation using Vercel + Railway MCP logs**
-
-Google OAuth last known working: **before S655**. Run these diagnostic steps:
-
-1. Open Vercel MCP → runtime logs for project `prj_oF9kf0IOydLNysoDFbpD6EpScM9j`. Filter for `/api/auth/callback/google`. Trace the full request chain from Google callback → OAuthBridge → `/api/auth/oauth` proxy → Railway.
-
-2. Open Railway CLI in VM: check backend logs for incoming `POST /auth/oauth` requests. Do they arrive? What do they return?
-
-3. If the backend gets the POST and returns a token, the problem is OAuthBridge not calling `login()` correctly or the NextAuth session not exposing `oauthProfile`. If the backend never receives the POST, the `beforeFiles` rewrite for `/api/auth/oauth` may not be proxying correctly.
-
-4. Compare git log S655→S667: `git log --oneline [S655-hash]..[S667-hash]`. Find the commit that changed AuthContext or the OAuth flow.
-
-**S674 priorities after OAuth resolved:**
-1. **P0: Product JSON-LD on `/items/[id]`** — structured data missing (S669 audit item, still open)
-2. **Add `MAILERLITE_ORGANIZERS_GROUP_ID`** env var in Railway (pending since S668)
-3. **Chrome authenticated audit** — organizer dashboard, rapid capture, pricing funnel
+**S675 priorities:**
+1. **Verify S674 fixes in Chrome** — confirm OAuth redirect works, homepage loads sales, incognito no longer bounces, organizer modal can be closed
+2. **P0: Product JSON-LD on `/items/[id]`** — structured data missing (S669 audit item, still open)
+3. **Add `MAILERLITE_ORGANIZERS_GROUP_ID`** env var in Railway (pending since S668)
+4. **Chrome authenticated audit** — organizer dashboard, rapid capture, pricing funnel
