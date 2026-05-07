@@ -4,7 +4,34 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S675 — Sentry P0 Sale Indexes + Enrichment Guard + user11 DB Fix (COMPLETE — push needed)**
+**Latest: S676 — AI Agent Discoverability + MCP Server Phase 1 (COMPLETE — push needed)**
+
+AI agent discovery initiative shipped. 5 items landed, 1 assessed:
+
+1. **llms.txt (#384)** — LLM-readable site summary at `/llms.txt`. Platform overview, features, pricing, key pages — structured for AI parsing.
+2. **robots.txt AI crawlers (#385)** — GPTBot, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended, Bytespider all explicitly allowed.
+3. **JSON-LD structured data (#386)** — WebPage/Offer on pricing.tsx, Organization on about.tsx, enhanced FAQPage on faq.tsx, LocalBusiness on index.tsx. Pending Chrome QA.
+4. **MCP Server Phase 1 (#388)** — New `packages/mcp-server` with 7 tools (search_sales, get_sale, search_items, get_item, list_cities, list_sale_types, list_categories). HTTP/SSE transport. Calls existing public backend routes — no backend changes needed. Railway-ready. Spec: `claude_docs/strategy/mcp-server-spec.md`.
+5. **.well-known/mcp.json (#389)** — AI platform discovery file. Status set to `coming-soon` — update to `active` once Railway service is live at mcp.finda.sale.
+6. **SSR assessment (#387)** — All 3 public pages (pricing, about, faq) already SSR-safe (content hardcoded in JSX constants). No code changes needed.
+
+**S676 files changed:**
+- `packages/frontend/public/llms.txt` — NEW
+- `packages/frontend/public/robots.txt` — AI crawler Allow blocks added
+- `packages/frontend/pages/index.tsx` — LocalBusiness JSON-LD
+- `packages/frontend/pages/pricing.tsx` — WebPage + Offer JSON-LD
+- `packages/frontend/pages/about.tsx` — Organization JSON-LD
+- `packages/frontend/pages/faq.tsx` — enhanced FAQPage JSON-LD
+- `packages/frontend/public/.well-known/mcp.json` — NEW
+- `packages/mcp-server/` — NEW (17 files: index.ts, handlers.ts, types.ts, lib/apiClient.ts, lib/rateLimiter.ts, 7 tool files, package.json, tsconfig.json, Dockerfile.production, .env.example, README.md)
+- `claude_docs/strategy/mcp-server-spec.md` — NEW
+- `claude_docs/strategy/roadmap.md` — v133, #384–389 added
+
+**MCP server Railway deploy still needed.** Service not yet added to Railway. See Next Session.
+
+---
+
+**Previous: S675 — Sentry P0 Sale Indexes + Enrichment Guard + user11 DB Fix (COMPLETE — push needed)**
 
 Three issues resolved:
 
@@ -453,37 +480,48 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S675
+## Next Session — S677
 
-**Patrick actions — S674 wrap push:**
+**P1: Audio note UX investigation (Patrick's explicit request)**
+Audio note buttons on the edit-item page are not intuitive — just one button surfacing near the tags. Questions for S677: Where does the audio note feature currently live in the codebase? What does it do (voice transcription? saved recording? note attached to item)? Where should it surface — rapid capture flow, description input area, item detail, review screen? Dispatch findasale-ux to audit current placement and propose the correct surfacing strategy, then findasale-dev to implement.
+
+**Patrick actions — S676 push block:**
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/_app.tsx
-git add packages/frontend/hooks/useRankUp.ts
+git add packages/frontend/public/llms.txt
+git add packages/frontend/public/robots.txt
 git add packages/frontend/pages/index.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/pricing.tsx
+git add packages/frontend/pages/about.tsx
+git add packages/frontend/pages/faq.tsx
+git add "packages/frontend/public/.well-known/mcp.json"
+git add packages/mcp-server/src/index.ts
+git add packages/mcp-server/src/handlers.ts
+git add packages/mcp-server/src/types.ts
+git add packages/mcp-server/src/lib/apiClient.ts
+git add packages/mcp-server/src/lib/rateLimiter.ts
+git add packages/mcp-server/src/tools/searchSales.ts
+git add packages/mcp-server/src/tools/getSale.ts
+git add packages/mcp-server/src/tools/searchItems.ts
+git add packages/mcp-server/src/tools/getItem.ts
+git add packages/mcp-server/src/tools/listCities.ts
+git add packages/mcp-server/src/tools/listSaleTypes.ts
+git add packages/mcp-server/src/tools/listCategories.ts
+git add packages/mcp-server/package.json
+git add packages/mcp-server/tsconfig.json
+git add packages/mcp-server/.env.example
+git add packages/mcp-server/Dockerfile.production
+git add packages/mcp-server/README.md
+git add claude_docs/strategy/mcp-server-spec.md
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: OAuth redirect, incognito 401 loop, empty homepage feed, onboarding modal conflict
-
-- OAuthBridge: role-based redirect after token exchange (organizers → /organizer/dashboard)
-- useRankUp: gate useXpProfile behind !!user to stop unauthenticated 401 redirect loop
-- index.tsx: remove initialData from feed query (getStaticProps returns null at build time)
-- dashboard.tsx: suppress OnboardingWizard when dashboardState=new (FocusTrap conflict fix)"
+git commit -m "S676: AI discoverability + MCP Server Phase 1 (#384-389)"
 .\push.ps1
 ```
 
-**Also still pending from S673 (if not yet pushed):**
-```powershell
-git add packages/frontend/pages/api/auth/[...nextauth].ts
-git add packages/frontend/lib/api.ts
-git add packages/backend/Dockerfile.production
-git commit -m "fix(auth): browser-side OAuth cookie exchange + Path C + S673 wrap"
-.\push.ps1
-```
-
-**S675 priorities:**
-1. **Verify S674 fixes in Chrome** — confirm OAuth redirect works, homepage loads sales, incognito no longer bounces, organizer modal can be closed
-2. **P0: Product JSON-LD on `/items/[id]`** — structured data missing (S669 audit item, still open)
-3. **Add `MAILERLITE_ORGANIZERS_GROUP_ID`** env var in Railway (pending since S668)
-4. **Chrome authenticated audit** — organizer dashboard, rapid capture, pricing funnel
+**S677 priorities:**
+1. **Audio note UX** — findasale-ux audit current placement → findasale-dev relocate/expand surfacing
+2. **Deploy MCP server on Railway** — Add `mcp-server` as a new Railway service (Dockerfile.production is ready). Set `BACKEND_URL=https://api.finda.sale` and `PORT=3003`. Point `mcp.finda.sale` DNS → Railway service. Then update `.well-known/mcp.json` status to `active`.
+3. **Verify S675 migration** — Confirm `20260507000004_sale_feed_indexes` was deployed to Railway. If not: run `prisma migrate deploy` with Railway URL.
+4. **Product JSON-LD on `/items/[id]`** — S669 P0 still open; #386 Chrome QA also pending
+5. **MAILERLITE_ORGANIZERS_GROUP_ID** env var in Railway (pending since S668)
