@@ -762,7 +762,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <Search size={20} />
                 </button>
                 {isSearchOpen && (
-                  <form onSubmit={handleHeaderSearch} role="search" aria-label="Search sales"
+                  <form onSubmit={handleHeaderSearch} role="search"
                     className="absolute right-0 top-1/2 -translate-y-1/2 z-50">
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 pointer-events-none" aria-hidden="true">

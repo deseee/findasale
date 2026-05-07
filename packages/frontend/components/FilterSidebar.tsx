@@ -139,7 +139,7 @@ const FiltersContent = ({ filters, facets, onChange, onClear }: Omit<FilterSideb
             placeholder="Min"
             value={filters.priceMin}
             aria-label="Min" onChange={(e) => onChange({ priceMin: e.target.value, offset: 0 })}
-            aria-label="Minimum price"
+
             className="w-full text-sm border border-warm-300 dark:border-gray-600 rounded-lg px-2 py-2 bg-white dark:bg-gray-800 text-warm-800 dark:text-gray-200 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
           <span className="text-warm-400 dark:text-gray-500 text-sm">–</span>
@@ -149,7 +149,7 @@ const FiltersContent = ({ filters, facets, onChange, onClear }: Omit<FilterSideb
             placeholder="Max"
             value={filters.priceMax}
             aria-label="Max" onChange={(e) => onChange({ priceMax: e.target.value, offset: 0 })}
-            aria-label="Maximum price"
+
             className="w-full text-sm border border-warm-300 dark:border-gray-600 rounded-lg px-2 py-2 bg-white dark:bg-gray-800 text-warm-800 dark:text-gray-200 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
