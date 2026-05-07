@@ -116,6 +116,7 @@ function ServiceWorkerUpdateNotifier() {
 function OAuthBridge() {
   const { data: session, status } = useSession();
   const { login, user } = useAuth();
+  const router = useRouter();
   const [exchanging, setExchanging] = useState(false);
 
   useEffect(() => {
@@ -134,6 +135,15 @@ function OAuthBridge() {
         .then(data => {
           if (data.token) {
             login(data.token);
+            // Redirect to role-based dashboard after OAuth login
+            try {
+              const payload = JSON.parse(atob(data.token.split('.')[1]));
+              const isOrganizer = payload.roles?.includes('ORGANIZER') || payload.role === 'ORGANIZER';
+              const destination = data.returnTo || (isOrganizer ? '/organizer/dashboard' : '/');
+              router.replace(destination);
+            } catch (_e) {
+              // Token decode failed — stay on current page
+            }
           }
           // Sign out of NextAuth session (no longer needed)
           signOut({ redirect: false });
@@ -143,7 +153,7 @@ function OAuthBridge() {
           setExchanging(false);
         });
     }
-  }, [session, status, user, exchanging, login]);
+  }, [session, status, user, exchanging, login, router]);
 
   return null;
 }
