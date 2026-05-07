@@ -835,6 +835,10 @@ model Sale {
   @@index([lifecycleStage])
   @@index([organizerId, status, endDate]) // Feature #249: Concurrent Sales Gate optimization
   @@index([locationId]) // #311: Multi-Location filter
+  @@index([status, endDate]) // Sentry P0: public feed filter (published + not-ended sales)
+  @@index([city, status, endDate]) // Sentry P0: geo-filtered feed performance
+  @@index([status, startDate]) // Sentry P0: upcoming sales ordering
+  @@index([sourceUrl]) // Sentry P0: scraper deduplication queries
 }
 
 // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
