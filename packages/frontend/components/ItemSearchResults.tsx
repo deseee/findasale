@@ -5,7 +5,7 @@
  */
 import React from 'react';
 import { getThumbnailUrl, getItemImageUrl } from '../lib/imageUtils';
-import ItemCard from './ItemCard'; // Feature 67: Use main ItemCard with social proof
+import ItemCard, { UnifiedItemCardItem } from './ItemCard'; // Feature 67: Use main ItemCard with social proof
 import { ItemSearchResult } from '../hooks/useItemSearch';
 
 // ---------------------------------------------------------------------------
@@ -129,7 +129,7 @@ const ItemSearchResults: React.FC<ItemSearchResultsProps> = ({
       >
         {items.map((item) => (
           <div key={item.id} role="listitem">
-            <ItemCard item={item} />
+            <ItemCard item={item as unknown as UnifiedItemCardItem} />
           </div>
         ))}
       </div>
