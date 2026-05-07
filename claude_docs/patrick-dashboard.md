@@ -1,55 +1,60 @@
-# Patrick's Dashboard — S670 Complete
+# Patrick's Dashboard — S671 Wrap
 
 ---
 
-## ⚠️ Action Required Before S671
+## 🚨 DO THIS FIRST in S672
 
-### Pull the MCP commits then push docs
+**Restart Railway backend** to clear the rate limiter (triggered by failed OAuth calls this session):
+Go to **railway.app → your project → backend service → ⋮ → Restart**
+
+Then test Google login in an incognito window. That tells us if OAuth is actually working now.
+
+---
+
+## ⚠️ Action Required Before S672
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git pull
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S670 wrap — login P0 fixed, Chrome verified"
+git commit -m "docs: S671 wrap — OAuth revert shipped, rate limit pending Railway restart"
 .\push.ps1
 ```
 
-### Still pending from S668
-- Add `MAILERLITE_ORGANIZERS_GROUP_ID` env var in Railway → "Beta Organizer Onboarding" group ID from MailerLite
+### Also pending
+- Add `MAILERLITE_ORGANIZERS_GROUP_ID` env var in Railway (pending since S668)
 
 ---
 
-## 📋 What happened in S670
+## 📋 What happened in S671
 
 | Item | Result |
 |---|---|
-| Login bounce — root cause | ✅ Found + fixed — browser was calling Railway directly (cross-domain), breaking SameSite cookie rules |
-| Proxy routing (api.ts) | ✅ Fixed — browser now uses `/api` Next.js proxy, not `NEXT_PUBLIC_API_URL` directly |
-| refreshToken cookie path | ✅ Fixed — was `/auth/refresh`, now `/` (all 4 locations in authController) |
-| CSRF bypass for /auth/refresh | ✅ Fixed — refresh + logout now skip CSRF check (they use httpOnly cookie, not bearer) |
-| 401 infinite loop guard | ✅ Fixed — interceptor was calling itself recursively on refresh 401s (was flooding with 90+ calls/load) |
-| Chrome login test | ✅ VERIFIED — user1@example.com → /organizer/dashboard, no bounce |
+| Google OAuth redirect_uri_mismatch | Root cause found: NextAuth v4 hardcodes `/api/auth/` internally — fix is explicit redirect_uri override in provider config |
+| Bad fix (moving handler to /api/auth/) | ❌ Caused immediate logout — catch-all blocked backend /auth/refresh + /auth/me routes |
+| Revert | ✅ Shipped — /api/oauth/[...nextauth].ts restored with redirect_uri overrides, bad /api/auth/ file deleted |
+| Error page fix | ✅ Shipped — `pages.error: '/login'` added so OAuth errors don't hit broken /api/auth/error URL |
+| Backend rate limiter | ❌ Triggered by repeated failed /auth/oauth calls — "Too many authentication attempts" |
+| OAuth verified end-to-end | ❌ NOT verified — rate limit blocked final test |
 
 ---
 
-## 🔜 S671 — Chrome Authenticated Audit + Audit Dispatch
+## 🔜 S672 — OAuth Verify + Audit Dispatch
 
-**Step 1 — Chrome authenticated flows** (now unblocked since login works):
-- Organizer dashboard, rapid capture, POS
-- Pricing/upgrade funnel (FREE→SIMPLE→PRO→TEAMS)
+**Step 1 — Railway restart + OAuth test** (must happen first)
 
-**Step 2 — Dev dispatch** for 5 audit P0/P1s (ready to run in parallel):
+**Step 2 — If OAuth broken after restart**, check Vercel function logs for `/api/oauth/callback/google` to see the actual server-side NextAuth error. The `OAuthCallback` error likely means the backend `/auth/oauth` exchange is failing.
+
+**Step 3 — Dev dispatch** for 5 S669 audit P0/P1s (ready to run in parallel once OAuth confirmed):
 
 | Severity | Finding | File |
 |---|---|---|
 | P0 | SaleCard: above-fold images lazy-loaded (kills LCP) | `components/SaleCard.tsx` |
 | P0 | Item pages: zero Product JSON-LD structured data | `pages/items/[id].tsx` |
-| P1 | `offline.html` missing — sw.js pre-caches it but it doesn't exist | `public/offline.html` |
-| P1 | City pages silently noindex when empty | `pages/[city].tsx` or similar |
-| P1 | Email templates: "estate sale" banned term ×5, unsubscribe URL exposes `?email=` PII | Email templates |
-
-**Step 3 — Re-run 2 incomplete lenses**: error/empty states + shopper competitive (lost to compression in S669)
+| P1 | `offline.html` missing — sw.js pre-caches it | `public/offline.html` |
+| P1 | City pages silently noindex when empty | city page file |
+| P1 | Email templates: "estate sale" banned ×5, unsubscribe `?email=` PII | Email templates |
 
 ---
 
@@ -57,7 +62,8 @@ git commit -m "docs: S670 wrap — login P0 fixed, Chrome verified"
 
 | Layer | Status |
 |---|---|
-| Railway (backend) | ✅ Green |
+| Railway (backend) | ⚠️ Rate limited — needs restart |
 | Vercel (frontend) | ✅ Green |
-| Login flow | ✅ VERIFIED in Chrome S670 |
+| Email/password login | ✅ VERIFIED in Chrome S670 |
+| Google/Facebook OAuth | ❌ UNVERIFIED — rate limit active |
 | MailerLite organizer enrollment | ⚠️ Needs `MAILERLITE_ORGANIZERS_GROUP_ID` in Railway |

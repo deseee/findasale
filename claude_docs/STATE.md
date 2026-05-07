@@ -311,30 +311,91 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S671
+## Recent Sessions (S666–S671)
 
-**Patrick actions before S671:**
-1. Pull the S670 MCP commits:
+### S671 — OAuth Login Investigation (INCOMPLETE — Google/Facebook OAuth still broken)
+
+Entire session consumed by OAuth `redirect_uri_mismatch` and followup issues. Root cause chain:
+
+1. **redirect_uri_mismatch**: NextAuth v4 internally hardcodes `/api/auth/` in callback URLs regardless of handler file location. Since S667 moved the handler to `/api/oauth/[...nextauth].ts`, the fix is explicit `authorization.params.redirect_uri` override in GoogleProvider and FacebookProvider pointing to `/api/oauth/callback/[provider]`.
+
+2. **Bad fix attempted**: A general-purpose agent concluded the move to `/api/oauth/` was unnecessary and that moving back to `/api/auth/` was safe. That was wrong. Moving NextAuth back to `/api/auth/[...nextauth].ts` created a catch-all that intercepted `POST /api/auth/refresh` and `GET /api/auth/me` (backend Railway routes), both returning 400. Result: immediate logout after every login attempt.
+
+3. **Revert shipped**: `pages/api/oauth/[...nextauth].ts` restored with `redirect_uri` overrides for both providers. `pages/api/auth/[...nextauth].ts` deleted via `git rm`. `_app.tsx` SessionProvider basePath reverted to `/api/oauth`. Pushed and deployed.
+
+4. **Error page fix**: Added `pages.error: '/login'` to NextAuth config — NextAuth v4 hardcodes `/api/auth/error` for errors, which no longer exists. This routes OAuth errors to login page instead of a broken URL.
+
+5. **Rate limiter triggered**: All the failed `/auth/oauth` calls during the bad deployment triggered the backend's in-memory rate limiter. "Too many authentication attempts, please try again later." Railway restart needed to clear it.
+
+6. **Status at wrap**: Rate limit still active. OAuth login unverified end-to-end. Railway backend needs restart to clear rate limit before next test.
+
+**Files changed this session:**
+- `packages/frontend/pages/api/oauth/[...nextauth].ts` — redirect_uri overrides + `error: '/login'` in pages config
+- `packages/frontend/pages/_app.tsx` — basePath reverted to `/api/oauth`
+- `packages/frontend/pages/api/auth/[...nextauth].ts` — DELETED (`git rm`)
+
+**Google/Facebook Console state at wrap:** Both `/api/auth/callback/[provider]` AND `/api/oauth/callback/[provider]` are registered. Both being registered is fine. The `/api/oauth/` ones are what matter and are correctly registered.
+
+---
+
+### S670 — P0 Login Bounce Fixed + Chrome Verified (COMPLETE — MCP pushed)
+
+Root cause of login bounce: browser API calls bypassed the Next.js proxy, going cross-domain to Railway and breaking SameSite cookie restrictions. Fixed in 5 files across frontend + backend. Also patched an infinite 401 loop in the response interceptor (api.post('/auth/refresh') was triggering its own interceptor, flooding the refresh endpoint with 90+ calls per page load — now guarded). All 5 files pushed to GitHub via MCP. Vercel deployed and Chrome-tested: login as user1@example.com → /organizer/dashboard ✅ no bounce.
+
+---
+
+### S669 — 7-Lens Audit + Build Fix + Organizer.stripeOnboarded P0 (COMPLETE — pushed)
+
+7-lens parallel audit (mobile/PWA, performance, shopper competitive, shopper SEO, error states, pricing funnel, email). P0 discovered from Railway logs: `Organizer.stripeOnboarded` column missing from production DB — was crashing every login. Migration created + deployed. Vercel build ERROR (S668 SocialProofBadge wiring introduced `ItemSearchResult` type mismatch) — fixed in `ItemSearchResults.tsx`. Chrome authenticated audit fully blocked: auth cookie flow (httpOnly cross-domain) cannot be established via Chrome MCP's programmatic fetch approach. All authenticated flows remain UNVERIFIED. Audit findings documented above; dev dispatch is S670 first action.
+
+---
+
+### S668 — Multi-Lens Product Audit + P0/P1 Fix Batch (COMPLETE — pushed)
+
+5-lens parallel audit. Lens 1 (CRO): SocialProofBadge + CountdownTimer were built but never deployed — now wired into browse/search item cards. Lens 2 (Game design): Scout→Ranger XP curve too steep — fixed 2000→1200. Lens 3 (Organizer competitive): onboarding email gap found — organizers never enrolled in MailerLite automation on signup, now fixed. Lens 4 (Session integrity): #336 race fix confirmed present, #228 roadmap row stale. Lens 5 (Onboarding funnel): 3-email drip automation exists in MailerLite but organizers were never subscribed — enrollment fix shipped. Two P0s found and fixed: login loop from S667 SessionProvider basePath mismatch, and Item.moderationStatus missing from prod DB crashing auctionAutoCloseCron every 5 min. Homepage: subtle "Running a sale? List it free" text link added below search bar. Patrick direction: no fake social proof, no copy bloat — lean into being new and fresh.
+
+---
+
+### S667 — S666 Backlog Sweep: All 16 Meta-Audit Items Shipped (COMPLETE — pushed)
+
+All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/api/oauth/`. AuthContext + api.ts off localStorage. GDPR export + CCPA opt-out page + schema migration. ToS arbitration. CAN-SPAM address fixed. Stripe refund webhook + dunning grace. Canonical URLs on 5 pages. `prefers-reduced-motion`. Sentry Crons on all 38 jobs. Slow-query + pool monitoring. SIGTERM graceful shutdown. Deliverability monitor. Address normalization + 20 tests. Camera race fix. Geocoding audit cron. Claim verify endpoint + page. NSFW detection. Cloudinary orphan cleanup. XP velocity admin page. D-006 "AI" → "Smart". API_RESPONSE_FORMAT.md. Post-session: settings.tsx TS fix, ipKeyGenerator rate limiter fix, Railway cache-bust, OAuth redirects updated, CCPA migration deployed.
+
+---
+
+### S666 — Meta-Audit + Comprehensive P0/P1 Sweep (COMPLETE — pushed)
+
+28 gaps found by 4 meta-audit agents. Key discoveries: admin role regression (IDOR), isUnmanagedListing missing on 4 controllers, auction dual-winner race, settlement non-atomic, weekly email cron with placeholder string never firing. All fixed. 38 cron jobs wrapped with Sentry. 4 new rate limiters. OAuth age gate UI added.
+
+---
+
+## Next Session — S672
+
+**FIRST ACTION: Restart Railway backend** to clear the in-memory rate limiter before testing anything.
+Go to railway.app → your project → backend service → ⋮ menu → Restart.
+
+**Then: verify OAuth login in incognito.**
+
+**Patrick actions before S672:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git pull
-```
-2. Then add STATE.md + dashboard updates:
-```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S670 wrap — login P0 fixed, Chrome verified"
+git commit -m "docs: S671 wrap — OAuth investigation, revert shipped, rate limit pending"
 .\push.ps1
 ```
-3. Add `MAILERLITE_ORGANIZERS_GROUP_ID` env var in Railway (still pending from S668)
 
-**S671 priorities (in order):**
-1. **Chrome authenticated audit** — login is now fixed; walk the organizer dashboard, rapid capture, pricing/upgrade funnel (FREE→SIMPLE→PRO→TEAMS). These have been UNVERIFIED for 3 sessions.
-2. **Dispatch S669 audit P0/P1 fixes** — 5 items ready to dispatch to findasale-dev in parallel:
+**S672 priorities (in order):**
+
+1. **P0 — Verify OAuth login works** after Railway restart clears rate limit. Test Google in incognito. If still broken, run full OAuth diagnostic (check Vercel function logs for `/api/oauth/callback/google` — see what error NextAuth is actually returning server-side).
+
+2. **OAuth diagnostic prep (if still broken):** The `OAuthCallback` error NextAuth returned likely means the backend `/auth/oauth` exchange is failing server-to-server. Check: (a) Is `NEXT_PUBLIC_API_URL` set correctly in Vercel env? (b) Does the Railway backend `/auth/oauth` endpoint accept the OAuth payload? (c) Are there any Railway logs from the NextAuth JWT callback server-to-server call?
+
+3. **S669 audit P0/P1 fixes** (once OAuth is confirmed working):
    - P0: `SaleCard.tsx` eager loading for above-fold cards (LCP)
    - P0: Product JSON-LD on `/items/[id]` pages
-   - P1: Create `public/offline.html` (sw.js pre-caches it but file is missing)
-   - P1: City page noindex logic (currently silently noindexes empty city pages)
-   - P1: Email template — remove "estate sale" banned terms (5×), fix unsubscribe URL PII (`?email=` param)
-3. Re-run error/empty states and shopper competitive audit lenses (lost to context in S669)
-4. Advance a roadmap item if context allows
+   - P1: Create `public/offline.html`
+   - P1: City page noindex logic fix
+   - P1: Email templates — remove banned "estate sale" terms (5×), fix unsubscribe PII
+
+4. **Add `MAILERLITE_ORGANIZERS_GROUP_ID`** env var in Railway (pending since S668)
