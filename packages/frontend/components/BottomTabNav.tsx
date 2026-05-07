@@ -191,7 +191,7 @@ const BottomTabNav = () => {
       {/* Explore bottom sheet */}
       {exploreSheetOpen && (
         <>
-          <div className="fixed inset-0 bg-black/40 z-50 md:hidden" onClick={() => setExploreSheetOpen(false)} />
+          <div className="fixed inset-0 bg-black/40 z-50 md:hidden" role="presentation" aria-hidden="true" onClick={() => setExploreSheetOpen(false)} />
           <div className="fixed bottom-14 left-0 right-0 bg-white dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 rounded-t-xl z-50 pb-safe md:hidden">
             <div className="p-4">
               <h3 className="text-xs font-semibold text-warm-500 dark:text-gray-400 uppercase tracking-wide mb-3">Explore</h3>

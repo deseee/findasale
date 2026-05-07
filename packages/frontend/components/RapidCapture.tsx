@@ -581,6 +581,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             <div
               className="fixed inset-0"
               style={{ zIndex: 29 }}
+              role="presentation"
+              aria-hidden="true"
               onClick={() => {
                 setSettingsPanelOpen(false);
                 setWbSubOpen(false);

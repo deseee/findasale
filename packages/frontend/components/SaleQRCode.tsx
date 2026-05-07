@@ -143,6 +143,9 @@ const SaleQRCode: React.FC<SaleQRCodeProps> = ({
       {enlarged && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Enlarged QR code view"
           onClick={() => setEnlarged(false)}
         >
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl text-center max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>

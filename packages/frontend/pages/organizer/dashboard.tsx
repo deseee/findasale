@@ -789,10 +789,12 @@ const OrganizerDashboard = () => {
 
           {/* Tier Progress Widget — show upgrade CTAs for SIMPLE and PRO tiers */}
           {isClient && user?.organizerTier === 'SIMPLE' && (
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-6 mb-8">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Your Plan: SIMPLE</h3>
+            <>
+              <h2 className="sr-only">Subscription Status and Tier Options</h2>
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-6 mb-8">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Your Plan: SIMPLE</h3>
                   <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Unlock more features — PRO is just $29/mo</p>
                   <p className="text-sm text-warm-700 dark:text-warm-300">
                     <strong>PRO includes:</strong> 500+ items per sale • Advanced analytics • Brand Kit
@@ -802,7 +804,8 @@ const OrganizerDashboard = () => {
                   Upgrade to PRO
                 </Link>
               </div>
-            </div>
+              </div>
+            </>
           )}
 
           {/* PRO Upgrade Nudge — shown to SIMPLE tier organizers with 3+ completed sales */}
