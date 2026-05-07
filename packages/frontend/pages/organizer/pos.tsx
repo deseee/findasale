@@ -2345,7 +2345,7 @@ export default function POSPage() {
               ✕
             </button>
 
-            <div className="relative w-full cursor-pointer" onClick={(e) => scanOnTap(e)}>
+            <div className="relative w-full cursor-pointer" role="button" tabIndex={0} onClick={(e) => scanOnTap(e)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scanOnTap(e as any); } }}>
               <video
                 ref={videoRef}
                 autoPlay

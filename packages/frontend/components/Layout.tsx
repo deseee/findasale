@@ -1738,7 +1738,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </div>
           </div>
         )}
-        {children}
+        <main id="main-content" tabIndex={-1}>
+          {children}
+        </main>
       </div>
 
       {/* Bottom tab navigation — mobile only */}

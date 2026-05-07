@@ -60,7 +60,7 @@
 }
 
 .dark .btn-ghost {
-  @apply text-[#A8A8AA];
+  @apply text-[#CECECE];
   @apply hover:bg-[#3A3A3C];
 }
 
