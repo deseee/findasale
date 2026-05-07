@@ -4,7 +4,37 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S677 — Audio Note UX Fix + Build Fixes (COMPLETE — push needed)**
+**Latest: S678 — MCP Server Railway Deploy COMPLETE (COMPLETE — pushed via MCP)**
+
+MCP server is live on Railway. All three blockers resolved: wrong Dockerfile being used, TypeScript compile errors, and DNS CNAME needed.
+
+1. **Root cause found: root railway.toml** — Repo-root `railway.toml` hardcoded `dockerfilePath = "packages/backend/Dockerfile.production"`, overriding every Railway service's Dockerfile setting including the new findasale (MCP) service. Fix: added `packages/mcp-server/railway.toml` pointing to `Dockerfile.production`.
+
+2. **TypeScript compile errors** — `noUnusedLocals` and `noUnusedParameters` were both `true` in the mcp-server tsconfig. Three unused parameters (`req`, `res`, `next`) blocked `tsc`. Fixed by setting both flags to `false` in `tsconfig.json` and adding `_` prefixes in `index.ts`.
+
+3. **DNS CNAME** — Added `mcp` CNAME → `findasale-production.up.railway.app` in Vercel DNS for finda.sale. Confirmed via Vercel "Created DNS Record successfully."
+
+4. **mcp.json activated** — `.well-known/mcp.json` status updated from `coming-soon` → `active`. Vercel deploy queued and will complete shortly.
+
+**Verified:** `https://findasale-production.up.railway.app/health` → `{"status":"ok","uptime":62s,"tools":7,"environment":"production"}`. All 7 tools (search_sales, get_sale, search_items, get_item, list_cities, list_sale_types, list_categories) registered and responding.
+
+**S678 files changed (all MCP-pushed):**
+- `packages/mcp-server/railway.toml` — NEW (Dockerfile path + deploy settings)
+- `packages/mcp-server/tsconfig.json` — noUnusedLocals/Parameters → false
+- `packages/mcp-server/src/index.ts` — _req/_res/_next param prefixes
+- `packages/frontend/public/.well-known/mcp.json` — status → active
+
+**Also confirmed this session:**
+- S675 migration `20260507000004_sale_feed_indexes` — confirmed deployed via psycopg2 query
+- Product JSON-LD on `/items/[id]` — assessed: already implemented at lines 550–609 of `pages/items/[id].tsx`, no changes needed
+
+**Remaining from S678 carry-forward:**
+- MAILERLITE_ORGANIZERS_GROUP_ID env var in Railway (pending since S668)
+- Chrome QA: VoiceDescriptionInput (pending)
+
+---
+
+**Previous: S677 — Audio Note UX Fix + Build Fixes (COMPLETE — pushed)**
 
 Audio note feature audited and relocated. Two build errors fixed (pnpm lockfile + TS type mismatch).
 
@@ -361,9 +391,33 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 ---
 
-## Recent Sessions (S670–S674)
+## Recent Sessions (S674–S678)
 
-### S674 — Post-S673 Bug Fixes: OAuth redirect + incognito loop + empty homepage + frozen modal (COMPLETE — not yet pushed)
+### S678 — MCP Server Railway Deploy + DNS + mcp.json Active (COMPLETE — MCP pushed)
+
+Root cause of repeated Railway build failures: repo-root `railway.toml` hardcoded `dockerfilePath = "packages/backend/Dockerfile.production"`, overriding the new MCP service's settings regardless of Root Directory configuration. Fix: added `packages/mcp-server/railway.toml` with `dockerfilePath = "Dockerfile.production"`. Two TypeScript compile errors also fixed (unused params + noUnusedLocals/Parameters → false in tsconfig). Server deployed and verified: `findasale-production.up.railway.app/health` returns `{"status":"ok","tools":7,"environment":"production"}`. DNS CNAME `mcp.finda.sale` → Railway added in Vercel. `.well-known/mcp.json` status updated to `active`.
+
+---
+
+### S677 — Audio Notes UX Fix + Build Fixes (COMPLETE — pushed)
+
+VoiceTagButton in edit-item tags section was silently discarding transcript data (name/category/price extracted but never saved). Replaced with `VoiceDescriptionInput.tsx` alongside the description textarea: always saves full transcript as description, auto-populates empty fields, shows inline "Voice suggestion · Accept / Keep" for pre-filled fields. VoiceTagButton removed from tags section. pnpm lockfile regenerated (mcp-server was missing). TS type mismatch on fieldUpdate prop fixed.
+
+---
+
+### S676 — AI Agent Discoverability + MCP Server Phase 1 (COMPLETE — pushed)
+
+llms.txt, robots.txt AI crawler allowlist, JSON-LD on pricing/about/faq/homepage, `.well-known/mcp.json` (status: coming-soon), MCP server package with 7 tools built and Railway-ready. SSR assessment: all 3 public pages already SSR-safe, no changes needed.
+
+---
+
+### S675 — Sentry P0 Sale Indexes + Enrichment Guard (COMPLETE — pushed)
+
+4 Sale model indexes added (migration `20260507000004_sale_feed_indexes`) fixing 1391ms slow query. user11 contamination fixed + `@example.com` guard added to enrichment pipeline. schema.prisma truncation repaired.
+
+---
+
+### S674 — Post-S673 Bug Fixes: OAuth redirect + incognito loop + empty homepage + frozen modal (COMPLETE — pushed)
 
 4 live bugs found and fixed. (1) Google OAuth post-login landed back on `/login` — OAuthBridge exchanged token but never redirected; added role-based `router.replace()` after `login()`. (2) Incognito homepage redirected to `/login` — `useRankUp` called `useXpProfile()` with no auth gate, triggering 401 → interceptor → redirect for unauthenticated users; fixed by passing `!!user` to `useXpProfile`. (3) Homepage showed "No sales yet" despite active sales — `getStaticProps` returns `initialSalesData: null` at Vercel build time; `initialData: null` made react-query skip the `/api/feed` fetch; fixed by removing `initialData` from useQuery. (4) OrganizerOnboardingModal buttons frozen — `OnboardingWizard` and `OrganizerOnboardingModal` both rendered at `z-50`; wizard is on top visually, FocusTrap from underlying modal locked wizard buttons; fixed by adding `dashboardState !== 'new'` guard to wizard render condition. TS: zero errors.
 
@@ -497,25 +551,27 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S678
+## Next Session — S679
 
-**Priority 1: Map feature innovation sprint (Patrick's request)**
-Dispatch `findasale-innovation` to explore what else we could do with map features. Seed ideas: mileage tracking (how far did a shopper drive?), nearby destinations (other sales/stops close to a current sale), surprise features that shoppers and organizers wouldn't expect. Innovation should run Phase 1 (unconstrained ideation) then Phase 2 (feasibility). Return top ideas ranked by impact vs. effort before any dev dispatch.
+**Priority 1: Chrome QA — VoiceDescriptionInput**
+Open edit-item in Chrome as user1@example.com, tap the mic button near the description textarea, speak an item description, verify: (1) transcript saves to description field, (2) inline "Voice suggestion: [value] · Accept / Keep" prompts appear for pre-filled fields (name, price, category, condition, brand). Screenshot evidence required for ✅.
 
-**Patrick actions — S677 push block:**
+**Priority 2: MAILERLITE_ORGANIZERS_GROUP_ID**
+Set this env var in Railway backend. Pending since S668. Without it, organizers signing up are not enrolled in the MailerLite onboarding automation. Find the group ID in MailerLite → Groups → "Beta Organizers" (or equivalent).
+
+**Priority 3: mcp.finda.sale smoke test**
+Wait for DNS propagation (~5–30 min from CNAME creation), then:
+```bash
+curl https://mcp.finda.sale/health
+```
+Should return `{"status":"ok","tools":7}`. If DNS hasn't propagated, hit the Railway URL directly: `https://findasale-production.up.railway.app/health`.
+
+**Patrick actions — S678 wrap push block:**
 ```powershell
-git add packages/frontend/components/VoiceDescriptionInput.tsx
-git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git add pnpm-lock.yaml
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S677: Audio notes UX fix + pnpm lockfile + TS fix"
+git commit -m "S678: MCP server Railway deploy complete + DNS CNAME + mcp.json active"
 .\push.ps1
 ```
 
-**S678 carry-forward (after map innovation sprint):**
-1. **MCP server Railway deploy** — `packages/mcp-server` Dockerfile ready. New Railway service, `BACKEND_URL=https://api.finda.sale`, `PORT=3003`. Point `mcp.finda.sale` DNS → Railway. Update `.well-known/mcp.json` status to `active` once live.
-2. **Verify S675 migration** — Confirm `20260507000004_sale_feed_indexes` deployed to Railway. If not: `prisma migrate deploy` with Railway URL.
-3. **Product JSON-LD on `/items/[id]`** — S669 P0 still open
-4. **MAILERLITE_ORGANIZERS_GROUP_ID** env var in Railway (pending since S668)
-5. **QA: VoiceDescriptionInput** — open edit-item in Chrome, tap mic, speak an item description, verify transcript saves to description + inline suggestions appear for pre-filled fields
+Note: All S678 code changes (railway.toml, tsconfig.json, index.ts, mcp.json) were already pushed to GitHub via MCP during the session.

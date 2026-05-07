@@ -1,18 +1,17 @@
-# Patrick's Dashboard — S677 Wrap
+# Patrick's Dashboard — S678 Wrap
 
 ---
 
 ## Push Block — Run This Now
 
 ```powershell
-git add packages/frontend/components/VoiceDescriptionInput.tsx
-git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git add pnpm-lock.yaml
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S677: Audio notes UX fix + pnpm lockfile + TS fix"
+git commit -m "S678: MCP server Railway deploy complete + DNS CNAME + mcp.json active"
 .\push.ps1
 ```
+
+Note: All code changes this session (railway.toml, tsconfig.json, index.ts, mcp.json) were already pushed to GitHub via MCP during the session.
 
 ---
 
@@ -23,39 +22,34 @@ git commit -m "S677: Audio notes UX fix + pnpm lockfile + TS fix"
 | Google OAuth | ⚠️ Still broken (S673/S674 architecture correct, root cause unclear) |
 | Login (email/password) | ✅ Working |
 | Homepage feed | ✅ Working |
-| Vercel build | ✅ Green (pnpm lockfile fix shipped this session) |
+| Vercel build | ✅ Green |
 | Railway backend | ✅ Green |
-| Audio notes (edit-item) | ✅ Shipped S677 — push needed |
-| AI discoverability (llms.txt, robots.txt, JSON-LD) | ✅ Pushed S676 |
-| MCP Server (packages/mcp-server) | ✅ Built S676 — Railway deploy still needed |
-| Sale feed indexes (S675 migration) | ⚠️ Confirm `20260507000004_sale_feed_indexes` was deployed |
+| MCP Server | ✅ LIVE — `findasale-production.up.railway.app/health` returns 200, 7 tools |
+| mcp.finda.sale DNS | ✅ CNAME added (Vercel DNS, propagating) |
+| .well-known/mcp.json | ✅ status → active (Vercel deploy queued) |
+| Audio notes (VoiceDescriptionInput) | ✅ Shipped S677 — Chrome QA pending |
+| AI discoverability (llms.txt, robots.txt, JSON-LD) | ✅ Live S676 |
+| Sale feed indexes (S675 migration) | ✅ Confirmed deployed |
+| Product JSON-LD on /items/[id] | ✅ Already implemented (lines 550–609) |
 
 ---
 
-## S678 First Action
+## S679 First Action
 
-Dispatch `findasale-innovation` for a map feature ideation sprint. Seed topics:
-- **Mileage tracking** — how far did a shopper drive to attend a sale?
-- **Nearby destinations** — other sales or stops close to a sale the shopper is already attending
-- **Surprise features** — what map-based experiences would genuinely delight shoppers or organizers?
-
-Innovation returns Phase 1 ideas + Phase 2 feasibility. Patrick reviews before any dev dispatch.
+**Chrome QA: VoiceDescriptionInput** — open edit-item in Chrome as user1@example.com (Seedy2025!), tap the mic button near the description textarea, speak an item description. Verify: transcript saves to description, inline "Voice suggestion · Accept / Keep" prompts appear for pre-filled fields. Screenshot required.
 
 ---
 
 ## Outstanding Carry-Forward
 
-1. **MCP server Railway deploy** — New Railway service, root dir `packages/mcp-server`, Dockerfile.production ready. Env vars: `BACKEND_URL=https://api.finda.sale`, `PORT=3003`. Point `mcp.finda.sale` DNS → Railway. Update `.well-known/mcp.json` status to `active` once live.
-2. **Verify S675 migration** — `20260507000004_sale_feed_indexes` — run `prisma migrate deploy` with Railway URL if not yet deployed.
-3. **Product JSON-LD on `/items/[id]`** — P0 from S669, still open
-4. **MAILERLITE_ORGANIZERS_GROUP_ID** env var in Railway (pending since S668)
-5. **QA: VoiceDescriptionInput** — open edit-item in Chrome, tap mic, speak item description, verify saves correctly + inline suggestions for pre-filled fields
+1. **MAILERLITE_ORGANIZERS_GROUP_ID** env var in Railway — pending since S668. Organizers signing up aren't enrolled in MailerLite onboarding automation without this. Get the group ID from MailerLite → Groups.
+2. **Chrome QA: VoiceDescriptionInput** — see above
+3. **mcp.finda.sale smoke test** — run `curl https://mcp.finda.sale/health` once DNS propagates (5–30 min). Direct URL works now: `https://findasale-production.up.railway.app/health`
 
 ---
 
 ## Outstanding Audit Items
 
-- ❌ P0: Item pages missing Product JSON-LD structured data
 - ❌ P0: SaleCard above-fold images using `loading="lazy"` (LCP hit)
 - ❌ P1: PWA offline.html missing (sw.js pre-caches it but file doesn't exist)
 - ❌ P1: City pages silently noindex when empty
