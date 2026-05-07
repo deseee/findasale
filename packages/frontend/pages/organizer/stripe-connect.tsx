@@ -41,7 +41,6 @@ const ACHPayoutsPage: React.FC = () => {
       });
       if (!response.ok) throw new Error('Failed to verify onboarding');
       const data = await response.json();
-      console.log('Onboarding status updated:', data);
     } catch (err) {
       console.error('Error verifying onboarding:', err);
     }

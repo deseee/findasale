@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSubmitPhoto } from '../hooks/useUGCPhotos';
+import { useToast } from './ToastContext';
 
 interface UGCPhotoSubmitButtonProps {
   saleId?: number;
@@ -16,18 +17,19 @@ export default function UGCPhotoSubmitButton({
   const [photoUrl, setPhotoUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [tagsInput, setTagsInput] = useState('');
+  const { showToast } = useToast();
   const submitMutation = useSubmitPhoto();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!photoUrl) {
-      alert('Please enter a photo URL');
+      showToast('Please enter a photo URL', 'error');
       return;
     }
 
     if (!saleId && !itemId) {
-      alert('Sale or item context is required');
+      showToast('Sale or item context is required', 'error');
       return;
     }
 
@@ -51,9 +53,10 @@ export default function UGCPhotoSubmitButton({
       setTagsInput('');
       setIsOpen(false);
 
+      showToast('Photo submitted successfully', 'success');
       if (onSuccess) onSuccess();
     } catch (error) {
-      alert('Failed to submit photo. Please try again.');
+      showToast('Failed to submit photo. Please try again.', 'error');
       console.error(error);
     }
   };
