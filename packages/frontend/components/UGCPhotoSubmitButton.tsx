@@ -102,7 +102,7 @@ export default function UGCPhotoSubmitButton({
                   placeholder="https://example.com/photo.jpg"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   required
-                />
+                 aria-label="https://example.com/photo.jpg" />
               </div>
 
               {/* Caption */}
@@ -130,7 +130,7 @@ export default function UGCPhotoSubmitButton({
                   onChange={(e) => setTagsInput(e.target.value)}
                   placeholder="e.g., vintage, furniture, mid-century"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+                 aria-label="e.g., vintage, furniture, mid-century" />
               </div>
 
               {/* Note */}
@@ -156,13 +156,4 @@ export default function UGCPhotoSubmitButton({
                   className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 transition-opacity font-medium disabled:opacity-50"
                   style={{ backgroundColor: '#8FB897' }}
                 >
-                  {submitMutation.isPending ? 'Submitting...' : 'Submit Photo'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
+                  {submit

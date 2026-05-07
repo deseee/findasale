@@ -594,7 +594,7 @@ const EditItemPage = () => {
                   type="text"
                   placeholder="Add a custom tag..."
                   className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  onKeyDown={(e) => {
+                  onKeyDown={(e) = aria-label="Add a custom tag..."> {
                     if (e.key === 'Enter') {
                       const value = (e.target as HTMLInputElement).value.trim();
                       if (value && !formData.tags.includes(value)) {
@@ -638,7 +638,7 @@ const EditItemPage = () => {
                     }
                     placeholder="e.g., #EF4444 or red"
                     className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
+                   aria-label="e.g., #EF4444 or red" />
                   <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                     Used for color-coded discount rules
                   </p>

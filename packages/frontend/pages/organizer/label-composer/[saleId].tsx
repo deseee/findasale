@@ -771,7 +771,7 @@ export default function LabelComposerPage() {
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search items..."
                     className="flex-1 bg-transparent border-none outline-none text-sm text-warm-900 dark:text-white placeholder-warm-400 dark:placeholder-gray-500"
-                  />
+                   aria-label="Search items..." />
                   {catalogData && (
                     <span className="text-xs font-mono text-warm-400 dark:text-gray-500">
                       {catalogData.items.length} match{catalogData.items.length !== 1 ? 'es' : ''}

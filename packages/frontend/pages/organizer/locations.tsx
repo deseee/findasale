@@ -370,7 +370,7 @@ const LocationsPage = () => {
                   placeholder="e.g., Main Warehouse"
                   className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500"
                   required
-                />
+                 aria-label="e.g., Main Warehouse" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
@@ -382,7 +382,7 @@ const LocationsPage = () => {
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   placeholder="123 Main St"
                   className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500"
-                />
+                 aria-label="123 Main St" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
@@ -394,7 +394,7 @@ const LocationsPage = () => {
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="(616) 123-4567"
                   className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500"
-                />
+                 aria-label="(616) 123-4567" />
               </div>
               <div className="flex gap-3 pt-4">
                 <button

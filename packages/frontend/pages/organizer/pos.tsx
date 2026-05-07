@@ -1478,7 +1478,7 @@ export default function POSPage() {
               onChange={e => setItemSearch(e.target.value)}
               placeholder="Search by title or SKU…"
               className="flex-1 border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
-            />
+             aria-label="Search by title or SKU…" />
             <button
               onClick={() => {
                 setCameraOpen(true);
@@ -1688,7 +1688,7 @@ export default function POSPage() {
             onChange={e => setBuyerEmail(e.target.value)}
             placeholder="buyer@email.com"
             className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
-          />
+           aria-label="buyer@email.com" />
         </div>
       )}
 
@@ -1990,7 +1990,7 @@ export default function POSPage() {
               type="email"
               placeholder="Enter shopper email..."
               value={shopperSearchEmail}
-              onChange={(e) => handleShopperEmailSearch(e.target.value)}
+              onChange={(e) = aria-label="Enter shopper email..."> handleShopperEmailSearch(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm placeholder-gray-500 dark:placeholder-gray-400"
             />
             {shopperSearchLoading && (
@@ -2388,9 +2388,4 @@ export default function POSPage() {
         isOpen={confirmState.open}
         title={confirmState.title}
         message={confirmState.message}
-        onConfirm={() => confirmState.onConfirm()}
-        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
-      />
-    </>
-  );
-}
+        onC

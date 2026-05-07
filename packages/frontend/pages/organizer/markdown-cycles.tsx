@@ -455,7 +455,7 @@ const MarkdownCyclesPage = () => {
                   }
                   placeholder="e.g., 5"
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
+                 aria-label="e.g., 5" />
                 <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                   Days after item creation before first markdown applies
                 </p>
@@ -477,7 +477,7 @@ const MarkdownCyclesPage = () => {
                     }
                     placeholder="e.g., 10"
                     className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                  />
+                   aria-label="e.g., 10" />
                   <span className="flex items-center px-3 py-2 bg-warm-50 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 font-semibold">
                     %
                   </span>
@@ -498,7 +498,7 @@ const MarkdownCyclesPage = () => {
                   }
                   placeholder="e.g., 10"
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
+                 aria-label="e.g., 10" />
                 <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                   Must be greater than first markdown days
                 </p>
@@ -520,7 +520,7 @@ const MarkdownCyclesPage = () => {
                     }
                     placeholder="e.g., 20"
                     className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                  />
+                   aria-label="e.g., 20" />
                   <span className="flex items-center px-3 py-2 bg-warm-50 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 font-semibold">
                     %
                   </span>

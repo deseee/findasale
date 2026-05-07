@@ -397,7 +397,7 @@ const DiscountRulesPage = () => {
                     }
                     placeholder="e.g., #EF4444 or red"
                     className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+                   aria-label="e.g., #EF4444 or red" />
                 </div>
                 <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                   Hex code (e.g., #EF4444) or color name
@@ -417,7 +417,7 @@ const DiscountRulesPage = () => {
                   }
                   placeholder="e.g., 25% Off — Red Tag"
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
+                 aria-label="e.g., 25% Off — Red Tag" />
                 <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                   Human-readable name for this rule
                 </p>
@@ -440,7 +440,7 @@ const DiscountRulesPage = () => {
                     }
                     placeholder="e.g., 25"
                     className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+                   aria-label="e.g., 25" />
                   <span className="flex items-center px-3 py-2 bg-warm-50 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 font-semibold">
                     %
                   </span>

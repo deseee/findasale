@@ -403,7 +403,7 @@ const EbayPolicySetupPage = () => {
                                 }}
                                 placeholder="No upper limit"
                                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
-                              />
+                               aria-label="No upper limit" />
                               {tier.maxOz === Infinity && (
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No upper limit</p>
                               )}
@@ -546,7 +546,7 @@ const EbayPolicySetupPage = () => {
                                 onChange={(e) => updateCategoryOverride(index, 'categoryId', e.target.value)}
                                 placeholder="e.g., 30009"
                                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
-                              />
+                               aria-label="e.g., 30009" />
                               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                 Find eBay category IDs in your existing listings or the eBay category tree.
                               </p>

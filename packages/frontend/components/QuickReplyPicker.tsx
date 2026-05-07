@@ -113,7 +113,7 @@ const QuickReplyPicker: React.FC<Props> = ({ onSelect }) => {
                 onChange={e => setNewTitle(e.target.value)}
                 placeholder="Template name"
                 className="w-full border border-warm-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400"
-              />
+               aria-label="Template name" />
               <textarea
                 value={newBody}
                 onChange={e => setNewBody(e.target.value)}

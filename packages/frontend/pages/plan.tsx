@@ -257,7 +257,7 @@ const PlanPage = () => {
                     disabled={isLoadingChat}
                     placeholder="Ask about your sale..."
                     className="flex-grow px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-500 disabled:bg-warm-50 text-sm"
-                  />
+                   aria-label="Ask about your sale..." />
                   <button
                     onClick={handleSend}
                     disabled={isLoadingChat || !inputValue.trim()}

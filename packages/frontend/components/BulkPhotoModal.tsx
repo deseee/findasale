@@ -159,7 +159,7 @@ const BulkPhotoModal: React.FC<BulkPhotoModalProps> = ({
               placeholder="https://example.com/photo.jpg"
               className="flex-1 px-3 py-2 border border-warm-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
               disabled={isApplying || loading}
-            />
+             aria-label="https://example.com/photo.jpg" />
             <button
               onClick={handleAddUrl}
               disabled={isApplying || loading || !photoUrl.trim()}

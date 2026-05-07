@@ -1429,7 +1429,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                               onChange={(e) => handleBidAmountChange(item.id, e.target.value)}
                               className="flex-grow px-2 py-1 border border-warm-300 dark:border-gray-600 rounded-l text-sm text-warm-900 dark:bg-gray-700 dark:text-warm-100"
                               placeholder="Enter bid amount"
-                            />
+                             aria-label="Enter bid amount" />
                             <button
                               onClick={() => handlePlaceBid(item.id)}
                               disabled={biddingItemId === item.id}

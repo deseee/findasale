@@ -286,7 +286,7 @@ function PrepThermometer({
             placeholder="Task name..."
             className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-warm-900 dark:text-warm-100 text-sm outline-none focus:ring-2 focus:ring-sage-500 mb-3"
             autoFocus
-          />
+           aria-label="Task name..." />
           <div className="flex items-center justify-between">
             <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
               <input

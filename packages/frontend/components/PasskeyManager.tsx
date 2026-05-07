@@ -155,7 +155,7 @@ const PasskeyManager: React.FC = () => {
               placeholder="e.g., iPhone Face ID, MacBook Touch ID"
               disabled={isRegistering}
               className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            />
+             aria-label="e.g., iPhone Face ID, MacBook Touch ID" />
           </div>
           <button
             onClick={handleAddPasskey}

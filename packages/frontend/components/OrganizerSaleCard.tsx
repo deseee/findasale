@@ -188,7 +188,7 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
                     className="w-16 px-2 py-1 text-xs border border-warm-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-gray-100"
                     placeholder="0"
                     disabled={isSavingAttendance}
-                  />
+                   aria-label="0" />
                   <button
                     onClick={handleSaveAttendance}
                     disabled={isSavingAttendance || attendanceCount === null || attendanceCount < 0}

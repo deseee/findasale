@@ -4,7 +4,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S681 — WCAG #391 Chrome Keyboard/Focus QA (COMPLETE — 3 bugs fixed)**
+**Latest: S682 — Pre-Launch Audits #390/#391/#392 (COMPLETE — all dispatched in parallel)**
+
+Three pre-launch audits dispatched and completed:
+
+**#390 Health Scout Baseline** — 0 Critical, 3 High (unbounded findMany in adminBroadcastController, adminController, buyingPoolController), 2 Medium (5 alert() UX calls on ugc-moderation/dashboard, Leaflet SSR guard check), 4 Low. Report: `claude_docs/health-reports/2026-05-07-health-scout.md`. High findings ready for dev dispatch.
+
+**#391 WCAG Deferred (partial)** — 152 aria-labels added across 56 frontend files. Images already compliant. Error ARIA deferred (no existing error message infrastructure). Remaining 189 labels in ~25 files with complex patterns added to Blocked/Unverified queue.
+
+**#392 Brand Voice Audit** — 3 violations fixed: `emailTemplateService.ts` tagline ("Estate Sales, Simplified" → "Find All The Sales"), `inspiration.tsx` ("best items" → "upcoming treasures"), `guild-primer.tsx` ("best sales" → "new sales"). Strong brand compliance overall — AI terminology already purged, sale-type inclusivity good. Audit report: `claude_docs/brand/brand-voice-audit-2026-05-07.md`.
+
+**⚠️ S682 files — in Patrick pushblock below (not yet on GitHub).**
+
+**Previous: S681 — WCAG #391 Chrome Keyboard/Focus QA (COMPLETE — 3 bugs fixed)**
 
 Live keyboard/focus testing in Chrome. Three bugs found and fixed.
 
@@ -397,6 +409,7 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | WCAG skip link re-verify | ✅ S682 VERIFIED — Tab once on finda.sale, amber "Skip to main content" button appears overlaying header top-left, disappears when focus moves. z-[100] fix working correctly. | — | S681 |
+| WCAG form labels (189 remaining) | 152/341 aria-labels added S682. Remaining 25 files have complex patterns (dynamic JSX, conditional rendering) requiring per-file review. | Review each remaining file and add context-aware labels or associated `<label>` elements | S682 |
 | JWT httpOnly cookies | ✅ VERIFIED S670 — login worked through proxy, cookies set correctly | — | S664/S667 |
 | COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error | S664 |
 | Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` | S664 |

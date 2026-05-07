@@ -199,7 +199,7 @@ const OrganizerWebhooksPage = () => {
                   onChange={e => setNewUrl(e.target.value)}
                   placeholder="https://hooks.zapier.com/hooks/catch/..."
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                 aria-label="https://hooks.zapier.com/hooks/catch/..." />
               </div>
 
               <div>

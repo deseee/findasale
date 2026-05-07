@@ -139,7 +139,7 @@ export default function WishlistAlertForm({ isOpen, onClose, alertId, initialDat
               placeholder="e.g., Mid-Century Furniture Under $200"
               className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
               required
-            />
+             aria-label="e.g., Mid-Century Furniture Under $200" />
           </div>
 
           {/* Keywords */}
@@ -153,7 +153,7 @@ export default function WishlistAlertForm({ isOpen, onClose, alertId, initialDat
               onChange={(e) => setKeywords(e.target.value)}
               placeholder="e.g., sofa, vintage, oak"
               className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
-            />
+             aria-label="e.g., sofa, vintage, oak" />
           </div>
 
           {/* Tags */}
@@ -174,7 +174,7 @@ export default function WishlistAlertForm({ isOpen, onClose, alertId, initialDat
                 }}
                 placeholder="Add a tag and press Enter"
                 className="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
-              />
+               aria-label="Add a tag and press Enter" />
               <button
                 type="button"
                 onClick={handleAddTag}
@@ -235,7 +235,7 @@ export default function WishlistAlertForm({ isOpen, onClose, alertId, initialDat
                 placeholder="0"
                 min="0"
                 className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
-              />
+               aria-label="0" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -248,7 +248,7 @@ export default function WishlistAlertForm({ isOpen, onClose, alertId, initialDat
                 placeholder="999999"
                 min="0"
                 className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
-              />
+               aria-label="999999" />
             </div>
           </div>
 

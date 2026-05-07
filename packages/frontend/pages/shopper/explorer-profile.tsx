@@ -182,7 +182,7 @@ function ExplorerProfilePage() {
                   }}
                   placeholder="e.g., mid-century modern"
                   className="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
-                />
+                 aria-label="e.g., mid-century modern" />
                 <button
                   onClick={handleAddSpecialty}
                   className="px-4 py-2 bg-[#8fb897] text-white rounded-lg hover:bg-[#7ba680] font-medium flex-shrink-0"
@@ -249,7 +249,7 @@ function ExplorerProfilePage() {
                   }}
                   placeholder="e.g., eames, pyrex, walnut"
                   className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
-                />
+                 aria-label="e.g., eames, pyrex, walnut" />
                 <button
                   onClick={handleAddKeyword}
                   className="px-4 py-2 bg-[#8fb897] text-white rounded-lg hover:bg-[#7ba680] font-medium"

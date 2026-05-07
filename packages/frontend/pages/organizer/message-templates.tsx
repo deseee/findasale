@@ -76,7 +76,7 @@ export default function TemplatesPage() {
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6 border-2 border-amber-200 dark:border-amber-800">
               <h3 className="font-semibold text-warm-900 dark:text-gray-100 mb-4">New Template</h3>
               <div className="space-y-3">
-                <input type="text" value={editData.title} onChange={e => setEditData(d => ({ ...d, title: e.target.value }))} placeholder="Template name (e.g. Pickup Hours)" className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white dark:bg-gray-700 dark:text-gray-100" />
+                <input type="text" value={editData.title} onChange={e => setEditData(d => ({ ...d, title: e.target.value }))} placeholder="Template name (e.g. Pickup Hours)" className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white dark:bg-gray-700 dark:text-gray-100"  aria-label="Template name (e.g. Pickup Hours)" />
                 <select value={editData.category} onChange={e => setEditData(d => ({ ...d, category: e.target.value }))} className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white dark:bg-gray-700 dark:text-gray-100">
                   {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                 </select>

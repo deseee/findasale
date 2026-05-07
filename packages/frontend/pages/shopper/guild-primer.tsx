@@ -880,7 +880,7 @@ const GuildPrimerPage = () => {
               <div>
                 <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Presales & Exclusives</h3>
                 <p className="text-sm text-warm-600 dark:text-warm-400">
-                  Sage shoppers see the best sales 24 hours early. Grandmasters get 48 hours.
+                  Sage shoppers see new sales 24 hours early. Grandmasters get 48 hours.
                 </p>
               </div>
 

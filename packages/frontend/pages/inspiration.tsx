@@ -79,7 +79,7 @@ const InspirationPage: React.FC<InspirationPageProps> = ({ initialItems = [], er
             Inspiration Gallery
           </h1>
           <p className="text-warm-600 dark:text-warm-400">
-            Discover the best items from upcoming sales in your area
+            Find upcoming treasures from sales happening near you
           </p>
         </div>
 

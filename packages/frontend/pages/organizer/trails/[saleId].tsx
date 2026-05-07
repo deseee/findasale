@@ -253,7 +253,7 @@ export default function TrailBuilderPage() {
                   onChange={(e) => setTrailName(e.target.value)}
                   placeholder="e.g., Downtown Vintage & Coffee"
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
-                />
+                 aria-label="e.g., Downtown Vintage & Coffee" />
               </div>
 
               <div>
@@ -512,7 +512,7 @@ export default function TrailBuilderPage() {
                         onChange={(e) => setManualStopName(e.target.value)}
                         placeholder="e.g., Vintage Furniture Warehouse"
                         className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
-                      />
+                       aria-label="e.g., Vintage Furniture Warehouse" />
                     </div>
 
                     <div>
@@ -542,7 +542,7 @@ export default function TrailBuilderPage() {
                         onChange={(e) => setManualStopAddress(e.target.value)}
                         placeholder="Street address"
                         className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
-                      />
+                       aria-label="Street address" />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -557,7 +557,7 @@ export default function TrailBuilderPage() {
                           onChange={(e) => setManualLat(e.target.value)}
                           placeholder="40.7128"
                           className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
-                        />
+                         aria-label="40.7128" />
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-warm-700 dark:text-warm-300 mb-1">
@@ -570,7 +570,7 @@ export default function TrailBuilderPage() {
                           onChange={(e) => setManualLng(e.target.value)}
                           placeholder="-74.0060"
                           className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
-                        />
+                         aria-label="-74.0060" />
                       </div>
                     </div>
 

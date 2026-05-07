@@ -145,7 +145,7 @@ const AdminBroadcast = () => {
             onChange={(e) => setSubject(e.target.value)}
             placeholder="e.g., New feature announcement"
             className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
-          />
+           aria-label="e.g., New feature announcement" />
         </div>
 
         {/* Body Textarea */}

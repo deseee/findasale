@@ -272,7 +272,7 @@ const OrganizerBountiesPage = () => {
                       onChange={e => setSearchQuery(e.target.value)}
                       placeholder="Search bounties (e.g. 'vintage dresser', 'mid-century lamp')"
                       className="w-full border border-gray-300 dark:border-gray-600 rounded-lg py-2.5 px-4 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
-                    />
+                     aria-label="Search bounties (e.g. " />
                     <svg className="absolute right-3 top-2.5 w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
@@ -432,7 +432,7 @@ const OrganizerBountiesPage = () => {
                                 type="text"
                                 placeholder="Item ID (optional)"
                                 value={fulfillItemId}
-                                onChange={e => setFulfillItemId(e.target.value)}
+                                onChange={e = aria-label="Item ID (optional)"> setFulfillItemId(e.target.value)}
                                 className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
                               />
                               <button

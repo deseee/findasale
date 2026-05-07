@@ -172,7 +172,7 @@ const EbayEditForm: React.FC<{
                   placeholder="e.g., Canon"
                   maxLength={100}
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                />
+                 aria-label="e.g., Canon" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">MPN</label>
@@ -183,7 +183,7 @@ const EbayEditForm: React.FC<{
                   placeholder="Manufacturer part #"
                   maxLength={100}
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                />
+                 aria-label="Manufacturer part #" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -196,7 +196,7 @@ const EbayEditForm: React.FC<{
                   placeholder="12 digits"
                   maxLength={12}
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                />
+                 aria-label="12 digits" />
                 {formData.upc && formData.upc.length !== 12 && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Typically 12 digits</p>
                 )}
@@ -210,7 +210,7 @@ const EbayEditForm: React.FC<{
                   placeholder="e.g., 5901234123457"
                   maxLength={14}
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                />
+                 aria-label="e.g., 5901234123457" />
               </div>
             </div>
             <div>
@@ -222,7 +222,7 @@ const EbayEditForm: React.FC<{
                 placeholder="10 or 13 digits"
                 maxLength={13}
                 className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-              />
+               aria-label="10 or 13 digits" />
               {formData.isbn && ![10, 13].includes(formData.isbn.length) && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">ISBN is typically 10 or 13 characters</p>
               )}
@@ -238,7 +238,7 @@ const EbayEditForm: React.FC<{
                 placeholder="Short selling point"
                 maxLength={55}
                 className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-              />
+               aria-label="Short selling point" />
               <p className="text-xs text-warm-600 dark:text-warm-400 mt-0.5">{subtitleLength}/55</p>
             </div>
             <div>
@@ -278,7 +278,7 @@ const EbayEditForm: React.FC<{
                 placeholder="0"
                 min="0"
                 className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-              />
+               aria-label="0" />
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
@@ -291,7 +291,7 @@ const EbayEditForm: React.FC<{
                   min="0"
                   step="0.25"
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                />
+                 aria-label="0" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Width (in)</label>
@@ -303,7 +303,7 @@ const EbayEditForm: React.FC<{
                   min="0"
                   step="0.25"
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                />
+                 aria-label="0" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Height (in)</label>
@@ -315,7 +315,7 @@ const EbayEditForm: React.FC<{
                   min="0"
                   step="0.25"
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                />
+                 aria-label="0" />
               </div>
             </div>
             <div>
@@ -372,7 +372,7 @@ const EbayEditForm: React.FC<{
                     min="0"
                     step="0.01"
                     className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                  />
+                   aria-label="0.00" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Auto-decline below ($)</label>
@@ -384,7 +384,7 @@ const EbayEditForm: React.FC<{
                     min="0"
                     step="0.01"
                     className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                  />
+                   aria-label="0.00" />
                 </div>
               </div>
             )}

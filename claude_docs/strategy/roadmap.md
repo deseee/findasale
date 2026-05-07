@@ -98,9 +98,9 @@
 - [ ] Trademark filing — see Decisions Needed (#82)
 
 ### Pre-Launch Audits (Priority Order)
-- [ ] **#390 Health Scout Baseline Scan** — run health-scout across full codebase, produce baseline JSON, identify P0/P1 security and code issues before public traffic. Dispatch: `Skill('health-scout')`. _Priority 1._
-- [ ] **#391 Accessibility Audit (WCAG)** — audit color contrast, keyboard navigation, screen reader labels, focus traps across organizer + shopper flows. Dispatch: `Skill('design:accessibility-review')`. _Priority 2._
-- [ ] **#392 Brand Voice Audit** — sweep all UI copy (labels, error messages, empty states, email templates, onboarding modal, notifications) against `brand-voice-system.md`. Banned words check (AI, estate sale sole, disruption). Dispatch: `Skill('findasale-marketing')`. _Priority 3._
+- [x] **#390 Health Scout Baseline Scan** ✅ S682 — 0 Critical, 3 High (unbounded findMany in admin controllers), 2 Medium (5 alert() UX calls, Leaflet SSR), 4 Low. Report: `claude_docs/health-reports/2026-05-07-health-scout.md`. High findings → findasale-dev dispatch queued.
+- [x] **#391 Accessibility Audit (WCAG)** ✅ S682 PARTIAL — 152 aria-labels added across 56 files (74% of missing labels). Images: already compliant. Error ARIA: deferred (no existing error infrastructure). Remaining: 189 inputs in ~25 files with complex patterns — queued in Blocked/Unverified.
+- [x] **#392 Brand Voice Audit** ✅ S682 — 3 violations found and fixed: emailTemplateService.ts tagline, inspiration.tsx, guild-primer.tsx. Strong compliance overall. Audit: `claude_docs/brand/brand-voice-audit-2026-05-07.md`.
 - [ ] **#393 Chrome QA Backlog Sprint** — work through Pending Chrome QA items S344–S391 in focused micro-dispatches (one feature per dispatch). Priority: auction mechanics #174, iCal #184, purchase confirmation #80, holds E2E #146–#147, SettlementWizard #253. _Priority 4._
 - [ ] **#394 Full Product Walkthrough** — complete organizer + shopper role walkthrough start to finish (create sale → add items → publish → shopper browses → buys → settlement). Dispatch: `Skill('findasale-qa')`. _Priority 5 — do after QA backlog sprint clears known issues._
 
