@@ -51,6 +51,12 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Public endpoints like /auth/me return 401 for unauthenticated users — this is normal.
+      // Only redirect to login if the endpoint requires authentication (not /auth/me or similar).
+      if (originalRequest.url?.includes('/auth/me')) {
+        return Promise.reject(error); // Let caller handle unauthenticated state gracefully
+      }
+
       originalRequest._retry = true;
       try {
         // Call the refresh endpoint to get a new access token

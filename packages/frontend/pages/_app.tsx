@@ -115,18 +115,35 @@ function ServiceWorkerUpdateNotifier() {
 // Phase 31: Bridge NextAuth OAuth session → our JWT AuthContext.
 function OAuthBridge() {
   const { data: session, status } = useSession();
-  const { login, user, isLoading: authLoading } = useAuth();
+  const { login, user } = useAuth();
+  const [exchanging, setExchanging] = useState(false);
 
   useEffect(() => {
-    const backendJwt = (session as any)?.backendJwt;
-    // Drop !authLoading guard — it caused a race on mobile where authLoading was
-    // true when NextAuth fired, so login() never ran and the session was lost.
-    // !user still prevents double-login if a stored token already exists.
-    if (status === 'authenticated' && backendJwt && !user) {
-      login(backendJwt);
-      signOut({ redirect: false });
+    const oauthProfile = (session as any)?.oauthProfile;
+    if (status === 'authenticated' && oauthProfile && !user && !exchanging) {
+      setExchanging(true);
+      // POST directly from browser → Next.js proxy (beforeFiles) → Railway
+      // This ensures Railway's Set-Cookie headers reach the BROWSER, not Vercel
+      fetch('/api/auth/oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(oauthProfile),
+        credentials: 'include', // Include cookies in request AND store response cookies
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.token) {
+            login(data.token);
+          }
+          // Sign out of NextAuth session (no longer needed)
+          signOut({ redirect: false });
+        })
+        .catch(err => {
+          console.error('[OAuthBridge] Browser exchange failed:', err);
+          setExchanging(false);
+        });
     }
-  }, [session, status, user, authLoading, login]);
+  }, [session, status, user, exchanging, login]);
 
   return null;
 }
