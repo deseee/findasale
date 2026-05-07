@@ -4,23 +4,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S672 — OAuth Diagnosis (INCOMPLETE — fix attempt failed, clean handoff for next session)**
+**Latest: S673 — OAuth Path C Implemented (INCOMPLETE — Google OAuth still broken at wrap)**
 
-Confirmed via `GET /api/oauth/providers` and live OAuth probe that NextAuth at runtime is still using `/api/auth/` as basePath despite the handler living at `/api/oauth/[...nextauth].ts`. Patrick changed Vercel env `NEXTAUTH_URL` from `https://finda.sale` to `https://finda.sale/api/oauth` (Production scope), and S672 commit `b98b3d8` stripped the redirect_uri overrides. Force-rebuild without cache did not change behavior — Google sends users back to `/api/auth/callback/google` which has no handler ("Cannot GET"). Conclusion: NextAuth v4 is not honoring `NEXTAUTH_URL.pathname` in this environment. Stop fighting it.
+Path C fully shipped: NextAuth moved to standard `/api/auth/[...nextauth].ts`. `beforeFiles` rewrites in `next.config.js` protect 14 backend `/api/auth/*` paths from the NextAuth catch-all. OAuth exchange moved from server-side (Vercel→Railway, cookies never reach browser) to browser-side (OAuthBridge POSTs to `/api/auth/oauth` with `credentials:'include'`). Homepage redirect bug fixed (api.ts 401 interceptor now guards `/auth/me`). Dockerfile cache-bust pushed to force Railway rebuild. All code shipped and deployed. Patrick confirmed at wrap: "still the same error with google oauth."
 
-**Vercel env "Needs Attention" badges — clarified:** `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_SECRET` all show "Needs Attention" badges. These are NOT empty/invalid — the badge fires because Vercel detects that values that look like secrets are stored as plain (visible) env vars. The values are accessible to anyone with Vercel project access. Recommended action: rotate each secret at the source (Google Console, Facebook Developer, generate new NEXTAUTH_SECRET), then re-add to Vercel as **Sensitive** type. Tradeoff to note: Vercel Sensitive env vars are write-only and cannot be read back through the UI — but they ARE injected into Production builds at build/runtime exactly as plain vars are. Marking Sensitive does NOT break Production usage. Action: rotate + mark Sensitive before next OAuth session.
+**Root cause hypothesis for next session:** Google OAuth was last known working **before S655**. Compare git history S655→S667 to find the exact commit that broke it. Key suspect: S667 moved NextAuth from `/api/auth/` to `/api/oauth/` and changed `AuthContext.tsx` to use `GET /auth/me` — this likely disrupted the cookie auth flow. The browser-side exchange fix in S673 should be the correct architecture, but something may still be wrong with how OAuthBridge reads the session, or the `/api/auth/oauth` proxy rewrite.
 
-**S672 commit shipped (b98b3d8):** stripped `authorization.params.redirect_uri` overrides from `pages/api/oauth/[...nextauth].ts` — diff currently live but irrelevant since the basePath approach didn't work.
-
-**Path forward for next session (recommended Path C):**
-1. Move NextAuth handler back to standard location: `pages/api/auth/[...nextauth].ts`
-2. Add `packages/frontend/middleware.ts` matching only the three backend paths that should NOT hit NextAuth: `/api/auth/refresh`, `/api/auth/me`, `/api/auth/logout` — rewrite to Railway via NEXT_PUBLIC_API_URL. NextAuth catch-all then handles all other `/api/auth/*`.
-3. Vercel env: revert `NEXTAUTH_URL` to `https://finda.sale` (Production scope, also expand to "All Environments" if Preview/Dev need it). Verify `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_SECRET` all have non-empty values.
-4. `_app.tsx`: remove `basePath="/api/oauth"` from SessionProvider (or change to `/api/auth`).
-5. Google + Facebook consoles already have `/api/auth/callback/[provider]` registered — keep them.
-6. Push, redeploy, verify `/api/oauth/providers` becomes `/api/auth/providers` with `callbackUrl: https://finda.sale/api/auth/callback/google`. Live-test Google + Facebook sign-in in incognito.
-
-This is the canonical NextAuth + custom backend pattern. The `/api/oauth/` migration in S667 introduced more friction than the original "catch-all conflict" was worth.
+**S673 files shipped:**
+- `packages/frontend/next.config.js` — `beforeFiles` rewrites for 14 backend paths (MCP pushed earlier)
+- `packages/frontend/pages/api/auth/[...nextauth].ts` (NEW) — jwt callback stores OAuth profile in token; session callback exposes oauthProfile to browser; no server-side Railway call
+- `packages/frontend/pages/_app.tsx` — OAuthBridge rewritten: browser-side POST to `/api/auth/oauth` with `credentials:'include'`; SessionProvider basePath → `/api/auth`
+- `packages/frontend/lib/api.ts` — `/auth/me` guarded from 401 redirect (homepage fix)
+- `packages/backend/Dockerfile.production` — cache-bust bumped to `2026-05-07b`
+- `packages/frontend/pages/api/oauth/[...nextauth].ts` — DELETED (`git rm`)
 
 **Previous: S671 — OAuth Revert + S669 Audit P0/P1 Batch Complete (COMPLETE — all pushed)**
 
@@ -279,7 +275,25 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 ---
 
-## Recent Sessions (S666–S670)
+## Recent Sessions (S669–S673)
+
+### S673 — OAuth Path C Implementation (INCOMPLETE — OAuth still broken at wrap)
+
+Path C: moved NextAuth from `/api/oauth/[...nextauth].ts` to standard `/api/auth/[...nextauth].ts`. Added `beforeFiles` rewrites in `next.config.js` to protect 14 backend `/api/auth/*` routes from NextAuth catch-all (beforeFiles run before all filesystem routes). Fixed the fundamental httpOnly cookie problem: server-side OAuth exchange (Vercel→Railway in jwt callback) means Railway's Set-Cookie headers go to Vercel's node process, not the browser — auth cookies never reach browser. Fix: OAuthBridge now makes browser-side POST to `/api/auth/oauth` (proxied via beforeFiles rewrite) with `credentials:'include'`. Also fixed homepage redirect bug — api.ts 401 interceptor was redirecting ALL 401s including `/auth/me`'s normal 401 for unauthenticated users. Patrick confirmed OAuth still broken at wrap. Last known working: before S655. Pushes needed in next-session pushblock below.
+
+---
+
+### S672 — OAuth Diagnosis (INCOMPLETE — fix attempt failed)
+
+Confirmed NextAuth v4 doesn't honor NEXTAUTH_URL pathname — Google always sends callback to `/api/auth/callback/google` regardless of handler location. Stripped redirect_uri overrides (commit b98b3d8). Concluded: stop fighting the routing, implement Path C (standard `/api/auth/` with beforeFiles protecting backend routes).
+
+---
+
+### S671 — OAuth Revert + S669 Audit P0/P1 Batch (COMPLETE — MCP pushed)
+
+OAuth redirect_uri_mismatch fixed + revert: `/api/oauth/[...nextauth].ts` restored with redirect_uri overrides. Bad attempt to move to `/api/auth/` deleted. S669 audit P0/P1 batch: 16 files MCP-pushed — SaleCard LCP eager load, ISR on index.tsx, offline.html, city noindex fix, email compliance (token-based unsubscribe in 6 email services, "estate sale" banned terms removed).
+
+---
 
 ### S670 — P0 Login Bounce Fixed + Chrome Verified (COMPLETE — MCP pushed)
 
@@ -391,34 +405,40 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S672
+## Next Session — S674
 
-**FIRST ACTION: Restart Railway backend** to clear the in-memory rate limiter before testing anything.
-Go to railway.app → your project → backend service → ⋮ menu → Restart.
-
-**Then: verify OAuth login in incognito.**
-
-**Patrick actions before S672:**
+**Patrick actions before S674 (wrap push):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git pull
+git add packages/frontend/pages/api/auth/[...nextauth].ts
+git add packages/frontend/pages/_app.tsx
+git add packages/frontend/lib/api.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S671 wrap — OAuth revert + S669 audit P0/P1 batch shipped via MCP"
+git commit -m "fix(auth): browser-side OAuth cookie exchange + homepage 401 redirect fix + S673 wrap"
 .\push.ps1
 ```
 
-**S672 priorities (in order):**
+Also push the Dockerfile cache-bust if not already pushed:
+```powershell
+git add packages/backend/Dockerfile.production
+git commit -m "chore: cache-bust Railway rebuild S673"
+.\push.ps1
+```
 
-1. **P0 — Verify OAuth login works** after Railway restart clears rate limit. Test Google in incognito. If still broken, run full OAuth diagnostic (check Vercel function logs for `/api/oauth/callback/google`).
+**S674 FIRST ACTION: OAuth investigation using Vercel + Railway MCP logs**
 
-2. **OAuth diagnostic prep (if still broken):** Check: (a) Vercel env `NEXT_PUBLIC_API_URL` correct? (b) Railway backend `/auth/oauth` accepting OAuth payload? (c) Railway logs from NextAuth JWT callback?
+Google OAuth last known working: **before S655**. Run these diagnostic steps:
 
-2b. **Vercel secrets hygiene (low-risk, do before OAuth test):** Rotate `NEXTAUTH_SECRET` (generate new), `GOOGLE_CLIENT_SECRET` (Google Console → new secret), `FACEBOOK_CLIENT_SECRET` (Facebook Developer → new secret). Re-add each in Vercel as **Sensitive** type. This does NOT break Production — Sensitive vars inject at build/runtime same as plain. Clears the "Needs Attention" badges and removes secret values from plain-text Vercel view.
+1. Open Vercel MCP → runtime logs for project `prj_oF9kf0IOydLNysoDFbpD6EpScM9j`. Filter for `/api/auth/callback/google`. Trace the full request chain from Google callback → OAuthBridge → `/api/auth/oauth` proxy → Railway.
 
-3. **Remaining S669 audit item (not in the 16-file batch):**
-   - P0: Product JSON-LD on `/items/[id]` pages — structured data still missing
+2. Open Railway CLI in VM: check backend logs for incoming `POST /auth/oauth` requests. Do they arrive? What do they return?
 
-4. **Add `MAILERLITE_ORGANIZERS_GROUP_ID`** env var in Railway (pending since S668)
+3. If the backend gets the POST and returns a token, the problem is OAuthBridge not calling `login()` correctly or the NextAuth session not exposing `oauthProfile`. If the backend never receives the POST, the `beforeFiles` rewrite for `/api/auth/oauth` may not be proxying correctly.
 
-5. **Chrome authenticated audit** (organizer dashboard, rapid capture, pricing funnel) — still in Unverified Queue
+4. Compare git log S655→S667: `git log --oneline [S655-hash]..[S667-hash]`. Find the commit that changed AuthContext or the OAuth flow.
+
+**S674 priorities after OAuth resolved:**
+1. **P0: Product JSON-LD on `/items/[id]`** — structured data missing (S669 audit item, still open)
+2. **Add `MAILERLITE_ORGANIZERS_GROUP_ID`** env var in Railway (pending since S668)
+3. **Chrome authenticated audit** — organizer dashboard, rapid capture, pricing funnel

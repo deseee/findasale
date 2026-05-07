@@ -1,24 +1,24 @@
-# Patrick's Dashboard — S671 Wrap (full)
+# Patrick's Dashboard — S673 Wrap
 
 ---
 
-## 🚨 DO THIS FIRST in S672
-
-**Restart Railway backend** to clear the rate limiter (triggered by failed OAuth calls this session):
-Go to **railway.app → your project → backend service → ⋮ → Restart**
-
-Then test Google login in an incognito window.
-
----
-
-## ⚠️ Action Required Before S672
+## ⚠️ Action Required — Wrap Push
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git pull
+git add packages/frontend/pages/api/auth/[...nextauth].ts
+git add packages/frontend/pages/_app.tsx
+git add packages/frontend/lib/api.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S671 wrap — OAuth revert + S669 audit P0/P1 batch shipped via MCP"
+git commit -m "fix(auth): browser-side OAuth cookie exchange + homepage 401 redirect fix + S673 wrap"
+.\push.ps1
+```
+
+If Dockerfile cache-bust not yet pushed separately:
+```powershell
+git add packages/backend/Dockerfile.production
+git commit -m "chore: cache-bust Railway rebuild S673"
 .\push.ps1
 ```
 
@@ -27,40 +27,37 @@ git commit -m "docs: S671 wrap — OAuth revert + S669 audit P0/P1 batch shipped
 
 ---
 
-## 📋 What happened in S671
+## 📋 What happened in S673
 
 | Item | Result |
 |---|---|
-| Google OAuth redirect_uri_mismatch | Root cause found + fixed: explicit redirect_uri override in NextAuth provider config |
-| Bad fix (moving handler to /api/auth/) | ❌ Caused immediate logout — catch-all blocked backend routes |
-| Revert | ✅ Shipped — /api/oauth/[...nextauth].ts restored, bad file deleted |
-| Error page fix | ✅ Shipped — `pages.error: '/login'` added |
-| Backend rate limiter | ❌ Triggered by repeated failed calls — needs Railway restart |
-| OAuth verified end-to-end | ❌ NOT verified — rate limit blocked final test |
-| S669 audit P0/P1 batch (16 files) | ✅ ALL pushed via MCP — LCP fix, offline.html, city noindex, email compliance |
+| Path C: NextAuth → standard `/api/auth/[...nextauth].ts` | ✅ Shipped |
+| `beforeFiles` rewrites protecting 14 backend routes | ✅ Shipped (MCP pushed) |
+| OAuthBridge: browser-side cookie exchange | ✅ Shipped |
+| Homepage redirect bug (all 401s → /login) | ✅ Fixed |
+| Dockerfile cache-bust (Railway rebuild) | ✅ Pushed |
+| Old `/api/oauth/[...nextauth].ts` | ✅ Deleted |
+| Google OAuth verified working | ❌ Still broken at wrap |
 
 ---
 
-## ✅ S669 audit items now DONE
+## 🔬 OAuth Status
 
-| Severity | Item | Status |
-|---|---|---|
-| P0 | SaleCard above-fold lazy loading (LCP) | ✅ Fixed + pushed |
-| P0 | index.tsx no ISR | ✅ Fixed (revalidate:300) + pushed |
-| P1 | `offline.html` missing | ✅ Created + pushed |
-| P1 | City pages silently noindex when empty | ✅ Fixed + pushed |
-| P1 | Email templates: unsubscribe `?email=` PII | ✅ Fixed (token-based) in all 6 services |
-| P1 | Email templates: "estate sale" banned terms | ✅ Fixed in all templates |
+**Last known working: before S655.**
 
-**Still open from S669 audit:**
-- P0: Product JSON-LD on `/items/[id]` — structured data still missing
+Root cause of current failure: unknown. S673 fixed the architecture (browser-side cookie exchange, beforeFiles routing), but OAuth is still not completing. Next session will use Vercel + Railway MCP logs to trace exactly where the flow breaks.
+
+**What to check in S674:**
+1. Vercel runtime logs — does `/api/auth/callback/google` land? Does OAuthBridge POST to `/api/auth/oauth`?
+2. Railway logs — does `POST /auth/oauth` arrive? What does it return?
+3. Git history S655→S667 — find the commit that broke it
 
 ---
 
-## 🔜 S672 priorities
+## 🔜 S674 priorities
 
-1. **Railway restart → OAuth test** (must happen first)
-2. **P0: Product JSON-LD** on item pages (one remaining S669 audit item)
+1. **OAuth investigation** — Vercel + Railway MCP log trace
+2. **P0: Product JSON-LD** on `/items/[id]` (still missing from S669 audit)
 3. **Add `MAILERLITE_ORGANIZERS_GROUP_ID`** in Railway
 4. **Chrome authenticated audit** — organizer dashboard, rapid capture, pricing funnel
 
@@ -70,10 +67,11 @@ git commit -m "docs: S671 wrap — OAuth revert + S669 audit P0/P1 batch shipped
 
 | Layer | Status |
 |---|---|
-| Railway (backend) | ⚠️ Rate limited — needs restart |
+| Railway (backend) | ✅ Rebuilding with cache-bust |
 | Vercel (frontend) | ✅ Green |
 | Email/password login | ✅ VERIFIED in Chrome S670 |
-| Google/Facebook OAuth | ❌ UNVERIFIED — rate limit active |
+| Google/Facebook OAuth | ❌ UNVERIFIED — still broken |
+| Homepage unauthenticated | ✅ Fixed (no longer redirects to login) |
 | LCP / PWA offline.html | ✅ Fixed + deployed |
 | Email compliance (unsubscribe PII) | ✅ Fixed + deployed |
 | MailerLite organizer enrollment | ⚠️ Needs `MAILERLITE_ORGANIZERS_GROUP_ID` in Railway |
