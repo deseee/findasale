@@ -9,17 +9,22 @@
  *   4. The `OAuthBridge` component in _app.tsx reads session.backendJwt,
  *      calls AuthContext.login(), then signs out of NextAuth.
  *
- * Handler lives at /api/auth/ (NextAuth v4 default — hardcodes this path internally).
- * S667 moved it to /api/oauth/ unnecessarily; moved back S671 after confirming
- * the S660 fallback rewrite already resolved the original routing conflict.
+ * WHY /api/oauth/ AND NOT /api/auth/:
+ *   The Next.js catch-all [...nextauth].ts at /api/auth/ would intercept ALL
+ *   /api/auth/* traffic, including backend routes (login, refresh, me, logout)
+ *   that are proxied through Next.js to Railway. Moving to /api/oauth/ avoids
+ *   this conflict. The S660 fallback rewrite keeps backend /api/auth/* routes
+ *   correctly proxied to Railway.
  *
- * Required env vars (add to Vercel + .env.local):
- *   NEXTAUTH_SECRET=<random 32-byte hex>
- *   NEXTAUTH_URL=https://finda.sale
- *   GOOGLE_CLIENT_ID=...
- *   GOOGLE_CLIENT_SECRET=...
- *   FACEBOOK_CLIENT_ID=...
- *   FACEBOOK_CLIENT_SECRET=...
+ * WHY redirect_uri OVERRIDE:
+ *   NextAuth v4 hardcodes /api/auth/ in callback URLs regardless of handler
+ *   location. Explicit redirect_uri in provider config forces the correct path.
+ *   Google/Facebook Cloud Console must have /api/oauth/callback/[provider] registered.
+ *
+ * Required env vars (Vercel + .env.local):
+ *   NEXTAUTH_SECRET, NEXTAUTH_URL=https://finda.sale
+ *   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+ *   FACEBOOK_CLIENT_ID, FACEBOOK_CLIENT_SECRET
  */
 
 import NextAuth, { NextAuthOptions } from 'next-auth';
@@ -32,10 +37,22 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId:     process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      // NextAuth v4 hardcodes /api/auth/ in callback URLs — override required.
+      authorization: {
+        params: {
+          redirect_uri: `${process.env.NEXTAUTH_URL}/api/oauth/callback/google`,
+        },
+      },
     }),
     FacebookProvider({
       clientId:     process.env.FACEBOOK_CLIENT_ID!,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET!,
+      // Same override required for Facebook.
+      authorization: {
+        params: {
+          redirect_uri: `${process.env.NEXTAUTH_URL}/api/oauth/callback/facebook`,
+        },
+      },
     }),
   ],
 

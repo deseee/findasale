@@ -253,7 +253,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
   const canonicalUrl = `https://finda.sale${router.asPath.split('?')[0]}`;
 
   return (
-    <SessionProvider session={session} basePath="/api/auth">
+    <SessionProvider session={session} basePath="/api/oauth">
       <Head>
         <link rel="canonical" href={canonicalUrl} />
       </Head>
