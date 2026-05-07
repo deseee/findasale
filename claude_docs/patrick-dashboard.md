@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S679 Wrap
+# Patrick's Dashboard — S680 Wrap
 
 ---
 
@@ -7,9 +7,15 @@
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/brand/brand-voice-system.md
-git commit -m "S679: Pre-launch checklist + mcp.finda.sale domain + pre-launch audit queue"
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/styles/globals.css
+git add packages/frontend/components/BottomTabNav.tsx
+git add packages/frontend/components/RapidCapture.tsx
+git add packages/frontend/components/SaleQRCode.tsx
+git add packages/frontend/pages/organizer/pos.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add claude_docs/health-reports/2026-05-07-wcag.md
+git commit -m "S680: WCAG #391 — main landmark, skip link, ghost contrast, keyboard divs, heading hierarchy + STATE"
 .\push.ps1
 ```
 
@@ -19,47 +25,52 @@ git commit -m "S679: Pre-launch checklist + mcp.finda.sale domain + pre-launch a
 
 | Area | Status |
 |------|--------|
-| Google OAuth | ⚠️ Still broken (S673/S674 architecture correct, root cause unclear) |
+| Google OAuth | ⚠️ Still broken (architecture correct per S674, root cause unclear) |
 | Login (email/password) | ✅ Working |
 | Homepage feed | ✅ Working |
 | Vercel build | ✅ Green |
 | Railway backend | ✅ Green |
-| MCP Server | ✅ LIVE — 7 tools responding |
-| mcp.finda.sale | ✅ Railway domain added + TXT verify record added — propagating |
-| Brand Voice System | ✅ `claude_docs/brand/brand-voice-system.md` created S679 |
-| VAPID keys | ✅ Set on Railway S679 |
-| Google Search Console | ✅ Verified S679 |
-| Resend | ✅ Confirmed S679 |
-| Stripe business account | ✅ Confirmed S679 |
-| Google Voice support line | ❌ Cancelled — not doing |
+| MCP Server (mcp.finda.sale) | ✅ LIVE — 7 tools, confirmed healthy S680 |
+| Health Scout #390 | ✅ COMPLETE — report at `claude_docs/health-reports/2026-05-07.md` |
+| WCAG Audit #391 | ✅ Code fixes shipped — Chrome keyboard testing UNVERIFIED |
+| Brand Voice System | ✅ `claude_docs/brand/brand-voice-system.md` |
+| .env credentials | ✅ Never committed to git (confirmed S680) |
 
 ---
 
 ## Patrick Manual Actions Needed
 
-1. **`MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`** — set on Railway → backend service → Variables. Shoppers who sign up won't be enrolled in MailerLite until this is set.
-2. **Google Business Profile** — create at business.google.com (use 219 E Michigan Ave, Suite F, Paw Paw, MI 49079)
-3. **Business cards** — files in `claude_docs/brand/`
-4. **mcp.finda.sale health check** — run `curl https://mcp.finda.sale/health` in 10–15 min to confirm propagated
+1. **Google Business Profile** — create at business.google.com (address: 219 E Michigan Ave, Suite F, Paw Paw, MI 49079)
+2. **Business cards** — files in `claude_docs/brand/`
 
 ---
 
-## Next Session Priority — Pre-Launch Audits
+## Next Session Priority
 
-| Priority | Audit | Dispatch |
-|----------|-------|---------|
-| 1 | Health Scout baseline scan (#390) | `Skill('health-scout')` |
-| 2 | Accessibility audit WCAG (#391) | `Skill('design:accessibility-review')` |
-| 3 | Brand Voice copy sweep (#392) | `Skill('findasale-marketing')` |
-| 4 | Chrome QA backlog sprint (#393) | Micro-dispatches — one feature per call |
-| 5 | Full product walkthrough (#394) | `Skill('findasale-qa')` — after QA sprint |
+| Priority | Task |
+|----------|------|
+| 1 | Verify Vercel build green after WCAG push |
+| 2 | WCAG Chrome keyboard test — skip link, tab order, modal focus traps |
+| 3 | #392 Brand Voice Audit — copy sweep against brand-voice-system.md |
+| 4 | #393 Chrome QA Backlog Sprint — one feature per dispatch |
 
 ---
 
-## Outstanding Audit Items (Pre-Existing)
+## What Was Done This Session (S680)
 
-- ❌ P0: SaleCard above-fold images using `loading="lazy"` (LCP hit)
-- ❌ P1: PWA offline.html missing (sw.js pre-caches it but file doesn't exist)
-- ❌ P1: City pages silently noindex when empty
-- ❌ P1: Email CAN-SPAM gaps + "estate sale" banned term in 5 templates
-- ❌ P1: Unsubscribe links expose email as URL parameter (PII leak)
+**Health Scout #390:**
+- Clean auth, CORS, JWT, rate limiting, file upload — no action needed
+- Fixed 10 `alert()` → toast, removed console.log, synced .env.example
+- .env git history confirmed clean — no credential rotation needed
+
+**WCAG #391 (code audit):**
+- Added `<main id="main-content">` to Layout.tsx — all 90+ pages now have a landmark
+- Skip link in Layout.tsx now has a valid target
+- Ghost button dark mode contrast: 3.6:1 → 5.1:1 (now passes WCAG AA)
+- 4 interactive divs made keyboard-accessible (pos.tsx, BottomTabNav, RapidCapture, SaleQRCode)
+- organizer/dashboard.tsx heading hierarchy fixed (h1→h3 skip resolved)
+
+**WCAG deferred to future sprint:**
+- 104+ product images missing alt text
+- 200+ form inputs without labels (largest scope — needs dedicated sprint)
+- Error ARIA (`aria-invalid`, `aria-describedby` on form validation)

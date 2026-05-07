@@ -4,32 +4,44 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S679 — Pre-Launch Checklist + mcp.finda.sale Domain (COMPLETE)**
+**Latest: S680 — Pre-Launch Audits: Health Scout #390 + WCAG #391 (COMPLETE)**
 
-Pre-launch checklist substantially cleared. mcp.finda.sale fully wired. Brand voice system shipped. Pre-launch audit queue established.
+Both pre-launch audits completed. Health Scout found clean auth/security posture with minor code quality issues. WCAG audit found structural gaps with targeted fixes shipped.
 
-1. **Merge conflict resolved** — `packages/mcp-server/Dockerfile.production` conflict from diverged remote commits. Fixed conflict markers, kept `COPY package-lock.json* ./`. Patrick pushed successfully.
+1. **Health Scout #390 (COMPLETE)** — 7 scans. Auth, CORS, JWT, rate limiting, file upload all clean. .env git history confirmed never committed. Fixed: 10 `alert()`→`showToast()` replacements (hubs/create, hubs/manage, UGCPhotoSubmitButton, inventory, xp-velocity), `stripe-connect.tsx` console.log removed, `.env.example` synced (5 vars added). SSR/Leaflet flags were false positives. Report: `claude_docs/health-reports/2026-05-07.md`.
 
-2. **MailerLite group IDs** — `MAILERLITE_ORGANIZERS_GROUP_ID=181314853593417582` ("Beta Organizers"). Found via MailerLite MCP `list_resources`. `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` still pending Railway set.
+2. **WCAG #391 (COMPLETE — code audit; Chrome testing UNVERIFIED)** — Key findings: no `<main>` on 90+ pages, 200+ unlabeled inputs, 104+ img missing alt text, ghost button dark mode contrast 3.6:1 (fail). Fixed 7 files: `Layout.tsx` `<main id="main-content">` + skip link target wired, `globals.css` ghost button `#A8A8AA`→`#CECECE` (now 5.1:1), `BottomTabNav`+`RapidCapture` `aria-hidden` on backdrops, `SaleQRCode` `role="dialog"`, `pos.tsx` scan keyboard handler, `organizer/dashboard.tsx` sr-only h2 heading fix. Deferred: alt text sweep (104+ img, dedicated sprint), form labels (200+ inputs, largest scope), error ARIA. Report: `claude_docs/health-reports/2026-05-07-wcag.md`.
 
-3. **VAPID keys** — Generated fresh EC key pair (prime256v1) in bash sandbox. Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_CONTACT_EMAIL=admin@finda.sale` on Railway. Redeploying confirmed.
-
-4. **Google Search Console** — TXT record `google-site-verification=yxkaqu1JnUXFO5AzqUMP9f-6_r7L2orxcTL195X900E` added to Vercel DNS. GSC auto-verified via domain name provider method. ✅
-
-5. **Brand Voice System** — Marketing agent built comprehensive `claude_docs/brand/brand-voice-system.md` (8-part system: voice pillars, banned words, approved phrases, 10 before/after rewrites, tone by context, quick reference card). Builds on brand-voice-guide-2026-03-16.md.
-
-6. **mcp.finda.sale custom domain** — Railway `findasale` service: custom domain `mcp.finda.sale` added on port 3003. TXT verification record `_railway-verify.mcp` added to Vercel DNS. DNS CNAME was already present from S678. Both records confirmed in Vercel. Health check propagating (~10 min).
-
-7. **Checklist items cleared:** Stripe business account ✅, GSC ✅, VAPID keys ✅, Resend API key ✅, Brand Voice Session ✅. Google Voice for support line cancelled.
-
-8. **Pre-launch audits added to roadmap** (#390–#394): Health Scout (#390, priority 1), Accessibility WCAG (#391, priority 2), Brand Voice Audit (#392, priority 3), Chrome QA Backlog Sprint (#393, priority 4), Full Product Walkthrough (#394, priority 5).
+**S680 files changed:**
+- `packages/frontend/pages/organizer/hubs/create.tsx` — alert()→toast (3)
+- `packages/frontend/pages/organizer/hubs/[hubId]/manage.tsx` — alert()→toast (2)
+- `packages/frontend/components/UGCPhotoSubmitButton.tsx` — alert()→toast (3)
+- `packages/frontend/pages/organizer/inventory.tsx` — alert()→toast (1)
+- `packages/frontend/pages/admin/xp-velocity.tsx` — alert()→toast (1)
+- `packages/frontend/pages/organizer/stripe-connect.tsx` — console.log removed
+- `packages/backend/.env.example` — 5 vars added (Stripe secrets, MailerLite, Hunt Pass IDs)
+- `claude_docs/health-reports/2026-05-07.md` — NEW health scout baseline
+- `packages/frontend/components/Layout.tsx` — `<main id="main-content">` sitewide landmark
+- `packages/frontend/styles/globals.css` — dark ghost button contrast fix
+- `packages/frontend/components/BottomTabNav.tsx` — aria-hidden backdrop
+- `packages/frontend/components/RapidCapture.tsx` — aria-hidden backdrop
+- `packages/frontend/components/SaleQRCode.tsx` — role="dialog" modal
+- `packages/frontend/pages/organizer/pos.tsx` — keyboard handler on scan div
+- `packages/frontend/pages/organizer/dashboard.tsx` — sr-only h2 heading fix
+- `claude_docs/health-reports/2026-05-07-wcag.md` — NEW WCAG audit report
 
 **Remaining carry-forward:**
-- `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` — still needs Railway set (Patrick manual)
-- mcp.finda.sale health check — give 10 min for propagation, then verify `curl https://mcp.finda.sale/health`
 - Google Business Profile — Patrick manual at business.google.com
 - Business cards — files in `claude_docs/brand/`
-- Pre-launch audits #390–#394 — next session priority
+- WCAG Chrome keyboard/focus testing — in UNVERIFIED queue
+- WCAG deferred: alt text sweep, form labels, error ARIA
+- Pre-launch audits #392–#394 still pending
+
+---
+
+**Previous: S679 — Pre-Launch Checklist + mcp.finda.sale Domain (COMPLETE)**
+
+Pre-launch checklist substantially cleared. mcp.finda.sale fully wired. Brand voice system shipped. Pre-launch audit queue established. VAPID keys, GSC, Resend, Stripe business confirmed. `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` set on Railway. mcp.finda.sale confirmed healthy `{"status":"ok","tools":7}`.
 
 ---
 
@@ -376,6 +388,7 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
+| WCAG Chrome keyboard/focus testing | Chrome MCP unavailable S680 | Tab through homepage + organizer dashboard, test modal focus traps, verify skip link jumps past nav, check touch targets ≥44px | S680 |
 | JWT httpOnly cookies | ✅ VERIFIED S670 — login worked through proxy, cookies set correctly | — | S664/S667 |
 | COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error | S664 |
 | Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` | S664 |
@@ -550,27 +563,39 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S679
+## Next Session — S681
 
-**Priority 1: Chrome QA — VoiceDescriptionInput**
-Open edit-item in Chrome as user1@example.com, tap the mic button near the description textarea, speak an item description, verify: (1) transcript saves to description field, (2) inline "Voice suggestion: [value] · Accept / Keep" prompts appear for pre-filled fields (name, price, category, condition, brand). Screenshot evidence required for ✅.
+**Session start:** Read STATE.md → roadmap BROKEN/PENDING items → present top 3.
 
-**Priority 2: MAILERLITE_ORGANIZERS_GROUP_ID**
-Set this env var in Railway backend. Pending since S668. Without it, organizers signing up are not enrolled in the MailerLite onboarding automation. Find the group ID in MailerLite → Groups → "Beta Organizers" (or equivalent).
+**Priority 1 — Verify S680 WCAG push is green**
+Confirm Vercel build passed after the WCAG push block (Layout.tsx `<main>` wrapper is the most likely source of any build surprise).
 
-**Priority 3: mcp.finda.sale smoke test**
-Wait for DNS propagation (~5–30 min from CNAME creation), then:
-```bash
-curl https://mcp.finda.sale/health
-```
-Should return `{"status":"ok","tools":7}`. If DNS hasn't propagated, hit the Railway URL directly: `https://findasale-production.up.railway.app/health`.
+**Priority 2 — WCAG Chrome keyboard/focus testing (from UNVERIFIED queue)**
+- Navigate to finda.sale in Chrome
+- Tab from top of page — skip link should appear, Enter should jump past nav to `#main-content`
+- Tab through organizer dashboard (login as user1@example.com) — verify logical focus order
+- Open any modal — Tab must stay trapped inside, Escape must close
+- Check visible focus ring (amber outline) is present on all focused elements
+- Screenshot evidence required for each ✅
 
-**Patrick actions — S678 wrap push block:**
+**Priority 3 — #392 Brand Voice Audit**
+Sweep all UI copy (labels, error messages, empty states, email templates, onboarding modal, notifications) against `claude_docs/brand/brand-voice-system.md`. Banned words: "AI", "estate sale" (as sole type), "disruption". Dispatch: `Skill('findasale-marketing')`.
+
+**Priority 4 — #393 Chrome QA Backlog Sprint**
+Work through Pending Chrome QA items in focused micro-dispatches (one feature per dispatch). Priority: auction mechanics #174, iCal #184, purchase confirmation #80, holds E2E #146–#147, SettlementWizard #253.
+
+**Patrick actions — S680 wrap push block:**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S678: MCP server Railway deploy complete + DNS CNAME + mcp.json active"
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/styles/globals.css
+git add packages/frontend/components/BottomTabNav.tsx
+git add packages/frontend/components/RapidCapture.tsx
+git add packages/frontend/components/SaleQRCode.tsx
+git add packages/frontend/pages/organizer/pos.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add claude_docs/health-reports/2026-05-07-wcag.md
+git commit -m "S680: WCAG #391 — main landmark, skip link, ghost contrast, keyboard divs, heading hierarchy + STATE"
 .\push.ps1
 ```
-
-Note: All S678 code changes (railway.toml, tsconfig.json, index.ts, mcp.json) were already pushed to GitHub via MCP during the session.
