@@ -356,7 +356,7 @@ const OrganizerMembersPage = () => {
                         type="email"
                         placeholder="colleague@example.com"
                         value={inviteEmail}
-                        aria-label="colleague@example.com" onChange={(e) => setInviteEmail(e.target.value)}
+                        onChange={(e) => setInviteEmail(e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                       />
                     </div>
@@ -507,8 +507,7 @@ const OrganizerMembersPage = () => {
                                 type="text"
                                 placeholder="e.g., Sales"
                                 value={editingProfile[member.id]?.department ?? member.department ?? ''}
-                                aria-label="e.g., Sales"
-                                onChange={(e) => {
+                                onChange={(e) =>
                                   setEditingProfile((prev) => ({
                                     ...prev,
                                     [member.id]: {
@@ -551,7 +550,7 @@ const OrganizerMembersPage = () => {
                                           }
                                           className="flex-1 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                           placeholder="Start"
-                                         aria-label="Start" />
+                                        />
                                         <input
                                           type="time"
                                           value={endValue}
@@ -560,7 +559,7 @@ const OrganizerMembersPage = () => {
                                           }
                                           className="flex-1 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                           placeholder="End"
-                                         aria-label="End" />
+                                        />
                                       </div>
                                     </div>
                                   </div>

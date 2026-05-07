@@ -782,14 +782,14 @@ const OrganizerSettingsPage = () => {
                           onKeyPress={(e) => e.key === 'Enter' && (verSource === 'google' ? handleGoogleSearch() : handleYelpSearch())}
                           placeholder="Search for your business..."
                           className="w-full px-4 py-2 border border-warm-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500 text-sm"
-                         aria-label="Search for your business..." />
+                        />
                         <input
                           type="text"
                           value={verCity}
                           onChange={(e) => setVerCity(e.target.value)}
                           placeholder="City, State (optional — helps narrow results)"
                           className="w-full px-4 py-2 border border-warm-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500 text-sm"
-                         aria-label="City, State (optional — helps narrow results)" />
+                        />
                         <button
                           onClick={verSource === 'google' ? handleGoogleSearch : handleYelpSearch}
                           disabled={verSearchLoading || !verSearchQuery.trim()}
@@ -1321,7 +1321,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setBusinessName(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="e.g., Sarah's Finds, Smith Family Estate, or your own name"
-                   aria-label="e.g., Sarah" />
+                  />
                   <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">No business? Your name works perfectly.</p>
                 </div>
 
@@ -1336,7 +1336,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="e.g., (616) 555-0123"
-                   aria-label="e.g., (616) 555-0123" />
+                  />
                 </div>
 
                 <div>
@@ -1359,7 +1359,7 @@ const OrganizerSettingsPage = () => {
                     maxLength={120}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="e.g., Estate Sales Since 2010 — Quality & Authenticity"
-                   aria-label="e.g., Estate Sales Since 2010 — Quality & Authenticity" />
+                  />
                   <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">{tagline.length}/120 characters</p>
                 </div>
 
@@ -1373,7 +1373,7 @@ const OrganizerSettingsPage = () => {
                     max={new Date().getFullYear()}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="e.g., 2018"
-                   aria-label="e.g., 2018" />
+                  />
                 </div>
 
                 <div>
@@ -1384,7 +1384,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setWebsite(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://example.com"
-                   aria-label="https://example.com" />
+                  />
                 </div>
 
                 <div>
@@ -1395,7 +1395,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setFacebook(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://facebook.com/yourpage"
-                   aria-label="https://facebook.com/yourpage" />
+                  />
                 </div>
 
                 <div>
@@ -1406,7 +1406,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setInstagram(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://instagram.com/yourprofile"
-                   aria-label="https://instagram.com/yourprofile" />
+                  />
                 </div>
 
                 <div>
@@ -1417,7 +1417,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setEtsy(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://etsy.com/shop/yourshop"
-                   aria-label="https://etsy.com/shop/yourshop" />
+                  />
                 </div>
 
                 <div>
@@ -1428,7 +1428,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setTwitterUrl(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://twitter.com/yourprofile"
-                   aria-label="https://twitter.com/yourprofile" />
+                  />
                 </div>
 
                 <div>
@@ -1439,7 +1439,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setTiktokUrl(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://tiktok.com/@yourprofile"
-                   aria-label="https://tiktok.com/@yourprofile" />
+                  />
                 </div>
 
                 <div>
@@ -1450,7 +1450,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setYoutubeUrl(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://youtube.com/@yourchannel"
-                   aria-label="https://youtube.com/@yourchannel" />
+                  />
                 </div>
 
                 <div>
@@ -1461,7 +1461,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setPinterestUrl(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://pinterest.com/yourprofile"
-                   aria-label="https://pinterest.com/yourprofile" />
+                  />
                 </div>
 
                 <div>
@@ -1881,4 +1881,47 @@ const OrganizerSettingsPage = () => {
         </p>
         <div className="mb-6">
           <label htmlFor="delete-password-input" className="block text-sm font-medium text-warm-900 dark:text-gray-100 mb-2">
-            Ente
+            Enter your password to confirm:
+          </label>
+          <input
+            id="delete-password-input"
+            type="password"
+            value={deletePassword}
+            onChange={(e) => setDeletePassword(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && deletePassword.trim()) {
+                deleteAccountMutation.mutate(deletePassword);
+              }
+            }}
+            placeholder="Enter password"
+            className="w-full px-4 py-2 border border-red-300 dark:border-red-700 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500"
+            autoFocus
+          />
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              deleteAccountMutation.mutate(deletePassword);
+            }}
+            disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
+            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete My Account'}
+          </button>
+          <button
+            onClick={() => {
+              setIsDeleteModalOpen(false);
+              setDeletePassword('');
+            }}
+            disabled={deleteAccountMutation.isPending}
+            className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-gray-100 font-medium hover:bg-warm-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </AccessibleModal>
+    </>
+  );
+};
+
+export default OrganizerSettingsPage;
