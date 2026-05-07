@@ -259,7 +259,7 @@ const buildMatchNotificationHtml = (
               <!-- CTA -->
               <div style="text-align:center; margin-top:28px;">
                 <a href="${FRONTEND_URL}/sales/${sale.id}" style="display:inline-block; padding:12px 32px; background:#d97706; color:#fff; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px;">
-                  View Sale & Items
+                  View Sale &amp; Items
                 </a>
               </div>
 
