@@ -23,13 +23,24 @@ export async function runEnrichmentBackfill(req: Request, res: Response): Promis
       where.googlePlaceId = null;
     }
 
+    // Add guard: skip test accounts with @example.com emails
+    const emailFilter = {
+      user: {
+        email: { not: { endsWith: '@example.com' } }
+      }
+    };
+    const whereWithEmailGuard = { ...where, ...emailFilter };
+
     const organizers = await prisma.organizer.findMany({
-      where: where as Parameters<typeof prisma.organizer.findMany>[0]['where'],
+      where: whereWithEmailGuard as Parameters<typeof prisma.organizer.findMany>[0]['where'],
       select: {
         id: true,
         businessName: true,
         address: true,
       },
+      include: {
+        user: { select: { email: true } }
+      }
     });
 
     const count = organizers.length;
