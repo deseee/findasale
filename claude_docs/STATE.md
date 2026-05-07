@@ -4,36 +4,44 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S680 — Pre-Launch Audits: Health Scout #390 + WCAG #391 (COMPLETE)**
+**Latest: S681 — WCAG #391 Chrome Keyboard/Focus QA (COMPLETE — 3 bugs fixed)**
 
-Both pre-launch audits completed. Health Scout found clean auth/security posture with minor code quality issues. WCAG audit found structural gaps with targeted fixes shipped.
+Live keyboard/focus testing in Chrome. Three bugs found and fixed.
 
-1. **Health Scout #390 (COMPLETE)** — 7 scans. Auth, CORS, JWT, rate limiting, file upload all clean. .env git history confirmed never committed. Fixed: 10 `alert()`→`showToast()` replacements (hubs/create, hubs/manage, UGCPhotoSubmitButton, inventory, xp-velocity), `stripe-connect.tsx` console.log removed, `.env.example` synced (5 vars added). SSR/Leaflet flags were false positives. Report: `claude_docs/health-reports/2026-05-07.md`.
+1. **Skip link z-index** (`Layout.tsx` line 700) — `focus:z-50` collided with header's `z-50`; header (later in DOM) painted over skip link when focused. Fixed: `focus:z-[100]`. ⚠️ **In Patrick pushblock below — not yet on GitHub.**
 
-2. **WCAG #391 (COMPLETE — code audit; Chrome testing UNVERIFIED)** — Key findings: no `<main>` on 90+ pages, 200+ unlabeled inputs, 104+ img missing alt text, ghost button dark mode contrast 3.6:1 (fail). Fixed 7 files: `Layout.tsx` `<main id="main-content">` + skip link target wired, `globals.css` ghost button `#A8A8AA`→`#CECECE` (now 5.1:1), `BottomTabNav`+`RapidCapture` `aria-hidden` on backdrops, `SaleQRCode` `role="dialog"`, `pos.tsx` scan keyboard handler, `organizer/dashboard.tsx` sr-only h2 heading fix. Deferred: alt text sweep (104+ img, dedicated sprint), form labels (200+ inputs, largest scope), error ARIA. Report: `claude_docs/health-reports/2026-05-07-wcag.md`.
+2. **Duplicate `id="main-content"`** (`Layout.tsx`) — S680 added `<main id="main-content">` inside existing `<div id="main-content">`. Browser jumped to wrong element. Fixed: removed `id` + `tabIndex={-1}` from outer div, kept only on `<main>`. ⚠️ **In Patrick pushblock below — not yet on GitHub.**
 
-**S680 files changed:**
-- `packages/frontend/pages/organizer/hubs/create.tsx` — alert()→toast (3)
-- `packages/frontend/pages/organizer/hubs/[hubId]/manage.tsx` — alert()→toast (2)
-- `packages/frontend/components/UGCPhotoSubmitButton.tsx` — alert()→toast (3)
-- `packages/frontend/pages/organizer/inventory.tsx` — alert()→toast (1)
-- `packages/frontend/pages/admin/xp-velocity.tsx` — alert()→toast (1)
-- `packages/frontend/pages/organizer/stripe-connect.tsx` — console.log removed
-- `packages/backend/.env.example` — 5 vars added (Stripe secrets, MailerLite, Hunt Pass IDs)
-- `claude_docs/health-reports/2026-05-07.md` — NEW health scout baseline
-- `packages/frontend/components/Layout.tsx` — `<main id="main-content">` sitewide landmark
-- `packages/frontend/styles/globals.css` — dark ghost button contrast fix
-- `packages/frontend/components/BottomTabNav.tsx` — aria-hidden backdrop
-- `packages/frontend/components/RapidCapture.tsx` — aria-hidden backdrop
-- `packages/frontend/components/SaleQRCode.tsx` — role="dialog" modal
-- `packages/frontend/pages/organizer/pos.tsx` — keyboard handler on scan div
-- `packages/frontend/pages/organizer/dashboard.tsx` — sr-only h2 heading fix
-- `claude_docs/health-reports/2026-05-07-wcag.md` — NEW WCAG audit report
+3. **Modal focus-on-open** (`AccessibleModal.tsx`) — `initialFocus: false` prevented focus-trap-react from moving focus into modal when it opened (WCAG 2.4.3 violation). Affected all 20+ modal instances. Fixed: removed `initialFocus: false`. ✅ **MCP pushed + Vercel deployed + Chrome verified.**
+
+**Verified working in Chrome:**
+- Tab order: Skip → Logo → Nav links → Register → Hero ✅
+- Focus rings: nav links, buttons, icon buttons (amber/white outlines) ✅
+- Modal tab trap cycles correctly (Input → Textarea → Cancel → wrap) ✅
+- Disabled buttons correctly skipped in trap ✅
+- Escape closes modal ✅
+- Focus returns to trigger after modal close ✅
+- Modal focus-on-open: `modalContainsFocus: true` confirmed ✅
+
+**WCAG deferred (separate sprint):** alt text sweep (104+ img), form labels (200+ inputs), error ARIA.
+
+**S681 files changed:**
+- `packages/frontend/components/AccessibleModal.tsx` — removed `initialFocus: false` (MCP pushed)
+- `packages/frontend/components/Layout.tsx` — skip link `z-[100]` + duplicate id removed (**Patrick pushblock**)
+
+**Patrick action needed:**
+```powershell
+git add packages/frontend/components/Layout.tsx
+git commit -m "S681: Fix skip link visibility + duplicate main-content id
+
+- Skip link z-index raised from z-50 to z-[100] (header was painting over it)
+- Removed duplicate id=main-content from outer div (kept on <main> only)"
+.\push.ps1
+```
 
 **Remaining carry-forward:**
 - Google Business Profile — Patrick manual at business.google.com
 - Business cards — files in `claude_docs/brand/`
-- WCAG Chrome keyboard/focus testing — in UNVERIFIED queue
 - WCAG deferred: alt text sweep, form labels, error ARIA
 - Pre-launch audits #392–#394 still pending
 
@@ -388,11 +396,11 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| WCAG Chrome keyboard/focus testing | Chrome MCP unavailable S680 | Tab through homepage + organizer dashboard, test modal focus traps, verify skip link jumps past nav, check touch targets ≥44px | S680 |
+| WCAG skip link re-verify | Layout.tsx fix in Patrick pushblock — not yet deployed | After Patrick pushes Layout.tsx, open finda.sale, Tab once, confirm yellow "Skip to main content" appears above header | S681 |
 | JWT httpOnly cookies | ✅ VERIFIED S670 — login worked through proxy, cookies set correctly | — | S664/S667 |
 | COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error | S664 |
 | Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` | S664 |
-| Modal focus traps (34 modals) | Code shipped but not browser-tested | Open any modal, Tab through — focus should stay inside | S664 |
+| Modal focus traps (34 modals) | ✅ S681 VERIFIED — MessageComposeModal tested. Tab trap ✅, Escape ✅, focus-on-open ✅ (fix shipped). Other modals assumed covered by AccessibleModal fix. | — | S664 |
 | Claim verify flow | Code shipped S667 but not browser-tested | Hit `/claim/verify/[token]` with a real token, verify organizer status updates | S667 |
 | NSFW detection | Code shipped S667 but not browser-tested | Upload an image via organizer flow, confirm Cloudinary moderation runs | S667 |
 | #251 priceBeforeMarkdown | No production item with markdownApplied=true | Seed item with markdownApplied=true, verify strikethrough price renders | S661 |
@@ -403,7 +411,13 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 ---
 
-## Recent Sessions (S674–S678)
+## Recent Sessions (S678–S681)
+
+### S681 — WCAG #391 Chrome Keyboard/Focus QA (COMPLETE — partially pushed)
+
+Live keyboard testing in Chrome against finda.sale. Three bugs found: (1) Skip link invisible when focused — `z-50` collided with header's `z-50`, fixed `z-[100]`. (2) Duplicate `id="main-content"` — S680 added `<main id>` inside existing `<div id="main-content">`, browser jumped to wrong element, removed from outer div. (3) Modal focus-on-open — `initialFocus: false` in AccessibleModal.tsx prevented focus-trap-react from moving focus inside modal (WCAG 2.4.3 violation, affected all 20+ modals), fixed by removing the option. AccessibleModal fix pushed via MCP + Vercel verified. Layout.tsx fix in Patrick pushblock.
+
+---
 
 ### S678 — MCP Server Railway Deploy + DNS + mcp.json Active (COMPLETE — MCP pushed)
 
@@ -471,21 +485,9 @@ Root cause of login bounce: browser API calls bypassed the Next.js proxy, going 
 
 ---
 
-### S667 — S666 Backlog Sweep: All 16 Meta-Audit Items Shipped (COMPLETE — pushed)
+### S674 — Post-S673 Bug Fixes: OAuth redirect + incognito loop + empty homepage + frozen modal (COMPLETE — pushed)
 
-All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/api/oauth/`. AuthContext + api.ts off localStorage. GDPR export + CCPA opt-out page + schema migration. ToS arbitration. CAN-SPAM address fixed. Stripe refund webhook + dunning grace. Canonical URLs on 5 pages. `prefers-reduced-motion`. Sentry Crons on all 38 jobs. Slow-query + pool monitoring. SIGTERM graceful shutdown. Deliverability monitor. Address normalization + 20 tests. Camera race fix. Geocoding audit cron. Claim verify endpoint + page. NSFW detection. Cloudinary orphan cleanup. XP velocity admin page. D-006 "AI" → "Smart". API_RESPONSE_FORMAT.md. Post-session: settings.tsx TS fix, ipKeyGenerator rate limiter fix, Railway cache-bust, OAuth redirects updated, CCPA migration deployed.
-
----
-
-### S666 — Meta-Audit + Comprehensive P0/P1 Sweep (COMPLETE — pushed)
-
-28 gaps found by 4 meta-audit agents. Key discoveries: admin role regression (IDOR), isUnmanagedListing missing on 4 controllers, auction dual-winner race, settlement non-atomic, weekly email cron with placeholder string never firing. All fixed. 38 cron jobs wrapped with Sentry. 4 new rate limiters. OAuth age gate UI added.
-
----
-
-### S665 — Vercel Build Fix + S664 Code Audit (COMPLETE)
-
-`AccessibleModal.tsx` KeyboardEvent type fix (native DOM → React.KeyboardEvent). Confirmed account deletion backend endpoint exists. Code-level audit of S664 batch verified all key changes present.
+4 live bugs found and fixed. Google OAuth post-login landed back on `/login` — OAuthBridge exchanged token but never redirected. Incognito homepage redirected to `/login` — `useRankUp` called `useXpProfile()` with no auth gate. Homepage showed "No sales yet" — `initialData: null` made react-query skip the `/api/feed` fetch. OrganizerOnboardingModal buttons frozen — `OnboardingWizard` and `OrganizerOnboardingModal` both at `z-50`, wizard on top visually, FocusTrap from underlying modal locked wizard buttons.
 
 ---
 
