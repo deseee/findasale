@@ -215,7 +215,13 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
   const handleSuggestionAccept = (suggestion: FieldSuggestion) => {
     if (!onFieldUpdate) return;
 
-    const fieldUpdate: Record<string, any> = {
+    const fieldUpdate: {
+      title?: string;
+      category?: string;
+      tags?: string[];
+      price?: string;
+      description: string;
+    } = {
       description: value,
     };
 
