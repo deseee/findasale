@@ -156,4 +156,13 @@ export default function UGCPhotoSubmitButton({
                   className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 transition-opacity font-medium disabled:opacity-50"
                   style={{ backgroundColor: '#8FB897' }}
                 >
-                  {submit
+                  {submitMutation.isPending ? 'Submitting...' : 'Submit Photo'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
