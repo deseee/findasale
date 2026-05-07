@@ -1,55 +1,18 @@
-# Patrick's Dashboard — S676 Wrap
+# Patrick's Dashboard — S677 Wrap
 
 ---
 
 ## Push Block — Run This Now
 
 ```powershell
-git add packages/frontend/public/llms.txt
-git add packages/frontend/public/robots.txt
-git add packages/frontend/pages/index.tsx
-git add packages/frontend/pages/pricing.tsx
-git add packages/frontend/pages/about.tsx
-git add packages/frontend/pages/faq.tsx
-git add "packages/frontend/public/.well-known/mcp.json"
-git add packages/mcp-server/src/index.ts
-git add packages/mcp-server/src/handlers.ts
-git add packages/mcp-server/src/types.ts
-git add packages/mcp-server/src/lib/apiClient.ts
-git add packages/mcp-server/src/lib/rateLimiter.ts
-git add packages/mcp-server/src/tools/searchSales.ts
-git add packages/mcp-server/src/tools/getSale.ts
-git add packages/mcp-server/src/tools/searchItems.ts
-git add packages/mcp-server/src/tools/getItem.ts
-git add packages/mcp-server/src/tools/listCities.ts
-git add packages/mcp-server/src/tools/listSaleTypes.ts
-git add packages/mcp-server/src/tools/listCategories.ts
-git add packages/mcp-server/package.json
-git add packages/mcp-server/tsconfig.json
-git add packages/mcp-server/.env.example
-git add packages/mcp-server/Dockerfile.production
-git add packages/mcp-server/README.md
-git add claude_docs/strategy/mcp-server-spec.md
-git add claude_docs/strategy/roadmap.md
+git add packages/frontend/components/VoiceDescriptionInput.tsx
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
+git add pnpm-lock.yaml
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S676: AI discoverability + MCP Server Phase 1 (#384-389)"
+git commit -m "S677: Audio notes UX fix + pnpm lockfile + TS fix"
 .\push.ps1
 ```
-
----
-
-## After the Push — Railway Deploy (MCP Server)
-
-1. Go to Railway dashboard → FindA.Sale project → **New Service** → **Deploy from GitHub repo**
-2. Set root directory: `packages/mcp-server`
-3. Set Dockerfile path: `Dockerfile.production`
-4. Add environment variables:
-   - `BACKEND_URL` = `https://api.finda.sale`
-   - `PORT` = `3003`
-   - `NODE_ENV` = `production`
-5. Add a Railway domain or custom domain → point `mcp.finda.sale` DNS CNAME to Railway
-6. Once live, Patrick tells Claude to update `.well-known/mcp.json` status from `coming-soon` → `active`
 
 ---
 
@@ -57,24 +20,36 @@ git commit -m "S676: AI discoverability + MCP Server Phase 1 (#384-389)"
 
 | Area | Status |
 |------|--------|
-| Google OAuth | ⚠️ Still broken (architecture correct per S674, root cause unclear) |
+| Google OAuth | ⚠️ Still broken (S673/S674 architecture correct, root cause unclear) |
 | Login (email/password) | ✅ Working |
 | Homepage feed | ✅ Working |
-| Vercel build | ✅ Green |
+| Vercel build | ✅ Green (pnpm lockfile fix shipped this session) |
 | Railway backend | ✅ Green |
-| AI discoverability (llms.txt, robots.txt, JSON-LD) | ✅ Shipped S676 — push needed |
-| MCP Server (packages/mcp-server) | ✅ Built S676 — Railway deploy needed |
-| Sale feed indexes (S675 migration) | ⚠️ Check if `20260507000004_sale_feed_indexes` was deployed |
+| Audio notes (edit-item) | ✅ Shipped S677 — push needed |
+| AI discoverability (llms.txt, robots.txt, JSON-LD) | ✅ Pushed S676 |
+| MCP Server (packages/mcp-server) | ✅ Built S676 — Railway deploy still needed |
+| Sale feed indexes (S675 migration) | ⚠️ Confirm `20260507000004_sale_feed_indexes` was deployed |
 
 ---
 
-## S677 Priorities
+## S678 First Action
 
-1. **Audio note UX investigation** — Buttons not intuitive on edit page (just one near tags). UX audit → placement fix.
-2. **MCP server Railway deploy** — Instructions above. ~15 min of dashboard work.
-3. **Verify S675 migration** — Confirm sale feed indexes migration deployed to Railway
-4. **Product JSON-LD on `/items/[id]`** — P0 from S669 audit, still open
-5. **MAILERLITE_ORGANIZERS_GROUP_ID** env var in Railway (pending since S668)
+Dispatch `findasale-innovation` for a map feature ideation sprint. Seed topics:
+- **Mileage tracking** — how far did a shopper drive to attend a sale?
+- **Nearby destinations** — other sales or stops close to a sale the shopper is already attending
+- **Surprise features** — what map-based experiences would genuinely delight shoppers or organizers?
+
+Innovation returns Phase 1 ideas + Phase 2 feasibility. Patrick reviews before any dev dispatch.
+
+---
+
+## Outstanding Carry-Forward
+
+1. **MCP server Railway deploy** — New Railway service, root dir `packages/mcp-server`, Dockerfile.production ready. Env vars: `BACKEND_URL=https://api.finda.sale`, `PORT=3003`. Point `mcp.finda.sale` DNS → Railway. Update `.well-known/mcp.json` status to `active` once live.
+2. **Verify S675 migration** — `20260507000004_sale_feed_indexes` — run `prisma migrate deploy` with Railway URL if not yet deployed.
+3. **Product JSON-LD on `/items/[id]`** — P0 from S669, still open
+4. **MAILERLITE_ORGANIZERS_GROUP_ID** env var in Railway (pending since S668)
+5. **QA: VoiceDescriptionInput** — open edit-item in Chrome, tap mic, speak item description, verify saves correctly + inline suggestions for pre-filled fields
 
 ---
 

@@ -4,7 +4,24 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S676 — AI Agent Discoverability + MCP Server Phase 1 (COMPLETE — push needed)**
+**Latest: S677 — Audio Note UX Fix + Build Fixes (COMPLETE — push needed)**
+
+Audio note feature audited and relocated. Two build errors fixed (pnpm lockfile + TS type mismatch).
+
+1. **Audio notes UX (#audio-ux)** — UX audit found two voice features: `VoiceTagButton` (misplaced in tags section, discarding extracted name/category/price) and `VoiceTagButtonThumbnail` (RapidCapture — already correct, untouched). Fix: created `VoiceDescriptionInput.tsx` alongside the description textarea. Records → always saves full transcript as description → auto-populates empty fields → shows inline "Voice suggestion: [value] · Accept / Keep" for fields that already have content (no silent overwrites). VoiceTagButton removed from edit-item tags section.
+
+2. **pnpm lockfile fix** — `packages/mcp-server/package.json` from S676 was not reflected in `pnpm-lock.yaml`. Vercel build was failing with `ERR_PNPM_OUTDATED_LOCKFILE`. Patrick ran `pnpm install` from monorepo root to regenerate lockfile.
+
+3. **VoiceDescriptionInput TS fix** — `fieldUpdate` typed as `Record<string, any>` was not assignable to the `onFieldUpdate` prop type. Fixed inline: replaced with explicit typed object matching the prop interface.
+
+**S677 files changed:**
+- `packages/frontend/components/VoiceDescriptionInput.tsx` — NEW (voice button alongside description, smart field suggestions)
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — VoiceTagButton removed, VoiceDescriptionInput wired in
+- `pnpm-lock.yaml` — regenerated to include mcp-server dependencies
+
+---
+
+**Previous: S676 — AI Agent Discoverability + MCP Server Phase 1 (COMPLETE — pushed)**
 
 AI agent discovery initiative shipped. 5 items landed, 1 assessed:
 
@@ -480,48 +497,25 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S677
+## Next Session — S678
 
-**P1: Audio note UX investigation (Patrick's explicit request)**
-Audio note buttons on the edit-item page are not intuitive — just one button surfacing near the tags. Questions for S677: Where does the audio note feature currently live in the codebase? What does it do (voice transcription? saved recording? note attached to item)? Where should it surface — rapid capture flow, description input area, item detail, review screen? Dispatch findasale-ux to audit current placement and propose the correct surfacing strategy, then findasale-dev to implement.
+**Priority 1: Map feature innovation sprint (Patrick's request)**
+Dispatch `findasale-innovation` to explore what else we could do with map features. Seed ideas: mileage tracking (how far did a shopper drive?), nearby destinations (other sales/stops close to a current sale), surprise features that shoppers and organizers wouldn't expect. Innovation should run Phase 1 (unconstrained ideation) then Phase 2 (feasibility). Return top ideas ranked by impact vs. effort before any dev dispatch.
 
-**Patrick actions — S676 push block:**
+**Patrick actions — S677 push block:**
 ```powershell
-git add packages/frontend/public/llms.txt
-git add packages/frontend/public/robots.txt
-git add packages/frontend/pages/index.tsx
-git add packages/frontend/pages/pricing.tsx
-git add packages/frontend/pages/about.tsx
-git add packages/frontend/pages/faq.tsx
-git add "packages/frontend/public/.well-known/mcp.json"
-git add packages/mcp-server/src/index.ts
-git add packages/mcp-server/src/handlers.ts
-git add packages/mcp-server/src/types.ts
-git add packages/mcp-server/src/lib/apiClient.ts
-git add packages/mcp-server/src/lib/rateLimiter.ts
-git add packages/mcp-server/src/tools/searchSales.ts
-git add packages/mcp-server/src/tools/getSale.ts
-git add packages/mcp-server/src/tools/searchItems.ts
-git add packages/mcp-server/src/tools/getItem.ts
-git add packages/mcp-server/src/tools/listCities.ts
-git add packages/mcp-server/src/tools/listSaleTypes.ts
-git add packages/mcp-server/src/tools/listCategories.ts
-git add packages/mcp-server/package.json
-git add packages/mcp-server/tsconfig.json
-git add packages/mcp-server/.env.example
-git add packages/mcp-server/Dockerfile.production
-git add packages/mcp-server/README.md
-git add claude_docs/strategy/mcp-server-spec.md
-git add claude_docs/strategy/roadmap.md
+git add packages/frontend/components/VoiceDescriptionInput.tsx
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
+git add pnpm-lock.yaml
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S676: AI discoverability + MCP Server Phase 1 (#384-389)"
+git commit -m "S677: Audio notes UX fix + pnpm lockfile + TS fix"
 .\push.ps1
 ```
 
-**S677 priorities:**
-1. **Audio note UX** — findasale-ux audit current placement → findasale-dev relocate/expand surfacing
-2. **Deploy MCP server on Railway** — Add `mcp-server` as a new Railway service (Dockerfile.production is ready). Set `BACKEND_URL=https://api.finda.sale` and `PORT=3003`. Point `mcp.finda.sale` DNS → Railway service. Then update `.well-known/mcp.json` status to `active`.
-3. **Verify S675 migration** — Confirm `20260507000004_sale_feed_indexes` was deployed to Railway. If not: run `prisma migrate deploy` with Railway URL.
-4. **Product JSON-LD on `/items/[id]`** — S669 P0 still open; #386 Chrome QA also pending
-5. **MAILERLITE_ORGANIZERS_GROUP_ID** env var in Railway (pending since S668)
+**S678 carry-forward (after map innovation sprint):**
+1. **MCP server Railway deploy** — `packages/mcp-server` Dockerfile ready. New Railway service, `BACKEND_URL=https://api.finda.sale`, `PORT=3003`. Point `mcp.finda.sale` DNS → Railway. Update `.well-known/mcp.json` status to `active` once live.
+2. **Verify S675 migration** — Confirm `20260507000004_sale_feed_indexes` deployed to Railway. If not: `prisma migrate deploy` with Railway URL.
+3. **Product JSON-LD on `/items/[id]`** — S669 P0 still open
+4. **MAILERLITE_ORGANIZERS_GROUP_ID** env var in Railway (pending since S668)
+5. **QA: VoiceDescriptionInput** — open edit-item in Chrome, tap mic, speak an item description, verify transcript saves to description + inline suggestions appear for pre-filled fields
