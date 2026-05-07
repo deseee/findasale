@@ -216,7 +216,7 @@ export default function HubManagePage() {
                     onChange={(e) => setEventName(e.target.value)}
                     placeholder="e.g., Spring Cleanup Sale Weekend"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
-                   aria-label="e.g., Spring Cleanup Sale Weekend" />
+                  />
                 </div>
 
                 <div>
@@ -255,4 +255,12 @@ export default function HubManagePage() {
           {/* Member Sales Section */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
             <h2 className="text-xl font-bold text-sage-900 mb-6">Member Sales</h2>
-           
+            <p className="text-gray-600 dark:text-gray-400">
+              Sales management coming soon. You can add/remove your sales to this hub from the hub creation page.
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}

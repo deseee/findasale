@@ -892,7 +892,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                         type="number"
                         placeholder="Enter bid amount"
                         value={bidAmount || ''}
-                        aria-label="Enter bid amount" onChange={(e) => {
+                        onChange={(e) => {
                           setBidAmount(e.target.value ? parseFloat(e.target.value) : null);
                           setBidError('');
                         }}
@@ -1251,4 +1251,54 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
   }
 
   try {
-    // 3s timeout — fail f
+    // 3s timeout — fail fast so Vercel function never hangs waiting for localhost
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${apiUrl}/items/${id}`, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      return { props: { ogData: null, initialData: null } };
+    }
+    const item = await res.json();
+
+    // Safeguard: check that item has required fields for OG data
+    if (!item?.id || !item?.title) {
+      return { props: { ogData: null, initialData: null } };
+    }
+
+    const ogData: OGItemData = {
+      id: item.id,
+      title: item.title || '',
+      description: item.description || '',
+      price: typeof item.price === 'number' ? item.price : null,
+      condition: item.condition || null,
+      photoUrl: Array.isArray(item.photoUrls) && item.photoUrls.length > 0
+        ? item.photoUrls[0]
+        : null,
+      saleId: item.sale?.id || '',
+      saleName: item.sale?.title || 'FindA.Sale',
+      organizer: item.sale?.organizer ? {
+        subscriptionTier: item.sale.organizer.subscriptionTier,
+        removeWatermarkEnabled: item.sale.organizer.removeWatermarkEnabled,
+      } : undefined,
+    };
+
+    // JSON-LD: Extract full item data for structured data injection
+    const initialData: InitialItemData = {
+      id: item.id,
+      title: item.title || '',
+      description: item.description || '',
+      price: typeof item.price === 'number' ? item.price : null,
+      priceBeforeMarkdown: typeof item.priceBeforeMarkdown === 'number' ? item.priceBeforeMarkdown : null,
+      photoUrls: Array.isArray(item.photoUrls) ? item.photoUrls : [],
+      status: item.status || 'AVAILABLE',
+    };
+
+    return { props: { ogData, initialData } };
+  } catch (error) {
+    // Fail open — page still works, OG tags fall back to CSR version
+    console.error('[items/[id] getServerSideProps error]', error);
+    return { props: { ogData: null, initialData: null } };
+  }
+}
