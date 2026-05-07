@@ -330,7 +330,7 @@ async function fetchSalePageHTML(sourceUrl: string, saleId?: string): Promise<st
  */
 export async function enrichSaleDetails(saleId: string, sourceUrl: string): Promise<boolean> {
   try {
-    await defaultRateLimiter.waitForSlot(sourceUrl);
+    await defaultRateLimiter.waitBeforeRequest(new URL(sourceUrl).hostname);
 
     const html = await fetchSalePageHTML(sourceUrl, saleId);
     if (!html) {
