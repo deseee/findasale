@@ -524,7 +524,7 @@ const OrganizerDashboard = () => {
       )}
 
       {/* Onboarding Wizard */}
-      {showWizard && !orgProfile?.onboardingComplete && (
+      {showWizard && !orgProfile?.onboardingComplete && dashboardState !== 'new' && (
         <OnboardingWizard
           onComplete={() => {
             setShowWizard(false);
