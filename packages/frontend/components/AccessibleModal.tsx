@@ -54,7 +54,6 @@ const AccessibleModal: React.FC<AccessibleModalProps> = ({
     <FocusTrap
       active={isOpen}
       focusTrapOptions={{
-        initialFocus: false,
         escapeDeactivates: true,
         onDeactivate: onClose,
       }}
