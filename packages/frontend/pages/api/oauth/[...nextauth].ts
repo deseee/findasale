@@ -28,10 +28,23 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId:     process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      // NextAuth v4 hardcodes /api/auth/ in callback URLs regardless of handler path.
+      // Handler is at /api/oauth/ so we must explicitly override redirect_uri.
+      authorization: {
+        params: {
+          redirect_uri: `${process.env.NEXTAUTH_URL}/api/oauth/callback/google`,
+        },
+      },
     }),
     FacebookProvider({
       clientId:     process.env.FACEBOOK_CLIENT_ID!,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET!,
+      // Same override required for Facebook.
+      authorization: {
+        params: {
+          redirect_uri: `${process.env.NEXTAUTH_URL}/api/oauth/callback/facebook`,
+        },
+      },
     }),
   ],
 
