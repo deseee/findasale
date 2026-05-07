@@ -206,7 +206,7 @@ const buildMatchNotificationHtml = (
   name: string,
   sale: any,
   topCategories: string[],
-  unsubEmail: string
+  unsubToken: string
 ): string => {
   const formatDate = (d: Date) =>
     new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -241,7 +241,7 @@ const buildMatchNotificationHtml = (
           <tr>
             <td style="padding:28px 32px;">
               <p style="font-size:15px; color:#374151; margin:0 0 8px;">Hi ${name},</p>
-              <p style="font-size:15px; color:#374151; margin:0 0 24px;">A new estate sale that matches your interests just went live! Check it out before items sell out.</p>
+              <p style="font-size:15px; color:#374151; margin:0 0 24px;">A new sale that matches your interests just went live! Check it out before items sell out.</p>
 
               <!-- Sale Card -->
               <div style="border:2px solid #fed7aa; border-radius:10px; padding:18px; background:#fffbf0; margin-bottom:20px;">
@@ -272,7 +272,7 @@ const buildMatchNotificationHtml = (
               <p style="font-size:12px; color:#9ca3af; margin:0;">
                 You're receiving this because a sale matches your interests on <a href="${FRONTEND_URL}" style="color:#d97706;">FindA.Sale</a>.<br/>
                 <a href="${FRONTEND_URL}/profile" style="color:#9ca3af; text-decoration:none;">Manage notification preferences</a> ·
-                <a href="${FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(unsubEmail)}" style="color:#9ca3af; text-decoration:none;">Unsubscribe</a>
+                <a href="${FRONTEND_URL}/unsubscribe?token=${unsubToken}" style="color:#9ca3af; text-decoration:none;">Unsubscribe</a>
               </p>
             </td>
           </tr>
@@ -336,7 +336,9 @@ export async function notifyMatchedBuyers(saleId: string): Promise<void> {
 
     for (const buyer of matched) {
       try {
-        const html = buildMatchNotificationHtml(buyer.name || 'Shopper', sale, topCategories, buyer.email);
+        const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+        const unsubToken = await generateUnsubscribeToken(buyer.userId, 'newSales');
+        const html = buildMatchNotificationHtml(buyer.name || 'Shopper', sale, topCategories, unsubToken);
 
         await resend.emails.send({
           from: FROM_EMAIL,

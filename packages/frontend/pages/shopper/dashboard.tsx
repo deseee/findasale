@@ -162,7 +162,7 @@ const ShopperDashboard = () => {
     return null;
   }
 
-  const { data: purchases } = useQuery({
+  const { data: purchases, isError: purchasesError } = useQuery({
     queryKey: ['shopper-purchases'],
     queryFn: async () => {
       const response = await api.get('/users/purchases');
@@ -173,7 +173,7 @@ const ShopperDashboard = () => {
 
   // Favorites consolidated to /shopper/wishlist (My Collections page)
 
-  const { data: userData } = useQuery({
+  const { data: userData, isError: userDataError } = useQuery({
     queryKey: ['user'],
     queryFn: async () => {
       const response = await api.get('/users/me');
@@ -182,10 +182,10 @@ const ShopperDashboard = () => {
     enabled: !!user?.id,
   });
 
-  const { data: follows, isLoading: followsLoading } = useFollows();
+  const { data: follows, isLoading: followsLoading, isError: followsError } = useFollows();
 
   // Hold-to-Pay: Fetch pending invoices for shopper
-  const { data: pendingInvoices = [] } = useQuery({
+  const { data: pendingInvoices = [], isError: invoicesError } = useQuery({
     queryKey: ['pending-invoices'],
     queryFn: async () => {
       const response = await api.get('/reservations/my-invoices');
@@ -197,7 +197,7 @@ const ShopperDashboard = () => {
 
 
   // Fetch shopper holds for Pickups tab
-  const { data: holds = [], isLoading: holdsLoading } = useQuery({
+  const { data: holds = [], isLoading: holdsLoading, isError: holdsError } = useQuery({
     queryKey: ['shopper-holds'],
     queryFn: async () => {
       const response = await api.get('/reservations/shopper');
@@ -207,7 +207,10 @@ const ShopperDashboard = () => {
   });
 
     // Fetch XP profile for rank progress
-  const { data: xpProfile, isLoading: xpLoading } = useXpProfile(!!user?.id);
+  const { data: xpProfile, isLoading: xpLoading, isError: xpError } = useXpProfile(!!user?.id);
+
+  // Check if any critical fetch has failed
+  const hasError = purchasesError || userDataError || followsError || invoicesError || holdsError || xpError;
 
   // Rank threshold configuration — must match backend xpService.ts RANK_THRESHOLDS
   const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
@@ -303,6 +306,13 @@ const ShopperDashboard = () => {
       </Head>
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
+          {/* Error banner — shows if any critical fetch fails */}
+          {hasError && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg">
+              <p className="text-red-800 dark:text-red-300 font-semibold">Something went wrong loading your dashboard. Please refresh.</p>
+            </div>
+          )}
+
           {/* Above the fold: State-aware hero section */}
           {isNewShopper && !welcomeDismissed ? (
             // State A: New shopper

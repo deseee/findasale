@@ -154,6 +154,22 @@ interface ItemDetailProps {
   initialData?: InitialItemData | null;
 }
 
+/**
+ * Map FindA.Sale condition values to Schema.org condition URIs
+ * Schema.org ProductCondition: NewCondition, RefurbishedCondition, UsedCondition
+ */
+function mapConditionToSchema(condition: string): string {
+  const conditionMap: Record<string, string> = {
+    'NEW': 'NewCondition',
+    'LIKE_NEW': 'NewCondition',
+    'GOOD': 'UsedCondition',
+    'FAIR': 'UsedCondition',
+    'POOR': 'UsedCondition',
+    'REFURBISHED': 'RefurbishedCondition',
+  };
+  return conditionMap[condition] || 'UsedCondition';
+}
+
 const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const router = useRouter();
   const { id } = router.query;
@@ -535,22 +551,59 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
       {item && (
         <Head>
           <script type="application/ld+json" dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'Product',
-              'name': item.title,
-              'description': item.description || undefined,
-              'image': item.photoUrls && item.photoUrls.length > 0 ? item.photoUrls[0] : undefined,
-              'offers': {
+            __html: JSON.stringify((() => {
+              const schema: any = {
+                '@context': 'https://schema.org',
+                '@type': 'Product',
+                'name': item.title,
+              };
+
+              // Add optional fields only if data exists
+              if (item.description) schema.description = item.description;
+
+              // Image(s) — include all available photos for rich snippets
+              if (item.photoUrls && item.photoUrls.length > 0) {
+                schema.image = item.photoUrls.length === 1
+                  ? item.photoUrls[0]
+                  : item.photoUrls;
+              }
+
+              // Build offers object
+              const offer: any = {
                 '@type': 'Offer',
-                'price': item.price?.toString() || '0',
                 'priceCurrency': 'USD',
                 'availability': item.status === 'AVAILABLE'
                   ? 'https://schema.org/InStock'
-                  : 'https://schema.org/SoldOut',
+                  : item.status === 'SOLD'
+                  ? 'https://schema.org/SoldOut'
+                  : 'https://schema.org/OutOfStock',
                 'url': `https://finda.sale/items/${item.id}`,
-              },
-            })
+              };
+
+              // Include price if available (auctions show current bid, fixed-price shows price)
+              if (item.price !== null && item.price !== undefined && item.price > 0) {
+                offer.price = item.price.toString();
+              } else if (item.currentBid !== null && item.currentBid !== undefined && item.currentBid > 0) {
+                offer.price = item.currentBid.toString();
+              }
+
+              // Add seller if organizer info exists
+              if (item.sale?.organizer?.businessName || item.sale?.organizer?.name) {
+                offer.seller = {
+                  '@type': 'Organization',
+                  'name': item.sale.organizer.businessName || item.sale.organizer.name,
+                };
+              }
+
+              schema.offers = offer;
+
+              // Add condition if available (NEW, LIKE_NEW, GOOD, FAIR, POOR)
+              if (item.condition) {
+                schema.condition = `https://schema.org/${mapConditionToSchema(item.condition)}`;
+              }
+
+              return schema;
+            })())
           }} />
         </Head>
       )}

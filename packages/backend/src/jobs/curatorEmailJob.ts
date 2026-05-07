@@ -26,7 +26,7 @@ interface UpcomingSale {
 const buildDigestHtml = (
   organizerName: string,
   sales: UpcomingSale[],
-  unsubEmail: string
+  unsubToken: string
 ): string => {
   const formatDate = (d: Date) =>
     d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -103,7 +103,7 @@ const buildDigestHtml = (
             <td style="padding:20px 32px; background:#f9f7f4; border-top:1px solid #e8e0d8;">
               <p style="font-size:12px; color:#9e8f82; margin:0;">
                 You're receiving this because you follow ${organizerName} on FindA.Sale.<br/>
-                <a href="${FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(unsubEmail)}"
+                <a href="${FRONTEND_URL}/unsubscribe?token=${unsubToken}"
                    style="color:#9e8f82;">Unsubscribe</a>
               </p>
             </td>
@@ -166,11 +166,14 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
 
     for (const follow of organizer.followers) {
       const recipientEmail = follow.user?.email;
+      const recipientId = follow.userId;
       if (!recipientEmail) continue;
 
-      const html = buildDigestHtml(organizerName, organizer.sales as UpcomingSale[], recipientEmail);
-
       try {
+        const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+        const unsubToken = await generateUnsubscribeToken(recipientId, 'emailNewSalesFromFollowed');
+        const html = buildDigestHtml(organizerName, organizer.sales as UpcomingSale[], unsubToken);
+
         await resend.emails.send({
           from: FROM_EMAIL,
           to: recipientEmail,

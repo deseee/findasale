@@ -78,11 +78,11 @@ const buildPersonalizedPicks = async (
       const photoUrl = item.photoUrls?.[0];
       picks.push({
         id: item.id,
-        title: item.title || 'Estate Sale Item',
+        title: item.title || 'Sale Item',
         price: item.price,
         category: item.category,
         photoUrls: photoUrl ? [photoUrl] : undefined,
-        saleName: sale.title || 'Estate Sale',
+        saleName: sale.title || 'Sale',
         saleStartDate: new Date(sale.startDate),
         saleCity: sale.city || regionConfig.city,
         saleId: sale.id,
@@ -94,7 +94,7 @@ const buildPersonalizedPicks = async (
 };
 
 // Build HTML email template
-const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubEmail: string): string => {
+const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubToken: string): string => {
   const formatDate = (d: Date) => {
     const now = new Date();
     const daysUntil = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -149,7 +149,7 @@ const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubEmail: strin
           <tr>
             <td style="background:#d97706; padding:28px 32px; text-align:center;">
               <span style="font-size:26px; font-weight:700; color:#fff;">FindA.Sale</span>
-              <p style="margin:8px 0 0; font-size:15px; color:#fde68a; font-weight:500;">Your Weekly Estate Sale Picks</p>
+              <p style="margin:8px 0 0; font-size:15px; color:#fde68a; font-weight:500;">Your Weekly Sale Picks</p>
             </td>
           </tr>
 
@@ -157,7 +157,7 @@ const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubEmail: strin
           <tr>
             <td style="padding:28px 32px;">
               <p style="font-size:15px; color:#374151; margin:0 0 12px;">Hi ${name},</p>
-              <p style="font-size:15px; color:#374151; margin:0 0 24px;">We found <strong>${picks.length} items</strong> across this week's estate sales that match what you've been looking at. Prices range from $${Math.min(...picks.map(p => p.price || 0)).toFixed(0)} to $${Math.max(...picks.map(p => p.price || 0)).toFixed(0)}. First dibs on these goes quickly.</p>
+              <p style="font-size:15px; color:#374151; margin:0 0 24px;">We found <strong>${picks.length} items</strong> across this week's sales that match what you've been looking at. Prices range from $${Math.min(...picks.map(p => p.price || 0)).toFixed(0)} to $${Math.max(...picks.map(p => p.price || 0)).toFixed(0)}. First dibs on these goes quickly.</p>
 
               <div>
                 ${itemCards}
@@ -175,7 +175,7 @@ const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubEmail: strin
               <p style="font-size:12px; color:#9ca3af; margin:0;">
                 <a href="${FRONTEND_URL}/profile?tab=notifications" style="color:#6b7280; text-decoration:none; font-weight:600;">Manage frequency</a> ·
                 <a href="${FRONTEND_URL}/profile?tab=categories" style="color:#6b7280; text-decoration:none;">Update interests</a> ·
-                <a href="${FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(unsubEmail)}" style="color:#9ca3af; text-decoration:none;">Unsubscribe</a><br/>
+                <a href="${FRONTEND_URL}/unsubscribe?token=${unsubToken}" style="color:#9ca3af; text-decoration:none;">Unsubscribe</a><br/>
                 <span style="color:#d1d5db; font-size:11px; margin-top:8px; display:block;">You're receiving this because you have an account at FindA.Sale.</span>
               </p>
             </td>
@@ -190,14 +190,16 @@ const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubEmail: strin
 };
 
 // Send weekly picks email to a single user
-const sendWeeklyPicksEmail = async (email: string, name: string, picks: WeeklyPickItem[]): Promise<void> => {
-  const html = buildEmailHtml(name, picks, email);
+const sendWeeklyPicksEmail = async (email: string, userId: string, name: string, picks: WeeklyPickItem[]): Promise<void> => {
+  const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+  const unsubToken = await generateUnsubscribeToken(userId, 'weekly');
+  const html = buildEmailHtml(name, picks, unsubToken);
 
   try {
     await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
-      subject: `${picks.length} Estate Sale Finds This Week (New Arrivals)`,
+      subject: `${picks.length} New Sale Finds This Week (New Arrivals)`,
       html,
     });
     console.log(`\u2713 Weekly picks email sent to ${email}`);
@@ -277,7 +279,7 @@ export const sendWeeklyEmails = async (): Promise<void> => {
         }
 
         // Send email
-        await sendWeeklyPicksEmail(user.email, user.name || 'Shopper', picks);
+        await sendWeeklyPicksEmail(user.email, user.id, user.name || 'Shopper', picks);
         sent++;
       } catch (err) {
         console.error(`[WeeklyEmail] Failed to send to ${user.email}:`, err);

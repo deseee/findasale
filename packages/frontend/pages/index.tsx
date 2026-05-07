@@ -503,8 +503,8 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                       <div>
                         <h3 className="font-heading text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Sales</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                          {searchResults.sales.map((sale) => (
-                            <SaleCard key={sale.id} sale={sale} />
+                          {searchResults.sales.map((sale, index) => (
+                            <SaleCard key={sale.id} sale={sale} priority={index < 4} />
                           ))}
                         </div>
                       </div>
@@ -556,8 +556,8 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   </div>
                 ) : filteredSales.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredSales.map((sale) => (
-                      <SaleCard key={sale.id} sale={sale} />
+                    {filteredSales.map((sale, index) => (
+                      <SaleCard key={sale.id} sale={sale} priority={index < 4} />
                     ))}
                   </div>
                 ) : (

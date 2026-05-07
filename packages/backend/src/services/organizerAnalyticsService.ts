@@ -142,7 +142,7 @@ export async function getOrganizerWeeklyStats(organizerId: string): Promise<Orga
 /**
  * Build HTML email template for organizer digest
  */
-function buildOrganizerDigestHtml(stats: OrganizerWeeklyStats, unsubEmail: string): string {
+function buildOrganizerDigestHtml(stats: OrganizerWeeklyStats, unsubToken: string): string {
   const formatDate = (d: Date) =>
     d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -260,7 +260,7 @@ function buildOrganizerDigestHtml(stats: OrganizerWeeklyStats, unsubEmail: strin
               <p style="font-size: 12px; color: #94a3b8; margin: 0;">
                 You're receiving this because you're an organizer on <a href="${FRONTEND_URL}" style="color: #0f766e;">FindA.Sale</a>.<br/>
                 <a href="${FRONTEND_URL}/organizer/settings" style="color: #94a3b8; text-decoration: none;">Manage email preferences</a> ·
-                <a href="${FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(unsubEmail)}" style="color: #94a3b8; text-decoration: none;">Unsubscribe</a>
+                <a href="${FRONTEND_URL}/unsubscribe?token=${unsubToken}" style="color: #94a3b8; text-decoration: none;">Unsubscribe</a>
               </p>
             </td>
           </tr>
@@ -277,7 +277,9 @@ function buildOrganizerDigestHtml(stats: OrganizerWeeklyStats, unsubEmail: strin
  * Send weekly digest email to a single organizer
  */
 async function sendOrganizerDigestEmail(stats: OrganizerWeeklyStats): Promise<void> {
-  const html = buildOrganizerDigestHtml(stats, stats.organizerEmail);
+  const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+  const unsubToken = await generateUnsubscribeToken(stats.organizerId, 'emailWeeklyDigest');
+  const html = buildOrganizerDigestHtml(stats, unsubToken);
 
   try {
     await resend.emails.send({
