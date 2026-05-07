@@ -30,7 +30,6 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import FacebookProvider from 'next-auth/providers/facebook';
-import axios from 'axios';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -46,29 +45,28 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async jwt({ token, account, profile }) {
-      // Only runs on initial sign-in (account is present)
+      // Store OAuth profile for browser-side exchange (not server-side)
+      // This avoids the server→server cookie problem where Railway's Set-Cookie
+      // headers reach Vercel but never the browser.
       if (account && profile) {
-        try {
-          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-          const { data } = await axios.post(`${apiUrl}/auth/oauth`, {
-            provider:   account.provider,
-            providerId: account.providerAccountId,
-            email:      (profile as any).email  ?? null,
-            name:       (profile as any).name   ?? 'User',
-          });
-          token.backendJwt = data.token;
-          token.userRole   = data.user?.role ?? 'USER';
-          token.userId     = data.user?.id;
-        } catch (err: any) {
-          console.error('[NextAuth] Backend OAuth exchange failed:', err?.message);
-        }
+        token.oauthProvider   = account.provider;
+        token.oauthProviderId = account.providerAccountId;
+        token.oauthEmail      = (profile as any).email  ?? null;
+        token.oauthName       = (profile as any).name   ?? 'User';
+        token.oauthPending    = true; // Signal that browser-side exchange is needed
       }
       return token;
     },
 
     async session({ session, token }) {
-      (session as any).backendJwt = token.backendJwt;
-      (session as any).userRole   = token.userRole;
+      if (token.oauthPending) {
+        (session as any).oauthProfile = {
+          provider:   token.oauthProvider,
+          providerId: token.oauthProviderId,
+          email:      token.oauthEmail,
+          name:       token.oauthName,
+        };
+      }
       return session;
     },
   },
