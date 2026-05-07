@@ -45,6 +45,11 @@ api.interceptors.response.use(
     const originalRequest = error.config as any;
 
     // P0 Security Fix: Auto-refresh expired access token using refresh token
+    // Guard: never retry the refresh endpoint itself — prevents infinite 401 loops
+    if (originalRequest.url?.includes('/auth/refresh')) {
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
