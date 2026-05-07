@@ -30,7 +30,7 @@ const requireSecret = (req: express.Request, res: express.Response, next: expres
 router.post('/scraper/ingest', ingestFromGitHubActions);
 
 // POST /api/internal/scraper/enrich-backfill — backfill Google Places data on unmanaged listings
-router.post('/scraper/enrich-backfill', runEnrichmentBackfill);
+router.post('/scraper/enrich-backfill', requireSecret, runEnrichmentBackfill);
 
 // POST /api/internal/enrich-sale-details — trigger ESN sale detail enrichment (description + photos)
 router.post('/enrich-sale-details', triggerSaleDetailEnrichment);
