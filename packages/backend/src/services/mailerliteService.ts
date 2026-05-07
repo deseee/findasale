@@ -120,3 +120,63 @@ export async function addShopperSubscriber(email: string, name: string): Promise
     console.error('[mailerlite] Network error adding shopper subscriber:', err);
   }
 }
+
+/**
+ * addOrganizerSubscriber — adds an organizer to the Beta Organizer Onboarding automation.
+ *
+ * Called when an organizer (role === 'ORGANIZER') registers, to enroll them in the
+ * onboarding automation drip sequence. The automation exits when the organizer publishes
+ * their first sale (via markSalePublished).
+ *
+ * @param email - the organizer's email address
+ * @param name - the organizer's name
+ */
+export async function addOrganizerSubscriber(email: string, name: string): Promise<void> {
+  const apiKey = getApiKey();
+  const groupId = process.env.MAILERLITE_ORGANIZERS_GROUP_ID;
+
+  if (!apiKey) {
+    console.warn('[mailerlite] MAILERLITE_API_KEY not set — skipping organizer subscription');
+    return;
+  }
+
+  if (!groupId) {
+    console.warn('[mailerlite] MAILERLITE_ORGANIZERS_GROUP_ID not set — skipping organizer subscription');
+    return;
+  }
+
+  if (!email) {
+    console.warn('[mailerlite] addOrganizerSubscriber called with empty email — skipping');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${MAILERLITE_API_URL}/subscribers`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        name,
+        groups: [groupId],
+        fields: {
+          sale_published: 'no',
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error(`[mailerlite] Failed to add organizer subscriber ${email}: HTTP ${response.status} — ${body}`);
+      return;
+    }
+
+    console.log(`[mailerlite] Organizer ${email} added to onboarding automation group`);
+  } catch (err) {
+    // Non-critical — do not throw; log and continue
+    console.error('[mailerlite] Network error adding organizer subscriber:', err);
+  }
+}

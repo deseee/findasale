@@ -4,7 +4,20 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S667 — S666 Backlog Sweep: All 16 Meta-Audit Items Shipped (COMPLETE — pushed)**
+**Latest: S668 — Multi-Lens Product Audit + P0/P1 Fix Batch (COMPLETE — push block provided)**
+
+4-lens audit (CRO, game design, organizer competitive, session integrity) + Lens 5 (organizer onboarding funnel). Two P0s found and fixed. P1s dispatched and shipped. Push block given to Patrick — awaiting `.\push.ps1` + migration deploy.
+
+**S668 items shipped:**
+- P0: Login loop — `_app.tsx` SessionProvider basePath `/api/oauth` + `api.ts` 401 redirect guard (fixes S667 NextAuth path migration regression)
+- P0: `Item.moderationStatus` not in production DB — migration `20260507000002_add_item_moderation_status` (fixes auctionAutoCloseCron CRON FAIL every 5min)
+- P1: SocialProofBadge + CountdownTimer wired into ItemCard/search/ItemSearchResults (existing components, now visible on browse/search)
+- P1: Scout→Ranger XP threshold 2000→1200 (xpService, rankUtils, guild-primer — game balance fix)
+- P1: Organizer MailerLite enrollment on signup — `addOrganizerSubscriber()` added + called on register/oauthLogin; organizers now enter Beta Onboarding automation
+- UX: `index.tsx` — "Running a sale? List it free" subtle text link below hero search bar (tasteful, hidden when searching)
+- Env var needed: `MAILERLITE_ORGANIZERS_GROUP_ID` in Railway
+
+**Previous: S667 — S666 Backlog Sweep: All 16 Meta-Audit Items Shipped (COMPLETE — pushed)**
 
 S666 deferred 16 items. Patrick decided: (A) NextAuth → `/api/oauth/`, (B) Sentry Crons for observability. All 16 items dispatched via 7 parallel dev agents, verified, and pushed via `.\push.ps1`.
 
@@ -184,6 +197,7 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
+| Login loop fix (S668 P0) | Code shipped S668 but not Chrome-tested post-push | After push+deploy: login as user1@example.com / Seedy2025! — should redirect to dashboard (was looping on /login due to SessionProvider basePath mismatch) | S668 |
 | JWT cookie migration | Code shipped S667 but not Chrome-tested | Login in browser → verify cookies in DevTools Application tab (should see httpOnly accessToken) | S664/S667 |
 | COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error | S664 |
 | Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` | S664 |
@@ -198,7 +212,13 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 ---
 
-## Recent Sessions (S663–S667)
+## Recent Sessions (S664–S668)
+
+### S668 — Multi-Lens Product Audit + P0/P1 Fix Batch (COMPLETE — push block provided)
+
+5-lens parallel audit. Lens 1 (CRO): SocialProofBadge + CountdownTimer were built but never deployed — now wired into browse/search item cards. Lens 2 (Game design): Scout→Ranger XP curve too steep — fixed 2000→1200. Lens 3 (Organizer competitive): onboarding email gap found — organizers never enrolled in MailerLite automation on signup, now fixed. Lens 4 (Session integrity): #336 race fix confirmed present, #228 roadmap row stale. Lens 5 (Onboarding funnel): 3-email drip automation exists in MailerLite but organizers were never subscribed — enrollment fix shipped. Two P0s found and fixed: login loop from S667 SessionProvider basePath mismatch, and Item.moderationStatus missing from prod DB crashing auctionAutoCloseCron every 5 min. Homepage: subtle "Running a sale? List it free" text link added below search bar. Patrick direction: no fake social proof, no copy bloat — lean into being new and fresh.
+
+---
 
 ### S667 — S666 Backlog Sweep: All 16 Meta-Audit Items Shipped (COMPLETE — pushed)
 
@@ -230,24 +250,16 @@ Shopper Pickups tab, Cart 404, CAN-SPAM footers, hold-placed email, vaporware co
 
 ---
 
-## Next Session — S668 (Multi-Lens Product Audit)
+## Next Session — S669
 
-**Mandate:** Four parallel auditors, each with a lens prior sessions have not covered. Dispatch all 4 simultaneously. Triage findings → dispatch P0/P1 fixes same session.
+**Patrick actions before S669:**
+1. Run push block from S668 (`.\push.ps1`)
+2. Run migration: `cd packages/database` → set `$env:DATABASE_URL` (Railway public proxy) → `npx prisma migrate deploy` → `npx prisma generate`
+3. Add `MAILERLITE_ORGANIZERS_GROUP_ID` env var in Railway — get group ID from MailerLite → Groups → "Beta Organizer Onboarding" group
+4. Verify login works post-deploy: login as user1@example.com / Seedy2025! — should redirect to dashboard
 
-**Lens 1 — Sales psychology / CRO expert**
-Walk all conversion flows (organizer signup, shopper discovery → hold/purchase). Audit: funnel drop-off points, friction, pricing anchors, scarcity signals, social proof, loss aversion language (ending-soon, limited inventory). Is XP a conversion lever or invisible? Deliverable: ranked gap list with specific copy/UI/flow fixes.
-
-**Lens 2 — Game designer / player psychology**
-Audit Explorer's Guild (XP, ranks, badges, Hunt Pass, leaderboard, crews) as someone who plays progression systems. Audit: XP curve shape across all rank tiers (does it flatten and lose players?), sink mechanics (XP expiry, rank resets — punishing or energizing?), Hunt Pass pay-to-win risk, crew mechanical purpose, known exploits or feel-bad moments. Deliverable: game design gaps grounded in player psychology research.
-
-**Lens 3 — Organizer choosing software (competitive buy decision)**
-Roleplay a professional organizer evaluating FindA.Sale vs EstateSales.NET, EstateSales.org, HiBid, Facebook Events. Walk organizer onboarding → sale creation → item upload → POS → settlement. Audit: clearest differentiator, obvious dealbreakers, pricing page clarity vs. competitors, what would make them switch vs. stay. Deliverable: competitive gap list + one-paragraph "why switch" pitch grounded in the actual product.
-
-**Lens 4 — Recent session integrity audit (S662–S667)**
-Re-audit the last 5 sessions' shipped features for: (a) S667 items — partially implemented or shipped with known gaps not flagged? (b) S666 28-gap list — did all 28 ship or did any fall through? (c) UNVERIFIED queue — anything now assessable with current context? Deliverable: list of anything claimed shipped but not actually complete.
-
-**Session start checklist:**
-1. Read STATE.md + `claude_docs/strategy/roadmap.md`
-2. Verify Railway + Vercel green (check S667 post-session fixes landed)
-3. Dispatch all 4 lenses in parallel (one Agent call per lens — do NOT use Skill tool for parallel work)
-4. When all 4 return: triage by severity, dispatch dev fixes for P0/P1 immediately
+**S669 priorities (in order):**
+1. Smoke test S668 fixes in Chrome (login loop resolved? auctionAutoCloseCron CRON FAIL stopped in Railway logs?)
+2. Dispatch 3-email organizer welcome drip: day-0 verify, day-1 "create your first sale", day-3 checklist reminder — Lens 5 finding, low effort / high impact
+3. Organizer onboarding persistent dashboard checklist (replaces skippable modal) — P1 per Lens 5
+4. Advance a roadmap feature — check roadmap.md for next BROKEN or PENDING item to ship

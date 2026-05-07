@@ -343,6 +343,14 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   💾 {isSavingSearch ? 'Saving...' : 'Save This Search'}
                 </button>
               )}
+              {!searchQuery && (
+                <p className="mt-3 text-sm text-white/60">
+                  Running a sale?{' '}
+                  <a href="/organizer/register" className="text-white/85 underline underline-offset-2 hover:text-white transition-colors">
+                    List it free
+                  </a>
+                </p>
+              )}
             </div>
           </div>
         </section>
