@@ -258,7 +258,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
                 type="text"
                 placeholder="e.g., Grand Rapids Sales Team"
                 value={workspaceName}
-                onChange={(e) = aria-label="e.g., Grand Rapids Sales Team"> setWorkspaceName(e.target.value)}
+                aria-label="e.g., Grand Rapids Sales Team" onChange={(e) => setWorkspaceName(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-sage-600"
                 autoFocus
               />
@@ -287,7 +287,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
                     type="email"
                     placeholder="organizer@example.com"
                     value={tempEmail}
-                    onChange={(e) = aria-label="organizer@example.com"> setTempEmail(e.target.value)}
+                    aria-label="organizer@example.com" onChange={(e) => setTempEmail(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleAddInvitee()}
                     className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-sage-600"
                   />

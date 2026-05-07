@@ -462,7 +462,7 @@ const Support: React.FC = () => {
                 type="text"
                 placeholder="Search FAQ..."
                 value={searchQuery}
-                onChange={(e) = aria-label="Search FAQ..."> setSearchQuery(e.target.value)}
+                aria-label="Search FAQ..." onChange={(e) => setSearchQuery(e.target.value)}
                 className={styles.searchInput}
               />
             </div>

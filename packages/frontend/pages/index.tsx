@@ -353,7 +353,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   type="text"
                   placeholder="Search by title, city, or keyword…"
                   value={searchQuery}
-                  onChange={(e) = aria-label="Search by title, city, or keyword…"> setSearchQuery(e.target.value)}
+                  aria-label="Search by title, city, or keyword…" onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white/95 text-warm-900 placeholder-warm-500 font-body"
                 />
               </div>

@@ -274,7 +274,7 @@ const CreateSalePage = () => {
                   max="50"
                   step="0.5"
                   value={formData.buyersPremiumPct ?? ''}
-                  onChange={(e) = aria-label="Buyerspremiumpct"> setFormData({
+                  aria-label="Buyerspremiumpct" onChange={(e) => setFormData({
                     ...formData,
                     buyersPremiumPct: e.target.value ? parseFloat(e.target.value) : null
                   })}

@@ -111,7 +111,7 @@ const SaleSubscription: React.FC<SaleSubscriptionProps> = ({
                 type="email"
                 id="email"
                 value={email}
-                onChange={(e) = aria-label="Email"> setEmail(e.target.value)}
+                aria-label="Email" onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                 placeholder="your@email.com"
               />
@@ -125,7 +125,7 @@ const SaleSubscription: React.FC<SaleSubscriptionProps> = ({
                 type="tel"
                 id="phone"
                 value={phone}
-                onChange={(e) = aria-label="Phone"> setPhone(e.target.value)}
+                aria-label="Phone" onChange={(e) => setPhone(e.target.value)}
                 className="w-full px-3 py-2 border border-warm-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                 placeholder="(123) 456-7890"
               />

@@ -221,7 +221,7 @@ function CreateHaulPostPage() {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) = aria-label="Photoupload"> handlePhotoUpload(e.target.files)}
+                  aria-label="Photoupload" onChange={(e) => handlePhotoUpload(e.target.files)}
                   disabled={uploading}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
@@ -310,7 +310,7 @@ function CreateHaulPostPage() {
                   id="itemSearch"
                   type="text"
                   value={searchQuery}
-                  onChange={(e) = aria-label="Itemsearch"> handleSearchChange(e.target.value)}
+                  aria-label="Itemsearch" onChange={(e) => handleSearchChange(e.target.value)}
                   onFocus={() => setShowSearchDropdown(true)}
                   placeholder="Search your purchases..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-white"

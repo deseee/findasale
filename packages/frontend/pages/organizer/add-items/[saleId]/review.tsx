@@ -912,7 +912,7 @@ const ReviewPage = () => {
                             step="0.01"
                             placeholder="Bulk price..."
                             value={bulkPrice}
-                            onChange={(e) = aria-label="Bulk price..."> setBulkPrice(e.target.value)}
+                            aria-label="Bulk price..." onChange={(e) => setBulkPrice(e.target.value)}
                             className="border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm w-28"
                           />
                           <button
@@ -1553,7 +1553,7 @@ const ReviewPage = () => {
                                     type="text"
                                     placeholder="Add a custom tag..."
                                     className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                    onKeyDown={(e) = aria-label="Add a custom tag..."> {
+                                    aria-label="Add a custom tag..." onKeyDown={(e) => {
                                       if (e.key === 'Enter') {
                                         handleAddCustomTag(item.id, (e.target as HTMLInputElement).value);
                                         (e.target as HTMLInputElement).value = '';

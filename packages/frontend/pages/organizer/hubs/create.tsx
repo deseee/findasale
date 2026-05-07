@@ -154,7 +154,7 @@ export default function CreateHubPage() {
                   id="slug"
                   type="text"
                   value={formData.slug}
-                  onChange={(e) = aria-label="Slug"> setFormData({ ...formData, slug: e.target.value })}
+                  aria-label="Slug" onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
                   placeholder="downtown-estate-sales-weekend"
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                   required
@@ -199,7 +199,7 @@ export default function CreateHubPage() {
                       type="number"
                       step="0.0001"
                       value={formData.lat}
-                      onChange={(e) = aria-label="Lat"> setFormData({ ...formData, lat: parseFloat(e.target.value) })}
+                      aria-label="Lat" onChange={(e) => setFormData({ ...formData, lat: parseFloat(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                       required
                     />
@@ -213,7 +213,7 @@ export default function CreateHubPage() {
                       type="number"
                       step="0.0001"
                       value={formData.lng}
-                      onChange={(e) = aria-label="Lng"> setFormData({ ...formData, lng: parseFloat(e.target.value) })}
+                      aria-label="Lng" onChange={(e) => setFormData({ ...formData, lng: parseFloat(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                       required
                     />
@@ -238,7 +238,7 @@ export default function CreateHubPage() {
                   step="0.1"
                   min="0.1"
                   value={formData.radiusKm}
-                  onChange={(e) = aria-label="Radiuskm"> setFormData({ ...formData, radiusKm: parseFloat(e.target.value) })}
+                  aria-label="Radiuskm" onChange={(e) => setFormData({ ...formData, radiusKm: parseFloat(e.target.value) })}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                   required
                 />
