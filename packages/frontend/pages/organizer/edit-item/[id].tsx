@@ -30,8 +30,8 @@ import RapidCapture, { RapidItem } from '../../../components/RapidCapture';
 import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 import EncyclopediaInlineTip from '../../../components/EncyclopediaInlineTip';
 import EbayCompTiles from '../../../components/EbayCompTiles';
-import VoiceTagButton from '../../../components/VoiceTagButton';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import VoiceDescriptionInput from '../../../components/VoiceDescriptionInput';
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -488,15 +488,29 @@ const EditItemPage = () => {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Description</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={4}
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
+            <VoiceDescriptionInput
+              value={formData.description}
+              onChange={(description) => setFormData({ ...formData, description })}
+              onFieldUpdate={(fields) => {
+                const updates: any = { description: fields.description };
+                if (fields.title && !formData.title) updates.title = fields.title;
+                if (fields.category && !formData.category) updates.category = fields.category;
+                if (fields.price && !formData.price) updates.price = fields.price;
+                if (fields.tags && fields.tags.length > 0) {
+                  const newTags = fields.tags.filter((tag: string) => !formData.tags.includes(tag));
+                  if (newTags.length > 0) {
+                    updates.tags = [...formData.tags, ...newTags];
+                  }
+                }
+                setFormData({ ...formData, ...updates });
+              }}
+              existingFields={{
+                title: formData.title,
+                category: formData.category,
+                tags: formData.tags,
+                price: formData.price,
+              }}
+            />
 
             <EbayCategoryPicker
               value={formData.category}
@@ -574,12 +588,12 @@ const EditItemPage = () => {
               <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Tags</label>
 
               {/* BUG 4 FIX: Removed curated tag list (AI already suggests tags) */}
-              {/* Custom tag input + Voice-to-Tag button */}
-              <div className="flex gap-2 mb-2">
+              {/* Custom tag input */}
+              <div className="mb-2">
                 <input
                   type="text"
                   placeholder="Add a custom tag..."
-                  className="flex-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       const value = (e.target as HTMLInputElement).value.trim();
@@ -589,16 +603,6 @@ const EditItemPage = () => {
                       }
                     }
                   }}
-                />
-                <VoiceTagButton
-                  onExtraction={(result) => {
-                    // Append extracted tags to the existing tags array, avoiding duplicates
-                    const newTags = result.tags.filter(tag => !formData.tags.includes(tag));
-                    if (newTags.length > 0) {
-                      setFormData({ ...formData, tags: [...formData.tags, ...newTags] });
-                    }
-                  }}
-                  className="flex-shrink-0"
                 />
               </div>
 
