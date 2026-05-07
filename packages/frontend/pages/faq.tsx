@@ -665,6 +665,23 @@ const FAQPage = () => {
             }),
           }}
         />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'WebPage',
+              name: 'Frequently Asked Questions',
+              url: 'https://finda.sale/faq',
+              description: 'Comprehensive FAQs for FindA.Sale shoppers and organizers',
+              isPartOf: {
+                '@type': 'WebSite',
+                name: 'FindA.Sale',
+                url: 'https://finda.sale'
+              }
+            }),
+          }}
+        />
       </Head>
 
       <div className="min-h-screen bg-white dark:bg-gray-800">

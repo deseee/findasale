@@ -1,0 +1,105 @@
+# FindA.Sale — Community Secondary Sales Marketplace
+
+## What is FindA.Sale?
+
+FindA.Sale is a digital marketplace connecting organizers of secondary sales (yard sales, garage sales, estate sales, auctions, flea markets, consignment shops) with shoppers hunting for unique items and great deals. We simplify sale management while helping organizers reach more buyers and shoppers discover sales near them.
+
+## For Organizers
+
+Organizers use FindA.Sale to:
+
+- **Create and manage sales** — List sales with dates, locations, and sale types
+- **Upload and tag inventory** — Photograph items; our system auto-tags titles, descriptions, and prices using Smart Pricing
+- **Manage shoppers** — Handle holds, reservations, and pre-sale questions via built-in messaging
+- **Take payments** — Accept card payments via Stripe point-of-sale (in-person) and online checkout
+- **Track performance** — View post-sale analytics, earnings breakdowns, and shopper engagement via Flip Report
+- **Export and integrate** — Publish to eBay, Facebook Marketplace, Craigslist, and more with one click
+- **Scale operations** — Run multiple concurrent sales, use command center for team management (PRO/TEAMS tiers)
+
+**Plans:**
+- SIMPLE (Free): 10% per-sale platform fee, 200 items per sale, 1 active sale, 100 auto tags/month
+- PRO ($29/month): 8% platform fee, 500 items, 3 concurrent sales, 2,000 auto tags/month, Smart Pricing, Flip Report, Command Center
+- TEAMS ($79/month): 8% fee, unlimited items/sales, multi-user workspaces with roles, webhooks, Command Center
+- Enterprise (starting $500/month): Custom integrations, white labeling, API access
+
+## For Shoppers
+
+Shoppers use FindA.Sale to:
+
+- **Discover sales** — Browse sales near your location; filter by date, type, or search by item/keyword
+- **Browse items** — View detailed listings with photos, descriptions, condition ratings, and prices
+- **Place holds and bids** — Reserve items before a sale or participate in auctions
+- **Buy online** — Checkout directly via Stripe for pre-sale purchases or auction wins
+- **Save favorites** — Follow organizers and save sales for easy reference
+- **Engage via Explorer's Guild** — Earn XP from activities (visits, purchases, hauls, reviews), progress through five ranks (Initiate → Grandmaster), unlock perks like longer hold times and early access to Rare items
+- **Unlock Hunt Pass** — Optional $4.99/month tier for 1.5× XP multiplier, 6/12-hour early access to Rare/Legendary items, seasonal challenges, Treasure Trail creation
+
+**Key Shopper Features:**
+- **Condition Ratings:** Every item rated S (Like New) through D (Poor) so shoppers know what to expect
+- **Smart Matching:** Search, filters, and curated recommendations based on location and preferences
+- **QR Code Treasure Hunts:** Scan QR codes at sales to view item details on your phone
+- **Bounties:** Post requests for items you're hunting; organizers can match and fulfill
+- **Community Appraisals:** Scout-ranked community members appraise items; community votes on best valuations
+- **Crew Features:** Group buying, shared lists, and collective haul tracking
+
+## Key Pages
+
+- **Homepage** (`/`) — Discover featured sales near you; search by title, location, or keyword
+- **Pricing** (`/pricing`) — Compare organizer plan options (SIMPLE, PRO, TEAMS, Enterprise)
+- **About** (`/about`) — Our mission and what we offer organizers and shoppers
+- **FAQ** (`/faq`) — Comprehensive FAQs for both organizers and shoppers
+- **Organizer Hub** (`/organizer`) — Dashboard, sale management, analytics, and integrations (requires organizer account)
+- **Shopper Features** (`/shopper`) — Guild primer, Hunt Pass info, seasonal challenges
+- **Organizer Guide** (`/guide`) — Comprehensive walkthrough for creating and running sales
+- **Contact** (`/contact`) — Support and general inquiries
+
+## API & Integrations
+
+FindA.Sale offers:
+
+- **Stripe Integration** — Payment processing, payouts via Stripe Connect, terminal reader support (S700/S710)
+- **Social Exports** — One-click publish to eBay, Facebook Marketplace, Craigslist, EstateSales.net
+- **Webhooks** — TEAMS tier access; trigger integrations on purchase, auction win, sale publish
+- **Zapier** — Connect FindA.Sale to thousands of apps for custom workflows
+
+**MCP Server (Coming Soon):**
+An MCP (Model Context Protocol) server will allow AI agents to:
+- Search sales by location, category, date
+- Look up item details and pricing
+- Check organizer information and availability
+- Access public sale calendars
+
+## Audience & Use Cases
+
+**Primary Use Cases:**
+- Individual estate sale organizers looking to reach more buyers
+- Auction houses managing high-volume sales
+- Flea market vendors and consignment shop operators
+- Secondary sale resellers (eBay/Poshmark sellers expanding channels)
+- Shoppers hunting for vintage, collectibles, and bargains in their local community
+
+**Geographic Focus:**
+FindA.Sale operates nationwide (US) with initial concentration in Michigan and surrounding Midwest regions.
+
+## Business Model
+
+- **Organizer Revenue:** Platform fees on completed sales (8–10% depending on plan) + subscription (PRO $29/mo, TEAMS $79/mo)
+- **Shopper Revenue:** Hunt Pass subscription ($4.99/month), XP redemption for cosmetics and gameplay boosts, seasonal challenge passes
+
+## Contact & Support
+
+- **Email:** support@finda.sale
+- **Web:** https://finda.sale
+- **Organizer Help:** /guide or /contact
+- **Shopper Help:** /faq or /contact
+
+## Links
+
+- Homepage: https://finda.sale
+- Browse Sales: https://finda.sale/sales
+- Organizer Pricing: https://finda.sale/pricing
+- Organizer Guide: https://finda.sale/guide
+- Shopper Guild Primer: https://finda.sale/shopper/guild-primer
+- Frequently Asked Questions: https://finda.sale/faq
+- About Us: https://finda.sale/about
+- Contact Support: https://finda.sale/contact

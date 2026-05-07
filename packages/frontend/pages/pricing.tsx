@@ -202,6 +202,65 @@ const PricingPage = () => {
         <meta name="description" content="Choose the perfect plan for managing your sales." />
         <meta property="og:title" content="Pricing - FindA.Sale" />
         <meta property="og:description" content="Choose the perfect plan for managing your sales." />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'WebPage',
+              name: 'Pricing',
+              url: 'https://finda.sale/pricing',
+              description: 'FindA.Sale organizer pricing plans',
+              hasPart: [
+                {
+                  '@type': 'Offer',
+                  name: 'SIMPLE',
+                  description: 'Free plan with 10% platform fee per sale',
+                  price: '0',
+                  priceCurrency: 'USD',
+                  eligibleCustomer: {
+                    '@type': 'Business'
+                  },
+                  url: 'https://finda.sale/pricing'
+                },
+                {
+                  '@type': 'Offer',
+                  name: 'PRO',
+                  description: '$29/month plan with 8% platform fee, smart pricing, and advanced analytics',
+                  price: '29',
+                  priceCurrency: 'USD',
+                  priceSpecification: {
+                    '@type': 'PriceSpecification',
+                    priceCurrency: 'USD',
+                    price: '29',
+                    billingDuration: 'P1M'
+                  },
+                  eligibleCustomer: {
+                    '@type': 'Business'
+                  },
+                  url: 'https://finda.sale/pricing'
+                },
+                {
+                  '@type': 'Offer',
+                  name: 'TEAMS',
+                  description: '$79/month plan with 8% platform fee, unlimited items, team collaboration',
+                  price: '79',
+                  priceCurrency: 'USD',
+                  priceSpecification: {
+                    '@type': 'PriceSpecification',
+                    priceCurrency: 'USD',
+                    price: '79',
+                    billingDuration: 'P1M'
+                  },
+                  eligibleCustomer: {
+                    '@type': 'Business'
+                  },
+                  url: 'https://finda.sale/pricing'
+                }
+              ]
+            }),
+          }}
+        />
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
