@@ -1,5 +1,6 @@
 # ROADMAP – FindA.Sale v2
 
+**Last Updated:** 2026-05-07 (v133 — S676: AI Discoverability + MCP Server spec. Added #384–#389. Shipped: llms.txt (/llms.txt LLM-readable site summary), robots.txt AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Bytespider all Allowed), JSON-LD structured data (WebPage, Offer, Organization, FAQPage on pricing/about/faq/index). Queued: SSR for public pages (#387, 3-4 dev days), MCP Server Phase 1 (#388, 7 tools + packages/mcp-server, 4-5 dev days), mcp.json discovery (#389, 0.5 dev days). Spec: claude_docs/strategy/mcp-server-spec.md.)
 **Last Updated:** 2026-05-04 (v130 — S641: Cold outreach deep-audit + two-sided pipeline sync. Verdict: BUILD don't BUY (4-vendor audit confirmed all are campaign-orchestrators that break Postgres-as-source-of-truth). Added #374 Cold Outreach Pipeline (Workspace + Postgres cron, 8 dev days, $6/mo), #375 Shopper-Side Discovery SEO (correction: organizer-side SEO deferrable but shopper-side is the demand flywheel — never defer), #376 LinkedIn Outreach Parallel Pilot (Expandi, ~$99/mo, defer 2 weeks past cold-email warm-up). Strategy doc: cold-outreach-deep-audit-S641.md. Supporting evidence: claude_docs/research/cold-outreach-2026-05/ (4 docs, ~57k words, ~80 primary sources). Memory updated with feedback_seo_two_sided_distinction.md.)
 **Last Updated:** 2026-05-04 (v132 — S626: Scraper/data-source research. Added #379 (Craigslist ghost stub BUG — cron scheduled, no source file), #380 (FB Marketplace GraphQL scraper — kyleronayne doc_id approach, needs live test first), #381 (GSalr.com aggregator — needs URL endpoint discovery), #382 (Sale type ordering fix — estate sales listed first in 5 places, quick dev dispatch), #383 (Meta Content Library API — deferred, requires academic/institutional ICPSR access). Dead avenues confirmed: CL RSS dead since Oct 2020; OpenRSS irrelevant; FB page RSS 404 confirmed. search-facebook-events.ts already active (Serper/Brave/ScaleSerp approach). GarageSaleFinder.com already scraped.)
 **Last Updated:** 2026-05-04 (v131 — S641: Help Library plan — added #377 (draft all 75 guides + video scripts) and #378 (site surface — `/guides` route + FAQ inbound links + slot in approved drafts). Plan: `claude_docs/strategy/guide-and-video-library-plan.md`. Audit categorized 47 FRESH + 18 THIN + 10 WRAPPER drafts (~51,500 words) — surfaces `/guide`, `/faq`, `/condition-guide`, `/shopper/guild-primer` instead of duplicating. Two-step flow: write everything → site prep + slot in. No phases.)
@@ -500,6 +501,19 @@ Features fully shipped and verified by both Claude and Patrick. Compact format �
 | 250 | Price Research Panel | ORG | SIMPLE | Shipped S389. ✅✅ both QA marks. Consolidated PriceSuggestion + ValuationWidget + eBay comps. |
 | 262 | Tier Restructure — Batch Ops + Seller Badge + Link Click Stats → SIMPLE | ORG | SIMPLE | Shipped S390. ✅✅ both QA marks. Batch ops + seller badge + link stats now SIMPLE-tier. |
 | 149 | Email Reminders to Shoppers | SHO | SIMPLE | Chrome-verified S355 + Patrick-verified. RemindMeButton fires correctly, toggles to "Cancel Reminder". |
+
+## AI Discoverability & MCP
+
+LLM bot optimization and AI platform integration.
+
+| # | Feature | Role | Tier | DB | API | UI | QA | Chr | Nav | Hum | Notes |
+|---|---------|------|------|----|----|----|----|--------|-----|-------|-------|
+| 384 | AI Discoverability: llms.txt | BOTH | ALL | - | - | - | Y | - | - | - | Shipped S676. LLM-readable site summary at /llms.txt. |
+| 385 | AI Discoverability: robots.txt AI Crawlers | BOTH | ALL | - | - | - | Y | - | - | - | Shipped S676. GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Bytespider all Allowed. |
+| 386 | AI Discoverability: JSON-LD Structured Data | BOTH | ALL | - | - | Y | P | P | - | - | Shipped S676. WebPage, Offer, Organization, FAQPage schemas on pricing/about/faq/index. Pending Chrome QA. |
+| 387 | AI Discoverability: SSR/Prerender Public Pages | BOTH | ALL | - | - | P | - | - | - | - | Queued. Public pages (pricing, about, FAQ) render client-side; AI bots see only shell. Fix: SSR or prerender layer. 3–4 dev days. |
+| 388 | MCP Server Phase 1 (7 tools) | BOTH | ALL | - | P | - | - | - | - | - | Queued. Spec: claude_docs/strategy/mcp-server-spec.md. 7 tools: search_sales, get_sale, search_items, get_item, list_cities, list_sale_types, list_categories. packages/mcp-server. 4–5 dev days. |
+| 389 | MCP Discovery: .well-known/mcp.json | BOTH | ALL | - | - | - | - | - | - | - | Queued. Discovery file so AI platforms can find the MCP server. Part of #388 Phase 1 deliverables. 0.5 dev days. |
 
 ## Platform Safety & Infrastructure
 

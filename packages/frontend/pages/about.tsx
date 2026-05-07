@@ -15,6 +15,36 @@ const AboutPage = () => {
         <meta property="og:url" content="https://finda.sale/about" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'FindA.Sale',
+              url: 'https://finda.sale',
+              logo: 'https://finda.sale/icons/icon-512x512.png',
+              description: 'Community marketplace connecting organizers of secondary sales with shoppers hunting for unique items and great deals. We simplify sale management while helping organizers reach more buyers and shoppers discover sales near them.',
+              sameAs: [
+                'https://www.facebook.com/findasale',
+                'https://twitter.com/findasale',
+                'https://instagram.com/findasale'
+              ],
+              contactPoint: {
+                '@type': 'ContactPoint',
+                contactType: 'Customer Service',
+                email: 'support@finda.sale',
+                url: 'https://finda.sale/contact'
+              },
+              address: {
+                '@type': 'PostalAddress',
+                addressCountry: 'US',
+                addressLocality: 'Grand Rapids',
+                addressRegion: 'MI'
+              }
+            }),
+          }}
+        />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 py-12">
