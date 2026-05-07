@@ -236,7 +236,7 @@ const ShopifyPage: React.FC = () => {
                         type="text"
                         placeholder="e.g., yourshop.myshopify.com"
                         value={shopDomain}
-                        onChange={(e) = aria-label="e.g., yourshop.myshopify.com"> setShopDomain(e.target.value)}
+                        aria-label="e.g., yourshop.myshopify.com" onChange={(e) => setShopDomain(e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                       />
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Found in your Shopify Admin → Settings → General</p>
@@ -250,7 +250,7 @@ const ShopifyPage: React.FC = () => {
                         type="password"
                         placeholder="shpat_..."
                         value={accessToken}
-                        onChange={(e) = aria-label="shpat_..."> setAccessToken(e.target.value)}
+                        aria-label="shpat_..." onChange={(e) => setAccessToken(e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                       />
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

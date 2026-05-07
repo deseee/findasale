@@ -1990,7 +1990,7 @@ export default function POSPage() {
               type="email"
               placeholder="Enter shopper email..."
               value={shopperSearchEmail}
-              onChange={(e) = aria-label="Enter shopper email..."> handleShopperEmailSearch(e.target.value)}
+              aria-label="Enter shopper email..." onChange={(e) => handleShopperEmailSearch(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm placeholder-gray-500 dark:placeholder-gray-400"
             />
             {shopperSearchLoading && (

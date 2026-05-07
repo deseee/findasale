@@ -432,7 +432,7 @@ const OrganizerBountiesPage = () => {
                                 type="text"
                                 placeholder="Item ID (optional)"
                                 value={fulfillItemId}
-                                onChange={e = aria-label="Item ID (optional)"> setFulfillItemId(e.target.value)}
+                                aria-label="Item ID (optional)" onChange={e => setFulfillItemId(e.target.value)}
                                 className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
                               />
                               <button

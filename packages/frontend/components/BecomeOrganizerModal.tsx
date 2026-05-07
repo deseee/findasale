@@ -119,7 +119,7 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
               type="text"
               placeholder="e.g., Sarah's Finds, Smith Family Estate, or your own name"
               value={businessName}
-              onChange={(e) = aria-label="e.g., Sarah's Finds, Smith Family Estate, or your own name"> setBusinessName(e.target.value)}
+              aria-label="e.g., Sarah's Finds, Smith Family Estate, or your own name" onChange={(e) => setBusinessName(e.target.value)}
               disabled={loading}
               className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
             />
@@ -136,7 +136,7 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
               type="tel"
               placeholder="123-456-7890"
               value={phone}
-              onChange={(e) = aria-label="123-456-7890"> setPhone(e.target.value)}
+              aria-label="123-456-7890" onChange={(e) => setPhone(e.target.value)}
               disabled={loading}
               className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
             />
@@ -152,7 +152,7 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
               type="text"
               placeholder="Your business address"
               value={address}
-              onChange={(e) = aria-label="Your business address"> setAddress(e.target.value)}
+              aria-label="Your business address" onChange={(e) => setAddress(e.target.value)}
               disabled={loading}
               className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
             />

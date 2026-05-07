@@ -892,7 +892,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                         type="number"
                         placeholder="Enter bid amount"
                         value={bidAmount || ''}
-                        onChange={(e) = aria-label="Enter bid amount"> {
+                        aria-label="Enter bid amount" onChange={(e) => {
                           setBidAmount(e.target.value ? parseFloat(e.target.value) : null);
                           setBidError('');
                         }}
