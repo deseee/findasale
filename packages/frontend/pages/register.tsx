@@ -231,7 +231,7 @@ const RegisterPage = () => {
                 onChange={handleChange}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 rounded-t-md focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                 placeholder="Full Name"
-              / aria-label="Full Name">
+              aria-label="Full Name" />
             </div>
             <div>
               <label htmlFor="email-address" className="sr-only">
@@ -247,7 +247,7 @@ const RegisterPage = () => {
                 onChange={handleChange}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                 placeholder="Email address"
-              / aria-label="Email address">
+              aria-label="Email address" />
             </div>
             <div>
               <label htmlFor="dateOfBirth" className="sr-only">
@@ -261,7 +261,7 @@ const RegisterPage = () => {
                 value={formData.dateOfBirth}
                 onChange={handleChange}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
-              / aria-label="Dateofbirth">
+              aria-label="Dateofbirth" />
               {ageError && (
                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">{ageError}</p>
               )}
@@ -281,7 +281,7 @@ const RegisterPage = () => {
                 onChange={handleChange}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                 placeholder="Password (min 8 characters)"
-              / aria-label="Password (min 8 characters)">
+              aria-label="Password (min 8 characters)" />
             </div>
             <div>
               <label htmlFor="confirmPassword" className="sr-only">
@@ -297,7 +297,7 @@ const RegisterPage = () => {
                 onChange={handleChange}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                 placeholder="Confirm password"
-              / aria-label="Confirm password">
+              aria-label="Confirm password" />
             </div>
             <div>
               <label htmlFor="role" className="sr-only">
@@ -339,7 +339,7 @@ const RegisterPage = () => {
                 className="appearance-none block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-md placeholder-warm-400 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm bg-white dark:bg-gray-800 uppercase"
                 placeholder="e.g. ABCD1234"
                 maxLength={12}
-              / aria-label="e.g. ABCD1234">
+              aria-label="e.g. ABCD1234" />
             </div>
           )}
 
@@ -359,7 +359,7 @@ const RegisterPage = () => {
                   onChange={handleChange}
                   className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 rounded-t-md focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                   placeholder="Business Name"
-                / aria-label="Business Name">
+                aria-label="Business Name" />
               </div>
               <div>
                 <label htmlFor="phone" className="sr-only">
@@ -374,7 +374,7 @@ const RegisterPage = () => {
                   onChange={handleChange}
                   className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                   placeholder="Business Phone"
-                / aria-label="Business Phone">
+                aria-label="Business Phone" />
               </div>
               <div>
                 <label htmlFor="businessAddress" className="sr-only">
@@ -389,7 +389,7 @@ const RegisterPage = () => {
                   onChange={handleChange}
                   className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 rounded-b-md focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                   placeholder="Business Address"
-                / aria-label="Business Address">
+                aria-label="Business Address" />
               </div>
             </div>
           )}
