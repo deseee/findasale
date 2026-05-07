@@ -181,14 +181,38 @@ const nextConfig = {
 
   // Static HTML rewrites — serve public/*.html files at clean URLs
   // S651: catch-all /api/:path* proxy → Railway backend.
-  // S660 FIX: Railway proxy MUST be in `fallback` (not flat array / afterFiles).
+  //
+  // S673 PATH C — NextAuth at /api/auth/ + beforeFiles for backend auth routes.
   // Next.js routing order: beforeFiles → filesystem/static → afterFiles → dynamic routes → fallback.
-  // Dynamic API routes like pages/api/auth/[...nextauth].ts are step 6 (dynamic routes).
-  // An afterFiles rewrite runs at step 5 and intercepts BEFORE dynamic API routes — breaking NextAuth.
-  // Using `fallback` ensures all pages/api/* routes (including dynamic catch-alls) are checked first.
+  //
+  // Problem: NextAuth catch-all at pages/api/auth/[...nextauth].ts intercepts ALL /api/auth/* traffic
+  // — including backend routes like /api/auth/refresh, /api/auth/me, /api/auth/logout — because
+  // dynamic routes run before the fallback rewrite.
+  //
+  // Solution: beforeFiles rewrites run BEFORE all filesystem routes (including specific API routes).
+  // Listing each backend auth path in beforeFiles ensures Railway handles them; NextAuth only sees
+  // its own paths (session, csrf, providers, callback, signin, signout, _log, error).
   async rewrites() {
     const railwayApi = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
     return {
+      // beforeFiles: run BEFORE all Next.js filesystem routes (including pages/api/auth/[...nextauth].ts).
+      // Backend auth endpoints must be listed here explicitly so NextAuth never intercepts them.
+      beforeFiles: [
+        { source: '/api/auth/login',               destination: `${railwayApi}/auth/login` },
+        { source: '/api/auth/register',            destination: `${railwayApi}/auth/register` },
+        { source: '/api/auth/logout',              destination: `${railwayApi}/auth/logout` },
+        { source: '/api/auth/refresh',             destination: `${railwayApi}/auth/refresh` },
+        { source: '/api/auth/me',                  destination: `${railwayApi}/auth/me` },
+        { source: '/api/auth/oauth',               destination: `${railwayApi}/auth/oauth` },
+        { source: '/api/auth/oauth-verify-age',    destination: `${railwayApi}/auth/oauth-verify-age` },
+        { source: '/api/auth/forgot-password',     destination: `${railwayApi}/auth/forgot-password` },
+        { source: '/api/auth/reset-password',      destination: `${railwayApi}/auth/reset-password` },
+        { source: '/api/auth/verify-email',        destination: `${railwayApi}/auth/verify-email` },
+        { source: '/api/auth/verify-email/:token', destination: `${railwayApi}/auth/verify-email/:token` },
+        { source: '/api/auth/change-password',     destination: `${railwayApi}/auth/change-password` },
+        { source: '/api/auth/redeem-invite',       destination: `${railwayApi}/auth/redeem-invite` },
+        { source: '/api/auth/resend-verification', destination: `${railwayApi}/auth/resend-verification` },
+      ],
       // afterFiles: static file rewrites (no API involvement)
       afterFiles: [
         // Marketing landing page
@@ -196,8 +220,8 @@ const nextConfig = {
       ],
       // fallback: only reached if no pages/api/* route matched — safe for Railway proxy
       fallback: [
-        // Proxy unmatched /api/* → Railway (fallback ensures all Next.js API routes win first,
-        // including dynamic catch-alls like pages/api/auth/[...nextauth].ts)
+        // Proxy unmatched /api/* → Railway (fallback ensures NextAuth dynamic catch-all runs first
+        // for its own paths: session, csrf, providers, callback, signin, signout, _log, error)
         { source: '/api/:path*', destination: `${railwayApi}/:path*` },
       ],
     };
