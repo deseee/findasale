@@ -87,6 +87,7 @@ export const authOptions: NextAuthOptions = {
 
   pages: {
     signIn: '/login',
+    error: '/login', // NextAuth v4 hardcodes /api/auth/error — redirect errors here instead
   },
 
   secret: process.env.NEXTAUTH_SECRET,
