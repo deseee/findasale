@@ -4,7 +4,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S669 — 7-Lens Audit + Vercel Build Fix + Organizer.stripeOnboarded P0 (COMPLETE — push block provided)**
+**Latest: S670 — P0 Login Bounce Fixed + Chrome Verified (COMPLETE — MCP pushed)**
+
+Diagnosed root cause of persistent login bounce: `NEXT_PUBLIC_API_URL` pointed browser API calls directly to Railway (cross-domain XHR), blocking SameSite=Lax auth cookies and SameSite=Strict CSRF cookie. Fixed in 5 files: proxy routing (api.ts), refreshToken cookie path (authController.ts), clearCookie paths (auth.ts routes), CSRF bypass for /auth/refresh + /auth/logout (csrf.ts), and an infinite 401 loop guard in the response interceptor (api.ts). All pushed via MCP. Login ✅ VERIFIED in Chrome: signed in as user1@example.com (Alice Johnson), landed on /organizer/dashboard, no bounce.
+
+**S670 items shipped:**
+- P0 fix: `packages/frontend/lib/api.ts` — browser baseURL changed from NEXT_PUBLIC_API_URL to `/api` proxy; added guard to prevent 401 interceptor looping on `/auth/refresh` itself
+- P0 fix: `packages/backend/src/controllers/authController.ts` — refreshToken cookie path `/auth/refresh` → `/` in all 4 cookie-setting locations (login, oauthLogin, register, refresh)
+- P0 fix: `packages/backend/src/routes/auth.ts` — clearCookie path for refreshToken fixed to `/` in logout + refresh error handler; `/auth/refresh` + `/auth/logout` added to CSRF bypass
+- P0 fix: `packages/backend/src/middleware/csrf.ts` — `/auth/refresh` and `/auth/logout` added to CSRF skip list
+
+**Note:** Existing users with a stale refreshToken scoped to old path `/auth/refresh` will need to log in fresh once — this is expected and correct.
+
+**Previous: S669 — 7-Lens Audit + Vercel Build Fix + Organizer.stripeOnboarded P0 (COMPLETE — pushed)**
 
 7 parallel audit lenses run (mobile/PWA, performance, shopper competitive, shopper SEO, error states, pricing funnel, email). P0 login crash diagnosed from Railway logs and fixed via migration. Vercel build ERROR from S668 diagnosed and fixed. Chrome authenticated audit UNVERIFIED — auth cookie mechanism blocks programmatic login in Chrome MCP.
 
@@ -235,8 +247,7 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| Login flow end-to-end | S669 Vercel build was ERROR during session; build fix pushed at wrap | After S669 push+deploy: login as user1@example.com / Seedy2025! — should reach dashboard. Two P0s now fixed: login loop (S668) + Organizer.stripeOnboarded crash (S669) | S669 |
-| JWT cookie migration | Code shipped S667 but not Chrome-tested | Login in browser → verify cookies in DevTools Application tab (should see httpOnly accessToken) | S664/S667 |
+| JWT httpOnly cookies | ✅ VERIFIED S670 — login worked through proxy, cookies set correctly | — | S664/S667 |
 | COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error | S664 |
 | Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` | S664 |
 | Modal focus traps (34 modals) | Code shipped but not browser-tested | Open any modal, Tab through — focus should stay inside | S664 |
@@ -250,9 +261,15 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 ---
 
-## Recent Sessions (S665–S669)
+## Recent Sessions (S666–S670)
 
-### S669 — 7-Lens Audit + Build Fix + Organizer.stripeOnboarded P0 (COMPLETE — push block provided)
+### S670 — P0 Login Bounce Fixed + Chrome Verified (COMPLETE — MCP pushed)
+
+Root cause of login bounce: browser API calls bypassed the Next.js proxy, going cross-domain to Railway and breaking SameSite cookie restrictions. Fixed in 5 files across frontend + backend. Also patched an infinite 401 loop in the response interceptor (api.post('/auth/refresh') was triggering its own interceptor, flooding the refresh endpoint with 90+ calls per page load — now guarded). All 5 files pushed to GitHub via MCP. Vercel deployed and Chrome-tested: login as user1@example.com → /organizer/dashboard ✅ no bounce.
+
+---
+
+### S669 — 7-Lens Audit + Build Fix + Organizer.stripeOnboarded P0 (COMPLETE — pushed)
 
 7-lens parallel audit (mobile/PWA, performance, shopper competitive, shopper SEO, error states, pricing funnel, email). P0 discovered from Railway logs: `Organizer.stripeOnboarded` column missing from production DB — was crashing every login. Migration created + deployed. Vercel build ERROR (S668 SocialProofBadge wiring introduced `ItemSearchResult` type mismatch) — fixed in `ItemSearchResults.tsx`. Chrome authenticated audit fully blocked: auth cookie flow (httpOnly cross-domain) cannot be established via Chrome MCP's programmatic fetch approach. All authenticated flows remain UNVERIFIED. Audit findings documented above; dev dispatch is S670 first action.
 
@@ -294,28 +311,30 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S670
+## Next Session — S671
 
-**Patrick actions before S670:**
-1. Run S669 push block:
+**Patrick actions before S671:**
+1. Pull the S670 MCP commits:
 ```powershell
-git add packages/frontend/components/ItemSearchResults.tsx
-git add packages/database/prisma/migrations/20260507000003_add_organizer_stripe_onboarded/migration.sql
-git commit -m "fix(build+migration): ItemSearchResults type cast for UnifiedItemCardItem, add Organizer.stripeOnboarded migration"
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git pull
+```
+2. Then add STATE.md + dashboard updates:
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "docs: S670 wrap — login P0 fixed, Chrome verified"
 .\push.ps1
 ```
-2. Migration `20260507000003` already deployed to DB (ran `prisma migrate deploy` in S669) — no action needed
 3. Add `MAILERLITE_ORGANIZERS_GROUP_ID` env var in Railway (still pending from S668)
-4. Verify Vercel goes green after push
 
-**S670 priorities (in order):**
-1. **Smoke test login** — after Vercel goes green, login as user1@example.com / Seedy2025! in Chrome MCP. Should reach dashboard. Both P0s (login loop + stripeOnboarded) are now fixed.
-2. **Chrome authenticated audit** — once logged in: organizer dashboard flow, rapid capture, pricing/upgrade funnel (FREE→SIMPLE→PRO→TEAMS walkthrough). These have been UNVERIFIED for 2 sessions.
-3. **Dispatch S669 audit P0/P1 fixes** — 5 items ready to dispatch to findasale-dev in parallel:
+**S671 priorities (in order):**
+1. **Chrome authenticated audit** — login is now fixed; walk the organizer dashboard, rapid capture, pricing/upgrade funnel (FREE→SIMPLE→PRO→TEAMS). These have been UNVERIFIED for 3 sessions.
+2. **Dispatch S669 audit P0/P1 fixes** — 5 items ready to dispatch to findasale-dev in parallel:
    - P0: `SaleCard.tsx` eager loading for above-fold cards (LCP)
    - P0: Product JSON-LD on `/items/[id]` pages
    - P1: Create `public/offline.html` (sw.js pre-caches it but file is missing)
    - P1: City page noindex logic (currently silently noindexes empty city pages)
    - P1: Email template — remove "estate sale" banned terms (5×), fix unsubscribe URL PII (`?email=` param)
-4. Re-run error/empty states and shopper competitive audit lenses (lost to context in S669)
-5. Advance a roadmap item if context allows
+3. Re-run error/empty states and shopper competitive audit lenses (lost to context in S669)
+4. Advance a roadmap item if context allows
