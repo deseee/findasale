@@ -16,13 +16,19 @@
  *   this conflict. The S660 fallback rewrite keeps backend /api/auth/* routes
  *   correctly proxied to Railway.
  *
- * WHY redirect_uri OVERRIDE:
- *   NextAuth v4 hardcodes /api/auth/ in callback URLs regardless of handler
- *   location. Explicit redirect_uri in provider config forces the correct path.
- *   Google/Facebook Cloud Console must have /api/oauth/callback/[provider] registered.
+ * WHY NEXTAUTH_URL INCLUDES /api/oauth (S672 fix):
+ *   NextAuth v4 derives its internal basePath from NEXTAUTH_URL.pathname.
+ *   With NEXTAUTH_URL=https://finda.sale (no path), basePath defaults to
+ *   /api/auth — so even though the handler file lives at /api/oauth/, NextAuth
+ *   was building the token-exchange redirect_uri as /api/auth/callback/google,
+ *   mismatching the /api/oauth/callback/google sent at authorization. Google
+ *   rejected token exchange → OAUTH_CALLBACK_ERROR (S660/S667/S671 chain).
+ *   Setting NEXTAUTH_URL=https://finda.sale/api/oauth fixes basePath at the
+ *   source — both authorization and token-exchange redirect_uri now match,
+ *   and explicit redirect_uri overrides are no longer needed.
  *
  * Required env vars (Vercel + .env.local):
- *   NEXTAUTH_SECRET, NEXTAUTH_URL=https://finda.sale
+ *   NEXTAUTH_SECRET, NEXTAUTH_URL=https://finda.sale/api/oauth
  *   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
  *   FACEBOOK_CLIENT_ID, FACEBOOK_CLIENT_SECRET
  */
@@ -37,22 +43,10 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId:     process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      // NextAuth v4 hardcodes /api/auth/ in callback URLs — override required.
-      authorization: {
-        params: {
-          redirect_uri: `${process.env.NEXTAUTH_URL}/api/oauth/callback/google`,
-        },
-      },
     }),
     FacebookProvider({
       clientId:     process.env.FACEBOOK_CLIENT_ID!,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET!,
-      // Same override required for Facebook.
-      authorization: {
-        params: {
-          redirect_uri: `${process.env.NEXTAUTH_URL}/api/oauth/callback/facebook`,
-        },
-      },
     }),
   ],
 
