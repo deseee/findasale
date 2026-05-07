@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 Confirmed via `GET /api/oauth/providers` and live OAuth probe that NextAuth at runtime is still using `/api/auth/` as basePath despite the handler living at `/api/oauth/[...nextauth].ts`. Patrick changed Vercel env `NEXTAUTH_URL` from `https://finda.sale` to `https://finda.sale/api/oauth` (Production scope), and S672 commit `b98b3d8` stripped the redirect_uri overrides. Force-rebuild without cache did not change behavior — Google sends users back to `/api/auth/callback/google` which has no handler ("Cannot GET"). Conclusion: NextAuth v4 is not honoring `NEXTAUTH_URL.pathname` in this environment. Stop fighting it.
 
-**Additional finding from Vercel env list:** `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_SECRET` all show "Needs Attention" badges — likely empty or invalid in Production scope. Verify these before next-session OAuth test.
+**Vercel env "Needs Attention" badges — clarified:** `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_SECRET` all show "Needs Attention" badges. These are NOT empty/invalid — the badge fires because Vercel detects that values that look like secrets are stored as plain (visible) env vars. The values are accessible to anyone with Vercel project access. Recommended action: rotate each secret at the source (Google Console, Facebook Developer, generate new NEXTAUTH_SECRET), then re-add to Vercel as **Sensitive** type. Tradeoff to note: Vercel Sensitive env vars are write-only and cannot be read back through the UI — but they ARE injected into Production builds at build/runtime exactly as plain vars are. Marking Sensitive does NOT break Production usage. Action: rotate + mark Sensitive before next OAuth session.
 
 **S672 commit shipped (b98b3d8):** stripped `authorization.params.redirect_uri` overrides from `pages/api/oauth/[...nextauth].ts` — diff currently live but irrelevant since the basePath approach didn't work.
 
@@ -413,6 +413,8 @@ git commit -m "docs: S671 wrap — OAuth revert + S669 audit P0/P1 batch shipped
 1. **P0 — Verify OAuth login works** after Railway restart clears rate limit. Test Google in incognito. If still broken, run full OAuth diagnostic (check Vercel function logs for `/api/oauth/callback/google`).
 
 2. **OAuth diagnostic prep (if still broken):** Check: (a) Vercel env `NEXT_PUBLIC_API_URL` correct? (b) Railway backend `/auth/oauth` accepting OAuth payload? (c) Railway logs from NextAuth JWT callback?
+
+2b. **Vercel secrets hygiene (low-risk, do before OAuth test):** Rotate `NEXTAUTH_SECRET` (generate new), `GOOGLE_CLIENT_SECRET` (Google Console → new secret), `FACEBOOK_CLIENT_SECRET` (Facebook Developer → new secret). Re-add each in Vercel as **Sensitive** type. This does NOT break Production — Sensitive vars inject at build/runtime same as plain. Clears the "Needs Attention" badges and removes secret values from plain-text Vercel view.
 
 3. **Remaining S669 audit item (not in the 16-file batch):**
    - P0: Product JSON-LD on `/items/[id]` pages — structured data still missing
