@@ -1568,7 +1568,7 @@ const AddItemsDetailPage = () => {
                         className="flex-1 px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
                         placeholder="Item title"
                         autoFocus
-                      />
+                       aria-label="Item title" />
                       {voiceSupported && user?.organizerTier === 'PRO' && (
                         <button
                           type="button"
@@ -1597,7 +1597,7 @@ const AddItemsDetailPage = () => {
                         onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                         className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
                         placeholder="0.00"
-                      />
+                       aria-label="0.00" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Category</label>
@@ -1651,7 +1651,7 @@ const AddItemsDetailPage = () => {
                           onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                           className="w-full px-3 py-1.5 border border-amber-300 dark:border-amber-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
                           placeholder="Starting price"
-                        />
+                         aria-label="Starting price" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-amber-900 dark:text-amber-200 mb-1">Daily Drop ($)</label>
@@ -1662,7 +1662,7 @@ const AddItemsDetailPage = () => {
                           onChange={(e) => setFormData({ ...formData, reverseDailyDrop: e.target.value })}
                           className="w-full px-3 py-1.5 border border-amber-300 dark:border-amber-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
                           placeholder="Drop amount"
-                        />
+                         aria-label="Drop amount" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-amber-900 dark:text-amber-200 mb-1">Floor Price ($)</label>
@@ -1673,7 +1673,7 @@ const AddItemsDetailPage = () => {
                           onChange={(e) => setFormData({ ...formData, reverseFloorPrice: e.target.value })}
                           className="w-full px-3 py-1.5 border border-amber-300 dark:border-amber-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
                           placeholder="Minimum price"
-                        />
+                         aria-label="Minimum price" />
                       </div>
                     </div>
                   )}
@@ -1690,7 +1690,7 @@ const AddItemsDetailPage = () => {
                           onChange={(e) => setFormData({ ...formData, startingBid: e.target.value })}
                           className="w-full px-3 py-1.5 border border-amber-300 dark:border-amber-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
                           placeholder="Starting bid"
-                        />
+                         aria-label="Starting bid" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-amber-900 dark:text-amber-200 mb-1">Reserve Price ($)</label>
@@ -1701,7 +1701,7 @@ const AddItemsDetailPage = () => {
                           onChange={(e) => setFormData({ ...formData, reservePrice: e.target.value })}
                           className="w-full px-3 py-1.5 border border-amber-300 dark:border-amber-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
                           placeholder="Reserve price (optional)"
-                        />
+                         aria-label="Reserve price (optional)" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-amber-900 dark:text-amber-200 mb-1">Auction End Time</label>
@@ -1768,7 +1768,7 @@ const AddItemsDetailPage = () => {
                           }}
                           placeholder="Add tags (press Enter)"
                           className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
-                        />
+                         aria-label="Add tags (press Enter)" />
                       </div>
                       <VoiceTagButton
                         onExtraction={(result) => {
@@ -2068,7 +2068,7 @@ const AddItemsDetailPage = () => {
                       placeholder="$ Price"
                       step="0.01"
                       className="w-20 px-2 py-1 border border-amber-400 rounded text-xs focus:outline-none focus:ring-2 focus:ring-white bg-white text-amber-900 placeholder-amber-400"
-                    />
+                     aria-label="$ Price" />
                     <button
                       onClick={() => { if (bulkPrice) handleBulkOperation('price', parseFloat(bulkPrice)); }}
                       disabled={bulkUpdateMutation.isPending || !bulkPrice}
@@ -2239,7 +2239,7 @@ const AddItemsDetailPage = () => {
                                 onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, price: e.target.value } }))}
                                 className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
                                 placeholder="0.00"
-                              />
+                               aria-label="0.00" />
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Category</label>

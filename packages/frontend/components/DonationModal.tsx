@@ -190,7 +190,7 @@ export default function DonationModal({
                   onChange={(e) => setCharityName(e.target.value)}
                   placeholder="e.g., Red Cross, Goodwill, Salvation Army"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                 aria-label="e.g., Red Cross, Goodwill, Salvation Army" />
               </div>
 
               <div>
@@ -203,7 +203,7 @@ export default function DonationModal({
                   onChange={(e) => setCharityEin(e.target.value)}
                   placeholder="e.g., 12-3456789"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                 aria-label="e.g., 12-3456789" />
               </div>
 
               <div>
@@ -216,7 +216,7 @@ export default function DonationModal({
                   onChange={(e) => setCharityAddress(e.target.value)}
                   placeholder="Street address"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                 aria-label="Street address" />
               </div>
 
               <div>

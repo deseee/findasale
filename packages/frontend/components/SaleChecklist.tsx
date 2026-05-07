@@ -264,7 +264,7 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
                     }}
                     placeholder="Add custom task..."
                     className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-gray-400 dark:placeholder-gray-500"
-                  />
+                   aria-label="Add custom task..." />
                   <button
                     onClick={() => handleAddItem(phase)}
                     className="px-4 py-2 bg-amber-500 dark:bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-600 dark:hover:bg-amber-700 transition-colors"

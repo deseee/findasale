@@ -142,7 +142,7 @@ export default function ClientPayoutPanel({
               onChange={(e) => setForm({ ...form, clientEmail: e.target.value })}
               placeholder="email@example.com"
               className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            />
+             aria-label="email@example.com" />
           </div>
           <div>
             <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Phone</label>
@@ -152,7 +152,7 @@ export default function ClientPayoutPanel({
               onChange={(e) => setForm({ ...form, clientPhone: e.target.value })}
               placeholder="(555) 123-4567"
               className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            />
+             aria-label="(555) 123-4567" />
           </div>
         </div>
 

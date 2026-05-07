@@ -84,7 +84,7 @@ const ContactPage = () => {
                 type="text"
                 id="name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) = aria-label="Name"> setName(e.target.value)}
                 required
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               />
@@ -98,7 +98,7 @@ const ContactPage = () => {
                 type="email"
                 id="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) = aria-label="Email"> setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               />
@@ -112,7 +112,7 @@ const ContactPage = () => {
                 type="text"
                 id="subject"
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(e) = aria-label="Subject"> setSubject(e.target.value)}
                 required
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               />

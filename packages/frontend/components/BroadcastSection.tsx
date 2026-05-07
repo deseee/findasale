@@ -85,7 +85,7 @@ const BroadcastSection: React.FC<BroadcastSectionProps> = ({ tier }) => {
             maxLength={100}
             placeholder="e.g., New items just arrived!"
             className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-          />
+           aria-label="e.g., New items just arrived!" />
           <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">
             {subject.length}/100 characters
           </p>

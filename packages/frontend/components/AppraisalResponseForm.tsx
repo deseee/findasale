@@ -113,7 +113,7 @@ const AppraisalResponseForm: React.FC<AppraisalResponseFormProps> = ({
             placeholder="0.00"
             className="w-full border border-warm-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-warm-900 dark:text-white text-sm"
             required
-          />
+           aria-label="0.00" />
         </div>
         <div>
           <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
@@ -130,7 +130,7 @@ const AppraisalResponseForm: React.FC<AppraisalResponseFormProps> = ({
             placeholder="0.00"
             className="w-full border border-warm-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-warm-900 dark:text-white text-sm"
             required
-          />
+           aria-label="0.00" />
         </div>
       </div>
 

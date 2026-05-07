@@ -111,7 +111,7 @@ Example Item 3,Another sample item,100.00,,,,SOLD,`;
               onChange={handleFileChange}
               className="hidden"
               id="csv-upload"
-            />
+             aria-label="Csv Upload" />
             <label htmlFor="csv-upload" className="cursor-pointer">
               <div className="flex flex-col items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-warm-400 dark:text-warm-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

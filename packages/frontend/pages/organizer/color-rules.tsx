@@ -330,7 +330,7 @@ const ColorRulesPage = () => {
                       }
                       placeholder="e.g., #EF4444 or red"
                       className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
-                    />
+                     aria-label="e.g., #EF4444 or red" />
                     {formData.tagColor && (
                       <div
                         className="w-10 h-10 rounded-lg border-2 border-warm-300 dark:border-gray-500 flex-shrink-0"
@@ -357,7 +357,7 @@ const ColorRulesPage = () => {
                     }
                     placeholder="e.g., 25% Off — Red Tag"
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                  />
+                   aria-label="e.g., 25% Off — Red Tag" />
                 </div>
 
                 {/* Discount Percent */}
@@ -375,7 +375,7 @@ const ColorRulesPage = () => {
                     }
                     placeholder="e.g., 25"
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                  />
+                   aria-label="e.g., 25" />
                 </div>
 
                 {/* Active From */}

@@ -462,7 +462,7 @@ const Support: React.FC = () => {
                 type="text"
                 placeholder="Search FAQ..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) = aria-label="Search FAQ..."> setSearchQuery(e.target.value)}
                 className={styles.searchInput}
               />
             </div>
@@ -546,7 +546,7 @@ const Support: React.FC = () => {
                           placeholder="Type your question..."
                           disabled={chatLoading}
                           className={styles.chatInput}
-                        />
+                         aria-label="Type your question..." />
                         <button
                           type="submit"
                           disabled={chatLoading || !chatInput.trim()}

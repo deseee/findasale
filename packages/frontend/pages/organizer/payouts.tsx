@@ -346,7 +346,7 @@ const OrganizerPayoutsPage = () => {
                     onChange={(e) => setPayoutAmount(e.target.value)}
                     placeholder="0.00"
                     className="w-full pl-7 pr-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                   aria-label="0.00" />
                 </div>
                 {balance && (
                   <button

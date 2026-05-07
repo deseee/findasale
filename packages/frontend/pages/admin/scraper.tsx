@@ -210,7 +210,7 @@ export default function ScraperAdminPage() {
             onChange={(e) => setSelectedMetro(e.target.value)}
             className="px-4 py-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white flex-1"
             placeholder="Metro (e.g., Grand Rapids, MI)"
-          />
+           aria-label="Metro (e.g., Grand Rapids, MI)" />
           <button
             onClick={handleTriggerScrape}
             disabled={triggering}

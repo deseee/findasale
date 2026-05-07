@@ -78,7 +78,7 @@ export function buildEmail(options: EmailOptions): string {
           <tr>
             <td style="background-color: ${accentColor}; padding: 28px 32px; text-align: center;">
               <div style="font-family: 'Fraunces', serif; font-size: 28px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">FindA.Sale</div>
-              <p style="margin: 8px 0 0; font-size: 14px; color: rgba(255, 255, 255, 0.85); font-weight: 500;">Estate Sales, Simplified</p>
+              <p style="margin: 8px 0 0; font-size: 14px; color: rgba(255, 255, 255, 0.85); font-weight: 500;">Find All The Sales</p>
             </td>
           </tr>
 

@@ -144,7 +144,7 @@ const PhotoOpsPage: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
                 placeholder="e.g., Front Porch Photo Spot"
-              />
+               aria-label="e.g., Front Porch Photo Spot" />
             </div>
 
             <div className="mb-4">

@@ -314,7 +314,7 @@ const AppraisalsPage = () => {
                     placeholder="e.g., Victorian Mahogany Chair"
                     className="w-full border border-warm-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-warm-900 dark:text-white text-sm"
                     required
-                  />
+                   aria-label="e.g., Victorian Mahogany Chair" />
                 </div>
 
                 {/* Description */}

@@ -101,7 +101,7 @@ const ResetPasswordPage = () => {
                     type="password"
                     id="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) = aria-label="Password"> setPassword(e.target.value)}
                     required
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                   />
@@ -115,7 +115,7 @@ const ResetPasswordPage = () => {
                     type="password"
                     id="confirmPassword"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) = aria-label="Confirmpassword"> setConfirmPassword(e.target.value)}
                     required
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                   />
