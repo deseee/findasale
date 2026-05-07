@@ -396,7 +396,7 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| WCAG skip link re-verify | Layout.tsx fix in Patrick pushblock — not yet deployed | After Patrick pushes Layout.tsx, open finda.sale, Tab once, confirm yellow "Skip to main content" appears above header | S681 |
+| WCAG skip link re-verify | ✅ S682 VERIFIED — Tab once on finda.sale, amber "Skip to main content" button appears overlaying header top-left, disappears when focus moves. z-[100] fix working correctly. | — | S681 |
 | JWT httpOnly cookies | ✅ VERIFIED S670 — login worked through proxy, cookies set correctly | — | S664/S667 |
 | COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error | S664 |
 | Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` | S664 |
