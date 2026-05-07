@@ -697,7 +697,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       {/* Skip to main content — keyboard/screen reader accessibility */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-amber-600 focus:text-white focus:rounded-md focus:font-medium"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-amber-600 focus:text-white focus:rounded-md focus:font-medium"
       >
         Skip to main content
       </a>
@@ -1715,9 +1715,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
           Desktop: pt-16 for fixed header (64px)
       */}
       <div
-        id="main-content"
         className="flex-grow pt-[92px] md:pt-16 pb-15 md:pb-0"
-        tabIndex={-1}
       >
         {/* Feature #75: Tier Lapse Banner — hard gate for past_due organizers */}
         {isClient && isOrganizer && isLapsed && (
