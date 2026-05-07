@@ -62,7 +62,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // Logging middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((req: Request, _res: Response, next: NextFunction) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${req.method} ${req.path}`);
   next();
@@ -72,7 +72,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Health Check
 // ──────────────────────────────────────────────────────────────
 
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     uptime: process.uptime(),
@@ -269,7 +269,7 @@ app.post('/messages', async (req: Request, res: Response) => {
 // Error Handling
 // ──────────────────────────────────────────────────────────────
 
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[Error]', err);
   res.status(500).json({
     error: 'Internal Server Error',
