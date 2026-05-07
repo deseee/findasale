@@ -4,7 +4,27 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S674 — Post-S673 Bug Fixes: OAuth redirect, incognito loop, empty homepage, frozen modal (COMPLETE)**
+**Latest: S675 — Sentry P0 Sale Indexes + Enrichment Guard + user11 DB Fix (COMPLETE — push needed)**
+
+Three issues resolved:
+
+1. **Sentry P0: Slow Sale query (1391–1656ms escalating)** — Missing indexes on public feed. Added 4 indexes to Sale model + migration `20260507000004_sale_feed_indexes`: `[status, endDate]`, `[city, status, endDate]`, `[status, startDate]`, `[sourceUrl]`. Migration not yet deployed to Railway — in push block below.
+
+2. **user11 organizer websiteUrl contaminated** — Enrichment backfill (`internalEnrichmentController.ts`) targets `isUnmanagedListing: true` organizers. user11 is seeded with that flag for #361 claim-listing testing. Backfill found "Love Inc of Muskegon" as a Google Places false-positive match for "Sunrise Consignment & Collectibles" and overwrote the fake URL. Reset manually via SQL (`website` = `https://organizer11.example.com`, `googlePlaceId` = NULL). Fixed forward: added `@example.com` email guard in both `internalEnrichmentController.ts` (query-level filter) and `enrichment.ts` (service-level bail-out).
+
+3. **schema.prisma truncated mid-file** — Dev agent's edit corrupted the file at line 4549 (`OutreachAuditLog` model). Restored from GitHub backup using Python merge: kept local lines 1–842 (Sale model with new indexes) + GitHub tail from line 843 onward. Prisma validate ✅.
+
+**S675 files changed:**
+- `packages/database/prisma/schema.prisma` — 4 new Sale @@index lines (838–841) + restored truncated tail
+- `packages/database/prisma/migrations/20260507000004_sale_feed_indexes/migration.sql` — NEW
+- `packages/backend/src/controllers/internalEnrichmentController.ts` — @example.com email filter in backfill query
+- `packages/backend/src/services/scraper/enrichment.ts` — @example.com bail-out guard in enrichOrganizer()
+
+**TS check:** ✅ Zero errors (backend). Migration NOT yet deployed. Push block below.
+
+---
+
+**Previous: S674 — Post-S673 Bug Fixes: OAuth redirect, incognito loop, empty homepage, frozen modal (COMPLETE)**
 
 S673 shipped the OAuth architecture but left 3 live bugs and a 4th was found during S674. All 4 fixed:
 

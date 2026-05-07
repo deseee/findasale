@@ -1,71 +1,54 @@
-# Patrick's Dashboard — S674 Wrap
+# Patrick's Dashboard — S675 Wrap
 
 ---
 
-## ⚠️ Action Required — Wrap Push
+## ⚠️ Action Required — Deploy Migration First, Then Push
 
+### Step 1 — Deploy the Sale indexes migration to Railway
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+### Step 2 — Push all S675 changes
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/_app.tsx
-git add packages/frontend/hooks/useRankUp.ts
-git add packages/frontend/pages/index.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260507000004_sale_feed_indexes/migration.sql
+git add packages/backend/src/controllers/internalEnrichmentController.ts
+git add packages/backend/src/services/scraper/enrichment.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: OAuth redirect, incognito 401 loop, empty homepage feed, onboarding modal conflict
+git commit -m "perf: Sale feed indexes + enrichment @example.com guard
 
-- OAuthBridge: role-based redirect after token exchange (organizers → /organizer/dashboard)
-- useRankUp: gate useXpProfile behind !!user to stop unauthenticated 401 redirect loop
-- index.tsx: remove initialData from feed query (getStaticProps returns null at build time)
-- dashboard.tsx: suppress OnboardingWizard when dashboardState=new (FocusTrap conflict fix)"
+- Add 4 missing Sale indexes: [status,endDate], [city,status,endDate], [status,startDate], [sourceUrl]
+- Fix Sentry P0 slow query (1391-1656ms) on public sale feed
+- Block enrichment backfill from overwriting @example.com seed accounts
+- Guard in both internalEnrichmentController (query filter) and enrichment.ts (bail-out)"
 .\push.ps1
 ```
 
-If S673 files haven't been pushed yet (api/auth/[...nextauth].ts, lib/api.ts, Dockerfile):
-```powershell
-git add packages/frontend/pages/api/auth/[...nextauth].ts
-git add packages/frontend/lib/api.ts
-git add packages/backend/Dockerfile.production
-git commit -m "fix(auth): browser-side OAuth cookie exchange + Path C + S673 wrap"
-.\push.ps1
-```
-
-### Also still pending
-- Add `MAILERLITE_ORGANIZERS_GROUP_ID` env var in Railway (pending since S668)
-
 ---
 
-## 📋 What happened in S674
+## Current State
 
-| Bug | Root Cause | Fix |
-|---|---|---|
-| Google OAuth → login screen | OAuthBridge never redirected after token exchange | Added `router.replace()` with role-based destination |
-| Incognito homepage → /login | `useXpProfile()` fired unauthenticated → 401 → interceptor redirect | `useXpProfile(!!user)` in `useRankUp.ts` |
-| Homepage: "No sales yet" | `getStaticProps` returns null at build time → `initialData:null` skips fetch | Removed `initialData` from feed useQuery |
-| Modal won't close (Skip/Verify Email frozen) | `OnboardingWizard` + `OrganizerOnboardingModal` both rendered; FocusTrap in underlying modal locked wizard buttons | Added `dashboardState !== 'new'` guard to wizard condition |
+| Area | Status |
+|------|--------|
+| Google OAuth | ⚠️ Still broken (S673–S674 architecture shipped, Patrick confirmed still failing at wrap S673) |
+| Login (email/password) | ✅ Working |
+| Homepage feed | ✅ Fixed S674 |
+| Sale DB query performance | ✅ Fixed S675 (pending migration deploy) |
+| user11 test data | ✅ Reset manually |
+| Enrichment guard | ✅ Shipped S675 |
+| Vercel build | ✅ Green |
+| Railway backend | ✅ Green |
 
----
-
-## 🔜 S675 priorities
-
-1. **Verify S674 fixes in Chrome** — confirm OAuth redirect, homepage sales, incognito, modal close all work
-2. **P0: Product JSON-LD on `/items/[id]`** (S669 audit item, still open)
-3. **Add `MAILERLITE_ORGANIZERS_GROUP_ID`** in Railway
-4. **Chrome authenticated audit** — organizer dashboard, rapid capture, pricing funnel
-
----
-
-## 📊 Build status
-
-| Layer | Status |
-|---|---|
-| Railway (backend) | ✅ Green |
-| Vercel (frontend) | ✅ Green |
-| Email/password login | ✅ VERIFIED in Chrome S670 |
-| Google OAuth | ⚠️ Fix shipped S674, needs Chrome verification |
-| Homepage (unauthenticated) | ⚠️ Feed fix shipped S674, needs Chrome verification |
-| Incognito redirect loop | ⚠️ Fix shipped S674, needs Chrome verification |
-| Organizer onboarding modal | ⚠️ Fix shipped S674, needs Chrome verification |
-| LCP / PWA offline.html | ✅ Fixed + deployed |
-| Email compliance | ✅ Fixed + deployed |
-| MailerLite organizer enrollment | ⚠️ Needs `MAILERLITE_ORGANIZERS_GROUP_ID` in Railway |
+## Outstanding Audit Items (from S669)
+- ❌ P0: Item pages missing Product JSON-LD structured data
+- ❌ P0: SaleCard above-fold images using `loading="lazy"` (LCP hit)
+- ❌ P1: PWA offline.html missing (sw.js pre-caches it but file doesn't exist)
+- ❌ P1: City pages silently noindex when empty
+- ❌ P1: Email CAN-SPAM gaps + "estate sale" banned term in 5 templates
+- ❌ P1: Unsubscribe links expose email as URL parameter (PII leak)

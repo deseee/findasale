@@ -48,11 +48,20 @@ export async function enrichOrganizer(
         esnCompanyPageUrl: true,
         googleRating: true,
         googleRatingCount: true,
+        user: {
+          select: { email: true }
+        }
       },
     });
 
     if (!organizer) {
       console.warn(`[Enrichment] Organizer not found: ${organizerId}`);
+      return;
+    }
+
+    // Skip test/seed accounts to prevent overwriting with real Google Places data
+    if (organizer.user?.email?.endsWith('@example.com')) {
+      if (DEBUG) console.info(`[Enrichment] Skipping test account ${organizerId} (@example.com)`);
       return;
     }
 
