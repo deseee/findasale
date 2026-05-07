@@ -599,7 +599,7 @@ const EditSalePage = () => {
                 value={formData.title}
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-              />
+              / aria-label="Title">
             </div>
 
             <div>
@@ -660,7 +660,7 @@ const EditSalePage = () => {
                       value={formData.startDate}
                       onChange={handleChange}
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                    />
+                    / aria-label="Startdate">
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Date</label>
@@ -670,7 +670,7 @@ const EditSalePage = () => {
                       value={formData.endDate}
                       onChange={handleChange}
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                    />
+                    / aria-label="Enddate">
                   </div>
                 </div>
 
@@ -713,7 +713,7 @@ const EditSalePage = () => {
                 value={formData.address}
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-              />
+              / aria-label="Address">
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -725,7 +725,7 @@ const EditSalePage = () => {
                   value={formData.city}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                />
+                / aria-label="City">
               </div>
               <div>
                 <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">State</label>
@@ -735,7 +735,7 @@ const EditSalePage = () => {
                   value={formData.state}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                />
+                / aria-label="State">
               </div>
               <div>
                 <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">ZIP</label>
@@ -745,7 +745,7 @@ const EditSalePage = () => {
                   value={formData.zip}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                />
+                / aria-label="Zip">
               </div>
             </div>
 
@@ -764,7 +764,7 @@ const EditSalePage = () => {
                 placeholder="Start typing or select..."
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
                 autoComplete="off"
-              />
+              / aria-label="Start typing or select...">
               <datalist id="neighborhood-list">
                 <option value="Downtown" />
                 <option value="Eastown" />
@@ -1021,7 +1021,7 @@ const EditSalePage = () => {
                       onChange={handleMarkdownFloorChange}
                       placeholder="e.g., 5.00 (optional)"
                       className="w-full max-w-xs px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                    />
+                    / aria-label="e.g., 5.00 (optional)">
                     <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">
                       Items will never be discounted below this price
                     </p>

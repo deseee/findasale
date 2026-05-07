@@ -399,7 +399,7 @@ export default function ShopperBountiesPage() {
                     placeholder="What are you looking for?"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                     required
-                  />
+                  / aria-label="What are you looking for?">
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -445,7 +445,7 @@ export default function ShopperBountiesPage() {
                   onChange={handleInputChange}
                   placeholder="https://example.com/photo.jpg or link to similar item"
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-                />
+                / aria-label="https://example.com/photo.jpg or link to similar item">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Optional: Link to a photo or reference item to help organizers understand what you're looking for
                 </p>
@@ -465,7 +465,7 @@ export default function ShopperBountiesPage() {
                     step="0.01"
                     min="0"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                  />
+                  / aria-label="0.00">
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -480,7 +480,7 @@ export default function ShopperBountiesPage() {
                     step="5"
                     min="5"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                  />
+                  / aria-label="25">
                 </div>
               </div>
 
@@ -498,7 +498,7 @@ export default function ShopperBountiesPage() {
                     step="10"
                     min="50"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                  />
+                  / aria-label="50">
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 mb-2">
                     Minimum 50 XP. Organizers earn this as a reward if they find your item
                   </p>

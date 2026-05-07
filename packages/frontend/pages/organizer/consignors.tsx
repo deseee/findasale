@@ -384,7 +384,7 @@ const ConsignorsPage: React.FC = () => {
                   onChange={handleFormChange}
                   className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                   required
-                />
+                / aria-label="Name">
               </div>
 
               <div className="mb-4">
@@ -397,7 +397,7 @@ const ConsignorsPage: React.FC = () => {
                   value={formData.email}
                   onChange={handleFormChange}
                   className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                />
+                / aria-label="Email">
               </div>
 
               <div className="mb-4">
@@ -410,7 +410,7 @@ const ConsignorsPage: React.FC = () => {
                   value={formData.phone}
                   onChange={handleFormChange}
                   className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                />
+                / aria-label="Phone">
               </div>
 
               <div className="mb-4">
@@ -427,7 +427,7 @@ const ConsignorsPage: React.FC = () => {
                   onChange={handleFormChange}
                   className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                   required
-                />
+                / aria-label="Commissionrate">
                 <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                   Percentage of sold item price paid to consignor
                 </p>

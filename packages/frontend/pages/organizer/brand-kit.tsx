@@ -216,7 +216,7 @@ const BrandKitPage = () => {
                       onChange={handleInputChange}
                       placeholder="https://facebook.com/yourpage"
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
-                    />
+                    / aria-label="https://facebook.com/yourpage">
                   </div>
 
                   <div>
@@ -228,7 +228,7 @@ const BrandKitPage = () => {
                       onChange={handleInputChange}
                       placeholder="https://instagram.com/yourprofile"
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
-                    />
+                    / aria-label="https://instagram.com/yourprofile">
                   </div>
 
                   <div>
@@ -240,7 +240,7 @@ const BrandKitPage = () => {
                       onChange={handleInputChange}
                       placeholder="https://etsy.com/shop/yourshop"
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
-                    />
+                    / aria-label="https://etsy.com/shop/yourshop">
                   </div>
                 </div>
               </div>
@@ -261,7 +261,7 @@ const BrandKitPage = () => {
                       onChange={handleLogoChange}
                       placeholder="https://example.com/logo.png"
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
-                    />
+                    / aria-label="https://example.com/logo.png">
                   </div>
 
                   {logoPreview && (
@@ -296,7 +296,7 @@ const BrandKitPage = () => {
                       onChange={handleInputChange}
                       placeholder="e.g., janes-estate-sales"
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
-                    />
+                    / aria-label="e.g., janes-estate-sales">
                     <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Use lowercase letters, numbers, and hyphens only</p>
                   </div>
                 </div>
@@ -319,7 +319,7 @@ const BrandKitPage = () => {
                         onChange={handleColorChange}
                         placeholder="#2563EB"
                         className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent font-mono text-sm dark:bg-gray-700 dark:text-warm-100"
-                      />
+                      / aria-label="#2563EB">
                       <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Hex format (e.g., #2563EB)</p>
                     </div>
                     {formData.brandPrimaryColor && (
@@ -341,7 +341,7 @@ const BrandKitPage = () => {
                         onChange={handleColorChange}
                         placeholder="#1E40AF"
                         className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent font-mono text-sm dark:bg-gray-700 dark:text-warm-100"
-                      />
+                      / aria-label="#1E40AF">
                       <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Hex format (e.g., #1E40AF)</p>
                     </div>
                     {formData.brandSecondaryColor && (
@@ -403,7 +403,7 @@ const BrandKitPage = () => {
                           ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300'
                           : 'border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100'
                       }`}
-                    />
+                    / aria-label="e.g., Georgia">
                     {tier === 'SIMPLE' && (
                       <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to customize your brand font</p>
                     )}
@@ -427,7 +427,7 @@ const BrandKitPage = () => {
                           ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300'
                           : 'border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100'
                       }`}
-                    />
+                    / aria-label="https://example.com/banner.jpg">
                     {tier === 'SIMPLE' && (
                       <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to add a custom banner image</p>
                     )}
@@ -452,7 +452,7 @@ const BrandKitPage = () => {
                             ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300'
                             : 'border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100'
                         }`}
-                      />
+                      / aria-label="#FF6B6B">
                       {tier === 'SIMPLE' && (
                         <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Upgrade to PRO to customize your accent color</p>
                       )}

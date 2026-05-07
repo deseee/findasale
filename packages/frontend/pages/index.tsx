@@ -353,7 +353,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   type="text"
                   placeholder="Search by title, city, or keyword…"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) = aria-label="Search by title, city, or keyword…"> setSearchQuery(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white/95 text-warm-900 placeholder-warm-500 font-body"
                 />
               </div>
@@ -595,45 +595,4 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                         <div className="flex justify-center mt-6">
                           <button
                             type="button"
-                            onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter(''); }}
-                            className="px-6 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
-                          >
-                            Clear all filters
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <EmptyState
-                        icon="💭"
-                        heading="No sales yet in your area"
-                        subtext="Great sales are coming soon! Check back daily or sign up to receive alerts when new sales open near you."
-                      />
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </section>
-        </div>
-      </main>
-        </div>
-    </>
-  );
-};
-
-export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
-  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/feed?limit=12&status=upcoming`);
-    const data = res.ok ? await res.json() : null;
-    return {
-      props: { initialSalesData: data },
-      revalidate: 300, // 5 minutes ISR
-    };
-  } catch (error) {
-    return { props: { initialSalesData: null }, revalidate: 60 };
-  }
-};
-
-export default HomePage;
+                            onClick={() => { setSearchQuery('');

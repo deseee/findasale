@@ -162,7 +162,7 @@ const AdminVerification = () => {
                             type="text"
                             placeholder="Reason (optional)"
                             value={rejectReason[org.id] || ''}
-                            onChange={(e) => setRejectReason(prev => ({ ...prev, [org.id]: e.target.value }))}
+                            onChange={(e) = aria-label="Reason (optional)"> setRejectReason(prev => ({ ...prev, [org.id]: e.target.value }))}
                             className="flex-1 px-2 py-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded text-xs"
                           />
                           <button
