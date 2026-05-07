@@ -57,9 +57,10 @@ interface BadgeConfig {
 
 interface SaleCardProps {
   sale: Sale;
+  priority?: boolean;
 }
 
-const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
+const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const { isLowBandwidth } = useNetworkQuality();
@@ -154,7 +155,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
             }`}
             onLoad={() => setImgLoaded(true)}
             onError={() => setImgError(true)}
-            loading="lazy"
+            loading={priority ? 'eager' : 'lazy'}
           />
         ) : (!photoUrl || imgError) ? (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700">

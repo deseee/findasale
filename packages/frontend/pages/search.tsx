@@ -84,7 +84,7 @@ const SearchPage = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, [router.isReady, router.query]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['search', q, tab, filters],
     queryFn: async () => {
       const params: any = { q, type: tab };
@@ -198,6 +198,14 @@ const SearchPage = () => {
             router.push(`/search?q=${encodeURIComponent(suggestion)}`);
           }} />
         </form>
+
+        {/* Error message — shows when main search API fails */}
+        {q && q.length >= 2 && isError && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg text-center">
+            <p className="text-red-800 dark:text-red-300 font-semibold mb-3">Search failed. Please check your connection and try again.</p>
+            <button onClick={() => refetch()} className="bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm">Try again</button>
+          </div>
+        )}
 
         {/* Mobile filter panel — hidden on items tab (uses FilterSidebar drawer instead) */}
         {q && q.length >= 2 && isMobile && tab !== 'items' && (

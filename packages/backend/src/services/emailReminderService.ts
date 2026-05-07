@@ -25,6 +25,7 @@ const getTwilioClient = () => {
 
 interface ReminderEmail {
   to: string;
+  userId: string;
   saleName: string;
   saleAddress: string;
   startDate: Date;
@@ -51,7 +52,7 @@ const formatSaleDateTime = (date: Date): string => {
   });
 };
 
-const getEmailTemplate = (reminder: ReminderEmail): { subject: string; html: string } => {
+const getEmailTemplate = (reminder: ReminderEmail, unsubToken: string): { subject: string; html: string } => {
   const formattedDate = formatSaleDateTime(reminder.startDate);
 
   if (reminder.reminderType === 'one-day') {
@@ -60,7 +61,7 @@ const getEmailTemplate = (reminder: ReminderEmail): { subject: string; html: str
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #333;">Don't forget about ${reminder.saleName}!</h2>
-          <p style="font-size: 16px; color: #666;">This estate sale starts tomorrow:</p>
+          <p style="font-size: 16px; color: #666;">This sale starts tomorrow:</p>
 
           <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #333;">${reminder.saleName}</h3>
@@ -80,7 +81,7 @@ const getEmailTemplate = (reminder: ReminderEmail): { subject: string; html: str
 
           <p style="font-size: 14px; color: #999; margin-top: 30px;">
             You're receiving this because you're watching this sale on FindA.Sale.<br/>
-            <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?email=${encodeURIComponent(reminder.to)}" style="color: #999;">Unsubscribe from reminders</a>
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?token=${unsubToken}" style="color: #999;">Unsubscribe from reminders</a>
           </p>
         </div>
       `,
@@ -91,7 +92,7 @@ const getEmailTemplate = (reminder: ReminderEmail): { subject: string; html: str
     subject: `${reminder.saleName} starts in 2 hours!`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Estate sale happening soon!</h2>
+        <h2 style="color: #333;">Sale happening soon!</h2>
         <p style="font-size: 16px; color: #666;">This sale you're watching starts in just 2 hours:</p>
 
         <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 20px 0;">
@@ -112,7 +113,7 @@ const getEmailTemplate = (reminder: ReminderEmail): { subject: string; html: str
 
         <p style="font-size: 14px; color: #999; margin-top: 30px;">
           You're receiving this because you're watching this sale on FindA.Sale.<br/>
-          <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?email=${encodeURIComponent(reminder.to)}" style="color: #999;">Unsubscribe from reminders</a>
+          <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?token=${unsubToken}" style="color: #999;">Unsubscribe from reminders</a>
         </p>
       </div>
     `,
@@ -152,20 +153,26 @@ const getSMSTemplate = (reminder: ReminderSMS): string => {
 };
 
 export const sendReminderEmail = async (reminder: ReminderEmail): Promise<void> => {
-  const { subject, html } = getEmailTemplate(reminder);
   try {
-    // EM2: Retry up to 3 times with exponential backoff on transient Resend failures
-    await withRetry(() =>
-      resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
-        to: reminder.to,
-        subject,
-        html,
-      })
-    );
-    console.log(`✓ Reminder email sent to ${reminder.to} for ${reminder.saleName}`);
+    const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+    const unsubToken = await generateUnsubscribeToken(reminder.userId, 'newSales');
+    const { subject, html } = getEmailTemplate(reminder, unsubToken);
+    try {
+      // EM2: Retry up to 3 times with exponential backoff on transient Resend failures
+      await withRetry(() =>
+        resend.emails.send({
+          from: process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
+          to: reminder.to,
+          subject,
+          html,
+        })
+      );
+      console.log(`✓ Reminder email sent to ${reminder.to} for ${reminder.saleName}`);
+    } catch (error) {
+      console.error(`✗ Failed to send reminder email to ${reminder.to} after retries:`, error);
+    }
   } catch (error) {
-    console.error(`✗ Failed to send reminder email to ${reminder.to} after retries:`, error);
+    console.error(`✗ Failed to generate unsubscribe token for reminder email:`, error);
   }
 };
 
@@ -230,6 +237,7 @@ export const processReminderEmails = async (): Promise<void> => {
         if (subscriber.email) {
           await sendReminderEmail({
             to: subscriber.email,
+            userId: subscriber.userId,
             saleName: sale.title,
             saleAddress: `${sale.address}, ${sale.city}, ${sale.state}`,
             startDate: sale.startDate,
@@ -290,6 +298,7 @@ export const processReminderEmails = async (): Promise<void> => {
         if (subscriber.email) {
           await sendReminderEmail({
             to: subscriber.email,
+            userId: subscriber.userId,
             saleName: sale.title,
             saleAddress: `${sale.address}, ${sale.city}, ${sale.state}`,
             startDate: sale.startDate,

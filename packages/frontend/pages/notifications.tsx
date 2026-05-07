@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -69,6 +69,7 @@ const NotificationsPage = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [channel, setChannel] = useState<'ALL' | 'OPERATIONAL' | 'DISCOVERY'>('ALL');
   const [channelUnreadCounts, setChannelUnreadCounts] = useState({
@@ -77,11 +78,10 @@ const NotificationsPage = () => {
     DISCOVERY: 0,
   });
 
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchNotifications = async (selectedChannel: 'ALL' | 'OPERATIONAL' | 'DISCOVERY') => {
+  const fetchNotifications = useCallback(
+    async (selectedChannel: 'ALL' | 'OPERATIONAL' | 'DISCOVERY') => {
       setIsLoading(true);
+      setIsError(false);
       try {
         const res = await api.get('/notifications/inbox', {
           params: { channel: selectedChannel },
@@ -94,13 +94,18 @@ const NotificationsPage = () => {
         }));
       } catch (err) {
         console.error('Failed to fetch notifications:', err);
+        setIsError(true);
       } finally {
         setIsLoading(false);
       }
-    };
+    },
+    []
+  );
 
+  useEffect(() => {
+    if (!user) return;
     fetchNotifications(channel);
-  }, [user, channel]);
+  }, [user, channel, fetchNotifications]);
 
   // H-003: _app.tsx wraps all pages in <Layout> — do NOT add another <Layout> here.
   // Returning bare JSX; the global layout handles header/footer.
@@ -288,6 +293,17 @@ const NotificationsPage = () => {
           {isLoading ? (
             <div className="text-center py-12">
               <p className="text-warm-500 dark:text-warm-400">Loading notifications...</p>
+            </div>
+          ) : isError ? (
+            <div className="text-center py-12 border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-900/20 rounded-lg">
+              <p className="text-red-600 dark:text-red-400 font-medium mb-4">Couldn't load notifications.</p>
+              <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">Try refreshing the page.</p>
+              <button
+                onClick={() => fetchNotifications(channel)}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-md text-sm font-medium transition-colors"
+              >
+                Retry
+              </button>
             </div>
           ) : displayedNotifications.length === 0 ? (
             <EmptyState

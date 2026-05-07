@@ -69,7 +69,7 @@ export async function markSalePublished(organizerEmail: string): Promise<void> {
  * addShopperSubscriber — adds a shopper to the Weekly Digest subscribers group.
  *
  * Called when a shopper (role === 'USER') registers, to enroll them in the weekly
- * personalized estate sale picks email digest.
+ * personalized sale picks email digest.
  *
  * @param email - the shopper's email address
  * @param name - the shopper's name

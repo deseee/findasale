@@ -134,8 +134,8 @@ const FeedPage = () => {
         {/* Sale cards */}
         {!isLoading && !isError && data && data.sales.length > 0 && (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.sales.map(sale => (
-              <SaleCard key={sale.id} sale={sale} />
+            {data.sales.map((sale, index) => (
+              <SaleCard key={sale.id} sale={sale} priority={index < 4} />
             ))}
           </div>
         )}

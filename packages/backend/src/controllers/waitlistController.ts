@@ -21,6 +21,7 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
 // Send waitlist notification email
 const sendWaitlistNotificationEmail = async (
   email: string,
+  userId: string,
   name: string,
   itemTitle: string,
   itemPrice: number | null,
@@ -31,6 +32,8 @@ const sendWaitlistNotificationEmail = async (
   if (!resend) return;
 
   const itemUrl = `${FRONTEND_URL}/items/${itemId}`;
+  const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+  const unsubToken = await generateUnsubscribeToken(userId, 'all');
   const html = `
 <!DOCTYPE html>
 <html lang="en">
@@ -80,7 +83,7 @@ const sendWaitlistNotificationEmail = async (
               <p style="font-size:12px; color:#9ca3af; margin:0;">
                 You're receiving this because you joined the waitlist at <a href="${FRONTEND_URL}" style="color:#10b981;">FindA.Sale</a>.<br/>
                 <a href="${FRONTEND_URL}/profile" style="color:#9ca3af; text-decoration:none;">Manage preferences</a> ·
-                <a href="${FRONTEND_URL}/unsubscribe?email=${encodeURIComponent(email)}" style="color:#9ca3af; text-decoration:none;">Unsubscribe</a>
+                <a href="${FRONTEND_URL}/unsubscribe?token=${unsubToken}" style="color:#9ca3af; text-decoration:none;">Unsubscribe</a>
               </p>
             </td>
           </tr>
@@ -250,7 +253,7 @@ export const notifyWaitlist = async (itemId: string): Promise<void> => {
     const waitlistEntries = await prisma.itemWaitlist.findMany({
       where: { itemId, notified: false },
       include: {
-        user: { select: { email: true, name: true } },
+        user: { select: { email: true, name: true, id: true } },
       },
     });
 
@@ -269,11 +272,12 @@ export const notifyWaitlist = async (itemId: string): Promise<void> => {
       try {
         await sendWaitlistNotificationEmail(
           entry.user.email,
+          entry.user.id,
           entry.user.name || 'Shopper',
           item.title,
           item.price ? Math.round(item.price * 100) : null,
           itemId,
-          item.sale?.title || 'Estate Sale'
+          item.sale?.title || 'Sale'
         );
 
         // Mark as notified
