@@ -9,9 +9,13 @@
  *   4. The `OAuthBridge` component in _app.tsx reads session.backendJwt,
  *      calls AuthContext.login(), then signs out of NextAuth.
  *
+ * Handler lives at /api/auth/ (NextAuth v4 default — hardcodes this path internally).
+ * S667 moved it to /api/oauth/ unnecessarily; moved back S671 after confirming
+ * the S660 fallback rewrite already resolved the original routing conflict.
+ *
  * Required env vars (add to Vercel + .env.local):
  *   NEXTAUTH_SECRET=<random 32-byte hex>
- *   NEXTAUTH_URL=https://your-frontend-url.vercel.app
+ *   NEXTAUTH_URL=https://finda.sale
  *   GOOGLE_CLIENT_ID=...
  *   GOOGLE_CLIENT_SECRET=...
  *   FACEBOOK_CLIENT_ID=...
@@ -28,23 +32,10 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId:     process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      // NextAuth v4 hardcodes /api/auth/ in callback URLs regardless of handler path.
-      // Handler is at /api/oauth/ so we must explicitly override redirect_uri.
-      authorization: {
-        params: {
-          redirect_uri: `${process.env.NEXTAUTH_URL}/api/oauth/callback/google`,
-        },
-      },
     }),
     FacebookProvider({
       clientId:     process.env.FACEBOOK_CLIENT_ID!,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET!,
-      // Same override required for Facebook.
-      authorization: {
-        params: {
-          redirect_uri: `${process.env.NEXTAUTH_URL}/api/oauth/callback/facebook`,
-        },
-      },
     }),
   ],
 
