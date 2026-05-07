@@ -1,7 +1,14 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || '/api',
+  // P0 FIX: Browser requests must go through the Next.js proxy (/api) so that
+  // httpOnly cookies are set/sent on the same origin (finda.sale).
+  // Direct Railway URL (NEXT_PUBLIC_API_URL) is cross-domain — SameSite=Lax blocks
+  // cookie transmission on XHR/fetch, breaking the entire auth flow.
+  // SSR still uses NEXT_PUBLIC_API_URL directly (server-to-server, no cookie issue).
+  baseURL: typeof window !== 'undefined'
+    ? '/api'
+    : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'),
   headers: {
     'Content-Type': 'application/json',
   },
