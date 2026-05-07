@@ -4,7 +4,25 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S670 — P0 Login Bounce Fixed + Chrome Verified (COMPLETE — MCP pushed)**
+**Latest: S672 — OAuth Diagnosis (INCOMPLETE — fix attempt failed, clean handoff for next session)**
+
+Confirmed via `GET /api/oauth/providers` and live OAuth probe that NextAuth at runtime is still using `/api/auth/` as basePath despite the handler living at `/api/oauth/[...nextauth].ts`. Patrick changed Vercel env `NEXTAUTH_URL` from `https://finda.sale` to `https://finda.sale/api/oauth` (Production scope), and S672 commit `b98b3d8` stripped the redirect_uri overrides. Force-rebuild without cache did not change behavior — Google sends users back to `/api/auth/callback/google` which has no handler ("Cannot GET"). Conclusion: NextAuth v4 is not honoring `NEXTAUTH_URL.pathname` in this environment. Stop fighting it.
+
+**Additional finding from Vercel env list:** `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_SECRET` all show "Needs Attention" badges — likely empty or invalid in Production scope. Verify these before next-session OAuth test.
+
+**S672 commit shipped (b98b3d8):** stripped `authorization.params.redirect_uri` overrides from `pages/api/oauth/[...nextauth].ts` — diff currently live but irrelevant since the basePath approach didn't work.
+
+**Path forward for next session (recommended Path C):**
+1. Move NextAuth handler back to standard location: `pages/api/auth/[...nextauth].ts`
+2. Add `packages/frontend/middleware.ts` matching only the three backend paths that should NOT hit NextAuth: `/api/auth/refresh`, `/api/auth/me`, `/api/auth/logout` — rewrite to Railway via NEXT_PUBLIC_API_URL. NextAuth catch-all then handles all other `/api/auth/*`.
+3. Vercel env: revert `NEXTAUTH_URL` to `https://finda.sale` (Production scope, also expand to "All Environments" if Preview/Dev need it). Verify `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_SECRET` all have non-empty values.
+4. `_app.tsx`: remove `basePath="/api/oauth"` from SessionProvider (or change to `/api/auth`).
+5. Google + Facebook consoles already have `/api/auth/callback/[provider]` registered — keep them.
+6. Push, redeploy, verify `/api/oauth/providers` becomes `/api/auth/providers` with `callbackUrl: https://finda.sale/api/auth/callback/google`. Live-test Google + Facebook sign-in in incognito.
+
+This is the canonical NextAuth + custom backend pattern. The `/api/oauth/` migration in S667 introduced more friction than the original "catch-all conflict" was worth.
+
+**Previous: S671 — OAuth Revert + S669 Audit P0/P1 Batch Complete (COMPLETE — all pushed)**
 
 Diagnosed root cause of persistent login bounce: `NEXT_PUBLIC_API_URL` pointed browser API calls directly to Railway (cross-domain XHR), blocking SameSite=Lax auth cookies and SameSite=Strict CSRF cookie. Fixed in 5 files: proxy routing (api.ts), refreshToken cookie path (authController.ts), clearCookie paths (auth.ts routes), CSRF bypass for /auth/refresh + /auth/logout (csrf.ts), and an infinite 401 loop guard in the response interceptor (api.ts). All pushed via MCP. Login ✅ VERIFIED in Chrome: signed in as user1@example.com (Alice Johnson), landed on /organizer/dashboard, no bounce.
 
@@ -336,6 +354,11 @@ Entire session consumed by OAuth `redirect_uri_mismatch` and followup issues. Ro
 
 **Google/Facebook Console state at wrap:** Both `/api/auth/callback/[provider]` AND `/api/oauth/callback/[provider]` are registered. Both being registered is fine. The `/api/oauth/` ones are what matter and are correctly registered.
 
+**S671 continuation — S669 audit P0/P1 batch (16 files, all MCP pushed):**
+Root cause: subagent writes to VM mount don't always flush to Windows git staging before `.\push.ps1`. MCP `push_files` reads Windows path directly, bypassing the sync window. Process rule added to `feedback_subagent_write_verification.md`.
+
+Files: `SaleCard.tsx` (P0 LCP — eager loading above-fold), `feed.tsx`, `public/offline.html` (P1 — sw.js gap), `city/[slug].tsx` (P1 — noindex fix), `notifications.tsx`, `search.tsx`, `sales/[id].tsx` (hero LCP), `index.tsx` (P0 ISR revalidate:300 + priority), `shopper/dashboard.tsx` (error banner), `mailerliteService.ts`, `weeklyEmailService.ts`, `emailReminderService.ts`, `buyerMatchService.ts`, `organizerAnalyticsService.ts`, `curatorEmailJob.ts`, `waitlistController.ts` — all 6 email services: token-based unsubscribe replacing raw `?email=` PII (P1 compliance).
+
 ---
 
 ### S670 — P0 Login Bounce Fixed + Chrome Verified (COMPLETE — MCP pushed)
@@ -381,21 +404,19 @@ cd C:\Users\desee\ClaudeProjects\FindaSale
 git pull
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S671 wrap — OAuth investigation, revert shipped, rate limit pending"
+git commit -m "docs: S671 wrap — OAuth revert + S669 audit P0/P1 batch shipped via MCP"
 .\push.ps1
 ```
 
 **S672 priorities (in order):**
 
-1. **P0 — Verify OAuth login works** after Railway restart clears rate limit. Test Google in incognito. If still broken, run full OAuth diagnostic (check Vercel function logs for `/api/oauth/callback/google` — see what error NextAuth is actually returning server-side).
+1. **P0 — Verify OAuth login works** after Railway restart clears rate limit. Test Google in incognito. If still broken, run full OAuth diagnostic (check Vercel function logs for `/api/oauth/callback/google`).
 
-2. **OAuth diagnostic prep (if still broken):** The `OAuthCallback` error NextAuth returned likely means the backend `/auth/oauth` exchange is failing server-to-server. Check: (a) Is `NEXT_PUBLIC_API_URL` set correctly in Vercel env? (b) Does the Railway backend `/auth/oauth` endpoint accept the OAuth payload? (c) Are there any Railway logs from the NextAuth JWT callback server-to-server call?
+2. **OAuth diagnostic prep (if still broken):** Check: (a) Vercel env `NEXT_PUBLIC_API_URL` correct? (b) Railway backend `/auth/oauth` accepting OAuth payload? (c) Railway logs from NextAuth JWT callback?
 
-3. **S669 audit P0/P1 fixes** (once OAuth is confirmed working):
-   - P0: `SaleCard.tsx` eager loading for above-fold cards (LCP)
-   - P0: Product JSON-LD on `/items/[id]` pages
-   - P1: Create `public/offline.html`
-   - P1: City page noindex logic fix
-   - P1: Email templates — remove banned "estate sale" terms (5×), fix unsubscribe PII
+3. **Remaining S669 audit item (not in the 16-file batch):**
+   - P0: Product JSON-LD on `/items/[id]` pages — structured data still missing
 
 4. **Add `MAILERLITE_ORGANIZERS_GROUP_ID`** env var in Railway (pending since S668)
+
+5. **Chrome authenticated audit** (organizer dashboard, rapid capture, pricing funnel) — still in Unverified Queue
