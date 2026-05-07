@@ -1,0 +1,27 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json ./
+COPY package-lock.json* ./
+COPY pnpm-lock.yaml* ./
+
+# Install dependencies (use pnpm if available, otherwise npm)
+RUN npm install -g pnpm 2>/dev/null || true && \
+    if [ -f pnpm-lock.yaml ]; then \
+      pnpm install --frozen-lockfile --prod; \
+    else \
+      npm ci --omit=dev; \
+    fi
+
+# Copy compiled code
+COPY dist/ ./dist/
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3003/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
+
+EXPOSE 3003
+
+CMD ["node", "dist/index.js"]
