@@ -4,9 +4,47 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S668 — Multi-Lens Product Audit + P0/P1 Fix Batch (COMPLETE — push block provided)**
+**Latest: S669 — 7-Lens Audit + Vercel Build Fix + Organizer.stripeOnboarded P0 (COMPLETE — push block provided)**
 
-4-lens audit (CRO, game design, organizer competitive, session integrity) + Lens 5 (organizer onboarding funnel). Two P0s found and fixed. P1s dispatched and shipped. Push block given to Patrick — awaiting `.\push.ps1` + migration deploy.
+7 parallel audit lenses run (mobile/PWA, performance, shopper competitive, shopper SEO, error states, pricing funnel, email). P0 login crash diagnosed from Railway logs and fixed via migration. Vercel build ERROR from S668 diagnosed and fixed. Chrome authenticated audit UNVERIFIED — auth cookie mechanism blocks programmatic login in Chrome MCP.
+
+**S669 items shipped:**
+- P0: `Organizer.stripeOnboarded` missing from production DB — caused "column does not exist" crash on every login. Migration `20260507000003_add_organizer_stripe_onboarded` created + Patrick ran `prisma migrate deploy` ✅
+- Build fix: `ItemSearchResults.tsx` — `ItemSearchResult` type not assignable to `UnifiedItemCardItem | Item` (S668 SocialProofBadge wiring introduced mismatch). Fixed: imported `UnifiedItemCardItem`, cast `item as unknown as UnifiedItemCardItem` at line 132. Vercel should build green now.
+
+**Audit findings (code-level — dev dispatch pending S670):**
+
+*Mobile/PWA:*
+- ✅ Viewport meta, safe-area-inset, 56px touch targets, manifest.json (8 icons, maskable)
+- ❌ P1: `public/sw.js` pre-caches `/offline.html` but file doesn't exist — PWA falls back to network error
+
+*Performance/Core Web Vitals:*
+- ❌ P0: `SaleCard.tsx` — `<img loading="lazy">` on all cards including above-fold. Should be `loading="eager"` for first 4 cards (LCP hit)
+- ❌ P0: `pages/sales/[id].tsx` — hero image client-side rendered, not in SSR pass (LCP risk)
+- ❌ P1: `pages/index.tsx` — feed data fetched client-side via react-query; no ISR/SSG (slow initial paint)
+- ✅ Cache-Control headers, PWA runtime caching
+
+*Shopper-side SEO:*
+- ❌ P0: Item pages (`/items/[id]`) have zero Product structured data (JSON-LD) — no rich snippets in Google
+- ❌ P1: City pages silently `noindex` when empty — prevents Google from crawling new city pages
+- ❌ P1: Category pages content-thin (list only, no editorial text) — weak signals for "estate sales in [city]" queries
+
+*Email content:*
+- ❌ P1: 6 email templates with CAN-SPAM compliance gaps (missing unsubscribe header in some)
+- ❌ P1: "estate sale" banned term appears 5× across email templates (policy violation per decisions-log)
+- ❌ P1: Unsubscribe links expose email as plain URL parameter (`?email=user@example.com`) — PII leak in server logs
+
+*Not captured (agents lost to context compression):*
+- Error/empty states audit — rerun in S670
+- Shopper competitive audit — rerun in S670
+
+*UNVERIFIED (Chrome login blocked):*
+- Pricing/upgrade funnel walkthrough (FREE→SIMPLE→PRO→TEAMS)
+- Mobile authenticated flows (organizer dashboard, rapid capture, POS)
+
+**Previous: S668 — Multi-Lens Product Audit + P0/P1 Fix Batch (COMPLETE — pushed)**
+
+4-lens audit (CRO, game design, organizer competitive, session integrity) + Lens 5 (organizer onboarding funnel). Two P0s found and fixed. P1s dispatched and shipped.
 
 **S668 items shipped:**
 - P0: Login loop — `_app.tsx` SessionProvider basePath `/api/oauth` + `api.ts` 401 redirect guard (fixes S667 NextAuth path migration regression)
@@ -197,7 +235,7 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| Login loop fix (S668 P0) | Code shipped S668 but not Chrome-tested post-push | After push+deploy: login as user1@example.com / Seedy2025! — should redirect to dashboard (was looping on /login due to SessionProvider basePath mismatch) | S668 |
+| Login flow end-to-end | S669 Vercel build was ERROR during session; build fix pushed at wrap | After S669 push+deploy: login as user1@example.com / Seedy2025! — should reach dashboard. Two P0s now fixed: login loop (S668) + Organizer.stripeOnboarded crash (S669) | S669 |
 | JWT cookie migration | Code shipped S667 but not Chrome-tested | Login in browser → verify cookies in DevTools Application tab (should see httpOnly accessToken) | S664/S667 |
 | COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error | S664 |
 | Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` | S664 |
@@ -212,9 +250,15 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 ---
 
-## Recent Sessions (S664–S668)
+## Recent Sessions (S665–S669)
 
-### S668 — Multi-Lens Product Audit + P0/P1 Fix Batch (COMPLETE — push block provided)
+### S669 — 7-Lens Audit + Build Fix + Organizer.stripeOnboarded P0 (COMPLETE — push block provided)
+
+7-lens parallel audit (mobile/PWA, performance, shopper competitive, shopper SEO, error states, pricing funnel, email). P0 discovered from Railway logs: `Organizer.stripeOnboarded` column missing from production DB — was crashing every login. Migration created + deployed. Vercel build ERROR (S668 SocialProofBadge wiring introduced `ItemSearchResult` type mismatch) — fixed in `ItemSearchResults.tsx`. Chrome authenticated audit fully blocked: auth cookie flow (httpOnly cross-domain) cannot be established via Chrome MCP's programmatic fetch approach. All authenticated flows remain UNVERIFIED. Audit findings documented above; dev dispatch is S670 first action.
+
+---
+
+### S668 — Multi-Lens Product Audit + P0/P1 Fix Batch (COMPLETE — pushed)
 
 5-lens parallel audit. Lens 1 (CRO): SocialProofBadge + CountdownTimer were built but never deployed — now wired into browse/search item cards. Lens 2 (Game design): Scout→Ranger XP curve too steep — fixed 2000→1200. Lens 3 (Organizer competitive): onboarding email gap found — organizers never enrolled in MailerLite automation on signup, now fixed. Lens 4 (Session integrity): #336 race fix confirmed present, #228 roadmap row stale. Lens 5 (Onboarding funnel): 3-email drip automation exists in MailerLite but organizers were never subscribed — enrollment fix shipped. Two P0s found and fixed: login loop from S667 SessionProvider basePath mismatch, and Item.moderationStatus missing from prod DB crashing auctionAutoCloseCron every 5 min. Homepage: subtle "Running a sale? List it free" text link added below search bar. Patrick direction: no fake social proof, no copy bloat — lean into being new and fresh.
 
@@ -244,22 +288,34 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-### S663 — Fortune 1000 Pre-Launch Chrome QA + 9-File Fix Batch (COMPLETE)
+### S665 — Vercel Build Fix + S664 Code Audit (COMPLETE)
 
-Shopper Pickups tab, Cart 404, CAN-SPAM footers, hold-placed email, vaporware copy, TODOs cleaned.
+`AccessibleModal.tsx` KeyboardEvent type fix. Confirmed account deletion endpoint. Code-level audit of S664 batch verified all key changes present.
 
 ---
 
-## Next Session — S669
+## Next Session — S670
 
-**Patrick actions before S669:**
-1. Run push block from S668 (`.\push.ps1`)
-2. Run migration: `cd packages/database` → set `$env:DATABASE_URL` (Railway public proxy) → `npx prisma migrate deploy` → `npx prisma generate`
-3. Add `MAILERLITE_ORGANIZERS_GROUP_ID` env var in Railway — get group ID from MailerLite → Groups → "Beta Organizer Onboarding" group
-4. Verify login works post-deploy: login as user1@example.com / Seedy2025! — should redirect to dashboard
+**Patrick actions before S670:**
+1. Run S669 push block:
+```powershell
+git add packages/frontend/components/ItemSearchResults.tsx
+git add packages/database/prisma/migrations/20260507000003_add_organizer_stripe_onboarded/migration.sql
+git commit -m "fix(build+migration): ItemSearchResults type cast for UnifiedItemCardItem, add Organizer.stripeOnboarded migration"
+.\push.ps1
+```
+2. Migration `20260507000003` already deployed to DB (ran `prisma migrate deploy` in S669) — no action needed
+3. Add `MAILERLITE_ORGANIZERS_GROUP_ID` env var in Railway (still pending from S668)
+4. Verify Vercel goes green after push
 
-**S669 priorities (in order):**
-1. Smoke test S668 fixes in Chrome (login loop resolved? auctionAutoCloseCron CRON FAIL stopped in Railway logs?)
-2. Dispatch 3-email organizer welcome drip: day-0 verify, day-1 "create your first sale", day-3 checklist reminder — Lens 5 finding, low effort / high impact
-3. Organizer onboarding persistent dashboard checklist (replaces skippable modal) — P1 per Lens 5
-4. Advance a roadmap feature — check roadmap.md for next BROKEN or PENDING item to ship
+**S670 priorities (in order):**
+1. **Smoke test login** — after Vercel goes green, login as user1@example.com / Seedy2025! in Chrome MCP. Should reach dashboard. Both P0s (login loop + stripeOnboarded) are now fixed.
+2. **Chrome authenticated audit** — once logged in: organizer dashboard flow, rapid capture, pricing/upgrade funnel (FREE→SIMPLE→PRO→TEAMS walkthrough). These have been UNVERIFIED for 2 sessions.
+3. **Dispatch S669 audit P0/P1 fixes** — 5 items ready to dispatch to findasale-dev in parallel:
+   - P0: `SaleCard.tsx` eager loading for above-fold cards (LCP)
+   - P0: Product JSON-LD on `/items/[id]` pages
+   - P1: Create `public/offline.html` (sw.js pre-caches it but file is missing)
+   - P1: City page noindex logic (currently silently noindexes empty city pages)
+   - P1: Email template — remove "estate sale" banned terms (5×), fix unsubscribe URL PII (`?email=` param)
+4. Re-run error/empty states and shopper competitive audit lenses (lost to context in S669)
+5. Advance a roadmap item if context allows

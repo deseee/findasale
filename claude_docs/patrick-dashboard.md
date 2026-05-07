@@ -1,63 +1,60 @@
-# Patrick's Dashboard — S668 Complete
+# Patrick's Dashboard — S669 Complete
 
 ---
 
-## ✅ S668 is done — push block ready
+## ⚠️ Action Required Before S670
+
+### Push block (fixes Vercel build + commits migration)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/_app.tsx
-git add packages/frontend/lib/api.ts
-git add packages/database/prisma/migrations/20260507000002_add_item_moderation_status/migration.sql
-git add packages/frontend/components/ItemCard.tsx
-git add packages/frontend/pages/search.tsx
 git add packages/frontend/components/ItemSearchResults.tsx
-git add packages/backend/src/services/xpService.ts
-git add packages/backend/src/utils/rankUtils.ts
-git add packages/frontend/pages/shopper/guild-primer.tsx
-git add packages/frontend/pages/index.tsx
-git add packages/backend/src/services/mailerliteService.ts
-git add packages/backend/src/controllers/authController.ts
+git add packages/database/prisma/migrations/20260507000003_add_organizer_stripe_onboarded/migration.sql
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix+feat(S668): login loop, cron crash, social proof on cards, XP rebalance, organizer MailerLite enrollment, homepage CTA"
+git commit -m "fix(build+migration): ItemSearchResults type cast for UnifiedItemCardItem, add Organizer.stripeOnboarded migration"
 .\push.ps1
 ```
 
-**Then run the migration:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+**Migration `20260507000003` is already deployed to Railway DB** (you ran `prisma migrate deploy` in-session). This push just commits the SQL file to git.
 
-**Then add this Railway env var** (if not already set):
-- Key: `MAILERLITE_ORGANIZERS_GROUP_ID`
-- Value: your group ID from MailerLite → Groups → "Beta Organizer Onboarding"
+### Still pending from S668
+- Add `MAILERLITE_ORGANIZERS_GROUP_ID` env var in Railway → "Beta Organizer Onboarding" group ID from MailerLite
 
 ---
 
-## 📋 What shipped in S668
+## 📋 What happened in S669
 
-| Fix | Impact |
+| Item | Result |
 |---|---|
-| Login loop (P0) | `SessionProvider basePath='/api/oauth'` — S667 NextAuth move broke login silently |
-| auctionAutoCloseCron FAIL (P0) | `Item.moderationStatus` migration — cron was crashing every 5 min |
-| Social proof on item cards (P1) | SocialProofBadge + CountdownTimer now visible on browse/search |
-| Scout→Ranger XP 2000→1200 (P1) | Game balance fix — mid-game dropout point smoothed |
-| Organizer MailerLite enrollment (P1) | Organizers now enter Beta Onboarding automation on signup |
-| Homepage organizer CTA | "Running a sale? List it free" — quiet text link below search bar |
+| `Organizer.stripeOnboarded` P0 | Migration created + deployed ✅ — was crashing every login (column didn't exist in DB) |
+| Vercel build ERROR | Fixed — `ItemSearchResults.tsx` type mismatch from S668 SocialProofBadge wiring |
+| 7-lens audit (code-level) | Complete — findings documented, dev dispatch ready for S670 |
+| Chrome authenticated audit | ❌ BLOCKED — auth cookie flow can't be established via Chrome MCP |
+
+### Audit findings queued for S670 dev dispatch
+
+| Severity | Finding | File |
+|---|---|---|
+| P0 | SaleCard: above-fold images lazy-loaded (kills LCP) | `components/SaleCard.tsx` |
+| P0 | Item pages: zero Product JSON-LD structured data | `pages/items/[id].tsx` |
+| P1 | `offline.html` missing — sw.js pre-caches it but it doesn't exist | `public/offline.html` |
+| P1 | City pages silently noindex when empty | `pages/[city].tsx` or similar |
+| P1 | Email templates: "estate sale" banned term ×5, unsubscribe URL exposes `?email=` PII | Email templates |
 
 ---
 
-## 🔜 Next session: S669
+## 🔜 S670 — Audit Continuation
 
-1. Smoke test: verify login works, check Railway logs confirm CRON OK on auctionAutoCloseCron
-2. Add `MAILERLITE_ORGANIZERS_GROUP_ID` to Railway
-3. Dispatch 3-email organizer welcome drip (day-0 verify, day-1 create-sale nudge, day-3 checklist)
-4. Persistent onboarding checklist on organizer dashboard
-5. Advance a roadmap feature
+**Step 1 — Smoke test** (first thing): After Vercel goes green, login as `user1@example.com` / `Seedy2025!` in Chrome. Should reach dashboard. If login works — Chrome authenticated audit is back on.
+
+**Step 2 — Chrome authenticated flows** (2 sessions pending):
+- Organizer dashboard, rapid capture, POS
+- Pricing/upgrade funnel (FREE→SIMPLE→PRO→TEAMS as a skeptical new organizer)
+
+**Step 3 — Dev dispatch** for 5 audit P0/P1s above (all independent, can run in parallel)
+
+**Step 4 — Re-run 2 incomplete lenses**: error/empty states + shopper competitive (lost to compression in S669)
 
 ---
 
@@ -66,7 +63,7 @@ npx prisma generate
 | Layer | Status |
 |---|---|
 | Railway (backend) | ✅ Green |
-| Vercel (frontend) | ✅ Green (redeploys on push) |
-| Migration `20260507000002_add_item_moderation_status` | ⚠️ Run `prisma migrate deploy` |
-| Login loop fix | ⚠️ Code ready — verify in browser post-deploy |
+| Vercel (frontend) | ❌ ERROR — push S669 block to fix |
+| Migration `20260507000003_add_organizer_stripe_onboarded` | ✅ Deployed to DB — needs git commit |
+| Login flow | ⚠️ Both P0s fixed in code — verify in Chrome after Vercel goes green |
 | MailerLite organizer enrollment | ⚠️ Needs `MAILERLITE_ORGANIZERS_GROUP_ID` in Railway |
