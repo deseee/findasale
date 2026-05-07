@@ -119,7 +119,7 @@ export const RarityBoostModal: React.FC<RarityBoostModalProps> = ({
               type="text"
               placeholder="Search by sale name or city..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) = aria-label="Search by sale name or city..."> setSearchQuery(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-warm-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
             />
           </div>

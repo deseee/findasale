@@ -274,7 +274,7 @@ const CreateSalePage = () => {
                   max="50"
                   step="0.5"
                   value={formData.buyersPremiumPct ?? ''}
-                  onChange={(e) => setFormData({
+                  onChange={(e) = aria-label="Buyerspremiumpct"> setFormData({
                     ...formData,
                     buyersPremiumPct: e.target.value ? parseFloat(e.target.value) : null
                   })}
@@ -300,7 +300,7 @@ const CreateSalePage = () => {
                 required
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 placeholder="e.g., My Weekend Sale"
-              />
+              / aria-label="e.g., My Weekend Sale">
             </div>
 
             {/* Dates — Hidden for Retail Mode */}
@@ -321,7 +321,7 @@ const CreateSalePage = () => {
                     min={new Date().toISOString().split('T')[0]}
                     required={formData.saleType !== 'RETAIL'}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                  />
+                  / aria-label="Startdate">
                   {validationErrors.startDate && touchedFields.has('startDate') && (
                     <p className="text-red-600 text-xs mt-1">{validationErrors.startDate}</p>
                   )}
@@ -348,7 +348,7 @@ const CreateSalePage = () => {
                     min={new Date().toISOString().split('T')[0]}
                     required={formData.saleType !== 'RETAIL'}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                  />
+                  / aria-label="Enddate">
                   {validationErrors.endDate && touchedFields.has('endDate') && (
                     <p className="text-red-600 text-xs mt-1">{validationErrors.endDate}</p>
                   )}
@@ -413,7 +413,7 @@ const CreateSalePage = () => {
                   onBlur={handleBlur}
                   required
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
+                / aria-label="City">
               </div>
               <div>
                 <label htmlFor="state" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">State</label>
@@ -427,7 +427,7 @@ const CreateSalePage = () => {
                   required
                   maxLength={2}
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
+                / aria-label="State">
               </div>
               <div>
                 <label htmlFor="zip" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">ZIP</label>
@@ -440,7 +440,7 @@ const CreateSalePage = () => {
                   onBlur={handleBlur}
                   required
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
+                / aria-label="Zip">
               </div>
             </div>
 

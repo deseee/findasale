@@ -317,7 +317,7 @@ export default function SubmissionsPage() {
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <ImageIcon size={32} className="text-gray-400" />
+                          <ImageIcon size={32} className="text-gray-400"  alt=""/>
                         </div>
                       )}
                     </div>

@@ -136,7 +136,7 @@ export default function ExpenseLineItemList({ saleId, expenses }: ExpenseLineIte
               min="0"
               placeholder="Amount"
               value={newExpense.amount}
-              onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+              onChange={(e) = aria-label="Amount"> setNewExpense({ ...newExpense, amount: e.target.value })}
               className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               required
             />
@@ -145,7 +145,7 @@ export default function ExpenseLineItemList({ saleId, expenses }: ExpenseLineIte
             type="text"
             placeholder="Description (e.g., Dumpster rental)"
             value={newExpense.description}
-            onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+            onChange={(e) = aria-label="Description (e.g., Dumpster rental)"> setNewExpense({ ...newExpense, description: e.target.value })}
             className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             required
           />
@@ -153,7 +153,7 @@ export default function ExpenseLineItemList({ saleId, expenses }: ExpenseLineIte
             type="text"
             placeholder="Vendor name (optional)"
             value={newExpense.vendorName}
-            onChange={(e) => setNewExpense({ ...newExpense, vendorName: e.target.value })}
+            onChange={(e) = aria-label="Vendor name (optional)"> setNewExpense({ ...newExpense, vendorName: e.target.value })}
             className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           />
           <div className="flex gap-2">

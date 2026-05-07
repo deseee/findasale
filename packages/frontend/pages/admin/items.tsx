@@ -152,7 +152,7 @@ const AdminItems = () => {
             value={search}
             onChange={handleSearchChange}
             className="flex-1 min-w-0 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
-          />
+          / aria-label="Search items by title...">
 
           <select
             value={status}

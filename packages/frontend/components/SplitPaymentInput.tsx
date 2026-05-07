@@ -74,7 +74,7 @@ export default function SplitPaymentInput({
               ? 'border-warm-300 dark:border-gray-600 focus:ring-sage-500'
               : 'border-red-300 dark:border-red-700 focus:ring-red-500'
           }`}
-        />
+        / aria-label="$0.00">
       </div>
 
       {/* Card amount (auto-calculated) */}
