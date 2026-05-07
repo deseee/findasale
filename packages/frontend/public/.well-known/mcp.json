@@ -5,7 +5,7 @@
   "server": {
     "url": "https://mcp.finda.sale",
     "transport": "sse",
-    "status": "coming-soon"
+    "status": "active"
   },
   "tools": [
     { "name": "search_sales", "description": "Search for active sales by city, location, date range, or sale type" },
