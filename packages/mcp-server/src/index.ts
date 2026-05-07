@@ -72,7 +72,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Health Check
 // ──────────────────────────────────────────────────────────────
 
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     uptime: process.uptime(),
@@ -269,7 +269,7 @@ app.post('/messages', async (req: Request, res: Response) => {
 // Error Handling
 // ──────────────────────────────────────────────────────────────
 
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[Error]', err);
   res.status(500).json({
     error: 'Internal Server Error',
