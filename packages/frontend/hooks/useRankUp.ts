@@ -7,7 +7,8 @@ import { useAuth } from '../components/AuthContext';
  * Only fires when rank goes UP (not down or stays same).
  */
 const useRankUp = (onRankUp?: (newRank: string) => void) => {
-  const { data: xpProfile, isLoading } = useXpProfile();
+  const { user } = useAuth();
+  const { data: xpProfile, isLoading } = useXpProfile(!!user); // Only fetch when authenticated
   const previousRankRef = useRef<string | null>(null);
 
   useEffect(() => {

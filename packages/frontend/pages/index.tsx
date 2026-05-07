@@ -133,7 +133,6 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
       }
     },
     retry: 1,
-    initialData: initialSalesData,
   });
 
   const sales = feedData?.sales as Sale[] | undefined;
