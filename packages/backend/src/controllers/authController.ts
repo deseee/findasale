@@ -449,7 +449,9 @@ export const register = async (req: Request, res: Response) => {
       httpOnly: true,
       secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
-      path: '/auth/refresh',
+      path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
+      // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
+      // refresh cookie is sent regardless of proxy path depth.
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -645,7 +647,9 @@ export const oauthLogin = async (req: Request, res: Response) => {
       httpOnly: true,
       secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
-      path: '/auth/refresh',
+      path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
+      // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
+      // refresh cookie is sent regardless of proxy path depth.
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -851,7 +855,9 @@ export const login = async (req: Request, res: Response) => {
       httpOnly: true,
       secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
-      path: '/auth/refresh',
+      path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
+      // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
+      // refresh cookie is sent regardless of proxy path depth.
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -1017,7 +1023,9 @@ export const redeemInvite = async (req: Request, res: Response) => {
       httpOnly: true,
       secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
-      path: '/auth/refresh',
+      path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
+      // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
+      // refresh cookie is sent regardless of proxy path depth.
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 

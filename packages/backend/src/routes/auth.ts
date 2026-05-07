@@ -276,7 +276,7 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
 // P0 Security Fix: POST /auth/logout — clears both accessToken and refreshToken cookies
 router.post('/logout', (req: AuthRequest, res: Response) => {
   res.clearCookie('accessToken', { path: '/' });
-  res.clearCookie('refreshToken', { path: '/auth/refresh' });
+  res.clearCookie('refreshToken', { path: '/' }); // P0 FIX: match new path '/'
   res.json({ message: 'Logged out' });
 });
 
@@ -318,7 +318,7 @@ router.post('/refresh', (req: AuthRequest, res: Response) => {
   } catch (error) {
     // Refresh token invalid or expired — clear both cookies and return 401
     res.clearCookie('accessToken', { path: '/' });
-    res.clearCookie('refreshToken', { path: '/auth/refresh' });
+    res.clearCookie('refreshToken', { path: '/' }); // P0 FIX: match new path '/'
     return res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 });

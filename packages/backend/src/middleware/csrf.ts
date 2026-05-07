@@ -94,9 +94,14 @@ export const validateCsrfToken = (req: Request, res: Response, next: NextFunctio
   // These endpoints are stateless and don't use cookies for authentication (JWT is in localStorage)
   // CSRF protection only meaningful for authenticated state-mutating requests
   // Cross-origin architecture makes double-submit pattern impossible for unauthenticated requests
+  // P0 FIX: /auth/refresh also bypassed — it uses httpOnly cookie (not bearer token) so the
+  // Bearer-token bypass below doesn't fire, and the CSRF cookie path/domain may not match
+  // when going through the Next.js proxy. Refresh is CSRF-safe: it reads a secret httpOnly cookie
+  // that attackers cannot read or forge from a different origin.
   if (req.path.includes('/auth/login') || req.path.includes('/auth/register') ||
       req.path.includes('/auth/oauth') || req.path.includes('/auth/forgot-password') ||
-      req.path.includes('/auth/reset-password')) {
+      req.path.includes('/auth/reset-password') || req.path.includes('/auth/refresh') ||
+      req.path.includes('/auth/logout')) {
     return next();
   }
 
