@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import api from '../../lib/api';
+import { useToast } from '../../components/ToastContext';
 
 interface FlaggedUser {
   userId: string;
@@ -14,6 +15,7 @@ interface FlaggedUser {
 
 export default function XpVelocityPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [users, setUsers] = useState<FlaggedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -76,7 +78,7 @@ export default function XpVelocityPage() {
                     </td>
                     <td className="px-4 py-3">
                       <button
-                        onClick={() => alert(`Review user ${user.userId} — coming soon`)}
+                        onClick={() => showToast('User review feature coming soon', 'info')}
                         className="text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 px-3 py-1 rounded transition-colors"
                       >
                         Review

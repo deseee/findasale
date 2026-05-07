@@ -9,6 +9,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useCreateHub } from '../../../hooks/useHubs';
 import { useAuth } from '../../../components/AuthContext';
+import { useToast } from '../../../components/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
 
 function generateSlug(name: string): string {
@@ -23,6 +24,7 @@ function generateSlug(name: string): string {
 export default function CreateHubPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
   const createHubMutation = useCreateHub();
 
@@ -68,12 +70,12 @@ export default function CreateHubPage() {
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      alert('Please enter a hub name');
+      showToast('Please enter a hub name', 'error');
       return;
     }
 
     if (!formData.slug.trim()) {
-      alert('Please enter a valid slug');
+      showToast('Please enter a valid slug', 'error');
       return;
     }
 
@@ -85,7 +87,7 @@ export default function CreateHubPage() {
       await router.push(`/organizer/hubs/${result.hubId}/manage`);
     } catch (err) {
       console.error('Error creating hub:', err);
-      alert(err instanceof Error ? err.message : 'Failed to create hub');
+      showToast(err instanceof Error ? err.message : 'Failed to create hub', 'error');
     }
   };
 

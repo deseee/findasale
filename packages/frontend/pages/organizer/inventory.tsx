@@ -114,7 +114,7 @@ const InventoryPage: React.FC = () => {
 
   const handleConfirmPull = () => {
     if (!pullModal.inventoryItemId || !selectedSaleId) {
-      alert('Please select a sale');
+      showToast('Please select a sale', 'error');
       return;
     }
     const price = priceOverride ? parseFloat(priceOverride) : undefined;

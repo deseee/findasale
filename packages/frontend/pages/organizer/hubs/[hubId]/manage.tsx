@@ -9,12 +9,14 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useHub, useUpdateHub, useSetHubEvent, useJoinHub, useLeaveHub } from '../../../../hooks/useHubs';
 import { useAuth } from '../../../../components/AuthContext';
+import { useToast } from '../../../../components/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function HubManagePage() {
   const router = useRouter();
   const { hubId } = router.query;
   const { user } = useAuth();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
 
   const [editMode, setEditMode] = useState(false);
@@ -42,8 +44,9 @@ export default function HubManagePage() {
       await updateHubMutation.mutateAsync(formData);
       queryClient.invalidateQueries({ queryKey: ['hubs', 'my'] });
       setEditMode(false);
+      showToast('Hub updated successfully', 'success');
     } catch (err) {
-      alert('Failed to update hub');
+      showToast('Failed to update hub', 'error');
     }
   };
 
@@ -56,8 +59,9 @@ export default function HubManagePage() {
       });
       queryClient.invalidateQueries({ queryKey: ['hubs', 'my'] });
       setShowEventForm(false);
+      showToast('Event date set successfully', 'success');
     } catch (err) {
-      alert('Failed to set event date');
+      showToast('Failed to set event date', 'error');
     }
   };
 
