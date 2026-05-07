@@ -248,7 +248,7 @@ function buildOrganizerDigestHtml(stats: OrganizerWeeklyStats, unsubToken: strin
 
               <div style="text-align: center; margin-top: 28px; padding-top: 28px; border-top: 1px solid #e2e8f0;">
                 <a href="${FRONTEND_URL}/organizer/dashboard" style="display: inline-block; padding: 12px 28px; background: #0f766e; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
-                  View Your Dashboard →
+                  View Your Dashboard &rarr;
                 </a>
               </div>
             </td>
