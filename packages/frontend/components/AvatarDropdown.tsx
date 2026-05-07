@@ -629,7 +629,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    <Image size={16} className="text-amber-500"  alt=""/>
+                    <Image size={16} className="text-amber-500"/>
                     <span>Manage Photos</span>
                   </Link>
                   <Link
