@@ -1,5 +1,6 @@
 # ROADMAP – FindA.Sale v2
 
+**Last Updated:** 2026-05-07 (v134 — S679: mcp.finda.sale custom domain wired (Railway + Vercel TXT verify). VAPID keys ✅, GSC ✅, Resend ✅, Stripe business ✅, Brand Voice System ✅. Added pre-launch audits #390–#393 in priority order. Checklist updated.)
 **Last Updated:** 2026-05-07 (v133 — S676: AI Discoverability + MCP Server spec. Added #384–#389. Shipped: llms.txt (/llms.txt LLM-readable site summary), robots.txt AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Bytespider all Allowed), JSON-LD structured data (WebPage, Offer, Organization, FAQPage on pricing/about/faq/index). Queued: SSR for public pages (#387, 3-4 dev days), MCP Server Phase 1 (#388, 7 tools + packages/mcp-server, 4-5 dev days), mcp.json discovery (#389, 0.5 dev days). Spec: claude_docs/strategy/mcp-server-spec.md.)
 **Last Updated:** 2026-05-04 (v130 — S641: Cold outreach deep-audit + two-sided pipeline sync. Verdict: BUILD don't BUY (4-vendor audit confirmed all are campaign-orchestrators that break Postgres-as-source-of-truth). Added #374 Cold Outreach Pipeline (Workspace + Postgres cron, 8 dev days, $6/mo), #375 Shopper-Side Discovery SEO (correction: organizer-side SEO deferrable but shopper-side is the demand flywheel — never defer), #376 LinkedIn Outreach Parallel Pilot (Expandi, ~$99/mo, defer 2 weeks past cold-email warm-up). Strategy doc: cold-outreach-deep-audit-S641.md. Supporting evidence: claude_docs/research/cold-outreach-2026-05/ (4 docs, ~57k words, ~80 primary sources). Memory updated with feedback_seo_two_sided_distinction.md.)
 **Last Updated:** 2026-05-04 (v132 — S626: Scraper/data-source research. Added #379 (Craigslist ghost stub BUG — cron scheduled, no source file), #380 (FB Marketplace GraphQL scraper — kyleronayne doc_id approach, needs live test first), #381 (GSalr.com aggregator — needs URL endpoint discovery), #382 (Sale type ordering fix — estate sales listed first in 5 places, quick dev dispatch), #383 (Meta Content Library API — deferred, requires academic/institutional ICPSR access). Dead avenues confirmed: CL RSS dead since Oct 2020; OpenRSS irrelevant; FB page RSS 404 confirmed. search-facebook-events.ts already active (Serper/Brave/ScaleSerp approach). GarageSaleFinder.com already scraped.)
@@ -70,9 +71,9 @@
 - [x] Set up support@finda.sale email forwarding ✅ (2026-03-06)
 - [ ] Order business cards (~$25) — files in `claude_docs/brand/`
 - [ ] Create Google Business Profile for FindA.Sale
-- [ ] Open Stripe business account
-- [ ] Google Search Console verification
-- [ ] Set up Google Voice for support line
+- [x] Open Stripe business account ✅ (S679)
+- [x] Google Search Console verification ✅ (S679 — TXT record verified)
+- [ ] ~~Set up Google Voice for support line~~ — cancelled S679
 
 ### Credentials + Services
 - [x] Google Cloud account + Vision API key ✅ (2026-03-05)
@@ -81,9 +82,9 @@
 - [x] Rotate Neon database credentials ✅ (2026-03-09)
 - [x] OAuth credentials (Google, Facebook) → Vercel env vars ✅ (2026-03-06)
 - [x] Platform fee locked at 10% flat ✅ (session 106)
-- [ ] VAPID keys confirmed in production
+- [x] VAPID keys confirmed in production ✅ (S679)
 - [ ] **⚠️ Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway**
-- [ ] **⚠️ Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway**
+- [x] **Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway** ✅ (S679)
 
 ### Beta Recruitment
 - [ ] Identify 5 target beta organizers — outreach template ready (`claude_docs/beta-launch/organizer-outreach.md`)
@@ -93,8 +94,15 @@
 - [ ] Sync: feedback → Claude for iteration
 
 ### Pre-Beta Prep
-- [ ] Brand Voice Session — use brand-voice plugin to establish documented voice, tone, and messaging pillars before beta outreach and email sequences
+- [x] Brand Voice Session ✅ (S679 — `claude_docs/brand/brand-voice-system.md` created, builds on brand-voice-guide-2026-03-16.md)
 - [ ] Trademark filing — see Decisions Needed (#82)
+
+### Pre-Launch Audits (Priority Order)
+- [ ] **#390 Health Scout Baseline Scan** — run health-scout across full codebase, produce baseline JSON, identify P0/P1 security and code issues before public traffic. Dispatch: `Skill('health-scout')`. _Priority 1._
+- [ ] **#391 Accessibility Audit (WCAG)** — audit color contrast, keyboard navigation, screen reader labels, focus traps across organizer + shopper flows. Dispatch: `Skill('design:accessibility-review')`. _Priority 2._
+- [ ] **#392 Brand Voice Audit** — sweep all UI copy (labels, error messages, empty states, email templates, onboarding modal, notifications) against `brand-voice-system.md`. Banned words check (AI, estate sale sole, disruption). Dispatch: `Skill('findasale-marketing')`. _Priority 3._
+- [ ] **#393 Chrome QA Backlog Sprint** — work through Pending Chrome QA items S344–S391 in focused micro-dispatches (one feature per dispatch). Priority: auction mechanics #174, iCal #184, purchase confirmation #80, holds E2E #146–#147, SettlementWizard #253. _Priority 4._
+- [ ] **#394 Full Product Walkthrough** — complete organizer + shopper role walkthrough start to finish (create sale → add items → publish → shopper browses → buys → settlement). Dispatch: `Skill('findasale-qa')`. _Priority 5 — do after QA backlog sprint clears known issues._
 
 ### Pre-Wire (Triggers Met)
 - [ ] Canary Deploy + Auto-Rollback: Add Vercel preview env + Railway staging slot config (trigger met — pre-beta stable)

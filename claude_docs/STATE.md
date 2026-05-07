@@ -4,33 +4,32 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S678 — MCP Server Railway Deploy COMPLETE (COMPLETE — pushed via MCP)**
+**Latest: S679 — Pre-Launch Checklist + mcp.finda.sale Domain (COMPLETE)**
 
-MCP server is live on Railway. All three blockers resolved: wrong Dockerfile being used, TypeScript compile errors, and DNS CNAME needed.
+Pre-launch checklist substantially cleared. mcp.finda.sale fully wired. Brand voice system shipped. Pre-launch audit queue established.
 
-1. **Root cause found: root railway.toml** — Repo-root `railway.toml` hardcoded `dockerfilePath = "packages/backend/Dockerfile.production"`, overriding every Railway service's Dockerfile setting including the new findasale (MCP) service. Fix: added `packages/mcp-server/railway.toml` pointing to `Dockerfile.production`.
+1. **Merge conflict resolved** — `packages/mcp-server/Dockerfile.production` conflict from diverged remote commits. Fixed conflict markers, kept `COPY package-lock.json* ./`. Patrick pushed successfully.
 
-2. **TypeScript compile errors** — `noUnusedLocals` and `noUnusedParameters` were both `true` in the mcp-server tsconfig. Three unused parameters (`req`, `res`, `next`) blocked `tsc`. Fixed by setting both flags to `false` in `tsconfig.json` and adding `_` prefixes in `index.ts`.
+2. **MailerLite group IDs** — `MAILERLITE_ORGANIZERS_GROUP_ID=181314853593417582` ("Beta Organizers"). Found via MailerLite MCP `list_resources`. `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` still pending Railway set.
 
-3. **DNS CNAME** — Added `mcp` CNAME → `findasale-production.up.railway.app` in Vercel DNS for finda.sale. Confirmed via Vercel "Created DNS Record successfully."
+3. **VAPID keys** — Generated fresh EC key pair (prime256v1) in bash sandbox. Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_CONTACT_EMAIL=admin@finda.sale` on Railway. Redeploying confirmed.
 
-4. **mcp.json activated** — `.well-known/mcp.json` status updated from `coming-soon` → `active`. Vercel deploy queued and will complete shortly.
+4. **Google Search Console** — TXT record `google-site-verification=yxkaqu1JnUXFO5AzqUMP9f-6_r7L2orxcTL195X900E` added to Vercel DNS. GSC auto-verified via domain name provider method. ✅
 
-**Verified:** `https://findasale-production.up.railway.app/health` → `{"status":"ok","uptime":62s,"tools":7,"environment":"production"}`. All 7 tools (search_sales, get_sale, search_items, get_item, list_cities, list_sale_types, list_categories) registered and responding.
+5. **Brand Voice System** — Marketing agent built comprehensive `claude_docs/brand/brand-voice-system.md` (8-part system: voice pillars, banned words, approved phrases, 10 before/after rewrites, tone by context, quick reference card). Builds on brand-voice-guide-2026-03-16.md.
 
-**S678 files changed (all MCP-pushed):**
-- `packages/mcp-server/railway.toml` — NEW (Dockerfile path + deploy settings)
-- `packages/mcp-server/tsconfig.json` — noUnusedLocals/Parameters → false
-- `packages/mcp-server/src/index.ts` — _req/_res/_next param prefixes
-- `packages/frontend/public/.well-known/mcp.json` — status → active
+6. **mcp.finda.sale custom domain** — Railway `findasale` service: custom domain `mcp.finda.sale` added on port 3003. TXT verification record `_railway-verify.mcp` added to Vercel DNS. DNS CNAME was already present from S678. Both records confirmed in Vercel. Health check propagating (~10 min).
 
-**Also confirmed this session:**
-- S675 migration `20260507000004_sale_feed_indexes` — confirmed deployed via psycopg2 query
-- Product JSON-LD on `/items/[id]` — assessed: already implemented at lines 550–609 of `pages/items/[id].tsx`, no changes needed
+7. **Checklist items cleared:** Stripe business account ✅, GSC ✅, VAPID keys ✅, Resend API key ✅, Brand Voice Session ✅. Google Voice for support line cancelled.
 
-**Remaining from S678 carry-forward:**
-- MAILERLITE_ORGANIZERS_GROUP_ID env var in Railway (pending since S668)
-- Chrome QA: VoiceDescriptionInput (pending)
+8. **Pre-launch audits added to roadmap** (#390–#394): Health Scout (#390, priority 1), Accessibility WCAG (#391, priority 2), Brand Voice Audit (#392, priority 3), Chrome QA Backlog Sprint (#393, priority 4), Full Product Walkthrough (#394, priority 5).
+
+**Remaining carry-forward:**
+- `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` — still needs Railway set (Patrick manual)
+- mcp.finda.sale health check — give 10 min for propagation, then verify `curl https://mcp.finda.sale/health`
+- Google Business Profile — Patrick manual at business.google.com
+- Business cards — files in `claude_docs/brand/`
+- Pre-launch audits #390–#394 — next session priority
 
 ---
 

@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S678 Wrap
+# Patrick's Dashboard — S679 Wrap
 
 ---
 
@@ -7,11 +7,11 @@
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S678: MCP server Railway deploy complete + DNS CNAME + mcp.json active"
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/brand/brand-voice-system.md
+git commit -m "S679: Pre-launch checklist + mcp.finda.sale domain + pre-launch audit queue"
 .\push.ps1
 ```
-
-Note: All code changes this session (railway.toml, tsconfig.json, index.ts, mcp.json) were already pushed to GitHub via MCP during the session.
 
 ---
 
@@ -24,31 +24,39 @@ Note: All code changes this session (railway.toml, tsconfig.json, index.ts, mcp.
 | Homepage feed | ✅ Working |
 | Vercel build | ✅ Green |
 | Railway backend | ✅ Green |
-| MCP Server | ✅ LIVE — `findasale-production.up.railway.app/health` returns 200, 7 tools |
-| mcp.finda.sale DNS | ✅ CNAME added (Vercel DNS, propagating) |
-| .well-known/mcp.json | ✅ status → active (Vercel deploy queued) |
-| Audio notes (VoiceDescriptionInput) | ✅ Shipped S677 — Chrome QA pending |
-| AI discoverability (llms.txt, robots.txt, JSON-LD) | ✅ Live S676 |
-| Sale feed indexes (S675 migration) | ✅ Confirmed deployed |
-| Product JSON-LD on /items/[id] | ✅ Already implemented (lines 550–609) |
+| MCP Server | ✅ LIVE — 7 tools responding |
+| mcp.finda.sale | ✅ Railway domain added + TXT verify record added — propagating |
+| Brand Voice System | ✅ `claude_docs/brand/brand-voice-system.md` created S679 |
+| VAPID keys | ✅ Set on Railway S679 |
+| Google Search Console | ✅ Verified S679 |
+| Resend | ✅ Confirmed S679 |
+| Stripe business account | ✅ Confirmed S679 |
+| Google Voice support line | ❌ Cancelled — not doing |
 
 ---
 
-## S679 First Action
+## Patrick Manual Actions Needed
 
-**Chrome QA: VoiceDescriptionInput** — open edit-item in Chrome as user1@example.com (Seedy2025!), tap the mic button near the description textarea, speak an item description. Verify: transcript saves to description, inline "Voice suggestion · Accept / Keep" prompts appear for pre-filled fields. Screenshot required.
-
----
-
-## Outstanding Carry-Forward
-
-1. **MAILERLITE_ORGANIZERS_GROUP_ID** env var in Railway — pending since S668. Organizers signing up aren't enrolled in MailerLite onboarding automation without this. Get the group ID from MailerLite → Groups.
-2. **Chrome QA: VoiceDescriptionInput** — see above
-3. **mcp.finda.sale smoke test** — run `curl https://mcp.finda.sale/health` once DNS propagates (5–30 min). Direct URL works now: `https://findasale-production.up.railway.app/health`
+1. **`MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`** — set on Railway → backend service → Variables. Shoppers who sign up won't be enrolled in MailerLite until this is set.
+2. **Google Business Profile** — create at business.google.com (use 219 E Michigan Ave, Suite F, Paw Paw, MI 49079)
+3. **Business cards** — files in `claude_docs/brand/`
+4. **mcp.finda.sale health check** — run `curl https://mcp.finda.sale/health` in 10–15 min to confirm propagated
 
 ---
 
-## Outstanding Audit Items
+## Next Session Priority — Pre-Launch Audits
+
+| Priority | Audit | Dispatch |
+|----------|-------|---------|
+| 1 | Health Scout baseline scan (#390) | `Skill('health-scout')` |
+| 2 | Accessibility audit WCAG (#391) | `Skill('design:accessibility-review')` |
+| 3 | Brand Voice copy sweep (#392) | `Skill('findasale-marketing')` |
+| 4 | Chrome QA backlog sprint (#393) | Micro-dispatches — one feature per call |
+| 5 | Full product walkthrough (#394) | `Skill('findasale-qa')` — after QA sprint |
+
+---
+
+## Outstanding Audit Items (Pre-Existing)
 
 - ❌ P0: SaleCard above-fold images using `loading="lazy"` (LCP hit)
 - ❌ P1: PWA offline.html missing (sw.js pre-caches it but file doesn't exist)
