@@ -1,9 +1,9 @@
 name: Scrape Foursquare Places
 
 on:
-  schedule:
-    - cron: '0 3 3 * *'   # 3rd of month — pulls next 50 queue items
-    - cron: '0 3 4 * *'   # 4th of month — pulls next 50 queue items
+  # DISABLED S695 — Foursquare free tier drops to 500 calls/month on June 1 2026.
+  # Our volume: ~2,461 requests/run × 2 runs/month = ~4,922/month → WILL BILL post June 1.
+  # Re-enable only if free tier is restored or volume is reduced below 500/month.
   workflow_dispatch:
 
 concurrency:
