@@ -4,26 +4,37 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S690 — 50-State Auctioneer Scraper Build (ON DISK — AUDIT REQUIRED BEFORE PUSH)**
+**Latest: S691 — 50-State Scraper Audit + Safe Fixes (PARTIAL — push block below)**
 
-Built scraper files for all 50 US states and wired all routes in `internal.ts`. However: Patrick correctly flagged that the 42 new state scrapers were template-generated in parallel agents without individually researching each state's actual licensing board URL, HTML structure, or whether auctioneer licensing even exists in that state. Scrapers are very likely rubber-stamped. Also caught: naming inconsistency (scrape-nc-licensing.yml abbreviation vs scrape-north-carolina-licensing.yml full-name for other states).
+S691 audited the S690 rubber-stamped scrapers. Research confirmed which states have real auctioneer licensing, which don't, and what Phase 2 license types can replace no-auctioneer scrapers. Three safe fixes applied:
 
-**What is on disk (NOT yet pushed — hold until audit):**
-- `packages/backend/src/routes/internal.ts` — updated to 728 lines with all 50 states (14 original + 36 new imports + 36 new routes)
-- `packages/backend/src/services/scraper/sources/northCarolinaLicensingScraper.ts`
-- `packages/backend/src/services/scraper/sources/ohioLicensingScraper.ts`
-- `packages/backend/src/services/scraper/sources/tennesseeLicensingScraper.ts`
-- `packages/backend/src/services/scraper/sources/virginiaLicensingScraper.ts`
-- 36 new state scrapers: AL, AR, AZ, CA, CO, CT, DE, FL, GA, HI, IA, ID, KS, KY, MA, MD, ME, MI, MN, MS, MT, NE, ND, NH, NJ, NM, NV, NY, OK, OR, PA, RI, SC, SD, TX, UT
-- 49 workflow YMLs (7 original + 42 new) — in `.github/workflows/`
-- Note: one bad file on disk: `westVirginia LicensingScraper.ts` (space in name) — delete it
+**Completed this session:**
+- **TX scraper rewritten** — Socrata REST API (`data.texas.gov/resource/7358-krk7.json`) replaces brittle ASP.NET form scraping. Paginates 1000/page, filters Active Auctioneers, optional `SOCRATA_APP_TOKEN` header. TS check: zero errors.
+- **NC workflow yml renamed** — `scrape-north-carolina-licensing.yml` (full name, consistent with all other states). Old `scrape-nc-licensing.yml` needs `git rm` by Patrick.
+- **WV space-named duplicate** — `westVirginia LicensingScraper.ts` (space) needs `git rm` by Patrick. True duplicate of `westVirginiaLicensingScraper.ts`.
 
-**Known issues flagged by Patrick:**
-1. State scraper URLs were guessed/templated, not individually researched
-2. Some states may not have auctioneer licensing requirements at all
-3. Workflow YML naming inconsistency — `scrape-nc-licensing.yml` (abbrev) vs `scrape-north-carolina-licensing.yml` (full name) for others
+**Research findings locked (S691):**
+- **18 states with confirmed auctioneer licensing + verified URLs:** AL, AR, FL, GA, IA, KY, LA, MA, ME, MS, ND, NH, PA, SC, SD, WA, WI, WV
+- **16 states with NO auctioneer license:** AZ, DE, ID, IL, KS, MI, MN, MO, MT, NM, NV, NY, OK, OR, RI, UT → need Phase 2 replacement (secondhand dealer, pawnbroker, SoS business name search)
+- **8 original no-license states from S690 batch:** AK, CA, CO, CT, HI, NE, NJ, WY → same Phase 2 treatment
+- **Phase 2 best sources:** CA ERDS (CA DOJ secondhand dealer/pawnbroker) is richest alternative nationally. All states have pawnbroker licensing. SoS keyword search works everywhere.
+- **Locked rule:** Never delete a state scraper before exhausting Phase 2 alternatives.
 
-**DO NOT PUSH** any of these files until the S691 audit confirms URLs and coverage.
+**Still pending (next dispatch wave):**
+- Rewrite the 18 states with confirmed real URLs to correct endpoints
+- Replace the 24 no-auctioneer states with Phase 2 license type scrapers
+- Push the full scraper batch + all 50 workflow YMLs (blocked on MCP `workflow` scope — Patrick must push)
+
+**Files changed this session (need Patrick push):**
+- `packages/backend/src/services/scraper/sources/texasLicensingScraper.ts` — Socrata API rewrite
+- `.github/workflows/scrape-north-carolina-licensing.yml` — NEW (renamed from scrape-nc-licensing.yml)
+- `claude_docs/strategy/roadmap.md` — v136, added #393
+
+**Patrick manual actions needed:**
+```powershell
+git rm ".github/workflows/scrape-nc-licensing.yml"
+git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"
+```
 
 ---
 
@@ -640,7 +651,13 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 ---
 
-## Recent Sessions (S685–S690)
+## Recent Sessions (S685–S691)
+
+### S691 — 50-State Scraper Audit + Safe Fixes (PARTIAL — push block below)
+
+Research confirmed 18 states with real auctioneer licensing + verified URLs, 16 states with no auctioneer license (Phase 2 alternatives: secondhand dealer, pawnbroker, SoS keyword search), and 8 more from the S690 batch needing Phase 2 treatment. TX scraper rewritten to Socrata API. NC yml renamed. WV space-named duplicate queued for manual deletion. Roadmap updated (v136, #393 added). Phase 2 URL-correction and replacement dispatch is next session's priority. Locked rule: never delete a state until all Phase 2 alternatives exhausted.
+
+---
 
 ### S690 — Roadmap Audit + Full Graduation Pass (COMPLETE)
 
@@ -830,59 +847,42 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S691
+## Next Session — S692
 
-**⚠️ PRIORITY 0 — Audit the S690 50-state scraper build before touching anything else**
+**Priority 1 — Patrick push the S691 block first**
 
-S690 generated 42 state scraper files using parallel agents with a template pattern. Patrick flagged (correctly) that the scrapers were rubber-stamped — agents guessed URLs and HTML structures rather than researching each state's actual licensing board. The files are on disk but nothing has been pushed.
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
 
-The S691 session must:
+# Delete the two files that need manual removal
+git rm ".github/workflows/scrape-nc-licensing.yml"
+git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"
 
-1. **Research each state's actual auctioneer licensing situation:**
-   - Does this state require auctioneer licensing? (Several states — TX, AK, etc. — have no auctioneer license requirement)
-   - What is the real URL for the state's public license lookup?
-   - What HTTP method and form structure does it use?
-   - Is there a downloadable CSV or API endpoint instead of HTML scraping?
+# Stage new/modified files
+git add .github/workflows/scrape-north-carolina-licensing.yml
+git add packages/backend/src/services/scraper/sources/texasLicensingScraper.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
 
-2. **Fix the naming inconsistency in workflow YMLs:**
-   - `scrape-nc-licensing.yml` uses abbreviation; all others use full state name
-   - Either rename to `scrape-north-carolina-licensing.yml` OR standardize everything to abbreviations
-   - States needing consistent naming decision before push
+git commit -m "S691: TX Socrata rewrite, NC yml rename, WV duplicate removal, scraper audit docs"
+.\push.ps1
+```
 
-3. **Delete the bad file on disk:**
-   - `packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts` (space in name — duplicate of westVirginiaLicensingScraper.ts)
+**Priority 2 — Push S689 Chrome QA fixes (still unpushed)**
 
-4. **Audit each scraper file for:**
-   - Correct URL (not hallucinated)
-   - Correct form field names (ASP.NET form names differ per state)
-   - Whether the state actually has a public auctioneer license directory
-   - Whether `AUCTION_HOUSE` is the right category (some states cover estate sale companies differently)
-
-5. **After audit:** rebuild the scraper files that need correction, then push the full batch + internal.ts + workflow YMLs
-
-**States with no auctioneer licensing requirement (likely deletable):** TX, AK, HI, CO, CA may not require state licensing — verify before keeping those scrapers.
-
-**Do not push the S690 scraper files until this audit is complete.**
-
----
-
-**Priority 2 — Push S689 Chrome QA fixes (still unpushed from prior session)**
-
-Block 1 — Chrome QA fixes + docs:
+Block 1 — Chrome QA fixes:
 ```powershell
 git add packages/backend/src/routes/organizers.ts
 git add packages/frontend/components/CheckoutModal.tsx
 git add packages/frontend/components/BoostPurchaseModal.tsx
 git add packages/frontend/components/CSVImportModal.tsx
 git add packages/frontend/components/DisputeForm.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "S689: Dashboard lapse fix, WCAG ARIA (4 components), roadmap v135"
+git commit -m "S689: Dashboard lapse fix, WCAG ARIA (4 components)"
 .\push.ps1
 ```
 
-Block 2 — S689 scraper infrastructure (crash loop fixes, already verified working):
+Block 2 — S689 scraper infrastructure:
 ```powershell
 git add packages/backend/src/services/scraper/sources/saleSeeker.ts
 git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
@@ -896,6 +896,10 @@ git commit -m "S689: Lead scoring service + crash loop fixes + scraper workflow 
 .\push.ps1
 ```
 
-**Priority 3 — QA holdover**
+**Priority 3 — Dispatch URL-correction agents for the 50-state scraper batch**
+
+18 states with confirmed auctioneer licensing need their scraper files rewritten to verified real URLs. 24 no-auctioneer states need Phase 2 replacement scrapers (secondhand dealer, pawnbroker, SoS keyword search). Dispatch in parallel batches by state, then push all files + workflow YMLs together. See S691 research findings in Current Status above for the full URL list.
+
+**Priority 4 — QA holdover**
 - #251 priceBeforeMarkdown — needs TEAMS-tier test scenario
 - #223 Organizer Guidance Layer rank badges — needs an active hold in prod
