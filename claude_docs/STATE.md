@@ -4,7 +4,21 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S693 — #174 Auction QA Setup + Bid Fix (COMPLETE)**
+**Latest: S694 — Admin Role Fix + Slow Queries + Display Name + Geo Feed (COMPLETE)**
+
+S694 shipped three bug fixes and one new feature:
+
+- **Admin role bypass fixed (already on GitHub)** — `updateUserRole` in adminController now syncs both `role` and `roles` fields and increments `tokenVersion` on every role change. Direct DB fix applied to user1@example.com (roles array cleaned, tokenVersion bumped — active session invalidated immediately).
+- **Discovery feed slow queries — geo bounding box** — `discoveryService.ts` now applies a ~100mi lat/lng bounding box when coordinates are available, cutting the Prisma query from ~10,059 rows to ~50-200. Fallback `take: 500` when no coords. Expected query time: 1300ms → <100ms.
+- **Display name editing** — `PATCH /users/me` now accepts `name` field (validated: non-empty string, ≤100 chars). Shopper settings page has a new "Display Name" section with save button wired to the endpoint.
+- **Design opportunity audit** — Top 3 highest-impact design prompts delivered: (1) homepage cold-shopper trust signals + geo-toggle, (2) organizer first-48h onboarding linear card, (3) Sale Pulse Quick Wins discoverability feedback for organizers.
+
+**Files changed this session (need Patrick push):**
+- `packages/backend/src/services/discoveryService.ts` — geo bounding box + take:500 fallback
+- `packages/backend/src/routes/users.ts` — PATCH /me accepts `name` field
+- `packages/frontend/pages/shopper/settings.tsx` — Display Name section
+
+**Previous: S693 — #174 Auction QA Setup + Bid Fix (COMPLETE)**
 
 S693 seeded production auction data for #174 and fixed two blocking bugs, but QA re-run after deploy is still pending.
 
@@ -888,9 +902,65 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S694
+## Next Session — S695
 
-**Priority 1 — Push the #174 bid fix first**
+**Priority 1 — Push S694 changes**
+
+```powershell
+git add packages/backend/src/services/discoveryService.ts
+git add packages/backend/src/routes/users.ts
+git add packages/frontend/pages/shopper/settings.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S694: Geo bounding box feed fix + display name editing + admin role sync"
+.\push.ps1
+```
+
+**Priority 2 — Push the #174 bid fix (still pending from S693)**
+
+```powershell
+git add packages/frontend/pages/items/[id].tsx
+git commit -m "fix: bid API field name bidAmount → maxBidAmount (ADR-013 contract)"
+.\push.ps1
+```
+
+Wait 2–3 min for Vercel, then re-run QA on #174: login as user12@example.com / Seedy2025!, go to finda.sale/sales/c5hykxxecanngwcrkvq92n1va, verify all 5 items visible, place a bid, verify reverse auction item shows ~$75.
+
+**Priority 3 — Push S691 block (still pending)**
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+
+git rm ".github/workflows/scrape-nc-licensing.yml"
+git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"
+git add .github/workflows/scrape-north-carolina-licensing.yml
+git add packages/backend/src/services/scraper/sources/texasLicensingScraper.ts
+git add claude_docs/strategy/roadmap.md
+git commit -m "S691: TX Socrata rewrite, NC yml rename, WV duplicate removal"
+.\push.ps1
+```
+
+**Priority 4 — Push S689 Chrome QA fixes (still unpushed)**
+
+Block 1 — Chrome QA fixes:
+```powershell
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/components/CheckoutModal.tsx
+git add packages/frontend/components/BoostPurchaseModal.tsx
+git add packages/frontend/components/CSVImportModal.tsx
+git add packages/frontend/components/DisputeForm.tsx
+git commit -m "S689: Dashboard lapse fix, WCAG ARIA (4 components)"
+.\push.ps1
+```
+
+**Priority 5 — Dispatch URL-correction agents for the 50-state scraper batch**
+
+18 states with confirmed auctioneer licensing need their scraper files rewritten to verified real URLs. 24 no-auctioneer states need Phase 2 replacement scrapers (secondhand dealer, pawnbroker, SoS keyword search). See S691 research findings in Current Status for the full URL list.
+
+**Priority 6 — QA holdover**
+- #174 Auction — push + QA (Priority 1/2 above)
+- #251 priceBeforeMarkdown — needs TEAMS-tier test scenario
+- #223 Organizer Guidance Layer rank badges — needs an active hold in prod
 
 ```powershell
 git add packages/frontend/pages/items/[id].tsx
