@@ -18,7 +18,7 @@
 | Outreach lead priority | ✅ HOT 40% / WARM 35% / COLD 25% |
 | MailerLite tier group wiring | ✅ BUILT — needs 3 Railway env vars + S698 push |
 | Email discovery schema | ✅ BUILT — needs S698 push + `prisma migrate deploy` |
-| #174 Auction QA | 🟡 Bid fix deployed. Ready to QA. |
+| #174 Auction QA | 🟡 2 P0s fixed (bid amount + reverse auction display). QA after S698 push deploys. |
 | Design brief pipeline | ✅ S699 COMPLETE — 5 briefs + implementation order |
 
 ---
