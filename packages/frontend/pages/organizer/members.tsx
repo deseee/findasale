@@ -444,9 +444,9 @@ const OrganizerMembersPage = () => {
                           )}
                         </div>
                         {expandedCards[member.id] ? (
-                          <ChevronUp className="w-5 h-5 text-gray-400" />
+                          <ChevronUp className="w-5 h-5 text-gray-400" aria-label="Collapse member details" />
                         ) : (
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
+                          <ChevronDown className="w-5 h-5 text-gray-400" aria-label="Expand member details" />
                         )}
                       </button>
 
@@ -595,6 +595,7 @@ const OrganizerMembersPage = () => {
                                 onClick={() => handleRemoveMember(member.id)}
                                 disabled={removeStaffMutation.isPending}
                                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition text-sm font-medium flex items-center gap-2"
+                                aria-label="Remove team member"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
