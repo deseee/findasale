@@ -1,16 +1,13 @@
 /**
- * ADR-073: Organizer Enrichment via Google Places & ESN Company Profile APIs
- * Fires after organizer creation/update to populate verification data
+ * ADR-073: Organizer Enrichment via ESN Company Profile APIs & Website Scraping
+ * Fires after organizer creation/update to populate verification data.
+ * NOTE: Google Places enrichment removed — paid API, $200/run (S695).
  */
 
 import { prisma } from '../../lib/prisma';
 import { getRandomUserAgent, getRandomReferer } from './userAgents';
 
 const DEBUG = process.env.LOG_LEVEL === 'debug';
-
-// In-memory cache for Google Place lookups — 30-day TTL
-const placeIdCache = new Map<string, { placeId: string; cachedAt: number }>();
-const PLACE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 /**
  * Main enrichment entry point.
@@ -29,7 +26,6 @@ export async function enrichOrganizer(
       where: { id: organizerId },
       select: {
         id: true,
-        googlePlaceId: true,
         phone: true,
         website: true,
         address: true,
@@ -46,8 +42,6 @@ export async function enrichOrganizer(
         esnOrgId: true,
         contactEmail: true,
         esnCompanyPageUrl: true,
-        googleRating: true,
-        googleRatingCount: true,
         user: {
           select: { email: true }
         }
@@ -65,8 +59,8 @@ export async function enrichOrganizer(
       return;
     }
 
-    // Skip only if fully enriched: Google lookup done, no ESN data pending, contact email found
-    if (organizer.googlePlaceId && !organizer.esnOrgId && organizer.contactEmail) {
+    // Skip if no ESN pending and contact email already found
+    if (!organizer.esnOrgId && organizer.contactEmail) {
       if (DEBUG) console.info(`[Enrichment] Already fully enriched — skipping: ${organizerId}`);
       return;
     }
@@ -118,46 +112,7 @@ export async function enrichOrganizer(
       }
     }
 
-    // Step 2: Google Places (fills address, phone, website, photo if still missing)
-    if (!organizer.googlePlaceId) {
-      const placeId = await lookupGooglePlace(name, city, state);
-      if (placeId) {
-        // Guard: skip if this placeId already belongs to a different organizer (P2002 prevention)
-        const alreadyOwned = await prisma.organizer.findFirst({
-          where: { googlePlaceId: placeId, NOT: { id: organizerId } },
-          select: { id: true },
-        });
-        if (alreadyOwned) {
-          if (DEBUG) console.info(`[Enrichment] googlePlaceId ${placeId} already owned by ${alreadyOwned.id} — skipping for ${organizerId}`);
-        } else {
-          updateData.googlePlaceId = placeId;
-        }
-
-        const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
-        if (googlePlacesKey) {
-          // Skip expensive Place Details call if phone and website already populated (ESN-sourced)
-          const hasPhone = organizer.phone || updateData.phone;
-          const hasWebsite = organizer.website || updateData.website;
-          if (!hasPhone || !hasWebsite) {
-            const details = await fetchGooglePlaceDetails(placeId, googlePlacesKey);
-            if (details) {
-              if (details.phone && !organizer.phone && !updateData.phone)
-                updateData.phone = details.phone;
-              if (details.website && !organizer.website && !updateData.website)
-                updateData.website = details.website;
-              if (details.formattedAddress && !organizer.address)
-                updateData.address = details.formattedAddress;
-              if (details.photoReference && !organizer.profilePhoto && !updateData.profilePhoto) {
-                const photoUrl = getGooglePhotoUrl(details.photoReference, googlePlacesKey);
-                if (photoUrl) updateData.profilePhoto = photoUrl;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Step 3: Contact email discovery
+    // Step 2: Contact email discovery
     // Priority: website /contact page → sale description parsing
     if (!organizer.contactEmail) {
       const websiteToCheck = (updateData.website as string | undefined) ?? organizer.website;
@@ -192,105 +147,6 @@ export async function enrichOrganizer(
   }
 }
 
-/**
- * Lookup organizer via Google Places API.
- * Returns place ID on success, null on failure or if not found.
- * Caches results for 30 days to avoid redundant API calls.
- */
-async function lookupGooglePlace(
-  name: string,
-  city: string,
-  state: string
-): Promise<string | null> {
-  const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!googlePlacesKey) return null;
-
-  // Build cache key from normalized input
-  const cacheKey = `${name}|${city}|${state}`.toLowerCase();
-
-  // Check for valid cached entry
-  const cached = placeIdCache.get(cacheKey);
-  if (cached && Date.now() - cached.cachedAt < PLACE_CACHE_TTL_MS) {
-    return cached.placeId;
-  }
-
-  try {
-    const query = `${name} ${city} ${state}`;
-    const url = new URL('https://maps.googleapis.com/maps/api/place/findplacefromtext/json');
-    url.searchParams.set('input', query);
-    url.searchParams.set('inputtype', 'textquery');
-    url.searchParams.set('fields', 'place_id,name,formatted_address');
-    url.searchParams.set('key', googlePlacesKey);
-
-    const response = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
-    if (!response.ok) return null;
-
-    const data = (await response.json()) as {
-      candidates?: Array<{ place_id: string }>;
-      status: string;
-    };
-
-    if (data.status !== 'OK' || !data.candidates?.length) return null;
-
-    const placeId = data.candidates[0]?.place_id || null;
-
-    // Cache successful lookups only (not null results, we retry those)
-    if (placeId) {
-      placeIdCache.set(cacheKey, { placeId, cachedAt: Date.now() });
-    }
-
-    return placeId;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Fetch full business details from Google Places Details API.
- * Requests phone, website, address, and photo — not rating fields (cost optimization).
- */
-async function fetchGooglePlaceDetails(
-  placeId: string,
-  apiKey: string
-): Promise<{
-  phone?: string;
-  website?: string;
-  photoReference?: string;
-  formattedAddress?: string;
-} | null> {
-  try {
-    const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
-    url.searchParams.set('place_id', placeId);
-    url.searchParams.set(
-      'fields',
-      'formatted_phone_number,website,photos,formatted_address'
-    );
-    url.searchParams.set('key', apiKey);
-
-    const response = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
-    if (!response.ok) return null;
-
-    const data = (await response.json()) as {
-      result?: {
-        formatted_phone_number?: string;
-        website?: string;
-        photos?: Array<{ photo_reference: string }>;
-        formatted_address?: string;
-      };
-      status: string;
-    };
-
-    if (data.status !== 'OK' || !data.result) return null;
-    return {
-      phone: data.result.formatted_phone_number,
-      website: data.result.website,
-      photoReference: data.result.photos?.[0]?.photo_reference,
-      formattedAddress: data.result.formatted_address,
-    };
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Lookup EstateSales.NET company profile via company-public-page API.
@@ -439,13 +295,3 @@ async function extractEmailFromSaleDescriptions(organizerId: string): Promise<st
   return null;
 }
 
-/**
- * Generate a public Google Places Photo URL.
- */
-function getGooglePhotoUrl(photoReference: string, apiKey: string): string {
-  const url = new URL('https://maps.googleapis.com/maps/api/place/photo');
-  url.searchParams.set('maxwidth', '400');
-  url.searchParams.set('photo_reference', photoReference);
-  url.searchParams.set('key', apiKey);
-  return url.toString();
-}

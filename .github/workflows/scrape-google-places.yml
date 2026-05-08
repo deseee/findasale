@@ -1,8 +1,8 @@
 name: Google Places Business Directory Scraper
 
 on:
-  schedule:
-    - cron: '0 2 1 * *'  # Monthly: 1st of every month at 02:00 UTC (~$0/month in free tier)
+  # DISABLED S695 — Google Places is a paid API ($200/run). Cron removed.
+  # Re-enable only if a free alternative is identified.
   workflow_dispatch:
 
 concurrency:
