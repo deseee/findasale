@@ -29,12 +29,30 @@ const CONCURRENCY = 5;
 async function main() {
   if (!SCRAPER_KEY) throw new Error('INTERNAL_SCRAPER_KEY is not set');
 
+  // Matrix job slicing (GitHub Actions parallel batches)
+  const batchIndex = parseInt(process.env.SCRAPER_BATCH_INDEX || '0', 10);
+  const batchCount = parseInt(process.env.SCRAPER_BATCH_COUNT || '1', 10);
+  const queueLimit = parseInt(process.env.SCRAPER_QUEUE_LIMIT || '50', 10);
+
   // Fetch next batch of queue items to crawl
-  const queueItems = await getNextCrawlsToRun(50, 'HEREPlaces'); // Get up to 50 queue items ready to run
+  // Note: We fetch queueLimit items but may process a subset based on matrix batching
+  const queueItems = await getNextCrawlsToRun(queueLimit, 'HEREPlaces'); // Get up to queueLimit queue items ready to run
   console.log(`[run-here-places] Found ${queueItems.length} queue items ready to run`);
 
-  if (queueItems.length === 0) {
-    console.log('[run-here-places] No queue items ready — exiting');
+  // If using matrix strategy (batchCount > 1), slice the queue into batches
+  let itemsToProcess = queueItems;
+  if (batchCount > 1) {
+    const itemsPerBatch = Math.ceil(queueItems.length / batchCount);
+    const startIdx = batchIndex * itemsPerBatch;
+    const endIdx = Math.min(startIdx + itemsPerBatch, queueItems.length);
+    itemsToProcess = queueItems.slice(startIdx, endIdx);
+    console.log(
+      `[run-here-places] Matrix batch ${batchIndex}/${batchCount - 1}: processing items ${startIdx}–${endIdx - 1} (${itemsToProcess.length} items)`
+    );
+  }
+
+  if (itemsToProcess.length === 0) {
+    console.log('[run-here-places] No queue items to process in this batch — exiting');
     return;
   }
 
@@ -48,7 +66,7 @@ async function main() {
   // runs all query categories regardless of queryType. Scrape each unique location once
   // and mark ALL matching queue rows complete to avoid 6x duplicate work.
   const locationMap = new Map<string, { searchLocation: string; queueIds: string[] }>();
-  for (const item of queueItems) {
+  for (const item of itemsToProcess) {
     const key = `${item.metro}::${item.subArea ?? ''}`;
     const searchLocation = item.subArea ? `${item.subArea}, ${item.metro}` : item.metro;
     if (!locationMap.has(key)) {

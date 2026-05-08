@@ -55,11 +55,7 @@ export async function runIndianaLicensingScraper(): Promise<void> {
         'Accept-Encoding': 'gzip, deflate',
         Connection: 'keep-alive',
       },
-<<<<<<< HEAD
-      timeout: 30000,
-=======
       signal: AbortSignal.timeout(30000),
->>>>>>> origin/main
     });
 
     if (!formPageResponse.ok) {
@@ -69,10 +65,7 @@ export async function runIndianaLicensingScraper(): Promise<void> {
     const formHtml = await formPageResponse.text();
 
     // Extract ASP.NET ViewState and EventValidation from hidden fields
-<<<<<<< HEAD
     // These are typically required for ASP.NET form submission
-=======
->>>>>>> origin/main
     const viewStateMatch = formHtml.match(/name="__VIEWSTATE"\s+value="([^"]+)"/);
     const eventValidationMatch = formHtml.match(/name="__EVENTVALIDATION"\s+value="([^"]+)"/);
 
@@ -89,17 +82,10 @@ export async function runIndianaLicensingScraper(): Promise<void> {
     formData.append('ctl00$ContentPlaceHolder1$ddlLicenseType', 'All');
     formData.append('ctl00$ContentPlaceHolder1$ddlAttributeType', 'All');
     formData.append('ctl00$ContentPlaceHolder1$ddlLicenseStatus', 'All');
-<<<<<<< HEAD
-    formData.append('ctl00$ContentPlaceHolder1$ddlState', 'Indiana'); // or look for value attribute
-    formData.append('ctl00$ContentPlaceHolder1$btnSearch', 'Search');
-
-    // Submit search — this will return paginated results
-=======
     formData.append('ctl00$ContentPlaceHolder1$ddlState', 'Indiana');
     formData.append('ctl00$ContentPlaceHolder1$btnSearch', 'Search');
 
-    // Submit search
->>>>>>> origin/main
+    // Submit search — this will return paginated results
     await rateLimiter.waitBeforeRequest(domain);
 
     const searchResponse = await fetch(SEARCH_URL, {
@@ -113,11 +99,7 @@ export async function runIndianaLicensingScraper(): Promise<void> {
         Referer: INDIANA_PLA_BASE_URL + '/EVerification/Search.aspx',
       },
       body: formData.toString(),
-<<<<<<< HEAD
-      timeout: 30000,
-=======
       signal: AbortSignal.timeout(30000),
->>>>>>> origin/main
     });
 
     if (!searchResponse.ok) {
@@ -126,42 +108,26 @@ export async function runIndianaLicensingScraper(): Promise<void> {
 
     const html = await searchResponse.text();
 
-    // Parse HTML table rows
-<<<<<<< HEAD
-    // Look for table rows in the results grid
-=======
->>>>>>> origin/main
+    // Parse HTML table rows — look for table rows in the results grid
     const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
     const rows = html.match(rowRegex) || [];
 
     console.log(`[IndianaLicensing] Found ${rows.length} table rows on page 1`);
 
-<<<<<<< HEAD
     // Skip header row if present, parse data rows
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
 
       // Extract cells from row
-=======
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-
->>>>>>> origin/main
       const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/g;
       const cells = row.match(cellRegex) || [];
 
       if (cells.length < 6) {
-<<<<<<< HEAD
         // Skip header or malformed rows
         continue;
       }
 
       // Extract text from cells, removing HTML tags
-=======
-        continue;
-      }
-
->>>>>>> origin/main
       const extractText = (html: string): string => {
         return html
           .replace(/<[^>]*>/g, '')
@@ -178,25 +144,15 @@ export async function runIndianaLicensingScraper(): Promise<void> {
       const addressFull = extractText(cells[5]);
 
       if (!name || !licenseNum) {
-<<<<<<< HEAD
         continue; // Skip rows without name or license
-=======
-        continue;
->>>>>>> origin/main
       }
 
       totalRecords++;
 
-<<<<<<< HEAD
       // Parse address
       const { city, zip } = parseAddress(addressFull);
 
-      // Only ingest active licenses for now (can adjust status filtering as needed)
-      // For completeness, we ingest all statuses but log them
-=======
-      const { city, zip } = parseAddress(addressFull);
-
->>>>>>> origin/main
+      // Only ingest active licenses
       if (status !== 'Active') {
         console.log(
           `[IndianaLicensing] Skipping ${name} (license ${licenseNum}): status=${status}`
@@ -206,16 +162,12 @@ export async function runIndianaLicensingScraper(): Promise<void> {
 
       console.log(`[IndianaLicensing] Processing: ${name} (License ${licenseNum}) in ${city}, IN`);
 
-<<<<<<< HEAD
       // Call getOrCreateScrapedOrganizer with AUCTION_HOUSE category
-=======
->>>>>>> origin/main
       const organizerId = await getOrCreateScrapedOrganizer(
         name,
         'IndianaLicensing',
         city || 'Indiana',
         'IN',
-<<<<<<< HEAD
         undefined, // esnOrgId
         undefined, // googlePlaceId
         undefined, // foursquareVenueId
@@ -224,24 +176,15 @@ export async function runIndianaLicensingScraper(): Promise<void> {
         undefined // contactEmail
       );
 
-      // If organizer was created or found, update with Indiana-specific fields
-=======
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'AUCTION_HOUSE',
-        undefined
-      );
-
->>>>>>> origin/main
       if (organizerId) {
+        // Set state licensing fields — these are the key signals for HOT lead scoring
         await prisma.organizer.update({
           where: { id: organizerId },
           data: {
             licenseNumber: licenseNum,
             licenseState: 'IN',
             isStateLicensed: true,
+            directoryMostRecentSource: 'IndianaLicensing',
           },
         });
 
