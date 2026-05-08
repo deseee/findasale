@@ -169,9 +169,12 @@ export default function PosInvoiceModal({ hold, miscItems = [], sessionId, cashA
                   <label className="flex items-center cursor-pointer">
                     <input
                       type="radio"
+                      id="deliver-email"
                       name="deliverVia"
                       value="EMAIL"
                       checked={deliverVia === 'EMAIL'}
+                      aria-invalid={!!error}
+                      aria-describedby={error ? "invoice-error" : undefined}
                       onChange={(e) => setDeliverVia(e.target.value as 'EMAIL')}
                       className="w-4 h-4 cursor-pointer"
                     />
@@ -289,7 +292,7 @@ export default function PosInvoiceModal({ hold, miscItems = [], sessionId, cashA
 
               {/* Error Message */}
               {error && (
-                <div className="mb-6 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
+                <div id="invoice-error" role="alert" className="mb-6 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
                   {error}
                 </div>
               )}

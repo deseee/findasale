@@ -211,7 +211,7 @@ const RegisterPage = () => {
             </div>
           )}
           {error && (
-            <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+            <div id="register-error" role="alert" className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
               <div className="text-sm text-red-700 dark:text-red-300">
                 {error}
               </div>
@@ -247,7 +247,10 @@ const RegisterPage = () => {
                 onChange={handleChange}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                 placeholder="Email address"
-              aria-label="Email address" />
+              aria-label="Email address"
+                aria-invalid={!!error}
+                aria-describedby={error ? "register-error" : undefined}
+              />
             </div>
             <div>
               <label htmlFor="dateOfBirth" className="sr-only">
@@ -261,9 +264,11 @@ const RegisterPage = () => {
                 value={formData.dateOfBirth}
                 onChange={handleChange}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
-              aria-label="Dateofbirth" />
+                aria-invalid={!!ageError}
+                aria-describedby={ageError ? "age-error" : undefined}
+              aria-label="Date of Birth" />
               {ageError && (
-                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{ageError}</p>
+                <p id="age-error" role="alert" className="mt-1 text-sm text-red-600 dark:text-red-400">{ageError}</p>
               )}
             </div>
             <div>

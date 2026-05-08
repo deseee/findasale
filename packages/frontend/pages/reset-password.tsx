@@ -74,7 +74,7 @@ const ResetPasswordPage = () => {
             <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">Reset Your Password</h1>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm">
+              <div id="reset-error" role="alert" className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm">
                 {error}
               </div>
             )}
@@ -101,7 +101,10 @@ const ResetPasswordPage = () => {
                     type="password"
                     id="password"
                     value={password}
-                    aria-label="Password" onChange={(e) => setPassword(e.target.value)}
+                    aria-label="Password"
+                    aria-invalid={!!error}
+                    aria-describedby={error ? 'reset-error' : undefined}
+                    onChange={(e) => setPassword(e.target.value)}
                     required
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                   />
@@ -115,7 +118,10 @@ const ResetPasswordPage = () => {
                     type="password"
                     id="confirmPassword"
                     value={confirmPassword}
-                    aria-label="Confirmpassword" onChange={(e) => setConfirmPassword(e.target.value)}
+                    aria-label="Confirm password"
+                    aria-invalid={!!error}
+                    aria-describedby={error ? 'reset-error' : undefined}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                     required
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                   />

@@ -78,7 +78,10 @@ const BulkStatusModal: React.FC<BulkStatusModalProps> = ({
             Status
           </label>
           <select
+            id="status-select"
             value={selectedStatus}
+            aria-invalid={!!error}
+            aria-describedby={error ? "status-error" : undefined}
             onChange={(e) => {
               setSelectedStatus(e.target.value);
               setError('');
@@ -102,7 +105,7 @@ const BulkStatusModal: React.FC<BulkStatusModalProps> = ({
 
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+          <div id="status-error" role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
             {error}
           </div>
         )}

@@ -32,8 +32,11 @@ const BrandFollowManager: React.FC = () => {
       </p>
       <div className="flex gap-2 mb-4">
         <input
+          id="brand-input"
           type="text"
           value={inputValue}
+          aria-invalid={!!addError}
+          aria-describedby={addError ? "brand-error" : undefined}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
           placeholder="e.g. Pottery Barn, MCM, Ralph Lauren"
@@ -48,7 +51,7 @@ const BrandFollowManager: React.FC = () => {
           {isAdding ? 'Adding…' : 'Add'}
         </button>
       </div>
-      {addError && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{addError}</p>}
+      {addError && <p id="brand-error" role="alert" className="text-sm text-red-600 dark:text-red-400 mb-3">{addError}</p>}
       {isLoading ? (
         <div className="space-y-2">
           {[1, 2].map((i) => <div key={i} className="h-10 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" />)}

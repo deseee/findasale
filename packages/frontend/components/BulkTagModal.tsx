@@ -141,10 +141,10 @@ const BulkTagModal: React.FC<BulkTagModalProps> = ({
 
         {/* Tags Checkboxes */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-warm-700 mb-3">
+          <label className="block text-sm font-medium text-warm-700 mb-3" id="tags-label">
             Select tags:
           </label>
-          <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border border-warm-200 rounded bg-warm-50">
+          <div aria-labelledby="tags-label" aria-invalid={!!error} aria-describedby={error ? "tags-error" : undefined} className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border border-warm-200 rounded bg-warm-50">
             {CURATED_TAGS.map((tag) => (
               <label
                 key={tag}
@@ -172,7 +172,7 @@ const BulkTagModal: React.FC<BulkTagModalProps> = ({
 
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+          <div id="tags-error" role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
             {error}
           </div>
         )}

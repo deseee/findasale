@@ -59,7 +59,7 @@ const ColorRulesPage = () => {
       const payload = {
         tagColor: formData.tagColor,
         label: formData.label,
-        discountPercent: parseInt(formData.discountPercent),
+        discountPercent: parseFloat(formData.discountPercent),
         activeFrom: formData.activeFrom || null,
         activeTo: formData.activeTo || null,
       };
@@ -84,7 +84,7 @@ const ColorRulesPage = () => {
       const payload = {
         tagColor: formData.tagColor,
         label: formData.label,
-        discountPercent: parseInt(formData.discountPercent),
+        discountPercent: parseFloat(formData.discountPercent),
         activeFrom: formData.activeFrom || null,
         activeTo: formData.activeTo || null,
       };

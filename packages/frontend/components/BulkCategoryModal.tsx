@@ -71,7 +71,10 @@ const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
             Category
           </label>
           <select
+            id="category-select"
             value={selectedCategory}
+            aria-invalid={!!error}
+            aria-describedby={error ? "category-error" : undefined}
             onChange={(e) => {
               setSelectedCategory(e.target.value);
               setError('');
@@ -90,7 +93,7 @@ const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
 
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+          <div id="category-error" role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
             {error}
           </div>
         )}
