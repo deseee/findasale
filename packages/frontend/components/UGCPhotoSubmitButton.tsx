@@ -102,6 +102,7 @@ export default function UGCPhotoSubmitButton({
                   placeholder="https://example.com/photo.jpg"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   required
+                  aria-label="Photo URL"
                 />
               </div>
 
@@ -116,6 +117,7 @@ export default function UGCPhotoSubmitButton({
                   placeholder="Tell us about your find..."
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                  aria-label="Photo caption"
                 />
               </div>
 
@@ -130,6 +132,7 @@ export default function UGCPhotoSubmitButton({
                   onChange={(e) => setTagsInput(e.target.value)}
                   placeholder="e.g., vintage, furniture, mid-century"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  aria-label="Photo tags comma-separated"
                 />
               </div>
 

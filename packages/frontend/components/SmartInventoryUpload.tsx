@@ -562,6 +562,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                         })
                       }
                       className="w-full px-2 py-1 border border-warm-300 dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600 rounded text-sm mt-1"
+                      aria-label="Item title"
                     />
                   </div>
 
@@ -586,6 +587,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                           step="0.01"
                           min="0"
                           className="w-full pl-5 pr-2 py-1 border border-warm-300 dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600 rounded text-sm mt-1"
+                          aria-label="Item price in dollars"
                         />
                       </div>
                     </div>
@@ -603,6 +605,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                           })
                         }
                         className="w-full px-2 py-1 border border-warm-300 dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600 rounded text-sm mt-1"
+                        aria-label="Item category"
                       >
                         {CATEGORIES.map((cat) => (
                           <option key={cat} value={cat}>
@@ -626,6 +629,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                         })
                       }
                       className="w-full px-2 py-1 border border-warm-300 dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600 rounded text-sm mt-1"
+                      aria-label="Item condition"
                     >
                       {CONDITIONS.map((cond) => (
                         <option key={cond} value={cond}>

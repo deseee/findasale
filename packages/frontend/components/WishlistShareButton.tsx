@@ -124,6 +124,7 @@ const WishlistShareButton: React.FC<WishlistShareButtonProps> = ({
                   value={shareUrl}
                   readOnly
                   className="flex-1 px-3 py-2 bg-warm-50 border border-warm-200 rounded text-sm text-warm-600"
+                  aria-label="Wishlist share URL"
                 />
                 <button
                   onClick={handleCopyLink}

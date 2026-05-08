@@ -95,6 +95,7 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
                 onChange={e => setAmount(e.target.value)}
                 className="w-full border border-warm-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 required
+                aria-label="Your bid amount in dollars"
               />
             </div>
             <div className="flex gap-3">

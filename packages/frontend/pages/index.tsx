@@ -355,6 +355,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white/95 text-warm-900 placeholder-warm-500 font-body"
+                  aria-label="Search sales and items"
                 />
               </div>
               {searchQuery && (
@@ -456,6 +457,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                 value={saleTypeFilter}
                 onChange={(e) => setSaleTypeFilter(e.target.value)}
                 className="px-3 py-2 rounded-full text-sm font-medium border border-warm-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors"
+                aria-label="Filter sales by type"
               >
                 {SALE_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>

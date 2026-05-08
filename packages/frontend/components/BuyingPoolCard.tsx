@@ -164,6 +164,7 @@ const BuyingPoolCard: React.FC<BuyingPoolCardProps> = ({
                       onChange={(e) => setPledgeAmount(e.target.value)}
                       placeholder={`Max: $${((activePool.targetAmount - activePool.totalPledged) / 100).toFixed(2)}`}
                       className="w-full px-3 py-2 border border-blue-300 rounded text-sm"
+                      aria-label="Pledge amount for buying pool"
                     />
                     <div className="flex gap-2">
                       <button

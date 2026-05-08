@@ -67,8 +67,9 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({ onRangeChange, se
         <div className="flex flex-col gap-3 p-4 bg-warm-50 rounded-lg border border-warm-200">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-warm-700 mb-1">From</label>
+              <label htmlFor="custom-from-date" className="block text-sm font-medium text-warm-700 mb-1">From</label>
               <input
+                id="custom-from-date"
                 type="date"
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
@@ -76,8 +77,9 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({ onRangeChange, se
               />
             </div>
             <div className="flex-1">
-              <label className="block text-sm font-medium text-warm-700 mb-1">To</label>
+              <label htmlFor="custom-to-date" className="block text-sm font-medium text-warm-700 mb-1">To</label>
               <input
+                id="custom-to-date"
                 type="date"
                 value={customTo}
                 onChange={(e) => setCustomTo(e.target.value)}
