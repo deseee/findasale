@@ -770,9 +770,9 @@ const OrganizerDashboard = () => {
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    <h2 className="text-sm font-medium text-amber-800 dark:text-amber-200">
                       Payment required to restore PRO access
-                    </h3>
+                    </h2>
                     <div className="mt-2 text-sm text-amber-700 dark:text-amber-300">
                       <p>Your subscription has lapsed. You're temporarily on SIMPLE tier (200 items/sale, 5 photos/item, 100 Auto Tags/month). Update your billing info to restore full PRO features.</p>
                     </div>
