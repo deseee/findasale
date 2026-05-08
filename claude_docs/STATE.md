@@ -4,7 +4,25 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S687 — Directory Rebuild: Schema + 3 New Scrapers (COMPLETE — Vercel ✅ Railway ✅)**
+**Latest: S688 — Chrome QA Sprint: COPPA ✅ Claim Verify ✅ DonationModal Bug Found (COMPLETE)**
+
+S688 ran live Chrome QA against the Blocked/Unverified Queue. Three features verified, one bug found and fixed inline.
+
+**QA Results:**
+- **COPPA age gate** — ✅ VERIFIED. Navigated to `/register`, entered DOB with year 2015 (age ~11). Form blocked submission with "You must be 18 or older" error. Birth year guard working correctly.
+- **Claim verify flow (#361)** — ✅ VERIFIED (all 3 states):
+  - Invalid token: `/claim/verify/invalid-token-qa-test-12345` → "Invalid Link" state with "This verification link is invalid or has expired" ✅
+  - Success: `/claim/verify/[real-token]` → "Email Verified!" with business name "Sunrise Consignment & Collectibles", 2-3 day review message ✅
+  - Already-used: Same token revisited → "Already Verified — This verification link has already been used. Your claim request is being reviewed." ✅
+- **#251 priceBeforeMarkdown** — ⚠️ UNVERIFIED. Feature requires TEAMS-tier organizer with active color-coded discount rules. No TEAMS test account available with a qualified item. Stays in queue.
+- **#235 DonationModal** — ❌ Bug found. SettlementWizard.tsx line 72: `api.get('/api/ebay/organizer/sales/...')` — double `/api/` prefix since `api` baseURL is already `/api`. Network call goes to `/api/api/ebay/...` → 404. `availableItems` always empty → Donate button never appears on Receipt tab. **Fix applied inline**: removed leading `/api` from the path. Pending Vercel deploy + re-verify.
+
+**File changed:**
+- `packages/frontend/components/SettlementWizard.tsx` — line 72: `/api/ebay/organizer/...` → `/ebay/organizer/...`
+
+---
+
+**Previous: S687 — Directory Rebuild: Schema + 3 New Scrapers (COMPLETE — Vercel ✅ Railway ✅)**
 
 S687 dispatched all directory rebuild work from S686 specs. Six parallel agents. Everything shipped and confirmed green.
 
@@ -522,13 +540,13 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 | WCAG skip link re-verify | ✅ S682 VERIFIED — Tab once on finda.sale, amber "Skip to main content" button appears overlaying header top-left, disappears when focus moves. z-[100] fix working correctly. | — | S681 |
 | WCAG error ARIA | S683 codebase sweep complete (aria-labels + input labels). Remaining gap: `aria-invalid` + `aria-describedby` on form inputs with error states (~20+ files). | Dedicated error ARIA sprint | S683 |
 | JWT httpOnly cookies | ✅ VERIFIED S670 — login worked through proxy, cookies set correctly | — | S664/S667 |
-| COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error | S664 |
+| COPPA age gate | ✅ S688 VERIFIED — DOB <18 on /register correctly blocked with "You must be 18 or older" error. | — | S664 |
 | Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` | S664 |
 | Modal focus traps (34 modals) | ✅ S681 VERIFIED — MessageComposeModal tested. Tab trap ✅, Escape ✅, focus-on-open ✅ (fix shipped). Other modals assumed covered by AccessibleModal fix. | — | S664 |
-| Claim verify flow | Code shipped S667 but not browser-tested | Hit `/claim/verify/[token]` with a real token, verify organizer status updates | S667 |
+| Claim verify flow | ✅ S688 VERIFIED — All 3 states confirmed: invalid token → "Invalid Link", valid token → "Email Verified!" with business name, already-used → "Already Verified". | — | S667 |
 | NSFW detection | Code shipped S667 but not browser-tested | Upload an image via organizer flow, confirm Cloudinary moderation runs | S667 |
 | #251 priceBeforeMarkdown | No production item with markdownApplied=true | Seed item with markdownApplied=true, verify strikethrough price renders | S661 |
-| #235 DonationModal | Needs SaleDonation record + available items | PRO organizer sale with SaleDonation + unsold items, verify Receipt step | S661 |
+| #235 DonationModal | ❌ Bug found S688: SettlementWizard.tsx line 72 double `/api/` prefix → unsold items 404 → Donate button never appears. Fix applied locally (pending deploy). | After Vercel deploy: load Settlement Hub Receipt tab for a PRO organizer sale with unsold items, verify Donate button appears and all 3 modal steps render | S661 |
 | AI listing enrichment | Fire-and-forget — needs scraped sale with description >50 chars | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` | S651 |
 | CategoryTopFinds TrendingSection | Cron runs 05:00 UTC — no data until first run | QA after first nightly run; verify TrendingSection renders on `/categories/[category]` | S647 |
 | Outreach pipeline open/click tracking | Can't verify without real sends | After `OUTREACH_ENABLED=true` + first cron run: check Railway logs, confirm pixel route 200 | S647 |
@@ -689,7 +707,7 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S688
+## Next Session — S689
 
 **Priority 1 — Trigger scrapers and monitor first runs**
 - POST `/api/internal/scraper/run-indiana-licensing` — watch Railway logs for parse success/failure on the ASP.NET form. This is the validation run for the whole licensing pattern.
@@ -705,14 +723,16 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 - Illinois: idfpr.illinois.gov — same pattern.
 - Each state is a single-agent dispatch once Indiana confirmed working.
 
-**Priority 4 — #393 QA Sprint holdover**
+**Priority 4 — QA holdover**
+- #235 DonationModal re-verify after S688 fix deploys (SettlementWizard.tsx double /api/ fix). PRO organizer → Settlement Hub → Receipt tab → Donate button should now appear.
+- #251 priceBeforeMarkdown — still needs TEAMS-tier test scenario.
 - Auction #174 — still blocked pending items listed in a production auction sale (Patrick action required to unblock).
-- #394 Full Walkthrough — after #174 cleared.
 
-**Patrick wrap actions (S687):**
+**Patrick wrap actions (S688):**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S687: Session wrap — STATE + dashboard updated"
+git add packages/frontend/components/SettlementWizard.tsx
+git commit -m "S688: Chrome QA — COPPA ✅ Claim verify ✅ | Fix DonationModal unsold-items double-api prefix"
 .\push.ps1
 ```

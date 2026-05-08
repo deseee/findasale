@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S687 Wrap
+# Patrick's Dashboard — S688 Wrap
 
 ---
 
@@ -13,34 +13,37 @@
 | MCP Server (mcp.finda.sale) | ✅ LIVE — 7 tools |
 | Organizer DB | ✅ 7,897 records + corroboration schema live |
 | New scrapers | ✅ OSM, Indiana Licensing, Sale Seeker — deployed, not yet triggered |
-| #393 Chrome QA Sprint | 🟡 Auction #174 still blocked (needs items listed) |
+| #393 Chrome QA Sprint | 🟡 DonationModal fix pending deploy; Auction #174 still blocked |
 | Cold Outreach Pipeline (#374) | 🟡 Schema ready — lead scoring service next |
 
 ---
 
-## What Happened This Session (S687)
+## What Happened This Session (S688)
 
-Big directory rebuild session. Six agents. Everything green.
+Chrome QA sprint against the Blocked/Unverified Queue.
 
-**Organizer schema expanded** — 14 new fields deployed to production: corroboration tracking (sourceCount, sourcesJson, corroborationScore, dedupeKey) + lead scoring (leadScore, leadTier, lastScoredAt, annualSalesEstimate, hasPhysicalOffice, isStateLicensed, licenseState, licenseNumber, staffSizeEstimate, reviewCount, reviewVelocity). Migration `20260508000001` deployed.
+**COPPA age gate — ✅ VERIFIED.** Registered with DOB in 2015 (age 11). Form correctly blocked with "You must be 18 or older" error. Cleared from queue.
 
-**Merge algorithm upgraded** — `getOrCreateScrapedOrganizer()` now runs 5-path dedup and tracks corroboration score across sources. Every new organizer ingested from any source will now automatically merge with existing records and increment confidence scoring.
+**Claim verify flow (#361) — ✅ VERIFIED.** Submitted a real claim request as Bob Smith on the Sunrise Consignment & Collectibles storefront. Got the token from admin API. Tested all three states: invalid token → "Invalid Link" ✅, valid token → "Email Verified!" with business name ✅, already-used token → "Already Verified" ✅. Cleared from queue.
 
-**Three new scrapers shipped:**
-- **OSM/Overpass** — 20 US metros, 5 venue tag types, weekly Monday 3am UTC
-- **Indiana licensing** — mylicense.in.gov, active auctioneer licenses only, weekly Monday 4am UTC
-- **Sale Seeker** — thesaleseeker.com (no ToS = legal), weekly Monday 5am UTC
+**#235 DonationModal — ❌ Bug found.** The "Donate Items & Get Tax Receipt" button on the Settlement Hub Receipt tab never appears. Root cause: `SettlementWizard.tsx` line 72 calls `api.get('/api/ebay/...')` but the `api` Axios instance already has `/api` as its baseURL, so the request goes to `/api/api/ebay/...` → 404 → empty items array → button hidden. One-line fix applied. Vercel will deploy automatically once pushed.
 
-**Source research completed:**
-- EstateSales.org: PROHIBITED — explicit anti-scraping clause, will not pursue
-- DataForSEO: SKIP — 20-100x more expensive than existing sources
-- OSM cron: was never active (S686 assessment was wrong) — now built
+**#251 priceBeforeMarkdown — still UNVERIFIED.** Requires a TEAMS-tier organizer with color-coded discount rules enabled. No suitable test account available.
 
 ---
 
 ## Patrick Actions Needed
 
-**Trigger scrapers manually to validate:**
+**Push this session's work:**
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add packages/frontend/components/SettlementWizard.tsx
+git commit -m "S688: Chrome QA — COPPA ✅ Claim verify ✅ | Fix DonationModal unsold-items double-api prefix"
+.\push.ps1
+```
+
+**Trigger scrapers manually to validate (from S687):**
 - Hit `POST /api/internal/scraper/run-indiana-licensing` in Railway console or via curl with internal secret
 - Watch logs — if the ASP.NET form parses correctly you'll see organizer records being created
 - Then trigger `run-osm`
@@ -50,9 +53,10 @@ Big directory rebuild session. Six agents. Everything green.
 
 ---
 
-## Next Session (S688)
+## Next Session (S689)
 
 1. Validate Indiana + OSM first runs from Railway logs
-2. Build lead scoring service (score all 7,897 organizers → unlocks #374 outreach pipeline)
-3. Louisiana + Illinois licensing scrapers (same pattern as Indiana, 1 agent each)
-4. #174 Auction QA if Patrick lists items
+2. Re-verify #235 DonationModal after this push deploys to Vercel
+3. Build lead scoring service (score all 7,897 organizers → unlocks #374 outreach pipeline)
+4. Louisiana + Illinois licensing scrapers (same pattern as Indiana, 1 agent each)
+5. #174 Auction QA if Patrick lists items
