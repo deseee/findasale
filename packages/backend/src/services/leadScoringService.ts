@@ -1,0 +1,248 @@
+/**
+ * Lead Scoring Service — ADR-076 Phase 2
+ *
+ * Scores scraped organizers 0–100 and assigns a leadTier:
+ *   COLD (0–24) — minimal data, cold outreach only
+ *   WARM (25–49) — some signals, worth nurturing
+ *   HOT  (50–74) — strong signals, prioritize outreach
+ *   ENTERPRISE (75–100) — licensed, verified, multi-source, high-value
+ *
+ * Scoring dimensions (max 100 pts total):
+ *   Contact reachability  — 20 pts  (contactEmail/scrapedEmail + phone)
+ *   Corroboration depth   — 20 pts  (sourceCount + corroborationScore)
+ *   Licensing             — 25 pts  (isStateLicensed + licenseNumber)
+ *   Review strength       — 20 pts  (googleRatingCount tiers)
+ *   Physical presence     — 15 pts  (hasPhysicalOffice + googlePlaceId)
+ *
+ * Backfill: scores all existing organizers in batches of 200.
+ * Weekly cron: re-scores all organizers every Sunday at 2 AM UTC.
+ */
+
+import { prisma } from '../lib/prisma';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type LeadTier = 'COLD' | 'WARM' | 'HOT' | 'ENTERPRISE';
+
+export interface LeadScoreResult {
+  score: number;
+  tier: LeadTier;
+  breakdown: {
+    contactReachability: number;
+    corroborationDepth: number;
+    licensing: number;
+    reviewStrength: number;
+    physicalPresence: number;
+  };
+}
+
+// Minimal organizer shape needed for scoring — avoids loading full model
+interface ScoringInput {
+  contactEmail: string | null;
+  scrapedEmail: string | null;
+  phone: string | null;
+  sourceCount: number;
+  corroborationScore: { toNumber(): number } | number | null;
+  isStateLicensed: boolean | null;
+  licenseNumber: string | null;
+  googleRatingCount: number | null;
+  hasPhysicalOffice: boolean | null;
+  googlePlaceId: string | null;
+}
+
+// ─── Scoring algorithm ────────────────────────────────────────────────────────
+
+/**
+ * Calculate a lead score for a single organizer.
+ * Pure function — no DB calls. Pass the organizer fields directly.
+ */
+export function calculateLeadScore(org: ScoringInput): LeadScoreResult {
+  let contactReachability = 0;
+  let corroborationDepth = 0;
+  let licensing = 0;
+  let reviewStrength = 0;
+  let physicalPresence = 0;
+
+  // ── 1. Contact reachability (max 20) ──────────────────────────────────────
+  // Email is the primary outreach signal (+12), phone is a bonus (+8)
+  if (org.contactEmail || org.scrapedEmail) contactReachability += 12;
+  if (org.phone) contactReachability += 8;
+
+  // ── 2. Corroboration depth (max 20) ───────────────────────────────────────
+  // sourceCount tiers: 1→5, 2→10, 3→14, 4+→18
+  // High corroborationScore (≥0.8) adds a final +2 quality bonus
+  const sc = org.sourceCount ?? 1;
+  if (sc >= 4) corroborationDepth = 18;
+  else if (sc === 3) corroborationDepth = 14;
+  else if (sc === 2) corroborationDepth = 10;
+  else corroborationDepth = 5;
+
+  const corrScore =
+    org.corroborationScore === null || org.corroborationScore === undefined
+      ? 0.5
+      : typeof org.corroborationScore === 'number'
+      ? org.corroborationScore
+      : org.corroborationScore.toNumber();
+
+  if (corrScore >= 0.8) corroborationDepth = Math.min(20, corroborationDepth + 2);
+
+  // ── 3. Licensing (max 25) ─────────────────────────────────────────────────
+  // State-licensed is the strongest professional signal (+20).
+  // Having a license number without isStateLicensed flag also earns +5.
+  if (org.isStateLicensed) {
+    licensing += 20;
+    if (org.licenseNumber) licensing += 5; // fully documented
+  } else if (org.licenseNumber) {
+    licensing += 5; // partial licensing data
+  }
+
+  // ── 4. Review strength (max 20) ───────────────────────────────────────────
+  // googleRatingCount tiers: 1-4→5, 5-9→10, 10-24→15, 25+→20
+  const rc = org.googleRatingCount ?? 0;
+  if (rc >= 25) reviewStrength = 20;
+  else if (rc >= 10) reviewStrength = 15;
+  else if (rc >= 5) reviewStrength = 10;
+  else if (rc >= 1) reviewStrength = 5;
+
+  // ── 5. Physical presence (max 15) ─────────────────────────────────────────
+  // Confirmed physical office (+10) and verified Google Business profile (+5)
+  if (org.hasPhysicalOffice) physicalPresence += 10;
+  if (org.googlePlaceId) physicalPresence += 5;
+
+  // ── Total & tier ──────────────────────────────────────────────────────────
+  const score = Math.min(
+    100,
+    contactReachability + corroborationDepth + licensing + reviewStrength + physicalPresence
+  );
+
+  const tier: LeadTier =
+    score >= 75 ? 'ENTERPRISE' :
+    score >= 50 ? 'HOT' :
+    score >= 25 ? 'WARM' : 'COLD';
+
+  return {
+    score,
+    tier,
+    breakdown: {
+      contactReachability,
+      corroborationDepth,
+      licensing,
+      reviewStrength,
+      physicalPresence,
+    },
+  };
+}
+
+// ─── Backfill ─────────────────────────────────────────────────────────────────
+
+const BATCH_SIZE = 200;
+
+export interface BackfillStats {
+  total: number;
+  scored: number;
+  cold: number;
+  warm: number;
+  hot: number;
+  enterprise: number;
+  durationMs: number;
+}
+
+/**
+ * Score all organizers in the database.
+ * Processes in batches of 200 to avoid memory pressure.
+ * Safe to run multiple times — always overwrites leadScore/leadTier/lastScoredAt.
+ */
+export async function runLeadScoringBackfill(): Promise<BackfillStats> {
+  const startTime = Date.now();
+  const now = new Date();
+
+  const stats: BackfillStats = {
+    total: 0,
+    scored: 0,
+    cold: 0,
+    warm: 0,
+    hot: 0,
+    enterprise: 0,
+    durationMs: 0,
+  };
+
+  // Count total organizers upfront for logging
+  stats.total = await prisma.organizer.count();
+  console.log(`[leadScoring] Starting backfill for ${stats.total} organizers (batch size: ${BATCH_SIZE})`);
+
+  let cursor: string | undefined = undefined;
+  let batchNum = 0;
+
+  while (true) {
+    batchNum++;
+
+    const batch = await prisma.organizer.findMany({
+      take: BATCH_SIZE,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        contactEmail: true,
+        scrapedEmail: true,
+        phone: true,
+        sourceCount: true,
+        corroborationScore: true,
+        isStateLicensed: true,
+        licenseNumber: true,
+        googleRatingCount: true,
+        hasPhysicalOffice: true,
+        googlePlaceId: true,
+      },
+    });
+
+    if (batch.length === 0) break;
+
+    cursor = batch[batch.length - 1].id;
+
+    // Score all organizers in this batch
+    const updates = batch.map((org) => {
+      const { score, tier } = calculateLeadScore(org);
+      return { id: org.id, score, tier };
+    });
+
+    // Write in parallel — each update is small
+    await Promise.all(
+      updates.map(({ id, score, tier }) =>
+        prisma.organizer.update({
+          where: { id },
+          data: {
+            leadScore: score,
+            leadTier: tier,
+            lastScoredAt: now,
+          },
+        })
+      )
+    );
+
+    // Accumulate tier stats
+    for (const { tier } of updates) {
+      stats.scored++;
+      if (tier === 'COLD') stats.cold++;
+      else if (tier === 'WARM') stats.warm++;
+      else if (tier === 'HOT') stats.hot++;
+      else if (tier === 'ENTERPRISE') stats.enterprise++;
+    }
+
+    console.log(
+      `[leadScoring] Batch ${batchNum}: scored ${batch.length} organizers ` +
+      `(${stats.scored}/${stats.total} total)`
+    );
+
+    if (batch.length < BATCH_SIZE) break;
+  }
+
+  stats.durationMs = Date.now() - startTime;
+
+  console.log(
+    `[leadScoring] Backfill complete in ${stats.durationMs}ms — ` +
+    `${stats.scored} scored: ` +
+    `COLD=${stats.cold} WARM=${stats.warm} HOT=${stats.hot} ENTERPRISE=${stats.enterprise}`
+  );
+
+  return stats;
+}
