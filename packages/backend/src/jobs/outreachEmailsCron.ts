@@ -103,41 +103,102 @@ export const sendOutreachEmails = async (): Promise<void> => {
     const quotaPerWindow = Math.max(1, Math.floor(dailyQuota / 6));
     console.log(`[OutreachCron] Day ${daysSinceStart}, quota: ${dailyQuota}/day, this window: ${quotaPerWindow}`);
 
-    const recordsToSend = await prisma.directoryClaimEmail.findMany({
-      where: {
-        organizer: {
-          directoryStatus: { not: 'CLOSED' },
-          // ADR-075: Only legitimate organizer types (estate sale, auction, antique, consignment, etc.)
-          businessCategory: {
-            in: [
-              'ESTATE_SALE_CO',
-              'AUCTION_HOUSE',
-              'ANTIQUE_MALL',
-              'ANTIQUE_DEALER',
-              'CONSIGNMENT',
-              'THRIFT_STORE',
-              'FLEA_MARKET',
-              'VINTAGE',
-              'LIQUIDATION',
-              'USED_FURNITURE',
-              'PAWN_SHOP',
-              'USED_BOOKSTORE',
-              'RECORD_STORE',
-              'USED_ELECTRONICS',
-              'COIN_DEALER',
-              'RESALE_SHOP',
-              'USED_SPORTING_GOODS',
-              'JEWELRY_RESALE',
-            ],
-          },
-          // ADR-075: Respect suppressOutreach flag
-          suppressOutreach: false,
+    // ADR-075: Base filter criteria (reused across all three leadTier passes)
+    const baseWhere = {
+      organizer: {
+        directoryStatus: { not: 'CLOSED' },
+        // Only legitimate organizer types (estate sale, auction, antique, consignment, etc.)
+        businessCategory: {
+          in: [
+            'ESTATE_SALE_CO',
+            'AUCTION_HOUSE',
+            'ANTIQUE_MALL',
+            'ANTIQUE_DEALER',
+            'CONSIGNMENT',
+            'THRIFT_STORE',
+            'FLEA_MARKET',
+            'VINTAGE',
+            'LIQUIDATION',
+            'USED_FURNITURE',
+            'PAWN_SHOP',
+            'USED_BOOKSTORE',
+            'RECORD_STORE',
+            'USED_ELECTRONICS',
+            'COIN_DEALER',
+            'RESALE_SHOP',
+            'USED_SPORTING_GOODS',
+            'JEWELRY_RESALE',
+          ],
         },
+        // Respect suppressOutreach flag
+        suppressOutreach: false,
       },
-      include: { organizer: true },
-      take: quotaPerWindow,
-      orderBy: { createdAt: 'asc' },
-    });
+    };
+
+    // Allocate quota proportionally: HOT 40%, WARM 35%, COLD 25% (floor 1 each)
+    const hotQuota = Math.max(1, Math.floor(quotaPerWindow * 0.4));
+    const warmQuota = Math.max(1, Math.floor(quotaPerWindow * 0.35));
+    const coldQuota = Math.max(1, Math.floor(quotaPerWindow * 0.25));
+    const untieredQuota = quotaPerWindow - (hotQuota + warmQuota + coldQuota);
+
+    // Three-pass query: HOT → WARM → COLD, then fallback to untiered/ENTERPRISE if quota remains
+    const recordsToSend: any[] = [];
+
+    if (hotQuota > 0) {
+      const hotRecords = await prisma.directoryClaimEmail.findMany({
+        where: {
+          ...baseWhere,
+          organizer: { ...baseWhere.organizer, leadTier: 'HOT' },
+        },
+        include: { organizer: true },
+        take: hotQuota,
+        orderBy: { createdAt: 'asc' },
+      });
+      recordsToSend.push(...hotRecords);
+    }
+
+    if (warmQuota > 0 && recordsToSend.length < quotaPerWindow) {
+      const warmRecords = await prisma.directoryClaimEmail.findMany({
+        where: {
+          ...baseWhere,
+          organizer: { ...baseWhere.organizer, leadTier: 'WARM' },
+        },
+        include: { organizer: true },
+        take: warmQuota,
+        orderBy: { createdAt: 'asc' },
+      });
+      recordsToSend.push(...warmRecords);
+    }
+
+    if (coldQuota > 0 && recordsToSend.length < quotaPerWindow) {
+      const coldRecords = await prisma.directoryClaimEmail.findMany({
+        where: {
+          ...baseWhere,
+          organizer: { ...baseWhere.organizer, leadTier: 'COLD' },
+        },
+        include: { organizer: true },
+        take: coldQuota,
+        orderBy: { createdAt: 'asc' },
+      });
+      recordsToSend.push(...coldRecords);
+    }
+
+    // Fallback: fill remaining quota with ENTERPRISE or untiered (leadTier IS NULL)
+    if (untieredQuota > 0 && recordsToSend.length < quotaPerWindow) {
+      const untieredRecords = await prisma.directoryClaimEmail.findMany({
+        where: {
+          ...baseWhere,
+          organizer: {
+            ...baseWhere.organizer,
+            OR: [{ leadTier: 'ENTERPRISE' }, { leadTier: null }],
+          },
+        },
+        include: { organizer: true },
+        take: untieredQuota,
+        orderBy: { createdAt: 'asc' },
+      });
+      recordsToSend.push(...untieredRecords);
+    }
 
     const transport = createTransport();
     let sent = 0;
