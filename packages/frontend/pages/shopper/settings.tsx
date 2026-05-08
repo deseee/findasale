@@ -30,6 +30,7 @@ function SettingsPage() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [profileSlug, setProfileSlug] = useState<string>('');
+  const [displayName, setDisplayName] = useState<string>('');
   const [purchasesVisible, setPurchasesVisible] = useState<boolean>(true);
   const [isFeedbackMenuOpen, setIsFeedbackMenuOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState<string>('');
@@ -49,6 +50,7 @@ function SettingsPage() {
   useEffect(() => {
     if (user) {
       setProfileSlug(user.profileSlug || '');
+      setDisplayName(user.name || '');
       setPurchasesVisible(user.purchasesVisible !== false);
     }
   }, [user]);
@@ -88,12 +90,16 @@ function SettingsPage() {
 
   // Mutation for updating profile settings
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { profileSlug?: string | null; purchasesVisible?: boolean }) => {
+    mutationFn: async (data: { name?: string; profileSlug?: string | null; purchasesVisible?: boolean }) => {
       const response = await api.patch('/users/me', data);
       return response.data;
     },
-    onSuccess: () => {
-      setSuccessMessage('Public profile settings saved!');
+    onSuccess: (data) => {
+      // Update the display name in the UI if it was updated
+      if (data.name) {
+        setDisplayName(data.name);
+      }
+      setSuccessMessage('Profile settings saved!');
       setTimeout(() => setSuccessMessage(''), 3000);
     },
     onError: (error: any) => {
@@ -443,6 +449,30 @@ function SettingsPage() {
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Account</h2>
 
             <div className="space-y-6">
+              {/* Display Name */}
+              <div className="pb-6 border-b border-gray-200 dark:border-gray-700">
+                <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                  Display Name
+                </label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Your full name"
+                  maxLength={100}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+                  aria-label="Display name"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">How your name appears on your profile and purchases</p>
+                <button
+                  onClick={() => updateProfileMutation.mutate({ name: displayName })}
+                  disabled={updateProfileMutation.isPending}
+                  className="mt-3 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                >
+                  {updateProfileMutation.isPending ? 'Saving...' : 'Save Display Name'}
+                </button>
+              </div>
+
               {/* Email Display */}
               <div className="pb-6 border-b border-gray-200 dark:border-gray-700">
                 <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Email Address</p>
