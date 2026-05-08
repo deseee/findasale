@@ -104,7 +104,7 @@ const DisputeForm: React.FC<DisputeFormProps> = ({
           onChange={(e) => setReason(e.target.value)}
           className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 bg-white dark:bg-gray-700 dark:text-gray-100"
           aria-invalid={!reason}
-          aria-describedby={!reason ? "dispute-reason-error" : undefined}"
+          aria-describedby={!reason ? "dispute-reason-error" : undefined}
         >
           <option value="">-- Select a reason --</option>
           {REASON_OPTIONS.map((opt) => (
