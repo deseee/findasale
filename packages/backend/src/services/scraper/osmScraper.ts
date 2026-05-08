@@ -34,7 +34,10 @@ interface OverpassResponse {
  * Covers major US metros and secondary markets
  */
 const METRO_BOUNDING_BOXES: Record<string, [number, number, number, number]> = {
+<<<<<<< HEAD
   // Top 20 metros + secondary markets
+=======
+>>>>>>> origin/main
   'New York, NY': [40.4774, -74.2591, 40.9176, -73.7004],
   'Los Angeles, CA': [33.7037, -118.5312, 34.3373, -117.6411],
   'Chicago, IL': [41.6428, -87.9496, 42.0230, -87.5240],
@@ -59,7 +62,10 @@ const METRO_BOUNDING_BOXES: Record<string, [number, number, number, number]> = {
 
 /**
  * Build Overpass QL query for a bounding box
+<<<<<<< HEAD
  * Queries: antiques, secondhand, used_goods, auction_house, auctioneer
+=======
+>>>>>>> origin/main
  */
 function buildOverpassQuery(bbox: [number, number, number, number]): string {
   const [south, west, north, east] = bbox;
@@ -89,7 +95,11 @@ async function queryOverpassApi(metro: string, bbox: [number, number, number, nu
     const response = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
       body: query,
+<<<<<<< HEAD
       timeout: 65000, // 65s to give query 60s + buffer
+=======
+      signal: AbortSignal.timeout(65000),
+>>>>>>> origin/main
     });
 
     if (!response.ok) {
@@ -123,19 +133,30 @@ function mapOsmToOrganizer(
 } | null {
   const { tags } = node;
 
+<<<<<<< HEAD
   // Required: name
   if (!tags.name) return null;
 
   // Required: lat/lon
+=======
+  if (!tags.name) return null;
+
+>>>>>>> origin/main
   const lat = node.lat ?? node.center?.lat;
   const lon = node.lon ?? node.center?.lon;
   if (lat === undefined || lon === undefined) return null;
 
+<<<<<<< HEAD
   // City: try tags first, fallback to generic
   const city = tags['addr:city'] || tags.addr || 'Unknown City';
   const state = tags['addr:state'] || tags['addr:country'] === 'US' ? 'US' : 'Unknown';
 
   // Phone and website are optional
+=======
+  const city = tags['addr:city'] || tags.addr || 'Unknown City';
+  const state = tags['addr:state'] || (tags['addr:country'] === 'US' ? 'US' : 'Unknown');
+
+>>>>>>> origin/main
   const phone = tags.phone || undefined;
   const website = tags.website || undefined;
 
@@ -170,7 +191,11 @@ export async function runOsmScraper(): Promise<void> {
     osmId: string;
   }> = [];
 
+<<<<<<< HEAD
   const seen = new Set<string>(); // Track by OSM ID
+=======
+  const seen = new Set<string>();
+>>>>>>> origin/main
   let skipped = 0;
 
   for (const [metro, bbox] of Object.entries(METRO_BOUNDING_BOXES)) {
@@ -193,11 +218,18 @@ export async function runOsmScraper(): Promise<void> {
         allItems.push(mapped);
       }
 
+<<<<<<< HEAD
       // Rate limit: 2s between metro queries
       await new Promise((r) => setTimeout(r, 2000));
     } catch (err) {
       console.error(`[osmScraper] ${metro} failed, continuing...`);
       // Continue with next metro even if one fails
+=======
+      // Rate limit: 2s between metro queries (Overpass policy)
+      await new Promise((r) => setTimeout(r, 2000));
+    } catch (err) {
+      console.error(`[osmScraper] ${metro} failed, continuing...`);
+>>>>>>> origin/main
     }
   }
 
@@ -206,7 +238,10 @@ export async function runOsmScraper(): Promise<void> {
   );
 
   let created = 0;
+<<<<<<< HEAD
   let updated = 0;
+=======
+>>>>>>> origin/main
   let failed = 0;
 
   for (const item of allItems) {
@@ -216,6 +251,7 @@ export async function runOsmScraper(): Promise<void> {
         'OSM',
         item.city,
         item.state,
+<<<<<<< HEAD
         undefined, // esnOrgId
         undefined, // googlePlaceId
         undefined, // foursquareVenueId
@@ -226,6 +262,17 @@ export async function runOsmScraper(): Promise<void> {
 
       if (organizerId) {
         // Update with OSM-specific fields
+=======
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      );
+
+      if (organizerId) {
+>>>>>>> origin/main
         created++;
       } else {
         failed++;
