@@ -326,7 +326,9 @@ export async function runOsmScraper(): Promise<void> {
         undefined,
         undefined,
         undefined,
-        undefined
+        undefined,
+        item.phone,
+        item.website
       );
       if (organizerId) {
         created++;

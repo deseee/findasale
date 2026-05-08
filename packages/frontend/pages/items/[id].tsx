@@ -513,8 +513,29 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   }
 
   const isAuction = !!item.auctionStartPrice || item.listingType === 'AUCTION';
+  const isReverseAuction = item.listingType === 'REVERSE_AUCTION';
   const isSold = item.status === 'SOLD';
-  const currentPrice = isAuction ? item.currentBid ?? 0 : (item.price ?? 0);
+
+  // Compute decayed price for reverse auction items.
+  // reverseDailyDrop and reverseFloorPrice are stored in cents in DB, returned as cents from API.
+  const reverseDecayedPrice = (() => {
+    if (!isReverseAuction) return null;
+    const startPrice = item.price ?? 0; // organizer sets price as starting price
+    const dailyDropDollars = (item.reverseDailyDrop ?? 0) / 100;
+    const floorPriceDollars = (item.reverseFloorPrice ?? 0) / 100;
+    if (!item.reverseStartDate || dailyDropDollars <= 0) return startPrice;
+    const daysElapsed = Math.floor(
+      (Date.now() - new Date(item.reverseStartDate).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const decayed = startPrice - daysElapsed * dailyDropDollars;
+    return Math.max(decayed, floorPriceDollars > 0 ? floorPriceDollars : 0);
+  })();
+
+  const currentPrice = isAuction
+    ? item.currentBid ?? 0
+    : isReverseAuction
+    ? reverseDecayedPrice ?? item.price ?? 0
+    : (item.price ?? 0);
   const isUserLiked = user && favoriteStatus?.isFavorited === true;
 
   return (
@@ -660,7 +681,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   {/* P2 #6: Check listingType instead of deprecated reverseAuction */}
-                  {item.listingType === 'REVERSE_AUCTION' && <ReverseAuctionBadge item={item} />}
+                  {isReverseAuction && <ReverseAuctionBadge item={item} currentPrice={reverseDecayedPrice ?? item.price ?? 0} />}
                   <div className="flex items-center gap-3">
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{item.title}</h1>
                     {/* Feature #363: Auction Lot Number */}
@@ -687,7 +708,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
               {/* Price Section */}
               <div className="border-t border-b border-gray-200 dark:border-gray-700 py-4">
                 <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                  {isAuction ? 'Current Bid' : 'Price'}
+                  {isAuction ? 'Current Bid' : isReverseAuction ? 'Current Price' : 'Price'}
                 </div>
                 <div className="flex items-center gap-2 mb-2">
                   {item.priceBeforeMarkdown && item.priceBeforeMarkdown > currentPrice ? (
@@ -752,10 +773,13 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                     )}
                   </div>
                 )}
-                {/* P2 #6: Check listingType instead of deprecated reverseAuction */}
-                {item.listingType === 'REVERSE_AUCTION' && (item.reverseFloorPrice ?? 0) > 0 && (
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Floor Price: ${(item.reverseFloorPrice ?? 0).toFixed(2)}
+                {/* P2 #6: Reverse auction — floor and daily drop display */}
+                {isReverseAuction && (item.reverseFloorPrice ?? 0) > 0 && (
+                  <div className="text-sm text-gray-600 dark:text-gray-400 space-y-0.5">
+                    <div>Floor Price: ${((item.reverseFloorPrice ?? 0) / 100).toFixed(2)}</div>
+                    {(item.reverseDailyDrop ?? 0) > 0 && (
+                      <div>Drops ${((item.reverseDailyDrop ?? 0) / 100).toFixed(2)}/day</div>
+                    )}
                   </div>
                 )}
                 {/* D-XP-003: Organizer discount badge */}

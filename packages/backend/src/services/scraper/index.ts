@@ -157,7 +157,7 @@ function isValidExternalEmail(email?: string): string | null {
  * ADR-075: Business category filter — only estate/antique/consignment/secondary sale categories allowed.
  * Off-target categories (tire shops, hotels, fast food, government, etc.) are rejected at ingest time.
  */
-async function getOrCreateScrapedOrganizer(
+export async function getOrCreateScrapedOrganizer(
   businessName: string,
   sourceName: string,
   city: string,
@@ -167,7 +167,9 @@ async function getOrCreateScrapedOrganizer(
   foursquareVenueId?: string,
   hereBusinessId?: string,
   businessCategory?: string,
-  contactEmail?: string
+  contactEmail?: string,
+  phone?: string,
+  website?: string
 ): Promise<string | null> {
   // ADR-075: Validate businessCategory against allowlist
   const VALID_CATEGORIES = new Set([
@@ -202,7 +204,7 @@ async function getOrCreateScrapedOrganizer(
   if (googlePlaceId) {
     const byPlaceId = await prisma.organizer.findFirst({
       where: { googlePlaceId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, sourceCount: true, sourcesJson: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true },
     });
     if (byPlaceId) {
       // Backfill missing source IDs and email, merge corroboration data
@@ -213,6 +215,8 @@ async function getOrCreateScrapedOrganizer(
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
       if (validEmail && !byPlaceId.contactEmail) updates.contactEmail = validEmail;
+      if (phone && !byPlaceId.phone) updates.phone = phone;
+      if (website && !byPlaceId.website) updates.website = website;
 
       // Corroboration merge: increment source count and update sourcesJson
       const newSourceCount = (byPlaceId.sourceCount || 1) + 1;
@@ -236,7 +240,7 @@ async function getOrCreateScrapedOrganizer(
   if (foursquareVenueId) {
     const byFoursquare = await prisma.organizer.findFirst({
       where: { foursquareVenueId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, sourceCount: true, sourcesJson: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true },
     });
     if (byFoursquare) {
       const updates: Record<string, unknown> = {};
@@ -246,6 +250,8 @@ async function getOrCreateScrapedOrganizer(
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
       if (validEmail && !byFoursquare.contactEmail) updates.contactEmail = validEmail;
+      if (phone && !byFoursquare.phone) updates.phone = phone;
+      if (website && !byFoursquare.website) updates.website = website;
 
       // Corroboration merge
       const newSourceCount = (byFoursquare.sourceCount || 1) + 1;
@@ -269,7 +275,7 @@ async function getOrCreateScrapedOrganizer(
   if (hereBusinessId) {
     const byHere = await prisma.organizer.findFirst({
       where: { hereBusinessId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, sourceCount: true, sourcesJson: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true },
     });
     if (byHere) {
       const updates: Record<string, unknown> = {};
@@ -279,6 +285,8 @@ async function getOrCreateScrapedOrganizer(
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
       if (validEmail && !byHere.contactEmail) updates.contactEmail = validEmail;
+      if (phone && !byHere.phone) updates.phone = phone;
+      if (website && !byHere.website) updates.website = website;
 
       // Corroboration merge
       const newSourceCount = (byHere.sourceCount || 1) + 1;
@@ -302,7 +310,7 @@ async function getOrCreateScrapedOrganizer(
   const dedupeKey = generateDedupeKey(businessName, city);
   const byDedupeKey = await prisma.organizer.findFirst({
     where: { dedupeKey },
-    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, sourceCount: true, sourcesJson: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true },
   });
 
   if (byDedupeKey) {
@@ -314,6 +322,8 @@ async function getOrCreateScrapedOrganizer(
     if (businessCategory) updates.businessCategory = businessCategory;
     const validEmail = isValidExternalEmail(contactEmail);
     if (validEmail && !byDedupeKey.contactEmail) updates.contactEmail = validEmail;
+    if (phone && !byDedupeKey.phone) updates.phone = phone;
+    if (website && !byDedupeKey.website) updates.website = website;
 
     // Corroboration merge
     const newSourceCount = (byDedupeKey.sourceCount || 1) + 1;
@@ -339,7 +349,7 @@ async function getOrCreateScrapedOrganizer(
       isUnmanagedListing: true,
       address: { contains: city },
     },
-    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, sourceCount: true, sourcesJson: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, dedupeKey: true, sourceCount: true, sourcesJson: true },
   });
 
   const normalizedName = normalizeName(businessName);
@@ -355,6 +365,8 @@ async function getOrCreateScrapedOrganizer(
     if (businessCategory) updates.businessCategory = businessCategory;
     const validEmail = isValidExternalEmail(contactEmail);
     if (validEmail && !existing.contactEmail) updates.contactEmail = validEmail;
+    if (phone && !existing.phone) updates.phone = phone;
+    if (website && !existing.website) updates.website = website;
 
     // Corroboration merge
     const newSourceCount = (existing.sourceCount || 1) + 1;
@@ -404,7 +416,7 @@ async function getOrCreateScrapedOrganizer(
         organizer: {
           create: {
             businessName,
-            phone: null,
+            phone: phone ?? null,
             address: `${city}, ${state}`,
             bio: `Sale organizer based in ${city}, ${state}.`,
             isClaimed: false,
@@ -413,6 +425,7 @@ async function getOrCreateScrapedOrganizer(
             googlePlaceId,
             businessCategory,
             contactEmail: validEmail || null,
+            website: website ?? null,
             dedupeKey: generateDedupeKey(businessName, city),
             sourceCount: 1,
             sourcesJson: [{ sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() }],
@@ -439,7 +452,7 @@ async function getOrCreateScrapedOrganizer(
           organizer: {
             create: {
               businessName,
-              phone: null,
+              phone: phone ?? null,
               address: `${city}, ${state}`,
               bio: `Sale organizer based in ${city}, ${state}.`,
               isClaimed: false,
@@ -448,6 +461,7 @@ async function getOrCreateScrapedOrganizer(
               googlePlaceId,
               businessCategory,
               contactEmail: validEmail || null,
+              website: website ?? null,
               dedupeKey: generateDedupeKey(businessName, city),
               sourceCount: 1,
               sourcesJson: [{ sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() }],
@@ -673,7 +687,9 @@ export async function ingestScrapedListing(
         listing.foursquareVenueId,
         listing.hereBusinessId,
         listing.businessCategory,
-        listing.organizerEmail
+        listing.organizerEmail,
+        listing.organizerPhone,
+        listing.organizerWebsite
       );
       // ADR-075: If organizer was rejected due to off-target category, skip this listing
       if (createdOrgId === null) {

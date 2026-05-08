@@ -228,6 +228,8 @@ export async function scrapeFoursquareQuery(
       description: undefined,
       saleType: queryConfig.saleType,
       organizerName: place.name,
+      organizerPhone: place.tel ?? undefined,
+      organizerWebsite: place.website ?? undefined,
       businessCategory: queryConfig.category,
       sourceName: 'Foursquare',
       sourceUrl: `https://foursquare.com/v/${place.name.replace(/\s+/g, '-').toLowerCase()}/${place.fsq_place_id}`,
