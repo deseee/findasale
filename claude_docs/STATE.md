@@ -4,7 +4,24 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S685 — #393 Chrome QA Sprint: Holds + Settlement + Purchase Confirmation (IN PROGRESS)**
+**Latest: S686 — Organizer Directory Rebuild: Research + Architecture (COMPLETE — no code shipped)**
+
+S686 was a pure research and planning session following the Google Places purge. No code was written or pushed.
+
+**Key findings:**
+- Google Places purge was surgical: all 7,897 organizer records still exist. Only `googlePlaceId` field was nulled. Zero orphaned Sale records. Zero frontend impact.
+- OSM workflow IS running (71 crawl log entries, last run May 4). Queue: 20 metros, 594 items each for Foursquare, HERE, and OSM.
+- All four active workflows (Foursquare, HERE, EstateSalesNet, Facebook Events) confirmed operationally sound.
+
+**Research outputs ready for S687 dispatch:**
+1. **Architect spec** — Corroboration schema (sourceCount, sourcesJson, corroborationScore, dedupeKey on Organizer) + merge algorithm for getOrCreateScrapedOrganizer().
+2. **Sales Ops spec** — Lead scoring rubric (0–100, 7 signal categories) for Teams/Enterprise prospect identification. Organizer model fields designed.
+3. **Innovation source ranking** — EstateSales.org (Tier 1 — verify ToS first), state auctioneer licensing boards (Tier 1 — Indiana + Ohio, public records), Foursquare + HERE (Tier 2). MaxSold = Skip. Craigslist/AuctionZip = Skip (legal risk).
+4. **EstateSales.org** — Confirmed distinct platform from .NET. National, organizer-focused. ToS check required before scraper build.
+
+---
+
+**Previous: S685 — #393 Chrome QA Sprint: Holds + Settlement + Purchase Confirmation (IN PROGRESS)**
 
 S685 is an active QA sprint. Holds ✅, Settlement ✅, Purchase Confirmation ✅ verified. P2 fixes shipped mid-session (green). Additional bugs found and fixed inline during #80 QA pass.
 
@@ -667,18 +684,47 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S686
+## Next Session — S687
 
 **Session start:** Read STATE.md → roadmap BROKEN/PENDING items → present top 3.
 
-**Priority 1 — #393 QA Sprint: one item remains**
-- Auction #174 — needs organizer to list items in a production auction sale before QA can proceed
+**Priority 1 — Directory Rebuild: Parallel Dev Dispatches**
 
-**Priority 2 — Dual bid/place-bid UX bug**
-`sales/[id].tsx` auction item cards have both inline "Bid" submit button AND "Place Bid" button. "Place Bid" onClick calls `setBiddingItemId` which disables the Bid button. Dispatch to findasale-dev.
+All specs are complete from S686. Dispatch these in parallel at session start:
 
-**Priority 3 — #394 Full Product Walkthrough**
-After #174 and bid bug cleared.
+**Dev Dispatch A — Corroboration schema + merge logic:**
+- Add to Organizer model in schema.prisma: `sourceCount Int @default(1)`, `sourcesJson Json?`, `corroborationScore Decimal @default(0.5) @db.Decimal(3,2)`, `dedupeKey String? @db.VarChar(255)`, plus `@@index([dedupeKey])`, `@@index([corroborationScore])`, `@@index([sourceCount])`
+- Create migration SQL (see Architect output from S686)
+- Update `getOrCreateScrapedOrganizer()` in backend ingest service to implement 6-step merge flow: dedupeKey lookup → source ID exact match → fuzzy name+geocode match → merge (increment sourceCount, update sourcesJson, recalculate corroborationScore) or create
+- Add `recalculateCorroborationScore()` helper
+- Add `geocodeToGrid(lat, lng, gridSizeMeters)` utility
+- TS check required before returning
+
+**Dev Dispatch B — Lead scoring fields on Organizer model:**
+- Add nullable fields to Organizer for lead scoring: `leadScore Int?`, `leadTier String?` (COLD/WARM/HOT/ENTERPRISE), `lastScoredAt DateTime?`, `annualSalesEstimate Int?`, `hasPhysicalOffice Boolean?`, `isStateLicensed Boolean?`, `licenseState String?`, `licenseNumber String?`, `staffSizeEstimate Int?`, `reviewCount Int?`, `reviewVelocity Float?`
+- Create migration
+- TS check required before returning
+
+**Research Dispatch C — EstateSales.org ToS + OSM workflow location:**
+- Visit estatesales.org/terms and estatesales.org/privacy — confirm whether scraping and persistent storage of organizer data is permitted
+- Check GitHub repo `deseee/findasale` for `.github/workflows/` files — list all workflow files that exist and confirm whether an OSM/Overpass workflow is present (DB shows 71 crawl log entries for OSM as of May 4)
+- Return: ToS verdict (permitted / prohibited / unclear) + OSM workflow file name if found
+
+**Priority 2 — After Dispatch C returns:**
+- If EstateSales.org ToS is clear → dev dispatch for scraper workflow (mirror EstateSalesNet workflow pattern)
+- If OSM workflow confirmed missing → dev dispatch to build it (Overpass API, `shop=antiques`, `shop=secondhand`, `shop=used_goods`, auctioneer tags, write to Organizer via existing ingest endpoint)
+
+**Priority 3 — State auctioneer licensing boards (Indiana first):**
+- Indiana PLA auctioneer database is public records via APRA portal
+- Dev dispatch: scraper for Indiana PLA → normalize name/address → POST to `/api/internal/scraper/ingest` with `sourceName: "IndianaLicensing"`
+- Ohio to follow once Indiana is confirmed working
+
+**Priority 4 — #393 QA Sprint holdover:**
+- Auction #174 — still needs organizer to list items in a production auction sale before Chrome QA can proceed
+- #394 Full Walkthrough — after #174 cleared
+
+**Note on #374 Cold Outreach Pipeline:**
+The directory rebuild (Dispatches A+B above) is the foundation for #374. The corroboration scoring identifies warm leads; the lead scoring rubric tiers them. Do not dispatch #374 until A+B are shipped and backfill is run on existing 7,897 organizer records.
 
 **Patrick wrap actions (S685):**
 ```powershell
