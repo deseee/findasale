@@ -95,6 +95,37 @@ function normalizeName(name: string): string {
 }
 
 /**
+ * Recalculate corroboration score based on source count.
+ * 1 source = 0.5, 2 = 0.7, 3 = 0.85, 4+ = 0.95
+ */
+function recalculateCorroborationScore(sourceCount: number): number {
+  if (sourceCount <= 1) return 0.5;
+  if (sourceCount === 2) return 0.7;
+  if (sourceCount === 3) return 0.85;
+  return 0.95;
+}
+
+/**
+ * Convert lat/lng to grid cell for proximity matching.
+ * gridSizeMeters defaults to 100m ≈ 0.0009 degrees
+ */
+function geocodeToGrid(lat: number, lng: number, gridSizeMeters: number = 100): string {
+  const cellSize = gridSizeMeters / 111000;
+  const gridLat = Math.floor(lat / cellSize);
+  const gridLng = Math.floor(lng / cellSize);
+  return `${gridLat}:${gridLng}`;
+}
+
+/**
+ * Generate dedupeKey from business name and city.
+ * Format: normalized-name:normalized-city
+ */
+function generateDedupeKey(name: string, city: string): string {
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().replace(/\s+/g, '-');
+  return `${normalize(name)}:${normalize(city)}`;
+}
+
+/**
  * Validate and sanitize an email address for storage.
  * Returns the email if valid and external (not @system.finda.sale), otherwise null.
  */
@@ -165,15 +196,15 @@ async function getOrCreateScrapedOrganizer(
     );
     return null;
   }
-  // ADR-077 Phase 2: Multi-source dedup
+  // ADR-077 Phase 2: Multi-source dedup + corroboration merge
   // Check by googlePlaceId first — strongest dedup signal.
   if (googlePlaceId) {
     const byPlaceId = await prisma.organizer.findFirst({
       where: { googlePlaceId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, sourceCount: true, sourcesJson: true },
     });
     if (byPlaceId) {
-      // Backfill missing source IDs and email
+      // Backfill missing source IDs and email, merge corroboration data
       const updates: Record<string, unknown> = {};
       if (foursquareVenueId && !byPlaceId.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
       if (hereBusinessId && !byPlaceId.hereBusinessId) updates.hereBusinessId = hereBusinessId;
@@ -181,6 +212,18 @@ async function getOrCreateScrapedOrganizer(
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
       if (validEmail && !byPlaceId.contactEmail) updates.contactEmail = validEmail;
+
+      // Corroboration merge: increment source count and update sourcesJson
+      const newSourceCount = (byPlaceId.sourceCount || 1) + 1;
+      const currentSources = (byPlaceId.sourcesJson as any[]) || [];
+      const newSource = { sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() };
+      const updatedSources = [...currentSources, newSource];
+
+      updates.sourceCount = newSourceCount;
+      updates.sourcesJson = updatedSources;
+      updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+      updates.updatedAt = new Date();
+
       if (Object.keys(updates).length > 0) {
         await prisma.organizer.update({ where: { id: byPlaceId.id }, data: updates });
       }
@@ -192,7 +235,7 @@ async function getOrCreateScrapedOrganizer(
   if (foursquareVenueId) {
     const byFoursquare = await prisma.organizer.findFirst({
       where: { foursquareVenueId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, sourceCount: true, sourcesJson: true },
     });
     if (byFoursquare) {
       const updates: Record<string, unknown> = {};
@@ -202,6 +245,18 @@ async function getOrCreateScrapedOrganizer(
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
       if (validEmail && !byFoursquare.contactEmail) updates.contactEmail = validEmail;
+
+      // Corroboration merge
+      const newSourceCount = (byFoursquare.sourceCount || 1) + 1;
+      const currentSources = (byFoursquare.sourcesJson as any[]) || [];
+      const newSource = { sourceName, sourceId: foursquareVenueId, lastSeen: new Date().toISOString() };
+      const updatedSources = [...currentSources, newSource];
+
+      updates.sourceCount = newSourceCount;
+      updates.sourcesJson = updatedSources;
+      updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+      updates.updatedAt = new Date();
+
       if (Object.keys(updates).length > 0) {
         await prisma.organizer.update({ where: { id: byFoursquare.id }, data: updates });
       }
@@ -213,7 +268,7 @@ async function getOrCreateScrapedOrganizer(
   if (hereBusinessId) {
     const byHere = await prisma.organizer.findFirst({
       where: { hereBusinessId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, sourceCount: true, sourcesJson: true },
     });
     if (byHere) {
       const updates: Record<string, unknown> = {};
@@ -223,11 +278,57 @@ async function getOrCreateScrapedOrganizer(
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
       if (validEmail && !byHere.contactEmail) updates.contactEmail = validEmail;
+
+      // Corroboration merge
+      const newSourceCount = (byHere.sourceCount || 1) + 1;
+      const currentSources = (byHere.sourcesJson as any[]) || [];
+      const newSource = { sourceName, sourceId: hereBusinessId, lastSeen: new Date().toISOString() };
+      const updatedSources = [...currentSources, newSource];
+
+      updates.sourceCount = newSourceCount;
+      updates.sourcesJson = updatedSources;
+      updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+      updates.updatedAt = new Date();
+
       if (Object.keys(updates).length > 0) {
         await prisma.organizer.update({ where: { id: byHere.id }, data: updates });
       }
       return byHere.id;
     }
+  }
+
+  // Fallback: Try to find existing organizer by dedupeKey first, then normalized businessName + city
+  const dedupeKey = generateDedupeKey(businessName, city);
+  const byDedupeKey = await prisma.organizer.findFirst({
+    where: { dedupeKey },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, sourceCount: true, sourcesJson: true },
+  });
+
+  if (byDedupeKey) {
+    const updates: Record<string, unknown> = {};
+    if (googlePlaceId && !byDedupeKey.googlePlaceId) updates.googlePlaceId = googlePlaceId;
+    if (foursquareVenueId && !byDedupeKey.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
+    if (hereBusinessId && !byDedupeKey.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+    if (esnOrgId) updates.esnOrgId = esnOrgId;
+    if (businessCategory) updates.businessCategory = businessCategory;
+    const validEmail = isValidExternalEmail(contactEmail);
+    if (validEmail && !byDedupeKey.contactEmail) updates.contactEmail = validEmail;
+
+    // Corroboration merge
+    const newSourceCount = (byDedupeKey.sourceCount || 1) + 1;
+    const currentSources = (byDedupeKey.sourcesJson as any[]) || [];
+    const newSource = { sourceName, sourceId: dedupeKey, lastSeen: new Date().toISOString() };
+    const updatedSources = [...currentSources, newSource];
+
+    updates.sourceCount = newSourceCount;
+    updates.sourcesJson = updatedSources;
+    updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+    updates.updatedAt = new Date();
+
+    if (Object.keys(updates).length > 0) {
+      await prisma.organizer.update({ where: { id: byDedupeKey.id }, data: updates });
+    }
+    return byDedupeKey.id;
   }
 
   // Fallback: Try to find existing organizer by normalized businessName + city
@@ -237,7 +338,7 @@ async function getOrCreateScrapedOrganizer(
       isUnmanagedListing: true,
       address: { contains: city },
     },
-    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, sourceCount: true, sourcesJson: true },
   });
 
   const normalizedName = normalizeName(businessName);
@@ -253,6 +354,23 @@ async function getOrCreateScrapedOrganizer(
     if (businessCategory) updates.businessCategory = businessCategory;
     const validEmail = isValidExternalEmail(contactEmail);
     if (validEmail && !existing.contactEmail) updates.contactEmail = validEmail;
+
+    // Corroboration merge
+    const newSourceCount = (existing.sourceCount || 1) + 1;
+    const currentSources = (existing.sourcesJson as any[]) || [];
+    const newSource = { sourceName, sourceId: `${normalizedName}:${city}`, lastSeen: new Date().toISOString() };
+    const updatedSources = [...currentSources, newSource];
+
+    updates.sourceCount = newSourceCount;
+    updates.sourcesJson = updatedSources;
+    updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+    updates.updatedAt = new Date();
+
+    // Set dedupeKey if not already set
+    if (!existing.dedupeKey) {
+      updates.dedupeKey = dedupeKey;
+    }
+
     if (Object.keys(updates).length > 0) {
       await prisma.organizer.update({ where: { id: existing.id }, data: updates });
     }
@@ -294,6 +412,10 @@ async function getOrCreateScrapedOrganizer(
             googlePlaceId,
             businessCategory,
             contactEmail: validEmail || null,
+            dedupeKey: generateDedupeKey(businessName, city),
+            sourceCount: 1,
+            sourcesJson: [{ sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() }],
+            corroborationScore: 0.5,
           },
         },
       },
@@ -325,6 +447,10 @@ async function getOrCreateScrapedOrganizer(
               googlePlaceId,
               businessCategory,
               contactEmail: validEmail || null,
+              dedupeKey: generateDedupeKey(businessName, city),
+              sourceCount: 1,
+              sourcesJson: [{ sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() }],
+              corroborationScore: 0.5,
             },
           },
         },
