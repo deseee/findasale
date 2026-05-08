@@ -54,7 +54,12 @@ export async function getPersonalizedFeed(
 ): Promise<{ sales: SaleWithScore[]; personalized: boolean }> {
   // Fetch all published sales with organizer data
   const sales = await prisma.sale.findMany({
-    where: { status: 'PUBLISHED' },
+    where: {
+      status: 'PUBLISHED',
+      deletedAt: null,
+      isInventoryContainer: false,
+      endDate: { gte: new Date() },
+    },
     include: {
       organizer: {
         select: {

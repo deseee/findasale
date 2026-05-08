@@ -112,7 +112,7 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
     const [salesResult, itemsResult, itemSearchResult, organizerSearchResult] = await Promise.all([
       type !== 'items'
         ? prisma.sale.findMany({
-            where: { ...textWhere, status: 'PUBLISHED' },
+            where: { ...textWhere, status: 'PUBLISHED', deletedAt: null, isInventoryContainer: false, endDate: { gte: new Date() } },
             select: {
               id: true,
               title: true,
@@ -197,6 +197,9 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
           where: {
             organizerId: { in: organizerIds },
             status: 'PUBLISHED',
+            deletedAt: null,
+            isInventoryContainer: false,
+            endDate: { gte: new Date() },
           },
           select: { id: true },
         });
