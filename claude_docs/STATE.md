@@ -4,17 +4,22 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S682 — Pre-Launch Audits #390/#391/#392 (COMPLETE — all dispatched in parallel)**
+**Latest: S682 — WCAG Corruption Recovery (COMPLETE — Vercel GREEN)**
 
-Three pre-launch audits dispatched and completed:
+The WCAG #391 bulk-label agent introduced 5 distinct corruption patterns across ~86 files. The entire session was spent diagnosing and repairing them before Vercel would build.
 
-**#390 Health Scout Baseline** — 0 Critical, 3 High (unbounded findMany in adminBroadcastController, adminController, buyingPoolController), 2 Medium (5 alert() UX calls on ugc-moderation/dashboard, Leaflet SSR guard check), 4 Low. Report: `claude_docs/health-reports/2026-05-07-health-scout.md`. High findings ready for dev dispatch.
+**Corruption patterns found and fixed:**
+1. **Arrow function splits** — agent split `=>` inserting aria-label between `=` and `>`. Fixed via Python regex across 30 files.
+2. **Self-closing tag splits** — agent split `/>` inserting aria-label between `/` and `>`. Fixed via Python regex across 11 files.
+3. **Lucide icon alt props** — agent added `alt=""` to SVG React components that don't accept `alt`. Fixed in 4 instances.
+4. **Duplicate aria-labels** — agent added second aria-label where one already existed. Fixed in 3 files.
+5. **File truncations + null bytes** — 23 files had content cut off mid-expression; 13 files had null bytes appended post-EOF. Fixed: 23 restored from pre-WCAG commit `2062556d`; null bytes stripped via Python; 3 truncated exports fixed manually (inventory.tsx, members.tsx, feature-flags.tsx).
 
-**#391 WCAG Deferred (partial)** — 152 aria-labels added across 56 frontend files. Images already compliant. Error ARIA deferred (no existing error message infrastructure). Remaining 189 labels in ~25 files with complex patterns added to Blocked/Unverified queue.
+**Net result:** 152 valid aria-labels committed in S682's first batch (non-corrupted files) remain in place. Vercel build GREEN.
 
-**#392 Brand Voice Audit** — 3 violations fixed: `emailTemplateService.ts` tagline ("Estate Sales, Simplified" → "Find All The Sales"), `inspiration.tsx` ("best items" → "upcoming treasures"), `guild-primer.tsx` ("best sales" → "new sales"). Strong brand compliance overall — AI terminology already purged, sale-type inclusivity good. Audit report: `claude_docs/brand/brand-voice-audit-2026-05-07.md`.
+**#390 Health Scout, #392 Brand Voice** — completed earlier in S682, still valid. Reports on disk.
 
-**⚠️ S682 files — in Patrick pushblock below (not yet on GitHub).**
+**⚠️ WCAG #391 — 189 remaining labels in ~25 complex files. DO NOT use bulk automation again. See Next Session for safe dispatch protocol.**
 
 **Previous: S681 — WCAG #391 Chrome Keyboard/Focus QA (COMPLETE — 3 bugs fixed)**
 
@@ -578,39 +583,35 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S681
+## Next Session — S683
 
 **Session start:** Read STATE.md → roadmap BROKEN/PENDING items → present top 3.
 
-**Priority 1 — Verify S680 WCAG push is green**
-Confirm Vercel build passed after the WCAG push block (Layout.tsx `<main>` wrapper is the most likely source of any build surprise).
+**Priority 1 — #390 Health Scout High findings → dev dispatch**
+3 unbounded `findMany` in `adminBroadcastController`, `adminController`, `buyingPoolController`. Add pagination/limits. Dispatch to `findasale-dev`. Quick fix, low risk.
 
-**Priority 2 — WCAG Chrome keyboard/focus testing (from UNVERIFIED queue)**
-- Navigate to finda.sale in Chrome
-- Tab from top of page — skip link should appear, Enter should jump past nav to `#main-content`
-- Tab through organizer dashboard (login as user1@example.com) — verify logical focus order
-- Open any modal — Tab must stay trapped inside, Escape must close
-- Check visible focus ring (amber outline) is present on all focused elements
-- Screenshot evidence required for each ✅
+**Priority 2 — WCAG #391 remaining 189 labels (SAFE protocol — mandatory)**
+189 aria-labels remain across ~25 complex files. The S682 bulk agent approach caused 5 corruption types and burned a full session on recovery. **Do NOT use bulk automation.**
 
-**Priority 3 — #392 Brand Voice Audit**
-Sweep all UI copy (labels, error messages, empty states, email templates, onboarding modal, notifications) against `claude_docs/brand/brand-voice-system.md`. Banned words: "AI", "estate sale" (as sole type), "disruption". Dispatch: `Skill('findasale-marketing')`.
+Safe dispatch protocol for S683:
+- Dispatch `findasale-dev` with max 5 files per batch
+- Each batch: dev agent edits files manually (no Python regex bulk rewrites)
+- After each batch: `npx tsc --noEmit --skipLibCheck` — zero errors required
+- After each batch: Python null-byte check — `python3 -c "import glob; print([p for p in glob.glob('**/*.tsx', recursive=True) if b'\x00' in open(p,'rb').read()])"`
+- After each batch: tail -3 each modified file to confirm it ends with `}` or `export default`
+- Only give Patrick a push block after ALL checks pass on ALL files in the batch
+- Never push a batch that hasn't been TS-checked in the same session
 
-**Priority 4 — #393 Chrome QA Backlog Sprint**
-Work through Pending Chrome QA items in focused micro-dispatches (one feature per dispatch). Priority: auction mechanics #174, iCal #184, purchase confirmation #80, holds E2E #146–#147, SettlementWizard #253.
+**Priority 3 — #393 Chrome QA Backlog Sprint**
+Auction #174, iCal #184, purchase confirmation #80, holds #146–#147. One feature per QA dispatch. Screenshot evidence required per finding.
 
-**Patrick actions — S680 wrap push block:**
+**Priority 4 — #394 Full Product Walkthrough**
+After QA sprint completes.
+
+**Patrick wrap actions:**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/styles/globals.css
-git add packages/frontend/components/BottomTabNav.tsx
-git add packages/frontend/components/RapidCapture.tsx
-git add packages/frontend/components/SaleQRCode.tsx
-git add packages/frontend/pages/organizer/pos.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add claude_docs/health-reports/2026-05-07-wcag.md
-git commit -m "S680: WCAG #391 — main landmark, skip link, ghost contrast, keyboard divs, heading hierarchy + STATE"
+git commit -m "S682: Session wrap — STATE + dashboard updated"
 .\push.ps1
 ```
