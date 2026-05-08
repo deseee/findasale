@@ -14,6 +14,7 @@ import {
 } from '../controllers/internalSaleDetailEnrichmentController';
 import { sendOutreachEmails } from '../jobs/outreachEmailsCron';
 import { runCategorySync } from '../jobs/categorySyncCron';
+import { runLeadScoringBackfill } from '../services/leadScoringService';
 import { runScrapeRun } from '../services/scraper/index';
 import { runIndianaLicensingScraper } from '../services/scraper/sources/indianaLicensingScraper';
 import { runOsmScraper } from '../services/scraper/osmScraper';
@@ -119,6 +120,17 @@ router.post('/outreach/trigger', requireSecret, async (req: express.Request, res
     await sendOutreachEmails();
     res.json({ ok: true, message: 'Outreach batch triggered' });
   } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /api/internal/scoring/run-backfill — score all organizers (protected)
+router.post('/scoring/run-backfill', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const stats = await runLeadScoringBackfill();
+    res.json({ ok: true, stats });
+  } catch (err: any) {
+    console.error('[LeadScoring] Backfill route error:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
