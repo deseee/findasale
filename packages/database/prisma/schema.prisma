@@ -438,6 +438,26 @@ model Organizer {
   shopperIntroductions     ShopperOrganizerIntroduction[] @relation("OrganizerIntroductions")
   // CAN-SPAM Compliance: Audit log for outreach events
   outreachAuditLogs        OutreachAuditLog[] @relation("OutreachAuditLogs")
+
+  // Corroboration fields — merge conflict resolution
+  sourceCount       Int      @default(1)
+  sourcesJson       Json?
+  corroborationScore Decimal @default(0.5) @db.Decimal(3,2)
+  dedupeKey         String?  @db.VarChar(255)
+
+  // Lead scoring fields
+  leadScore         Int?
+  leadTier          String?
+  lastScoredAt      DateTime?
+  annualSalesEstimate Int?
+  hasPhysicalOffice Boolean?
+  isStateLicensed   Boolean?
+  licenseState      String?
+  licenseNumber     String?
+  staffSizeEstimate Int?
+  reviewCount       Int?
+  reviewVelocity    Float?
+
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 
@@ -446,6 +466,9 @@ model Organizer {
   @@index([suppressOutreach])
   @@index([claimStatus])
   @@index([esnOrgId])
+  @@index([dedupeKey])
+  @@index([corroborationScore])
+  @@index([sourceCount])
 }
 
 // Feature #354: OrganizerHours — business hours per day of week
