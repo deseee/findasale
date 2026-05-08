@@ -117,35 +117,14 @@ const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<Cloud
       {
         resource_type: 'image', // P1 SECURITY FIX: Restrict to 'image' instead of 'auto' to prevent non-image uploads
         folder,
-        // Content Moderation: AWS Rekognition tagging for NSFW detection
-        categorization: 'aws_rek_tagging',
-        auto_tagging: 0.7,
+        // Note: aws_rek_tagging removed — requires paid Cloudinary add-on, caused 420 on all uploads
         // Note: not using eager transforms — transformation URLs are generated on-the-fly
         // from the original URL to ensure public_id is always preserved
       },
       async (error, result) => {
         if (error || !result) return reject(error ?? new Error('No result from Cloudinary'));
 
-        // Content Moderation: Check for NSFW content
-        const awsRekTags = (result as any).info?.categorization?.aws_rek_tagging?.data;
-        if (awsRekTags) {
-          for (const tag of awsRekTags) {
-            // Check for explicit/suggestive labels with high confidence
-            if ((tag.name === 'Explicit Nudity' || tag.name === 'Suggestive') && tag.confidence > 0.8) {
-              // Delete the uploaded image from Cloudinary
-              try {
-                const publicId = (result as any).public_id;
-                await cloudinary.uploader.destroy(publicId);
-              } catch (deleteError) {
-                console.error('Error deleting NSFW image from Cloudinary:', deleteError);
-              }
-              return reject({
-                code: 'NSFW_DETECTED',
-                message: 'Image was rejected for policy violation',
-              });
-            }
-          }
-        }
+        // Note: NSFW check via aws_rek_tagging removed (add-on not active — caused 420 on every upload)
 
         // Track Cloudinary serve for bandwidth monitoring (#105)
         // Use original URL only — avoid eager transformation URLs which may be incomplete
