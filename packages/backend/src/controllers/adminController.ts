@@ -365,7 +365,7 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { role },
+      data: { role, roles: [role], tokenVersion: { increment: 1 } },
       select: {
         id: true,
         email: true,
