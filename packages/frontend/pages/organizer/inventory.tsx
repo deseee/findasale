@@ -414,4 +414,4 @@ const InventoryPage: React.FC = () => {
   );
 };
 
-export default In
+export default InventoryPage;
