@@ -101,7 +101,7 @@ const AdminBroadcast = () => {
       </div>
 
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-6">
+        <div id="broadcast-error" role="alert" className="bg-red-100 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-6">
           {error}
         </div>
       )}
@@ -119,8 +119,11 @@ const AdminBroadcast = () => {
             Audience
           </label>
           <select
+            id="broadcast-audience"
             value={audience}
             onChange={handleAudienceChange}
+            aria-invalid={!!error}
+            aria-describedby={error ? "broadcast-error" : undefined}
             className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
           >
             {audiences.map(opt => (
@@ -140,10 +143,13 @@ const AdminBroadcast = () => {
             Subject
           </label>
           <input
+            id="broadcast-subject"
             type="text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="e.g., New feature announcement"
+            aria-invalid={!!error}
+            aria-describedby={error ? "broadcast-error" : undefined}
             className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
            aria-label="e.g., New feature announcement" />
         </div>
@@ -154,9 +160,12 @@ const AdminBroadcast = () => {
             Message Body
           </label>
           <textarea
+            id="broadcast-body"
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Write your message here..."
+            aria-invalid={!!error}
+            aria-describedby={error ? "broadcast-error" : undefined}
             rows={8}
             className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600 font-mono text-sm"
           />

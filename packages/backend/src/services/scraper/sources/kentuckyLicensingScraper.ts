@@ -1,7 +1,7 @@
 /**
  * Kentucky Auctioneer License Scraper
  * Scrapes licensed auctioneers from Kentucky Auctioneer Commission search
- * Source: https://auctioneers.ky.gov/Pages/Search.aspx
+ * Source: http://web1.ky.gov/gensearch/LicenseSearch.aspx?AGY=3
  * Public directory with auctioneer license records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,7 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const KENTUCKY_SEARCH_URL = 'https://auctioneers.ky.gov/Pages/Search.aspx';
+const KENTUCKY_SEARCH_URL = 'http://web1.ky.gov/gensearch/LicenseSearch.aspx?AGY=3';
 
 /**
  * Parse an address string into city and zip components

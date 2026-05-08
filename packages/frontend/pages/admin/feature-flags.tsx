@@ -271,14 +271,17 @@ export default function AdminFeatureFlagsPage() {
                   Flag Key *
                 </label>
                 <input
+                  id="flag-key"
                   type="text"
                   value={newFlag.key}
                   onChange={(e) => setNewFlag({ ...newFlag, key: e.target.value.toLowerCase() })}
                   placeholder="e.g. ebay_push_enabled"
+                  aria-invalid={!!formErrors.key}
+                  aria-describedby={formErrors.key ? "flag-key-error" : undefined}
                   className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-900 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600 font-mono text-sm"
                   aria-label="Feature flag key"
                 />
-                {formErrors.key && <p className="text-red-600 text-xs mt-1">{formErrors.key}</p>}
+                {formErrors.key && <p id="flag-key-error" role="alert" className="text-red-600 text-xs mt-1">{formErrors.key}</p>}
               </div>
 
               <div>
@@ -286,14 +289,17 @@ export default function AdminFeatureFlagsPage() {
                   Description *
                 </label>
                 <input
+                  id="flag-description"
                   type="text"
                   value={newFlag.description}
                   onChange={(e) => setNewFlag({ ...newFlag, description: e.target.value })}
                   placeholder="e.g. Enable eBay listing push"
+                  aria-invalid={!!formErrors.description}
+                  aria-describedby={formErrors.description ? "flag-description-error" : undefined}
                   className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-900 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
                   aria-label="Feature flag description"
                 />
-                {formErrors.description && <p className="text-red-600 text-xs mt-1">{formErrors.description}</p>}
+                {formErrors.description && <p id="flag-description-error" role="alert" className="text-red-600 text-xs mt-1">{formErrors.description}</p>}
               </div>
 
               <div className="flex gap-4">

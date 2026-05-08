@@ -1,7 +1,7 @@
 /**
  * Alabama Department of Commerce — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Alabama public license verification system
- * Source: https://auctioneer.alabama.gov/verify.html
+ * Source: https://auctioneer.alabama.gov/licensee-search/
  * Public directory with auctioneer license records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -12,7 +12,7 @@ import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
 const ALABAMA_LICENSE_BASE_URL = 'https://auctioneer.alabama.gov';
-const SEARCH_URL = 'https://auctioneer.alabama.gov/verify.html';
+const SEARCH_URL = 'https://auctioneer.alabama.gov/licensee-search/';
 
 /**
  * Parse an address string into components

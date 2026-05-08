@@ -1,7 +1,7 @@
 /**
  * South Carolina Department of Labor, Licensing and Regulation — Auctioneer License Scraper
  * Scrapes licensed auctioneers from South Carolina LLR auctioneer license search
- * Source: https://llr.sc.gov/auc/search.aspx
+ * Source: https://verify.llronline.com/LicLookup/Auctioneer/Auctioneer.aspx?div=29
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -12,7 +12,7 @@ import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
 const SOUTHCAROLINA_LLR_BASE_URL = 'https://llr.sc.gov';
-const SEARCH_URL = 'https://llr.sc.gov/auc/search.aspx';
+const SEARCH_URL = 'https://verify.llronline.com/LicLookup/Auctioneer/Auctioneer.aspx?div=29';
 
 /**
  * Parse an address string into city and state components

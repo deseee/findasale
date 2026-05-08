@@ -163,11 +163,14 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
         /* Search input — shown when no selection confirmed */
         <div className="relative">
           <input
+            id="ebay-category-search"
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onFocus={() => input.trim() && setIsOpen(true)}
             placeholder={placeholder}
+            aria-invalid={!!error}
+            aria-describedby={error ? "ebay-category-error" : undefined}
             className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
           />
 
@@ -182,7 +185,7 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
 
       {/* Error message */}
       {error && (
-        <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>
+        <p id="ebay-category-error" role="alert" className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
 
       {/* Dropdown suggestions */}

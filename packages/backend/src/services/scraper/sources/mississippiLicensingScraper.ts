@@ -1,7 +1,7 @@
 /**
  * Mississippi Board of Auctioneers — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Mississippi Board of Auctioneers database
- * Source: https://mba.ms.gov/search
+ * Source: https://www.mac.webapps.ms.gov/PublicView/PublicIndSearch.aspx
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,7 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const MISSISSIPPI_BASE_URL = 'https://mba.ms.gov/search';
+const MISSISSIPPI_BASE_URL = 'https://www.mac.webapps.ms.gov/PublicView/PublicIndSearch.aspx';
 
 /**
  * Parse an address string into city and zip components
