@@ -8,11 +8,11 @@
  *   ENTERPRISE (75–100) — licensed, verified, multi-source, high-value
  *
  * Scoring dimensions (max 100 pts total):
- *   Contact reachability  — 20 pts  (contactEmail/scrapedEmail + phone)
+ *   Contact completeness  — 40 pts  (email=25, phone=15)
  *   Corroboration depth   — 20 pts  (sourceCount + corroborationScore)
  *   Licensing             — 25 pts  (isStateLicensed + licenseNumber)
- *   Review strength       — 20 pts  (googleRatingCount tiers)
- *   Physical presence     — 15 pts  (hasPhysicalOffice + googlePlaceId)
+ *   Review strength       — 10 pts  (googleRatingCount tiers — grows as enrichment arrives)
+ *   Physical presence     —  5 pts  (hasPhysicalOffice + googlePlaceId)
  *
  * Backfill: scores all existing organizers in batches of 200.
  * Weekly cron: re-scores all organizers every Sunday at 2 AM UTC.
@@ -63,10 +63,10 @@ export function calculateLeadScore(org: ScoringInput): LeadScoreResult {
   let reviewStrength = 0;
   let physicalPresence = 0;
 
-  // ── 1. Contact reachability (max 20) ──────────────────────────────────────
-  // Email is the primary outreach signal (+12), phone is a bonus (+8)
-  if (org.contactEmail || org.scrapedEmail) contactReachability += 12;
-  if (org.phone) contactReachability += 8;
+  // ── 1. Contact completeness (max 40) ──────────────────────────────────────
+  // Email is the primary outreach signal (+25), phone is a strong bonus (+15)
+  if (org.contactEmail || org.scrapedEmail) contactReachability += 25;
+  if (org.phone) contactReachability += 15;
 
   // ── 2. Corroboration depth (max 20) ───────────────────────────────────────
   // sourceCount tiers: 1→5, 2→10, 3→14, 4+→18
@@ -96,18 +96,20 @@ export function calculateLeadScore(org: ScoringInput): LeadScoreResult {
     licensing += 5; // partial licensing data
   }
 
-  // ── 4. Review strength (max 20) ───────────────────────────────────────────
-  // googleRatingCount tiers: 1-4→5, 5-9→10, 10-24→15, 25+→20
+  // ── 4. Review strength (max 10) ───────────────────────────────────────────
+  // googleRatingCount tiers: 1-4→3, 5-9→6, 10-24→8, 25+→10
+  // Capped at 10 — we don't have Google data yet, grows as enrichment arrives
   const rc = org.googleRatingCount ?? 0;
-  if (rc >= 25) reviewStrength = 20;
-  else if (rc >= 10) reviewStrength = 15;
-  else if (rc >= 5) reviewStrength = 10;
-  else if (rc >= 1) reviewStrength = 5;
+  if (rc >= 25) reviewStrength = 10;
+  else if (rc >= 10) reviewStrength = 8;
+  else if (rc >= 5) reviewStrength = 6;
+  else if (rc >= 1) reviewStrength = 3;
 
-  // ── 5. Physical presence (max 15) ─────────────────────────────────────────
-  // Confirmed physical office (+10) and verified Google Business profile (+5)
-  if (org.hasPhysicalOffice) physicalPresence += 10;
-  if (org.googlePlaceId) physicalPresence += 5;
+  // ── 5. Physical presence (max 5) ──────────────────────────────────────────
+  // Confirmed physical office (+3) and verified Google Business profile (+2)
+  // Capped at 5 — we don't have Google Places data yet
+  if (org.hasPhysicalOffice) physicalPresence += 3;
+  if (org.googlePlaceId) physicalPresence += 2;
 
   // ── Total & tier ──────────────────────────────────────────────────────────
   const score = Math.min(
