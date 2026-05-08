@@ -14,6 +14,8 @@ export interface ParsedListing {
   endDate: Date;
   organizerName?: string;
   organizerEmail?: string;
+  organizerPhone?: string;   // scraped phone — fills organizer.phone only if currently null
+  organizerWebsite?: string; // scraped website — fills organizer.website only if currently null
   description?: string;
   photoUrls?: string[];
   saleType?: string; // ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL

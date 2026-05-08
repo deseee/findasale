@@ -328,6 +328,8 @@ export async function scrapeHEREQuery(
         description: null as any,
         saleType: queryConfig.saleType,
         organizerName: place.title,
+        organizerPhone: phone ?? undefined,
+        organizerWebsite: website ?? undefined,
         businessCategory: queryConfig.category,
         sourceName: 'HEREPlaces',
         sourceUrl: `https://www.here.com/en/search?q=${encodeURIComponent(place.title)}`,

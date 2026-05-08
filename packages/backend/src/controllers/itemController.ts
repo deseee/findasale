@@ -1244,11 +1244,9 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     let outbidWinnerId: string | null = null;
 
     if (!currentWinner) {
-      // No other bids — this is the first bid
-      actualBidAmount = Math.max(
-        item.auctionStartPrice || 0,
-        item.auctionReservePrice || 0
-      );
+      // No other bids — this is the first bid. Use the submitted maxBidAmount directly.
+      // (Validation above already ensures maxBidAmount > currentHighBid and >= reservePrice)
+      actualBidAmount = maxBidAmount;
     } else if (currentWinner.maxAmount < maxBidAmount) {
       // New bidder's max is higher — they win with auto-increment
       actualBidAmount = currentWinner.maxAmount + calculateBidIncrement(currentWinner.maxAmount);
