@@ -132,7 +132,7 @@ const StripePayForm = ({
       <PaymentElement />
 
       {errorMessage && (
-        <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+        <p id="stripe-pay-error" role="alert" className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
       )}
 
       <div className="flex gap-3 pt-2">
@@ -285,7 +285,7 @@ export default function BoostPurchaseModal({
 
         {/* Error */}
         {error && !loading && (
-          <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm mb-4">
+          <div id="boost-purchase-error" role="alert" className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm mb-4">
             {error}
           </div>
         )}

@@ -135,7 +135,7 @@ Example Item 3,Another sample item,100.00,,,,SOLD,`;
         </div>
         
         {uploadResult && (
-          <div className={`rounded-md p-3 mb-4 ${uploadResult.success ? 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}>
+          <div id="csv-upload-result" role="alert" className={`rounded-md p-3 mb-4 ${uploadResult.success ? 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}>
             {uploadResult.message}
           </div>
         )}
