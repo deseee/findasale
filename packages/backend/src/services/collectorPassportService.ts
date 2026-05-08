@@ -20,24 +20,32 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  * Returns empty passport if not yet created
  */
 export const getOrCreatePassport = async (userId: string): Promise<any> => {
-  // upsert is race-safe: concurrent calls won't produce P2002 unique constraint errors
-  const passport = await prisma.collectorPassport.upsert({
-    where: { userId },
-    create: {
-      userId,
-      bio: null,
-      specialties: [],
-      categories: [],
-      keywords: [],
-      notifyEmail: true,
-      notifyPush: true,
-      totalFinds: 0,
-      isPublic: true,
-    },
-    update: {}, // no-op — just return the existing record
-  });
-
-  return passport;
+  // NOTE: Prisma upsert is NOT race-safe — concurrent calls can produce P2002.
+  // Fix: catch P2002 and fall back to findUnique (the concurrent create already succeeded).
+  try {
+    return await prisma.collectorPassport.upsert({
+      where: { userId },
+      create: {
+        userId,
+        bio: null,
+        specialties: [],
+        categories: [],
+        keywords: [],
+        notifyEmail: true,
+        notifyPush: true,
+        totalFinds: 0,
+        isPublic: true,
+      },
+      update: {}, // no-op — just return the existing record
+    });
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      // Race condition: another concurrent call created the record first — just fetch it
+      const existing = await prisma.collectorPassport.findUnique({ where: { userId } });
+      if (existing) return existing;
+    }
+    throw err;
+  }
 };
 
 /**
