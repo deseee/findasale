@@ -492,6 +492,7 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       phone: organizer.phone,
       bio: organizer.bio,
       tagline: (organizer as any).tagline || null,
+      organizerTypes: (organizer as any).organizerTypes || [],
       yearFounded: (organizer as any).yearFounded || null,
       website: organizer.website,
       facebook: (organizer as any).facebook || null,
@@ -1999,4 +2000,4 @@ router.get('/claim/verify/:token', async (req: Request, res: Response) => {
   }
 });
 
-export default router;
+e
