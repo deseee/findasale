@@ -4,7 +4,20 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S691 — 50-State Scraper Audit + Safe Fixes (PARTIAL — push block below)**
+**Latest: S692 — Backend Crash + Camera Fix (COMPLETE)**
+
+S692 diagnosed and fixed two production P0s:
+
+**Completed this session:**
+- **Backend crash fixed** — Commit `4756009b` (S691, today 9:22am) added 44+ state scraper imports to `internal.ts` without committing the actual source files. Railway crashed on boot with `MODULE_NOT_FOUND: northCarolinaLicensingScraper`. Fix: Patrick pushed all scraper source files (already existed locally, never committed).
+- **Camera upload fixed** — `[rapidfire] Cloudinary upload failed: http_code: 420`. Root cause: `aws_rek_tagging` (AWS Rekognition content moderation add-on) was configured in `uploadToCloudinary` but the Cloudinary add-on is not active. Cloudinary returned 420 on every single upload. Fixed by removing `categorization: 'aws_rek_tagging'` and `auto_tagging: 0.7` from the upload options, and removing the dependent NSFW check block. Also added `uploadToCloudinaryWithRetry` wrapper (3 retries, exponential backoff) for transient 420s.
+- **Roadmap #394 added** — Content moderation decision logged in Decisions Needed. Options: Cloudinary built-in (free), Rekognition add-on (~$0.001/img), or leave off for beta.
+
+**Files changed this session:**
+- `packages/backend/src/controllers/uploadController.ts` — remove aws_rek_tagging, add retry wrapper
+- `claude_docs/strategy/roadmap.md` — v137, added #394
+
+**Previous: S691 — 50-State Scraper Audit + Safe Fixes (PARTIAL — push block below)**
 
 S691 audited the S690 rubber-stamped scrapers. Research confirmed which states have real auctioneer licensing, which don't, and what Phase 2 license types can replace no-auctioneer scrapers. Three safe fixes applied:
 

@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S691 Wrap
+# Patrick's Dashboard — S692 Wrap
 
 ---
 
@@ -7,18 +7,28 @@
 | Area | Status |
 |------|--------|
 | Vercel build | ✅ GREEN |
-| Railway backend | ✅ GREEN |
+| Railway backend | ✅ GREEN — crash fixed S692 |
+| Camera / rapidfire upload | ✅ FIXED S692 |
 | Google OAuth | ⚠️ Still broken |
 | Login (email/password) | ✅ Working |
 | Lead scoring service | ✅ LIVE — 7,897 scored |
 | TX scraper | ✅ Rewritten to Socrata API |
 | 50-state scraper batch | ⚠️ Audit complete — URL corrections + Phase 2 dispatch pending |
-| S691 push block | ⚠️ Patrick push needed (block below) |
-| S689 Chrome QA fixes | ⚠️ Still unpushed — blocks 1+2 below |
+| Content moderation (NSFW) | ⚠️ Removed S692 — decision #394 pending |
 
 ---
 
-## What Happened This Session (S691 — Scraper Audit)
+## What Happened This Session (S692 — Backend Crash + Camera Fix)
+
+Two production P0s hit and fixed:
+
+- **Backend crash** — S691 commit added 44+ scraper imports to `internal.ts` without the actual files. Railway couldn't boot. Fix: push all scraper source files (already existed locally).
+- **Camera uploads** — Cloudinary was returning 420 on every photo. Root cause: `aws_rek_tagging` (AWS Rekognition NSFW detection) configured but add-on not active on account. Removed from upload options. Also added retry wrapper for transient rate limits.
+- **Roadmap #394** — Content moderation decision logged. Options: Cloudinary built-in (free), Rekognition add-on (~$0.001/img), or leave off for beta.
+
+---
+
+## What Happened Last Session (S691 — Scraper Audit)
 
 Audited all 50 state scraper files built in S690. Research confirmed:
 
