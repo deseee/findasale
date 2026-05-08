@@ -173,7 +173,7 @@ const PurchaseConfirmationPage = () => {
             </h2>
             {organizer && (
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Sold by <span className="font-medium text-gray-700 dark:text-gray-300">{organizer.name}</span>
+                Sold by <span className="font-medium text-gray-700 dark:text-gray-300">{organizer.businessName}</span>
               </p>
             )}
           </div>
