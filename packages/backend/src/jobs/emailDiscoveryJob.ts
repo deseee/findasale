@@ -1,4 +1,6 @@
+import cron from 'node-cron';
 import { emailDiscoveryBatchJob } from '../services/emailDiscoveryService';
+import { cronGuard } from '../utils/cronGuard';
 
 /**
  * Email Discovery Batch Job
@@ -35,4 +37,26 @@ export async function emailDiscoveryJob(): Promise<{
     console.error('[emailDiscoveryJob] Error:', err);
     throw err;
   }
+}
+
+/**
+ * initEmailDiscoveryCron — registers the email discovery job in the cron scheduler.
+ *
+ * Schedule: daily at 3:00 AM UTC
+ * Gate: EMAIL_DISCOVERY_ENABLED=true (Railway env var — togglable without a deploy)
+ *
+ * To activate: set EMAIL_DISCOVERY_ENABLED=true in Railway → backend service → Variables.
+ */
+export function initEmailDiscoveryCron(): void {
+  if (process.env.EMAIL_DISCOVERY_ENABLED !== 'true') {
+    console.log('[emailDiscoveryCron] Disabled — set EMAIL_DISCOVERY_ENABLED=true to activate');
+    return;
+  }
+
+  // Daily at 3:00 AM UTC
+  cron.schedule('0 3 * * *', cronGuard({ jobName: 'email-discovery' }, async () => {
+    await emailDiscoveryJob();
+  }), { timezone: 'UTC' });
+
+  console.log('[emailDiscoveryCron] Registered — runs daily at 03:00 UTC');
 }

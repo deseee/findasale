@@ -231,6 +231,7 @@ import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Direct
 import { initMetroSyncCron } from './jobs/metroSyncCron'; // ADR-074: Metro Sync — eBay sold items nightly cron
 import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase 2: Category Sync — eBay category items nightly cron
 import { initOutreachEmailsCron } from './jobs/outreachEmailsCron'; // Phase 1: Cold outreach email pipeline
+import { initEmailDiscoveryCron } from './jobs/emailDiscoveryJob'; // ADR-073 Phase 2: Email discovery for unmanaged organizers
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
 import { scheduleLeadScoringCron } from './jobs/leadScoringJob'; // ADR-076 Phase 2: Weekly lead score recomputation
@@ -695,6 +696,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-074 Phase 2: Initialize category sync cron (gated by CATEGORY_SYNC_ENABLED env var)
   initCategorySyncCron();
+
+  // ADR-073 Phase 2: Initialize email discovery cron (gated by EMAIL_DISCOVERY_ENABLED env var)
+  initEmailDiscoveryCron();
 
   // Log environment variables status for debugging (dev only)
   if (process.env.NODE_ENV !== 'production') {
