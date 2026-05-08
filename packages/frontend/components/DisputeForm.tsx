@@ -103,6 +103,8 @@ const DisputeForm: React.FC<DisputeFormProps> = ({
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 bg-white dark:bg-gray-700 dark:text-gray-100"
+          aria-invalid={!reason}
+          aria-describedby={!reason ? "dispute-reason-error" : undefined}"
         >
           <option value="">-- Select a reason --</option>
           {REASON_OPTIONS.map((opt) => (
@@ -111,9 +113,9 @@ const DisputeForm: React.FC<DisputeFormProps> = ({
             </option>
           ))}
         </select>
-      </div>
-
-      {/* Description Textarea */}
+          {!reason && <p id="dispute-reason-error" role="alert" className="text-sm text-red-600 dark:text-red-400 mt-1">Please select a reason</p>}
+        </div>
+        {/* Description Textarea */}
       <div>
         <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
           Description <span className="text-red-500">*</span>
@@ -123,9 +125,15 @@ const DisputeForm: React.FC<DisputeFormProps> = ({
           onChange={handleDescriptionChange}
           placeholder="Please describe the issue in detail. What did you expect vs. what did you receive?"
           className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 resize-none bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400"
+          aria-invalid={description.length > 0 && description.length < 50}
+          aria-describedby={description.length > 0 && description.length < 50 ? "dispute-description-error" : undefined}"
           rows={5}
         />
-        <div className="text-xs text-warm-500 dark:text-gray-400 mt-1">
+        <div
+          id="dispute-description-error"
+          role="alert"
+          className="text-xs text-warm-500 dark:text-gray-400 mt-1"
+        >
           {charCount} / 50 characters minimum
         </div>
       </div>
