@@ -125,13 +125,14 @@ router.post('/outreach/trigger', requireSecret, async (req: express.Request, res
 });
 
 // POST /api/internal/scoring/run-backfill — score all organizers (protected)
+// Note: long-running (~30s for 8k orgs). Guard headersSent in case client times out.
 router.post('/scoring/run-backfill', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     const stats = await runLeadScoringBackfill();
-    res.json({ ok: true, stats });
+    if (!res.headersSent) res.json({ ok: true, stats });
   } catch (err: any) {
     console.error('[LeadScoring] Backfill route error:', err);
-    res.status(500).json({ ok: false, error: err.message });
+    if (!res.headersSent) res.status(500).json({ ok: false, error: err.message });
   }
 });
 
