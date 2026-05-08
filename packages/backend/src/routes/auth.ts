@@ -324,8 +324,24 @@ router.post('/refresh', (req: AuthRequest, res: Response) => {
 });
 
 // P0 Security Fix: GET /auth/me — returns current user from authenticated session (cookie or header)
-router.get('/me', authenticate, (req: AuthRequest, res: Response) => {
-  res.json({ user: req.user });
+// P1 Fix (S689): Include organizerTier so AuthContext.initAuth correctly restores tier on refresh
+router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
+  if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+
+  // Load organizer tier so PRO/TEAMS features work correctly after page refresh
+  const organizer = await prisma.organizer.findUnique({
+    where: { userId: req.user.id },
+    select: { subscriptionTier: true, subscriptionStatus: true, subscriptionLapsed: true },
+  }).catch(() => null);
+
+  res.json({
+    user: {
+      ...req.user,
+      organizerTier: organizer?.subscriptionTier ?? 'SIMPLE',
+      subscriptionStatus: organizer?.subscriptionStatus ?? null,
+      subscriptionLapsed: organizer?.subscriptionLapsed ?? false,
+    },
+  });
 });
 
 export default router;
