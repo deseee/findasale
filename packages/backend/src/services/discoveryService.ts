@@ -52,14 +52,28 @@ export async function getPersonalizedFeed(
   lat?: number,
   lng?: number
 ): Promise<{ sales: SaleWithScore[]; personalized: boolean }> {
+  // Geo bounding box filter: ~1.5 degree delta ≈ ~100 miles
+  const GEO_DELTA = 1.5;
+
+  const effectiveLat = lat ?? (userId ? undefined : regionConfig.centerLat);
+  const effectiveLng = lng ?? (userId ? undefined : regionConfig.centerLng);
+
+  const whereClause: any = {
+    status: 'PUBLISHED',
+    deletedAt: null,
+    isInventoryContainer: false,
+    endDate: { gte: new Date() },
+  };
+
+  // Add bounding box when user coords are available
+  if (effectiveLat !== undefined && effectiveLng !== undefined) {
+    whereClause.lat = { gte: effectiveLat - GEO_DELTA, lte: effectiveLat + GEO_DELTA };
+    whereClause.lng = { gte: effectiveLng - GEO_DELTA, lte: effectiveLng + GEO_DELTA };
+  }
+
   // Fetch all published sales with organizer data
-  const sales = await prisma.sale.findMany({
-    where: {
-      status: 'PUBLISHED',
-      deletedAt: null,
-      isInventoryContainer: false,
-      endDate: { gte: new Date() },
-    },
+  const findManyOptions: any = {
+    where: whereClause,
     include: {
       organizer: {
         select: {
@@ -72,7 +86,15 @@ export async function getPersonalizedFeed(
         select: { favorites: true },
       },
     },
-  });
+    orderBy: [{ startDate: 'asc' }],
+  };
+
+  // Add fallback safety limit when no bounding box possible
+  if (effectiveLat === undefined || effectiveLng === undefined) {
+    findManyOptions.take = 500;
+  }
+
+  const sales = await prisma.sale.findMany(findManyOptions);
 
   // BoostPurchase has no direct FK on Sale — query separately by targetId
   const saleIds = sales.map((s) => s.id);

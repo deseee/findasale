@@ -307,7 +307,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { notificationPrefs, profileSlug, purchasesVisible, teamsOnboardingComplete } = req.body;
+    const { notificationPrefs, profileSlug, purchasesVisible, teamsOnboardingComplete, name } = req.body;
 
     // Validate notification preferences if provided
     if (notificationPrefs && typeof notificationPrefs !== 'object') {
@@ -319,6 +319,19 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({
         message: 'Profile slug can only contain letters, numbers, dashes, and underscores'
       });
+    }
+
+    // Validate display name if provided
+    if (name !== undefined && name !== null) {
+      if (typeof name !== 'string') {
+        return res.status(400).json({ message: 'Display name must be a string' });
+      }
+      if (name.trim().length === 0) {
+        return res.status(400).json({ message: 'Display name cannot be empty' });
+      }
+      if (name.length > 100) {
+        return res.status(400).json({ message: 'Display name must be 100 characters or less' });
+      }
     }
 
     // XP-gate for profileSlug: check if user is setting a slug for the first time
@@ -366,6 +379,9 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
     if (purchasesVisible !== undefined) {
       updateData.purchasesVisible = purchasesVisible;
+    }
+    if (name !== undefined && name !== null) {
+      updateData.name = name.trim();
     }
     if (teamsOnboardingComplete !== undefined) {
       updateData.teamsOnboardingComplete = teamsOnboardingComplete;
@@ -439,6 +455,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         purchasesVisible: true,
         teamsOnboardingComplete: true,
         guildXp: true,
+        roles: true,
       }
     });
 
