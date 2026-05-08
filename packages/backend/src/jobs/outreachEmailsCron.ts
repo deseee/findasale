@@ -326,4 +326,59 @@ export const sendOutreachEmails = async (): Promise<void> => {
  *   - were scored in the past 7 days (lastScoredAt > now - 7d)
  *
  * Errors per-organizer are caught and logged without stopping the batch.
- * Runs 
+ * Runs weekly on Sundays at 02:00 UTC via initOutreachEmailsCron.
+ */
+export async function syncLeadTierGroups(): Promise<void> {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const organizers = await prisma.organizer.findMany({
+    where: {
+      contactEmail: { not: null },
+      leadTier: { not: null },
+      lastScoredAt: { gte: sevenDaysAgo },
+    },
+    select: { id: true, contactEmail: true, leadTier: true },
+  });
+
+  console.log(`[syncLeadTierGroups] Syncing ${organizers.length} organizers to MailerLite`);
+  let synced = 0;
+  let failed = 0;
+
+  for (const org of organizers) {
+    try {
+      await syncLeadTierToMailerLite(org.contactEmail!, org.leadTier!, org.id);
+      synced++;
+    } catch (err: any) {
+      failed++;
+      console.error(`[syncLeadTierGroups] Failed for org ${org.id}:`, err.message);
+    }
+  }
+
+  console.log(`[syncLeadTierGroups] Complete: ${synced} synced, ${failed} failed`);
+}
+
+/**
+ * initOutreachEmailsCron — registers outreach email jobs in the cron scheduler.
+ *
+ * sendOutreachEmails: runs every 4 hours (6 windows/day) to distribute the daily quota.
+ * syncLeadTierGroups: runs weekly on Sundays at 02:00 UTC.
+ *
+ * Both gates on OUTREACH_ENABLED=true.
+ */
+export function initOutreachEmailsCron(): void {
+  if (process.env.OUTREACH_ENABLED !== 'true') {
+    console.log('[OutreachCron] Disabled — set OUTREACH_ENABLED=true to activate');
+    return;
+  }
+
+  // Every 4 hours — spreads daily quota across 6 windows
+  cron.schedule('0 */4 * * *', cronGuard({ jobName: 'outreach-emails' }, async () => {
+    await sendOutreachEmails();
+  }), { timezone: 'UTC' });
+  console.log('[OutreachCron] Registered — runs every 4 hours UTC');
+
+  // Weekly Sunday 02:00 UTC — sync lead tiers to MailerLite groups
+  cron.schedule('0 2 * * 0', cronGuard({ jobName: 'sync-lead-tier-groups' }, async () => {
+    await syncLeadTierGroups();
+  }), { timezone: 'UTC' });
+  console.log('[OutreachCron] syncLeadTierGroups registered — runs Sundays 02:00 UTC');
+}
