@@ -145,8 +145,11 @@ const BulkPhotoModal: React.FC<BulkPhotoModalProps> = ({
           </label>
           <div className="flex gap-2">
             <input
+              id="photo-url"
               type="text"
               value={photoUrl}
+              aria-invalid={!!error}
+              aria-describedby={error ? "photo-url-error" : undefined}
               onChange={(e) => {
                 setPhotoUrl(e.target.value);
                 setError('');
@@ -172,7 +175,7 @@ const BulkPhotoModal: React.FC<BulkPhotoModalProps> = ({
 
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+          <div id="photo-url-error" role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
             {error}
           </div>
         )}

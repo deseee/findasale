@@ -99,8 +99,11 @@ const BulkPriceModal: React.FC<BulkPriceModalProps> = ({
             {priceType === 'fixed' ? 'New Price ($)' : 'Discount (%)'}
           </label>
           <input
+            id="price-value"
             type="number"
             value={value}
+            aria-invalid={!!error}
+            aria-describedby={error ? "price-value-error" : undefined}
             onChange={(e) => {
               setValue(e.target.value);
               setError('');
@@ -120,7 +123,7 @@ const BulkPriceModal: React.FC<BulkPriceModalProps> = ({
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+          <div id="price-value-error" role="alert" className="mb-6 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
             {error}
           </div>
         )}

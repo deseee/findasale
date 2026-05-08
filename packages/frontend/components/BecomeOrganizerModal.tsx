@@ -104,7 +104,7 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4">
           {/* Error messages */}
           {(formError || error) && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-200">
+            <div id="form-error" role="alert" className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-200">
               {formError || error}
             </div>
           )}
@@ -119,7 +119,10 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
               type="text"
               placeholder="e.g., Sarah's Finds, Smith Family Estate, or your own name"
               value={businessName}
-              aria-label="e.g., Sarah's Finds, Smith Family Estate, or your own name" onChange={(e) => setBusinessName(e.target.value)}
+              aria-label="e.g., Sarah's Finds, Smith Family Estate, or your own name"
+              aria-invalid={!!formError}
+              aria-describedby={formError ? "form-error" : undefined}
+              onChange={(e) => setBusinessName(e.target.value)}
               disabled={loading}
               className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
             />
@@ -136,7 +139,10 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
               type="tel"
               placeholder="123-456-7890"
               value={phone}
-              aria-label="123-456-7890" onChange={(e) => setPhone(e.target.value)}
+              aria-label="123-456-7890"
+              aria-invalid={!!formError}
+              aria-describedby={formError ? "form-error" : undefined}
+              onChange={(e) => setPhone(e.target.value)}
               disabled={loading}
               className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
             />
@@ -152,7 +158,10 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
               type="text"
               placeholder="Your business address"
               value={address}
-              aria-label="Your business address" onChange={(e) => setAddress(e.target.value)}
+              aria-label="Your business address"
+              aria-invalid={!!formError}
+              aria-describedby={formError ? "form-error" : undefined}
+              onChange={(e) => setAddress(e.target.value)}
               disabled={loading}
               className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
             />
@@ -164,6 +173,8 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
               id="termsCheckbox"
               type="checkbox"
               checked={agreedToTerms}
+              aria-invalid={!!formError}
+              aria-describedby={formError ? "form-error" : undefined}
               onChange={(e) => setAgreedToTerms(e.target.checked)}
               disabled={loading}
               className="mt-1 h-4 w-4 text-amber-600 border-warm-300 rounded focus:ring-amber-500 cursor-pointer disabled:opacity-50"

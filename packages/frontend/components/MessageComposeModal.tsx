@@ -87,8 +87,11 @@ const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
               Subject (Optional)
             </label>
             <input
+              id="message-subject"
               type="text"
               value={subject}
+              aria-invalid={sendMessageMutation.isError}
+              aria-describedby={sendMessageMutation.isError ? "message-error" : undefined}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="e.g., Question about furniture"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md
@@ -108,7 +111,10 @@ const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
               </span>
             </div>
             <textarea
+              id="message-body"
               value={body}
+              aria-invalid={sendMessageMutation.isError}
+              aria-describedby={sendMessageMutation.isError ? "message-error" : undefined}
               onChange={(e) => {
                 if (e.target.value.length <= maxChars) {
                   setBody(e.target.value);
@@ -125,7 +131,7 @@ const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
 
           {/* Error State */}
           {sendMessageMutation.isError && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md">
+            <div id="message-error" role="alert" className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md">
               <p className="text-sm text-red-700 dark:text-red-200">
                 Failed to send message. Please try again.
               </p>

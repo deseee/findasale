@@ -120,7 +120,7 @@ const LoginPage = () => {
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+            <div id="form-error" role="alert" className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
               <div className="text-sm text-red-700 dark:text-red-300">
                 {error}
               </div>
@@ -139,7 +139,10 @@ const LoginPage = () => {
                 autoComplete="email"
                 required
                 value={email}
-                aria-label="Email" onChange={(e) => setEmail(e.target.value)}
+                aria-label="Email"
+                aria-invalid={!!error}
+                aria-describedby={error ? 'form-error' : undefined}
+                onChange={(e) => setEmail(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 rounded-t-md focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                 placeholder="Email address"
               />
@@ -155,7 +158,10 @@ const LoginPage = () => {
                 autoComplete="current-password"
                 required
                 value={password}
-                aria-label="Password" onChange={(e) => setPassword(e.target.value)}
+                aria-label="Password"
+                aria-invalid={!!error}
+                aria-describedby={error ? 'form-error' : undefined}
+                onChange={(e) => setPassword(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 pr-10 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 rounded-b-md focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                 placeholder="Password"
               />
