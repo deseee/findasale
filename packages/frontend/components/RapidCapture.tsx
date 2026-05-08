@@ -1394,7 +1394,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         {selectedIndex !== null && photos[selectedIndex] && (
           <div
             className="absolute inset-0 z-20 bg-black/80 flex items-center justify-center p-4"
+            role="button"
+            tabIndex={0}
             onClick={() => setSelectedIndex(null)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedIndex(null); } }}
           >
             <div className="relative max-w-full max-h-full" onClick={(e) => e.stopPropagation()}>
               <img
