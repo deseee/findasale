@@ -1405,7 +1405,7 @@ const AddItemsDetailPage = () => {
     const tier = orgTier || 'SIMPLE';
 
     if (tier === 'PRO') return 10;
-    if (tier === 'TEAMS' || tier === 'ENTERPRISE') return 20;
+    if (tier === 'TEAMS') return 20;
     // SIMPLE: 5 normally, 10 for ala carte
     return isAlaCarte ? 10 : 5;
   })();
