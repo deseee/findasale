@@ -232,6 +232,7 @@ import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase
 import { initOutreachEmailsCron } from './jobs/outreachEmailsCron'; // Phase 1: Cold outreach email pipeline
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
+import { scheduleLeadScoringCron } from './jobs/leadScoringJob'; // ADR-076 Phase 2: Weekly lead score recomputation
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -663,6 +664,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-073: Geocoding success rate audit cron (daily at 6 AM UTC)
   scheduleGeocodingAuditCron();
+
+  // ADR-076 Phase 2: Lead scoring recomputation (Sundays at 2 AM UTC)
+  scheduleLeadScoringCron();
 
   // Feature #75: Tier grace period finalization cron
   startTierGraceCron();
