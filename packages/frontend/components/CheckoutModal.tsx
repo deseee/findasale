@@ -390,7 +390,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
               placeholder="e.g. A3F2C891"
               maxLength={8}
               className="w-full px-3 py-2 border border-warm-300 rounded-lg font-mono tracking-widest text-warm-900 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
-             aria-label="e.g. A3F2C891" />
+             aria-label="e.g. A3F2C891" aria-invalid={false} aria-describedby={undefined} />
             <p className="text-xs text-warm-400 mt-1">
               Coupons are issued after each completed purchase.
             </p>
@@ -419,6 +419,8 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
         <>
           {loadError && (
             <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm mb-4">
+              role="alert"
+              id="checkout-load-error"
               <p className="mb-2">{loadError}</p>
               {/* Allow user to retry — clears error and reloads payment intent */}
               <button

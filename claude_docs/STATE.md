@@ -4,7 +4,31 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S688 — Chrome QA Sprint: COPPA ✅ Claim Verify ✅ DonationModal Bug Found (COMPLETE)**
+**Latest: S689 — Lead Scoring Service + Scraper Crash Loop Fixes (COMPLETE)**
+
+S689 completed ADR-076 Phase 2 (lead scoring) and fixed a cascade of Railway MODULE_NOT_FOUND crash loops caused by subagent-written files that were never pushed to GitHub.
+
+**What shipped:**
+- **`leadScoringService.ts`** — 5-signal 0–100 scoring engine. Dimensions: contact reachability (20), corroboration depth (20), licensing (25), review strength (20), physical presence (15). Pure `calculateLeadScore()` + batched `runLeadScoringBackfill()` (cursor-paginated, 200/batch).
+- **`leadScoringJob.ts`** — weekly cron Sundays 2 AM UTC via `cronGuard`.
+- **`POST /api/internal/scoring/run-backfill`** — wired in `internal.ts` (already confirmed on GitHub).
+- **Backfill run:** 7,897 organizers scored in 29s — COLD=3,235 WARM=4,662 HOT=0 ENTERPRISE=0. Zero HOT/ENTERPRISE expected: those tiers require `isStateLicensed` (25 pts) or 10+ Google reviews, which scraped orgs don't have yet. Will climb as Indiana licensing + Places enrichment runs.
+
+**Crash loop fixes (all MCP pushed):**
+- `saleSeeker.ts` — was never on GitHub; `internal.ts` imports it at startup → instant crash
+- `indianaLicensingScraper.ts` — same issue
+- `osmScraper.ts` — same issue
+
+**Workflow files — need Patrick push (MCP blocked by GitHub `workflow` scope):**
+- `.github/workflows/scrape-indiana-licensing.yml`
+- `.github/workflows/scrape-osm.yml`
+- `.github/workflows/scrape-sale-seeker.yml`
+
+**Migration status:** `20260508000001_organizer_corroboration_and_lead_scoring` was deployed in S687 ✅ (confirmed — backfill ran successfully against Railway DB).
+
+---
+
+**Previous: S688 — Chrome QA Sprint: COPPA ✅ Claim Verify ✅ DonationModal Bug Found (COMPLETE)**
 
 S688 ran live Chrome QA against the Blocked/Unverified Queue. Three features verified, one bug found and fixed inline.
 
@@ -553,7 +577,37 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 
 ---
 
-## Recent Sessions (S678–S681)
+## Recent Sessions (S685–S689)
+
+### S689 — Lead Scoring Service + Scraper Crash Loop Fixes (COMPLETE — MCP pushed)
+
+ADR-076 Phase 2 complete. `leadScoringService.ts` + `leadScoringJob.ts` built and MCP-pushed. Three scraper source files that were local-only (saleSeeker, indianaLicensingScraper, osmScraper) pushed to fix Railway crash loops. Backfill triggered: 7,897 scored — COLD=3,235 WARM=4,662 HOT=0 ENTERPRISE=0. Weekly re-score wired (Sundays 2 AM UTC). Workflow YMLs for 3 scrapers still need Patrick manual push (MCP lacks `workflow` scope).
+
+---
+
+### S688 — Chrome QA Sprint: COPPA ✅ Claim Verify ✅ DonationModal Bug Found (COMPLETE)
+
+COPPA and claim verify flow verified in Chrome. DonationModal double-`/api/` prefix bug found and fixed inline in `SettlementWizard.tsx`.
+
+---
+
+### S687 — Directory Rebuild: Schema + 3 New Scrapers (COMPLETE — Vercel ✅ Railway ✅)
+
+14 schema fields + 3 indexes (migration `20260508000001`). OSM, Indiana licensing, Sale Seeker scrapers built. Merge algorithm updated with 5-path dedup.
+
+---
+
+### S685 — #393 Chrome QA Sprint: Holds + Settlement + Purchase Confirmation (COMPLETE)
+
+Holds ✅, Settlement Wizard ✅, Purchase Confirmation ✅ all verified in Chrome. P2 fixes shipped mid-session.
+
+---
+
+### S684 — WCAG Error ARIA Sprint + #310 Discount Rules Fix (COMPLETE — Vercel GREEN)
+
+`aria-invalid` + `aria-describedby` on 14 files (Batch A + B). Discount Rules `parseInt` → `parseFloat` decimal fix.
+
+---
 
 ### S681 — WCAG #391 Chrome Keyboard/Focus QA (COMPLETE — partially pushed)
 
@@ -707,32 +761,42 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S689
+## Next Session — S690
 
-**Priority 1 — Trigger scrapers and monitor first runs**
-- POST `/api/internal/scraper/run-indiana-licensing` — watch Railway logs for parse success/failure on the ASP.NET form. This is the validation run for the whole licensing pattern.
-- POST `/api/internal/scraper/run-osm` — watch for Overpass API responses and organizer create/merge counts.
-- Sale Seeker: hold until Indiana + OSM confirmed working, then assess if cheerio selectors hit real data.
+**Priority 1 — Lead scoring recalibration**
+- HOT/ENTERPRISE thresholds need adjustment. Current scoring was designed for eventually-enriched orgs. For cold outreach today, HOT should be reachable with email + phone + 2+ sources (~35–40 pts). Review scoring weights and lower tier thresholds or adjust dimension weights so real organizers can reach HOT without licensing data.
+- Target: ~10–20% of WARM pool should climb to HOT after recalibration.
 
-**Priority 2 — Lead scoring service**
-- Schema fields are live. Build `leadScoringService.ts` that scores existing 7,897 organizers (0–100, maps to COLD/WARM/HOT/ENTERPRISE leadTier). Run as one-time backfill + weekly cron.
-- Unlocks #374 Cold Outreach Pipeline — can segment organizers by tier.
+**Priority 2 — Push workflow files (Patrick manual)**
+- `.github/workflows/scrape-indiana-licensing.yml`
+- `.github/workflows/scrape-osm.yml`  
+- `.github/workflows/scrape-sale-seeker.yml`
+- These are local, need `git add` + push.ps1 (MCP blocked by workflow scope).
 
-**Priority 3 — Additional state licensing boards**
-- Louisiana: lalb.org "Find an Auctioneer" — same ASP.NET pattern as Indiana, 1-agent dispatch.
-- Illinois: idfpr.illinois.gov — same pattern.
-- Each state is a single-agent dispatch once Indiana confirmed working.
+**Priority 3 — Trigger scrapers manually**
+- POST `/api/internal/scraper/run-indiana-licensing` — validates ASP.NET form scrape.
+- POST `/api/internal/scraper/run-osm` — Overpass API batch.
+- After Indiana runs, re-score to see HOT/ENTERPRISE movement.
 
-**Priority 4 — QA holdover**
-- #235 DonationModal re-verify after S688 fix deploys (SettlementWizard.tsx double /api/ fix). PRO organizer → Settlement Hub → Receipt tab → Donate button should now appear.
-- #251 priceBeforeMarkdown — still needs TEAMS-tier test scenario.
-- Auction #174 — still blocked pending items listed in a production auction sale (Patrick action required to unblock).
+**Priority 4 — Additional state licensing boards**
+- Louisiana (lalb.org), Illinois (idfpr.illinois.gov) — same ASP.NET pattern as Indiana.
 
-**Patrick wrap actions (S688):**
+**Priority 5 — QA holdover**
+- #235 DonationModal re-verify (S689 fix deployed).
+- #251 priceBeforeMarkdown — TEAMS-tier test scenario.
+
+**Patrick wrap actions (S689):**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/components/SettlementWizard.tsx
-git commit -m "S688: Chrome QA — COPPA ✅ Claim verify ✅ | Fix DonationModal unsold-items double-api prefix"
+git add packages/backend/src/services/scraper/sources/saleSeeker.ts
+git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
+git add packages/backend/src/services/scraper/osmScraper.ts
+git add packages/backend/src/services/leadScoringService.ts
+git add packages/backend/src/jobs/leadScoringJob.ts
+git add .github/workflows/scrape-indiana-licensing.yml
+git add .github/workflows/scrape-osm.yml
+git add .github/workflows/scrape-sale-seeker.yml
+git commit -m "S689: Lead scoring service + fix scraper crash loops (MODULE_NOT_FOUND)"
 .\push.ps1
 ```

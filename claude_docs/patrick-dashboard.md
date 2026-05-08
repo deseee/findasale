@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S688 Wrap
+# Patrick's Dashboard — S689 Wrap
 
 ---
 
@@ -7,56 +7,57 @@
 | Area | Status |
 |------|--------|
 | Vercel build | ✅ GREEN |
-| Railway backend | ✅ GREEN |
+| Railway backend | ✅ GREEN (crash loops fixed) |
 | Google OAuth | ⚠️ Still broken (root cause unclear) |
 | Login (email/password) | ✅ Working |
 | MCP Server (mcp.finda.sale) | ✅ LIVE — 7 tools |
-| Organizer DB | ✅ 7,897 records + corroboration schema live |
-| New scrapers | ✅ OSM, Indiana Licensing, Sale Seeker — deployed, not yet triggered |
-| #393 Chrome QA Sprint | 🟡 DonationModal fix pending deploy; Auction #174 still blocked |
-| Cold Outreach Pipeline (#374) | 🟡 Schema ready — lead scoring service next |
+| Organizer DB | ✅ 7,897 scored — COLD=3,235 WARM=4,662 HOT=0 ENTERPRISE=0 |
+| Lead scoring service | ✅ LIVE — backfill done, weekly cron wired |
+| New scrapers | ✅ Deployed — not yet triggered manually |
+| Workflow YMLs | ⚠️ Local only — need Patrick git push |
+| #393 Chrome QA Sprint | 🟡 DonationModal fix live; Auction #174 still blocked |
+| Lead scoring recalibration | 🔴 HOT/ENTERPRISE thresholds need tuning — currently unreachable without enrichment data |
 
 ---
 
-## What Happened This Session (S688)
+## What Happened This Session (S689)
 
-Chrome QA sprint against the Blocked/Unverified Queue.
+Railway was crashing on every deploy with MODULE_NOT_FOUND for three scraper source files (`saleSeeker.ts`, `indianaLicensingScraper.ts`, `osmScraper.ts`) — they were written by S687 subagents to the VM but never committed to GitHub. All three pushed via MCP and Railway is back up.
 
-**COPPA age gate — ✅ VERIFIED.** Registered with DOB in 2015 (age 11). Form correctly blocked with "You must be 18 or older" error. Cleared from queue.
+Lead scoring service (ADR-076 Phase 2) built and deployed. Backfill ran: **7,897 organizers scored in 29 seconds.** Results: COLD=3,235 / WARM=4,662 / HOT=0 / ENTERPRISE=0. Zero HOT/ENTERPRISE because the current thresholds require state licensing data or Google reviews — neither of which scraped orgs have yet. The scoring thresholds need recalibration for the current data reality (see Next Session).
 
-**Claim verify flow (#361) — ✅ VERIFIED.** Submitted a real claim request as Bob Smith on the Sunrise Consignment & Collectibles storefront. Got the token from admin API. Tested all three states: invalid token → "Invalid Link" ✅, valid token → "Email Verified!" with business name ✅, already-used token → "Already Verified" ✅. Cleared from queue.
-
-**#235 DonationModal — ❌ Bug found.** The "Donate Items & Get Tax Receipt" button on the Settlement Hub Receipt tab never appears. Root cause: `SettlementWizard.tsx` line 72 calls `api.get('/api/ebay/...')` but the `api` Axios instance already has `/api` as its baseURL, so the request goes to `/api/api/ebay/...` → 404 → empty items array → button hidden. One-line fix applied. Vercel will deploy automatically once pushed.
-
-**#251 priceBeforeMarkdown — still UNVERIFIED.** Requires a TEAMS-tier organizer with color-coded discount rules enabled. No suitable test account available.
+Weekly cron is wired — it will re-score all organizers every Sunday at 2 AM UTC automatically as new data arrives.
 
 ---
 
 ## Patrick Actions Needed
 
-**Push this session's work:**
+**Push this session's work (includes workflow YMLs that MCP can't push):**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/components/SettlementWizard.tsx
-git commit -m "S688: Chrome QA — COPPA ✅ Claim verify ✅ | Fix DonationModal unsold-items double-api prefix"
+git add packages/backend/src/services/scraper/sources/saleSeeker.ts
+git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
+git add packages/backend/src/services/scraper/osmScraper.ts
+git add packages/backend/src/services/leadScoringService.ts
+git add packages/backend/src/jobs/leadScoringJob.ts
+git add .github/workflows/scrape-indiana-licensing.yml
+git add .github/workflows/scrape-osm.yml
+git add .github/workflows/scrape-sale-seeker.yml
+git commit -m "S689: Lead scoring service + fix scraper crash loops (MODULE_NOT_FOUND)"
 .\push.ps1
 ```
-
-**Trigger scrapers manually to validate (from S687):**
-- Hit `POST /api/internal/scraper/run-indiana-licensing` in Railway console or via curl with internal secret
-- Watch logs — if the ASP.NET form parses correctly you'll see organizer records being created
-- Then trigger `run-osm`
 
 **Auction #174 still blocked:**
 - List at least one item in a production auction sale so Chrome QA can run the bid → close → purchase flow
 
 ---
 
-## Next Session (S689)
+## Next Session (S690)
 
-1. Validate Indiana + OSM first runs from Railway logs
-2. Re-verify #235 DonationModal after this push deploys to Vercel
-3. Build lead scoring service (score all 7,897 organizers → unlocks #374 outreach pipeline)
+1. Recalibrate lead scoring thresholds so HOT/ENTERPRISE are reachable with current scraped data
+2. Trigger Indiana + OSM scrapers manually, watch Railway logs
+3. Re-score after scraper runs to see movement into HOT
+4. Re-verify #235 DonationModal
 4. Louisiana + Illinois licensing scrapers (same pattern as Indiana, 1 agent each)
 5. #174 Auction QA if Patrick lists items

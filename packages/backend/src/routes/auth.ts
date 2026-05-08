@@ -329,9 +329,11 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
 
   // Load organizer tier so PRO/TEAMS features work correctly after page refresh
+  // Note: subscriptionLapsed is NOT on the Organizer model — it's computed by checkTierLapse
+  // middleware (via UserRoleSubscription) and attached to req.user.subscriptionLapsed
   const organizer = await prisma.organizer.findUnique({
     where: { userId: req.user.id },
-    select: { subscriptionTier: true, subscriptionStatus: true, subscriptionLapsed: true },
+    select: { subscriptionTier: true, subscriptionStatus: true },
   }).catch(() => null);
 
   res.json({
@@ -339,7 +341,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
       ...req.user,
       organizerTier: organizer?.subscriptionTier ?? 'SIMPLE',
       subscriptionStatus: organizer?.subscriptionStatus ?? null,
-      subscriptionLapsed: organizer?.subscriptionLapsed ?? false,
+      subscriptionLapsed: req.user.subscriptionLapsed ?? false,
     },
   });
 });
