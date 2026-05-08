@@ -161,7 +161,7 @@ Features that Patrick's human QA walkthrough confirmed are broken. Use the two-s
 
 |  #  | DB | API | UI | Nav | Claude QA | Human QA | Status | Feature | Role | Tier | Needs | Notes |
 |-----|----|----|----|----|-----------|----------|--------|---------|------|------|-------|-------|
-| 174 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ FIXED S344 | Auction Mechanics + Close Flow | ORG | SIMPLE | Pending Chrome QA — Phase 1: reserve price check in auctionJob.ts. Phase 2: /purchases/[id].tsx persistent confirmation, CheckoutModal redirects to it, checkout-success backward compat. | Code fixed S685 — blocked on prod test data (no active auction items) |
+| 174 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ FIXED S344 | Auction Mechanics + Close Flow | ORG | SIMPLE | Pending Chrome QA — S693 data seeded + bid fix deployed. QA: login user12/Seedy2025!, go to /sales/c5hykxxecanngwcrkvq92n1va, bid $30 on Vintage Brass Compass ($25 start), verify reverse auction item shows ~$75, check organizer bid view as user2. | S693: bidAmount→maxBidAmount fix (items/[id].tsx), draftStatus fixed in DB, 5 items seeded (4 standard + 1 reverse auction). QA re-run pending Vercel deploy. |
 |  46 | ✅ | ✅ | ✅ | ✅ | ✅ |✅⬜ FIXED S346 | FIXED S346 | Treasure Typology Classifier | ORG | PRO | Deprecated Feature
 
 ## Building — Active Backlog

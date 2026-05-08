@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S692 Wrap
+# Patrick's Dashboard — S693 Wrap
 
 ---
 
@@ -7,95 +7,62 @@
 | Area | Status |
 |------|--------|
 | Vercel build | ✅ GREEN |
-| Railway backend | ✅ GREEN — crash fixed S692 |
-| Camera / rapidfire upload | ✅ FIXED S692 |
-| Google OAuth | ⚠️ Still broken |
+| Railway backend | ✅ GREEN |
+| Google OAuth | ⚠️ Still broken (root cause unclear) |
 | Login (email/password) | ✅ Working |
-| Lead scoring service | ✅ LIVE — 7,897 scored |
-| TX scraper | ✅ Rewritten to Socrata API |
-| 50-state scraper batch | ⚠️ Audit complete — URL corrections + Phase 2 dispatch pending |
-| Content moderation (NSFW) | ⚠️ Removed S692 — decision #394 pending |
+| MCP Server (mcp.finda.sale) | ✅ LIVE — 7 tools |
+| Organizer DB | ✅ 7,897 scored — COLD=3,235 WARM=4,662 HOT=0 ENTERPRISE=0 |
+| Lead scoring service | ✅ LIVE — backfill done, weekly cron wired |
+| #174 Auction QA | 🟡 Data seeded, bid fix on disk. Push items/[id].tsx → re-run QA |
+| Workflow YMLs | ⚠️ Local only — need Patrick git push (S691 block) |
 
 ---
 
-## What Happened This Session (S692 — Backend Crash + Camera Fix)
+## What Happened This Session (S693)
 
-Two production P0s hit and fixed:
-
-- **Backend crash** — S691 commit added 44+ scraper imports to `internal.ts` without the actual files. Railway couldn't boot. Fix: push all scraper source files (already existed locally).
-- **Camera uploads** — Cloudinary was returning 420 on every photo. Root cause: `aws_rek_tagging` (AWS Rekognition NSFW detection) configured but add-on not active on account. Removed from upload options. Also added retry wrapper for transient rate limits.
-- **Roadmap #394** — Content moderation decision logged. Options: Cloudinary built-in (free), Rekognition add-on (~$0.001/img), or leave off for beta.
-
----
-
-## What Happened Last Session (S691 — Scraper Audit)
-
-Audited all 50 state scraper files built in S690. Research confirmed:
-
-- **18 states** have real auctioneer licensing with verified public lookup URLs (AL, AR, FL, GA, IA, KY, LA, MA, ME, MS, ND, NH, PA, SC, SD, WA, WI, WV)
-- **24 states** have no auctioneer license requirement — will be replaced with Phase 2 alternatives (secondhand dealer, pawnbroker, SoS business name keyword search) rather than deleted
-- **TX scraper** fully rewritten to use Texas Socrata API — no more fragile ASP.NET form scraping
-- **NC workflow yml** renamed to full state name (consistency)
-- **WV duplicate file** (space in name) queued for `git rm`
-
-Roadmap updated: #393 added (50-State Licensing Scraper Build).
+- Seeded 5 auction items on user2's production auction sale (sale ID: `c5hykxxecanngwcrkvq92n1va`): Art Deco Brooch ($150), Signed First Edition Novel ($500), Victorian Silver Pocket Watch ($75), Vintage Brass Compass ($25), Vintage Brass Compass Reverse Auction ($120 drops $15/day, floor $45).
+- QA run found two bugs and fixed both:
+  1. **Bid field mismatch** — frontend sent `bidAmount`, backend (ADR-013) expects `maxBidAmount`. Every bid → 400. Fixed in `items/[id].tsx` line 259. **On disk, needs push.**
+  2. **draftStatus filter** — 2 items were DRAFT/APPROVED instead of PUBLISHED, so `PUBLIC_ITEM_FILTER` hid them. Fixed directly in DB — all 5 items visible immediately.
 
 ---
 
 ## Patrick Actions Needed
 
-**S691 Push Block:**
+**Step 1 — Push the bid fix:**
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
+git add "packages/frontend/pages/items/[id].tsx"
+git commit -m "fix: bid API field name bidAmount → maxBidAmount (ADR-013 contract)"
+.\push.ps1
+```
 
+**Step 2 — After Vercel deploys (~3 min), re-run #174 QA:**
+- Login as user12@example.com / Seedy2025! (shopper)
+- Go to: https://finda.sale/sales/c5hykxxecanngwcrkvq92n1va
+- Verify all 5 items visible
+- Bid $30 on "Vintage Brass Compass" ($25 start, $5 increments)
+- Check "Vintage Brass Compass (Reverse Auction)" — should show ~$75
+- Switch to user2@example.com (organizer) — verify bid shows in dashboard
+
+**Step 3 — Push S691 scraper block + docs:**
+```powershell
 git rm ".github/workflows/scrape-nc-licensing.yml"
 git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"
-
 git add .github/workflows/scrape-north-carolina-licensing.yml
 git add packages/backend/src/services/scraper/sources/texasLicensingScraper.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-
-git commit -m "S691: TX Socrata rewrite, NC yml rename, WV duplicate removal, scraper audit docs"
+git commit -m "S691+S693: TX Socrata rewrite, NC yml rename, WV removal, #174 bid fix docs"
 .\push.ps1
 ```
-
-**S689 Block 1 — Chrome QA fixes (still pending from S689):**
-```powershell
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/components/CheckoutModal.tsx
-git add packages/frontend/components/BoostPurchaseModal.tsx
-git add packages/frontend/components/CSVImportModal.tsx
-git add packages/frontend/components/DisputeForm.tsx
-git commit -m "S689: Dashboard lapse fix, WCAG ARIA (4 components)"
-.\push.ps1
-```
-
-**S689 Block 2 — Scraper infrastructure (lead scoring + crash loop fixes):**
-```powershell
-git add packages/backend/src/services/scraper/sources/saleSeeker.ts
-git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
-git add packages/backend/src/services/scraper/osmScraper.ts
-git add packages/backend/src/services/leadScoringService.ts
-git add packages/backend/src/jobs/leadScoringJob.ts
-git add .github/workflows/scrape-indiana-licensing.yml
-git add .github/workflows/scrape-osm.yml
-git add .github/workflows/scrape-sale-seeker.yml
-git commit -m "S689: Lead scoring service + crash loop fixes + scraper workflow YMLs"
-.\push.ps1
-```
-
-**Auction #174 still blocked:**
-- List at least one item in a production auction sale so Chrome QA can run the bid → close → purchase flow
 
 ---
 
-## Next Session (S692)
+## Next Session (S694)
 
-1. Push S691 block above first
-2. Push S689 blocks 1+2 (long overdue)
-3. Dispatch URL-correction agents for 18 confirmed-licensing states (verified URLs in STATE.md)
-4. Dispatch Phase 2 replacement agents for 24 no-auctioneer states (secondhand dealer / pawnbroker / SoS keyword)
-5. Push full 50-state scraper batch + all workflow YMLs (Patrick must push — MCP lacks `workflow` scope)
-6. QA holdover: #251 priceBeforeMarkdown, #223 rank badges
+1. Verify #174 QA passes after Vercel deploy (bid flow + reverse auction)
+2. Lead scoring recalibration — HOT/ENTERPRISE thresholds need tuning
+3. Trigger Indiana + OSM scrapers manually, watch Railway logs
+4. Louisiana + Illinois licensing scrapers
+5. Continue 50-state scraper URL-correction batch

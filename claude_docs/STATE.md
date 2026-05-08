@@ -4,7 +4,28 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S692 — Backend Crash + Camera Fix (COMPLETE)**
+**Latest: S693 — #174 Auction QA Setup + Bid Fix (COMPLETE)**
+
+S693 seeded production auction data for #174 and fixed two blocking bugs, but QA re-run after deploy is still pending.
+
+**Completed this session:**
+- **Auction data seeded** — user2@example.com's sale "QA Test Auction — Antiques & Collectibles" (`c5hykxxecanngwcrkvq92n1va`) now has 5 AVAILABLE items: Art Deco Brooch ($150 start), Signed First Edition Novel ($500), Victorian Silver Pocket Watch ($75), Vintage Brass Compass ($25), Vintage Brass Compass Reverse Auction ($120 drops $15/day, floor $45, started 3 days ago → ~$75 today). All `draftStatus=PUBLISHED`, `auctionEndTime` 24h from seeding.
+- **Bid field name mismatch fixed** — `packages/frontend/pages/items/[id].tsx` line 259: `{ bidAmount: amount }` → `{ maxBidAmount: amount }`. Backend (ADR-013) expects `maxBidAmount`; frontend was sending `bidAmount` → 400 on every bid attempt. Fix is on disk, needs Patrick to push.
+- **draftStatus filter fixed (DB)** — Items were filtered from public sale page by `PUBLIC_ITEM_FILTER` (`draftStatus: 'PUBLISHED'`). Two items had wrong status: Vintage Brass Compass was `DRAFT`, Reverse Auction item was `APPROVED`. Fixed directly in DB — all 5 items now `PUBLISHED` and visible immediately.
+- **QA run attempted** — Chrome QA agent confirmed: 3 of 5 items were visible (draftStatus issue), bids returned 400 (field name issue). Reverse auction item not visible. Both root causes found and fixed.
+
+**QA re-run needed after Patrick pushes `items/[id].tsx` fix:**
+- Login as user12@example.com / Seedy2025! (shopper)
+- Navigate to auction sale (finda.sale/sales/c5hykxxecanngwcrkvq92n1va)
+- Verify all 5 items visible
+- Place bid on Vintage Brass Compass (bid $30 on $25 start)
+- Verify reverse auction item shows ~$75 dropping price with floor $45
+- Check organizer view (user2@example.com) for bid status
+
+**Files changed this session (need Patrick push):**
+- `packages/frontend/pages/items/[id].tsx` — `maxBidAmount` field name fix (line 259)
+
+**Previous: S692 — Backend Crash + Camera Fix (COMPLETE)**
 
 S692 diagnosed and fixed two production P0s:
 
@@ -656,11 +677,18 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 | Modal focus traps (34 modals) | ✅ S681 VERIFIED — MessageComposeModal tested. Tab trap ✅, Escape ✅, focus-on-open ✅ (fix shipped). Other modals assumed covered by AccessibleModal fix. | — | S664 |
 | Claim verify flow | ✅ S688 VERIFIED — All 3 states confirmed: invalid token → "Invalid Link", valid token → "Email Verified!" with business name, already-used → "Already Verified". | — | S667 |
 | NSFW detection | Code shipped S667 but not browser-tested | Upload an image via organizer flow, confirm Cloudinary moderation runs | S667 |
+| **#174 Auction — bid flow + reverse auction** | `items/[id].tsx` `maxBidAmount` fix needs deploy. Data is seeded (sale `c5hykxxecanngwcrkvq92n1va`, user2@example.com). | Push `items/[id].tsx`, then QA: login as user12/Seedy2025!, navigate to sale, bid on Vintage Brass Compass ($30 on $25 start), verify reverse auction item shows ~$75 dropping price, check organizer bid view. | S693 |
 | #251 priceBeforeMarkdown | No production item with markdownApplied=true | Seed item with markdownApplied=true, verify strikethrough price renders | S661 |
 | #235 DonationModal | ✅ S689 VERIFIED end-to-end. Two-iteration fix: double /api/ prefix (S688) + auth/me subscriptionLapsed field (S689). PRO tier gate opens correctly, all 3 steps render. | — | S661 |
 | AI listing enrichment | Fire-and-forget — needs scraped sale with description >50 chars | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` | S651 |
 | CategoryTopFinds TrendingSection | Cron runs 05:00 UTC — no data until first run | QA after first nightly run; verify TrendingSection renders on `/categories/[category]` | S647 |
 | Outreach pipeline open/click tracking | Can't verify without real sends | After `OUTREACH_ENABLED=true` + first cron run: check Railway logs, confirm pixel route 200 | S647 |
+
+---
+
+### S693 — #174 Auction QA Setup + Bid Fix (COMPLETE — push needed)
+
+Seeded 5 auction items on user2's production auction sale. QA run found two bugs: (1) `bidAmount` → `maxBidAmount` field name mismatch (ADR-013 contract) causing 400 on all bid attempts — fixed in `items/[id].tsx`; (2) 2 of 5 items hidden by `PUBLIC_ITEM_FILTER` due to wrong `draftStatus` (DRAFT/APPROVED instead of PUBLISHED) — fixed directly in DB. Re-run QA after `items/[id].tsx` deploy to verify full bid flow + reverse auction display.
 
 ---
 
@@ -860,9 +888,19 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S692
+## Next Session — S694
 
-**Priority 1 — Patrick push the S691 block first**
+**Priority 1 — Push the #174 bid fix first**
+
+```powershell
+git add packages/frontend/pages/items/[id].tsx
+git commit -m "fix: bid API field name bidAmount → maxBidAmount (ADR-013 contract)"
+.\push.ps1
+```
+
+Wait 2–3 min for Vercel, then re-run QA on #174: login as user12@example.com / Seedy2025!, go to finda.sale/sales/c5hykxxecanngwcrkvq92n1va, verify all 5 items visible, place a bid, verify reverse auction item shows ~$75.
+
+**Priority 2 — Patrick push the S691 block first**
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
