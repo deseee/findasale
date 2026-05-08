@@ -1,0 +1,131 @@
+/**
+ * Idaho Board of Licensure — Auctioneer License Scraper
+ * Scrapes licensed auctioneers from Idaho IBOL license verification system
+ * Source: https://ibol.idaho.gov/IBOL/ConsumerInformation.aspx
+ * Public directory with auctioneer records
+ */
+
+import { defaultRateLimiter } from '../rateLimiter';
+import { getOrCreateScrapedOrganizer } from '../index';
+import { prisma } from '../../../lib/prisma';
+import { getRandomUserAgent } from '../userAgents';
+
+const IDAHO_IBOL_URL = 'https://ibol.idaho.gov/IBOL/ConsumerInformation.aspx';
+
+/**
+ * Scrape Idaho auctioneer licenses from IBOL verification system.
+ * Public directory — no authentication required.
+ * Ingests records into Organizer table with IdahoLicensing source attribution.
+ */
+export async function runIdahoLicensingScraper(): Promise<void> {
+  const rateLimiter = defaultRateLimiter;
+  const domain = new URL(IDAHO_IBOL_URL).hostname;
+  let totalRecords = 0;
+  let createdOrganizers = 0;
+
+  try {
+    console.log('[IdahoLicensing] Starting auctioneer license scraper');
+
+    await rateLimiter.waitBeforeRequest(domain);
+
+    const response = await fetch(IDAHO_IBOL_URL, {
+      method: 'GET',
+      headers: {
+        'User-Agent': getRandomUserAgent(),
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate',
+        Connection: 'keep-alive',
+      },
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Idaho auctioneer list: ${response.status}`);
+    }
+
+    const html = await response.text();
+
+    // Parse HTML table rows
+    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
+    const rows = html.match(rowRegex) || [];
+
+    console.log(`[IdahoLicensing] Found ${rows.length} table rows`);
+
+    const extractText = (html: string): string => {
+      return html
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .trim();
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+
+      const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/g;
+      const cells = row.match(cellRegex) || [];
+
+      if (cells.length < 3) {
+        continue;
+      }
+
+      const name = extractText(cells[0]);
+      const licenseNum = extractText(cells[1]);
+      const status = cells.length > 3 ? extractText(cells[3]) : extractText(cells[2]);
+
+      if (!name || !licenseNum) {
+        continue;
+      }
+
+      totalRecords++;
+
+      if (status.toLowerCase() !== 'active') {
+        console.log(
+          `[IdahoLicensing] Skipping ${name} (license ${licenseNum}): status=${status}`
+        );
+        continue;
+      }
+
+      console.log(`[IdahoLicensing] Processing: ${name} (License ${licenseNum}), ID`);
+
+      const organizerId = await getOrCreateScrapedOrganizer(
+        name,
+        'IdahoLicensing',
+        'Idaho',
+        'ID',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'AUCTION_HOUSE',
+        undefined
+      );
+
+      if (organizerId) {
+        await prisma.organizer.update({
+          where: { id: organizerId },
+          data: {
+            licenseNumber: licenseNum,
+            licenseState: 'ID',
+            isStateLicensed: true,
+          },
+        });
+
+        createdOrganizers++;
+
+        if (totalRecords % 50 === 0) {
+          console.log(
+            `[IdahoLicensing] Progress: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
+          );
+        }
+      }
+    }
+
+    console.log(
+      `[IdahoLicensing] Scraper completed: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
+    );
+  } catch (error) {
+    console.error('[IdahoLicensing] Scraper error:', error);
+    throw error;
+  }
+}
