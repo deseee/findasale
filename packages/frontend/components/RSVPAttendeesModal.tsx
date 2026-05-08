@@ -60,6 +60,7 @@ const RSVPAttendeesModal: React.FC<RSVPAttendeesModalProps> = ({
           <button
             onClick={onClose}
             className="text-warm-500 hover:text-warm-700 text-2xl leading-none"
+            aria-label="Close"
           >
             ×
           </button>
