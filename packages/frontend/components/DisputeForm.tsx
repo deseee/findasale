@@ -126,7 +126,7 @@ const DisputeForm: React.FC<DisputeFormProps> = ({
           placeholder="Please describe the issue in detail. What did you expect vs. what did you receive?"
           className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 resize-none bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400"
           aria-invalid={description.length > 0 && description.length < 50}
-          aria-describedby={description.length > 0 && description.length < 50 ? "dispute-description-error" : undefined}"
+          aria-describedby={description.length > 0 && description.length < 50 ? "dispute-description-error" : undefined}
           rows={5}
         />
         <div
