@@ -70,7 +70,7 @@ const PurchaseConfirmationPage = () => {
             We couldn't load your purchase details.
           </p>
           <Link
-            href="/shopper/purchases"
+            href="/shopper/history"
             className="inline-block px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg transition"
           >
             View My Purchases
@@ -270,7 +270,7 @@ const PurchaseConfirmationPage = () => {
           {/* CTAs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Link
-              href="/shopper/purchases"
+              href="/shopper/history"
               className="inline-flex items-center justify-center px-6 py-4 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold rounded-lg transition shadow-md hover:shadow-lg"
             >
               View My Purchases
