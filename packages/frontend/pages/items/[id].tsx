@@ -924,7 +924,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                       </button>
                     </div>
                   ) : item.status === 'RESERVED' ? (
-                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-center">
+                    <div className="p-3 bg-amber-50 dark:bg-gray-800 border border-amber-200 dark:border-amber-700 rounded-lg text-center">
                       <p className="text-amber-800 dark:text-amber-300 font-semibold text-sm">🔒 This item is currently on hold</p>
                       <div className="mt-2">
                         <HoldTimer itemId={item.id} />
