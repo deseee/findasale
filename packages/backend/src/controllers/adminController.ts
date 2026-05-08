@@ -9,7 +9,10 @@ import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 export const getStats = async (req: AuthRequest, res: Response) => {
   try {
     const totalUsers = await prisma.user.count();
-    const totalOrganizers = await prisma.organizer.count();
+    // CONTAMINATION FIX: Count only real organizers, exclude isUnmanagedListing: true
+    const totalOrganizers = await prisma.organizer.count({
+      where: { isUnmanagedListing: false },
+    });
     const totalItems = await prisma.item.count();
 
     const salesByStatus = await prisma.sale.groupBy({
@@ -39,10 +42,11 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Tier breakdown
+    // Tier breakdown (real organizers only)
     const tierBreakdown = await prisma.organizer.groupBy({
       by: ['subscriptionTier'],
       _count: true,
+      where: { isUnmanagedListing: false },
     });
 
     const tierBreakdownMap: Record<string, number> = {
@@ -54,9 +58,10 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       tierBreakdownMap[t.subscriptionTier as string] = t._count;
     });
 
-    // MRR calculation
+    // MRR calculation (real organizers only)
     const activePaidOrganizers = await prisma.organizer.findMany({
       where: {
+        isUnmanagedListing: false,
         subscriptionStatus: 'active',
         subscriptionTier: { in: ['PRO', 'TEAMS'] },
       },
@@ -154,8 +159,10 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const totalSignups = totalUsers;
     const haveOrganizer = totalOrganizers;
 
+    // Real organizers only for funnel metrics
     const createdOneSale = await prisma.organizer.count({
       where: {
+        isUnmanagedListing: false,
         sales: {
           some: {},
         },
@@ -164,6 +171,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
 
     const publishedOneSale = await prisma.organizer.count({
       where: {
+        isUnmanagedListing: false,
         sales: {
           some: {
             status: { in: ['PUBLISHED', 'ENDED'] },
@@ -174,6 +182,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
 
     const paidTier = await prisma.organizer.count({
       where: {
+        isUnmanagedListing: false,
         subscriptionTier: { in: ['PRO', 'TEAMS'] },
       },
     });
@@ -1004,5 +1013,179 @@ export const updateCuratorEntry = async (req: AuthRequest, res: Response) => {
     }
     console.error('Error updating curator entry:', error);
     res.status(500).json({ message: 'Failed to update curator entry', error: error.message });
+  }
+};
+
+// GET /api/admin/scrape-pool-stats — scrape pool analytics dashboard
+export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
+  try {
+    // Total scraped organizers
+    const totalScrapedOrgs = await prisma.organizer.count({
+      where: { isUnmanagedListing: true },
+    });
+
+    // Tier distribution for scraped orgs
+    const tierDistribution = await prisma.organizer.groupBy({
+      by: ['leadTier'],
+      _count: true,
+      where: { isUnmanagedListing: true },
+    });
+
+    const tierMap: Record<string, number> = {
+      COLD: 0,
+      WARM: 0,
+      HOT: 0,
+      ENTERPRISE: 0,
+    };
+    tierDistribution.forEach((t: any) => {
+      if (t.leadTier && t.leadTier in tierMap) {
+        tierMap[t.leadTier as string] = t._count;
+      }
+    });
+
+    // Lead score stats for scraped orgs
+    const scrapedOrgs = await prisma.organizer.findMany({
+      where: { isUnmanagedListing: true },
+      select: { leadScore: true },
+      take: 10000,
+    });
+
+    const leadScores = scrapedOrgs
+      .map((o) => o.leadScore)
+      .filter((score) => score !== null) as number[];
+
+    let leadScoreStats = {
+      min: 0,
+      max: 0,
+      avg: 0,
+      median: 0,
+    };
+
+    if (leadScores.length > 0) {
+      leadScoreStats = {
+        min: Math.min(...leadScores),
+        max: Math.max(...leadScores),
+        avg: Math.round((leadScores.reduce((a, b) => a + b, 0) / leadScores.length) * 100) / 100,
+        median: (() => {
+          const sorted = [...leadScores].sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        })(),
+      };
+    }
+
+    // Enrichment coverage
+    const enrichmentOrgs = await prisma.organizer.findMany({
+      where: { isUnmanagedListing: true },
+      select: {
+        scrapedEmail: true,
+        contactEmail: true,
+        lat: true,
+        lng: true,
+        isStateLicensed: true,
+        googlePlaceId: true,
+      },
+      take: 10000,
+    });
+
+    const enrichmentCoverage = {
+      withEmail: enrichmentOrgs.filter((o) => o.scrapedEmail || o.contactEmail).length,
+      geocoded: enrichmentOrgs.filter((o) => o.lat !== null && o.lng !== null).length,
+      licensed: enrichmentOrgs.filter((o) => o.isStateLicensed === true).length,
+      googlePlaced: enrichmentOrgs.filter((o) => o.googlePlaceId).length,
+    };
+
+    const enrichmentPercentages = {
+      withEmail: totalScrapedOrgs > 0 ? Math.round((enrichmentCoverage.withEmail / totalScrapedOrgs) * 100) : 0,
+      geocoded: totalScrapedOrgs > 0 ? Math.round((enrichmentCoverage.geocoded / totalScrapedOrgs) * 100) : 0,
+      licensed: totalScrapedOrgs > 0 ? Math.round((enrichmentCoverage.licensed / totalScrapedOrgs) * 100) : 0,
+      googlePlaced: totalScrapedOrgs > 0 ? Math.round((enrichmentCoverage.googlePlaced / totalScrapedOrgs) * 100) : 0,
+    };
+
+    // Outreach status
+    const outreachOrgsWithSent = await prisma.organizer.findMany({
+      where: {
+        isUnmanagedListing: true,
+        outreachAuditLogs: {
+          some: { event: 'SENT' },
+        },
+      },
+      select: { id: true },
+      take: 10000,
+    });
+
+    const outreachOrgsWithOpened = await prisma.organizer.findMany({
+      where: {
+        isUnmanagedListing: true,
+        outreachAuditLogs: {
+          some: { event: 'OPENED' },
+        },
+      },
+      select: { id: true },
+      take: 10000,
+    });
+
+    const outreachOrgsWithBounced = await prisma.organizer.findMany({
+      where: {
+        isUnmanagedListing: true,
+        outreachAuditLogs: {
+          some: { event: 'BOUNCED' },
+        },
+      },
+      select: { id: true },
+      take: 10000,
+    });
+
+    // Last scrape runs grouped by source
+    const scrapeRuns = await prisma.scrapeRun.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: { sourceName: true, createdAt: true },
+    });
+
+    const lastScrapeRunsBySource: Record<string, string> = {};
+    const sourceNames = new Set<string>();
+    scrapeRuns.forEach((run: any) => {
+      if (run.sourceName && !sourceNames.has(run.sourceName)) {
+        lastScrapeRunsBySource[run.sourceName] = run.createdAt.toISOString();
+        sourceNames.add(run.sourceName);
+      }
+    });
+
+    // Recent additions (last 50 scraped orgs)
+    const recentAdditions = await prisma.organizer.findMany({
+      where: { isUnmanagedListing: true },
+      select: {
+        id: true,
+        businessName: true,
+        city: true,
+        leadTier: true,
+        leadScore: true,
+        scrapedEmail: true,
+        sourceName: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    const stats = {
+      totalScrapedOrgs,
+      tierDistribution: tierMap,
+      leadScoreStats,
+      enrichmentCoverage: enrichmentPercentages,
+      outreachStatus: {
+        contacted: outreachOrgsWithSent.length,
+        opened: outreachOrgsWithOpened.length,
+        bounced: outreachOrgsWithBounced.length,
+      },
+      lastScrapeRuns: lastScrapeRunsBySource,
+      recentAdditions,
+    };
+
+    res.json(stats);
+  } catch (error: any) {
+    console.error('Error fetching scrape pool stats:', error);
+    res.status(500).json({ message: 'Failed to fetch scrape pool stats', error: error.message });
   }
 };
