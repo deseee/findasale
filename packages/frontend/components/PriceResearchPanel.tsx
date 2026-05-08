@@ -374,6 +374,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
                   setAppraisalCost(val);
                 }}
                 className="w-full px-3 py-1.5 border border-blue-300 dark:border-blue-600 rounded-md dark:bg-gray-700 dark:text-white text-sm mb-2"
+                aria-label={`XP offer minimum ${MIN_APPRAISAL_XP}`}
               />
               <p className="text-xs text-blue-700 dark:text-blue-300">
                 Offer more XP for faster, more qualified responses.

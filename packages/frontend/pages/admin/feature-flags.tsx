@@ -276,6 +276,7 @@ export default function AdminFeatureFlagsPage() {
                   onChange={(e) => setNewFlag({ ...newFlag, key: e.target.value.toLowerCase() })}
                   placeholder="e.g. ebay_push_enabled"
                   className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-900 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600 font-mono text-sm"
+                  aria-label="Feature flag key"
                 />
                 {formErrors.key && <p className="text-red-600 text-xs mt-1">{formErrors.key}</p>}
               </div>
@@ -290,6 +291,7 @@ export default function AdminFeatureFlagsPage() {
                   onChange={(e) => setNewFlag({ ...newFlag, description: e.target.value })}
                   placeholder="e.g. Enable eBay listing push"
                   className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-900 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
+                  aria-label="Feature flag description"
                 />
                 {formErrors.description && <p className="text-red-600 text-xs mt-1">{formErrors.description}</p>}
               </div>
@@ -385,6 +387,7 @@ export default function AdminFeatureFlagsPage() {
                               if (e.key === 'Escape') setEditingDescId(null);
                             }}
                             className="w-full px-2 py-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-900 dark:text-warm-100 rounded text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                            aria-label={`Edit description for ${flag.key}`}
                           />
                         ) : (
                           <span

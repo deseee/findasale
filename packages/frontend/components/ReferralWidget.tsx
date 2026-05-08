@@ -68,6 +68,7 @@ const ReferralWidget: React.FC = () => {
               readOnly
               value={data?.referralCode || ''}
               className="w-full px-4 py-2 border border-warm-300 rounded-lg bg-warm-50 dark:bg-slate-700 dark:border-slate-600 text-warm-900 dark:text-white font-mono font-semibold"
+              aria-label="Your referral code"
             />
           </div>
           <button
@@ -95,6 +96,7 @@ const ReferralWidget: React.FC = () => {
               readOnly
               value={data?.referralLink || ''}
               className="w-full px-4 py-2 border border-warm-300 rounded-lg bg-warm-50 dark:bg-slate-700 dark:border-slate-600 text-warm-700 dark:text-warm-300 text-xs truncate"
+              aria-label="Your referral link"
             />
           </div>
           <button

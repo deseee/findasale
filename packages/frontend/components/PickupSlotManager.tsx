@@ -324,6 +324,7 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
                 value={selectedDates[0] || ''}
                 onChange={(e) => (e.target.value ? setSelectedDates([e.target.value]) : setSelectedDates([]))}
                 className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded dark:bg-gray-600 dark:text-gray-100"
+                aria-label="Select pickup slot date"
               />
             )}
           </div>
@@ -331,8 +332,9 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
           {/* Start and End Times */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start time</label>
+              <label htmlFor="slot-start-time" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start time</label>
               <input
+                id="slot-start-time"
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
@@ -340,8 +342,9 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End time</label>
+              <label htmlFor="slot-end-time" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End time</label>
               <input
+                id="slot-end-time"
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
@@ -352,8 +355,9 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
 
           {/* Slot Length */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Slot length</label>
+            <label htmlFor="slot-duration" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Slot length</label>
             <select
+              id="slot-duration"
               value={slotDuration}
               onChange={(e) => setSlotDuration(parseInt(e.target.value, 10))}
               className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded dark:bg-gray-600 dark:text-gray-100"
@@ -367,8 +371,9 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
 
           {/* Capacity */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Shoppers per slot</label>
+            <label htmlFor="slot-capacity" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Shoppers per slot</label>
             <input
+              id="slot-capacity"
               type="number"
               min="1"
               max="50"
@@ -460,8 +465,9 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Date</label>
+              <label htmlFor="manual-start-date" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Date</label>
               <input
+                id="manual-start-date"
                 type="date"
                 value={manualFormData.startDate}
                 onChange={(e) => setManualFormData({ ...manualFormData, startDate: e.target.value })}
@@ -469,8 +475,9 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Time</label>
+              <label htmlFor="manual-start-time" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Time</label>
               <input
+                id="manual-start-time"
                 type="time"
                 value={manualFormData.startTime}
                 onChange={(e) => setManualFormData({ ...manualFormData, startTime: e.target.value })}
@@ -481,8 +488,9 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Date</label>
+              <label htmlFor="manual-end-date" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Date</label>
               <input
+                id="manual-end-date"
                 type="date"
                 value={manualFormData.endDate}
                 onChange={(e) => setManualFormData({ ...manualFormData, endDate: e.target.value })}
@@ -490,8 +498,9 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Time</label>
+              <label htmlFor="manual-end-time" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Time</label>
               <input
+                id="manual-end-time"
                 type="time"
                 value={manualFormData.endTime}
                 onChange={(e) => setManualFormData({ ...manualFormData, endTime: e.target.value })}
@@ -501,8 +510,9 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Capacity</label>
+            <label htmlFor="manual-capacity" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Capacity</label>
             <input
+              id="manual-capacity"
               type="number"
               min="1"
               max="50"
