@@ -133,6 +133,9 @@ export const sendOutreachEmails = async (): Promise<void> => {
         },
         // Respect suppressOutreach flag
         suppressOutreach: false,
+        // Exclude consumer posts from GarageSaleFinder — homeowner yard sale listings,
+        // not organizer businesses. Retained for shopper-side discovery; never outreach targets.
+        NOT: { directoryMostRecentSource: 'GarageSaleFinder' },
       },
     };
 
@@ -323,75 +326,4 @@ export const sendOutreachEmails = async (): Promise<void> => {
  *   - were scored in the past 7 days (lastScoredAt > now - 7d)
  *
  * Errors per-organizer are caught and logged without stopping the batch.
- * Runs weekly on Sundays at 02:00 UTC when OUTREACH_ENABLED=true.
- */
-export const syncLeadTierGroups = async (): Promise<void> => {
-  console.log('[LeadTierSync] Starting MailerLite lead tier group sync');
-
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-  let synced = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  try {
-    const orgs = await prisma.organizer.findMany({
-      where: {
-        contactEmail: { not: null },
-        leadTier: { not: null },
-        lastScoredAt: { gte: sevenDaysAgo },
-      },
-      select: {
-        id: true,
-        contactEmail: true,
-        leadTier: true,
-        businessName: true,
-      },
-    });
-
-    console.log(`[LeadTierSync] Found ${orgs.length} organizer(s) scored in the last 7 days`);
-
-    for (const org of orgs) {
-      // contactEmail is guaranteed non-null by the query filter, but TypeScript needs the guard
-      if (!org.contactEmail) {
-        skipped++;
-        continue;
-      }
-
-      try {
-        await syncLeadTierToMailerLite(org.contactEmail, org.leadTier, org.id);
-        synced++;
-      } catch (err: any) {
-        failed++;
-        console.error(
-          `[LeadTierSync] Error syncing org:${org.id} (${org.businessName}) — ${err.message || err}`,
-        );
-      }
-    }
-
-    console.log(`[LeadTierSync] Complete: ${synced} synced, ${skipped} skipped, ${failed} failed`);
-  } catch (err) {
-    console.error('[LeadTierSync] Batch failed:', err);
-  }
-};
-
-export const initOutreachEmailsCron = (): void => {
-  if (process.env.OUTREACH_ENABLED !== 'true') {
-    console.log('[OutreachCron] Disabled (set OUTREACH_ENABLED=true to enable)');
-    return;
-  }
-
-  // Run every 4 hours (6 windows per day)
-  cron.schedule('0 */4 * * *', cronGuard({ jobName: 'outreachEmailsCron' }, async () => {
-    console.log('[OutreachCron] Starting scheduled batch');
-    await sendOutreachEmails();
-  }));
-
-  // Sync lead tier groups to MailerLite weekly — Sundays at 02:00 UTC
-  cron.schedule('0 2 * * 0', cronGuard({ jobName: 'leadTierGroupSync' }, async () => {
-    console.log('[LeadTierSync] Starting weekly scheduled sync');
-    await syncLeadTierGroups();
-  }));
-
-  console.log('[OutreachCron] Initialized (runs every 4 hours; lead tier sync Sundays 02:00 UTC)');
-};
+ * Runs 
