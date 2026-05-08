@@ -4,9 +4,9 @@ interface ReverseAuctionBadgeProps {
   item: {
     title: string;
     price: number;
-    listingType?: string; // P2 #6: Use listingType instead of deprecated reverseAuction
-    reverseDailyDrop?: number; // in cents
-    reverseFloorPrice?: number; // in cents
+    reverseAuction?: boolean; // canonical boolean field from API
+    reverseDailyDrop?: number; // in dollars (not cents)
+    reverseFloorPrice?: number; // in dollars (not cents)
     reverseStartDate?: string; // ISO date
   };
   // Pre-computed decayed price in dollars, passed from parent to avoid duplicate decay logic
@@ -14,13 +14,13 @@ interface ReverseAuctionBadgeProps {
 }
 
 const ReverseAuctionBadge: React.FC<ReverseAuctionBadgeProps> = ({ item, currentPrice: propCurrentPrice }) => {
-  // P2 #6: Check listingType === 'REVERSE_AUCTION' instead of reverseAuction boolean
-  if (item.listingType !== 'REVERSE_AUCTION') {
+  // Guard: only render for reverse auction items (canonical boolean field)
+  if (!item.reverseAuction) {
     return null;
   }
 
-  const dailyDropDollars = (item.reverseDailyDrop || 0) / 100;
-  const floorPriceDollars = (item.reverseFloorPrice || 0) / 100;
+  const dailyDropDollars = item.reverseDailyDrop || 0;
+  const floorPriceDollars = item.reverseFloorPrice || 0;
   // Use pre-computed decayed price from parent if provided; fall back to item.price
   const currentPrice = propCurrentPrice ?? item.price;
   const isAtFloor = floorPriceDollars > 0 && currentPrice <= floorPriceDollars;
