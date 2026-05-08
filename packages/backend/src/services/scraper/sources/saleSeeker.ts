@@ -1,8 +1,21 @@
 /**
  * TheSaleSeker.com scraper adapter
- * Aggregates estate sales, auctions, and secondary sale organizers
- * Uses Playwright for JavaScript-rendered content
  * ADR-073: Directory Scraper Phase 1
+ *
+ * STATUS: DISABLED — pre-launch site, no data to scrape.
+ *
+ * As of 2026-05, thesaleseeker.com is a pre-launch marketing/waitlist page
+ * with zero listings, no directory, and no "listing" custom post type.
+ * Their FAQ confirms: "We're currently in development and getting closer every day!"
+ * The WP REST API exposes only 4 pages (Home, FAQ, Contact, Socials).
+ *
+ * The selector audit that flagged [data-listing] / .listing-card was correct that
+ * those selectors return zero results, but a selector fix cannot help — the
+ * underlying data does not exist on the site yet.
+ *
+ * Re-enable once thesaleseeker.com publicly launches their listing directory.
+ * At that point: fetch their HTML, identify actual container selectors, and
+ * remove the DISABLED guard below.
  */
 
 import * as cheerio from 'cheerio';
@@ -439,6 +452,11 @@ export async function scrapeTheSaleSeker(
   rateLimiter: RateLimiter
 ): Promise<{ created: number; updated: number; skipped: number; failed: number }> {
   const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
+
+  // DISABLED: thesaleseeker.com is pre-launch (no listings exist yet — verified 2026-05).
+  // Remove this guard once the site launches and has a scrapeable directory.
+  console.warn(`[TheSaleSeker] Scraper disabled — site is pre-launch, no listings available. Metro: ${metro}`);
+  return stats;
 
   try {
     // Parse metro string: "grand-rapids-mi" → { city: "Grand Rapids", state: "MI" }

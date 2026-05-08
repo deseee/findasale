@@ -68,6 +68,7 @@ import { runTexasLicensingScraper } from '../services/scraper/sources/texasLicen
 import { runUtahLicensingScraper } from '../services/scraper/sources/utahLicensingScraper';
 import { runOsmScraper } from '../services/scraper/osmScraper';
 import { scrapeTheSaleSeker, DEFAULT_METROS } from '../services/scraper/sources/saleSeeker';
+import { runAuctionZipScraper } from '../services/scraper/sources/auctionZipScraper';
 
 const router = express.Router();
 
@@ -676,6 +677,19 @@ router.post('/scraper/run-sale-seeker', requireSecret, async (req: express.Reque
     res.json({ success: true, message: 'SaleSeker scraper completed', stats });
   } catch (error: any) {
     console.error('[SaleSeker] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-auctionzip — run AuctionZip auctioneer directory scraper (manual only)
+// Body (optional): { "letters": ["A","B","C"] } to run a subset of letters
+router.post('/scraper/run-auctionzip', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const letters = Array.isArray(req.body?.letters) ? req.body.letters : undefined;
+    await runAuctionZipScraper(letters);
+    res.json({ success: true, message: 'AuctionZip scraper completed' });
+  } catch (error: any) {
+    console.error('[AuctionZip] Route error:', error);
     res.status(500).json({ error: error.message });
   }
 });
