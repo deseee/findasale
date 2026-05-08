@@ -236,6 +236,9 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
     );
 
     if (batch.length < BATCH_SIZE) break;
+
+    // Yield between batches to avoid starving live site queries
+    await new Promise(r => setTimeout(r, 50));
   }
 
   stats.durationMs = Date.now() - startTime;
