@@ -14,6 +14,10 @@ import {
 } from '../controllers/internalSaleDetailEnrichmentController';
 import { sendOutreachEmails } from '../jobs/outreachEmailsCron';
 import { runCategorySync } from '../jobs/categorySyncCron';
+import { runScrapeRun } from '../services/scraper/index';
+import { runIndianaLicensingScraper } from '../services/scraper/sources/indianaLicensingScraper';
+import { runOsmScraper } from '../services/scraper/osmScraper';
+import { scrapeTheSaleSeker } from '../services/scraper/sources/saleSeeker';
 
 const router = express.Router();
 
@@ -31,6 +35,61 @@ router.post('/scraper/ingest', ingestFromGitHubActions);
 
 // POST /api/internal/scraper/enrich-backfill — backfill Google Places data on unmanaged listings
 router.post('/scraper/enrich-backfill', requireSecret, runEnrichmentBackfill);
+
+// POST /api/internal/scraper/run-indiana-licensing — run Indiana auctioneer license scraper
+router.post('/scraper/run-indiana-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runIndianaLicensingScraper();
+    res.json({ success: true, message: 'Indiana licensing scraper completed' });
+  } catch (error: any) {
+    console.error('[IndianaLicensing] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-osm — run OpenStreetMap Overpass API scraper
+router.post('/scraper/run-osm', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runOsmScraper();
+    res.json({ success: true, message: 'OSM scraper completed' });
+  } catch (error: any) {
+    console.error('[OSM] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-sale-seeker — run TheSaleSeker.com scraper
+router.post('/scraper/run-sale-seeker', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    // Get system organizer for unmanaged listings
+    const { getOrCreateSystemOrganizer } = await import('../services/scraper/index');
+    const organizerId = await getOrCreateSystemOrganizer();
+
+    // Scrape all major metros (extract from query or use default list)
+    const metros = req.body?.metros || ['grand-rapids-mi', 'new-york-ny', 'los-angeles-ca'];
+
+    const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
+
+    for (const metro of metros) {
+      try {
+        const { defaultRateLimiter } = await import('../services/scraper/index');
+        const result = await scrapeTheSaleSeker(metro, organizerId, defaultRateLimiter);
+        stats.created += result.created;
+        stats.updated += result.updated;
+        stats.skipped += result.skipped;
+        stats.failed += result.failed;
+      } catch (err) {
+        console.error(`[SaleSeker] Metro ${metro} failed:`, err);
+        stats.failed++;
+      }
+    }
+
+    res.json({ success: true, message: 'SaleSeker scraper completed', stats });
+  } catch (error: any) {
+    console.error('[SaleSeker] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // POST /api/internal/enrich-sale-details — trigger ESN sale detail enrichment (description + photos)
 router.post('/enrich-sale-details', triggerSaleDetailEnrichment);
