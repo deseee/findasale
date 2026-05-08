@@ -258,6 +258,7 @@ export const getPoolsForItem = async (req: any, res: Response) => {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: 100,
     });
 
     const poolsWithCalcFields = pools.map(pool => {

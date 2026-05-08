@@ -61,6 +61,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
         subscriptionTier: { in: ['PRO', 'TEAMS'] },
       },
       select: { subscriptionTier: true },
+      take: 10000,
     });
 
     let mrrCents = 0;
@@ -101,6 +102,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
           },
         },
       },
+      take: 10000,
     });
 
     let transactionRevenueLast30d = 0;
@@ -132,6 +134,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
           },
         },
       },
+      take: 10000,
     });
 
     let transactionRevenueToday = 0;
@@ -215,6 +218,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
             },
           },
         },
+        take: 10000,
       });
 
       let dayTransactionRevenue = 0;
@@ -787,6 +791,7 @@ export const getFeatureFlags = async (req: AuthRequest, res: Response) => {
   try {
     const flags = await prisma.featureFlag.findMany({
       orderBy: { key: 'asc' },
+      take: 1000,
     });
 
     res.json(flags);
@@ -960,6 +965,7 @@ export const getCuratorEntries = async (req: AuthRequest, res: Response) => {
         status: true,
       },
       orderBy: { createdAt: 'desc' },
+      take: 1000,
     });
 
     res.json({ entries });

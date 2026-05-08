@@ -36,6 +36,7 @@ export const sendBroadcast = async (req: AuthRequest, res: Response) => {
     if (audience === 'ALL') {
       users = await prisma.user.findMany({
         select: { email: true, name: true },
+        take: 50000,
       });
     } else if (audience === 'ORGANIZERS') {
       // Users with an organizer record
@@ -44,6 +45,7 @@ export const sendBroadcast = async (req: AuthRequest, res: Response) => {
           organizer: { isNot: null },
         },
         select: { email: true, name: true },
+        take: 50000,
       });
     } else if (audience === 'SHOPPERS') {
       // Users without an organizer record
@@ -52,6 +54,7 @@ export const sendBroadcast = async (req: AuthRequest, res: Response) => {
           organizer: null,
         },
         select: { email: true, name: true },
+        take: 50000,
       });
     } else if (audience === 'PRO_ORGANIZERS') {
       // Organizers with PRO tier
@@ -62,6 +65,7 @@ export const sendBroadcast = async (req: AuthRequest, res: Response) => {
           },
         },
         select: { email: true, name: true },
+        take: 50000,
       });
     } else if (audience === 'TEAMS_ORGANIZERS') {
       // Organizers with TEAMS tier
@@ -72,6 +76,7 @@ export const sendBroadcast = async (req: AuthRequest, res: Response) => {
           },
         },
         select: { email: true, name: true },
+        take: 50000,
       });
     }
 

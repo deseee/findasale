@@ -66,6 +66,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({ className = '', onQrClick 
                 key={item.id}
                 onClick={onQrClick}
                 className="flex flex-col items-center justify-center p-3 rounded-lg bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors"
+                aria-label="Display my QR code"
               >
                 <QrCode className="w-5 h-5 mb-1" />
                 <span className="text-xs font-semibold text-warm-900 dark:text-warm-100 text-center">
@@ -93,6 +94,8 @@ export const ActionBar: React.FC<ActionBarProps> = ({ className = '', onQrClick 
           <button
             onClick={() => setIsMoreOpen(!isMoreOpen)}
             className="flex flex-col items-center justify-center p-3 rounded-lg bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors w-full h-full"
+            aria-label={isMoreOpen ? 'Close more actions menu' : 'Open more actions menu'}
+            aria-expanded={isMoreOpen}
           >
             <span className="text-xl mb-1">⋯</span>
             <span className="text-xs font-semibold text-warm-900 dark:text-warm-100">More</span>

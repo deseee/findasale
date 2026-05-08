@@ -77,6 +77,8 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
         disabled={disabled}
         className="text-sm font-semibold text-white bg-amber-700 dark:bg-amber-900 hover:bg-amber-800 disabled:opacity-50 px-3 py-1 rounded transition-colors"
         title="More bulk actions"
+        aria-label="More bulk actions menu"
+        aria-expanded={isOpen}
       >
         More
       </button>
