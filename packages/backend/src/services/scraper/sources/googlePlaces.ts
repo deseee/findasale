@@ -121,110 +121,143 @@ export const PLACES_QUERIES: QueryConfig[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Top 100 US metros for directory coverage
+// 301 US metros — all 50 states + DC, weighted for estate sale density
+// (retirement corridors, older housing stock, mid-size markets)
+// Updated S695: expanded from 100 population-ranked cities to full coverage
 // ---------------------------------------------------------------------------
 
 export const GOOGLE_PLACES_METROS: string[] = [
-  'New York, NY',
-  'Los Angeles, CA',
-  'Chicago, IL',
-  'Houston, TX',
-  'Phoenix, AZ',
-  'Philadelphia, PA',
-  'San Antonio, TX',
-  'San Diego, CA',
-  'Dallas, TX',
-  'San Jose, CA',
-  'Austin, TX',
-  'Jacksonville, FL',
-  'Fort Worth, TX',
-  'Columbus, OH',
-  'Charlotte, NC',
-  'Indianapolis, IN',
-  'San Francisco, CA',
-  'Seattle, WA',
-  'Denver, CO',
-  'Nashville, TN',
-  'Oklahoma City, OK',
-  'El Paso, TX',
+  // Alabama
+  'Birmingham, AL', 'Montgomery, AL', 'Huntsville, AL', 'Mobile, AL', 'Tuscaloosa, AL',
+  // Alaska
+  'Anchorage, AK',
+  // Arizona
+  'Phoenix, AZ', 'Tucson, AZ', 'Mesa, AZ', 'Chandler, AZ', 'Scottsdale, AZ',
+  'Glendale, AZ', 'Gilbert, AZ', 'Tempe, AZ', 'Peoria, AZ', 'Surprise, AZ',
+  'Yuma, AZ', 'Flagstaff, AZ',
+  // Arkansas
+  'Little Rock, AR', 'Fayetteville, AR', 'Fort Smith, AR',
+  // California
+  'Los Angeles, CA', 'San Diego, CA', 'San Jose, CA', 'San Francisco, CA',
+  'Fresno, CA', 'Sacramento, CA', 'Long Beach, CA', 'Oakland, CA', 'Anaheim, CA',
+  'Santa Ana, CA', 'Riverside, CA', 'Bakersfield, CA', 'Stockton, CA', 'Irvine, CA',
+  'Modesto, CA', 'San Bernardino, CA', 'Fremont, CA', 'Palm Springs, CA',
+  'Santa Barbara, CA', 'Pasadena, CA', 'Thousand Oaks, CA', 'Santa Rosa, CA',
+  'Ventura, CA', 'Salinas, CA',
+  // Colorado
+  'Denver, CO', 'Colorado Springs, CO', 'Aurora, CO', 'Fort Collins, CO',
+  'Boulder, CO', 'Pueblo, CO', 'Lakewood, CO',
+  // Connecticut
+  'Bridgeport, CT', 'New Haven, CT', 'Hartford, CT', 'Stamford, CT',
+  'Waterbury, CT', 'Norwalk, CT', 'Greenwich, CT',
+  // Delaware
+  'Wilmington, DE', 'Dover, DE',
+  // Florida — fully expanded (retirement corridors, Gulf Coast, estate sale dense)
+  'Jacksonville, FL', 'Miami, FL', 'Tampa, FL', 'Orlando, FL', 'St. Petersburg, FL',
+  'Hialeah, FL', 'Port St. Lucie, FL', 'Cape Coral, FL', 'Fort Lauderdale, FL',
+  'Pembroke Pines, FL', 'Hollywood, FL', 'Gainesville, FL', 'Coral Springs, FL',
+  'West Palm Beach, FL', 'Clearwater, FL', 'Lakeland, FL', 'Tallahassee, FL',
+  'Fort Myers, FL', 'Sarasota, FL', 'Bradenton, FL', 'Naples, FL', 'Pensacola, FL',
+  'Daytona Beach, FL', 'Boca Raton, FL', 'Delray Beach, FL', 'The Villages, FL',
+  'Palm Bay, FL', 'Ocala, FL', 'Bonita Springs, FL', 'Miramar, FL',
+  // Georgia
+  'Atlanta, GA', 'Augusta, GA', 'Columbus, GA', 'Savannah, GA', 'Athens, GA', 'Macon, GA',
+  // Hawaii
+  'Honolulu, HI',
+  // Idaho
+  'Boise, ID', 'Nampa, ID', 'Meridian, ID', 'Idaho Falls, ID', "Coeur d'Alene, ID",
+  // Illinois
+  'Chicago, IL', 'Rockford, IL', 'Joliet, IL', 'Naperville, IL',
+  'Peoria, IL', 'Springfield, IL', 'Elgin, IL',
+  // Indiana
+  'Indianapolis, IN', 'Fort Wayne, IN', 'Evansville, IN', 'South Bend, IN',
+  // Iowa
+  'Des Moines, IA', 'Cedar Rapids, IA', 'Davenport, IA', 'Sioux City, IA',
+  // Kansas
+  'Wichita, KS', 'Overland Park, KS', 'Kansas City, KS', 'Topeka, KS',
+  // Kentucky
+  'Louisville, KY', 'Lexington, KY', 'Bowling Green, KY', 'Owensboro, KY',
+  // Louisiana
+  'New Orleans, LA', 'Baton Rouge, LA', 'Shreveport, LA', 'Lafayette, LA', 'Lake Charles, LA',
+  // Maine
+  'Portland, ME', 'Bangor, ME',
+  // Maryland
+  'Baltimore, MD', 'Frederick, MD', 'Rockville, MD', 'Annapolis, MD',
+  // Massachusetts
+  'Boston, MA', 'Worcester, MA', 'Springfield, MA', 'Lowell, MA', 'Cambridge, MA',
+  'New Bedford, MA', 'Brockton, MA',
+  // Michigan — expanded (Detroit is a major estate sale market)
+  'Detroit, MI', 'Grand Rapids, MI', 'Warren, MI', 'Sterling Heights, MI',
+  'Ann Arbor, MI', 'Lansing, MI', 'Flint, MI', 'Dearborn, MI',
+  'Kalamazoo, MI', 'Livonia, MI', 'Traverse City, MI',
+  // Minnesota
+  'Minneapolis, MN', 'St. Paul, MN', 'Rochester, MN', 'Duluth, MN',
+  // Mississippi
+  'Jackson, MS', 'Gulfport, MS', 'Biloxi, MS',
+  // Missouri
+  'Kansas City, MO', 'St. Louis, MO', 'Springfield, MO', 'Columbia, MO',
+  // Montana
+  'Billings, MT', 'Missoula, MT', 'Great Falls, MT', 'Bozeman, MT',
+  // Nebraska
+  'Omaha, NE', 'Lincoln, NE',
+  // Nevada
+  'Las Vegas, NV', 'Henderson, NV', 'Reno, NV', 'North Las Vegas, NV', 'Sparks, NV',
+  // New Hampshire
+  'Manchester, NH', 'Nashua, NH', 'Concord, NH',
+  // New Jersey
+  'Newark, NJ', 'Jersey City, NJ', 'Paterson, NJ', 'Elizabeth, NJ', 'Trenton, NJ', 'Edison, NJ',
+  // New Mexico
+  'Albuquerque, NM', 'Santa Fe, NM', 'Las Cruces, NM', 'Rio Rancho, NM',
+  // New York
+  'New York, NY', 'Buffalo, NY', 'Rochester, NY', 'Yonkers, NY', 'Syracuse, NY', 'Albany, NY',
+  // North Carolina
+  'Charlotte, NC', 'Raleigh, NC', 'Greensboro, NC', 'Durham, NC', 'Winston-Salem, NC',
+  'Fayetteville, NC', 'Cary, NC', 'Asheville, NC', 'Wilmington, NC', 'High Point, NC',
+  // North Dakota
+  'Fargo, ND', 'Bismarck, ND', 'Grand Forks, ND',
+  // Ohio — expanded (Cleveland + Dayton are large estate sale markets)
+  'Columbus, OH', 'Cleveland, OH', 'Cincinnati, OH', 'Toledo, OH', 'Akron, OH',
+  'Dayton, OH', 'Youngstown, OH', 'Canton, OH',
+  // Oklahoma
+  'Oklahoma City, OK', 'Tulsa, OK', 'Norman, OK', 'Broken Arrow, OK',
+  // Oregon — entire state was missing
+  'Portland, OR', 'Salem, OR', 'Eugene, OR', 'Bend, OR',
+  // Pennsylvania
+  'Philadelphia, PA', 'Pittsburgh, PA', 'Allentown, PA', 'Erie, PA',
+  'Reading, PA', 'Scranton, PA', 'Bethlehem, PA', 'Lancaster, PA',
+  // Rhode Island
+  'Providence, RI', 'Warwick, RI',
+  // South Carolina — entire state was missing
+  'Charleston, SC', 'Columbia, SC', 'Greenville, SC', 'Myrtle Beach, SC',
+  'Rock Hill, SC', 'Hilton Head Island, SC',
+  // South Dakota
+  'Sioux Falls, SD', 'Rapid City, SD',
+  // Tennessee
+  'Nashville, TN', 'Memphis, TN', 'Knoxville, TN', 'Chattanooga, TN',
+  'Clarksville, TN', 'Murfreesboro, TN',
+  // Texas
+  'Houston, TX', 'San Antonio, TX', 'Dallas, TX', 'Austin, TX', 'Fort Worth, TX',
+  'El Paso, TX', 'Arlington, TX', 'Corpus Christi, TX', 'Plano, TX', 'Lubbock, TX',
+  'Garland, TX', 'Irving, TX', 'Amarillo, TX', 'McKinney, TX', 'McAllen, TX',
+  'Waco, TX', 'Beaumont, TX', 'Midland, TX', 'Denton, TX', 'Laredo, TX',
+  // Utah — entire state was missing
+  'Salt Lake City, UT', 'West Valley City, UT', 'Provo, UT', 'West Jordan, UT', 'Ogden, UT',
+  // Vermont
+  'Burlington, VT',
+  // Virginia
+  'Virginia Beach, VA', 'Norfolk, VA', 'Chesapeake, VA', 'Richmond, VA',
+  'Newport News, VA', 'Alexandria, VA', 'Hampton, VA', 'Roanoke, VA',
+  // Washington
+  'Seattle, WA', 'Spokane, WA', 'Tacoma, WA', 'Vancouver, WA', 'Bellevue, WA',
+  'Everett, WA', 'Bellingham, WA',
+  // West Virginia — entire state was missing
+  'Charleston, WV', 'Huntington, WV', 'Morgantown, WV',
+  // Wisconsin
+  'Milwaukee, WI', 'Madison, WI', 'Green Bay, WI', 'Kenosha, WI', 'Racine, WI',
+  // Wyoming
+  'Cheyenne, WY', 'Casper, WY',
+  // Washington DC
   'Washington, DC',
-  'Boston, MA',
-  'Memphis, TN',
-  'Las Vegas, NV',
-  'Louisville, KY',
-  'Baltimore, MD',
-  'Milwaukee, WI',
-  'Albuquerque, NM',
-  'Tucson, AZ',
-  'Fresno, CA',
-  'Mesa, AZ',
-  'Kansas City, MO',
-  'Atlanta, GA',
-  'Sacramento, CA',
-  'Colorado Springs, CO',
-  'Omaha, NE',
-  'Raleigh, NC',
-  'Long Beach, CA',
-  'Virginia Beach, VA',
-  'Minneapolis, MN',
-  'Tampa, FL',
-  'New Orleans, LA',
-  'Arlington, TX',
-  'Bakersfield, CA',
-  'Wichita, KS',
-  'Aurora, CO',
-  'Anaheim, CA',
-  'Santa Ana, CA',
-  'Corpus Christi, TX',
-  'Riverside, CA',
-  'St. Louis, MO',
-  'Lexington, KY',
-  'Pittsburgh, PA',
-  'Stockton, CA',
-  'Cincinnati, OH',
-  'St. Paul, MN',
-  'Toledo, OH',
-  'Greensboro, NC',
-  'Newark, NJ',
-  'Plano, TX',
-  'Henderson, NV',
-  'Lincoln, NE',
-  'Buffalo, NY',
-  'Fort Wayne, IN',
-  'Jersey City, NJ',
-  'Chandler, AZ',
-  'St. Petersburg, FL',
-  'Laredo, TX',
-  'Norfolk, VA',
-  'Madison, WI',
-  'Durham, NC',
-  'Lubbock, TX',
-  'Winston-Salem, NC',
-  'Garland, TX',
-  'Glendale, AZ',
-  'Hialeah, FL',
-  'Reno, NV',
-  'Baton Rouge, LA',
-  'Irvine, CA',
-  'Chesapeake, VA',
-  'Irving, TX',
-  'Scottsdale, AZ',
-  'North Las Vegas, NV',
-  'Fremont, CA',
-  'Gilbert, AZ',
-  'San Bernardino, CA',
-  'Birmingham, AL',
-  'Boise, ID',
-  'Rochester, NY',
-  'Richmond, VA',
-  'Spokane, WA',
-  'Des Moines, IA',
-  'Montgomery, AL',
-  'Modesto, CA',
-  'Fayetteville, NC',
-  'Tacoma, WA',
-  'Akron, OH',
-  'Grand Rapids, MI',
 ];
 
 // ---------------------------------------------------------------------------

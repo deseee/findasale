@@ -1,9 +1,11 @@
 name: Scrape Foursquare Places
 
 on:
-  # DISABLED S695 — Foursquare free tier drops to 500 calls/month on June 1 2026.
-  # Our volume: ~2,461 requests/run × 2 runs/month = ~4,922/month → WILL BILL post June 1.
-  # Re-enable only if free tier is restored or volume is reduced below 500/month.
+  schedule:
+    - cron: '0 3 3 * *'   # 3rd of month
+    - cron: '0 3 4 * *'   # 4th of month
+  # Sandbox plan: 9,450 free calls remaining, no card on file — cannot be billed.
+  # Actual usage: ~550 calls/cycle (390 + 160 confirmed May 2026). Re-enabled S695.
   workflow_dispatch:
 
 concurrency:

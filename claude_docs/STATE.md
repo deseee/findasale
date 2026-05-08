@@ -4,19 +4,31 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S694 — Admin Role Fix + Slow Queries + Display Name + Geo Feed (COMPLETE)**
+**Latest: S695 — Scraper Audit: Paid APIs Stripped, Metro List 100→301, Admin Stats Fixed (COMPLETE)**
 
-S694 shipped three bug fixes and one new feature:
+S695 audited the full scraping/outreach infrastructure. Key outcomes:
 
-- **Admin role bypass fixed (already on GitHub)** — `updateUserRole` in adminController now syncs both `role` and `roles` fields and increments `tokenVersion` on every role change. Direct DB fix applied to user1@example.com (roles array cleaned, tokenVersion bumped — active session invalidated immediately).
-- **Discovery feed slow queries — geo bounding box** — `discoveryService.ts` now applies a ~100mi lat/lng bounding box when coordinates are available, cutting the Prisma query from ~10,059 rows to ~50-200. Fallback `take: 500` when no coords. Expected query time: 1300ms → <100ms.
-- **Display name editing** — `PATCH /users/me` now accepts `name` field (validated: non-empty string, ≤100 chars). Shopper settings page has a new "Display Name" section with save button wired to the endpoint.
-- **Design opportunity audit** — Top 3 highest-impact design prompts delivered: (1) homepage cold-shopper trust signals + geo-toggle, (2) organizer first-48h onboarding linear card, (3) Sale Pulse Quick Wins discoverability feedback for organizers.
+- **Google Places stripped** — `enrichment.ts` had live calls to Google Places API ($200/run confirmed). All three functions (`lookupGooglePlace`, `fetchGooglePlaceDetails`, `getGooglePhotoUrl`) removed. Cron in `scrape-google-places.yml` disabled. Delete `GOOGLE_PLACES_API_KEY` from Railway env vars + GitHub Secrets.
+- **Foursquare confirmed safe** — Investigated June 1 2026 pricing cliff. Verified: account is Sandbox plan, 9,450 free calls remaining, no card on file, cannot be billed. Actual usage: ~550 calls/2-run cycle (confirmed from billing screen: May 3=390, May 4=160). Cron re-enabled.
+- **HERE confirmed free** — 250K free/month, our volume ~6,923/month at 301 metros. Well within free tier.
+- **Metro list expanded 100→301** — Original list was top-100 US cities by population. Replaced with estate-sale-weighted coverage: all 50 states + DC, Florida fully expanded (4→30 cities), Michigan expanded (Grand Rapids only → 11 cities), Oregon/Utah/SC/WV/AR added from scratch. HERE volume impact: ~2,852 → ~6,923/month (3% of free tier).
+- **Admin stats contamination fixed** — All 6 real-organizer stat queries in `adminController.ts` now filter `isUnmanagedListing: false`. Scraped directory orgs no longer inflate real user counts.
+- **Scrape pool admin dashboard** — New `getScrapePoolStats()` endpoint + `/admin/scrape-pool` page showing tier distribution, enrichment coverage, outreach status, last run by source.
+- **Outreach strategy written** — `outreach-email-strategy.md`: COLD/WARM/HOT message variants, 4-touch sequence, 8-week warming ramp, MailerLite automation structure.
+- **Email discovery spec written** — `email-discovery-spec.md`: 6-stage free pipeline. ⚠️ Still contains Hunter.io/Clearbit/Apollo references — strip before implementing.
+
+**Critical gap uncovered:** Scraper throughput. GitHub Actions 60-min timeout kills runs at ~550 calls. Full 301-metro coverage requires 6,923 calls/run. At current rate, ~8% of metros get scraped per month. Architect + Innovation dispatch needed before Dev implementation.
 
 **Files changed this session (need Patrick push):**
-- `packages/backend/src/services/discoveryService.ts` — geo bounding box + take:500 fallback
-- `packages/backend/src/routes/users.ts` — PATCH /me accepts `name` field
-- `packages/frontend/pages/shopper/settings.tsx` — Display Name section
+- `packages/backend/src/services/scraper/enrichment.ts` — Google Places stripped
+- `packages/backend/src/services/scraper/sources/googlePlaces.ts` — 301 metros
+- `packages/backend/src/controllers/adminController.ts` — isUnmanagedListing filter + getScrapePoolStats
+- `packages/backend/src/routes/admin.ts` — /scrape-pool-stats route
+- `packages/frontend/pages/admin/scrape-pool.tsx` — NEW scrape pool dashboard
+- `.github/workflows/scrape-google-places.yml` — cron disabled
+- `.github/workflows/scrape-foursquare.yml` — cron re-enabled (Sandbox safe)
+- `claude_docs/strategy/outreach-email-strategy.md` — NEW
+- `claude_docs/strategy/email-discovery-spec.md` — NEW
 
 **Previous: S693 — #174 Auction QA Setup + Bid Fix (COMPLETE)**
 
@@ -931,18 +943,30 @@ Full Google Maps Platform incident response and lockdown. Root cause: monthly Gi
 
 ## Next Session — S696
 
-**Priority 1 — Push S695 changes**
+### Step 0 — Push all pending blocks (do first, in order)
 
+**S695 — scraper audit + metro expansion:**
 ```powershell
-git add packages/backend/src/routes/internal.ts
+git add packages/backend/src/services/scraper/enrichment.ts
+git add packages/backend/src/services/scraper/sources/googlePlaces.ts
+git add packages/backend/src/controllers/adminController.ts
+git add packages/backend/src/routes/admin.ts
+git add packages/frontend/pages/admin/scrape-pool.tsx
+git add .github/workflows/scrape-google-places.yml
+git add .github/workflows/scrape-foursquare.yml
+git add claude_docs/strategy/outreach-email-strategy.md
+git add claude_docs/strategy/email-discovery-spec.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S695: requireSecret on enrich-backfill + Google API lockdown wrap"
+git commit -m "S695: strip Google Places, expand metros 100→301, fix admin stats, scrape pool dashboard"
 .\push.ps1
 ```
 
-**Priority 2 — Push S694 changes (still pending)**
+⚠️ Also manually delete `GOOGLE_PLACES_API_KEY` from:
+- Railway dashboard → findasale-backend service → Variables tab
+- GitHub repo → Settings → Secrets → Actions
 
+**S694 (still pending):**
 ```powershell
 git add packages/backend/src/services/discoveryService.ts
 git add packages/backend/src/routes/users.ts
@@ -951,22 +975,15 @@ git commit -m "S694: Geo bounding box feed fix + display name editing + admin ro
 .\push.ps1
 ```
 
-**Priority 3 — Push the #174 bid fix (still pending from S693)**
-
+**S693 bid fix (still pending):**
 ```powershell
 git add "packages/frontend/pages/items/[id].tsx"
 git commit -m "fix: bid API field name bidAmount → maxBidAmount (ADR-013 contract)"
 .\push.ps1
 ```
-
 Then QA #174: user12@example.com / Seedy2025! → finda.sale/sales/c5hykxxecanngwcrkvq92n1va
 
-**Priority 4 — Dispatch organizer directory buildout (parallel)**
-
-Use the session brief written in S695. Dispatch findasale-innovation, findasale-architect, findasale-dev, and findasale-sales-ops in parallel. Goal: multi-source organizer directory with cross-source deduplication and Teams/Enterprise lead scoring. No Google Places. See session brief for full dispatch spec.
-
-**Priority 5 — Push S691 block (still pending)**
-
+**S691 scraper block (still pending):**
 ```powershell
 git rm ".github/workflows/scrape-nc-licensing.yml"
 git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"
@@ -977,8 +994,7 @@ git commit -m "S691: TX Socrata rewrite, NC yml rename, WV duplicate removal"
 .\push.ps1
 ```
 
-**Priority 6 — Push S689 Chrome QA fixes**
-
+**S689 Chrome QA fixes (still pending):**
 ```powershell
 git add packages/backend/src/routes/organizers.ts
 git add packages/frontend/components/CheckoutModal.tsx
@@ -988,6 +1004,68 @@ git add packages/frontend/components/DisputeForm.tsx
 git commit -m "S689: Dashboard lapse fix, WCAG ARIA (4 components)"
 .\push.ps1
 ```
+
+---
+
+### Step 1 — S695 Audit (read this before dispatching anything)
+
+Before any subagent runs, verify these S695 claims are actually on disk:
+
+1. `enrichment.ts` — confirm `lookupGooglePlace`, `fetchGooglePlaceDetails`, `getGooglePhotoUrl` functions are gone. Grep for `GOOGLE_PLACES_API_KEY` in the file — should return nothing.
+2. `googlePlaces.ts` — confirm `GOOGLE_PLACES_METROS` array has 301 entries (`grep -c "', '" ...` or count in Python).
+3. `adminController.ts` — grep for `isUnmanagedListing: false` — should appear in 6 stat queries. Grep for `getScrapePoolStats` — should exist.
+4. `scrape-pool.tsx` — confirm file exists at `packages/frontend/pages/admin/scrape-pool.tsx`.
+5. `email-discovery-spec.md` — grep for `hunter\|clearbit\|apollo` — should return hits. This needs paid API refs stripped before Dev implements it.
+
+---
+
+### Step 2 — Innovation Dispatch (before Architect or Dev)
+
+**Dispatch `findasale-innovation` with this brief:**
+
+**Context:**
+FindA.Sale scrapes secondhand/resale businesses as directory entries for outreach. We have scrapers for: ESN (EstateSales.NET company profiles), HERE Places API (free, 250K/month), Foursquare Places API (Sandbox, 9,450 free calls), state licensing databases (auctioneer/secondhand dealer), OSM/Overpass, Sale Seeker, and Facebook events.
+
+**The core problem — throughput:**
+GitHub Actions workflows have a 60-minute timeout. Our scrapers process metros sequentially. With 301 metros × 23 queries = 6,923 calls/run, the workflow dies at ~550 calls (~8% coverage). There is no cursor or queue — each run starts from metro 1. This means the same ~8 metros get scraped every month while 293 metros never get touched.
+
+**Five problems that need creative solutions (generate ideas for all five, evaluate top 3 per problem):**
+
+1. **Throughput / Coverage** — How do we get all 301 metros scraped reliably within GitHub Actions free tier constraints? Options to explore: cursor-based queue stored in DB (scraper picks up where it left off), splitting metros into batches across multiple workflow files, parallel matrix strategy in a single workflow, self-hosted runner, external trigger (cron via Railway instead of GitHub Actions), reducing calls per metro via smarter query selection.
+
+2. **Source tracking gap** — 7,897 existing scraped orgs have `directoryMostRecentSource = NULL` and `sourcesJson = NULL`. The admin scrape pool dashboard can't show run history. Options: backfill job that infers source from existing data patterns, forward-fix only (new runs populate), hybrid approach.
+
+3. **HOT lead score = 0** — All 7,897 scraped orgs score COLD or WARM. HOT requires `isStateLicensed` (25 pts) or 10+ Google reviews (now stripped). With Google Places gone, the scoring engine may never produce HOT leads from Places-sourced orgs. Options: recalibrate HOT threshold, add alternative signals (ESN membership = proxy for licensed?, website + phone + social media count = physical presence proxy), use state licensing scraper matches as `isStateLicensed` signal.
+
+4. **Email discovery pipeline** — `email-discovery-spec.md` exists but: (a) has Hunter.io/Clearbit/Apollo references that must be removed, (b) `emailDiscoveryService.ts` is not built. Spec the correct free-only implementation using: website contact page scraping (Playwright/cheerio), SMTP RCPT-TO probing (smtp-validate-email), WHOIS lookup (whois-parser), and email pattern permutation. What's the right architecture — standalone service, enrichment pipeline step, or triggered on bounce?
+
+5. **MailerLite sequence wiring** — `outreach-email-strategy.md` has COLD/WARM/HOT sequences designed but `outreachEmailsCron.ts` is not wired to them. Innovation: what's the smartest trigger logic? Time-based? Score-threshold-based? Event-based (organizer claims a listing → move to different sequence)? What does the MailerLite group/segment architecture look like for a 7,897-person list with 3 tiers?
+
+**Output format:** For each problem, provide: current state, 3 creative options (including at least one non-obvious approach), recommended option with rationale, estimated token/dev cost to implement.
+
+---
+
+### Step 3 — Architect Dispatch (after Innovation returns)
+
+Read Innovation output. Dispatch `findasale-architect` with:
+- Innovation's recommended throughput solution
+- Constraint: no new paid services, must work within GitHub Actions free tier OR Railway cron (already paid)
+- Deliverable: technical spec for (a) cursor/queue system design, (b) source tracking backfill approach, (c) HOT score recalibration with revised signal weights, (d) emailDiscoveryService.ts architecture
+
+---
+
+### Step 4 — Dev Dispatch (after Architect returns)
+
+Batch 1 (safe to run immediately, no architecture dependency):
+- Strip Hunter.io/Clearbit/Apollo from `email-discovery-spec.md`
+- Populate `directoryMostRecentSource` in Foursquare and HERE scraper output (forward-fix, 1–2 files)
+- 50-state licensing scraper: 18 URL corrections (confirmed URLs from S691 research)
+
+Batch 2 (after Architect spec):
+- Implement cursor/queue system per Architect spec
+- Implement `emailDiscoveryService.ts` free-only pipeline
+- Wire MailerLite sequences into `outreachEmailsCron.ts`
+- HOT score threshold recalibration
 
 **Priority 7 — QA holdover**
 - #174 Auction — push + QA (Priority 3 above)
