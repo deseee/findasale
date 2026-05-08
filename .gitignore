@@ -108,3 +108,56 @@ _tmp_*
 .last-wrap
 conversation-defaults-SKILL-*.tmp.*
 package-lock.json
+
+# =========================
+# Temp / backup file variants
+# =========================
+*.bak
+*.backup
+*.working
+*.edit
+*.new
+
+# =========================
+# Prisma schema backups
+# =========================
+packages/database/prisma/schema.prisma.*
+
+# =========================
+# Scraper runtime output
+# =========================
+packages/backend/craigslist-leads-*.json
+
+# =========================
+# Root-level scratch / session artifacts
+# =========================
+/*.sql
+/business-names.txt
+/guild-primer-*.txt
+/xpService-original.ts
+/reset-artifact-verification.js
+/verify-ts.ps1
+/test_fb_graphql.py
+/label-sheet-composer-dev-prompt.md
+/rvm-*.md
+/*-mockup.html
+/*-prototype.html
+/*-prototype.jsx
+/icon-preview*.html
+/AUDIO_NOTES_UX_SPEC.md
+/EMAIL_AUDIT_REPORT.md
+/GROUP5_*.txt
+/IMPLEMENTATION_SUMMARY_*.md
+/PRICING_ENGINE_UPDATES_SUMMARY.txt
+/sale-progress-prototype.*
+
+# =========================
+# Nested package-level claude_docs (all docs belong in root claude_docs/)
+# =========================
+packages/*/claude_docs/
+
+# =========================
+# Encoded Windows temp path artifacts (VM encoding issue)
+# =========================
+"packages/backend/C:"*
+"packages/frontend/C:"*
