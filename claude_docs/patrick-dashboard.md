@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S696 Wrap
+# Patrick's Dashboard — S697 Wrap
 
 ---
 
@@ -11,33 +11,73 @@
 | Google OAuth | ⚠️ Still broken (root cause unclear) |
 | Login (email/password) | ✅ Working |
 | MCP Server (mcp.finda.sale) | ✅ LIVE — 7 tools |
-| Google Places API | ✅ STRIPPED — code removed, cron disabled, key needs manual deletion |
-| Foursquare scraper | ✅ SAFE — Sandbox plan, 9,450 free calls, cron re-enabled |
-| HERE scraper | ✅ FREE — 250K/month free tier |
-| Metro coverage | ✅ 301 metros (all 50 states + DC) |
-| Scraper throughput | ✅ FIXED — GitHub Actions matrix (6 parallel jobs, ~10-15 min/run) |
-| Indiana licensing | ✅ WIRED — isStateLicensed will populate on next scraper run |
-| Source tracking | ✅ FIXED — directoryMostRecentSource now populates on all scraper upserts |
-| HOT lead count | 🟡 0 now → 200–500 after Indiana scraper runs post-push |
-| Email discovery service | ❌ NOT BUILT — spec exists, paid refs need stripping |
-| MailerLite sequences | ❌ NOT WIRED — dispatch ready for next session |
+| Scraper throughput | ✅ FIXED — 6-job matrix, 10–15 min/run |
+| 18-state licensing scrapers | ✅ URL-corrected (13 this session + WA NEW) |
+| Phase 2 scrapers | ✅ AK / NJ / WY / OK — pawnbroker/PDF sources built |
+| Phase 2 research (blocked states) | 🔴 AZ/DE/ID/IL/KS/MI/MN/MO all city-level or restricted |
+| Outreach lead priority | ✅ HOT 40% / WARM 35% / COLD 25% queue ordering |
+| Email discovery service | ✅ BUILT — 3-stage free pipeline (website scrape → pattern → SMTP) |
+| Settings #352 tagline / #353 yearFounded | ✅ FIXED — GET /me was missing organizerTypes, causing post-PATCH state loss |
+| WCAG error ARIA | ✅ SUFFICIENT COVERAGE — all high-traffic error states covered |
+| HOT lead count | 🟡 0 now → 200–500 after Indiana scraper runs |
 | #174 Auction QA | 🟡 Bid fix on disk (S693). Push items/[id].tsx → re-run QA |
 
 ---
 
-## What Happened This Session (S696)
+## What Happened This Session (S697)
 
-- **Innovation + Architect** ran on 5 scraper infrastructure problems. Full analysis saved to `claude_docs/research/innovation-scraper-throughput-2026-05-08.md`.
-- **Indiana scraper fixed** — 31 merge conflict markers resolved. `isStateLicensed: true`, `licenseState: 'IN'`, and `licenseNumber` now set on every organizer the Indiana scraper creates/finds. 200–500 organizers will reach HOT tier after next run.
-- **Source tracking wired** — `scraper/index.ts` now writes `directoryMostRecentSource` on every Foursquare, HERE, and OSM upsert. Admin scrape pool dashboard will show data source going forward.
-- **GitHub Actions matrix** — Both Foursquare and HERE scrapers now run as 6 parallel jobs. 301 metros in ~10–15 minutes instead of dying at ~550 calls/60 min. Script files updated with batch-slicing logic.
-- **TS check: ✅ zero errors** on all changes.
+3 parallel dispatch batches across scraper infrastructure, accessibility, and outreach tooling:
+
+**Batch 1:** WCAG error ARIA (`aria-invalid` + `aria-describedby`) on 4 frontend files. 13 state licensing scrapers corrected to live government endpoints (AL AR FL GA IA KY LA ME MS ND SC SD WV).
+
+**Batch 2:** Washington licensing scraper built (18th confirmed state — was missing from prior batch). `outreachEmailsCron.ts` now prioritizes HOT organizers at 40% of daily quota, WARM at 35%, COLD at 25%. AK / NJ / WY Phase 2 pawnbroker scrapers built with workflows.
+
+**Batch 3:** Oklahoma Phase 2 (PDF roster scraper). Email discovery service built — 3-stage free pipeline that tries to find contact email via website scraping, then common patterns, then SMTP RCPT TO probe (no actual email sent). Batch job targets organizers with website but no contactEmail. P1 bug fixed: tagline/yearFounded settings weren't persisting on reload because GET /me was missing `organizerTypes` from its response shape, breaking frontend form refetch after PATCH.
 
 ---
 
-## Patrick Actions Needed (push in this order)
+## Patrick Actions Needed
 
-**Step 1 — S696 (this session — do first):**
+**Step 1 — S697 (all 31 files, one commit — do first):**
+```powershell
+git add packages/frontend/components/EbayCategoryPicker.tsx
+git add packages/frontend/components/ReturnRequestModal.tsx
+git add packages/frontend/pages/admin/broadcast.tsx
+git add packages/frontend/pages/admin/feature-flags.tsx
+git add packages/backend/src/services/scraper/sources/alabamaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/arkansasLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/floridaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/georgiaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/iowaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/kentuckyLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/louisianaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/maineLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/mississippiLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/northdakotaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/southcarolinaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/southdakotaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/westvirginiaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/washingtonLicensingScraper.ts
+git add .github/workflows/scrape-washington-licensing.yml
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/src/services/scraper/sources/alaskaPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/newjerseyPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/wyomingPhase2Scraper.ts
+git add .github/workflows/scrape-ak-phase2.yml
+git add .github/workflows/scrape-nj-phase2.yml
+git add .github/workflows/scrape-wy-phase2.yml
+git add packages/backend/src/services/scraper/sources/oklahomaphase2Scraper.ts
+git add .github/workflows/scrape-ok-phase2.yml
+git add packages/backend/src/services/emailDiscoveryService.ts
+git add packages/backend/src/jobs/emailDiscoveryJob.ts
+git add packages/backend/src/routes/organizers.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S697: WCAG ARIA fixes, 13 scraper URL corrections, WA scraper, outreach lead tier priority, AK/NJ/WY/OK Phase2 scrapers, email discovery service, settings GET /me fix"
+.\push.ps1
+```
+
+**Step 2 — S696:**
 ```powershell
 git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
 git add packages/backend/src/services/scraper/index.ts
@@ -46,13 +86,11 @@ git add .github/workflows/scrape-here-places.yml
 git add packages/backend/src/scripts/run-foursquare-places.ts
 git add packages/backend/src/scripts/run-here-places.ts
 git add claude_docs/research/innovation-scraper-throughput-2026-05-08.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
 git commit -m "S696: Indiana licensing fix + source tracking + GitHub Actions matrix throughput"
 .\push.ps1
 ```
 
-**Step 2 — S695 (⚠️ skip scrape-foursquare.yml — already in S696 above):**
+**Step 3 — S695 (⚠️ skip scrape-foursquare.yml — already in S696):**
 ```powershell
 git add packages/backend/src/services/scraper/enrichment.ts
 git add packages/backend/src/services/scraper/sources/googlePlaces.ts
@@ -70,7 +108,7 @@ git commit -m "S695: strip Google Places, expand metros 100→301, fix admin sta
 - Railway → findasale-backend → Variables tab
 - GitHub → repo Settings → Secrets → Actions
 
-**Step 3 — S694:**
+**Step 4 — S694:**
 ```powershell
 git add packages/backend/src/services/discoveryService.ts
 git add packages/backend/src/routes/users.ts
@@ -79,7 +117,7 @@ git commit -m "S694: Geo bounding box feed fix + display name editing + admin ro
 .\push.ps1
 ```
 
-**Step 4 — S693 bid fix + QA:**
+**Step 5 — S693 bid fix + QA:**
 ```powershell
 git add "packages/frontend/pages/items/[id].tsx"
 git commit -m "fix: bid API field name bidAmount → maxBidAmount (ADR-013 contract)"
@@ -87,7 +125,7 @@ git commit -m "fix: bid API field name bidAmount → maxBidAmount (ADR-013 contr
 ```
 Wait 2–3 min for Vercel, then QA #174: login user12@example.com / Seedy2025! → finda.sale/sales/c5hykxxecanngwcrkvq92n1va
 
-**Step 5 — S691 (git rm commands first):**
+**Step 6 — S691 (git rm commands first):**
 ```powershell
 git rm ".github/workflows/scrape-nc-licensing.yml"
 git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"
@@ -98,7 +136,7 @@ git commit -m "S691: TX Socrata rewrite, NC yml rename, WV duplicate removal"
 .\push.ps1
 ```
 
-**Step 6 — S689 Chrome QA fixes:**
+**Step 7 — S689 Chrome QA fixes:**
 ```powershell
 git add packages/backend/src/routes/organizers.ts
 git add packages/frontend/components/CheckoutModal.tsx
@@ -111,8 +149,10 @@ git commit -m "S689: Dashboard lapse fix, WCAG ARIA (4 components)"
 
 ---
 
-## Next Session (S697) — Top Priorities
+## Next Session (S698) — Top Priorities
 
-1. **Batch 2 dispatches** — Strip paid refs from email-discovery-spec.md, 50-state licensing URL corrections (18 states), MailerLite group wiring
-2. **QA #174 Auction** — after S693 push deploys
-3. **emailDiscoveryService.ts** — schema migration + free pipeline implementation
+1. **Wire emailDiscoveryJob into the scheduler/cron** — job is built but not registered in any cron runner. Needs wiring into `jobRunner.ts` or equivalent + Railway env var: `EMAIL_DISCOVERY_ENABLED=true`
+2. **Illinois Phase 2** — IDFPR eLicense portal needs manual form inspection (browser session required). If machine-readable, build scraper.
+3. **QA #174 Auction** — after S693 bid fix deploys
+4. **QA #352/#353 settings fix** — verify tagline/yearFounded persist after S697 push deploys
+5. **HOT score ESN membership signal** — Architect spec needed (S696 backlog item)

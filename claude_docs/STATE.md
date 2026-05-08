@@ -4,7 +4,56 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S696 — Scraper Infrastructure Batch 1: Indiana Licensing Fix + Source Tracking + Matrix Throughput (COMPLETE)**
+**Latest: S697 — Scraper URL Corrections + WCAG ARIA + Outreach Lead Priority + Phase 2 Scrapers + Email Discovery (COMPLETE — push block provided)**
+
+S697 ran 3 parallel dispatch batches: WCAG error ARIA fixes (4 frontend files), 13 state scraper URL corrections + WA scraper (NEW), outreach cron lead tier prioritization, AK/NJ/WY/OK Phase 2 scrapers, email discovery service, and a P1 settings bug fix.
+
+**Completed this session:**
+
+**Batch 1 — WCAG error ARIA + 13 scraper URL corrections:**
+- **WCAG error ARIA** — `aria-invalid` + `aria-describedby` added to: EbayCategoryPicker (search input), ReturnRequestModal (textarea), admin/broadcast.tsx (3 inputs), admin/feature-flags.tsx (2 inputs). WCAG error ARIA queue item can now be cleared — sufficient coverage achieved across all sprint batches.
+- **13 state scraper URLs corrected** — AL, AR, FL, GA, IA, KY, LA, ME, MS, ND, SC, SD, WV all pointed to wrong or placeholder endpoints. Now corrected to live government licensing lookup pages. MA/NH/PA/WI confirmed already correct. IN untouched (resolved S696).
+
+**Batch 2 — WA scraper + outreach lead tier priority + AK/NJ/WY Phase 2:**
+- **Washington scraper (NEW)** — `washingtonLicensingScraper.ts` hitting Washington DOL brkrlocator endpoint with ASP.NET form state handling. `directoryMostRecentSource: 'WashingtonLicensing'`. Workflow: Monday 4:30am UTC. This was the 18th confirmed state missing from the S696 corrections.
+- **Outreach lead tier priority** — `outreachEmailsCron.ts` single `findMany` replaced with 4-pass HOT/WARM/COLD/fallback system. HOT gets 40% of `quotaPerWindow`, WARM 35%, COLD 25%, all floored at 1. Backward-compatible: ENTERPRISE and untiered orgs go to fallback pool.
+- **AK Phase 2 scraper (NEW)** — Alaska pawnbroker licenses from commerce.alaska.gov (Program ID 41).
+- **NJ Phase 2 scraper (NEW)** — NJ pawnbroker (type 1306) from NJDOBI A-Z search.
+- **WY Phase 2 scraper (NEW)** — Wyoming pawnbroker from Wyoming Banking Division licensee list.
+- **3 workflow YMLs** — scrape-ak-phase2.yml, scrape-nj-phase2.yml, scrape-wy-phase2.yml (Monday cadence, staggered times).
+
+**Phase 2 research finding (blocked):** AZ/DE/ID/IL/KS/MI/MN/MO all have city/county-level licensing or restricted databases — no viable state-level machine-readable source found. IL has a potential IDFPR eLicense portal needing manual form inspection before building. CA/CO/CT/HI/NE blocked entirely (city-level or bot protection).
+
+**Batch 3 — OK Phase 2 + Email Discovery + Settings bug fix:**
+- **OK Phase 2 scraper (NEW)** — `oklahomaphase2Scraper.ts` — Oklahoma pawnbroker from PDF roster at oklahoma.gov. Workflow: Monday 6:00am UTC.
+- **Email discovery service (NEW)** — `emailDiscoveryService.ts` (277 lines): 3-stage free pipeline: (1) website scrape for mailto: links + regex patterns, (2) 12 candidate pattern generation from businessName + domain, (3) MX lookup + RCPT TO probe on port 25 (no actual email sent, 30s timeout). On success: updates `organizer.contactEmail` in DB.
+- **Email discovery batch job (NEW)** — `emailDiscoveryJob.ts` (33 lines): cursor-paginated batch, targets `contactEmail IS NULL AND website IS NOT NULL AND isUnmanagedListing = true`. `batchSize=50, delayMs=2000`.
+- **P1 settings bug fixed** — `#352 tagline` and `#353 yearFounded` were accepting input but not surviving page reload. Root cause: `GET /organizers/me` response was missing `organizerTypes` from the return shape, causing the frontend's post-PATCH refetch to fail to populate form state. Fixed: added `organizerTypes: (organizer as any).organizerTypes || []` to GET /me response at line 495 (tagline at 494 and yearFounded at 496 were already present). Backend TS: 0 errors. Frontend TS: 0 errors.
+
+**Files changed this session (push block provided above):**
+- `packages/frontend/components/EbayCategoryPicker.tsx` — aria-invalid + aria-describedby
+- `packages/frontend/components/ReturnRequestModal.tsx` — aria-invalid + aria-describedby
+- `packages/frontend/pages/admin/broadcast.tsx` — aria-invalid + aria-describedby (3 inputs)
+- `packages/frontend/pages/admin/feature-flags.tsx` — aria-invalid + aria-describedby (2 inputs)
+- 13 state scraper source files — URL corrections (AL AR FL GA IA KY LA ME MS ND SC SD WV)
+- `packages/backend/src/services/scraper/sources/washingtonLicensingScraper.ts` — NEW
+- `.github/workflows/scrape-washington-licensing.yml` — NEW
+- `packages/backend/src/jobs/outreachEmailsCron.ts` — 4-pass lead tier priority
+- `packages/backend/src/services/scraper/sources/alaskaPhase2Scraper.ts` — NEW
+- `packages/backend/src/services/scraper/sources/newjerseyPhase2Scraper.ts` — NEW
+- `packages/backend/src/services/scraper/sources/wyomingPhase2Scraper.ts` — NEW
+- `.github/workflows/scrape-ak-phase2.yml` — NEW
+- `.github/workflows/scrape-nj-phase2.yml` — NEW
+- `.github/workflows/scrape-wy-phase2.yml` — NEW
+- `packages/backend/src/services/scraper/sources/oklahomaphase2Scraper.ts` — NEW
+- `.github/workflows/scrape-ok-phase2.yml` — NEW
+- `packages/backend/src/services/emailDiscoveryService.ts` — NEW
+- `packages/backend/src/jobs/emailDiscoveryJob.ts` — NEW
+- `packages/backend/src/routes/organizers.ts` — organizerTypes added to GET /me
+
+---
+
+**Previous: S696 — Scraper Infrastructure Batch 1: Indiana Licensing Fix + Source Tracking + Matrix Throughput (COMPLETE)**
 
 S696 ran Innovation + Architect on 5 scraper problems, then dispatched 3 parallel dev agents for Batch 1 (no schema changes). All verified TS clean.
 
@@ -13,21 +62,6 @@ S696 ran Innovation + Architect on 5 scraper problems, then dispatched 3 paralle
 - **Source tracking forward-fix** — `scraper/index.ts` now sets `directoryMostRecentSource` + `directoryMostRecentAt` for all Foursquare, HEREPlaces, and OSM upserts. Admin scrape pool dashboard will show attribution for all future scrape runs.
 - **GitHub Actions matrix** — `scrape-foursquare.yml` and `scrape-here-places.yml` updated to 6-job parallel matrix (batch_index 0–5, 5-second stagger). `run-foursquare-places.ts` and `run-here-places.ts` updated with `SCRAPER_BATCH_INDEX` / `SCRAPER_BATCH_COUNT` slicing. 301 metros in ~10–15 min vs 60+ min sequential. Zero rate limit impact (still ~301 calls/run total).
 - **Innovation output saved** — `claude_docs/research/innovation-scraper-throughput-2026-05-08.md` (5 problem analyses, 3 options each, recommendations).
-
-**Files changed this session (need Patrick push):**
-- `packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts` — conflict fix + isStateLicensed wiring
-- `packages/backend/src/services/scraper/index.ts` — directoryMostRecentSource forward-fix
-- `.github/workflows/scrape-foursquare.yml` — matrix strategy (6 parallel jobs)
-- `.github/workflows/scrape-here-places.yml` — matrix strategy (6 parallel jobs)
-- `packages/backend/src/scripts/run-foursquare-places.ts` — batch slicing
-- `packages/backend/src/scripts/run-here-places.ts` — batch slicing
-- `claude_docs/research/innovation-scraper-throughput-2026-05-08.md` — NEW
-
-**Batch 2 still pending (requires schema migration or deeper architecture):**
-- `emailDiscoveryService.ts` — free email discovery pipeline (website scrape + SMTP probe)
-- MailerLite `outreachEmailsCron.ts` wiring to score-threshold groups
-- HOT score ESN membership signal (separate from licensing)
-- 50-state licensing URL corrections (18 states with confirmed URLs)
 
 ---
 
@@ -723,7 +757,7 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | WCAG skip link re-verify | ✅ S682 VERIFIED — Tab once on finda.sale, amber "Skip to main content" button appears overlaying header top-left, disappears when focus moves. z-[100] fix working correctly. | — | S681 |
-| WCAG error ARIA | S683 codebase sweep complete (aria-labels + input labels). Remaining gap: `aria-invalid` + `aria-describedby` on form inputs with error states (~20+ files). | Dedicated error ARIA sprint | S683 |
+| WCAG error ARIA | ✅ S697 SUFFICIENT COVERAGE — Batches S684 (9 components + 5 pages) + S689 (4 more) + S697 (4 files: EbayCategoryPicker, ReturnRequestModal, broadcast, feature-flags). All high-traffic error states covered. | — | S683 |
 | JWT httpOnly cookies | ✅ VERIFIED S670 — login worked through proxy, cookies set correctly | — | S664/S667 |
 | COPPA age gate | ✅ S688 VERIFIED — DOB <18 on /register correctly blocked with "You must be 18 or older" error. | — | S664 |
 | Sales/Items SSR JSON-LD | ✅ S689 VERIFIED — JS extraction confirmed `<script type="application/ld+json">` present on pricing/about/faq/index with correct schema types. | — | S664 |
@@ -745,7 +779,37 @@ Seeded 5 auction items on user2's production auction sale. QA run found two bugs
 
 ---
 
-## Recent Sessions (S685–S691)
+## Recent Sessions (S693–S697)
+
+### S697 — WCAG ARIA + 13 Scraper URL Corrections + WA Scraper + Lead Priority + Phase 2 Scrapers + Email Discovery + Settings P1 Fix (COMPLETE — push block provided)
+
+3 parallel dispatch batches. WCAG error ARIA on 4 frontend files. 13 state licensing scraper endpoints corrected (AL AR FL GA IA KY LA ME MS ND SC SD WV). Washington scraper NEW. outreachEmailsCron HOT/WARM/COLD/fallback 4-pass prioritization. AK/NJ/WY Phase 2 pawnbroker scrapers + OK Phase 2 PDF scraper. emailDiscoveryService (3-stage: website scrape → pattern probe → SMTP RCPT TO) + emailDiscoveryJob (cursor-paginated batch). P1 fix: GET /organizers/me missing organizerTypes caused #352/#353 settings fields not persisting on reload. Phase 2 research blocked: AZ/DE/ID/IL/KS/MI/MN/MO all city-level or restricted. IL IDFPR portal needs manual inspection.
+
+---
+
+### S696 — Indiana Licensing Fix + Source Tracking + Matrix Throughput (COMPLETE — push pending)
+
+Indiana scraper conflict resolved (31 merge conflict markers). Source tracking forward-fix (all Foursquare/HERE/OSM upserts now set directoryMostRecentSource). GitHub Actions 6-job parallel matrix for Foursquare + HERE scrapers (301 metros in 10–15min vs 60+ min sequential).
+
+---
+
+### S695 — Google Maps Lockdown + Metro List 100→301 + Admin Stats Fix (COMPLETE — push pending)
+
+Google Places stripped from enrichment.ts. Foursquare confirmed safe (Sandbox plan, no billing). Metro list expanded 100→301 (estate-sale weighted). Admin stat contamination fixed (isUnmanagedListing filter on all 6 real-user queries). Scrape pool admin dashboard added.
+
+---
+
+### S693 — #174 Auction QA Setup + Bid Fix (COMPLETE — push pending)
+
+5 auction items seeded on user2's production sale. maxBidAmount field name fix. draftStatus filter fixed in DB. QA re-run needed after bid fix deploys.
+
+---
+
+### S692 — Backend Crash + Camera Fix (COMPLETE)
+
+Backend crash fixed (MODULE_NOT_FOUND for scraper source files). Camera upload fixed (aws_rek_tagging add-on not active, returning 420 on every upload — removed). uploadToCloudinaryWithRetry wrapper added.
+
+---
 
 ### S691 — 50-State Scraper Audit + Safe Fixes (PARTIAL — push block below)
 
@@ -968,11 +1032,51 @@ Full Google Maps Platform incident response and lockdown. Root cause: monthly Gi
 
 ---
 
-## Next Session — S697
+## Next Session — S698
 
-### Step 0 — Push all pending blocks (do in order)
+### Step 0 — Push S697 block (all in one commit)
 
-**S696 — scraper infrastructure Batch 1 (push this first — note: scrape-foursquare.yml already has matrix, don't push from S695 block):**
+```powershell
+git add packages/frontend/components/EbayCategoryPicker.tsx
+git add packages/frontend/components/ReturnRequestModal.tsx
+git add packages/frontend/pages/admin/broadcast.tsx
+git add packages/frontend/pages/admin/feature-flags.tsx
+git add packages/backend/src/services/scraper/sources/alabamaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/arkansasLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/floridaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/georgiaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/iowaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/kentuckyLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/louisianaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/maineLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/mississippiLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/northdakotaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/southcarolinaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/southdakotaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/westvirginiaLicensingScraper.ts
+git add packages/backend/src/services/scraper/sources/washingtonLicensingScraper.ts
+git add .github/workflows/scrape-washington-licensing.yml
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/src/services/scraper/sources/alaskaPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/newjerseyPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/wyomingPhase2Scraper.ts
+git add .github/workflows/scrape-ak-phase2.yml
+git add .github/workflows/scrape-nj-phase2.yml
+git add .github/workflows/scrape-wy-phase2.yml
+git add packages/backend/src/services/scraper/sources/oklahomaphase2Scraper.ts
+git add .github/workflows/scrape-ok-phase2.yml
+git add packages/backend/src/services/emailDiscoveryService.ts
+git add packages/backend/src/jobs/emailDiscoveryJob.ts
+git add packages/backend/src/routes/organizers.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S697: WCAG ARIA fixes, 13 scraper URL corrections, WA scraper, outreach lead tier priority, AK/NJ/WY/OK Phase2 scrapers, email discovery service, settings GET /me fix"
+.\push.ps1
+```
+
+### Pending S696 and earlier pushes (still outstanding — push before S697 block)
+
+**S696 — scraper infrastructure Batch 1:**
 ```powershell
 git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
 git add packages/backend/src/services/scraper/index.ts
@@ -981,13 +1085,11 @@ git add .github/workflows/scrape-here-places.yml
 git add packages/backend/src/scripts/run-foursquare-places.ts
 git add packages/backend/src/scripts/run-here-places.ts
 git add claude_docs/research/innovation-scraper-throughput-2026-05-08.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
 git commit -m "S696: Indiana licensing fix + source tracking + GitHub Actions matrix throughput"
 .\push.ps1
 ```
 
-**S695 — scraper audit + metro expansion (push second — skip scrape-foursquare.yml, already covered above):**
+**S695 — scraper audit + metro expansion:**
 ```powershell
 git add packages/backend/src/services/scraper/enrichment.ts
 git add packages/backend/src/services/scraper/sources/googlePlaces.ts
