@@ -458,6 +458,11 @@ model Organizer {
   reviewCount       Int?
   reviewVelocity    Float?
 
+  // Email discovery tracking (migration 20260508000002)
+  emailDiscoveryMethod      String?   // 'website_scrape' | 'smtp_probe' | 'pattern_match'
+  emailDiscoveryConfidence  Float?    // 0.0–1.0
+  emailDiscoveredAt         DateTime?
+
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 
