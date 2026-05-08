@@ -85,6 +85,25 @@ interface CloudinaryUrls {
 }
 
 // Upload a single buffer to Cloudinary — returns multi-res URLs
+// Retry wrapper for Cloudinary 420 rate limit errors (rapid-fire mode fires in bursts)
+const uploadToCloudinaryWithRetry = async (buffer: Buffer, folder = 'findasale', maxRetries = 3): Promise<CloudinaryUrls> => {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await uploadToCloudinary(buffer, folder);
+    } catch (err: any) {
+      const is420 = err?.http_code === 420 || err?.status === 420;
+      if (is420 && attempt < maxRetries) {
+        const delay = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
+        console.warn(`[cloudinary] Rate limited (420), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Cloudinary upload failed after max retries');
+};
+
 // Also tracks bandwidth usage (#105)
 // P1 SECURITY FIX: Validates magic bytes before upload, resource_type restricted to 'image'
 const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<CloudinaryUrls> =>
@@ -436,10 +455,10 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Upload image to Cloudinary
+    // Upload image to Cloudinary (with retry for 420 rate limits from rapid-fire bursts)
     let photoUrl: string;
     try {
-      const urls = await uploadToCloudinary(file.buffer);
+      const urls = await uploadToCloudinaryWithRetry(file.buffer);
       photoUrl = urls.original;
     } catch (uploadErr) {
       console.error('[rapidfire] Cloudinary upload failed:', uploadErr);
