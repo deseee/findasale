@@ -4,6 +4,12 @@
  * ADR-073: Directory Scraper Phase 1
  */
 
+/**
+ * ENTITY TYPE: Consumer (homeowner yard sale posts)
+ * Records from this source are NOT organizer businesses and are excluded from outreach.
+ * Consumer sale data is retained for shopper-side discovery value only.
+ * See: outreachEmailsCron.ts — directoryMostRecentSource filter.
+ */
 import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
 import { parseGarageSalesFinderListing, extractEmails } from '../htmlParser';
