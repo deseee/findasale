@@ -368,7 +368,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
 
     setBiddingItemId(itemId);
     try {
-      await api.post(`/items/${itemId}/bids`, { amount });
+      await api.post(`/items/${itemId}/bids`, { maxBidAmount: amount });
       showToast('Bid placed successfully!', 'success');
       setBidAmounts(prev => ({ ...prev, [itemId]: '' }));
       queryClient.invalidateQueries({ queryKey: ['sale', id] });
