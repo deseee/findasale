@@ -50,8 +50,10 @@ export const optionalAuthenticate = async (req: AuthRequest, res: Response, next
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });
     if (user) {
       req.user = user;
-      // Feature #72 Phase 2: Attach roles array from JWT or fallback to single-role array
-      req.user.roles = decoded.roles || (decoded.role ? [decoded.role] : user.roles || []);
+      // SECURITY FIX S692: Always use DB roles — never JWT roles.
+      // JWT roles go stale immediately when an admin changes a user's role.
+      // DB is the single source of truth for authorization.
+      req.user.roles = user.roles || [];
     }
   } catch {
     // Invalid/expired token — proceed as unauthenticated, do not block
@@ -201,8 +203,8 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 
     // Attach user to request
     req.user = user;
-    // Feature #72 Phase 2: Attach roles array from JWT or fallback to single-role array
-    req.user.roles = decoded.roles || (decoded.role ? [decoded.role] : user.roles || []);
+    // SECURITY FIX S692: Always use DB roles — never JWT roles (same fix as optionalAuthenticate).
+    req.user.roles = user.roles || [];
     // Attach organizer profile for tier checks
     if (user.organizer) {
       req.user.organizerProfile = user.organizer;

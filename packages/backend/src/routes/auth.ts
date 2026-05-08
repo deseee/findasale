@@ -281,7 +281,8 @@ router.post('/logout', (req: AuthRequest, res: Response) => {
 });
 
 // P0 Security Fix: POST /auth/refresh — issues new access token using refresh token
-router.post('/refresh', (req: AuthRequest, res: Response) => {
+// SECURITY FIX S692: Read fresh role/roles from DB — never re-bake stale JWT roles into new token
+router.post('/refresh', async (req: AuthRequest, res: Response) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
     if (!refreshToken) {
@@ -295,12 +296,16 @@ router.post('/refresh', (req: AuthRequest, res: Response) => {
 
     const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || jwtSecret) as any;
 
+    // Always read role from DB so role changes take effect on next refresh cycle
+    const freshUser = await prisma.user.findUnique({ where: { id: payload.id }, select: { role: true, roles: true } });
+    if (!freshUser) return res.status(401).json({ error: 'User not found' });
+
     const newAccessToken = jwt.sign(
       {
         id: payload.id,
         email: payload.email,
-        role: payload.role,
-        roles: payload.roles || [payload.role],
+        role: freshUser.role,
+        roles: freshUser.roles || [freshUser.role],
       },
       jwtSecret,
       { expiresIn: '15m' }
@@ -308,7 +313,7 @@ router.post('/refresh', (req: AuthRequest, res: Response) => {
 
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
-      secure: true, // P0 Security Fix Item 7: Always require HTTPS
+      secure: true,
       sameSite: 'lax',
       path: '/',
       maxAge: 15 * 60 * 1000, // 15 minutes
@@ -318,7 +323,7 @@ router.post('/refresh', (req: AuthRequest, res: Response) => {
   } catch (error) {
     // Refresh token invalid or expired — clear both cookies and return 401
     res.clearCookie('accessToken', { path: '/' });
-    res.clearCookie('refreshToken', { path: '/' }); // P0 FIX: match new path '/'
+    res.clearCookie('refreshToken', { path: '/' });
     return res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 });
