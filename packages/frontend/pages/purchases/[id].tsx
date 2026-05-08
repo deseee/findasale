@@ -242,7 +242,7 @@ const PurchaseConfirmationPage = () => {
               <div className="flex justify-between items-center">
                 <span className="text-gray-600 dark:text-gray-400">Amount Paid</span>
                 <span className="text-lg font-bold text-gray-900 dark:text-white">
-                  ${purchase.amount.toFixed(2)}
+                  ${(isAuction && item?.auctionStartPrice ? item.auctionStartPrice * 1.05 : purchase.amount).toFixed(2)}
                 </span>
               </div>
               {purchase.stripePaymentIntentId && (
