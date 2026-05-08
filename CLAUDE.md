@@ -87,6 +87,8 @@ Write-without-read is a rule violation, not a guideline.
 stops: (a) needs Patrick's input, (b) ambiguous failure, (c) batch complete.
 Do not ask "shall I continue?" mid-batch.
 
+**QA ceiling rule:** If the Blocked/Unverified Queue in STATE.md has ≥8 items, the next session MUST be a dedicated QA session. No new feature dev without Patrick explicit sign-off. Check the queue count at every session start. This rule has been recommended 3 consecutive months (March, April, May 2026) — it is now mandatory. No exceptions.
+
 **Roadmap update gate (two triggers only):**
 1. **Session ships a new feature** → add or update the roadmap entry at wrap. Include `claude_docs/strategy/roadmap.md` in the push block.
 2. **Chrome QA confirms a feature** → update the roadmap Chrome QA column immediately (not deferred to wrap). Include roadmap.md in that push block.
@@ -270,6 +272,8 @@ Each dev agent prompt MUST include:
 2. Knock-on effects: "After implementing, grep for any other file that references the old behavior and fix it or flag it."
 3. TS check gate: `cd packages/frontend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules` — zero errors required before returning.
 4. Changed-files list: "Return an explicit list of every file you created or modified."
+5. **Auth-touching work ONLY:** Before moving or changing any NextAuth handler file, run `grep -r "router\.\(get\|post\|put\|delete\).*'/auth/" packages/backend/src/routes/` and confirm no backend routes share the new catch-all path prefix. If they do, use `next.config.js` `beforeFiles` rewrites instead of moving the handler. (See SH-020.)
+6. **Bulk-edit work (>20 files) ONLY:** Split into batches of ≤10 files. Run `npx tsc --noEmit --skipLibCheck` between batches. Do not proceed to next batch if errors exist. (See SH-021.)
 
 **Step 4 — Post-batch processing (before next dispatch):**
 When agents return, do all four before dispatching again:
@@ -459,6 +463,9 @@ list. After dev returns, provide the push block, then immediately write QA dispa
 ## 12. Session Wrap
 
 Before ending any session:
+
+**File placement pre-check (fires before doc update):**
+If any new file was created in `claude_docs/` this session: verify each file's path against `claude_docs/operations/file-creation-schema.md`. Files in the wrong location must be noted in the push block comment. Files that belong in a subdirectory must NOT be left in `claude_docs/` root. This check prevents the accumulating root-violation debt documented in monthly retrospectives.
 
 **Doc Update Order (mandatory at every session wrap — in this exact order):**
 1. Update STATE.md (source of truth for session state; now includes "## Recent Sessions" section with 5 most recent entries and "## Next Session" section)

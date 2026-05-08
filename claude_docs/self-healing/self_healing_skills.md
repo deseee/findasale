@@ -480,3 +480,90 @@ curl -I "https://res.cloudinary.com/<cloud>/image/upload/l_text:Arial_30,co_whit
 ```
 
 **Confidence:** HIGH — Cloudinary transformation errors are silent at write-time; only URL testing catches them. Pattern is certain to recur whenever new text overlays or custom fonts are added.
+
+---
+
+## SH-020: Auth handler relocation breaks backend route catch-all
+
+**Trigger:** After moving a NextAuth handler file (e.g., from `/api/auth/[...nextauth].ts` to `/api/oauth/[...nextauth].ts` or vice versa), backend routes that share the same path prefix return 400 or are intercepted by the catch-all. Every login attempt fails.
+
+**Environment:** `packages/frontend/pages/api/auth/` or `packages/frontend/pages/api/oauth/` — any NextAuth handler relocation.
+
+**Pattern:** S667 moved NextAuth to `/api/oauth/`. S671 a general-purpose agent moved it back to `/api/auth/` — which caused the NextAuth catch-all to intercept `/api/auth/refresh`, `/api/auth/me`, and `/api/auth/logout` (all backend Railway routes that proxy through Next.js). Result: every login attempt returned NextAuth 400 instead of the Railway response. Cascaded into S671→S672→S673→S674 repair chain (~4 sessions, ~150k tokens).
+
+**Steps (pre-dispatch gate — run BEFORE moving the handler):**
+1. List all backend auth routes: `grep -r "router\.\(get\|post\|put\|delete\).*'/auth/" packages/backend/src/routes/ | head -30`
+2. Compare the new catch-all path against all backend routes that share the prefix.
+3. If any backend route matches the catch-all prefix: do NOT move the handler file. Use `beforeFiles` rewrites in `next.config.js` instead (these run before filesystem routes, protecting the backend paths).
+4. After any handler move: verify `curl -I https://finda.sale/api/auth/refresh` returns 200/401 (backend Railway response), NOT a NextAuth JSON error.
+
+**Fix (if already broken):**
+1. Check if the NextAuth catch-all is intercepting a backend route: compare the catch-all path against any route returning an unexpected NextAuth response.
+2. Add `beforeFiles` rewrite in `next.config.js` for each affected backend path, pointing to the Railway proxy.
+3. Move the handler back to the previous location OR use `beforeFiles` to protect the backend paths at the new location.
+
+**Confidence:** HIGH — catch-all routing is deterministic in Next.js; any `[...nextauth].ts` at a given path WILL intercept all sub-paths. The pattern will recur on any handler path migration.
+
+---
+
+## SH-021: Bulk-edit agent corrupts files when scope > 20 files
+
+**Trigger:** After a "apply X to all files in the codebase" agent pass, Vercel or Railway build fails. TypeScript errors appear in files that weren't the primary targets. Files have null bytes, truncated content, or syntactically broken constructs.
+
+**Environment:** Any bulk-edit dispatch targeting the full frontend codebase (e.g., "add aria-labels to all icon buttons", "add X import to all files", "replace X pattern across all pages").
+
+**Pattern:** S682 — WCAG bulk-label agent modified ~86 files in one pass, introducing 5 distinct corruption patterns: (1) arrow function splits (`=` and `>` separated with aria-label inserted between them), (2) self-closing tag splits (`/` and `>` separated), (3) Lucide icon alt props added (SVG React components don't accept `alt`), (4) duplicate aria-labels on elements that already had one, (5) 23 files truncated mid-expression + 13 files with null bytes appended. Entire S682 session consumed by repair.
+
+**Prevention:**
+1. Never dispatch "apply X to all files" without a file count estimate first: `find packages/frontend/src packages/frontend/pages packages/frontend/components -name "*.tsx" | wc -l`
+2. If file count > 20: split into batches of ≤10 files per agent call, with `npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS"` between each batch. Do NOT proceed to next batch if TS errors exist.
+3. Scope the dispatch with explicit file lists (not "all files matching pattern").
+
+**Repair commands (if corruption found):**
+```python
+import re, os
+
+for root, dirs, files in os.walk('packages/frontend'):
+    for fname in files:
+        if not fname.endswith(('.tsx', '.ts')): continue
+        path = os.path.join(root, fname)
+        with open(path, 'r', errors='replace') as f:
+            content = f.read()
+        # Fix null bytes
+        content = content.replace('\x00', '')
+        # Fix arrow function splits (= followed by > on next token)
+        content = re.sub(r'=\s*\n\s*>', '=>', content)
+        # Fix self-closing splits (/ followed by >)
+        content = re.sub(r'/\s*\n\s*>', '/>', content)
+        with open(path, 'w') as f:
+            f.write(content)
+```
+For truncated files: `git show <last-good-commit>:<file-path> > <file-path>` restores from git.
+
+**Confidence:** HIGH — token budget limits cause agents to drop partial edits on file #N+1 when token limit is hit mid-batch. The larger the scope, the higher the corruption probability.
+
+---
+
+## SH-022: Schema field missing from production DB (silent P0)
+
+**Trigger:** Railway logs show `column "X" does not exist` or `Unknown column` on a specific endpoint. That endpoint crashes for all users. The schema.prisma has the field; the migration was created but never deployed to Railway.
+
+**Environment:** Any new Prisma migration file added to `packages/database/prisma/migrations/`.
+
+**Pattern:** S668 (`Item.moderationStatus` missing — `auctionAutoCloseCron` crashed every 5 minutes). S669 (`Organizer.stripeOnboarded` missing — crashed every single login). Both were schema fields added in migration files that were committed and pushed but where `prisma migrate deploy` was never run against the Railway database. Code ran with new field references; DB had no such column.
+
+**Root cause:** The Railway deploy (auto-triggered on push) deploys new code that references new fields, but Railway does NOT run `prisma migrate deploy` — that is always a manual step.
+
+**Steps (mandatory after any schema change):**
+1. Verify the migration is pending on Railway BEFORE pushing schema-dependent code:
+   ```powershell
+   # From packages/database/
+   $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+   npx prisma migrate status
+   ```
+2. Run migration FIRST, deploy code SECOND. Never reverse the order.
+3. If code is already live and DB is behind: run `prisma migrate deploy` immediately. Restart Railway service to clear crashed state.
+
+**Detection:** Check Railway logs (`railway logs --service backend --tail 50`) — look for `column "X" does not exist`. This is always a missing migration, not a code bug.
+
+**Confidence:** HIGH — two confirmed instances in S668/S669 within the same week. The failure mode is structurally guaranteed whenever code and migration deployments are ordered incorrectly.

@@ -5,6 +5,14 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-05-08 (S687) — Scraper Source Allowlist Decisions
+
+**Status:** LOCKED
+**Made by:** Competitor research agent, confirmed by Patrick (implicit — shipped to Railway)
+**Rationale:** Three data sources assessed before S687 scrapers were built. EstateSales.org — **PROHIBITED** (explicit anti-scraping clause in ToS). EstatePros — **PROHIBITED** (similar anti-scraping language). Sale Seeker (thesaleseeker.com) — **PERMITTED** (no ToS found as of S687). OSM/Overpass API — **PERMITTED** (open data license, standard API usage). Indiana mylicense.in.gov — **PERMITTED** (public government data). DataForSEO — **SKIPPED** ($0.01–0.05/record vs HERE's $0.0005, cost-prohibitive). Do not re-add EstateSales.org or EstatePros to any scraper candidate list without legal clearance.
+
+---
+
 ## 2026-05-02 (S626) — Organizer Acquisition Pipeline Locked (7 sub-decisions)
 
 **Status:** LOCKED
