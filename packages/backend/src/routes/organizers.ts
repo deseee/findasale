@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../index';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, AuthRequest, checkTierLapse } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
 import { exportOrganizer } from '../controllers/exportController';
 import { getCsvExportHandler } from '../controllers/csvExportController';
@@ -416,7 +416,7 @@ router.post('/me/onboarding-complete', authenticate, async (req: AuthRequest, re
 
 // Authenticated: get current organizer's own profile + tier data (Phase 22)
 // Must be registered before /:id to avoid being swallowed by the wildcard
-router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
     if (!req.user || !hasOrganizerRole) {
@@ -481,9 +481,10 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     const discountExpiry = (organizer as any).referralDiscountExpiry as Date | null;
     const referralDiscountActive = discountExpiry != null && discountExpiry > new Date();
 
-    // Feature #75: Include subscription lapse status — compute from actual subscription status, not cached JWT
-    // Subscription is active only if status is 'active' or 'trialing'. Any other status (past_due, canceled, null) means lapsed.
-    const subscriptionLapsed = organizer.subscriptionStatus !== 'active' && organizer.subscriptionStatus !== 'trialing';
+    // Feature #75: Include subscription lapse status — use checkTierLapse middleware result for consistent
+    // single source of truth (same logic as auth.ts /me and JWT middleware). Avoids split-brain between
+    // subscriptionStatus field and UserRoleSubscription.tierLapsedAt.
+    const subscriptionLapsed = req.user.subscriptionLapsed ?? false;
 
     res.json({
       id: organizer.id,
