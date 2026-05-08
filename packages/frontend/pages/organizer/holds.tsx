@@ -94,7 +94,7 @@ const OrganizerHoldsPage = () => {
   }
 
   // Fetch holds with filters
-  const { data: holds = [], isLoading: holdsLoading } = useQuery({
+  const { data: holds = [], isLoading: holdsLoading, isError: holdsError } = useQuery({
     queryKey: ['organizer-holds', saleFilter, sortBy],
     queryFn: async () => {
       const params = new URLSearchParams({ sort: sortBy });
@@ -107,7 +107,7 @@ const OrganizerHoldsPage = () => {
   });
 
   // Fetch organizer's sales for filter dropdown
-  const { data: salesData } = useQuery({
+  const { data: salesData, isError: salesError } = useQuery({
     queryKey: ['organizer-sales-list', user?.id],
     queryFn: async () => {
       const response = await api.get('/sales/mine');
@@ -198,6 +198,13 @@ const OrganizerHoldsPage = () => {
       </Head>
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-5xl mx-auto px-4 py-8">
+          {/* Error banner */}
+          {(holdsError || salesError) && (
+            <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 p-4 mb-6 text-sm text-red-700 dark:text-red-400">
+              Something went wrong loading your holds. Please refresh to try again.
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex items-center gap-4 mb-6">
             <Link href="/organizer/dashboard" className="text-amber-600 dark:text-amber-500 hover:text-amber-800 dark:hover:text-amber-400 text-sm">

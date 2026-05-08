@@ -54,7 +54,7 @@ const MarkdownCyclesPage = () => {
   });
 
   // Fetch markdown cycles
-  const { data: cycles = [], isLoading } = useQuery({
+  const { data: cycles = [], isLoading, isError: cyclesError } = useQuery({
     queryKey: ['markdown-cycles'],
     queryFn: async () => {
       const response = await api.get('/markdown-cycles');
@@ -63,7 +63,7 @@ const MarkdownCyclesPage = () => {
   });
 
   // Fetch organizer's sales for dropdown
-  const { data: sales = [] } = useQuery({
+  const { data: sales = [], isError: salesError } = useQuery({
     queryKey: ['organizer-sales-for-markdown'],
     queryFn: async () => {
       const response = await api.get('/organizer/sales');
@@ -284,6 +284,13 @@ const MarkdownCyclesPage = () => {
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
         <div className="max-w-4xl mx-auto px-4">
+          {/* Error banner */}
+          {(cyclesError || salesError) && (
+            <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 p-4 mb-6 text-sm text-red-700 dark:text-red-400">
+              Something went wrong loading your markdown cycles. Please refresh to try again.
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>

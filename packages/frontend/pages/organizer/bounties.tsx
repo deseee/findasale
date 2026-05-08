@@ -91,7 +91,7 @@ const OrganizerBountiesPage = () => {
     return null;
   }
 
-  const { data: sales } = useQuery<Sale[]>({
+  const { data: sales, isError: salesError } = useQuery<Sale[]>({
     queryKey: ['organizer-sales-list'],
     queryFn: async () => {
       const res = await api.get('/sales/mine');
@@ -104,7 +104,7 @@ const OrganizerBountiesPage = () => {
     if (sales?.length && !selectedSaleId) setSelectedSaleId(sales[0].id);
   }, [sales]);
 
-  const { data: bounties = [], isLoading: bountiesLoading } = useQuery<Bounty[]>({
+  const { data: bounties = [], isLoading: bountiesLoading, isError: bountiesError } = useQuery<Bounty[]>({
     queryKey: ['bounties', selectedSaleId],
     queryFn: async () => {
       const res = await api.get(`/bounties/sale/${selectedSaleId}`);
@@ -113,7 +113,7 @@ const OrganizerBountiesPage = () => {
     enabled: !!selectedSaleId,
   });
 
-  const { data: localBountiesData, isLoading: localBountiesLoading } = useQuery({
+  const { data: localBountiesData, isLoading: localBountiesLoading, isError: localBountiesError } = useQuery({
     queryKey: ['local-bounties', searchRadius, searchQuery],
     queryFn: async () => {
       const res = await api.get('/bounties/local', {
@@ -124,7 +124,7 @@ const OrganizerBountiesPage = () => {
     enabled: activeTab === 'browse',
   });
 
-  const { data: submissionsData, isLoading: submissionsLoading } = useQuery({
+  const { data: submissionsData, isLoading: submissionsLoading, isError: submissionsError } = useQuery({
     queryKey: ['organizer-submissions'],
     queryFn: async () => {
       const res = await api.get('/bounties/organizer/submissions');
@@ -262,6 +262,13 @@ const OrganizerBountiesPage = () => {
           {/* ── Tab: Browse Local Bounties ── */}
           {activeTab === 'browse' && (
             <div className="space-y-4">
+              {/* Error banner */}
+              {localBountiesError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 p-4 mb-4 text-sm text-red-700 dark:text-red-400">
+                  Something went wrong loading bounties. Please refresh to try again.
+                </div>
+              )}
+
               {/* Search bar + radius selector */}
               <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -362,6 +369,13 @@ const OrganizerBountiesPage = () => {
           {/* ── Tab: Your Sale Requests (existing functionality) ── */}
           {activeTab === 'requests' && (
             <div className="space-y-4">
+              {/* Error banner */}
+              {(bountiesError || salesError) && (
+                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 p-4 mb-4 text-sm text-red-700 dark:text-red-400">
+                  Something went wrong loading your bounties. Please refresh to try again.
+                </div>
+              )}
+
               {/* Compact sale selector */}
               <div className="flex items-center gap-3">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Sale:</label>
@@ -492,6 +506,13 @@ const OrganizerBountiesPage = () => {
           {/* ── Tab: Your Submissions ── */}
           {activeTab === 'submissions' && (
             <div className="space-y-4">
+              {/* Error banner */}
+              {submissionsError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 p-4 mb-4 text-sm text-red-700 dark:text-red-400">
+                  Something went wrong loading your submissions. Please refresh to try again.
+                </div>
+              )}
+
               {submissionsLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 dark:border-amber-400" />

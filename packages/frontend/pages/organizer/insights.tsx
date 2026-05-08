@@ -145,7 +145,7 @@ const OrganizerInsightsPage = () => {
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
   // Fetch aggregate insights data — hooks before any conditional return
-  const { data: insights, isLoading: insightsLoading, error } = useQuery({
+  const { data: insights, isLoading: insightsLoading, error, isError: insightsError } = useQuery({
     queryKey: ['organizer-insights', user?.id],
     queryFn: async () => {
       const response = await api.get(`/insights/organizer`);
@@ -155,7 +155,7 @@ const OrganizerInsightsPage = () => {
   });
 
   // Fetch per-sale performance metrics
-  const { data: metricsData, isLoading: metricsLoading } = useQuery({
+  const { data: metricsData, isLoading: metricsLoading, isError: metricsError } = useQuery({
     queryKey: ['performance-metrics', selectedSaleId, dateRange, customFrom, customTo],
     queryFn: async () => {
       if (!selectedSaleId) return null;
@@ -184,7 +184,7 @@ const OrganizerInsightsPage = () => {
   });
 
   // Fetch organizer's sales to pre-select first sale
-  const { data: sales = [] } = useQuery({
+  const { data: sales = [], isError: salesError } = useQuery({
     queryKey: ['organizer-sales-insights'],
     queryFn: async () => {
       const response = await api.get('/sales/mine');
@@ -277,6 +277,12 @@ const OrganizerInsightsPage = () => {
         </div>
 
         <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+          {/* Error banner */}
+          {(insightsError || metricsError || salesError) && (
+            <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 p-4 text-sm text-red-700 dark:text-red-400">
+              Something went wrong loading your insights. Please refresh to try again.
+            </div>
+          )}
           {/* Title + Sale Filter */}
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
