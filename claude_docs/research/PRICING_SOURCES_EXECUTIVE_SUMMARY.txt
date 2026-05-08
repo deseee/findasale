@@ -1,0 +1,193 @@
+FindA.Sale Multi-Source Pricing Engine Research
+EXECUTIVE SUMMARY FOR PATRICK
+April 25, 2026
+
+================================================================================
+THE SITUATION
+================================================================================
+
+PriceCharting + eBay covers ~15-20% of estate sale listings (collectibles only).
+Furniture, tools, decor, appliances have different pricing patterns entirely.
+
+Problem: AI pricing is off by 50-300% on non-collectible items because there's
+no single source covering estate sales like EBTH or auctions.
+
+ItsDeductible (Intuit's FMV database) is DEAD as of October 2025.
+Xactware is enterprise insurance-only (not accessible).
+You NEED 4-5 integrated sources to get reasonable coverage.
+
+================================================================================
+THE SOLUTION: 3-TIER ENGINE
+================================================================================
+
+TIER 1 - HIGH CONFIDENCE (Real Sold Prices)
+------------------------------------------
+1. PriceCharting (existing) - collectibles/games
+2. eBay Browse API (existing) - broad coverage
+3. EBTH / MaxSold Scraper (BUILD THIS) - estate sale furniture/decor ← BIGGEST GAP
+4. Keepa API (add) - electronics/appliances with ASIN
+
+TIER 2 - GOOD PROXY (Recent Market Data)
+----------------------------------------
+1. GSA Auctions API (add, FREE) - tools/equipment/office furniture
+2. B-Stock API (if partnership) - appliances/electronics/returns baseline
+3. OfferUp Scraper (optional) - local furniture comps
+
+TIER 3 - BASELINE/FLOOR (Category Estimates)
+---------------------------------------------
+1. Salvation Army Donation Guide (free) - furniture/appliances generic baseline
+2. Storage Treasures (free) - distressed furniture floor pricing
+3. The Real Real Report (free) - luxury goods depreciation curves
+4. Michigan Probate Records (one-time research) - estate appraisal calibration
+
+================================================================================
+WHAT TO BUILD FIRST (Priority Order)
+================================================================================
+
+MONTH 1-2: Quick Wins
+  1. EBTH Scraper (Tier 1) - Your single biggest blind spot
+     - Cost: $50-100/month (Apify)
+     - Effort: 3-4 days dev time
+     - ROI: Covers estate sale pricing for furniture/decor/tools
+     - Implementation: Weekly ingestion of EBTH auction results
+
+  2. Keepa API (Tier 1) - Easy win for ASIN-tagged items
+     - Cost: $20-30/month
+     - Effort: 2-3 days
+     - ROI: Electronics/appliances with barcode/ASIN
+
+  3. Donation Guide Fallback (Tier 3) - Safety net
+     - Cost: Free
+     - Effort: 1 day
+
+MONTH 3-4: Medium Effort
+  4. GSA Auctions API (Tier 2) - Free government surplus
+     - Cost: $0
+     - Effort: 2 days
+     - ROI: Tools/equipment/office furniture
+
+  5. eBay Enhancement (existing)
+     - Cost: Existing
+     - Effort: 1-2 days
+     - Improve sold listing filtering
+
+MONTH 5-6: Strategic
+  6. B-Stock Partnership (Tier 2) - Optional
+     - Cost: $500-2,000/month
+     - ROI: Baseline for returns/new appliances
+     - Skip if budget tight (not critical for launch)
+
+  7. Michigan Probate Study (Tier 3) - Research
+     - Cost: Free (one-time, 3-5 days research)
+     - ROI: Calibrated depreciation curves for furniture
+
+================================================================================
+COST BREAKDOWN
+================================================================================
+
+Minimum viable setup: $70-130/month
+  - Keepa API: $20-30/month
+  - EBTH Scraper: $50-100/month
+
+With B-Stock: $570-2,130/month (nice-to-have, not critical)
+
+This gets you 80% of the way there. B-Stock is valuable but not essential for launch.
+
+================================================================================
+WEIGHTING ALGORITHM (How to Combine Sources)
+================================================================================
+
+Collectible item?
+  → PriceCharting 60% + eBay 40%
+
+Has ASIN + Keepa comps?
+  → Keepa 50% + eBay 50%
+
+Furniture/decor/tools + EBTH comps?
+  → EBTH 70% + eBay 30%
+
+Tools/equipment + GSA comps?
+  → GSA 40% + eBay 60%
+
+No comps found?
+  → Salvation Army Donation Guide (floor price)
+
+Key principle: More sources = higher confidence. Always prefer Tier 1 (sold prices)
+over Tier 2 (market data) over Tier 3 (estimates).
+
+================================================================================
+CRITICAL GOTCHAS
+================================================================================
+
+1. SOLD ≠ ASKING
+   - eBay "sold listings" are asking prices with shipping
+   - EBTH/auctions are TRUE hammer prices (real market)
+   - Don't weight them equally
+
+2. CATEGORY SEGMENTATION MATTERS
+   - Furniture depreciates 20-30%/year
+   - Electronics depreciate 40-60%/year
+   - Tools depreciate 5-10%/year (brand-name tools hold value)
+   - Don't cross-apply pricing across categories
+
+3. DEPRECIATION CURVES ARE YOUR BIGGEST NEED
+   - Build via Michigan probate study or manual research
+   - A couch in "good condition" might be $200-400 depending on age/style
+   - Condition assessment is critical (off by 1 level = 30-50% pricing error)
+
+4. ESTATE SALES HAVE UPWARD BIAS
+   - EBTH/MaxSold are high-end estate sales (estate professionals)
+   - Yard sale pricing can be 20-40% lower
+   - Account for this in category-specific curves
+
+5. LIQUIDATION CONTEXT DISTORTS PRICES
+   - B-Stock/storage auctions = distressed sellers
+   - Don't apply to normal secondary market
+   - Use only for specific categories (electronics returns, bulk tools)
+
+================================================================================
+SOURCES TO SKIP (Dead Ends)
+================================================================================
+
+- Xactware: Enterprise insurance-only, no API, not accessible
+- ItsDeductible: DEAD (shut down October 2025)
+- Invaluable: Art/antiques only, partner API only, too niche
+- WorthPoint: Antiques only, no API, expensive subscription
+- Kovels: Redundant with WorthPoint, no API
+- Replacements.com: China/flatware only, too niche
+- NARTS/NAA: No pricing data
+- Allied/United/Atlas movers: Data is proprietary, not public
+- Poshmark/Depop: No official API, TOS-risky scraping, asking prices only
+- ThredUp/The Real Real: Aggregate reports only, no item-level data
+
+================================================================================
+RECOMMENDED READING
+================================================================================
+
+Full technical research document (with all sources and detailed analysis):
+  → claude_docs/research/pricing-engine-multi-source-research.md
+
+This summary + full doc should give you everything needed to brief findasale-dev
+on Phase 1 implementation.
+
+================================================================================
+BOTTOM LINE
+================================================================================
+
+Start with EBTH. That's your single biggest gap.
+
+Then Keepa (quick win).
+
+Then GSA (free, good for tools).
+
+Then B-Stock IF budget allows.
+
+Everything else is either free (Salvation Army, Michigan records, GSA) or
+not worth the effort (Invaluable, WorthPoint, private APIs).
+
+Total cost to launch: $70-130/month gets you 80% there.
+
+The real work is building good depreciation curves (use Michigan probate
+records one-time study to calibrate).
+
+-END SUMMARY-

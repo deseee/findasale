@@ -1,0 +1,17 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>FindA.Sale icon — orange pin on white</title>
+  <rect width="512" height="512" rx="110" fill="#FFFFFF" stroke="#E5E5E5" stroke-width="2"/>
+  <svg x="106" y="40" width="300" height="432" viewBox="180 35 330 460">
+    <path d="M 340 490 L 208 276 A 155 155 0 1 1 472 276 Z" fill="#F97316" stroke="#111111" stroke-width="4" stroke-linejoin="round"/>
+    <polygon points="340,208 319,157 340,73 361,157" fill="#111111"/>
+    <polygon points="340,208 391,187 475,208 391,229" fill="#111111"/>
+    <polygon points="340,208 361,259 340,343 319,259" fill="#111111"/>
+    <polygon points="340,208 289,229 205,208 289,187" fill="#111111"/>
+    <polygon points="340,208 361,157 436,113 391,187" fill="#FFFFFF"/>
+    <polygon points="340,208 391,229 436,304 361,259" fill="#FFFFFF"/>
+    <polygon points="340,208 319,259 244,304 289,229" fill="#FFFFFF"/>
+    <polygon points="340,208 289,187 244,113 319,157" fill="#FFFFFF"/>
+    <circle cx="340" cy="208" r="32" fill="#111111"/>
+    <circle cx="340" cy="208" r="21" fill="#FFFFFF"/>
+  </svg>
+</svg>

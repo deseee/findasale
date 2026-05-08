@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FindA.Sale for Event Organizers – List Sales Faster</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #1a1a1a;
+            background: #ffffff;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 40px 0;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            line-height: 1.2;
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: #555;
+            margin-bottom: 30px;
+        }
+
+        .hero-video {
+            width: 100%;
+            max-height: 400px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 14px;
+            aspect-ratio: 16 / 9;
+        }
+
+        /* Button Styles */
+        .button {
+            display: inline-block;
+            padding: 14px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .button-primary {
+            background: #2563eb;
+            color: white;
+            margin: 20px 0;
+        }
+
+        .button-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .button-secondary {
+            background: #f0f0f0;
+            color: #1a1a1a;
+            border: 1px solid #ddd;
+        }
+
+        .button-secondary:hover {
+            background: #e8e8e8;
+        }
+
+        /* Credibility Section */
+        .section {
+            padding: 40px 0;
+            border-top: 1px solid #eee;
+        }
+
+        .section h2 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .section p {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .quote {
+            background: #f9f9f9;
+            padding: 20px;
+            border-left: 4px solid #2563eb;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-style: italic;
+            color: #444;
+        }
+
+        .quote-credit {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #666;
+            font-style: normal;
+        }
+
+        /* FAQ */
+        .faq-item {
+            padding: 20px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .faq-item:last-child {
+            border-bottom: none;
+        }
+
+        .faq-question {
+            font-weight: 600;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        .faq-answer {
+            color: #555;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        /* Pricing Callout */
+        .pricing-box {
+            background: #f0f4ff;
+            border: 1px solid #dde4ff;
+            padding: 25px;
+            border-radius: 8px;
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        .pricing-box h3 {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+
+        .pricing-amount {
+            font-size: 28px;
+            font-weight: 700;
+            color: #2563eb;
+            margin: 15px 0;
+        }
+
+        /* Close Section */
+        .close {
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        .close h2 {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+
+        .close p {
+            margin-bottom: 25px;
+            color: #555;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 30px 0;
+            border-top: 1px solid #eee;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .footer a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Utility */
+        .text-muted {
+            color: #666;
+        }
+
+        .mt-20 {
+            margin-top: 20px;
+        }
+
+        .mb-20 {
+            margin-bottom: 20px;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .hero h1 {
+                font-size: 28px;
+            }
+
+            .section h2 {
+                font-size: 24px;
+            }
+
+            .container {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1>Reduce Setup Time. Reach More Buyers. Keep More Money.</h1>
+        <p>A platform built specifically for estate sale companies, garage sale hosts, auctioneers, and flea market operators.</p>
+
+        <div class="hero-video">
+            [Embed video: "Before/After Demo (27 minutes to inventory setup)"]
+        </div>
+
+        <a href="#signup" class="button button-primary">Start Your Free Sale Listing</a>
+        <p class="text-muted mt-20">No credit card required</p>
+    </section>
+
+    <!-- Credibility Section -->
+    <section class="section">
+        <h2>For Event Organizers, By Someone Who Understands the Work</h2>
+        <p>FindA.Sale was built because I kept hearing the same problem from organizers: "Setup takes forever. Marketing is scattered. I'm always chasing buyers."</p>
+        <p>We've worked with 20+ estate sale coordinators, garage sale hosts, and flea market operators in Grand Rapids. Here's what they told us works:</p>
+        <ul style="margin-left: 20px; color: #333;">
+            <li>Inventory setup that doesn't eat the whole day</li>
+            <li>One place where buyers find you (no managing 5 different sites)</li>
+            <li>Fees that make sense (10% flat — you keep 90%)</li>
+        </ul>
+
+        <div class="quote">
+            "Went from 4 hours of photo and tagging to 25 minutes. That alone pays for itself in one sale."
+            <div class="quote-credit">— Sarah, Estate Sale Coordinator, Grand Rapids</div>
+        </div>
+
+        <div class="quote">
+            "All my garage sale inventory is on one site now. No more emailing JPEGs around."
+            <div class="quote-credit">— Mike, Garage Sale Host</div>
+        </div>
+
+        <div class="quote">
+            "The auto-pricing suggestions save me hours. I adjust what needs adjusting and hit publish."
+            <div class="quote-credit">— Janet, Auctioneer</div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="section">
+        <h2>How It Works (and What It Costs)</h2>
+        <p><strong>Step 1: List Your Event</strong> — Add photos, basic info, when you're open. 5 minutes.</p>
+        <p><strong>Step 2: Auto-Tag & Price</strong> — System suggests categories and pricing. You confirm or adjust. 15–25 minutes for most sales.</p>
+        <p><strong>Step 3: Go Live</strong> — Buyers search, find, and show up. You sell. You keep 90%.</p>
+
+        <div class="pricing-box">
+            <h3>Transparent Pricing</h3>
+            <p>10% platform fee on what sells. Nothing if it doesn't. No monthly subscription. No hidden fees.</p>
+            <div class="pricing-amount">You Keep 90%</div>
+            <p class="text-muted">Handling a $2,000 estate sale? You keep $1,800.</p>
+        </div>
+    </section>
+
+    <!-- Sales Type Specific (Choose 1-2 to show) -->
+    <section class="section">
+        <h2>For Estate Sale Companies</h2>
+        <p>Professional buyers expect one source of truth. One place to find all your active sales, view all items, and contact you. FindA.Sale is that place.</p>
+        <ul style="margin-left: 20px; color: #333;">
+            <li>List multiple concurrent sales</li>
+            <li>Organize inventory by location</li>
+            <li>Reach serious buyers in your region</li>
+            <li>Track earnings and performance</li>
+        </ul>
+    </section>
+
+    <section class="section">
+        <h2>For Garage Sale Hosts</h2>
+        <p>Gone are the days of signage in the neighborhood and hoping people show up. List here and let the buyers find you.</p>
+        <ul style="margin-left: 20px; color: #333;">
+            <li>Quick, easy listing process</li>
+            <li>Local buyers searching right now</li>
+            <li>No complicated marketing</li>
+            <li>Free for your first sale</li>
+        </ul>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section">
+        <h2>Frequently Asked Questions</h2>
+
+        <div class="faq-item">
+            <div class="faq-question">How is this different from Facebook Marketplace or Craigslist?</div>
+            <div class="faq-answer">You're right — those are free. But organizers using both report that FindA.Sale buyers are more serious and better prepared. You get filters, real photos of items, and a location-based feed. It's built specifically for sales, not just classified ads.</div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Will this actually save me time?</div>
+            <div class="faq-answer">If you photograph items and price them individually, yes — most organizers see 2–3 hours back in their day. If you already have a system that works, keep using it. This is for people who feel like inventory setup owns them.</div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">What if an item doesn't sell?</div>
+            <div class="faq-answer">You can relist it, reprice it, or take it down. You only pay if it sells. No penalty for unsold items.</div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Do I have to use your pricing?</div>
+            <div class="faq-answer">No. You set the price. The system will suggest pricing based on similar items, but you confirm everything before publishing.</div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">Is this only for estate sales?</div>
+            <div class="faq-answer">No. We support estate sales, garage sales, auctions, flea markets, and consignment. All one platform.</div>
+        </div>
+    </section>
+
+    <!-- Close Section -->
+    <section class="close">
+        <h2>Let's Make Setup Simpler</h2>
+        <p>One message I keep hearing: "Thank you for building something for us." That means everything.</p>
+        <p>Give it a try. If it saves you even one hour on your next sale, you'll get why we built it.</p>
+
+        <a href="#signup" class="button button-primary">Start Your First Sale — Free</a>
+        <p class="mt-20 text-muted">Questions? Email <a href="mailto:patrick@findasale.com">patrick@findasale.com</a></p>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2026 FindA.Sale. All rights reserved.</p>
+        <p><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a></p>
+    </footer>
+
+</div>
+
+</body>
+</html>

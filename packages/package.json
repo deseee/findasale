@@ -1,0 +1,11 @@
+{
+  "name": "findasale-packages",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
+}

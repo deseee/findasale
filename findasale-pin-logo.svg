@@ -1,0 +1,20 @@
+<svg width="100%" viewBox="0 0 680 520" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>FindA.Sale location pin logo</title>
+  <desc>8-pointed star inside a dark location pin</desc>
+
+  <path d="M 340 490 L 208 276 A 155 155 0 1 1 472 276 Z"
+        fill="#111111" stroke="#F97316" stroke-width="4" stroke-linejoin="round"/>
+
+  <polygon points="340,208 319,157 340,73 361,157" fill="#F97316"/>
+  <polygon points="340,208 391,187 475,208 391,229" fill="#F97316"/>
+  <polygon points="340,208 361,259 340,343 319,259" fill="#F97316"/>
+  <polygon points="340,208 289,229 205,208 289,187" fill="#F97316"/>
+
+  <polygon points="340,208 361,157 436,113 391,187" fill="#FFFFFF"/>
+  <polygon points="340,208 391,229 436,304 361,259" fill="#FFFFFF"/>
+  <polygon points="340,208 319,259 244,304 289,229" fill="#FFFFFF"/>
+  <polygon points="340,208 289,187 244,113 319,157" fill="#FFFFFF"/>
+
+  <circle cx="340" cy="208" r="32" fill="#111111"/>
+  <circle cx="340" cy="208" r="21" fill="#F97316"/>
+</svg>
