@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S684 Wrap
+# Patrick's Dashboard — S685 Wrap
 
 ---
 
@@ -11,60 +11,50 @@
 | Google OAuth | ⚠️ Still broken (root cause unclear) |
 | Login (email/password) | ✅ Working |
 | MCP Server (mcp.finda.sale) | ✅ LIVE — 7 tools |
-| #390 Health Scout High | ✅ FIXED — 3 controllers paginated |
-| #391 WCAG aria-labels | ✅ COMPLETE — full codebase sweep done |
-| #391 WCAG error ARIA | ✅ COMPLETE S684 — 14 files done (all applicable form inputs) |
-| #310 Discount Rules page | ✅ EXISTS at /organizer/color-rules — parseFloat fix applied |
-| #184 iCal export | ✅ Core feature verified Chrome — item-level UNVERIFIED |
-| #174 Auction QA | ⬜ UNVERIFIED — no items in production auction sales |
-| #393 Chrome QA Sprint | ⬜ READY — non-QA dev work complete |
+| #391 WCAG accessibility | ✅ COMPLETE — aria-labels + error ARIA done |
+| #310 Discount Rules page | ✅ EXISTS at /organizer/color-rules |
+| #184 iCal export | ✅ Core verified — item-level UNVERIFIED |
+| #174 Auction QA | ⬜ UNVERIFIED — need items listed in a production auction sale |
+| #146/#147 Holds E2E | ✅ VERIFIED S685 |
+| #253 Settlement Wizard | ✅ VERIFIED S685 |
+| #80 Purchase Confirmation | ✅ VERIFIED S685 |
+| SSR JSON-LD (sales + items) | ✅ VERIFIED S685 |
+| #393 Chrome QA Sprint | 🟡 IN PROGRESS — one item remaining (#174) |
 | #394 Full Walkthrough | ⬜ After QA sprint |
 
 ---
 
-## What Shipped This Session (S684)
+## What Shipped This Session (S685)
 
-**WCAG error ARIA (Batch A — 9 files):** `aria-invalid` + `aria-describedby` added to BecomeOrganizerModal, BulkPriceModal, BulkCategoryModal, BulkPhotoModal, BulkStatusModal, BulkTagModal, BrandFollowManager, MessageComposeModal, PosInvoiceModal.
+**#146/#147 Holds E2E ✅:** Shopper places hold → RESERVED, organizer sees Extend/Cancel, Extend resets timer, Cancel → AVAILABLE.
 
-**WCAG error ARIA (Batch B — 5 files):** Same pattern applied to login, register, forgot-password, reset-password, create-sale pages.
+**#253 Settlement Wizard ✅:** All 5 tabs, commission math, payout records with COMPLETED badge. Blank fields bug fixed (`ClientPayoutPanel.tsx`).
 
-**#310 Color-tagged Discount Rules:** Page already existed at `/organizer/color-rules` (roadmap was stale). Applied `parseFloat` fix for decimal discount percentages (was `parseInt`). TEAMS-gated, full CRUD UI wired to live backend.
+**#80 Purchase Confirmation ✅:** "It's yours!", ✓ Paid, item + seller + pickup info + bid breakdown all correct. Two bugs fixed:
+- P1: "View My Purchases" → `/shopper/history` (was 404 `/shopper/purchases`)
+- P2: "Amount Paid" now shows $157.50 for auction buyers (hammer × 1.05), not just $150 hammer price
+
+**SSR JSON-LD ✅:** Event schema on sale pages, Product schema on item pages, both server-side rendered.
+
+**Hold card dark mode fix:** `dark:bg-amber-900/20` → `dark:bg-gray-800`.
 
 ---
 
-## Patrick Push Blocks This Session
+## Patrick Push Block (S685)
 
-**S684 — WCAG error ARIA + #310 fix (15 files):**
 ```powershell
-git add packages/frontend/components/BecomeOrganizerModal.tsx
-git add packages/frontend/components/BulkPriceModal.tsx
-git add packages/frontend/components/BulkCategoryModal.tsx
-git add packages/frontend/components/BulkPhotoModal.tsx
-git add packages/frontend/components/BulkStatusModal.tsx
-git add packages/frontend/components/BulkTagModal.tsx
-git add packages/frontend/components/BrandFollowManager.tsx
-git add packages/frontend/components/MessageComposeModal.tsx
-git add packages/frontend/components/PosInvoiceModal.tsx
-git add packages/frontend/pages/login.tsx
-git add packages/frontend/pages/register.tsx
-git add packages/frontend/pages/forgot-password.tsx
-git add packages/frontend/pages/reset-password.tsx
-git add packages/frontend/pages/organizer/create-sale.tsx
-git add packages/frontend/pages/organizer/color-rules.tsx
-git commit -m "S684: WCAG error ARIA (14 files) + #310 discount rules parseFloat fix
+git add packages/frontend/pages/items/[id].tsx
+git add packages/frontend/components/ClientPayoutPanel.tsx
+git add "packages/frontend/pages/purchases/[id].tsx"
+git commit -m "S685: QA fixes — hold dark mode, settlement payout fields, purchase history link
 
-- aria-invalid + aria-describedby on all form inputs with inline error states
-- Batch A: 9 component files (modals + BrandFollowManager)
-- Batch B: 5 page files (auth flow + create-sale)
-- #310 color-rules: parseInt -> parseFloat for decimal discount percentages"
+- items/[id].tsx: dark:bg-amber-900/20 -> dark:bg-gray-800
+- ClientPayoutPanel.tsx: payout confirmation reads mutation response on save
+- purchases/[id].tsx: View My Purchases -> /shopper/history; Amount Paid shows total with buyer premium for auctions"
 .\push.ps1
-```
-
-**S684 — Session wrap docs:**
-```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S684: Session wrap — STATE + dashboard updated"
+git commit -m "S685: Session wrap — STATE + dashboard updated"
 .\push.ps1
 ```
 
@@ -72,14 +62,15 @@ git commit -m "S684: Session wrap — STATE + dashboard updated"
 
 ## Pending Patrick Actions
 
-1. **Run the 2 push blocks above** (in order)
-2. **Auction items** — to QA #174, list items in a production auction sale first
-3. **Google Business Profile** — create at business.google.com (219 E Michigan Ave, Suite F, Paw Paw, MI 49079)
+1. **Run the push blocks above**
+2. **Auction items** — list items in a production auction sale so #174 can be QA'd
+3. **Google Business Profile** — business.google.com (219 E Michigan Ave, Suite F, Paw Paw, MI 49079)
 4. **Business cards** — files in `claude_docs/brand/`
 
 ---
 
-## Next Session Priorities (S685)
+## Next Session Priorities (S686)
 
-1. **#393 Chrome QA Sprint** — non-QA work complete; QA queue is ready. Priority: auction #174, purchase #80, holds #146–#147, settlement #228, settlement wizard #253 (one feature per dispatch, sequential Chrome)
-2. **#394 Full Product Walkthrough** — after QA sprint clears known issues
+1. **#174 Auction QA** — once items are listed in a production auction sale
+2. **Dual bid/place-bid UX bug** — dispatch to findasale-dev
+3. **#394 Full Product Walkthrough**

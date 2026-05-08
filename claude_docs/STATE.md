@@ -4,7 +4,44 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S684 — WCAG Error ARIA Sprint + #310 Discount Rules Fix (COMPLETE — Vercel GREEN)**
+**Latest: S685 — #393 Chrome QA Sprint: Holds + Settlement + Purchase Confirmation (IN PROGRESS)**
+
+S685 is an active QA sprint. Holds ✅, Settlement ✅, Purchase Confirmation ✅ verified. P2 fixes shipped mid-session (green). Additional bugs found and fixed inline during #80 QA pass.
+
+**#146/#147 Holds E2E — ✅ VERIFIED:**
+- Shopper places hold on AVAILABLE item → item becomes RESERVED ✅
+- Organizer `/organizer/holds` page shows hold with Extend/Cancel actions ✅
+- Extend: resets timer to 30min from click ✅
+- Cancel: removes hold, item returns to AVAILABLE ✅
+
+**#253 Settlement Wizard — ✅ VERIFIED (5 tabs):**
+- Summary, Expenses, Commission, Payout, Receipt tabs all navigate ✅
+- Commission math live-updates correctly ✅
+- Payout records successfully (COMPLETED badge + date) ✅
+- P2 fixed: `ClientPayoutPanel.tsx` payout confirmation blank fields → reads from mutation response on save
+
+**#80 Purchase Confirmation — ✅ VERIFIED:**
+- `/purchases/[id]` renders "It's yours! 🎉", ✓ Paid, item name, seller, pickup info, bid breakdown, confirmation date ✅
+- P1 fixed: "View My Purchases" → `/shopper/history` (was `/shopper/purchases`, 404)
+- P2 fixed: "Amount Paid" for auction items now shows total with buyer premium (hammer × 1.05)
+- `/shopper/history` page confirmed working — shows user's purchases with correct data
+
+**Sales/Items SSR JSON-LD — ✅ VERIFIED (clearing unverified queue):**
+- `/sales/[id]`: Event schema + BreadcrumbList ✅
+- `/items/[id]`: Product schema with Offer ✅
+- `pageProps` present (`ogData`, `initialData`) confirming SSR
+
+**All fixes in this session (not yet pushed):**
+- `items/[id].tsx`: hold card dark mode fix
+- `ClientPayoutPanel.tsx`: settlement payout confirmation blank fields
+- `purchases/[id].tsx`: "View My Purchases" → `/shopper/history`; "Amount Paid" shows total for auction buyers
+
+**Remaining in #393 QA Sprint:**
+- #174 Auction — needs items listed in a production auction sale before QA can proceed
+
+**Seeded test item:** `ce65ser7xo2ef073v8w3ud0ac` ("Vintage Brass Compass") in DB as QA fixture. `isActive=true`, `draftStatus=APPROVED`.
+
+**Previous: S684 — WCAG Error ARIA Sprint + #310 Discount Rules Fix (COMPLETE — Vercel GREEN)**
 
 S684 completed the WCAG error ARIA sprint (`aria-invalid` + `aria-describedby` on all form inputs with inline validation error states) and applied a minor decimal precision fix to the #310 Discount Rules page.
 
@@ -19,7 +56,7 @@ S684 completed the WCAG error ARIA sprint (`aria-invalid` + `aria-describedby` o
 - Fix: `parseInt` → `parseFloat` for decimal discount percentages (Prisma Decimal field compatibility)
 - TEAMS-gated, full CRUD wired to live backend endpoints
 
-**Non-QA dev work status: COMPLETE.** QA queue (#393 Chrome QA Sprint) is ready to begin.
+**Non-QA dev work status: COMPLETE.** QA queue (#393 Chrome QA Sprint) active.
 
 ---
 
@@ -630,47 +667,32 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S685
+## Next Session — S686
 
 **Session start:** Read STATE.md → roadmap BROKEN/PENDING items → present top 3.
 
-**Priority 1 — #393 Chrome QA Backlog Sprint**
-All non-QA dev work complete. QA queue is ready. One feature per Chrome QA dispatch, sequential (Chrome concurrency rule). Priority order:
-- Auction #174 — needs organizer to list items in a production auction sale first (or seed one)
-- iCal #184 — ✅ core feature verified; item-level export UNVERIFIED
-- Purchase confirmation #80 — test /purchases/[id] with a real completed purchase
-- Holds #146–#147 — hold an item E2E as shopper + organizer view
-- Settlement wizard #253 — complete settlement with payout, verify transfer ID in receipt step
+**Priority 1 — #393 QA Sprint: one item remains**
+- Auction #174 — needs organizer to list items in a production auction sale before QA can proceed
 
-**Priority 2 — #394 Full Product Walkthrough**
-After QA sprint clears the queue.
+**Priority 2 — Dual bid/place-bid UX bug**
+`sales/[id].tsx` auction item cards have both inline "Bid" submit button AND "Place Bid" button. "Place Bid" onClick calls `setBiddingItemId` which disables the Bid button. Dispatch to findasale-dev.
 
-**Patrick wrap actions:**
+**Priority 3 — #394 Full Product Walkthrough**
+After #174 and bid bug cleared.
+
+**Patrick wrap actions (S685):**
 ```powershell
-git add packages/frontend/components/BecomeOrganizerModal.tsx
-git add packages/frontend/components/BulkPriceModal.tsx
-git add packages/frontend/components/BulkCategoryModal.tsx
-git add packages/frontend/components/BulkPhotoModal.tsx
-git add packages/frontend/components/BulkStatusModal.tsx
-git add packages/frontend/components/BulkTagModal.tsx
-git add packages/frontend/components/BrandFollowManager.tsx
-git add packages/frontend/components/MessageComposeModal.tsx
-git add packages/frontend/components/PosInvoiceModal.tsx
-git add packages/frontend/pages/login.tsx
-git add packages/frontend/pages/register.tsx
-git add packages/frontend/pages/forgot-password.tsx
-git add packages/frontend/pages/reset-password.tsx
-git add packages/frontend/pages/organizer/create-sale.tsx
-git add packages/frontend/pages/organizer/color-rules.tsx
-git commit -m "S684: WCAG error ARIA (14 files) + #310 discount rules parseFloat fix
+git add packages/frontend/pages/items/[id].tsx
+git add packages/frontend/components/ClientPayoutPanel.tsx
+git add "packages/frontend/pages/purchases/[id].tsx"
+git commit -m "S685: QA fixes — hold dark mode, settlement payout fields, purchase history link
 
-- aria-invalid + aria-describedby on all form inputs with inline error states
-- Batch A: 9 component files (modals + BrandFollowManager)
-- Batch B: 5 page files (auth flow + create-sale)
-- #310 color-rules: parseInt -> parseFloat for decimal discount percentages"
+- items/[id].tsx: dark:bg-amber-900/20 -> dark:bg-gray-800
+- ClientPayoutPanel.tsx: payout confirmation reads mutation response on save
+- purchases/[id].tsx: View My Purchases -> /shopper/history; Amount Paid shows total with buyer premium for auctions"
 .\push.ps1
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S684: Session wrap — STATE + dashboard updated"
+git commit -m "S685: Session wrap — STATE + dashboard updated"
 .\push.ps1
 ```
