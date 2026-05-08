@@ -136,6 +136,7 @@ export default function HighValueTrackerWidget({ saleId }: HighValueTrackerWidge
               onClick={() => toggleMutation.mutate({ itemId: item.id, isHighValue: false })}
               className="text-xs text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-1"
               title="Remove from high-value tracking"
+              aria-label="Remove from high-value tracking"
             >
               ✕
             </button>

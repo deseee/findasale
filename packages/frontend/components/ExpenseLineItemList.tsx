@@ -106,6 +106,7 @@ export default function ExpenseLineItemList({ saleId, expenses }: ExpenseLineIte
                   onClick={() => removeMutation.mutate(expense.id)}
                   className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 text-xs p-1"
                   title="Remove expense"
+                  aria-label="Remove expense"
                 >
                   ✕
                 </button>
