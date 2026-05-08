@@ -4,7 +4,26 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S683 — WCAG #391 Full Sweep + #390 Pagination Fix (COMPLETE — Vercel GREEN)**
+**Latest: S684 — WCAG Error ARIA Sprint + #310 Discount Rules Fix (COMPLETE — Vercel GREEN)**
+
+S684 completed the WCAG error ARIA sprint (`aria-invalid` + `aria-describedby` on all form inputs with inline validation error states) and applied a minor decimal precision fix to the #310 Discount Rules page.
+
+**WCAG error ARIA — what shipped:**
+- **Batch A (9 components):** BecomeOrganizerModal, BulkPriceModal, BulkCategoryModal, BulkPhotoModal, BulkStatusModal, BulkTagModal, BrandFollowManager, MessageComposeModal, PosInvoiceModal
+- **Batch B (5 pages):** login, register, forgot-password, reset-password, organizer/create-sale
+- Remaining components (HoldButton, PriceResearchPanel, etc.) confirmed to have no inline error states — no changes needed
+- TS check: zero errors
+
+**#310 Discount Rules:**
+- Page already existed at `/organizer/color-rules` (roadmap was stale — never updated)
+- Fix: `parseInt` → `parseFloat` for decimal discount percentages (Prisma Decimal field compatibility)
+- TEAMS-gated, full CRUD wired to live backend endpoints
+
+**Non-QA dev work status: COMPLETE.** QA queue (#393 Chrome QA Sprint) is ready to begin.
+
+---
+
+**Previous: S683 — WCAG #391 Full Sweep + #390 Pagination Fix (COMPLETE — Vercel GREEN)**
 
 S683 completed the WCAG #391 accessibility sweep across the entire frontend codebase (components + pages), fixed 3 Health Scout High findings (#390), and partially QA'd iCal (#184 ✅).
 
@@ -611,27 +630,47 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S684
+## Next Session — S685
 
 **Session start:** Read STATE.md → roadmap BROKEN/PENDING items → present top 3.
 
 **Priority 1 — #393 Chrome QA Backlog Sprint**
-WCAG sweep complete. Resume QA. One feature per Chrome QA dispatch, sequential (Chrome concurrency rule). Priority order:
+All non-QA dev work complete. QA queue is ready. One feature per Chrome QA dispatch, sequential (Chrome concurrency rule). Priority order:
 - Auction #174 — needs organizer to list items in a production auction sale first (or seed one)
 - iCal #184 — ✅ core feature verified; item-level export UNVERIFIED
 - Purchase confirmation #80 — test /purchases/[id] with a real completed purchase
 - Holds #146–#147 — hold an item E2E as shopper + organizer view
+- Settlement wizard #253 — complete settlement with payout, verify transfer ID in receipt step
 
-**Priority 2 — WCAG error ARIA sprint**
-Add `aria-invalid` + `aria-describedby` to form inputs with error states. Affects ~20+ files with form validation UI. Dispatch `findasale-dev` with 10–15 files per batch (safe batch size confirmed this session).
-
-**Priority 3 — #394 Full Product Walkthrough**
+**Priority 2 — #394 Full Product Walkthrough**
 After QA sprint clears the queue.
 
 **Patrick wrap actions:**
 ```powershell
+git add packages/frontend/components/BecomeOrganizerModal.tsx
+git add packages/frontend/components/BulkPriceModal.tsx
+git add packages/frontend/components/BulkCategoryModal.tsx
+git add packages/frontend/components/BulkPhotoModal.tsx
+git add packages/frontend/components/BulkStatusModal.tsx
+git add packages/frontend/components/BulkTagModal.tsx
+git add packages/frontend/components/BrandFollowManager.tsx
+git add packages/frontend/components/MessageComposeModal.tsx
+git add packages/frontend/components/PosInvoiceModal.tsx
+git add packages/frontend/pages/login.tsx
+git add packages/frontend/pages/register.tsx
+git add packages/frontend/pages/forgot-password.tsx
+git add packages/frontend/pages/reset-password.tsx
+git add packages/frontend/pages/organizer/create-sale.tsx
+git add packages/frontend/pages/organizer/color-rules.tsx
+git commit -m "S684: WCAG error ARIA (14 files) + #310 discount rules parseFloat fix
+
+- aria-invalid + aria-describedby on all form inputs with inline error states
+- Batch A: 9 component files (modals + BrandFollowManager)
+- Batch B: 5 page files (auth flow + create-sale)
+- #310 color-rules: parseInt -> parseFloat for decimal discount percentages"
+.\push.ps1
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S683: Session wrap — STATE + dashboard updated"
+git commit -m "S684: Session wrap — STATE + dashboard updated"
 .\push.ps1
 ```

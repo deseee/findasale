@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S683 Wrap
+# Patrick's Dashboard — S684 Wrap
 
 ---
 
@@ -12,86 +12,59 @@
 | Login (email/password) | ✅ Working |
 | MCP Server (mcp.finda.sale) | ✅ LIVE — 7 tools |
 | #390 Health Scout High | ✅ FIXED — 3 controllers paginated |
-| #391 WCAG aria-labels | ✅ COMPLETE — full codebase sweep done (33 files, ~50 elements) |
-| #391 WCAG error ARIA | ⬜ Next sprint (aria-invalid + aria-describedby on form errors) |
+| #391 WCAG aria-labels | ✅ COMPLETE — full codebase sweep done |
+| #391 WCAG error ARIA | ✅ COMPLETE S684 — 14 files done (all applicable form inputs) |
+| #310 Discount Rules page | ✅ EXISTS at /organizer/color-rules — parseFloat fix applied |
 | #184 iCal export | ✅ Core feature verified Chrome — item-level UNVERIFIED |
 | #174 Auction QA | ⬜ UNVERIFIED — no items in production auction sales |
-| #393 Chrome QA Sprint | ⬜ Next session |
+| #393 Chrome QA Sprint | ⬜ READY — non-QA dev work complete |
 | #394 Full Walkthrough | ⬜ After QA sprint |
 
 ---
 
-## What Shipped This Session (S683)
+## What Shipped This Session (S684)
 
-**#390 Pagination fix:** 12 unbounded `findMany` calls capped across `adminBroadcastController`, `adminController`, `buyingPoolController`.
+**WCAG error ARIA (Batch A — 9 files):** `aria-invalid` + `aria-describedby` added to BecomeOrganizerModal, BulkPriceModal, BulkCategoryModal, BulkPhotoModal, BulkStatusModal, BulkTagModal, BrandFollowManager, MessageComposeModal, PosInvoiceModal.
 
-**WCAG #391 — full codebase sweep:**
-- Batch A: dark-mode ghost button contrast fixed, 4 keyboard-inaccessible divs fixed, heading hierarchy fixed
-- 25+ form inputs labeled across 13 component files
-- ~25 icon button aria-labels added across 20+ files
-- 91 page files checked — only `organizer/members.tsx` had gaps (2 labels added)
-- Scope confirmed: alt text and most icon buttons were already clean. Remaining gap is error ARIA only.
+**WCAG error ARIA (Batch B — 5 files):** Same pattern applied to login, register, forgot-password, reset-password, create-sale pages.
 
-**#184 iCal:** Chrome-verified. Button present, download triggers, real sale data confirmed.
+**#310 Color-tagged Discount Rules:** Page already existed at `/organizer/color-rules` (roadmap was stale). Applied `parseFloat` fix for decimal discount percentages (was `parseInt`). TEAMS-gated, full CRUD UI wired to live backend.
 
 ---
 
 ## Patrick Push Blocks This Session
 
-Run these in order (each is a separate commit):
-
-**1. Batch 2 + Batch A (if not already pushed):**
+**S684 — WCAG error ARIA + #310 fix (15 files):**
 ```powershell
-git add packages/frontend/components/RSVPAttendeesModal.tsx
-git add packages/frontend/components/HighValueTrackerWidget.tsx
-git add packages/frontend/components/DisputeForm.tsx
-git add packages/frontend/components/RarityBoostModal.tsx
-git add packages/frontend/components/ExpenseLineItemList.tsx
-git add packages/frontend/styles/globals.css
-git add packages/frontend/components/BottomTabNav.tsx
-git add packages/frontend/components/RapidCapture.tsx
-git add packages/frontend/components/SaleQRCode.tsx
-git add packages/frontend/pages/organizer/pos.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git commit -m "S683: WCAG batch 2 (5 labels) + Batch A (ghost button, keyboard divs, heading fix)"
-.\push.ps1
-```
-
-**2. Round 1 (input labels + icon buttons):**
-```powershell
-git add packages/frontend/components/BoostPurchaseModal.tsx
-git add packages/frontend/components/BidModal.tsx
+git add packages/frontend/components/BecomeOrganizerModal.tsx
 git add packages/frontend/components/BulkPriceModal.tsx
-git add packages/frontend/components/BuyingPoolCard.tsx
-git add packages/frontend/components/CommissionCalculator.tsx
-git add packages/frontend/components/DateRangeSelector.tsx
-git add packages/frontend/components/PickupSlotManager.tsx
-git add packages/frontend/components/PriceResearchPanel.tsx
-git add packages/frontend/components/ReferralWidget.tsx
-git add packages/frontend/components/SmartInventoryUpload.tsx
-git add packages/frontend/components/UGCPhotoSubmitButton.tsx
-git add packages/frontend/components/WishlistShareButton.tsx
-git add packages/frontend/pages/admin/feature-flags.tsx
-git add packages/frontend/pages/index.tsx
-git commit -m "S683: WCAG Round 1 — 25+ input labels + icon buttons (14 files)"
+git add packages/frontend/components/BulkCategoryModal.tsx
+git add packages/frontend/components/BulkPhotoModal.tsx
+git add packages/frontend/components/BulkStatusModal.tsx
+git add packages/frontend/components/BulkTagModal.tsx
+git add packages/frontend/components/BrandFollowManager.tsx
+git add packages/frontend/components/MessageComposeModal.tsx
+git add packages/frontend/components/PosInvoiceModal.tsx
+git add packages/frontend/pages/login.tsx
+git add packages/frontend/pages/register.tsx
+git add packages/frontend/pages/forgot-password.tsx
+git add packages/frontend/pages/reset-password.tsx
+git add packages/frontend/pages/organizer/create-sale.tsx
+git add packages/frontend/pages/organizer/color-rules.tsx
+git commit -m "S684: WCAG error ARIA (14 files) + #310 discount rules parseFloat fix
+
+- aria-invalid + aria-describedby on all form inputs with inline error states
+- Batch A: 9 component files (modals + BrandFollowManager)
+- Batch B: 5 page files (auth flow + create-sale)
+- #310 color-rules: parseInt -> parseFloat for decimal discount percentages"
 .\push.ps1
 ```
 
-**3. Round 2 + pages:**
-```powershell
-git add packages/frontend/components/SyncQueueModal.tsx
-git add packages/frontend/components/TeamSeatUpsellModal.tsx
-git add packages/frontend/components/ValuationWidget.tsx
-git add packages/frontend/pages/organizer/members.tsx
-git commit -m "S683: WCAG Round 2 + pages sweep — 4 files"
-.\push.ps1
-```
-
-**4. Session wrap docs:**
+**S684 — Session wrap docs:**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S683: Session wrap — STATE + dashboard updated"
+git commit -m "S684: Session wrap — STATE + dashboard updated"
 .\push.ps1
 ```
 
@@ -99,15 +72,14 @@ git commit -m "S683: Session wrap — STATE + dashboard updated"
 
 ## Pending Patrick Actions
 
-1. **Run the 4 push blocks above** (in order)
-2. **Auction items** — to QA #174, an organizer needs to list items in one of the production auction sales, or you can seed test data
+1. **Run the 2 push blocks above** (in order)
+2. **Auction items** — to QA #174, list items in a production auction sale first
 3. **Google Business Profile** — create at business.google.com (219 E Michigan Ave, Suite F, Paw Paw, MI 49079)
 4. **Business cards** — files in `claude_docs/brand/`
 
 ---
 
-## Next Session Priorities (S684)
+## Next Session Priorities (S685)
 
-1. **#393 Chrome QA Sprint** — auction #174, purchase #80, holds #146–#147 (one per dispatch, sequential)
-2. **WCAG error ARIA** — `aria-invalid` + `aria-describedby` sprint (~20 files, 10–15 per batch)
-3. **#394 Full Product Walkthrough**
+1. **#393 Chrome QA Sprint** — non-QA work complete; QA queue is ready. Priority: auction #174, purchase #80, holds #146–#147, settlement #228, settlement wizard #253 (one feature per dispatch, sequential Chrome)
+2. **#394 Full Product Walkthrough** — after QA sprint clears known issues
