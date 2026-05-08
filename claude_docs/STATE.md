@@ -4,7 +4,35 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S682 — WCAG Corruption Recovery (COMPLETE — Vercel GREEN)**
+**Latest: S683 — WCAG #391 Full Sweep + #390 Pagination Fix (COMPLETE — Vercel GREEN)**
+
+S683 completed the WCAG #391 accessibility sweep across the entire frontend codebase (components + pages), fixed 3 Health Scout High findings (#390), and partially QA'd iCal (#184 ✅).
+
+**WCAG #391 — what shipped this session:**
+- **Batch A:** Ghost button dark-mode contrast fix (`globals.css`), 4 interactive divs made keyboard-accessible (`BottomTabNav`, `RapidCapture`, `SaleQRCode`, `pos.tsx`), heading hierarchy fix (`organizer/dashboard.tsx`)
+- **Input labels (Round 1C):** 25+ inputs labeled across 13 component files (`BidModal`, `BulkPriceModal`, `BuyingPoolCard`, `CommissionCalculator`, `DateRangeSelector`, `PickupSlotManager`, `PriceResearchPanel`, `ReferralWidget`, `SmartInventoryUpload`, `UGCPhotoSubmitButton`, `WishlistShareButton`, `admin/feature-flags`, `index.tsx`)
+- **Icon button labels:** ~25 elements across 20 files (`ActionBar`, `AddToCalendarButton`, `BulkActionDropdown`, `camera/PreviewModal`, `RSVPAttendeesModal`, `HighValueTrackerWidget`, `DisputeForm`, `RarityBoostModal`, `ExpenseLineItemList`, `BoostPurchaseModal`, `SyncQueueModal`, `TeamSeatUpsellModal`, `ValuationWidget`, `organizer/members.tsx` + others)
+- **Full codebase pages sweep:** 91 page files checked — only `organizer/members.tsx` had gaps (chevron expand/collapse + trash icon)
+- **Total: 33 files modified, ~50+ accessibility elements fixed**
+
+**WCAG remaining (next sprint):**
+- Error ARIA: `aria-invalid` + `aria-describedby` on form inputs with error states (~20+ files) — not touched this session
+- No remaining aria-label or input-label gaps found in codebase-wide sweep
+
+**#390 Health Scout High findings — fixed:**
+- `adminBroadcastController.ts` — 5 unbounded `findMany` → `take: 50000`
+- `adminController.ts` — 6 unbounded `findMany` → `take: 10000`/`take: 1000`
+- `buyingPoolController.ts` — 1 unbounded `findMany` → `take: 100`
+- TS check: zero errors
+
+**#184 iCal — partially ✅ Chrome-verified:**
+- "📆 Add to Calendar" button visible on all sale pages, download triggers with success toast, real sale data confirmed
+- Item-level export UNVERIFIED (no items in test sales)
+
+**#174 Auction — UNVERIFIED:**
+- Both production auction sales have zero items listed — cannot QA bid mechanics, close flow, or purchase confirmation
+
+**Previous: S682 — WCAG Corruption Recovery (COMPLETE — Vercel GREEN)**
 
 The WCAG #391 bulk-label agent introduced 5 distinct corruption patterns across ~86 files. The entire session was spent diagnosing and repairing them before Vercel would build.
 
@@ -414,7 +442,7 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | WCAG skip link re-verify | ✅ S682 VERIFIED — Tab once on finda.sale, amber "Skip to main content" button appears overlaying header top-left, disappears when focus moves. z-[100] fix working correctly. | — | S681 |
-| WCAG form labels (189 remaining) | 152/341 aria-labels added S682. Remaining 25 files have complex patterns (dynamic JSX, conditional rendering) requiring per-file review. | Review each remaining file and add context-aware labels or associated `<label>` elements | S682 |
+| WCAG error ARIA | S683 codebase sweep complete (aria-labels + input labels). Remaining gap: `aria-invalid` + `aria-describedby` on form inputs with error states (~20+ files). | Dedicated error ARIA sprint | S683 |
 | JWT httpOnly cookies | ✅ VERIFIED S670 — login worked through proxy, cookies set correctly | — | S664/S667 |
 | COPPA age gate | Code shipped but not Chrome-tested | Register with DOB <18 → should get "must be 18 or older" error | S664 |
 | Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` | S664 |
@@ -583,35 +611,27 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S683
+## Next Session — S684
 
 **Session start:** Read STATE.md → roadmap BROKEN/PENDING items → present top 3.
 
-**Priority 1 — #390 Health Scout High findings → dev dispatch**
-3 unbounded `findMany` in `adminBroadcastController`, `adminController`, `buyingPoolController`. Add pagination/limits. Dispatch to `findasale-dev`. Quick fix, low risk.
+**Priority 1 — #393 Chrome QA Backlog Sprint**
+WCAG sweep complete. Resume QA. One feature per Chrome QA dispatch, sequential (Chrome concurrency rule). Priority order:
+- Auction #174 — needs organizer to list items in a production auction sale first (or seed one)
+- iCal #184 — ✅ core feature verified; item-level export UNVERIFIED
+- Purchase confirmation #80 — test /purchases/[id] with a real completed purchase
+- Holds #146–#147 — hold an item E2E as shopper + organizer view
 
-**Priority 2 — WCAG #391 remaining 189 labels (SAFE protocol — mandatory)**
-189 aria-labels remain across ~25 complex files. The S682 bulk agent approach caused 5 corruption types and burned a full session on recovery. **Do NOT use bulk automation.**
+**Priority 2 — WCAG error ARIA sprint**
+Add `aria-invalid` + `aria-describedby` to form inputs with error states. Affects ~20+ files with form validation UI. Dispatch `findasale-dev` with 10–15 files per batch (safe batch size confirmed this session).
 
-Safe dispatch protocol for S683:
-- Dispatch `findasale-dev` with max 5 files per batch
-- Each batch: dev agent edits files manually (no Python regex bulk rewrites)
-- After each batch: `npx tsc --noEmit --skipLibCheck` — zero errors required
-- After each batch: Python null-byte check — `python3 -c "import glob; print([p for p in glob.glob('**/*.tsx', recursive=True) if b'\x00' in open(p,'rb').read()])"`
-- After each batch: tail -3 each modified file to confirm it ends with `}` or `export default`
-- Only give Patrick a push block after ALL checks pass on ALL files in the batch
-- Never push a batch that hasn't been TS-checked in the same session
-
-**Priority 3 — #393 Chrome QA Backlog Sprint**
-Auction #174, iCal #184, purchase confirmation #80, holds #146–#147. One feature per QA dispatch. Screenshot evidence required per finding.
-
-**Priority 4 — #394 Full Product Walkthrough**
-After QA sprint completes.
+**Priority 3 — #394 Full Product Walkthrough**
+After QA sprint clears the queue.
 
 **Patrick wrap actions:**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S682: Session wrap — STATE + dashboard updated"
+git commit -m "S683: Session wrap — STATE + dashboard updated"
 .\push.ps1
 ```
