@@ -902,7 +902,97 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S695
+## Recent Sessions (S695)
+
+### S695 — Google Maps API Lockdown + Directory Source Strategy (COMPLETE)
+
+Full Google Maps Platform incident response and lockdown. Root cause: monthly GitHub Actions cron (`scrape-google-places.yml`) fired May 1, 2026 and ran 23 categories × 100+ metros × 3 pages, generating a $201.61 charge. Response:
+
+- API key restricted to Places API + Places API (New) only (25 APIs stripped)
+- 30/day quota cap on both remaining APIs (within free tier)
+- `scrape-google-places.yml` workflow disabled manually in GitHub Actions
+- Railway `GOOGLE_PLACES_API_KEY` env var deleted (prior session)
+- GitHub Actions secret `GOOGLE_PLACES_API_KEY` deleted this session
+- `requireSecret` middleware added to `/scraper/enrich-backfill` endpoint (was unauthenticated)
+- 5,314 Organizer records cleared of `googlePlaceId`, `googleRating`, `googleRatingCount` (Google ToS compliance — persistent storage prohibited)
+- 594 queued `DirectoryCrawlQueue` GooglePlaces jobs deleted
+- Edward (Google support) response drafted confirming all preventive measures + data deletion
+
+**Google Vision API confirmed active** — `cloudAIService.ts` uses it for photo label extraction → Haiku tag pipeline. Keep `GOOGLE_VISION_API_KEY` in `.env.example`. Not affected by this lockdown.
+
+**Directory source audit findings:**
+- Sale table: EstateSalesNet (7,492), Foursquare (3,656), Facebook Events (699), HEREPlaces (596) — zero GooglePlaces records
+- DirectoryCrawlLog: Foursquare (301 runs), HEREPlaces (144 runs), OSM (71 runs) — GooglePlaces: 0 runs
+- Organizer table: Google fields purged. Data now sourced from non-Google workflows only.
+
+**Next session prompt written** (in claude_docs or Patrick's notes) — dispatches Innovation + Architect + Dev + Sales Ops in parallel to build comprehensive multi-source organizer directory from Foursquare, HERE, EstateSales.NET, Facebook Events, Eventbrite, OSM, and new sources. Cross-source deduplication and Teams/Enterprise lead scoring are the key deliverables.
+
+---
+
+## Next Session — S696
+
+**Priority 1 — Push S695 changes**
+
+```powershell
+git add packages/backend/src/routes/internal.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S695: requireSecret on enrich-backfill + Google API lockdown wrap"
+.\push.ps1
+```
+
+**Priority 2 — Push S694 changes (still pending)**
+
+```powershell
+git add packages/backend/src/services/discoveryService.ts
+git add packages/backend/src/routes/users.ts
+git add packages/frontend/pages/shopper/settings.tsx
+git commit -m "S694: Geo bounding box feed fix + display name editing + admin role sync"
+.\push.ps1
+```
+
+**Priority 3 — Push the #174 bid fix (still pending from S693)**
+
+```powershell
+git add "packages/frontend/pages/items/[id].tsx"
+git commit -m "fix: bid API field name bidAmount → maxBidAmount (ADR-013 contract)"
+.\push.ps1
+```
+
+Then QA #174: user12@example.com / Seedy2025! → finda.sale/sales/c5hykxxecanngwcrkvq92n1va
+
+**Priority 4 — Dispatch organizer directory buildout (parallel)**
+
+Use the session brief written in S695. Dispatch findasale-innovation, findasale-architect, findasale-dev, and findasale-sales-ops in parallel. Goal: multi-source organizer directory with cross-source deduplication and Teams/Enterprise lead scoring. No Google Places. See session brief for full dispatch spec.
+
+**Priority 5 — Push S691 block (still pending)**
+
+```powershell
+git rm ".github/workflows/scrape-nc-licensing.yml"
+git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"
+git add .github/workflows/scrape-north-carolina-licensing.yml
+git add packages/backend/src/services/scraper/sources/texasLicensingScraper.ts
+git add claude_docs/strategy/roadmap.md
+git commit -m "S691: TX Socrata rewrite, NC yml rename, WV duplicate removal"
+.\push.ps1
+```
+
+**Priority 6 — Push S689 Chrome QA fixes**
+
+```powershell
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/components/CheckoutModal.tsx
+git add packages/frontend/components/BoostPurchaseModal.tsx
+git add packages/frontend/components/CSVImportModal.tsx
+git add packages/frontend/components/DisputeForm.tsx
+git commit -m "S689: Dashboard lapse fix, WCAG ARIA (4 components)"
+.\push.ps1
+```
+
+**Priority 7 — QA holdover**
+- #174 Auction — push + QA (Priority 3 above)
+- #251 priceBeforeMarkdown — needs TEAMS-tier test scenario
+- #223 Organizer Guidance Layer rank badges — needs an active hold in prod
 
 **Priority 1 — Push S694 changes**
 
