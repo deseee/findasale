@@ -322,7 +322,7 @@ const CreateSalePage = () => {
                     required={formData.saleType !== 'RETAIL'}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                     aria-invalid={!!validationErrors.startDate}
-                    aria-describedby={validationErrors.startDate ? \'startDate-error\' : undefined}
+                    aria-describedby={validationErrors.startDate ? "startDate-error" : undefined}
                     aria-label="Startdate" />
                   {validationErrors.startDate && touchedFields.has('startDate') && (
                     <p id="startDate-error" role="alert" className="text-red-600 text-xs mt-1">{validationErrors.startDate}</p>
@@ -351,7 +351,7 @@ const CreateSalePage = () => {
                     required={formData.saleType !== 'RETAIL'}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                     aria-invalid={!!validationErrors.endDate}
-                    aria-describedby={validationErrors.endDate ? \'endDate-error\' : undefined}
+                    aria-describedby={validationErrors.endDate ? "endDate-error" : undefined}
                     aria-label="Enddate" />
                   {validationErrors.endDate && touchedFields.has('endDate') && (
                     <p id="endDate-error" role="alert" className="text-red-600 text-xs mt-1">{validationErrors.endDate}</p>
