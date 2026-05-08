@@ -36,6 +36,7 @@ import CSVImportModal from '../../../components/CSVImportModal';
 import SmartInventoryUpload from '../../../components/SmartInventoryUpload';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import { useFeedbackSurvey } from '../../../hooks/useFeedbackSurvey';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -281,6 +282,7 @@ const AddItemsDetailPage = () => {
   const router = useRouter();
   const { saleId } = router.query;
   const { user, isLoading: authLoading } = useAuth();
+  const { tier: orgTier, canAccess } = useOrganizerTier();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const { showSurvey } = useFeedbackSurvey();
@@ -1400,7 +1402,7 @@ const AddItemsDetailPage = () => {
   // TEAMS/ENTERPRISE: 20 photos (UI cap, backend allows unlimited)
   const maxPhotosPerItem = (() => {
     const isAlaCarte = sale?.purchaseModel === 'ALA_CARTE';
-    const tier = user?.organizerTier || 'SIMPLE';
+    const tier = orgTier || 'SIMPLE';
 
     if (tier === 'PRO') return 10;
     if (tier === 'TEAMS' || tier === 'ENTERPRISE') return 20;
@@ -1569,7 +1571,7 @@ const AddItemsDetailPage = () => {
                         placeholder="Item title"
                         autoFocus
                        aria-label="Item title" />
-                      {voiceSupported && user?.organizerTier === 'PRO' && (
+                      {voiceSupported && canAccess('PRO') && (
                         <button
                           type="button"
                           onClick={handleVoiceToggle}
@@ -1991,7 +1993,7 @@ const AddItemsDetailPage = () => {
                   >
                     📦 Export to eBay
                   </button>
-                  {(user?.organizerTier === 'PRO' || user?.organizerTier === 'TEAMS' || user?.organizerTier === 'ENTERPRISE') ? (
+                  {canAccess('PRO') ? (
                     <button
                       onClick={() => setQuickbooksExportOpen(true)}
                       className="text-xs font-medium text-green-700 dark:text-green-400 hover:underline px-2 py-1 border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20"
@@ -2498,7 +2500,7 @@ const AddItemsDetailPage = () => {
                   checked={ebayPhotoMode === 'clean'}
                   onChange={() => setEbayPhotoMode('clean')}
                   className="w-4 h-4"
-                  disabled={user?.organizerTier !== 'TEAMS' && user?.organizerTier !== 'ENTERPRISE'}
+                  disabled={!canAccess('TEAMS')}
                 />
                 <span className="text-sm font-medium text-warm-700 dark:text-warm-300">
                   Remove watermark

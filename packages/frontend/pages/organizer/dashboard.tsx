@@ -81,7 +81,7 @@ const OrganizerDashboard = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
-  const { isSimple, canAccess, isLapsed } = useOrganizerTier();
+  const { tier: orgTier, isSimple, isTeams, canAccess, isLapsed } = useOrganizerTier();
   const { data: existingWorkspace, isLoading: workspaceLoading } = useMyWorkspace();
   const [isClient, setIsClient] = useState(false);
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
@@ -145,10 +145,10 @@ const OrganizerDashboard = () => {
       setShowOnboardingModal(true);
     }
     // Show TEAMS onboarding wizard for new TEAMS-tier organizers
-    if (user?.organizerTier === 'TEAMS' && !user?.teamsOnboardingComplete && !workspaceLoading && !existingWorkspace) {
+    if (isTeams && !user?.teamsOnboardingComplete && !workspaceLoading && !existingWorkspace) {
       setShowTeamsOnboardingWizard(true);
     }
-  }, [user?.organizerTier, user?.teamsOnboardingComplete, existingWorkspace, workspaceLoading]);
+  }, [isTeams, user?.teamsOnboardingComplete, existingWorkspace, workspaceLoading]);
 
   // Fetch organizer's sales
   const { data: salesData = [], isLoading: salesLoading, isError: salesError } = useQuery<Sale[]>({
@@ -332,13 +332,13 @@ const OrganizerDashboard = () => {
 
   // Handle Stripe checkout success redirect
   useEffect(() => {
-    if (router.query.upgrade === 'success' && user?.organizerTier) {
-      const tierName = user.organizerTier === 'PRO' ? 'PRO' : 'TEAMS';
+    if (router.query.upgrade === 'success' && orgTier) {
+      const tierName = orgTier === 'PRO' ? 'PRO' : 'TEAMS';
       showToast(`You're now on ${tierName}! Welcome to an upgraded experience.`, 'success');
       // Clear the query param from URL
       router.replace(router.pathname, undefined, { shallow: true });
     }
-  }, [router.query.upgrade, user?.organizerTier, router, showToast]);
+  }, [router.query.upgrade, orgTier, router, showToast]);
 
   // Load dismissed share prompt IDs from localStorage on mount
   useEffect(() => {

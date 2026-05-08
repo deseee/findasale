@@ -41,7 +41,7 @@ const OrganizerPayoutsPage = () => {
 
   // ─── Data fetching ───────────────────────────────────────────────────────────
 
-  const { data: balance, isLoading: balanceLoading } = useQuery({
+  const { data: balance, isLoading: balanceLoading, isError: balanceError } = useQuery({
     queryKey: ['stripe-balance'],
     queryFn: async () => {
       const res = await api.get('/stripe/balance');
@@ -50,7 +50,7 @@ const OrganizerPayoutsPage = () => {
     enabled: !!user?.id,
   });
 
-  const { data: schedule, isLoading: scheduleLoading } = useQuery({
+  const { data: schedule, isLoading: scheduleLoading, isError: scheduleError } = useQuery({
     queryKey: ['payout-schedule'],
     queryFn: async () => {
       const res = await api.get('/stripe/payout-schedule');
@@ -77,7 +77,7 @@ const OrganizerPayoutsPage = () => {
     totalNetPayout: number;
   }
 
-  const { data: earnings, isLoading: earningsLoading } = useQuery({
+  const { data: earnings, isLoading: earningsLoading, isError: earningsError } = useQuery({
     queryKey: ['earnings-breakdown'],
     queryFn: async () => {
       const res = await api.get('/stripe/earnings');
@@ -206,6 +206,13 @@ const OrganizerPayoutsPage = () => {
         </div>
 
         <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+
+          {/* Error banner */}
+          {(balanceError || scheduleError || earningsError) && (
+            <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 p-4 text-sm text-red-700 dark:text-red-400">
+              Something went wrong loading your payout data. Please refresh to try again.
+            </div>
+          )}
 
           {/* Feature #11: Referral discount banner */}
           {organizerProfile?.referralDiscountActive && organizerProfile.referralDiscountExpiry && (
