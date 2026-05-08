@@ -1999,5 +1999,3 @@ router.get('/claim/verify/:token', async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-e
