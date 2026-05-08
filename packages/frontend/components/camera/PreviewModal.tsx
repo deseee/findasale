@@ -173,6 +173,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
           <button
             onClick={onClose}
             className="text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 text-2xl leading-none"
+            aria-label="Close modal"
           >
             ✕
           </button>
@@ -283,6 +284,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     setEditingField(editingField === 'title' ? null : 'title')
                   }
                   className="text-amber-600 hover:text-amber-700 text-sm"
+                  aria-label="Edit title"
                 >
                   ✏️
                 </button>
@@ -314,6 +316,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     )
                   }
                   className="text-amber-600 hover:text-amber-700 text-sm"
+                  aria-label="Edit category"
                 >
                   ✏️
                 </button>
@@ -353,6 +356,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     )
                   }
                   className="text-amber-600 hover:text-amber-700 text-sm"
+                  aria-label="Edit condition"
                 >
                   ✏️
                 </button>
@@ -398,6 +402,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                       )
                     }
                     className="text-amber-600 hover:text-amber-700 text-sm"
+                    aria-label="Edit description"
                   >
                     ✏️
                   </button>
