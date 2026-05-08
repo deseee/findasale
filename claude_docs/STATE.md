@@ -4,14 +4,41 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S698 — All S691–S697 push blocks landed + Batch 2 complete (COMPLETE — push block below)**
+**Latest: S699 — Design Strategy Session: 5 design briefs commissioned + implementation order mapped (COMPLETE — push block below)**
 
-S698 verified all S691–S697 commits on GitHub. Dispatched 3 parallel Batch 2 agents — all returned clean (zero TS errors):
+S699 was a pure design strategy session. Reviewed all 5 Claude Design handoff zip files (Sessions 1–5). Created 5 design brief/reply documents in `claude_docs/design/`. Answered all design open questions. Mapped implementation priority against the roadmap. No code changes this session — all deliverables are documentation files for the design pipeline.
+
+**Design docs created:**
+- `storefront-design-reply-v1.md` — answers to all 11 design question categories from the Session 1 handoff
+- `session-2-sale-detail-shopper-onboarding.md` — sale detail page (all states) + shopper first-run experience
+- `session-3-organizer-sale-creation-wizard.md` — 5-step creation wizard + item manager entry + quick-add flow
+- `session-4-email-design-system.md` — base template + 5 modules + 7 emails (9 counting onboarding series)
+- `session-5-smart-queue-broadcast-saletypes.md` — Smart review queue, broadcast composer, sale type matrix
+
+**Implementation priority:**
+1. Sale detail page (Session 2) — highest-traffic public page, cold Google traffic lands here
+2. Sale creation wizard (Session 3) — activation gate, highest organizer churn point
+3. Email design system (Session 4) — every user receives these; base template unlocks broadcast too
+4. Smart review queue (Session 5 Brief D) — completes the camera pipeline (PENDING_REVIEW flow)
+5. Broadcast composer (Session 5 Brief E) — OrganizerBroadcast in schema (#356), Pro/Teams monetization
+6. Sale type badge system (Session 5 Brief F) — display-only, no new schema
+7. Storefront v0.2 (zip 4 design update) — light-default flip, not blocking
+
+**One dev gap flagged:** Online Only toggle (Brief F) designed in `sale-types.jsx` but NOT wired into `wizard.jsx` Step 2. Dev must pull it from the sale-types canvas and wire into wizard Step 2 (dates & location).
+
+---
+
+**Previous: S698 — All S691–S697 push blocks landed + Batch 2 complete + Auction P0s fixed + Scraper phone/website dropout fixed (COMPLETE — push block below)**
+
+S698 verified all S691–S697 commits on GitHub. Dispatched Batch 2 agents + QA + scraper audit — all returned clean (zero TS errors):
 
 - **email-discovery-spec.md cleanup** — Hunter.io/Clearbit/Apollo refs stripped from 5 locations. Free pipeline (website scraping + SMTP probe + pattern permutation) fully intact.
 - **MailerLite tier group wiring** — `mailerliteService.ts` + `syncLeadTierGroups()` added to `outreachEmailsCron.ts`. Weekly cron (Sundays 02:00 UTC). Gates on `OUTREACH_ENABLED=true`. Patrick must add 3 Railway env vars: `MAILERLITE_COLD_GROUP_ID`, `MAILERLITE_WARM_GROUP_ID`, `MAILERLITE_HOT_GROUP_ID`.
 - **Email discovery schema migration** — 3 new Organizer fields: `emailDiscoveryMethod`, `emailDiscoveryConfidence`, `emailDiscoveredAt`. Migration `20260508000002_email_discovery_fields` created. `emailDiscoveryService.ts` now writes all 3 fields on successful discovery. **Patrick must run `prisma migrate deploy` + `prisma generate` after pushing.**
-- **18-state scraper URL corrections** — ALREADY DONE in S697. No action needed.
+- **#174 Auction P0 #1 fixed** — `itemController.ts` `placeBid`: `actualBidAmount` was computed as `Math.max(auctionStartPrice, auctionReservePrice)`, completely ignoring submitted bid amount. Fixed: `actualBidAmount = maxBidAmount`. Every bid was recording the starting price instead of the actual bid.
+- **#174 Auction P0 #2 fixed** — `items/[id].tsx`: `isAuction` only checked for `AUCTION` type, not `REVERSE_AUCTION`. Reverse auction items rendered as standard items with no price decay. Fixed: added `REVERSE_AUCTION` to detection, computed `reverseDecayedPrice` (days elapsed × daily drop, clamped to floor), fixed floor price display (was dividing cents incorrectly — showed $1200 instead of $12). `ReverseAuctionBadge.tsx` updated to accept `currentPrice` prop and use `<=` for `isAtFloor`.
+- **Scraper phone/website dropout fixed** — `getOrCreateScrapedOrganizer()` had no phone/website params so all Foursquare, HERE, and OSM phone/website data was silently dropped into scrapedMetadata. Fixed: added params, threaded phone/website through from all 3 sources. `ParsedListing` interface updated in `htmlParser.ts`. Null-check-before-write: never overwrites organizer-provided data.
+- **Scraper audit findings (strategic — decision needed):** (1) Yelp Fusion API not yet integrated — 5K free calls/day, returns phone+website pre-populated, ToS-clean. Highest-yield untapped source. (2) GarageSaleFinder scrapes consumer homeowner posts, not organizer businesses — wrong entity type. (3) AuctionZip.com (~25K auction houses) — ToS gray zone, decision needed before build. (4) SaleSeeker CSS selectors likely returning zero results — `[data-listing]` and `.listing-card` may not match live markup.
 
 **Previous: S697 — Scraper URL Corrections + WCAG ARIA + Outreach Lead Priority + Phase 2 Scrapers + Email Discovery (COMPLETE — pushed S698)**
 
@@ -788,7 +815,13 @@ Seeded 5 auction items on user2's production auction sale. QA run found two bugs
 
 ---
 
-## Recent Sessions (S693–S697)
+## Recent Sessions (S693–S699)
+
+### S699 — Design Strategy Session: 5 briefs + implementation order (COMPLETE — push block provided)
+
+Pure design strategy session. Reviewed 5 Claude Design handoff zip files (Sessions 1–5 returns). Created 5 design brief/reply files in `claude_docs/design/`. Key answers to design open questions: light is the default tone (dark is organizer-selectable); DRAFT/PUBLISHED/ENDED are schema values (UPCOMING/LIVE are derived at render); storefront identity = Simple/Pro/Teams (BRONZE/SILVER/GOLD = activity reputation, not identity); aiSuggestedPrice must always be a ghost placeholder, never pre-filled; no "AI" in copy. Recommended session order for next design cycle: storefront v0.2 → broadcast + sale types. Identified one dev gap: Online Only wizard toggle designed in `sale-types.jsx` but not integrated into `wizard.jsx` Step 2 — dev must pull and wire it.
+
+---
 
 ### S697 — WCAG ARIA + 13 Scraper URL Corrections + WA Scraper + Lead Priority + Phase 2 Scrapers + Email Discovery + Settings P1 Fix (COMPLETE — push block provided)
 
@@ -1041,7 +1074,7 @@ Full Google Maps Platform incident response and lockdown. Root cause: monthly Gi
 
 ---
 
-## Next Session — S699
+## Next Session — S700
 
 ### Step 0 — All S691–S697 pushes complete ✅ (verified S698)
 
