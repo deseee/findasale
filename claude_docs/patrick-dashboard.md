@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S686 Wrap
+# Patrick's Dashboard — S687 Wrap
 
 ---
 
@@ -7,67 +7,52 @@
 | Area | Status |
 |------|--------|
 | Vercel build | ✅ GREEN |
-| Railway backend | ✅ Green |
+| Railway backend | ✅ GREEN |
 | Google OAuth | ⚠️ Still broken (root cause unclear) |
 | Login (email/password) | ✅ Working |
 | MCP Server (mcp.finda.sale) | ✅ LIVE — 7 tools |
-| Organizer DB (post-purge) | ✅ Clean — 7,897 records intact, zero orphaned sales |
-| Directory workflows | ✅ All 4 active sources confirmed working |
-| #393 Chrome QA Sprint | 🟡 One item remaining — Auction #174 (needs items listed) |
-| #394 Full Walkthrough | ⬜ After QA sprint |
-| Directory rebuild plan | ✅ Complete — specs written, ready to dispatch S687 |
+| Organizer DB | ✅ 7,897 records + corroboration schema live |
+| New scrapers | ✅ OSM, Indiana Licensing, Sale Seeker — deployed, not yet triggered |
+| #393 Chrome QA Sprint | 🟡 Auction #174 still blocked (needs items listed) |
+| Cold Outreach Pipeline (#374) | 🟡 Schema ready — lead scoring service next |
 
 ---
 
-## What Happened This Session (S686)
+## What Happened This Session (S687)
 
-Pure research and planning session. No code shipped.
+Big directory rebuild session. Six agents. Everything green.
 
-**Google Places purge verified clean:**
-- 7,897 organizer records still exist (none deleted)
-- Only the `googlePlaceId` field was nulled across all records
-- Zero orphaned Sale records
-- Zero shopper-facing impact — no frontend page references googlePlaceId
+**Organizer schema expanded** — 14 new fields deployed to production: corroboration tracking (sourceCount, sourcesJson, corroborationScore, dedupeKey) + lead scoring (leadScore, leadTier, lastScoredAt, annualSalesEstimate, hasPhysicalOffice, isStateLicensed, licenseState, licenseNumber, staffSizeEstimate, reviewCount, reviewVelocity). Migration `20260508000001` deployed.
 
-**All four active workflows confirmed working:**
-- Foursquare: 3,656 organizer records, ~12/run avg — working
-- HERE Places: 596 organizer records, ~4/run avg — working
-- EstateSalesNet: 7,492 sales linked to organizers — working
-- Facebook Events: 699 sales — working
-- OSM: 71 crawl log entries, last run May 4 — workflow confirmed running
+**Merge algorithm upgraded** — `getOrCreateScrapedOrganizer()` now runs 5-path dedup and tracks corroboration score across sources. Every new organizer ingested from any source will now automatically merge with existing records and increment confidence scoring.
 
-**New sources evaluated:**
-- **EstateSales.org** — Tier 1 candidate (different company from .NET, organizer-focused, national). Need to verify their ToS on data storage before building scraper.
-- **State auctioneer licensing boards** — Tier 1, public records, zero ToS risk. Indiana + Ohio first. Yields verified licensed professionals only.
-- **MaxSold** — Skip. Transaction platform, not a directory. No organizer profiles.
+**Three new scrapers shipped:**
+- **OSM/Overpass** — 20 US metros, 5 venue tag types, weekly Monday 3am UTC
+- **Indiana licensing** — mylicense.in.gov, active auctioneer licenses only, weekly Monday 4am UTC
+- **Sale Seeker** — thesaleseeker.com (no ToS = legal), weekly Monday 5am UTC
 
-**Architecture designed (ready for dev dispatch):**
-- Corroboration schema: sourceCount, sourcesJson, corroborationScore, dedupeKey fields on Organizer model. Full merge algorithm written.
-- Lead scoring rubric: 0–100 scale, 7 signal categories, maps to Teams/Enterprise tiers. All new Organizer fields identified.
+**Source research completed:**
+- EstateSales.org: PROHIBITED — explicit anti-scraping clause, will not pursue
+- DataForSEO: SKIP — 20-100x more expensive than existing sources
+- OSM cron: was never active (S686 assessment was wrong) — now built
 
 ---
 
-## Patrick Push Block (S686)
+## Patrick Actions Needed
 
-No code changes. Only doc updates:
+**Trigger scrapers manually to validate:**
+- Hit `POST /api/internal/scraper/run-indiana-licensing` in Railway console or via curl with internal secret
+- Watch logs — if the ASP.NET form parses correctly you'll see organizer records being created
+- Then trigger `run-osm`
 
-```powershell
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S686: Session wrap — directory rebuild research complete"
-.\push.ps1
-```
+**Auction #174 still blocked:**
+- List at least one item in a production auction sale so Chrome QA can run the bid → close → purchase flow
 
 ---
 
-## Next Session (S687) — Ready to Fire
+## Next Session (S688)
 
-Three parallel dispatches at session start:
-
-1. **Dev A** — Corroboration schema migration + merge logic (spec complete from S686 Architect agent)
-2. **Dev B** — Lead scoring fields on Organizer model (spec complete from S686 Sales Ops agent)
-3. **Research C** — EstateSales.org ToS verification + confirm OSM workflow file location on GitHub
-
-After C returns:
-- If EstateSales.org ToS clear → dev dispatch scraper workflow
-- State auctioneer licensing board scraper (Indiana first)
+1. Validate Indiana + OSM first runs from Railway logs
+2. Build lead scoring service (score all 7,897 organizers → unlocks #374 outreach pipeline)
+3. Louisiana + Illinois licensing scrapers (same pattern as Indiana, 1 agent each)
+4. #174 Auction QA if Patrick lists items

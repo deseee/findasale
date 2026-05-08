@@ -4,20 +4,25 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S686 — Organizer Directory Rebuild: Research + Architecture (COMPLETE — no code shipped)**
+**Latest: S687 — Directory Rebuild: Schema + 3 New Scrapers (COMPLETE — Vercel ✅ Railway ✅)**
 
-S686 was a pure research and planning session following the Google Places purge. No code was written or pushed.
+S687 dispatched all directory rebuild work from S686 specs. Six parallel agents. Everything shipped and confirmed green.
 
-**Key findings:**
-- Google Places purge was surgical: all 7,897 organizer records still exist. Only `googlePlaceId` field was nulled. Zero orphaned Sale records. Zero frontend impact.
-- OSM workflow IS running (71 crawl log entries, last run May 4). Queue: 20 metros, 594 items each for Foursquare, HERE, and OSM.
-- All four active workflows (Foursquare, HERE, EstateSalesNet, Facebook Events) confirmed operationally sound.
+**What shipped:**
+- **Organizer schema** — 14 new fields + 3 indexes: corroboration (sourceCount, sourcesJson, corroborationScore, dedupeKey) + lead scoring (leadScore, leadTier, lastScoredAt, annualSalesEstimate, hasPhysicalOffice, isStateLicensed, licenseState, licenseNumber, staffSizeEstimate, reviewCount, reviewVelocity). Migration `20260508000001_organizer_corroboration_and_lead_scoring` deployed to Railway ✅
+- **Merge algorithm** — `getOrCreateScrapedOrganizer()` updated with 5-path dedup (googlePlaceId, foursquareVenueId, hereBusinessId, dedupeKey, name+city) + corroboration scoring helpers (generateDedupeKey, geocodeToGrid, recalculateCorroborationScore)
+- **OSM/Overpass scraper** — New scraper hitting Overpass API, 20 US metros, 5 tag types (antiques, secondhand, used_goods, auction_house, auctioneer). Weekly Monday 3am UTC cron.
+- **Indiana licensing scraper** — Hits mylicense.in.gov ASP.NET form, active licenses only, maps licenseNumber/licenseState/isStateLicensed. Weekly Monday 4am UTC cron.
+- **Sale Seeker scraper** — Hits thesaleseeker.com (no ToS — legal). Cheerio HTML parsing, city-based search. Weekly Monday 5am UTC cron. May need selector refinement after first live run.
 
-**Research outputs ready for S687 dispatch:**
-1. **Architect spec** — Corroboration schema (sourceCount, sourcesJson, corroborationScore, dedupeKey on Organizer) + merge algorithm for getOrCreateScrapedOrganizer().
-2. **Sales Ops spec** — Lead scoring rubric (0–100, 7 signal categories) for Teams/Enterprise prospect identification. Organizer model fields designed.
-3. **Innovation source ranking** — EstateSales.org (Tier 1 — verify ToS first), state auctioneer licensing boards (Tier 1 — Indiana + Ohio, public records), Foursquare + HERE (Tier 2). MaxSold = Skip. Craigslist/AuctionZip = Skip (legal risk).
-4. **EstateSales.org** — Confirmed distinct platform from .NET. National, organizer-focused. ToS check required before scraper build.
+**Research findings (C dispatch):**
+- EstateSales.org — **PROHIBITED** (explicit anti-scraping clause). Remove from candidate list.
+- EstatePros — **PROHIBITED**. Remove.
+- Sale Seeker — No ToS found → built scraper (legally permissive).
+- OSM cron — **was never active**. S686 assessment ("71 entries, workflow running") was wrong — entries were from a manual run, no workflow file existed in GitHub. Now built.
+- DataForSEO — SKIP ($0.01–0.05/record vs HERE's $0.0005).
+
+**Pending first runs:** Trigger Indiana scraper first (structured government data, highest confidence). OSM second. Sale Seeker may need selector tweak.
 
 ---
 
@@ -684,61 +689,30 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S687
+## Next Session — S688
 
-**Session start:** Read STATE.md → roadmap BROKEN/PENDING items → present top 3.
+**Priority 1 — Trigger scrapers and monitor first runs**
+- POST `/api/internal/scraper/run-indiana-licensing` — watch Railway logs for parse success/failure on the ASP.NET form. This is the validation run for the whole licensing pattern.
+- POST `/api/internal/scraper/run-osm` — watch for Overpass API responses and organizer create/merge counts.
+- Sale Seeker: hold until Indiana + OSM confirmed working, then assess if cheerio selectors hit real data.
 
-**Priority 1 — Directory Rebuild: Parallel Dev Dispatches**
+**Priority 2 — Lead scoring service**
+- Schema fields are live. Build `leadScoringService.ts` that scores existing 7,897 organizers (0–100, maps to COLD/WARM/HOT/ENTERPRISE leadTier). Run as one-time backfill + weekly cron.
+- Unlocks #374 Cold Outreach Pipeline — can segment organizers by tier.
 
-All specs are complete from S686. Dispatch these in parallel at session start:
+**Priority 3 — Additional state licensing boards**
+- Louisiana: lalb.org "Find an Auctioneer" — same ASP.NET pattern as Indiana, 1-agent dispatch.
+- Illinois: idfpr.illinois.gov — same pattern.
+- Each state is a single-agent dispatch once Indiana confirmed working.
 
-**Dev Dispatch A — Corroboration schema + merge logic:**
-- Add to Organizer model in schema.prisma: `sourceCount Int @default(1)`, `sourcesJson Json?`, `corroborationScore Decimal @default(0.5) @db.Decimal(3,2)`, `dedupeKey String? @db.VarChar(255)`, plus `@@index([dedupeKey])`, `@@index([corroborationScore])`, `@@index([sourceCount])`
-- Create migration SQL (see Architect output from S686)
-- Update `getOrCreateScrapedOrganizer()` in backend ingest service to implement 6-step merge flow: dedupeKey lookup → source ID exact match → fuzzy name+geocode match → merge (increment sourceCount, update sourcesJson, recalculate corroborationScore) or create
-- Add `recalculateCorroborationScore()` helper
-- Add `geocodeToGrid(lat, lng, gridSizeMeters)` utility
-- TS check required before returning
+**Priority 4 — #393 QA Sprint holdover**
+- Auction #174 — still blocked pending items listed in a production auction sale (Patrick action required to unblock).
+- #394 Full Walkthrough — after #174 cleared.
 
-**Dev Dispatch B — Lead scoring fields on Organizer model:**
-- Add nullable fields to Organizer for lead scoring: `leadScore Int?`, `leadTier String?` (COLD/WARM/HOT/ENTERPRISE), `lastScoredAt DateTime?`, `annualSalesEstimate Int?`, `hasPhysicalOffice Boolean?`, `isStateLicensed Boolean?`, `licenseState String?`, `licenseNumber String?`, `staffSizeEstimate Int?`, `reviewCount Int?`, `reviewVelocity Float?`
-- Create migration
-- TS check required before returning
-
-**Research Dispatch C — EstateSales.org ToS + OSM workflow location:**
-- Visit estatesales.org/terms and estatesales.org/privacy — confirm whether scraping and persistent storage of organizer data is permitted
-- Check GitHub repo `deseee/findasale` for `.github/workflows/` files — list all workflow files that exist and confirm whether an OSM/Overpass workflow is present (DB shows 71 crawl log entries for OSM as of May 4)
-- Return: ToS verdict (permitted / prohibited / unclear) + OSM workflow file name if found
-
-**Priority 2 — After Dispatch C returns:**
-- If EstateSales.org ToS is clear → dev dispatch for scraper workflow (mirror EstateSalesNet workflow pattern)
-- If OSM workflow confirmed missing → dev dispatch to build it (Overpass API, `shop=antiques`, `shop=secondhand`, `shop=used_goods`, auctioneer tags, write to Organizer via existing ingest endpoint)
-
-**Priority 3 — State auctioneer licensing boards (Indiana first):**
-- Indiana PLA auctioneer database is public records via APRA portal
-- Dev dispatch: scraper for Indiana PLA → normalize name/address → POST to `/api/internal/scraper/ingest` with `sourceName: "IndianaLicensing"`
-- Ohio to follow once Indiana is confirmed working
-
-**Priority 4 — #393 QA Sprint holdover:**
-- Auction #174 — still needs organizer to list items in a production auction sale before Chrome QA can proceed
-- #394 Full Walkthrough — after #174 cleared
-
-**Note on #374 Cold Outreach Pipeline:**
-The directory rebuild (Dispatches A+B above) is the foundation for #374. The corroboration scoring identifies warm leads; the lead scoring rubric tiers them. Do not dispatch #374 until A+B are shipped and backfill is run on existing 7,897 organizer records.
-
-**Patrick wrap actions (S685):**
+**Patrick wrap actions (S687):**
 ```powershell
-git add packages/frontend/pages/items/[id].tsx
-git add packages/frontend/components/ClientPayoutPanel.tsx
-git add "packages/frontend/pages/purchases/[id].tsx"
-git commit -m "S685: QA fixes — hold dark mode, settlement payout fields, purchase history link
-
-- items/[id].tsx: dark:bg-amber-900/20 -> dark:bg-gray-800
-- ClientPayoutPanel.tsx: payout confirmation reads mutation response on save
-- purchases/[id].tsx: View My Purchases -> /shopper/history; Amount Paid shows total with buyer premium for auctions"
-.\push.ps1
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S685: Session wrap — STATE + dashboard updated"
+git commit -m "S687: Session wrap — STATE + dashboard updated"
 .\push.ps1
 ```
