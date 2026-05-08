@@ -27,6 +27,7 @@ import {
   runCuratorReviewJobSingle,
   getCuratorEntries,
   updateCuratorEntry,
+  getScrapePoolStats,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -117,6 +118,9 @@ router.post('/scraper/runs', triggerScrapeRun);
 router.get('/scraper/runs', getScrapeRuns);
 router.get('/scraper/sales', getScrapedSales);
 router.post('/scraper/takedown', emergencyTakedown);
+
+// Scrape pool analytics dashboard
+router.get('/scrape-pool-stats', getScrapePoolStats);
 
 // Feature #362: GET /api/admin/xp-velocity — XP exploit detection
 router.get('/xp-velocity', authenticate, requireAdmin, async (req: any, res: any) => {
