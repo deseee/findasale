@@ -96,6 +96,7 @@ export const RarityBoostModal: React.FC<RarityBoostModalProps> = ({
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl leading-none"
+              aria-label="Close"
             >
               ×
             </button>

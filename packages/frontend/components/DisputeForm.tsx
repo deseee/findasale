@@ -84,6 +84,7 @@ const DisputeForm: React.FC<DisputeFormProps> = ({
           type="button"
           onClick={onCancel}
           className="text-warm-500 hover:text-warm-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium"
+          aria-label="Close"
         >
           ✕
         </button>
