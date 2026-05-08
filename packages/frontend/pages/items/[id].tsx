@@ -256,7 +256,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   // Mutations
   const placeBidMutation = useMutation({
     mutationFn: async (amount: number) => {
-      const response = await api.post(`/items/${id}/bids`, { bidAmount: amount });
+      const response = await api.post(`/items/${id}/bids`, { maxBidAmount: amount });
       return response.data;
     },
     onSuccess: (data) => {

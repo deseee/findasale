@@ -13,6 +13,423 @@ import { getRandomUserAgent, jitterDelay } from '../userAgents';
 const SALE_SEEKER_BASE_URL = 'https://thesaleseeker.com';
 
 /**
+ * Comprehensive national metro coverage for TheSaleSeker scraping.
+ * Format: {city-name}-{state-abbreviation} all lowercase with hyphens.
+ * Covers top 50 US metros + major secondary markets across all 50 states.
+ */
+export const DEFAULT_METROS = [
+  // Top 10 metros
+  'new-york-ny',
+  'los-angeles-ca',
+  'chicago-il',
+  'dallas-tx',
+  'houston-tx',
+  'philadelphia-pa',
+  'phoenix-az',
+  'san-antonio-tx',
+  'san-diego-ca',
+  'san-jose-ca',
+
+  // Top 11-25 metros
+  'austin-tx',
+  'jacksonville-fl',
+  'fort-worth-tx',
+  'columbus-oh',
+  'charlotte-nc',
+  'san-francisco-ca',
+  'indianapolis-in',
+  'seattle-wa',
+  'denver-co',
+  'boston-ma',
+
+  // Top 26-50 metros
+  'el-paso-tx',
+  'memphis-tn',
+  'nashville-tn',
+  'detroit-mi',
+  'oklahoma-city-ok',
+  'portland-or',
+  'las-vegas-nv',
+  'louisville-ky',
+  'baltimore-md',
+  'milwaukee-wi',
+  'albuquerque-nm',
+  'tucson-az',
+  'fresno-ca',
+  'sacramento-ca',
+  'kansas-city-mo',
+  'mesa-az',
+  'virginia-beach-va',
+  'atlanta-ga',
+  'new-orleans-la',
+  'minneapolis-mn',
+  'long-beach-ca',
+  'miami-fl',
+  'oakland-ca',
+  'tulsa-ok',
+  'cleveland-oh',
+
+  // Additional major secondary markets by state
+  // Alabama
+  'birmingham-al',
+  'mobile-al',
+  'montgomery-al',
+
+  // Alaska
+  'anchorage-ak',
+  'juneau-ak',
+
+  // Arizona
+  'scottsdale-az',
+  'glendale-az',
+  'gilbert-az',
+  'chandler-az',
+
+  // Arkansas
+  'little-rock-ar',
+  'fayetteville-ar',
+
+  // California
+  'santa-ana-ca',
+  'irvine-ca',
+  'berkeley-ca',
+  'oakland-ca',
+  'santa-monica-ca',
+  'pasadena-ca',
+  'anaheim-ca',
+  'ventura-ca',
+  'stockton-ca',
+  'santa-barbara-ca',
+
+  // Colorado
+  'boulder-co',
+  'colorado-springs-co',
+  'fort-collins-co',
+  'pueblo-co',
+
+  // Connecticut
+  'bridgeport-ct',
+  'hartford-ct',
+  'new-haven-ct',
+
+  // Delaware
+  'wilmington-de',
+  'dover-de',
+
+  // Florida
+  'orlando-fl',
+  'tampa-fl',
+  'st-petersburg-fl',
+  'hialeah-fl',
+  'fort-lauderdale-fl',
+  'palm-beach-fl',
+  'daytona-beach-fl',
+  'ft-myers-fl',
+  'naples-fl',
+  'sarasota-fl',
+  'gainesville-fl',
+  'tampa-bay-fl',
+
+  // Georgia
+  'savannah-ga',
+  'augusta-ga',
+  'athens-ga',
+
+  // Hawaii
+  'honolulu-hi',
+
+  // Idaho
+  'boise-id',
+  'pocatello-id',
+
+  // Illinois
+  'peoria-il',
+  'rockford-il',
+  'springfield-il',
+  'naperville-il',
+  'evanston-il',
+  'oak-lawn-il',
+
+  // Indiana
+  'fort-wayne-in',
+  'evansville-in',
+  'south-bend-in',
+  'bloomington-in',
+  'gary-in',
+
+  // Iowa
+  'des-moines-ia',
+  'cedar-rapids-ia',
+  'davenport-ia',
+  'iowa-city-ia',
+
+  // Kansas
+  'wichita-ks',
+  'overland-park-ks',
+  'kansas-city-ks',
+  'topeka-ks',
+
+  // Kentucky
+  'lexington-ky',
+  'covington-ky',
+
+  // Louisiana
+  'baton-rouge-la',
+  'shreveport-la',
+  'lafayette-la',
+
+  // Maine
+  'portland-me',
+  'lewiston-me',
+  'bangor-me',
+
+  // Maryland
+  'baltimore-md',
+  'silver-spring-md',
+  'annapolis-md',
+
+  // Massachusetts
+  'boston-ma',
+  'worcester-ma',
+  'springfield-ma',
+  'salem-ma',
+
+  // Michigan
+  'detroit-mi',
+  'grand-rapids-mi',
+  'warren-mi',
+  'ann-arbor-mi',
+  'flint-mi',
+  'lansing-mi',
+  'sterling-heights-mi',
+  'dearborn-mi',
+  'livonia-mi',
+  'traverse-city-mi',
+
+  // Minnesota
+  'minneapolis-mn',
+  'st-paul-mn',
+  'rochester-mn',
+  'st-louis-park-mn',
+  'minnetonka-mn',
+  'bloomington-mn',
+
+  // Mississippi
+  'jackson-ms',
+  'gulfport-ms',
+
+  // Missouri
+  'kansas-city-mo',
+  'st-louis-mo',
+  'springfield-mo',
+  'independence-mo',
+  'columbia-mo',
+
+  // Montana
+  'billings-mt',
+  'missoula-mt',
+  'great-falls-mt',
+
+  // Nebraska
+  'omaha-ne',
+  'lincoln-ne',
+
+  // Nevada
+  'las-vegas-nv',
+  'henderson-nv',
+  'reno-nv',
+  'north-las-vegas-nv',
+
+  // New Hampshire
+  'manchester-nh',
+  'nashua-nh',
+  'concord-nh',
+
+  // New Jersey
+  'newark-nj',
+  'jersey-city-nj',
+  'paterson-nj',
+  'elizabeth-nj',
+  'trenton-nj',
+  'atlantic-city-nj',
+  'camden-nj',
+
+  // New Mexico
+  'albuquerque-nm',
+  'santa-fe-nm',
+  'las-cruces-nm',
+
+  // New York
+  'new-york-ny',
+  'buffalo-ny',
+  'rochester-ny',
+  'yonkers-ny',
+  'syracuse-ny',
+  'albany-ny',
+  'new-rochelle-ny',
+  'utica-ny',
+
+  // North Carolina
+  'charlotte-nc',
+  'raleigh-nc',
+  'greensboro-nc',
+  'durham-nc',
+  'chapel-hill-nc',
+  'wilmington-nc',
+  'asheville-nc',
+  'fayetteville-nc',
+  'charlotte-nc',
+  'high-point-nc',
+
+  // North Dakota
+  'bismarck-nd',
+  'fargo-nd',
+  'grand-forks-nd',
+
+  // Ohio
+  'columbus-oh',
+  'cleveland-oh',
+  'cincinnati-oh',
+  'toledo-oh',
+  'akron-oh',
+  'dayton-oh',
+  'youngstown-oh',
+  'canton-oh',
+
+  // Oklahoma
+  'oklahoma-city-ok',
+  'tulsa-ok',
+  'norman-ok',
+
+  // Oregon
+  'portland-or',
+  'salem-or',
+  'eugene-or',
+  'gresham-or',
+  'bend-or',
+
+  // Pennsylvania
+  'philadelphia-pa',
+  'pittsburgh-pa',
+  'allentown-pa',
+  'erie-pa',
+  'reading-pa',
+  'scranton-pa',
+  'bethlehem-pa',
+  'harrisburg-pa',
+  'lancaster-pa',
+  'altoona-pa',
+
+  // Rhode Island
+  'providence-ri',
+  'warwick-ri',
+  'cranston-ri',
+
+  // South Carolina
+  'charleston-sc',
+  'columbia-sc',
+  'greenville-sc',
+  'spartanburg-sc',
+  'myrtle-beach-sc',
+
+  // South Dakota
+  'sioux-falls-sd',
+  'rapid-city-sd',
+
+  // Tennessee
+  'memphis-tn',
+  'nashville-tn',
+  'knoxville-tn',
+  'chattanooga-tn',
+  'clarksville-tn',
+  'murfreesboro-tn',
+
+  // Texas
+  'houston-tx',
+  'san-antonio-tx',
+  'dallas-tx',
+  'austin-tx',
+  'fort-worth-tx',
+  'corpus-christi-tx',
+  'lubbock-tx',
+  'laredo-tx',
+  'arlington-tx',
+  'irving-tx',
+  'plano-tx',
+  'garland-tx',
+  'amarillo-tx',
+  'beaumont-tx',
+  'brownsville-tx',
+  'galveston-tx',
+  'san-angelo-tx',
+  'abilene-tx',
+  'tyler-tx',
+  'waco-tx',
+  'grand-prairie-tx',
+  'north-richland-hills-tx',
+  'mckinney-tx',
+  'carrollton-tx',
+  'denton-tx',
+  'lewisville-tx',
+  'richardson-tx',
+  'midland-tx',
+  'odessa-tx',
+
+  // Utah
+  'salt-lake-city-ut',
+  'provo-ut',
+  'ogden-ut',
+  'west-jordan-ut',
+  'lehi-ut',
+  'sandy-ut',
+
+  // Vermont
+  'burlington-vt',
+  'montpelier-vt',
+
+  // Virginia
+  'virginia-beach-va',
+  'norfolk-va',
+  'richmond-va',
+  'arlington-va',
+  'alexandria-va',
+  'roanoke-va',
+  'lynchburg-va',
+  'salem-va',
+
+  // Washington
+  'seattle-wa',
+  'spokane-wa',
+  'tacoma-wa',
+  'vancouver-wa',
+  'bellevue-wa',
+  'kent-wa',
+  'everett-wa',
+  'renton-wa',
+  'federal-way-wa',
+  'olympia-wa',
+
+  // West Virginia
+  'charleston-wv',
+  'huntington-wv',
+  'parkersburg-wv',
+
+  // Wisconsin
+  'milwaukee-wi',
+  'madison-wi',
+  'green-bay-wi',
+  'kenosha-wi',
+  'racine-wi',
+  'appleton-wi',
+  'oshkosh-wi',
+
+  // Wyoming
+  'cheyenne-wy',
+  'casper-wy',
+  'laramie-wy',
+];
+
+/**
  * Scrape TheSaleSeker for a specific metro area.
  * Fetches organizer/company listings by searching for the metro area.
  */

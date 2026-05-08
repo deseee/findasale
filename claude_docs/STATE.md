@@ -4,7 +4,30 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S689 (continued) — Roadmap Audit + Full Graduation Pass (COMPLETE)**
+**Latest: S690 — 50-State Auctioneer Scraper Build (ON DISK — AUDIT REQUIRED BEFORE PUSH)**
+
+Built scraper files for all 50 US states and wired all routes in `internal.ts`. However: Patrick correctly flagged that the 42 new state scrapers were template-generated in parallel agents without individually researching each state's actual licensing board URL, HTML structure, or whether auctioneer licensing even exists in that state. Scrapers are very likely rubber-stamped. Also caught: naming inconsistency (scrape-nc-licensing.yml abbreviation vs scrape-north-carolina-licensing.yml full-name for other states).
+
+**What is on disk (NOT yet pushed — hold until audit):**
+- `packages/backend/src/routes/internal.ts` — updated to 728 lines with all 50 states (14 original + 36 new imports + 36 new routes)
+- `packages/backend/src/services/scraper/sources/northCarolinaLicensingScraper.ts`
+- `packages/backend/src/services/scraper/sources/ohioLicensingScraper.ts`
+- `packages/backend/src/services/scraper/sources/tennesseeLicensingScraper.ts`
+- `packages/backend/src/services/scraper/sources/virginiaLicensingScraper.ts`
+- 36 new state scrapers: AL, AR, AZ, CA, CO, CT, DE, FL, GA, HI, IA, ID, KS, KY, MA, MD, ME, MI, MN, MS, MT, NE, ND, NH, NJ, NM, NV, NY, OK, OR, PA, RI, SC, SD, TX, UT
+- 49 workflow YMLs (7 original + 42 new) — in `.github/workflows/`
+- Note: one bad file on disk: `westVirginia LicensingScraper.ts` (space in name) — delete it
+
+**Known issues flagged by Patrick:**
+1. State scraper URLs were guessed/templated, not individually researched
+2. Some states may not have auctioneer licensing requirements at all
+3. Workflow YML naming inconsistency — `scrape-nc-licensing.yml` (abbrev) vs `scrape-north-carolina-licensing.yml` (full name) for others
+
+**DO NOT PUSH** any of these files until the S691 audit confirms URLs and coverage.
+
+---
+
+**Previous: S689 (continued) — Roadmap Audit + Full Graduation Pass (COMPLETE)**
 
 Full cross-reference of STATE.md vs roadmap.md. roadmap.md updated to v135. Stale statuses corrected, items moved to correct sections. Full graduation pass: 23 items promoted to SHIPPED & VERIFIED.
 
@@ -809,31 +832,41 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ## Next Session — S691
 
-**Priority 1 — Lead scoring recalibration**
-- HOT/ENTERPRISE thresholds need adjustment. Current scoring was designed for eventually-enriched orgs. For cold outreach today, HOT should be reachable with email + phone + 2+ sources (~35–40 pts). Review scoring weights and lower tier thresholds or adjust dimension weights so real organizers can reach HOT without licensing data.
-- Target: ~10–20% of WARM pool should climb to HOT after recalibration.
+**⚠️ PRIORITY 0 — Audit the S690 50-state scraper build before touching anything else**
 
-**Priority 2 — Push workflow files (Patrick manual)**
-- `.github/workflows/scrape-indiana-licensing.yml`
-- `.github/workflows/scrape-osm.yml`  
-- `.github/workflows/scrape-sale-seeker.yml`
-- These are local, need `git add` + push.ps1 (MCP blocked by workflow scope).
+S690 generated 42 state scraper files using parallel agents with a template pattern. Patrick flagged (correctly) that the scrapers were rubber-stamped — agents guessed URLs and HTML structures rather than researching each state's actual licensing board. The files are on disk but nothing has been pushed.
 
-**Priority 3 — Trigger scrapers manually**
-- POST `/api/internal/scraper/run-indiana-licensing` — validates ASP.NET form scrape.
-- POST `/api/internal/scraper/run-osm` — Overpass API batch.
-- After Indiana runs, re-score to see HOT/ENTERPRISE movement.
+The S691 session must:
 
-**Priority 4 — Additional state licensing boards**
-- Louisiana (lalb.org), Illinois (idfpr.illinois.gov) — same ASP.NET pattern as Indiana.
+1. **Research each state's actual auctioneer licensing situation:**
+   - Does this state require auctioneer licensing? (Several states — TX, AK, etc. — have no auctioneer license requirement)
+   - What is the real URL for the state's public license lookup?
+   - What HTTP method and form structure does it use?
+   - Is there a downloadable CSV or API endpoint instead of HTML scraping?
 
-**Priority 5 — QA holdover**
-- #235 DonationModal ✅ VERIFIED S689 Chrome QA sprint
-- #251 priceBeforeMarkdown — still needs TEAMS-tier test scenario
-- #223 Organizer Guidance Layer rank badges — needs an active hold in prod to verify badge display
-- NSFW detection — upload image via organizer photo flow, confirm Cloudinary moderation ran
+2. **Fix the naming inconsistency in workflow YMLs:**
+   - `scrape-nc-licensing.yml` uses abbreviation; all others use full state name
+   - Either rename to `scrape-north-carolina-licensing.yml` OR standardize everything to abbreviations
+   - States needing consistent naming decision before push
 
-**Patrick wrap actions (S689+S690 — two blocks):**
+3. **Delete the bad file on disk:**
+   - `packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts` (space in name — duplicate of westVirginiaLicensingScraper.ts)
+
+4. **Audit each scraper file for:**
+   - Correct URL (not hallucinated)
+   - Correct form field names (ASP.NET form names differ per state)
+   - Whether the state actually has a public auctioneer license directory
+   - Whether `AUCTION_HOUSE` is the right category (some states cover estate sale companies differently)
+
+5. **After audit:** rebuild the scraper files that need correction, then push the full batch + internal.ts + workflow YMLs
+
+**States with no auctioneer licensing requirement (likely deletable):** TX, AK, HI, CO, CA may not require state licensing — verify before keeping those scrapers.
+
+**Do not push the S690 scraper files until this audit is complete.**
+
+---
+
+**Priority 2 — Push S689 Chrome QA fixes (still unpushed from prior session)**
 
 Block 1 — Chrome QA fixes + docs:
 ```powershell
@@ -845,11 +878,11 @@ git add packages/frontend/components/DisputeForm.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git commit -m "S689+S690: Dashboard lapse fix, WCAG ARIA (4 components), roadmap v135"
+git commit -m "S689: Dashboard lapse fix, WCAG ARIA (4 components), roadmap v135"
 .\push.ps1
 ```
 
-Block 2 — Scraper files + workflow YMLs:
+Block 2 — S689 scraper infrastructure (crash loop fixes, already verified working):
 ```powershell
 git add packages/backend/src/services/scraper/sources/saleSeeker.ts
 git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
@@ -862,3 +895,7 @@ git add .github/workflows/scrape-sale-seeker.yml
 git commit -m "S689: Lead scoring service + crash loop fixes + scraper workflow YMLs"
 .\push.ps1
 ```
+
+**Priority 3 — QA holdover**
+- #251 priceBeforeMarkdown — needs TEAMS-tier test scenario
+- #223 Organizer Guidance Layer rank badges — needs an active hold in prod

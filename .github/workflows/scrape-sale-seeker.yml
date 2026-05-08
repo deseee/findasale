@@ -21,13 +21,21 @@ jobs:
 
       - name: Run Sale Seeker Scraper
         run: |
-          METRO="${{ github.event.inputs.metro || 'grand-rapids-mi' }}"
-          echo "Scraping Sale Seeker for: $METRO"
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -H "x-internal-secret: ${{ secrets.OUTREACH_SECRET }}" \
-            -d "{\"metro\":\"$METRO\"}" \
-            ${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/scraper/run-sale-seeker
+          if [ -z "${{ github.event.inputs.metro }}" ]; then
+            echo "Scraping Sale Seeker for all national metros (DEFAULT_METROS)"
+            curl -X POST \
+              -H "Content-Type: application/json" \
+              -H "x-internal-secret: ${{ secrets.OUTREACH_SECRET }}" \
+              -d '{}' \
+              ${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/scraper/run-sale-seeker
+          else
+            echo "Scraping Sale Seeker for: ${{ github.event.inputs.metro }}"
+            curl -X POST \
+              -H "Content-Type: application/json" \
+              -H "x-internal-secret: ${{ secrets.OUTREACH_SECRET }}" \
+              -d "{\"metros\":[\"${{ github.event.inputs.metro }}\"]}" \
+              ${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/scraper/run-sale-seeker
+          fi
 
       - name: Notify on failure
         if: failure()
