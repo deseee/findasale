@@ -4,9 +4,49 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S689 — Lead Scoring Service + Scraper Crash Loop Fixes (COMPLETE)**
+**Latest: S689 (continued) — Roadmap Audit + Full Graduation Pass (COMPLETE)**
 
-S689 completed ADR-076 Phase 2 (lead scoring) and fixed a cascade of Railway MODULE_NOT_FOUND crash loops caused by subagent-written files that were never pushed to GitHub.
+Full cross-reference of STATE.md vs roadmap.md. roadmap.md updated to v135. Stale statuses corrected, items moved to correct sections. Full graduation pass: 23 items promoted to SHIPPED & VERIFIED.
+
+**What changed in roadmap.md:**
+- BROKEN → TESTING: #7, #13, #41, #48, #50, #184 (bugs confirmed fixed, pending Chrome QA)
+- BROKEN → SHIPPED & VERIFIED: #80 Purchase Confirmation (✅ S685)
+- #174 Auction: Notes updated — code fixed, blocked on test data
+- #46: Marked Deprecated
+- Status column updates: #146/#147/#24 ✅ S685, #253 ✅ S685, #361 ✅ S688, #235 bug fix S688, #310 page confirmed, #386 ✅ S685, #388/#389 Shipped S678, #94 ✅ S661
+- Graduation pass (Chrome-verified rows moved to SHIPPED & VERIFIED): #49 #64 #80 #92 #177 #212 #231 #233 #234 #240 #242 #249 #252 #253 #264 #269 #270 #276 #277 #282 #287 #361 + #13 #48 from TESTING
+
+**Files changed:**
+- `claude_docs/strategy/roadmap.md` — v135 S688/S689 sync
+
+---
+
+**Previous: S689 (continued) — Chrome QA Sprint + Auth/me Fix + Dashboard Lapse Bug (COMPLETE)**
+
+Chrome QA sprint continuing from S688 context. auth/me subscriptionLapsed field bug fixed (two Railway deploys). Dashboard lapse banner split-brain fixed. WCAG error ARIA sprint extended (4 more files). Four roadmap items Chrome-verified.
+
+**What shipped:**
+- **auth/me subscriptionLapsed fix (2nd commit `040db6a4`)** — First fix (S689 Part 1) incorrectly selected `subscriptionLapsed` from Prisma Organizer model (field doesn't exist on DB table). `.catch(() => null)` silently returned null → tier fell back to SIMPLE. Fixed: removed from Prisma select, use `req.user.subscriptionLapsed` (already computed by `checkTierLapse` middleware).
+- **Dashboard lapse banner fix** — `GET /organizers/me` was computing `subscriptionLapsed` from `Organizer.subscriptionStatus` (null → lapsed), while `auth/me` used `UserRoleSubscription.tierLapsedAt`. Split-brain showed PRO lapse banner for manually-promoted organizers. Fixed: added `checkTierLapse` middleware to `GET /organizers/me` route, use `req.user.subscriptionLapsed` as single source of truth. Import updated. In Patrick's pushblock.
+- **WCAG error ARIA — 4 more files** — CheckoutModal coupon input (aria-label fix — agent had hardcoded wrong aria-invalid/aria-describedby), BoostPurchaseModal (role="alert" on error divs), CSVImportModal (role="alert" on upload result), DisputeForm (aria-invalid + aria-describedby on select + textarea). In Patrick's pushblock.
+
+**QA results (Chrome-verified):**
+- **#235 DonationModal** — ✅ VERIFIED end-to-end. Root cause chain resolved: S688 fixed double /api/ prefix → S689 P1 fixed auth/me async → S689 P2 fixed subscriptionLapsed Prisma field. PRO gate opens correctly.
+- **#271 TEAMS pricing copy** — ✅ VERIFIED. "Webhooks - Connect your systems" + "API Access" in comparison table. Solo power user pitch present.
+- **#310 Color-tagged Discount Rules** — ✅ VERIFIED. TierGate correctly gates PRO users with blurred overlay + upgrade card. `pointer-events-none` blocks button clicks. TEAMS content itself UNVERIFIED (no TEAMS account).
+- **#386 JSON-LD structured data** — ✅ VERIFIED on all 4 pages: pricing (WebPage+Offer), about (Organization), faq (FAQPage+BreadcrumbList+WebPage), index (Organization+WebSite+LocalBusiness).
+- **#223 Organizer Guidance Layer** — ⚠️ partial. Tier tooltips (SIMPLE/PRO/TEAMS Help buttons) ✅ on pricing. `explorerRank` confirmed in reservationController lines 469+595. Rank badge visual UNVERIFIED (no active holds in prod).
+
+**Files changed (Patrick pushblock needed):**
+- `packages/backend/src/routes/organizers.ts` — `checkTierLapse` middleware added to `/me` route + import
+- `packages/frontend/components/CheckoutModal.tsx` — coupon input aria-label fixed
+- `packages/frontend/components/BoostPurchaseModal.tsx` — role="alert" on error divs
+- `packages/frontend/components/CSVImportModal.tsx` — role="alert" on upload result
+- `packages/frontend/components/DisputeForm.tsx` — aria-invalid + aria-describedby
+
+**Previous: S689 (Part 1) — Lead Scoring Service + Scraper Crash Loop Fixes (COMPLETE)**
+
+S689 Part 1 completed ADR-076 Phase 2 (lead scoring) and fixed a cascade of Railway MODULE_NOT_FOUND crash loops caused by subagent-written files that were never pushed to GitHub.
 
 **What shipped:**
 - **`leadScoringService.ts`** — 5-signal 0–100 scoring engine. Dimensions: contact reachability (20), corroboration depth (20), licensing (25), review strength (20), physical presence (15). Pure `calculateLeadScore()` + batched `runLeadScoringBackfill()` (cursor-paginated, 200/batch).
@@ -565,19 +605,25 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 | WCAG error ARIA | S683 codebase sweep complete (aria-labels + input labels). Remaining gap: `aria-invalid` + `aria-describedby` on form inputs with error states (~20+ files). | Dedicated error ARIA sprint | S683 |
 | JWT httpOnly cookies | ✅ VERIFIED S670 — login worked through proxy, cookies set correctly | — | S664/S667 |
 | COPPA age gate | ✅ S688 VERIFIED — DOB <18 on /register correctly blocked with "You must be 18 or older" error. | — | S664 |
-| Sales/Items SSR JSON-LD | Code shipped but not Chrome-tested | View source on finda.sale/sales/[id] — should see `<script type="application/ld+json">` | S664 |
+| Sales/Items SSR JSON-LD | ✅ S689 VERIFIED — JS extraction confirmed `<script type="application/ld+json">` present on pricing/about/faq/index with correct schema types. | — | S664 |
 | Modal focus traps (34 modals) | ✅ S681 VERIFIED — MessageComposeModal tested. Tab trap ✅, Escape ✅, focus-on-open ✅ (fix shipped). Other modals assumed covered by AccessibleModal fix. | — | S664 |
 | Claim verify flow | ✅ S688 VERIFIED — All 3 states confirmed: invalid token → "Invalid Link", valid token → "Email Verified!" with business name, already-used → "Already Verified". | — | S667 |
 | NSFW detection | Code shipped S667 but not browser-tested | Upload an image via organizer flow, confirm Cloudinary moderation runs | S667 |
 | #251 priceBeforeMarkdown | No production item with markdownApplied=true | Seed item with markdownApplied=true, verify strikethrough price renders | S661 |
-| #235 DonationModal | ❌ Bug found S688: SettlementWizard.tsx line 72 double `/api/` prefix → unsold items 404 → Donate button never appears. Fix applied locally (pending deploy). | After Vercel deploy: load Settlement Hub Receipt tab for a PRO organizer sale with unsold items, verify Donate button appears and all 3 modal steps render | S661 |
+| #235 DonationModal | ✅ S689 VERIFIED end-to-end. Two-iteration fix: double /api/ prefix (S688) + auth/me subscriptionLapsed field (S689). PRO tier gate opens correctly, all 3 steps render. | — | S661 |
 | AI listing enrichment | Fire-and-forget — needs scraped sale with description >50 chars | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` | S651 |
 | CategoryTopFinds TrendingSection | Cron runs 05:00 UTC — no data until first run | QA after first nightly run; verify TrendingSection renders on `/categories/[category]` | S647 |
 | Outreach pipeline open/click tracking | Can't verify without real sends | After `OUTREACH_ENABLED=true` + first cron run: check Railway logs, confirm pixel route 200 | S647 |
 
 ---
 
-## Recent Sessions (S685–S689)
+## Recent Sessions (S685–S690)
+
+### S690 — Roadmap Audit + Full Graduation Pass (COMPLETE)
+
+Full STATE.md vs roadmap.md cross-reference. roadmap.md updated to v135. BROKEN items reorganized: #7/#13/#41/#48/#50/#184 → TESTING, #80 → SHIPPED & VERIFIED, #46 marked Deprecated. Status columns updated for 12 features verified S684–S688. Full graduation pass: 23 Chrome-verified rows promoted to SHIPPED & VERIFIED. Memory feedback saved: complete-the-full-assignment.
+
+---
 
 ### S689 — Lead Scoring Service + Scraper Crash Loop Fixes (COMPLETE — MCP pushed)
 
@@ -761,7 +807,7 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 
 ---
 
-## Next Session — S690
+## Next Session — S691
 
 **Priority 1 — Lead scoring recalibration**
 - HOT/ENTERPRISE thresholds need adjustment. Current scoring was designed for eventually-enriched orgs. For cold outreach today, HOT should be reachable with email + phone + 2+ sources (~35–40 pts). Review scoring weights and lower tier thresholds or adjust dimension weights so real organizers can reach HOT without licensing data.
@@ -782,13 +828,29 @@ All 16 S666-deferred items dispatched in 7 parallel dev batches. NextAuth → `/
 - Louisiana (lalb.org), Illinois (idfpr.illinois.gov) — same ASP.NET pattern as Indiana.
 
 **Priority 5 — QA holdover**
-- #235 DonationModal re-verify (S689 fix deployed).
-- #251 priceBeforeMarkdown — TEAMS-tier test scenario.
+- #235 DonationModal ✅ VERIFIED S689 Chrome QA sprint
+- #251 priceBeforeMarkdown — still needs TEAMS-tier test scenario
+- #223 Organizer Guidance Layer rank badges — needs an active hold in prod to verify badge display
+- NSFW detection — upload image via organizer photo flow, confirm Cloudinary moderation ran
 
-**Patrick wrap actions (S689):**
+**Patrick wrap actions (S689+S690 — two blocks):**
+
+Block 1 — Chrome QA fixes + docs:
 ```powershell
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/components/CheckoutModal.tsx
+git add packages/frontend/components/BoostPurchaseModal.tsx
+git add packages/frontend/components/CSVImportModal.tsx
+git add packages/frontend/components/DisputeForm.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "S689+S690: Dashboard lapse fix, WCAG ARIA (4 components), roadmap v135"
+.\push.ps1
+```
+
+Block 2 — Scraper files + workflow YMLs:
+```powershell
 git add packages/backend/src/services/scraper/sources/saleSeeker.ts
 git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
 git add packages/backend/src/services/scraper/osmScraper.ts
@@ -797,6 +859,6 @@ git add packages/backend/src/jobs/leadScoringJob.ts
 git add .github/workflows/scrape-indiana-licensing.yml
 git add .github/workflows/scrape-osm.yml
 git add .github/workflows/scrape-sale-seeker.yml
-git commit -m "S689: Lead scoring service + fix scraper crash loops (MODULE_NOT_FOUND)"
+git commit -m "S689: Lead scoring service + crash loop fixes + scraper workflow YMLs"
 .\push.ps1
 ```
