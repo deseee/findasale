@@ -689,6 +689,17 @@ export async function ingestScrapedListing(
       finalOrganizerId = await getOrCreateSystemOrganizer();
     }
 
+    // Update directoryMostRecentSource for scraped listings (from Foursquare, HERE, OSM)
+    if (listing.sourceName && ['Foursquare', 'HEREPlaces', 'OSM'].includes(listing.sourceName)) {
+      await prisma.organizer.update({
+        where: { id: finalOrganizerId },
+        data: {
+          directoryMostRecentSource: listing.sourceName,
+          directoryMostRecentAt: new Date(),
+        },
+      });
+    }
+
     // Extract lat/lng from top-level or scrapedMetadata (ESN stores them in metadata)
     const lat =
       (listing as any).lat ??

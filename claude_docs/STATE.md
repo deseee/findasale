@@ -4,7 +4,34 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S695 — Scraper Audit: Paid APIs Stripped, Metro List 100→301, Admin Stats Fixed (COMPLETE)**
+**Latest: S696 — Scraper Infrastructure Batch 1: Indiana Licensing Fix + Source Tracking + Matrix Throughput (COMPLETE)**
+
+S696 ran Innovation + Architect on 5 scraper problems, then dispatched 3 parallel dev agents for Batch 1 (no schema changes). All verified TS clean.
+
+**Completed this session:**
+- **Indiana scraper conflict resolved** — `indianaLicensingScraper.ts` had 31 merge conflict markers from a botched push. Resolved all conflicts (kept HEAD's descriptive comments + origin/main's `AbortSignal.timeout` fix). Added `isStateLicensed: true`, `licenseState: 'IN'`, `licenseNumber`, `directoryMostRecentSource: 'IndianaLicensing'` via post-upsert `prisma.organizer.update()`. When Indiana scraper runs, 200–500 organizers will reach HOT tier (currently 0 HOT).
+- **Source tracking forward-fix** — `scraper/index.ts` now sets `directoryMostRecentSource` + `directoryMostRecentAt` for all Foursquare, HEREPlaces, and OSM upserts. Admin scrape pool dashboard will show attribution for all future scrape runs.
+- **GitHub Actions matrix** — `scrape-foursquare.yml` and `scrape-here-places.yml` updated to 6-job parallel matrix (batch_index 0–5, 5-second stagger). `run-foursquare-places.ts` and `run-here-places.ts` updated with `SCRAPER_BATCH_INDEX` / `SCRAPER_BATCH_COUNT` slicing. 301 metros in ~10–15 min vs 60+ min sequential. Zero rate limit impact (still ~301 calls/run total).
+- **Innovation output saved** — `claude_docs/research/innovation-scraper-throughput-2026-05-08.md` (5 problem analyses, 3 options each, recommendations).
+
+**Files changed this session (need Patrick push):**
+- `packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts` — conflict fix + isStateLicensed wiring
+- `packages/backend/src/services/scraper/index.ts` — directoryMostRecentSource forward-fix
+- `.github/workflows/scrape-foursquare.yml` — matrix strategy (6 parallel jobs)
+- `.github/workflows/scrape-here-places.yml` — matrix strategy (6 parallel jobs)
+- `packages/backend/src/scripts/run-foursquare-places.ts` — batch slicing
+- `packages/backend/src/scripts/run-here-places.ts` — batch slicing
+- `claude_docs/research/innovation-scraper-throughput-2026-05-08.md` — NEW
+
+**Batch 2 still pending (requires schema migration or deeper architecture):**
+- `emailDiscoveryService.ts` — free email discovery pipeline (website scrape + SMTP probe)
+- MailerLite `outreachEmailsCron.ts` wiring to score-threshold groups
+- HOT score ESN membership signal (separate from licensing)
+- 50-state licensing URL corrections (18 states with confirmed URLs)
+
+---
+
+**Previous: S695 — Scraper Audit: Paid APIs Stripped, Metro List 100→301, Admin Stats Fixed (COMPLETE)**
 
 S695 audited the full scraping/outreach infrastructure. Key outcomes:
 
@@ -941,11 +968,26 @@ Full Google Maps Platform incident response and lockdown. Root cause: monthly Gi
 
 ---
 
-## Next Session — S696
+## Next Session — S697
 
-### Step 0 — Push all pending blocks (do first, in order)
+### Step 0 — Push all pending blocks (do in order)
 
-**S695 — scraper audit + metro expansion:**
+**S696 — scraper infrastructure Batch 1 (push this first — note: scrape-foursquare.yml already has matrix, don't push from S695 block):**
+```powershell
+git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
+git add packages/backend/src/services/scraper/index.ts
+git add .github/workflows/scrape-foursquare.yml
+git add .github/workflows/scrape-here-places.yml
+git add packages/backend/src/scripts/run-foursquare-places.ts
+git add packages/backend/src/scripts/run-here-places.ts
+git add claude_docs/research/innovation-scraper-throughput-2026-05-08.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S696: Indiana licensing fix + source tracking + GitHub Actions matrix throughput"
+.\push.ps1
+```
+
+**S695 — scraper audit + metro expansion (push second — skip scrape-foursquare.yml, already covered above):**
 ```powershell
 git add packages/backend/src/services/scraper/enrichment.ts
 git add packages/backend/src/services/scraper/sources/googlePlaces.ts
@@ -953,11 +995,8 @@ git add packages/backend/src/controllers/adminController.ts
 git add packages/backend/src/routes/admin.ts
 git add packages/frontend/pages/admin/scrape-pool.tsx
 git add .github/workflows/scrape-google-places.yml
-git add .github/workflows/scrape-foursquare.yml
 git add claude_docs/strategy/outreach-email-strategy.md
 git add claude_docs/strategy/email-discovery-spec.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
 git commit -m "S695: strip Google Places, expand metros 100→301, fix admin stats, scrape pool dashboard"
 .\push.ps1
 ```
@@ -1007,7 +1046,28 @@ git commit -m "S689: Dashboard lapse fix, WCAG ARIA (4 components)"
 
 ---
 
-### Step 1 — S695 Audit (read this before dispatching anything)
+### Step 1 — Batch 2 Dev Dispatch
+
+Read `claude_docs/research/innovation-scraper-throughput-2026-05-08.md` for full context. Dispatch in parallel (different files, no conflict):
+
+**Agent A — Strip paid API refs from email-discovery-spec.md:**
+Remove all Hunter.io, Clearbit, and Apollo references from `claude_docs/strategy/email-discovery-spec.md`. Replace with "Phase 2 only — not approved for current build." Keep the free-only pipeline (website scraping + SMTP probe + pattern permutation). This is a doc edit, dispatch to findasale-records.
+
+**Agent B — 50-state licensing URL corrections (18 states):**
+18 confirmed states with real auctioneer licensing URLs from S691 research. Rewrite each state's scraper to use the verified URL. See S691 research findings in Current Status (S691 section). States: AL, AR, FL, GA, IA, KY, LA, MA, ME, MS, ND, NH, PA, SC, SD, WA, WI, WV. Dispatch to findasale-dev in batches of ≤6 states each.
+
+**Agent C — MailerLite group wiring in outreachEmailsCron.ts:**
+Wire `outreachEmailsCron.ts` to MailerLite group API. Score-threshold trigger: COLD → Group ID (env: `MAILERLITE_COLD_GROUP_ID`), WARM → `MAILERLITE_WARM_GROUP_ID`, HOT → `MAILERLITE_HOT_GROUP_ID`. On each cron run: for orgs whose `leadTier` changed since `lastScoredAt`, call MailerLite to move them to the correct group. Patrick must set the 3 group IDs in Railway env vars.
+
+**Batch 2 schema work (requires migration — defer if context tight):**
+- `emailDiscoveryService.ts`: needs 3 new Organizer fields (`emailDiscoveryMethod`, `emailDiscoveryConfidence`, `emailDiscoveredAt`). Architect spec already captured in Innovation output. Migration file: `20260508000002_email_discovery_fields`.
+
+### Step 2 — QA holdover
+- #174 Auction — push S693 fix first, then QA: user12@example.com / Seedy2025! → finda.sale/sales/c5hykxxecanngwcrkvq92n1va
+- #251 priceBeforeMarkdown — needs TEAMS-tier test scenario
+- #223 rank badges — needs active hold in prod
+
+### Step 1 — S695 Audit (already done S696 — skip)
 
 Before any subagent runs, verify these S695 claims are actually on disk:
 
