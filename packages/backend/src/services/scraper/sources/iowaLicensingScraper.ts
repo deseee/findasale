@@ -1,7 +1,7 @@
 /**
  * Iowa Professional Licensing Bureau — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Iowa PLB license verification system
- * Source: https://plb.iowa.gov/licensee-search
+ * Source: https://ia-plb.my.site.com/LicenseSearchPage
  * Public directory with auctioneer records
  */
 
@@ -10,7 +10,7 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const IOWA_PLB_URL = 'https://plb.iowa.gov/licensee-search';
+const IOWA_PLB_URL = 'https://ia-plb.my.site.com/LicenseSearchPage';
 
 /**
  * Scrape Iowa auctioneer licenses from PLB verification system.

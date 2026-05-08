@@ -76,6 +76,8 @@ export default function ReturnRequestModal({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Please describe why you'd like to return this item..."
+              aria-invalid={!!error}
+              aria-describedby={error ? "reason-error" : undefined}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               rows={4}
               disabled={isLoading}
@@ -83,7 +85,7 @@ export default function ReturnRequestModal({
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+            <div id="reason-error" role="alert" className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
               {error}
             </div>
           )}

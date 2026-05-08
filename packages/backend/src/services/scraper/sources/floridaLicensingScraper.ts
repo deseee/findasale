@@ -1,7 +1,7 @@
 /**
  * Florida Department of Agriculture and Consumer Services — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Florida FDACS license verification system
- * Source: https://www.fdacs.gov/Consumer-Resources/Auction-Services
+ * Source: https://www2.myfloridalicense.com/auctioneers/
  * Public directory with auctioneer records
  */
 
@@ -10,7 +10,7 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const FLORIDA_FDACS_URL = 'https://www.fdacs.gov/Consumer-Resources/Auction-Services';
+const FLORIDA_FDACS_URL = 'https://www2.myfloridalicense.com/auctioneers/';
 
 /**
  * Scrape Florida auctioneer licenses from FDACS verification system.

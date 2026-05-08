@@ -1,7 +1,7 @@
 /**
  * North Dakota Professional Standards Board — Auctioneer License Scraper
  * Scrapes licensed auctioneers from North Dakota PSI Exams database
- * Source: https://www.psiexams.com/ndac
+ * Source: https://www.sos.nd.gov/business/licensing-registration
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,7 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const NORTH_DAKOTA_BASE_URL = 'https://www.psiexams.com/ndac';
+const NORTH_DAKOTA_BASE_URL = 'https://www.sos.nd.gov/business/licensing-registration';
 
 /**
  * Parse an address string into city and zip components

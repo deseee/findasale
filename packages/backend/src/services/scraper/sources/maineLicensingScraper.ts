@@ -1,7 +1,7 @@
 /**
  * Maine Auctioneer License Scraper
  * Scrapes licensed auctioneers from Maine Department of Professional and Financial Regulation
- * Source: https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/SearchIndividual.aspx
+ * Source: https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/Welcome.aspx?board=4210
  * Public directory with auctioneer license records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,7 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const MAINE_SEARCH_URL = 'https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/SearchIndividual.aspx';
+const MAINE_SEARCH_URL = 'https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/Welcome.aspx?board=4210';
 
 /**
  * Parse an address string into city and zip components

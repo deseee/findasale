@@ -1,7 +1,7 @@
 /**
  * Arkansas Department of Community Correction — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Arkansas public license verification system
- * Source: https://www.auctioneer.ar.gov/Search.aspx
+ * Source: https://portal.arkansas.gov/service/auctioneer-roster-search/
  * Public directory with auctioneer license records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -12,7 +12,7 @@ import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
 const ARKANSAS_LICENSE_BASE_URL = 'https://www.auctioneer.ar.gov';
-const SEARCH_URL = 'https://www.auctioneer.ar.gov/Search.aspx';
+const SEARCH_URL = 'https://portal.arkansas.gov/service/auctioneer-roster-search/';
 
 /**
  * Parse an address string into components

@@ -1,7 +1,7 @@
 /**
  * West Virginia Real Estate Commission — Auctioneer License Scraper
  * Scrapes licensed auctioneers from West Virginia real estate licensing search
- * Source: https://wvrealestate.wv.gov/licensing/search.aspx
+ * Source: https://agriculture.wv.gov/licenses/auctioneer-licenses/
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,7 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const WEST_VIRGINIA_BASE_URL = 'https://wvrealestate.wv.gov/licensing/search.aspx';
+const WEST_VIRGINIA_BASE_URL = 'https://agriculture.wv.gov/licenses/auctioneer-licenses/';
 
 /**
  * Scrape West Virginia auctioneer licenses from state real estate commission directory.

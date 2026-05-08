@@ -1,7 +1,7 @@
 /**
  * Georgia Secretary of State — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Georgia SOS license verification system
- * Source: https://verify.sos.ga.gov/verification/Search.aspx
+ * Source: https://verify.sos.ga.gov/verification/
  * Public directory with auctioneer records
  */
 
@@ -10,7 +10,7 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const GEORGIA_SOS_URL = 'https://verify.sos.ga.gov/verification/Search.aspx';
+const GEORGIA_SOS_URL = 'https://verify.sos.ga.gov/verification/';
 
 /**
  * Scrape Georgia auctioneer licenses from SOS verification system.

@@ -1,7 +1,7 @@
 /**
  * South Dakota Department of Labor and Regulation — Auctioneer License Scraper
  * Scrapes licensed auctioneers from South Dakota DLR auctioneer license search
- * Source: https://dlr.sd.gov/licensees/auctioneers.aspx
+ * Source: https://dlr.sd.gov/realestate/license_verification_system.aspx
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -12,7 +12,7 @@ import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
 const SOUTHDAKOTA_DLR_BASE_URL = 'https://dlr.sd.gov';
-const SEARCH_URL = 'https://dlr.sd.gov/licensees/auctioneers.aspx';
+const SEARCH_URL = 'https://dlr.sd.gov/realestate/license_verification_system.aspx';
 
 /**
  * Parse an address string into city and state components
