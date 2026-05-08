@@ -211,32 +211,17 @@ document.querySelector('[data-testid="about-section"]')?.textContent
 
 ---
 
-### Stage 5: Free Tier APIs (Phase 2 — REFERENCE ONLY)
-**Cost:** Free tier very limited; use only as validation layer after Stage 1-3
+### Stage 5: Paid Enrichment APIs (Phase 2 only — not approved for current build)
+**Cost:** Paid third-party services — not approved for current build
 
-**Hunter.io (25 free searches/month)**
-- API endpoint: `hunter.io/v2/email-finder`
-- Returns: verified email, sources, confidence score
-- Caveat: No bulk API in free tier; slow for cold outreach at scale
-- Useful for: Validating high-value targets
-
-**Clearbit (deprecated but still works)**
-- Endpoint: `person.clearbit.com` (free tier)
-- Returns: company, role, emails (limited)
-- Caveat: Free endpoint heavily rate-limited
-- Useful for: Company enrichment, not primary email source
-
-**Apollo.io (free tier limited)**
-- Has free plan, but severely limited
-- Paid plan much better for bulk outreach
-- Not recommended for Phase 1
+Phase 2 only — not approved for current build.
 
 **RocketReach**
 - Free tier: minimal
 - Paid: more comprehensive
 - Not viable for free pipeline
 
-**Recommendation:** Implement Stages 1-3 first. If budget exists in Phase 2, layer Hunter.io as a validation step after pattern generation.
+**Recommendation:** Implement Stages 1-3 first. Paid enrichment APIs are deferred to Phase 2 pending budget approval.
 
 ---
 
@@ -511,7 +496,7 @@ async function verifyEmail(
 |---------|---------|-------|
 | `whois-parser` | WHOIS lookup parsing | Parses raw WHOIS; maintained as of 2025 |
 | `extract-emails` | Regex-based email extraction | Simple utility, low overhead |
-| `hunter` (official SDK) | Hunter.io API client | 25 free searches/month; Phase 2 only |
+| `hunter` (official SDK) | Email enrichment API client | Phase 2 only — not approved for current build |
 
 ### Community References
 - **GitHub:** Search for `email-discovery-nodejs` (multiple public repos on pattern + SMTP validation)
@@ -550,7 +535,7 @@ async function verifyEmail(
 ### Phase 2 (ENRICHMENT — 1-2 weeks)
 1. Add WHOIS lookup (registrant name extraction)
 2. Add LinkedIn scraping (founder name extraction)
-3. Layer in Hunter.io (25 free searches/month as validation)
+3. Layer in paid enrichment API (Phase 2 only — not approved for current build)
 4. Build confidence scoring that weights all signals
 
 ### Phase 3 (OPTIMIZATION — ONGOING)
@@ -569,7 +554,7 @@ async function verifyEmail(
 | Stage 2 (pattern + SMTP) | 40-55% | 70-80% | Medium | MVP |
 | Stage 3 (WHOIS) | 20-30% | 50-60% | Low | MVP |
 | Stage 4 (LinkedIn) | 50-70% | 75%+ | Medium | Phase 2 |
-| Hunter.io API | 70-85% | 95%+ | Low | Phase 2 |
+| Paid enrichment API | 70-85% | 95%+ | Low | Phase 2 — not approved |
 
 **Combined (MVP Phases 1-3):** ~85-95% of emails enriched with at least one valid option.
 
@@ -639,7 +624,7 @@ async function verifyEmail(
 - Build ML classifier for email confidence (weight by source, age, engagement)
 - Add callback verification (send verification code, wait for reply)
 - Integrate with warm-up sequences (Mailwarm, etc.) before sending cold outreach
-- Phase 2: Layer in Hunter.io for high-value targets
+- Phase 2: Layer in paid enrichment API for high-value targets (not approved for current build)
 
 ---
 

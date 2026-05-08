@@ -273,6 +273,17 @@ export async function discoverEmail(organizerId: string): Promise<string | null>
 }
 
 /**
+ * Map internal source label to schema emailDiscoveryMethod value
+ */
+function toDiscoveryMethod(
+  source: 'website_scrape' | 'smtp_pattern' | 'whois'
+): 'website_scrape' | 'smtp_probe' | 'pattern_match' {
+  if (source === 'website_scrape') return 'website_scrape';
+  if (source === 'smtp_pattern') return 'smtp_probe';
+  return 'pattern_match';
+}
+
+/**
  * Update organizer with discovered email
  */
 async function updateOrganizerEmail(
@@ -287,6 +298,9 @@ async function updateOrganizerEmail(
       data: {
         contactEmail: email,
         scrapedEmail: source === 'website_scrape' ? email : undefined,
+        emailDiscoveryMethod: toDiscoveryMethod(source),
+        emailDiscoveryConfidence: confidence,
+        emailDiscoveredAt: new Date(),
       },
     });
   } catch (err) {

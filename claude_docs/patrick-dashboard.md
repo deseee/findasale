@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S697 Wrap
+# Patrick's Dashboard — S698 Wrap
 
 ---
 
@@ -11,20 +11,30 @@
 | Google OAuth | ⚠️ Still broken (root cause unclear) |
 | Login (email/password) | ✅ Working |
 | MCP Server (mcp.finda.sale) | ✅ LIVE — 7 tools |
-| Scraper throughput | ✅ FIXED — 6-job matrix, 10–15 min/run |
-| 18-state licensing scrapers | ✅ URL-corrected (13 this session + WA NEW) |
-| Phase 2 scrapers | ✅ AK / NJ / WY / OK — pawnbroker/PDF sources built |
+| S691–S697 push blocks | ✅ ALL PUSHED — verified on GitHub S698 |
+| 18-state licensing scrapers | ✅ COMPLETE — 13 corrected S697 + WA new + MA/NH/PA/WI confirmed correct |
+| Phase 2 scrapers | ✅ AK / NJ / WY / OK built |
 | Phase 2 research (blocked states) | 🔴 AZ/DE/ID/IL/KS/MI/MN/MO all city-level or restricted |
-| Outreach lead priority | ✅ HOT 40% / WARM 35% / COLD 25% queue ordering |
-| Email discovery service | ✅ BUILT — 3-stage free pipeline (website scrape → pattern → SMTP) |
-| Settings #352 tagline / #353 yearFounded | ✅ FIXED — GET /me was missing organizerTypes, causing post-PATCH state loss |
-| WCAG error ARIA | ✅ SUFFICIENT COVERAGE — all high-traffic error states covered |
-| HOT lead count | 🟡 0 now → 200–500 after Indiana scraper runs |
-| #174 Auction QA | 🟡 Bid fix on disk (S693). Push items/[id].tsx → re-run QA |
+| Outreach lead priority | ✅ HOT 40% / WARM 35% / COLD 25% |
+| MailerLite tier group wiring | ✅ BUILT — needs 3 Railway env vars + push |
+| Email discovery schema | ✅ BUILT — needs push + `prisma migrate deploy` |
+| Email discovery service | ✅ Now writes discoveryMethod/confidence/discoveredAt |
+| email-discovery-spec.md | ✅ Paid API refs (Hunter.io/Clearbit/Apollo) stripped |
+| #174 Auction QA | 🟡 Bid fix DEPLOYED. Ready to QA now. |
 
 ---
 
-## What Happened This Session (S697)
+## What Happened This Session (S698)
+
+Verified all S691–S697 commits on GitHub. Dispatched 3 parallel agents — all returned clean:
+
+**Agent A:** Stripped Hunter.io/Clearbit/Apollo refs from `email-discovery-spec.md` (5 locations). Free pipeline intact.
+
+**Agent C:** MailerLite tier group wiring. `mailerliteService.ts` + `syncLeadTierGroups()` added to `outreachEmailsCron.ts`. Runs weekly Sundays 02:00 UTC. Gates on `OUTREACH_ENABLED=true`. Needs 3 Railway env vars.
+
+**Agent D:** Email discovery schema migration. 3 new Organizer fields + migration SQL file. `emailDiscoveryService.ts` now tracks how email was found and confidence. Needs `prisma migrate deploy`.
+
+**S697 summary (previous session):**
 
 3 parallel dispatch batches across scraper infrastructure, accessibility, and outreach tooling:
 
@@ -38,55 +48,40 @@
 
 ## Patrick Actions Needed
 
-**Step 1 — S697 (all 31 files, one commit — do first):**
+**Step 1 — S698 push (9 files):**
 ```powershell
-git add packages/frontend/components/EbayCategoryPicker.tsx
-git add packages/frontend/components/ReturnRequestModal.tsx
-git add packages/frontend/pages/admin/broadcast.tsx
-git add packages/frontend/pages/admin/feature-flags.tsx
-git add packages/backend/src/services/scraper/sources/alabamaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/arkansasLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/floridaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/georgiaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/iowaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/kentuckyLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/louisianaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/maineLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/mississippiLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/northdakotaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/southcarolinaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/southdakotaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/westvirginiaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/washingtonLicensingScraper.ts
-git add .github/workflows/scrape-washington-licensing.yml
+git add claude_docs/strategy/email-discovery-spec.md
+git add packages/backend/src/services/mailerliteService.ts
 git add packages/backend/src/jobs/outreachEmailsCron.ts
-git add packages/backend/src/services/scraper/sources/alaskaPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/newjerseyPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/wyomingPhase2Scraper.ts
-git add .github/workflows/scrape-ak-phase2.yml
-git add .github/workflows/scrape-nj-phase2.yml
-git add .github/workflows/scrape-wy-phase2.yml
-git add packages/backend/src/services/scraper/sources/oklahomaphase2Scraper.ts
-git add .github/workflows/scrape-ok-phase2.yml
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260508000002_email_discovery_fields/migration.sql
 git add packages/backend/src/services/emailDiscoveryService.ts
-git add packages/backend/src/jobs/emailDiscoveryJob.ts
-git add packages/backend/src/routes/organizers.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S697: WCAG ARIA fixes, 13 scraper URL corrections, WA scraper, outreach lead tier priority, AK/NJ/WY/OK Phase2 scrapers, email discovery service, settings GET /me fix"
+git add claude_docs/strategy/roadmap.md
+git commit -m "S698: MailerLite tier group wiring, email discovery schema, email-discovery-spec cleanup"
 .\push.ps1
 ```
 
-**Step 2 — S696:**
+**Step 2 — Run migration (use public proxy URL from Windows):**
 ```powershell
-git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
-git add packages/backend/src/services/scraper/index.ts
-git add .github/workflows/scrape-foursquare.yml
-git add .github/workflows/scrape-here-places.yml
-git add packages/backend/src/scripts/run-foursquare-places.ts
-git add packages/backend/src/scripts/run-here-places.ts
-git add claude_docs/research/innovation-scraper-throughput-2026-05-08.md
-git commit -m "S696: Indiana licensing fix + source tracking + GitHub Actions matrix throughput"
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**Step 3 — Add Railway env vars** (Railway dashboard → findasale-backend → Variables):
+- `MAILERLITE_COLD_GROUP_ID` — get from MailerLite dashboard → Subscribers → Groups
+- `MAILERLITE_WARM_GROUP_ID`
+- `MAILERLITE_HOT_GROUP_ID`
+
+**Step 4 — Delete GOOGLE_PLACES_API_KEY** (S695 lockdown — still pending):
+- Railway dashboard → findasale-backend → Variables
+- GitHub repo → Settings → Secrets → Actions
+
+**Step 5 — QA #174 Auction** (bid fix is live):
+Login user12@example.com / Seedy2025! → finda.sale/sales/c5hykxxecanngwcrkvq92n1va
 .\push.ps1
 ```
 

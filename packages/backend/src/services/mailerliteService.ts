@@ -2,8 +2,11 @@
  * mailerliteService.ts
  * Handles MailerLite API v2 integration for subscriber field updates.
  *
- * Current usage: mark organizer as "sale_published" when a sale is published,
- * triggering the automation exit condition in MailerLite.
+ * Current usage:
+ *   - mark organizer as "sale_published" when a sale is published,
+ *     triggering the automation exit condition in MailerLite.
+ *   - syncLeadTierToMailerLite: assign a directory organizer to the
+ *     COLD / WARM / HOT MailerLite group based on their leadTier.
  *
  * API docs: https://developers.mailerlite.com/docs/subscribers
  * Base URL: https://connect.mailerlite.com/api
@@ -178,5 +181,90 @@ export async function addOrganizerSubscriber(email: string, name: string): Promi
   } catch (err) {
     // Non-critical — do not throw; log and continue
     console.error('[mailerlite] Network error adding organizer subscriber:', err);
+  }
+}
+
+/**
+ * syncLeadTierToMailerLite — upserts a directory organizer into the correct
+ * lead-tier MailerLite group (COLD / WARM / HOT).
+ *
+ * Uses the MailerLite v2 subscriber upsert endpoint with `groups` array.
+ * The API adds the subscriber to the group if not already present and
+ * creates the subscriber record if it doesn't exist.
+ *
+ * ENTERPRISE organizers are intentionally skipped — they receive manual outreach.
+ *
+ * Required env vars:
+ *   MAILERLITE_COLD_GROUP_ID
+ *   MAILERLITE_WARM_GROUP_ID
+ *   MAILERLITE_HOT_GROUP_ID
+ *
+ * @param email     - organizer's contact email (contactEmail field on Organizer)
+ * @param leadTier  - "COLD" | "WARM" | "HOT" | "ENTERPRISE" | null
+ * @param orgId     - organizer ID, used only for logging
+ */
+export async function syncLeadTierToMailerLite(
+  email: string,
+  leadTier: string | null,
+  orgId: string,
+): Promise<void> {
+  if (!email) {
+    console.warn(`[mailerlite:leadSync] Skipping org:${orgId} — no contact email`);
+    return;
+  }
+
+  if (!leadTier || leadTier === 'ENTERPRISE') {
+    // ENTERPRISE is handled manually; null means not yet scored — skip both
+    return;
+  }
+
+  const groupIdMap: Record<string, string | undefined> = {
+    COLD: process.env.MAILERLITE_COLD_GROUP_ID,
+    WARM: process.env.MAILERLITE_WARM_GROUP_ID,
+    HOT:  process.env.MAILERLITE_HOT_GROUP_ID,
+  };
+
+  const groupId = groupIdMap[leadTier];
+
+  if (!groupId) {
+    console.warn(`[mailerlite:leadSync] MAILERLITE_${leadTier}_GROUP_ID not set — skipping org:${orgId}`);
+    return;
+  }
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.warn('[mailerlite:leadSync] MAILERLITE_API_KEY not set — skipping lead tier sync');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${MAILERLITE_API_URL}/subscribers`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        groups: [groupId],
+        fields: {
+          lead_tier: leadTier,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error(
+        `[mailerlite:leadSync] Failed to sync org:${orgId} (${leadTier}) — HTTP ${response.status}: ${body}`,
+      );
+      return;
+    }
+
+    console.log(`[mailerlite:leadSync] org:${orgId} → ${leadTier} group (${groupId})`);
+  } catch (err) {
+    // Non-critical — do not throw; caller logs and continues
+    console.error(`[mailerlite:leadSync] Network error syncing org:${orgId}:`, err);
   }
 }
