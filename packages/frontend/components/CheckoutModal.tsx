@@ -390,7 +390,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
               placeholder="e.g. A3F2C891"
               maxLength={8}
               className="w-full px-3 py-2 border border-warm-300 rounded-lg font-mono tracking-widest text-warm-900 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
-             aria-label="e.g. A3F2C891" aria-invalid={false} aria-describedby={undefined} />
+              aria-label="Coupon code (optional)" />
             <p className="text-xs text-warm-400 mt-1">
               Coupons are issued after each completed purchase.
             </p>
