@@ -7,22 +7,63 @@ import { prisma } from '../lib/prisma';
 import { suppressionService } from '../services/suppressionService';
 import { syncLeadTierToMailerLite } from '../services/mailerliteService';
 
-const TEMPLATES = {
-  touch1: {
-    subject: 'Where do buyers find [Business Name]?',
-    html: '<p>Your sale may be fantastic, but if your buyers don\'t know when and where to find you, it won\'t matter.</p><p>We built [Business Name] a free storefront on FindA.Sale — it puts you on the map before shoppers start searching, not after.</p><p>Take a look: <a href="[preview link]">[preview link]</a></p><p>2-minute walkthrough: <a href="[video link]?src=outreach-a">[video link]</a></p><p>It\'s free to claim your page. No credit card needed.</p><p>— The FindA.Sale Team</p><p>[physical address] · <a href="[unsubscribe link]">Unsubscribe</a></p>',
+// Tier-specific T1 templates (strategy doc §2.1–2.3). T2–T4 are shared across tiers.
+// Token format: [Token Name] — replaced by renderTemplate() below.
+// Available tokens: Business Name, state, preview link, video link, unsubscribe link, physical address
+const TEMPLATES: Record<string, Record<string, { subject: string; html: string }>> = {
+  COLD: {
+    touch1: {
+      subject: 'You have something people want — let\'s help you sell it',
+      html: '<p>Hi [Business Name],</p><p>We found your [state] business running estate sales, yard sales, auctions, or consignment.</p><p>And we built something for people exactly like you.</p><p>It\'s a marketplace where you list once, and shoppers come find you. No commission until you sell. No monthly fee. You keep your data.</p><p><strong>How it works:</strong></p><p>1. List your items with a phone camera. Our system tags them automatically so shoppers can find exactly what they want.<br>2. Shoppers reserve items or bid. You collect money, pack, or have them pick up.<br>3. Settle up in your dashboard. See which items sold, profit per item, hold deposit from each shopper.</p><p>We\'re handling 8,000+ sales a month. Estate sale organizers are moving 30–100 items per week through the platform.</p><p>Want to see how it works? Watch the 2-minute demo:<br><a href="[video link]?src=outreach-cold-1">[video link]?src=outreach-cold-1</a></p><p>No obligation. You\'re already selling — we just make it easier.</p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
+    touch2: {
+      subject: 'One thing we left out',
+      html: '<p>Hi [Business Name],</p><p>I sent you an email last week about FindA.Sale and didn\'t get a response.</p><p>You might have been busy. Or maybe the first email didn\'t land right. So I\'m sending this one.</p><p>One thing I didn\'t mention: it\'s completely free to try.</p><p>List one item. See if it sells. Then decide if the platform is worth your time.</p><p>Zero risk. You don\'t pay anything unless an item sells. We keep 10%.</p><p>If you want to give it a shot:<br><a href="[video link]?src=outreach-cold-2">[video link]?src=outreach-cold-2</a></p><p>Or if now\'s not the right time, just let me know and I\'ll stop emailing.</p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
+    touch3: {
+      subject: 'Quick question from [Business Name]\'s biggest competitor',
+      html: '<p>Hi [Business Name],</p><p>You opened my email but didn\'t click the video.</p><p>So maybe the pitch wasn\'t compelling. Let me try a different angle.</p><p>Here\'s the thing: right now, shoppers are searching for what you sell on Google and eBay. But they\'re not finding your inventory. They\'re finding your competitors instead.</p><p>FindA.Sale exists to fix that.</p><p>When you list on our platform, we surface your items to shoppers actively looking for estate sales, auctions, and used goods in [state]. The people who buy from you <em>want</em> what you\'re selling.</p><p>Claim your storefront (takes 30 seconds):<br><a href="[preview link]">[preview link]</a></p><p>Then add 3 items from your next sale. If no one buys, you lose nothing. If someone does, you pocket 90%.</p><p>No risk. No monthly subscription. No data lock-in.</p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
+    touch4: {
+      subject: 'One last thought',
+      html: '<p>Hi [Business Name],</p><p>This is my last email. I promise.</p><p>I\'ve reached out a few times because I genuinely think FindA.Sale can help you reach more customers. But maybe the timing isn\'t right, or maybe online listing isn\'t for you.</p><p>No judgment either way.</p><p>But before I let you go: if you ever get curious — about how the platform works, what the 10% split looks like, whether it\'s worth trying — just reply to this email. I\'ll answer within a day.</p><p>Your storefront is ready whenever you change your mind:<br><a href="[preview link]">[preview link]</a></p><p>Good luck with your sales.</p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
   },
-  touch2: {
-    subject: 'Most shoppers find a sale after it\'s over',
-    html: '<p>By the time the Facebook post goes up or the signs hit the corners, the best things are already gone. Most people find out too late.</p><p>[Business Name] has a free page on FindA.Sale — it shows up before people start searching, not after the weekend wraps up. Takes about 30 seconds to claim.</p><p>Take a look: <a href="[preview link]">[preview link]</a></p><p>2-minute walkthrough: <a href="[video link]?src=outreach-b">[video link]</a></p><p>No credit card needed.</p><p>— The FindA.Sale Team</p><p>[physical address] · <a href="[unsubscribe link]">Unsubscribe</a></p>',
+  WARM: {
+    touch1: {
+      subject: 'We built [Business Name] a free storefront',
+      html: '<p>Hi [Business Name],</p><p>We\'ve been researching [state] estate sale organizers and found your business. So we built you a free storefront on FindA.Sale.</p><p>Your items are already getting some exposure on Google or local listings. We\'ve created a dedicated channel where your inventory lives in one place — and shoppers can discover all of it at once.</p><p><strong>What we built for you:</strong></p><p>• 1 listing, discovered everywhere (phone camera with smart tags)<br>• Shoppers reserve or bid directly (deposits held by us, not you)<br>• Dashboard shows profit per item, hold status, payout calendar<br>• Export your catalog to eBay, Amazon, or anywhere anytime</p><p>You own your data. We only take 10% when something sells.</p><p>See your storefront here:<br><a href="[preview link]">[preview link]</a></p><p>It\'s ready to go live whenever you want. Just claim it, add a few items, and start selling.</p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
+    touch2: {
+      subject: 'One thing we left out',
+      html: '<p>Hi [Business Name],</p><p>I sent you an email last week about FindA.Sale and didn\'t get a response.</p><p>You might have been busy. Or maybe the first email didn\'t land right. So I\'m sending this one.</p><p>One thing I didn\'t mention: it\'s completely free to try.</p><p>List one item. See if it sells. Then decide if the platform is worth your time.</p><p>Zero risk. You don\'t pay anything unless an item sells. We keep 10%.</p><p>Take a look at your storefront:<br><a href="[preview link]">[preview link]</a></p><p>Or if now\'s not the right time, just let me know and I\'ll stop emailing.</p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
+    touch3: {
+      subject: 'Quick question from [Business Name]\'s biggest competitor',
+      html: '<p>Hi [Business Name],</p><p>You opened my email but didn\'t click through.</p><p>Here\'s the thing: right now, shoppers are searching for what you sell on Google and eBay. But they\'re not finding your inventory — they\'re finding your competitors instead.</p><p>FindA.Sale exists to fix that. When you list on our platform, we surface your items to shoppers actively looking for estate sales, auctions, and used goods in [state].</p><p>Claim your storefront (takes 30 seconds):<br><a href="[preview link]">[preview link]</a></p><p>Then add 3 items from your next sale. If no one buys, you lose nothing. If someone does, you pocket 90%.</p><p>No risk. No monthly subscription. No data lock-in.</p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
+    touch4: {
+      subject: 'One last thought',
+      html: '<p>Hi [Business Name],</p><p>This is my last email. I promise.</p><p>I\'ve reached out a few times because I genuinely think FindA.Sale can help you reach more customers. But maybe the timing isn\'t right, or maybe online listing isn\'t for you.</p><p>No judgment either way.</p><p>But before I let you go: if you ever get curious — about how the platform works, what the 10% split looks like, whether it\'s worth trying — just reply to this email.</p><p>Your storefront is ready whenever you change your mind:<br><a href="[preview link]">[preview link]</a></p><p>Good luck with your sales.</p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
   },
-  touch3: {
-    subject: 'Be honest — how\'s the pricing going?',
-    html: '<p>Most organizers price from memory. It works until it doesn\'t.</p><p>Unfamiliar items, everything needs to go by Saturday — guessing on a Hummel figurine or an art nouveau lamp can mean leaving real money on the table.</p><p>FindA.Sale includes Smart Pricing — it pulls recent sold comps so you can price with confidence instead of spending 20 minutes on eBay first.</p><p>Your [Business Name] storefront is here whenever you\'re ready: <a href="[preview link]">[preview link]</a></p><p>Free forever. No credit card needed.</p><p>— The FindA.Sale Team</p><p>[physical address] · <a href="[unsubscribe link]">Unsubscribe</a></p>',
-  },
-  touch4: {
-    subject: 'Last note',
-    html: '<p>Four notes, no response — we get it. This is the last one.</p><p>[Business Name]\'s storefront stays live on FindA.Sale. If anything changes and you want to claim it, it\'s here whenever you\'re ready: <a href="[preview link]">[preview link]</a></p><p>— The FindA.Sale Team</p><p>[physical address] · <a href="[unsubscribe link]">Unsubscribe</a></p>',
+  HOT: {
+    touch1: {
+      subject: '[Business Name] + FindA.Sale: Your next growth channel',
+      html: '<p>Hi [Business Name],</p><p>We\'re reaching out directly to licensed auctioneers and estate sale professionals in [state] who are running multiple events a month.</p><p>You\'re among a select group of organizers we\'re inviting to a white-glove onboarding.</p><p><strong>For High-Volume Sellers:</strong></p><p>• Bulk photo upload (RapidFire: 100 items in 20 minutes via phone camera)<br>• Smart tagging powered by pricing data<br>• Printable inventory sheets for your sale event<br>• API export to eBay, Shopify, or your own system</p><p><strong>For Professional Organizers:</strong></p><p>• Staff accounts (delegate photos, pricing, listing reviews)<br>• Hold management dashboard (reserves, deposits, customer pickup scheduling)<br>• Commission-only pricing (10% on sales, zero monthly fees)</p><p>Your storefront is built and ready. Just claim it and add items:<br><a href="[preview link]">[preview link]</a></p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
+    touch2: {
+      subject: 'One thing we left out',
+      html: '<p>Hi [Business Name],</p><p>I sent you an email last week and didn\'t hear back.</p><p>One thing I didn\'t lead with: it\'s commission-only. You pay nothing until something sells. We keep 10%.</p><p>For a high-volume operation like yours, that math gets very favorable very fast.</p><p>See your storefront:<br><a href="[preview link]">[preview link]</a></p><p>Or if timing\'s off, just reply and I\'ll stop emailing.</p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
+    touch3: {
+      subject: 'Quick question from [Business Name]\'s biggest competitor',
+      html: '<p>Hi [Business Name],</p><p>You opened my email but didn\'t click through.</p><p>Here\'s what I know: your competitors in [state] are already listing on FindA.Sale. Their items are being discovered by shoppers who are looking specifically for what you sell.</p><p>The platform is commission-only (10%), no monthly fee, and you export your data anytime.</p><p>Claim your storefront in 30 seconds:<br><a href="[preview link]">[preview link]</a></p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
+    touch4: {
+      subject: 'One last thought',
+      html: '<p>Hi [Business Name],</p><p>This is my last email.</p><p>I\'ve reached out because I think a high-volume operation like yours is exactly what FindA.Sale was built for. But maybe the timing isn\'t right.</p><p>If that changes, your storefront is here:<br><a href="[preview link]">[preview link]</a></p><p>Good luck with your sales.</p><p>— The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+    },
   },
 };
 
@@ -241,15 +282,21 @@ export const sendOutreachEmails = async (): Promise<void> => {
           { expiresIn: '90d' }
         );
 
-        const template = TEMPLATES[`touch${touchNum}` as keyof typeof TEMPLATES];
+        // Select tier-specific template — fall back to COLD if tier is unset or unrecognised
+        const tier = (record.organizer.leadTier || 'COLD').toUpperCase();
+        const tierTemplates = TEMPLATES[tier] ?? TEMPLATES['COLD'];
+        const template = tierTemplates[`touch${touchNum}`];
         const previewLink = `${frontendUrl}/organizers/${record.organizerId}`;
         const videoLink = `${frontendUrl}/video`;
         const unsubscribeLink = `${backendUrl}/api/outreach/unsubscribe?token=${trackingToken}`;
         const trackingPixelUrl = `${backendUrl}/api/outreach/pixel?trackingId=${trackingPixelId}`;
         const physicalAddress = process.env.OUTREACH_PHYSICAL_ADDRESS || '219 E Michigan Ave, Suite F, Paw Paw, MI 49079';
+        // licenseState is the most reliable state field on Organizer for scraped listings
+        const stateValue = escapeHtml(record.organizer.licenseState || '');
 
         const html = renderTemplate(template.html, {
           'Business Name': escapeHtml(record.organizer.businessName || 'Your Business'),
+          'state': stateValue,
           'preview link': previewLink,
           'video link': videoLink,
           'unsubscribe link': unsubscribeLink,
@@ -258,6 +305,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
 
         const subject = renderTemplate(template.subject, {
           'Business Name': escapeHtml((record.organizer.businessName || 'Your Business').replace(/[\r\n\t]/g, ' ')),
+          'state': stateValue,
         });
 
         // Append tracking pixel — templates don't include <body> tags, so just concat

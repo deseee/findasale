@@ -704,5 +704,5 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // ADR-073 Phase 2: Initialize email discovery cron (gated by EMAIL_DISCOVERY_ENABLED env var)
   initEmailDiscoveryCron();
 
-  // Log environment variables status for debugging (dev only)
-  if (process.env.NODE_ENV !== 'production') {
+  // ADR-075: Initialize outreach email send cron (gated by OUTREACH_ENABLED env var)
+  initOutreachEmailsCron();

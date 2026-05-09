@@ -724,6 +724,19 @@ router.post('/scraper/run-auctionzip', requireSecret, async (req: express.Reques
   }
 });
 
+// POST /api/internal/outreach/send — manually trigger one outreach email window (bypasses cron schedule)
+// Requires OUTREACH_ENABLED=true + OUTREACH_SECRET + OUTREACH_WORKSPACE_EMAIL env vars.
+// Used for: warmup testing, manual sends, Railway one-off triggers.
+router.post('/outreach/send', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await sendOutreachEmails();
+    res.json({ success: true, message: 'Outreach email window completed' });
+  } catch (error: any) {
+    console.error('[OutreachManual] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/internal/enrich-sale-details — trigger ESN sale detail enrichment (description + photos)
 router.post('/enrich-sale-details', triggerSaleDetailEnrichment);
 
