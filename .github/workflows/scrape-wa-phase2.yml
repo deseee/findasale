@@ -1,0 +1,67 @@
+name: Scrape Washington Business Lookup (Phase 2)
+
+on:
+  schedule:
+    # Tuesday 9:00 AM UTC
+    - cron: '0 9 * * 2'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: Washington Phase 2 Business Lookup Scraper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        working-directory: packages/database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: npx prisma generate
+
+      - name: Run Washington Phase 2 Scraper
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { runWashingtonPhase2Scraper } from "./src/services/scraper/sources/washingtonPhase2Scraper";
+            try {
+              await runWashingtonPhase2Scraper();
+              console.log("Washington Phase 2 scraper completed successfully");
+              process.exit(0);
+            } catch (err) {
+              console.error("Washington Phase 2 scraper failed:", err);
+              process.exit(1);
+            }
+          '
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: 1,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Washington Phase 2 business lookup scraper failed. Check workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            })
