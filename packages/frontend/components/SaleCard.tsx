@@ -10,6 +10,7 @@ import ReputationBadge from './ReputationBadge'; // Feature #71
 import VerifiedBadge from './VerifiedBadge'; // Feature #16
 import BoostBadge from './BoostBadge'; // Phase 2b: Boost badges
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
+import SaleTypeBadge from './SaleTypeBadge'; // Brief F: Sale type badge system
 
 interface Sale {
   id: string;
@@ -38,6 +39,7 @@ interface Sale {
   tags?: string[];
   favoriteCount?: number;
   maxOrganizerDiscount?: number; // D-XP-003: Max organizer discount across items
+  saleType?: string; // Brief F: ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL
   boost?: { // Phase 2b: Boost badge
     boostType: string;
     expiresAt: string;
@@ -189,6 +191,13 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
         {sale.boost && sale.boost.status === 'ACTIVE' && (
           <div className="absolute top-2 right-2">
             <BoostBadge boostType={sale.boost.boostType} size="sm" />
+          </div>
+        )}
+
+        {/* Brief F: Sale type badge — bottom-left of photo (shows when no lock badge) */}
+        {sale.saleType && !sale.locked && (
+          <div className="absolute bottom-2 left-2">
+            <SaleTypeBadge saleType={sale.saleType} size="sm" theme="dark" />
           </div>
         )}
 

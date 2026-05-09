@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S702 Wrap
+# Patrick's Dashboard — S703 Wrap
 
 ---
 
@@ -6,21 +6,20 @@
 
 | Area | Status |
 |------|--------|
-| Vercel build | ✅ GREEN |
+| Vercel build | ✅ GREEN (pending this push) |
 | Railway backend | ✅ GREEN |
-| Phase 2 scraper routes in internal.ts | ✅ ALL 28 NOW WIRED — was zero before this session |
-| CT Phase 2 scraper | ✅ FIXED — substring matching + compact column keys |
-| PA Phase 2 scraper | ✅ FIXED — rewrote bulk CSV → Socrata paginated JSON (OOM fix) |
-| VA Phase 2 scraper (DPOR) | ✅ FIXED — correct numbered file URLs, all 4 files, 117 records |
-| NJ Phase 2 scraper | ⚠️ FIXED syntax, returns 0 — MyLicense.com bot-protected |
-| WA Phase 2 scraper | ❌ Returns 0 — data.wa.gov locked (403/400) — needs DOL data request |
-| VA General Phase 2 (Norfolk) | ✅ NEW — Norfolk Socrata, ~9,800 business license records |
-| Geocoding coverage | ❌ 0% geocoded — root cause unknown, investigate S703 |
-| Org scoring coverage | ⚠️ 7,884 of 32,110 scored — 24k orgs unscored |
+| Sale detail page `/sales/[id]` | ✅ REDESIGNED — new design tokens, hero, sticky CTAs |
+| Sale creation wizard | ✅ REDESIGNED — 5-step, Online Only toggle wired (schema TODO) |
+| Email design system | ✅ REBUILT — 5 modules, 4 new email types, backward compat |
+| Smart review queue | ✅ REDESIGNED — amber stripes, price enforcement, View live sale link |
+| Sale type badge system | ✅ NEW component — SaleTypeBadge, all 5 types |
+| Broadcast composer | ✅ NEW component — 2-panel, templates, tier gates |
+| Organizer storefront v0.2 | ✅ REDESIGNED — parchment default, hero, stats strip, right rail |
+| Schema gap: isOnlineOnly | ⚠️ UI wired (TODO comment), needs future migration |
+| Schema gap: saleSubtype | ⚠️ UI wired (TODO comment), needs future migration |
+| Geocoding coverage | ❌ 0% geocoded — carry-forward from S702, investigate |
 | MailerLite tier group wiring | ⚠️ Built — needs 3 Railway env vars |
-| emailDiscoveryJob cron wiring | ⚠️ Not yet registered in cron |
-| S698 migration | ⚠️ May still need running |
-| Outreach sends | ❌ 0 sent — domain warming not started |
+| S698 migration | ⚠️ May still need running if not done |
 
 ---
 

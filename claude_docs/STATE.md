@@ -4,7 +4,34 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S702 — Phase 2 Scraper Fixes (CT/PA/VA/NJ/WA) + All 28 Phase 2 Scrapers Wired into internal.ts + VA General Scraper (COMPLETE — pushblock below)**
+**Latest: S703 — Design Overhaul: All 7 Surfaces Complete (Tier 1 + Tier 2 + Tier 3) — PUSHBLOCK BELOW**
+
+Design overhaul across the full product UI using the organizer-storefront design handoff (zip 5). All surfaces redesigned with FS_TONES tokens: light parchment bg (#F4EFE7), dark (#0B0F17), Inter Tight headings, JetBrains Mono labels, accent #C8552B light / #E97C4D dark. TS check: 0 errors on all verifiable files (sale detail + storefront need Patrick to run tsc locally — VM env issue).
+
+**Completed this session:**
+- **Sale detail page** (`pages/sales/[id].tsx`) — full-bleed 460px hero with gradient overlay, status/type pills, sticky mobile action strip, desktop 2-col layout, ENDED state with FollowOrganizerButton, parchment surface tokens throughout
+- **Sale creation wizard** (`pages/organizer/create-sale.tsx`) — 5-step wizard rewritten (591 lines): type tile selector, Step 2 dates+location+Online Only toggle (UI-wired, schema TODO), Cloudinary upload, tag chips, post-publish success state, auto-save to localStorage. TS: 0 errors.
+- **Email design system** (`emailTemplateService.ts`) — full rebuild with T={outer,surface,ink,accent,font} tokens, 5 module builders (buildSaleCardModule, buildItemCardModule, buildMetricRowModule, buildTextBlockModule, buildQuickWinsModule), 4 new email builders (NewSaleAlert, SaleDayReminder, OrganizerWeeklyDigest, SmartMatch). All 14+ existing callers backward compatible.
+- **Onboarding email service** (`onboardingEmailService.ts` — NEW) — 3-email Day 0/Day 2/Day 7 series for non-activated organizers
+- **Sale live email** (`saleLiveEmailService.ts` — NEW) — Email 7 sale live confirmation with share links
+- **Smart review queue** (`pages/organizer/add-items/[saleId]/review.tsx`) — full v2 redesign: amber left-stripe review border, price enforcement (never pre-fills aiSuggestedPrice), sticky bulk actions bar, empty success state, "View live sale →" quiet link in header
+- **SaleTypeBadge component** (`components/SaleTypeBadge.tsx` — NEW, 288 lines) — ESTATE/YARD/AUCTION/FLEA_MARKET/RETAIL badge system, CharityHeartBadge, SALE_TYPE_FILTER_GROUPS export, saleSubtype + isOnlineOnly UI props (schema TODO)
+- **BroadcastComposer** (`components/BroadcastComposer.tsx` — NEW, 985 lines) — 2-panel desktop (compose + live preview, 300ms debounce), mobile tab toggle, 3 templates, 7-day frequency guardrail, SIMPLE tier blur overlay
+- **BroadcastSection** (`components/BroadcastSection.tsx`) — redesigned to use BroadcastComposer
+- **SaleCard** (`components/SaleCard.tsx`) — additive: SaleTypeBadge overlay
+- **SalePulseWidget** (`components/SalePulseWidget.tsx`) — additive: "Message N followers →" quick-compose
+- **Storefront v0.2** (`pages/organizer/storefront/[slug].tsx`) — complete visual overhaul: 280px cover hero with gradient overlay + initials logo mark + status pill computed from sales data, stats strip, 2-col desktop grid (1fr 300px), sale cards redesigned with striped placeholders, right rail (Follow CTA, Hours, Contact, org types, brand swatches PRO/TEAMS), parchment theme default, all existing data/API contracts preserved
+
+**Pending Patrick actions:**
+- Run TS check before pushing (two files couldn't be checked in VM):
+  ```powershell
+  cd C:\Users\desee\ClaudeProjects\FindaSale\packages\frontend
+  npx tsc --noEmit --skipLibCheck 2>&1 | Select-String "error TS" | Select-String -NotMatch "node_modules"
+  ```
+- Push all 16 files (pushblock below)
+- SCHEMA TODO (future session): add `isOnlineOnly: Boolean` and `saleSubtype: String?` to Sale model — both wired as UI-only with TODO comments
+
+**Previous: S702 — Phase 2 Scraper Fixes (CT/PA/VA/NJ/WA) + All 28 Phase 2 Scrapers Wired into internal.ts + VA General Scraper (COMPLETE — pushblock below)**
 
 S702 fixed 5 broken Phase 2 scrapers, wired all 28 Phase 2 scrapers into Express routes (they had zero routes before — none could be triggered), and built a new Virginia general business scraper targeting Norfolk's Socrata dataset. Dashboard screenshot showed 32,110 scraped orgs, Geocoded=0%, only 7,884 scored of 32k, NY Phase 2 pulling construction/landscaping businesses (incidental secondhand dealer licenses). Next session: investigate geocoding=0%, GitHub Actions audit, scoring backfill for ~24k unscored orgs, outreach warming strategy.
 
