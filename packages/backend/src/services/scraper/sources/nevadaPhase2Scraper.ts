@@ -1,238 +1,250 @@
 /**
- * Nevada Financial Institutions Division (FID) — Pawnbroker License Scraper (Phase 2)
- * Scrapes licensed pawnbrokers from Nevada FID licensee database
- * Primary: https://fid.nv.gov/
- * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data (no auctioneer licensing in NV)
+ * Las Vegas OpenData (Socrata) — Secondary Sale Business Scraper (Phase 2)
+ * Source: https://opendata.lasvegasnevada.gov/resource/jv8a-mrfg.json
+ * Dataset: City of Las Vegas business licenses (~70%+ of NV population)
+ * ADR-073: Directory Scraper Phase 2 — State/city business licensing data
  *
- * NV is heavily city-level regulated (Las Vegas/Clark County), but state FID
- * maintains a pawnbroker license list. We attempt state-level FID search first.
- * TODO: Clark County supplemental —
- *   https://www.clarkcountynv.gov/business/business_license/pages/business_license_search.aspx
- * requires JS rendering; implement as separate city-level scraper if state returns sparse results.
+ * Matches all secondary sale business types:
+ *   - Always-include license types: SECONDHAND DEALER, PAWNBROKER, AUCTIONEER,
+ *     JUNK DEALER, CONSIGNMENT
+ *   - Broader license types + keyword match on business name: RETAIL,
+ *     GENERAL MERCHANDISE, DEALER
+ *
+ * Paginated Socrata JSON API with $limit/$offset until response < limit.
+ * Filters to ACTIVE licenses only.
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
+import { getOrCreateScrapedOrganizer } from '../index';
 
-const NV_FID_BASE_URL = 'https://fid.nv.gov';
-const NV_FID_SEARCH_URL = 'https://fid.nv.gov/';
-const NV_FID_LICENSEE_URL = 'https://fid.nv.gov/licensee-list/pawnbrokers';
-const RATE_DELAY_MS = 3000;
+const NV_API_BASE = 'https://opendata.lasvegasnevada.gov/resource/jv8a-mrfg.json';
+const NV_DOMAIN = 'opendata.lasvegasnevada.gov';
+const PAGE_LIMIT = 5000;
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// License types that always indicate a secondhand-sale business
+const ALWAYS_INCLUDE_TYPES = new Set([
+  'SECONDHAND DEALER',
+  'PAWNBROKER',
+  'AUCTIONEER',
+  'JUNK DEALER',
+  'CONSIGNMENT',
+]);
+
+// Broader license types that require a keyword match on business name
+const BROADER_TYPES = new Set([
+  'RETAIL',
+  'GENERAL MERCHANDISE',
+  'DEALER',
+]);
+
+// Keywords — any match includes the row when paired with a broader type
+const SALE_TYPE_KEYWORDS = [
+  'pawn',
+  'estate sale',
+  'consign',
+  'thrift',
+  'resale',
+  'antique',
+  'vintage',
+  'collectible',
+  'flea market',
+  'swap meet',
+  'liquidat',
+  'salvage',
+  'junk dealer',
+  'used goods',
+  'auction',
+  'secondhand',
+  'second hand',
+  'pre-owned',
+  'preowned',
+  'surplus',
+  'rummage',
+];
+
+// False-positive name fragments — exclude if business name contains any of these
+const EXCLUDE_FRAGMENTS = [
+  'real estate',
+  'realty',
+  'realtor',
+  'restaurant',
+  'petroleum',
+  'dental',
+  'medical',
+  'pharmacy',
+  'funeral',
+  'insurance',
+  'tax service',
+  'accounting',
+  'attorney',
+  'law office',
+  'landscaping',
+  'construction',
+  'plumbing',
+  'electrical',
+  'roofing',
+  'automotive repair',
+  'car wash',
+  'dry clean',
+  'laundry',
+  'hair salon',
+  'nail salon',
+  'tattoo',
+  'massage',
+  'yoga',
+  'daycare',
+];
+
+function nameMatchesKeyword(name: string): boolean {
+  const lower = name.toLowerCase();
+  return SALE_TYPE_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
+function nameIsExcluded(name: string): boolean {
+  const lower = name.toLowerCase();
+  return EXCLUDE_FRAGMENTS.some((frag) => lower.includes(frag));
+}
+
+function mapCategory(licenseType: string): string {
+  const upper = licenseType.toUpperCase();
+  if (upper.includes('AUCTION')) return 'AUCTION_HOUSE';
+  return 'RESALE_SHOP';
+}
+
+/**
+ * Las Vegas OpenData secondary sale scraper.
+ * Fetches all active business licenses via paginated Socrata JSON API and
+ * filters to secondhand-sale matches using license type and keyword matching.
+ */
 export async function runNevadaPhase2Scraper(): Promise<void> {
-  const rateLimiter = defaultRateLimiter;
-  const domain = new URL(NV_FID_SEARCH_URL).hostname;
-  let totalRecords = 0;
-  let createdOrganizers = 0;
+  let totalFetched = 0;
+  let totalMatched = 0;
+  let totalUpserted = 0;
+  let offset = 0;
+
+  console.log('[NevadaPhase2] Starting secondary sale scraper via Las Vegas OpenData');
+  console.log(`[NevadaPhase2] Source: ${NV_API_BASE}`);
 
   try {
-    console.log('[NevadaPhase2] Starting Nevada FID pawnbroker license scraper');
+    while (true) {
+      const url = `${NV_API_BASE}?$limit=${PAGE_LIMIT}&$offset=${offset}`;
+      await defaultRateLimiter.waitBeforeRequest(NV_DOMAIN);
 
-    await rateLimiter.waitBeforeRequest(domain);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(60000),
+      });
 
-    const landingResponse = await fetch(NV_FID_SEARCH_URL, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!landingResponse.ok) {
-      console.warn(
-        '[NevadaPhase2] Could not reach NV FID portal: ' + landingResponse.status + '. ' +
-        'TODO: If FID portal unavailable, try https://fid.nv.gov/licensee-list/pawnbrokers ' +
-        'or contact fid@fid.nv.gov to request a bulk licensee list.'
-      );
-      return;
-    }
-
-    const landingHtml = await landingResponse.text();
-    console.log('[NevadaPhase2] FID landing page fetched');
-
-    await sleep(RATE_DELAY_MS);
-    await rateLimiter.waitBeforeRequest(domain);
-
-    const listResponse = await fetch(NV_FID_LICENSEE_URL, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        Referer: NV_FID_SEARCH_URL,
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
-
-    let html = '';
-
-    if (listResponse.ok) {
-      html = await listResponse.text();
-      console.log('[NevadaPhase2] FID pawnbroker list page fetched');
-    } else {
-      console.warn('[NevadaPhase2] Direct licensee URL failed: ' + listResponse.status + '. Trying landing page link.');
-      const pawnLinkMatch = landingHtml.match(/href="([^"]*pawn[^"]*)"/i);
-      if (pawnLinkMatch) {
-        const pawnUrl = pawnLinkMatch[1].startsWith('http')
-          ? pawnLinkMatch[1]
-          : NV_FID_BASE_URL + pawnLinkMatch[1];
-        console.log('[NevadaPhase2] Found pawnbroker link: ' + pawnUrl);
-
-        await sleep(RATE_DELAY_MS);
-        await rateLimiter.waitBeforeRequest(domain);
-
-        const fallbackResponse = await fetch(pawnUrl, {
-          method: 'GET',
-          headers: {
-            'User-Agent': getRandomUserAgent(),
-            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            Referer: NV_FID_SEARCH_URL,
-            Connection: 'keep-alive',
-          },
-          signal: AbortSignal.timeout(30000),
-        });
-
-        if (fallbackResponse.ok) {
-          html = await fallbackResponse.text();
-          console.log('[NevadaPhase2] Pawnbroker page fetched via landing link');
-        }
-      }
-    }
-
-    if (!html) {
-      console.warn(
-        '[NevadaPhase2] Could not retrieve pawnbroker licensee page. ' +
-        'TODO: NV FID may require JS navigation. ' +
-        'Check https://fid.nv.gov for downloadable Excel/PDF, ' +
-        'or try https://www.nvsos.gov/sos/licensing for state licensing search.'
-      );
-      return;
-    }
-
-    if (
-      html.includes('captcha') ||
-      html.includes('CAPTCHA') ||
-      html.includes('Cloudflare') ||
-      html.includes('cf-browser-verification') ||
-      html.length < 500
-    ) {
-      console.warn(
-        '[NevadaPhase2] Bot protection or empty page detected. ' +
-        'TODO: FID portal may block server-side requests. ' +
-        'Alternative: check https://fid.nv.gov for downloadable licensee PDFs per category.'
-      );
-      return;
-    }
-
-    const extractText = (cellHtml: string): string => {
-      return cellHtml
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"\')
-        .replace(/&#39;/g, "'")
-        .trim();
-    };
-
-    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
-    let rowMatch: RegExpExecArray | null;
-
-    while ((rowMatch = rowRegex.exec(html)) !== null) {
-      const rowHtml = rowMatch[1];
-      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/g;
-      const cells: string[] = [];
-      let cellMatch: RegExpExecArray | null;
-
-      while ((cellMatch = cellRegex.exec(rowHtml)) !== null) {
-        cells.push(extractText(cellMatch[1]));
+      if (!response.ok) {
+        console.error(`[NevadaPhase2] API fetch failed: HTTP ${response.status} at offset ${offset}`);
+        break;
       }
 
-      if (cells.length < 2) continue;
+      const records: Record<string, string>[] = await response.json();
 
-      const licenseNumber = cells[0];
-      const businessName = cells[1];
-      const city = cells.length > 2 ? cells[2] : '';
-
-      if (!licenseNumber || !businessName || licenseNumber === 'License Number' || licenseNumber === '#') continue;
-
-      totalRecords++;
-      console.log('[NevadaPhase2] Processing: ' + businessName + ' (' + licenseNumber + ') in ' + (city || 'NV'));
-
-      try {
-        const existing = await prisma.organizer.findFirst({
-          where: {
-            businessName: { equals: businessName, mode: 'insensitive' },
-            licenseState: 'NV',
-          },
-          select: { id: true },
-        });
-
-        if (existing) {
-          await prisma.organizer.update({
-            where: { id: existing.id },
-            data: {
-              licenseNumber,
-              licenseState: 'NV',
-              isStateLicensed: true,
-              directoryMostRecentSource: 'NevadaPhase2',
-              directoryMostRecentAt: new Date(),
-            },
-          });
-        } else {
-          const slug = businessName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
-          const citySlug = (city || 'nv').toLowerCase().replace(/[^a-z0-9]/g, '-');
-          await prisma.organizer.create({
-            data: {
-              businessName,
-              phone: null,
-              address: city ? city + ', NV' : 'Nevada',
-              city: city || 'Nevada',
-              state: 'NV',
-              bio: 'Licensed pawnbroker in ' + (city || 'Nevada') + '.',
-              isClaimed: false,
-              isUnmanagedListing: true,
-              licenseNumber,
-              licenseState: 'NV',
-              isStateLicensed: true,
-              businessCategory: 'PAWN_SHOP',
-              directoryMostRecentSource: 'NevadaPhase2',
-              directoryMostRecentAt: new Date(),
-              user: {
-                create: {
-                  email: 'scraper+' + slug + '-' + citySlug + '-nv-nvphase2@system.finda.sale',
-                  name: businessName,
-                  password: null,
-                  role: 'ORGANIZER',
-                  roles: ['ORGANIZER'],
-                },
-              },
-            },
-          });
-          createdOrganizers++;
-        }
-
-        if (totalRecords % 50 === 0) {
-          console.log('[NevadaPhase2] Progress: ' + totalRecords + ' processed, ' + createdOrganizers + ' created');
-        }
-
-        await sleep(RATE_DELAY_MS);
-      } catch (err) {
-        console.error('[NevadaPhase2] Error processing ' + businessName + ':', err);
+      if (!Array.isArray(records) || records.length === 0) {
+        console.log(`[NevadaPhase2] No more records at offset ${offset}`);
+        break;
       }
+
+      totalFetched += records.length;
+      console.log(`[NevadaPhase2] Page offset ${offset}: ${records.length} records`);
+
+      for (const record of records) {
+        try {
+          // Status filter — active only
+          const status = (
+            record['status'] ||
+            record['license_status'] ||
+            ''
+          ).trim().toUpperCase();
+          if (status && status !== 'ACTIVE') continue;
+
+          // Resolve license type from common field variants
+          const licenseTypeRaw = (
+            record['license_type'] ||
+            record['license_description'] ||
+            record['business_type'] ||
+            ''
+          ).trim();
+          const licenseTypeUpper = licenseTypeRaw.toUpperCase();
+
+          // Resolve business name
+          const businessName = (
+            record['business_name'] ||
+            record['dba_name'] ||
+            record['name'] ||
+            ''
+          ).trim();
+
+          if (!businessName) continue;
+
+          // Determine inclusion
+          const alwaysInclude = ALWAYS_INCLUDE_TYPES.has(licenseTypeUpper);
+          const broaderMatch =
+            BROADER_TYPES.has(licenseTypeUpper) && nameMatchesKeyword(businessName);
+
+          // If no explicit license type match, fall back to keyword-only match
+          const keywordFallback = !licenseTypeRaw && nameMatchesKeyword(businessName);
+
+          if (!alwaysInclude && !broaderMatch && !keywordFallback) continue;
+          if (nameIsExcluded(businessName)) continue;
+
+          totalMatched++;
+
+          const licenseNumber = (
+            record['business_license'] ||
+            record['license_number'] ||
+            record['license_no'] ||
+            ''
+          ).trim();
+
+          const address = (
+            record['address'] ||
+            record['location_address'] ||
+            record['street_address'] ||
+            ''
+          ).trim();
+
+          const city = (record['city'] || 'Las Vegas').trim();
+          const zip = (record['zip'] || record['zip_code'] || '').trim();
+
+          const dedupeKey = `NV-SECONDARY-${licenseNumber || businessName.toLowerCase().replace(/\s+/g, '-')}`;
+          const businessCategory = mapCategory(licenseTypeRaw);
+
+          const orgId = await getOrCreateScrapedOrganizer(
+            businessName,
+            'NevadaPhase2',
+            city || 'Las Vegas',
+            'NV',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            businessCategory,
+            undefined,
+            undefined,
+            undefined
+          );
+
+          if (orgId) {
+            totalUpserted++;
+          }
+        } catch (rowErr) {
+          console.error('[NevadaPhase2] Error processing record:', rowErr);
+        }
+      }
+
+      if (records.length < PAGE_LIMIT) break;
+      offset += PAGE_LIMIT;
     }
 
-    console.log('[NevadaPhase2] Scraper completed: ' + totalRecords + ' records processed, ' + createdOrganizers + ' created');
+    console.log(
+      `[NevadaPhase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`
+    );
   } catch (error) {
-    console.error('[NevadaPhase2] Scraper error:', error);
+    console.error('[NevadaPhase2] Scraper fatal error:', error);
     throw error;
   }
 }

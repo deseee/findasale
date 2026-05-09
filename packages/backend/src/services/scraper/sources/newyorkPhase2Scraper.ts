@@ -1,309 +1,234 @@
 /**
- * New York Department of Financial Services (DFS) — Secondhand Dealer/Pawnbroker License Scraper (Phase 2)
- * Scrapes licensed pawnbrokers and secondhand dealers from NY DFS licensee search
- * Primary: https://myportal.dfs.ny.gov/web/guest-applications/licensed-entities
- * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data
- * Note: NYC also has city-level licensing, but NY DFS maintains state-level pawnbroker/secondhand dealer records.
+ * NYC Open Data — Secondary Sale Business Scraper (Phase 2)
+ * ADR-073: Directory Scraper Phase 2 — City/state business licensing data
  *
- * NY DFS licensed entities portal supports license type filtering.
- * We search for "Pawnbroker" and "Secondhand Dealer" license types separately.
+ * Ingests TWO dedicated NYC Open Data datasets via Socrata JSON API:
+ *
+ *   Dataset 1 — NYC Secondhand Dealer General Licenses
+ *     https://data.cityofnewyork.us/resource/9jmq-ziz9.json
+ *     All records are secondhand dealers — ingest all active ones.
+ *     mapCategory: AUCTION_HOUSE if license_type includes 'AUCTION', else RESALE_SHOP
+ *
+ *   Dataset 2 — NYC Active Pawnbroker Licenses
+ *     https://data.cityofnewyork.us/resource/u7z4-p9uq.json
+ *     All records are pawnbrokers — ingest all as RESALE_SHOP.
+ *
+ * Both APIs are paginated with $limit=2000&$offset until response.length < limit.
+ * isStateLicensed = true for all records (official NYC license registries).
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
+import { getOrCreateScrapedOrganizer } from '../index';
 
-// NY DFS public licensee search — REST-style query endpoint
-const NYDFS_BASE_URL = 'https://myportal.dfs.ny.gov';
-const NYDFS_SEARCH_URL = 'https://myportal.dfs.ny.gov/web/guest-applications/licensed-entities';
-// DFS uses Liferay portal — search API endpoint
-const NYDFS_API_URL = 'https://myportal.dfs.ny.gov/api/jsonws/invoke';
-const RATE_DELAY_MS = 3000;
+const NYC_DOMAIN = 'data.cityofnewyork.us';
 
-// License types to search — NY DFS covers both pawnbroker and secondhand dealer at state level
-const LICENSE_TYPES = ['Pawnbroker', 'Secondhand Dealer'];
+const SECONDHAND_URL =
+  'https://data.cityofnewyork.us/resource/9jmq-ziz9.json';
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+const PAWNBROKER_URL =
+  'https://data.cityofnewyork.us/resource/u7z4-p9uq.json';
+
+const PAGE_LIMIT = 2000;
+
+/** Inactive license statuses to skip */
+const INACTIVE_STATUSES = new Set(['EXPIRED', 'INACTIVE', 'REVOKED', 'CANCELLED', 'SUSPENDED']);
+
+/**
+ * Resolve a business name from a Socrata record — checks several common field variants.
+ */
+function resolveName(record: Record<string, string>): string {
+  return (
+    record['business_name'] ||
+    record['licensee_name'] ||
+    record['dba_name'] ||
+    record['name'] ||
+    ''
+  ).trim();
 }
 
 /**
- * Scrape New York DFS pawnbroker and secondhand dealer licenses.
- * Attempts DFS portal search for each license type.
- * Falls back gracefully if portal requires JS rendering.
+ * Resolve a license number from a Socrata record.
  */
-export async function runNewYorkPhase2Scraper(): Promise<void> {
-  const rateLimiter = defaultRateLimiter;
-  const domain = new URL(NYDFS_SEARCH_URL).hostname;
-  let totalRecords = 0;
-  let createdOrganizers = 0;
+function resolveLicenseNumber(record: Record<string, string>): string {
+  return (
+    record['license_nbr'] ||
+    record['license_number'] ||
+    record['license_no'] ||
+    ''
+  ).trim();
+}
 
-  try {
-    console.log('[NewYorkPhase2] Starting NY DFS pawnbroker/secondhand dealer scraper');
+/**
+ * Resolve the license status from a Socrata record.
+ */
+function resolveStatus(record: Record<string, string>): string {
+  return (
+    record['status'] ||
+    record['license_status'] ||
+    record['lic_status'] ||
+    'ACTIVE'
+  ).trim().toUpperCase();
+}
 
-    // Step 1: Fetch the DFS licensed entities page to understand portal structure
-    await rateLimiter.waitBeforeRequest(domain);
+/**
+ * Slugify a business name for use in a dedupeKey fallback.
+ */
+function slugifyName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 60);
+}
 
-    const landingResponse = await fetch(NYDFS_SEARCH_URL, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
+/**
+ * Map a secondhand dealer license type to a FindA.Sale business category.
+ */
+function mapSecondhandCategory(licenseType: string): string {
+  const upper = (licenseType || '').toUpperCase();
+  if (upper.includes('AUCTION')) return 'AUCTION_HOUSE';
+  return 'RESALE_SHOP';
+}
 
-    if (!landingResponse.ok) {
-      console.warn(`[NewYorkPhase2] DFS portal unreachable: ${landingResponse.status}`);
-      // TODO: NY DFS licensed entity search may require Liferay session.
-      // Alternative: https://www.dfs.ny.gov/consumers/financial_companies/pawnbroker
-      // or email dfs.licensing@dfs.ny.gov for bulk licensee list.
-      return;
-    }
+/**
+ * Fetch one page from a Socrata JSON endpoint.
+ */
+async function fetchPage(
+  baseUrl: string,
+  offset: number
+): Promise<Record<string, string>[]> {
+  const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}`;
+  await defaultRateLimiter.waitBeforeRequest(NYC_DOMAIN);
 
-    const landingHtml = await landingResponse.text();
-    console.log(`[NewYorkPhase2] DFS portal fetched (${landingHtml.length} bytes)`);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(30000),
+  });
 
-    // Check for JS-rendered portal (Liferay/React apps return minimal HTML without JS)
-    const isJsPortal =
-      landingHtml.includes('window.__INITIAL_STATE__') ||
-      landingHtml.includes('ng-app') ||
-      landingHtml.length < 2000;
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} from ${url}`);
+  }
 
-    if (isJsPortal) {
-      console.warn(
-        '[NewYorkPhase2] DFS portal appears to be JS-rendered. ' +
-        'TODO: NY DFS myportal.dfs.ny.gov is a Liferay portal that requires JavaScript rendering. ' +
-        'Options: ' +
-        '1. Use DFS public data: https://www.dfs.ny.gov/apps_and_licensing/licensed_entities/pawnbrokers ' +
-        '2. Request bulk list via FOIL: https://www.dfs.ny.gov/consumers/foil ' +
-        '3. Parse the DFS public PDF directory if available.'
+  return (await response.json()) as Record<string, string>[];
+}
+
+/**
+ * Ingest all records from a single NYC Open Data Socrata dataset.
+ *
+ * @param label           - Short label for log messages (e.g. 'secondhand', 'pawnbroker')
+ * @param baseUrl         - Socrata resource URL without query params
+ * @param defaultCategory - FindA.Sale category for all records in this dataset
+ * @param dedupePrefix    - Prefix for dedupeKey (e.g. 'NY-SECONDARY', 'NY-SECONDARY-PAWN')
+ * @param categoryFn      - Optional per-record category override (used for secondhand dealers)
+ */
+async function ingestNycDataset(
+  label: string,
+  baseUrl: string,
+  defaultCategory: string,
+  dedupePrefix: string,
+  categoryFn?: (record: Record<string, string>) => string
+): Promise<void> {
+  let offset = 0;
+  let totalFetched = 0;
+  let totalSkipped = 0;
+  let totalUpserted = 0;
+
+  console.log(`[NewYork Phase2] Starting ${label} dataset ingestion`);
+  console.log(`[NewYork Phase2] Source: ${baseUrl}`);
+
+  while (true) {
+    let page: Record<string, string>[];
+
+    try {
+      page = await fetchPage(baseUrl, offset);
+    } catch (fetchErr) {
+      console.error(
+        `[NewYork Phase2] ${label}: fetch error at offset ${offset}:`,
+        fetchErr
       );
-      // Attempt the public static page as a fallback
-      await sleep(RATE_DELAY_MS);
-      await runNewYorkStaticFallback(domain, rateLimiter, createdOrganizers, totalRecords);
-      return;
+      break;
     }
 
-    // Parse results if portal returned HTML data
-    const extractText = (cellHtml: string): string => {
-      return cellHtml
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .trim();
-    };
+    if (!page || page.length === 0) break;
 
-    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
-    let rowMatch: RegExpExecArray | null;
+    totalFetched += page.length;
 
-    while ((rowMatch = rowRegex.exec(landingHtml)) !== null) {
-      const rowHtml = rowMatch[1];
-      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/g;
-      const cells: string[] = [];
-      let cellMatch: RegExpExecArray | null;
-
-      while ((cellMatch = cellRegex.exec(rowHtml)) !== null) {
-        cells.push(extractText(cellMatch[1]));
-      }
-
-      if (cells.length < 2) continue;
-
-      const licenseNumber = cells[0];
-      const businessName = cells[1];
-      const city = cells.length > 2 ? cells[2] : '';
-      const licenseType = cells.length > 3 ? cells[3] : '';
-
-      // Filter to pawnbroker and secondhand dealer entries
-      if (licenseType && !licenseType.toLowerCase().includes('pawn') && !licenseType.toLowerCase().includes('secondhand')) {
-        continue;
-      }
-
-      if (!licenseNumber || !businessName || licenseNumber === 'License Number') continue;
-
-      totalRecords++;
-
-      console.log(`[NewYorkPhase2] Processing: ${businessName} (${licenseNumber}) in ${city || 'NY'}`);
-
+    for (const record of page) {
       try {
-        await upsertNYOrganizer({ businessName, licenseNumber, city });
-        createdOrganizers++;
+        const name = resolveName(record);
+        if (!name) continue;
 
-        if (totalRecords % 50 === 0) {
-          console.log(`[NewYorkPhase2] Progress: ${totalRecords} processed, ${createdOrganizers} created`);
+        // Filter inactive licenses
+        const status = resolveStatus(record);
+        if (INACTIVE_STATUSES.has(status)) {
+          totalSkipped++;
+          continue;
         }
 
-        await sleep(RATE_DELAY_MS);
-      } catch (err) {
-        console.error(`[NewYorkPhase2] Error processing ${businessName}:`, err);
+        const licenseNumber = resolveLicenseNumber(record);
+        const dedupeKey = `${dedupePrefix}-${licenseNumber || slugifyName(name)}`;
+        const category = categoryFn ? categoryFn(record) : defaultCategory;
+        const city = (record['city'] || 'New York').trim();
+
+        const orgId = await getOrCreateScrapedOrganizer(
+          name,              // businessName
+          'NewYorkPhase2',   // sourceName
+          city,              // city
+          'NY',              // state
+          undefined,         // esnOrgId
+          undefined,         // googlePlaceId
+          undefined,         // foursquareVenueId
+          undefined,         // hereBusinessId
+          category,          // businessCategory
+          undefined,         // contactEmail
+          undefined,         // phone
+          undefined          // website
+        );
+
+        if (orgId) {
+          totalUpserted++;
+        }
+      } catch (rowErr) {
+        console.error(`[NewYork Phase2] ${label}: error on record:`, rowErr);
       }
     }
 
     console.log(
-      `[NewYorkPhase2] Scraper completed: ${totalRecords} records processed, ${createdOrganizers} created`
+      `[NewYork Phase2] ${label}: processed offset ${offset}\u2013${offset + page.length - 1} (page size: ${page.length})`
     );
-  } catch (error) {
-    console.error('[NewYorkPhase2] Scraper error:', error);
-    throw error;
-  }
-}
 
-/**
- * Fallback: Try the NY DFS static public pawnbroker page.
- * https://www.dfs.ny.gov/apps_and_licensing/licensed_entities/pawnbrokers
- */
-async function runNewYorkStaticFallback(
-  domain: string,
-  rateLimiter: typeof defaultRateLimiter,
-  createdOrganizers: number,
-  totalRecords: number
-): Promise<void> {
-  const fallbackUrl = 'https://www.dfs.ny.gov/apps_and_licensing/licensed_entities/pawnbrokers';
-  const fallbackDomain = 'www.dfs.ny.gov';
-
-  console.log(`[NewYorkPhase2] Attempting static fallback: ${fallbackUrl}`);
-
-  await rateLimiter.waitBeforeRequest(fallbackDomain);
-
-  const fallbackResponse = await fetch(fallbackUrl, {
-    method: 'GET',
-    headers: {
-      'User-Agent': getRandomUserAgent(),
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Connection: 'keep-alive',
-    },
-    signal: AbortSignal.timeout(30000),
-  });
-
-  if (!fallbackResponse.ok) {
-    console.warn(
-      `[NewYorkPhase2] Static fallback also failed (${fallbackResponse.status}). ` +
-      'TODO: Submit FOIL request to NY DFS for pawnbroker licensee list. ' +
-      'Contact: https://www.dfs.ny.gov/consumers/foil'
-    );
-    return;
-  }
-
-  const html = await fallbackResponse.text();
-
-  if (html.includes('captcha') || html.includes('CAPTCHA') || html.length < 500) {
-    console.warn(
-      '[NewYorkPhase2] Static fallback returned blocked/empty response. ' +
-      'TODO: NY DFS is blocking server-side requests. Use FOIL request for bulk data.'
-    );
-    return;
-  }
-
-  const extractText = (cellHtml: string): string => {
-    return cellHtml
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .trim();
-  };
-
-  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
-  let rowMatch: RegExpExecArray | null;
-
-  while ((rowMatch = rowRegex.exec(html)) !== null) {
-    const rowHtml = rowMatch[1];
-    const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/g;
-    const cells: string[] = [];
-    let cellMatch: RegExpExecArray | null;
-
-    while ((cellMatch = cellRegex.exec(rowHtml)) !== null) {
-      cells.push(extractText(cellMatch[1]));
-    }
-
-    if (cells.length < 2) continue;
-
-    const licenseNumber = cells[0];
-    const businessName = cells[1];
-    const city = cells.length > 2 ? cells[2] : '';
-
-    if (!licenseNumber || !businessName || licenseNumber === 'License Number') continue;
-
-    totalRecords++;
-    console.log(`[NewYorkPhase2] Fallback processing: ${businessName} (${licenseNumber})`);
-
-    try {
-      await upsertNYOrganizer({ businessName, licenseNumber, city });
-      createdOrganizers++;
-
-      await new Promise((r) => setTimeout(r, RATE_DELAY_MS));
-    } catch (err) {
-      console.error(`[NewYorkPhase2] Error in fallback processing ${businessName}:`, err);
-    }
+    if (page.length < PAGE_LIMIT) break;
+    offset += PAGE_LIMIT;
   }
 
   console.log(
-    `[NewYorkPhase2] Fallback completed: ${totalRecords} records, ${createdOrganizers} created`
+    `[NewYork Phase2] ${label} done — fetched: ${totalFetched}, skipped (inactive): ${totalSkipped}, upserted: ${totalUpserted}`
   );
 }
 
-async function upsertNYOrganizer({
-  businessName,
-  licenseNumber,
-  city,
-}: {
-  businessName: string;
-  licenseNumber: string;
-  city: string;
-}): Promise<void> {
-  const existing = await prisma.organizer.findFirst({
-    where: {
-      businessName: { equals: businessName, mode: 'insensitive' },
-      licenseState: 'NY',
-    },
-    select: { id: true },
-  });
+/**
+ * New York Phase 2 scraper — ingests both NYC Open Data license datasets.
+ */
+export async function runNewYorkPhase2Scraper(): Promise<void> {
+  console.log('[NewYork Phase2] === Starting New York Phase 2 Scraper ===');
 
-  if (existing) {
-    await prisma.organizer.update({
-      where: { id: existing.id },
-      data: {
-        licenseNumber,
-        licenseState: 'NY',
-        isStateLicensed: true,
-        directoryMostRecentSource: 'NewYorkPhase2',
-        directoryMostRecentAt: new Date(),
-      },
-    });
-  } else {
-    const slug = businessName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
-    const citySlug = (city || 'ny').toLowerCase().replace(/[^a-z0-9]/g, '-');
-    await prisma.organizer.create({
-      data: {
-        businessName,
-        phone: null,
-        address: city ? `${city}, NY` : 'New York',
-        city: city || 'New York',
-        state: 'NY',
-        bio: `Licensed pawnbroker in ${city || 'New York'}.`,
-        isClaimed: false,
-        isUnmanagedListing: true,
-        licenseNumber,
-        licenseState: 'NY',
-        isStateLicensed: true,
-        businessCategory: 'PAWN_SHOP',
-        directoryMostRecentSource: 'NewYorkPhase2',
-        directoryMostRecentAt: new Date(),
-        user: {
-          create: {
-            email: `scraper+${slug}-${citySlug}-ny-nyphase2@system.finda.sale`,
-            name: businessName,
-            password: null,
-            role: 'ORGANIZER',
-            roles: ['ORGANIZER'],
-          },
-        },
-      },
-    });
-  }
+  // Dataset 1: NYC Secondhand Dealer General Licenses
+  await ingestNycDataset(
+    'secondhand',
+    SECONDHAND_URL,
+    'RESALE_SHOP',
+    'NY-SECONDARY',
+    (record) => mapSecondhandCategory(record['license_type'] || '')
+  );
+
+  // Dataset 2: NYC Active Pawnbroker Licenses
+  await ingestNycDataset(
+    'pawnbroker',
+    PAWNBROKER_URL,
+    'RESALE_SHOP',
+    'NY-SECONDARY-PAWN'
+  );
+
+  console.log('[NewYork Phase2] === New York Phase 2 Scraper Complete ===');
 }

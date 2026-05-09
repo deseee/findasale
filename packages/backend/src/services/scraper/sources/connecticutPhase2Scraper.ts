@@ -1,195 +1,338 @@
 /**
- * Connecticut Department of Banking — Pawnbroker License Scraper (Phase 2)
+ * Connecticut State Licenses and Credentials — Secondary Sale Business Scraper (Phase 2)
+ * Source: https://data.ct.gov/api/views/fxib-2xng/rows.csv?accessType=DOWNLOAD
+ * Dataset: CT State Licenses and Credentials (~800+ credential types)
+ * ADR-073: Directory Scraper Phase 2 — State business licensing data
  *
- * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data
- * (no statewide auctioneer licensing law in CT; pawnbrokers licensed under CGS §21-39+)
- *
- * DATA SOURCE STATUS (verified 2026-05-09):
- *   - CT Department of Banking (DOB) licenses pawnbrokers under CGS §21-39.
- *   - portal.ct.gov/DOB is accessible static HTML.
- *   - Pawnbroker-specific resource page redirects to a 404 (moved or restructured).
- *   - CT DOB does not appear to publish a bulk licensee list or searchable database
- *     for pawnbrokers specifically — their NMLS lookup covers mortgage/lending, not pawn.
- *   - The Nationwide Mortgage Licensing System (NMLS) at nmlsconsumeraccess.org does
- *     not cover CT pawnbrokers (they are regulated separately under DOB).
- *
- * UNBLOCKING OPTIONS (in priority order):
- *   1. CT Open Data portal: https://data.ct.gov — search "pawnbroker" or "DOB licensee".
- *      If a Socrata dataset is found, use:
- *      GET https://data.ct.gov/resource/<DATASET_ID>.json?$limit=500&$offset=<offset>
- *   2. CT DOB direct inquiry: https://portal.ct.gov/DOB or (860) 240-8299.
- *      Request the pawnbroker licensee list as a public records release (CGS §1-210).
- *   3. CT eLicense portal: https://elicense.ct.gov — search for license type "Pawnbroker"
- *      (some CT agencies use this common portal; DOB may have joined it).
- *      Probe: GET https://elicense.ct.gov/Lookup/LicenseLookup.aspx
+ * Matches secondary sale business types:
+ *   - Always-include credential_types: AUCTIONEER, PAWNBROKER,
+ *     SECONDHAND DEALER, JUNK DEALER, CONSIGNMENT STORE
+ *   - Broader credential_types + keyword match on business name:
+ *     RETAIL, DEALER, VENDOR, CONSIGNMENT
  */
 
-import { defaultRateLimiter } from '../rateLimiter';
-import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
+import { defaultRateLimiter } from "../rateLimiter";
+import { getOrCreateScrapedOrganizer } from "../index";
 
-const LIVE_ENDPOINT_AVAILABLE = false;
+const CT_OPEN_DATA_CSV_URL =
+  "https://data.ct.gov/api/views/fxib-2xng/rows.csv?accessType=DOWNLOAD";
+const CT_OPEN_DATA_DOMAIN = "data.ct.gov";
 
-// Placeholder — replace with confirmed CT endpoint once available
-const CT_SEARCH_URL = 'https://portal.ct.gov/DOB';
+// Credential types that always indicate a secondhand-sale business — include regardless of name
+const ALWAYS_INCLUDE_ACTIVITIES = new Set([
+  "AUCTIONEER",
+  "PAWNBROKER",
+  "SECONDHAND DEALER",
+  "JUNK DEALER",
+  "CONSIGNMENT STORE",
+]);
 
-interface CtLicenseRecord {
-  businessName: string;
-  licenseNumber: string;
-  city: string;
-  address?: string;
-  phone?: string;
-}
+// Broader credential types that require a keyword match on business name to include
+const BROADER_ACTIVITIES = new Set([
+  "RETAIL",
+  "DEALER",
+  "VENDOR",
+  "CONSIGNMENT",
+]);
 
-const extractText = (html: string): string =>
-  html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .trim();
+// Case-insensitive keywords — any match includes the row (when paired with a broader credential type)
+const SALE_TYPE_KEYWORDS = [
+  "pawn",
+  "estate sale",
+  "consign",
+  "thrift",
+  "resale",
+  "antique",
+  "vintage",
+  "collectible",
+  "flea market",
+  "swap meet",
+  "liquidat",
+  "salvage",
+  "junk dealer",
+  "used goods",
+  "auction",
+  "secondhand",
+  "second hand",
+  "pre-owned",
+  "preowned",
+  "surplus",
+  "rummage",
+];
 
-async function fetchAllRecords(): Promise<CtLicenseRecord[]> {
-  /**
-   * TODO: Implement once CT DOB endpoint is confirmed.
-   *
-   * Option A — CT Open Data Socrata:
-   *   const res = await fetch(
-   *     'https://data.ct.gov/resource/<ID>.json?$limit=500&license_type=Pawnbroker',
-   *     { headers: { 'User-Agent': getRandomUserAgent() }, signal: AbortSignal.timeout(30000) }
-   *   );
-   *   const json: any[] = await res.json();
-   *   return json.map((r) => ({ businessName: r.name, licenseNumber: r.license_no, city: r.city }));
-   *
-   * Option B — HTML form search (iterate A–Z):
-   *   for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
-   *     POST to CT search endpoint with name prefix = letter, license_type = 'Pawnbroker'
-   *     parse <tr>/<td> rows
-   *   }
-   */
-  return [];
-}
+// False-positive name fragments — exclude row if business name contains any of these
+const EXCLUDE_FRAGMENTS = [
+  "real estate",
+  "realty",
+  "realtor",
+  "restaurant",
+  "petroleum",
+  "dental",
+  "medical",
+  "pharmacy",
+  "funeral",
+  "insurance",
+  "tax service",
+  "accounting",
+  "attorney",
+  "law office",
+  "landscaping",
+  "construction",
+  "plumbing",
+  "electrical",
+  "roofing",
+  "automotive repair",
+  "car wash",
+  "dry clean",
+  "laundry",
+  "hair salon",
+  "nail salon",
+  "tattoo",
+  "massage",
+  "yoga",
+  "daycare",
+];
 
-async function upsertRecord(record: CtLicenseRecord): Promise<boolean> {
-  const { businessName, licenseNumber, city, address, phone } = record;
-  if (!businessName || !licenseNumber) return false;
+/**
+ * Parse a single CSV line respecting quoted fields (commas inside quotes are ignored).
+ */
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
 
-  const dedupeKey = `CT-PAWN-${licenseNumber}`;
-  const slug = businessName
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 30)
-    .replace(/-$/, '');
-  const citySlug = (city || 'ct')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-    .slice(0, 20);
-
-  const existing = await prisma.organizer.findFirst({
-    where: {
-      OR: [
-        { licenseNumber: dedupeKey },
-        {
-          businessName: { equals: businessName, mode: 'insensitive' },
-          licenseState: 'CT',
-        },
-      ],
-    },
-    select: { id: true },
-  });
-
-  if (existing) {
-    await prisma.organizer.update({
-      where: { id: existing.id },
-      data: {
-        licenseNumber: dedupeKey,
-        licenseState: 'CT',
-        isStateLicensed: true,
-        directoryMostRecentSource: 'ConnecticutPhase2',
-        directoryMostRecentAt: new Date(),
-        ...(city && { city }),
-        ...(phone && { phone }),
-      },
-    });
-    return false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === """) {
+      if (inQuotes && line[i + 1] === """) {
+        // Escaped quote inside a quoted field
+        current += """;
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === "," && !inQuotes) {
+      fields.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
   }
-
-  await prisma.organizer.create({
-    data: {
-      businessName,
-      phone: phone ?? null,
-      address: address ?? (city ? `${city}, CT` : 'Connecticut'),
-      city: city || null,
-      bio: `Licensed pawnbroker in ${city || 'Connecticut'}.`,
-      isClaimed: false,
-      isUnmanagedListing: true,
-      licenseNumber: dedupeKey,
-      licenseState: 'CT',
-      isStateLicensed: true,
-      businessCategory: 'PAWN_SHOP',
-      directoryMostRecentSource: 'ConnecticutPhase2',
-      directoryMostRecentAt: new Date(),
-      user: {
-        create: {
-          email: `scraper+${slug}-${citySlug}-ct-ctphase2@system.finda.sale`,
-          name: businessName,
-          password: null,
-          role: 'ORGANIZER',
-          roles: ['ORGANIZER'],
-        },
-      },
-    },
-  });
-  return true;
+  fields.push(current.trim());
+  return fields;
 }
 
+/**
+ * Return true if the business name matches at least one keyword (case-insensitive).
+ */
+function nameMatchesKeyword(name: string): boolean {
+  const lower = name.toLowerCase();
+  return SALE_TYPE_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+/**
+ * Return true if the business name contains a false-positive fragment.
+ */
+function nameIsExcluded(name: string): boolean {
+  const lower = name.toLowerCase();
+  return EXCLUDE_FRAGMENTS.some((frag) => lower.includes(frag));
+}
+
+/**
+ * Map a CT credential type to a valid getOrCreateScrapedOrganizer category.
+ */
+function mapCategory(credentialType: string): string {
+  const upper = credentialType.toUpperCase();
+  if (upper.includes("AUCTION")) return "AUCTION_HOUSE";
+  return "RESALE_SHOP";
+}
+
+/**
+ * Connecticut State Licenses and Credentials secondary sale scraper.
+ * Fetches all CT credential records and filters to secondhand-sale matches
+ * using credential type codes and keyword matching on business name.
+ */
 export async function runConnecticutPhase2Scraper(): Promise<void> {
-  console.log('[ConnecticutPhase2] Starting pawnbroker license scraper');
+  let totalFetched = 0;
+  let totalMatched = 0;
+  let totalUpserted = 0;
 
-  if (!LIVE_ENDPOINT_AVAILABLE) {
-    console.warn(
-      '[ConnecticutPhase2] STUB MODE: CT DOB pawnbroker search page returns 404 (moved/restructured). ' +
-        'See scraper header comments for unblocking options. ' +
-        'Set LIVE_ENDPOINT_AVAILABLE = true and implement fetchAllRecords() once endpoint is confirmed.'
-    );
-    console.log('[ConnecticutPhase2] Scraper exited (stub mode) — 0 records processed');
-    return;
-  }
-
-  const domain = new URL(CT_SEARCH_URL).hostname;
-  let totalRecords = 0;
-  let createdOrganizers = 0;
+  console.log("[ConnecticutPhase2] Starting secondary sale scraper via CT Open Data Portal");
+  console.log(`[ConnecticutPhase2] Source: ${CT_OPEN_DATA_CSV_URL}`);
 
   try {
-    await defaultRateLimiter.waitBeforeRequest(domain);
-    const records = await fetchAllRecords();
-    console.log(`[ConnecticutPhase2] Fetched ${records.length} records`);
+    await defaultRateLimiter.waitBeforeRequest(CT_OPEN_DATA_DOMAIN);
 
-    for (const record of records) {
+    const response = await fetch(CT_OPEN_DATA_CSV_URL, {
+      method: "GET",
+      headers: {
+        Accept: "text/csv,*/*",
+      },
+      signal: AbortSignal.timeout(120000),
+    });
+
+    if (!response.ok) {
+      console.error(
+        `[ConnecticutPhase2] CSV fetch failed: HTTP ${response.status} from ${CT_OPEN_DATA_CSV_URL}`
+      );
+      return;
+    }
+
+    const csvText = await response.text();
+    const lines = csvText.split("
+");
+
+    if (lines.length < 2) {
+      console.warn("[ConnecticutPhase2] CSV response appears empty or malformed");
+      return;
+    }
+
+    // Parse header row — normalise to lowercase with single spaces
+    const headers = parseCsvLine(lines[0]).map((h) =>
+      h.toLowerCase().replace(/\s+/g, " ").trim()
+    );
+
+    console.log("[ConnecticutPhase2] CSV headers found:", headers.join(", "));
+
+    const col = (name: string): number => headers.indexOf(name);
+
+    // CT Socrata column probe — try multiple common variations
+    const iCredentialType =
+      col("credential_type") !== -1 ? col("credential_type") :
+      col("credential type") !== -1 ? col("credential type") :
+      col("license_type") !== -1 ? col("license_type") :
+      col("license type") !== -1 ? col("license type") : -1;
+
+    const iBusinessName =
+      col("credential_name") !== -1 ? col("credential_name") :
+      col("credential name") !== -1 ? col("credential name") :
+      col("license_name") !== -1 ? col("license_name") :
+      col("license name") !== -1 ? col("license name") :
+      col("business_name") !== -1 ? col("business_name") :
+      col("business name") !== -1 ? col("business name") :
+      col("name") !== -1 ? col("name") : -1;
+
+    const iFirstName =
+      col("first_name") !== -1 ? col("first_name") :
+      col("first name") !== -1 ? col("first name") : -1;
+
+    const iLastName =
+      col("last_name") !== -1 ? col("last_name") :
+      col("last name") !== -1 ? col("last name") : -1;
+
+    const iCity =
+      col("town") !== -1 ? col("town") :
+      col("city") !== -1 ? col("city") : -1;
+
+    const iState =
+      col("state") !== -1 ? col("state") : -1;
+
+    const iZip =
+      col("zip") !== -1 ? col("zip") :
+      col("zip_code") !== -1 ? col("zip_code") :
+      col("zip code") !== -1 ? col("zip code") :
+      col("postal_code") !== -1 ? col("postal_code") : -1;
+
+    const iLicenseNumber =
+      col("license_number") !== -1 ? col("license_number") :
+      col("license number") !== -1 ? col("license number") :
+      col("credential_number") !== -1 ? col("credential_number") :
+      col("credential number") !== -1 ? col("credential number") : -1;
+
+    const iAddress =
+      col("address") !== -1 ? col("address") :
+      col("address_1") !== -1 ? col("address_1") :
+      col("address 1") !== -1 ? col("address 1") :
+      col("street_address") !== -1 ? col("street_address") : -1;
+
+    if (iCredentialType === -1 || iBusinessName === -1) {
+      console.error(
+        "[ConnecticutPhase2] Could not find required columns (credential_type / license_type, credential_name / license_name) in CSV header. Headers found:",
+        headers.join(", ")
+      );
+      return;
+    }
+
+    totalFetched = lines.length - 1;
+    console.log(`[ConnecticutPhase2] CSV fetched — ${totalFetched} data rows`);
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
       try {
-        const created = await upsertRecord(record);
-        if (created) createdOrganizers++;
-        totalRecords++;
+        const fields = parseCsvLine(line);
 
-        if (totalRecords % 50 === 0) {
-          console.log(
-            `[ConnecticutPhase2] Progress: ${totalRecords} processed, ${createdOrganizers} created`
-          );
+        const credentialTypeRaw = iCredentialType >= 0 ? (fields[iCredentialType] || "") : "";
+        const credentialType    = credentialTypeRaw.trim().toUpperCase();
+
+        const businessNameRaw = iBusinessName >= 0 ? (fields[iBusinessName] || "").trim() : "";
+        const firstName       = iFirstName  >= 0 ? (fields[iFirstName]  || "").trim() : "";
+        const lastName        = iLastName   >= 0 ? (fields[iLastName]   || "").trim() : "";
+
+        // Compose display name: prefer business/license name, fall back to "First Last"
+        const displayName =
+          businessNameRaw ||
+          (firstName || lastName ? [firstName, lastName].filter(Boolean).join(" ") : "");
+
+        if (!displayName) continue;
+
+        // Determine whether this row qualifies
+        const alwaysInclude = ALWAYS_INCLUDE_ACTIVITIES.has(credentialType);
+        const broaderMatch  = BROADER_ACTIVITIES.has(credentialType) && nameMatchesKeyword(displayName);
+
+        if (!alwaysInclude && !broaderMatch) continue;
+
+        // Filter out false positives by name
+        if (nameIsExcluded(displayName)) continue;
+
+        totalMatched++;
+
+        const licenseNumber = iLicenseNumber >= 0 ? (fields[iLicenseNumber] || "").trim() : "";
+        const city          = iCity          >= 0 ? (fields[iCity]          || "").trim() : "";
+        const zip           = iZip           >= 0 ? (fields[iZip]           || "").trim() : "";
+        const address1      = iAddress       >= 0 ? (fields[iAddress]       || "").trim() : "";
+
+        // dedupeKey: prefer license number, fall back to slugified name
+        const slugifiedName = displayName
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "-")
+          .replace(/-+/g, "-")
+          .slice(0, 40);
+        const dedupeKey      = `CT-SECONDARY-${licenseNumber || slugifiedName}`;
+        const isStateLicensed = alwaysInclude;
+        const businessCategory = mapCategory(credentialType);
+
+        console.log(`[ConnecticutPhase2] Matched: ${dedupeKey} — ${displayName} (${credentialType})`);
+
+        const orgId = await getOrCreateScrapedOrganizer(
+          displayName,                  // businessName
+          "ConnecticutPhase2",          // sourceName
+          city || "Connecticut",        // city
+          "CT",                         // state
+          undefined,                    // esnOrgId
+          undefined,                    // googlePlaceId
+          undefined,                    // foursquareVenueId
+          undefined,                    // hereBusinessId
+          businessCategory,             // businessCategory
+          undefined,                    // contactEmail
+          undefined,                    // phone
+          undefined                     // website
+        );
+
+        if (orgId) {
+          totalUpserted++;
         }
-
-        await new Promise((r) => setTimeout(r, 2000));
-      } catch (err) {
-        console.error(`[ConnecticutPhase2] Error processing ${record.businessName}:`, err);
+      } catch (rowErr) {
+        console.error(`[ConnecticutPhase2] Error on row ${i}:`, rowErr);
       }
     }
 
     console.log(
-      `[ConnecticutPhase2] Scraper completed: ${totalRecords} records processed, ${createdOrganizers} organizers created`
+      `[ConnecticutPhase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`
     );
   } catch (error) {
-    console.error('[ConnecticutPhase2] Scraper error:', error);
+    console.error("[ConnecticutPhase2] Scraper fatal error:", error);
     throw error;
   }
 }
