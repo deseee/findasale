@@ -3,7 +3,7 @@
 
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
-import { buildEmail, buildItemCard, ItemCardData } from './emailTemplateService';
+import { buildEmail, buildItemCard, buildSmartMatchEmail, ItemCardData } from './emailTemplateService';
 import { regionConfig } from '../config/regionConfig';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -169,28 +169,22 @@ interface WishlistMatchEmailData {
  */
 async function sendWishlistMatchEmail(data: WishlistMatchEmailData): Promise<void> {
   try {
-    const itemCard = buildItemCard({
-      title: data.item.title,
-      price: data.item.price ? Math.round(data.item.price * 100) : 0,
-      category: data.item.category || undefined,
-      photoUrl: data.item.photoUrls?.[0],
-      url: `${FRONTEND_URL}/items/${data.item.id}`,
-    });
-
-    const emailHtml = buildEmail({
-      preheader: `New match for your "${data.wishlistName}" wishlist`,
-      headline: `New match for your "${data.wishlistName}" wishlist`,
-      body: `
-<p style="margin: 0 0 20px; color: #374151;">
-  We found an item that matches your wishlist at an upcoming estate sale!
-</p>
-${itemCard}
-<p style="margin: 16px 0 0; font-size: 14px; color: #6b7280;">
-  <strong>${data.saleName}</strong> · ${data.saleCity}
-</p>
-      `,
-      ctaText: 'View Item',
-      ctaUrl: `${FRONTEND_URL}/items/${data.item.id}`,
+    const itemPrice = data.item.price ?? 0;
+    const emailHtml = buildSmartMatchEmail({
+      matchCategory: data.item.category || undefined,
+      item: {
+        title:    data.item.title,
+        price:    itemPrice,
+        photoUrl: data.item.photoUrls?.[0],
+        category: data.item.category || undefined,
+        itemUrl:  `${FRONTEND_URL}/items/${data.item.id}`,
+      },
+      sale: {
+        title:     data.saleName,
+        dateRange: data.saleCity,
+        address:   data.saleCity,
+        saleUrl:   FRONTEND_URL,
+      },
     });
 
     await resend.emails.send({
