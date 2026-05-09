@@ -36,11 +36,11 @@ interface ScrapePoolStats {
   recentAdditions: Array<{
     id: string;
     businessName: string;
-    city: string;
+    address: string;
     leadTier: string;
     leadScore: number | null;
     scrapedEmail: string | null;
-    sourceName: string | null;
+    directoryMostRecentSource: string | null;
     createdAt: string;
   }>;
 }
@@ -268,7 +268,7 @@ export default function ScrapePoolDashboard() {
               {stats.recentAdditions.map((org) => (
                 <tr key={org.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="p-3 dark:text-white">{org.businessName}</td>
-                  <td className="p-3 text-gray-600 dark:text-gray-400">{org.city}</td>
+                  <td className="p-3 text-gray-600 dark:text-gray-400">{org.address}</td>
                   <td className="p-3">
                     <span
                       className="px-2 py-1 rounded text-xs font-semibold text-white"
@@ -287,7 +287,7 @@ export default function ScrapePoolDashboard() {
                       '—'
                     )}
                   </td>
-                  <td className="p-3 text-gray-600 dark:text-gray-400">{org.sourceName || '—'}</td>
+                  <td className="p-3 text-gray-600 dark:text-gray-400">{org.directoryMostRecentSource || '—'}</td>
                   <td className="p-3 text-gray-600 dark:text-gray-400">{new Date(org.createdAt).toLocaleDateString()}</td>
                 </tr>
               ))}
