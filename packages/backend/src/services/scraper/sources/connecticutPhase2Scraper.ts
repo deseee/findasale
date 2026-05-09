@@ -174,16 +174,18 @@ export async function runConnecticutPhase2Scraper(): Promise<void> {
       for (const row of rows) {
         try {
           // Column name probe — Socrata JSON uses lowercase_underscore keys
+          // CT Socrata JSON uses compact keys (no separators): credentialtype, name, city
           const credentialTypeRaw =
+            row["credentialtype"] ??
             row["credential_type"] ?? row["credential type"] ??
             row["license_type"]   ?? row["license type"] ?? "";
           const credentialType = credentialTypeRaw.trim().toUpperCase();
 
           const businessNameRaw =
+            row["name"] ??
             row["credential_name"] ?? row["credential name"] ??
             row["license_name"]    ?? row["license name"] ??
-            row["business_name"]   ?? row["business name"] ??
-            row["name"] ?? "";
+            row["business_name"]   ?? row["business name"] ?? "";
 
           const firstName = row["first_name"] ?? row["first name"] ?? "";
           const lastName  = row["last_name"]  ?? row["last name"]  ?? "";
@@ -203,9 +205,10 @@ export async function runConnecticutPhase2Scraper(): Promise<void> {
           totalMatched++;
 
           const licenseNumber =
-            (row["license_number"] ?? row["license number"] ??
+            (row["credentialnumber"] ??
+             row["license_number"] ?? row["license number"] ??
              row["credential_number"] ?? row["credential number"] ?? "").trim();
-          const city = (row["town"] ?? row["city"] ?? "").trim();
+          const city = (row["city"] ?? row["town"] ?? "").trim();
 
           const slugifiedName = displayName
             .toLowerCase()
