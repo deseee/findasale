@@ -169,7 +169,9 @@ export async function getOrCreateScrapedOrganizer(
   businessCategory?: string,
   contactEmail?: string,
   phone?: string,
-  website?: string
+  website?: string,
+  lat?: number,
+  lng?: number
 ): Promise<string | null> {
   // ADR-075: Validate businessCategory against allowlist
   const VALID_CATEGORIES = new Set([
@@ -426,6 +428,8 @@ export async function getOrCreateScrapedOrganizer(
             businessCategory,
             contactEmail: validEmail || null,
             website: website ?? null,
+            lat: lat ?? null,
+            lng: lng ?? null,
             dedupeKey: generateDedupeKey(businessName, city),
             sourceCount: 1,
             sourcesJson: [{ sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() }],
@@ -462,6 +466,8 @@ export async function getOrCreateScrapedOrganizer(
               businessCategory,
               contactEmail: validEmail || null,
               website: website ?? null,
+              lat: lat ?? null,
+              lng: lng ?? null,
               dedupeKey: generateDedupeKey(businessName, city),
               sourceCount: 1,
               sourcesJson: [{ sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() }],
