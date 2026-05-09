@@ -19,10 +19,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'pnpm'
+
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -44,15 +46,3 @@ jobs:
               process.exit(1);
             }
           '
-
-      - name: Notify on failure
-        if: failure()
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: 1,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '⚠️ Arizona Phase 2 pawnbroker scraper failed. Check workflow logs for details.'
-            })
