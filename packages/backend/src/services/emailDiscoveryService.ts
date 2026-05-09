@@ -2,7 +2,7 @@ import { Prisma } from '@findasale/database';
 import * as cheerio from 'cheerio';
 import * as dns from 'dns';
 import * as net from 'net';
-import { db } from '../db';
+import { prisma } from '../lib/prisma';
 
 /**
  * Email Discovery Service — Free tier pipeline
@@ -223,7 +223,7 @@ async function verifyEmailSMTP(
  */
 export async function discoverEmail(organizerId: string): Promise<string | null> {
   try {
-    const organizer = await db.organizer.findUnique({
+    const organizer = await prisma.organizer.findUnique({
       where: { id: organizerId },
     });
 
@@ -293,7 +293,7 @@ async function updateOrganizerEmail(
   confidence: number
 ): Promise<void> {
   try {
-    await db.organizer.update({
+    await prisma.organizer.update({
       where: { id: organizerId },
       data: {
         contactEmail: email,
@@ -337,7 +337,7 @@ export async function emailDiscoveryBatchJob(
 
   while (true) {
     try {
-      const organizers = await db.organizer.findMany({
+      const organizers = await prisma.organizer.findMany({
         where: {
           AND: [
             { contactEmail: null },
