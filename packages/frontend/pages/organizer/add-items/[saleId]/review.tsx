@@ -1,13 +1,12 @@
 /**
- * Publishing Page (Review & Publish)
+ * Smart Review Queue (Brief D — Session 5 redesign)
  *
- * Phase 4: Publishing page for Rapidfire items
- * - Fetch items with draftStatus IN ['DRAFT', 'PENDING_REVIEW']
- * - AI confidence color tinting (green/amber/red borders)
- * - Per-item expanded editor (brightness, contrast, aspect ratio, background removal, metadata)
- * - Batch toolbar (select, bulk price, bulk category, bulk BG removal)
- * - Buyer preview mode (light-mode grid)
- * - Publish all button
+ * Organizer reviews AI-suggested fields for PENDING_REVIEW items before publishing.
+ * Design tokens from fs-shared.jsx / FS_TONES light palette.
+ *
+ * KEY RULE: aiSuggestedPrice (sourced from ItemCompLookup via PriceSuggestion component)
+ * is NEVER pre-filled into the price input. It is shown ONLY as placeholder text.
+ * Organizer must type their own price. This prevents the recurring auto-fill bug.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -92,6 +91,7 @@ interface Item {
   backgroundRemoved: boolean;
   autoEnhanced: boolean;
   draftStatus: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED';
+  rarity?: 'COMMON' | 'UNCOMMON' | 'RARE' | 'LEGENDARY';
   tags?: string[];
   suggestedTags?: string[];
   suggestedConditionGrade?: string; // #64: AI-suggested condition grade
@@ -221,6 +221,15 @@ const ReviewPage = () => {
     message: string;
     onConfirm: () => void;
   }>({ open: false, title: '', message: '', onConfirm: () => {} });
+
+  // Smart Review Queue UI state
+  const [priceInputs, setPriceInputs] = useState<Map<string, string>>(new Map());
+  const [priceErrors, setPriceErrors] = useState<Set<string>>(new Set());
+  const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
+  const [showApproveAllModal, setShowApproveAllModal] = useState(false);
+  const [showDiscardAllModal, setShowDiscardAllModal] = useState(false);
+  const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
+  const [addTagInputs, setAddTagInputs] = useState<Map<string, string>>(new Map());
 
   // Auto-enable buyer preview on mount if preview=true in query
   useEffect(() => {
@@ -705,959 +714,905 @@ const ReviewPage = () => {
     handleAddTag(itemId, trimmed);
   };
 
-  const previewItems = showBuyerPreview
-    ? items
-    : items;
+  // ── Smart Review Queue helpers ──────────────────────────────────────────────
+
+  /** Get the organizer-typed price string for an item (never falls back to AI). */
+  const getPriceInput = (itemId: string): string => priceInputs.get(itemId) ?? '';
+
+  /** Set the organizer-typed price for an item. Clears any error state. */
+  const setPriceInput = (itemId: string, value: string) => {
+    setPriceInputs(prev => new Map(prev).set(itemId, value));
+    if (value.trim()) {
+      setPriceErrors(prev => { const next = new Set(prev); next.delete(itemId); return next; });
+    }
+  };
+
+  /** Approve a single item. Blocks if price is empty. */
+  const handleApproveItem = async (item: Item) => {
+    const priceStr = getPriceInput(item.id);
+    const priceVal = parseFloat(priceStr);
+    if (!priceStr.trim() || isNaN(priceVal) || priceVal <= 0) {
+      setPriceErrors(prev => new Set(prev).add(item.id));
+      return;
+    }
+    // Save price + tags then publish
+    const editState = getEditState(item);
+    try {
+      await updateItemMutation.mutateAsync({
+        itemId: item.id,
+        updates: {
+          price: priceVal,
+          title: editState.title,
+          category: editState.category,
+          condition: editState.condition,
+          conditionGrade: editState.conditionGrade,
+          tags: editState.tags,
+        },
+      });
+      await api.post(`/items/${item.id}/publish`);
+      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+      setApprovedIds(prev => new Set(prev).add(item.id));
+      showToast('Item published!', 'success');
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || 'Failed to publish', 'error');
+    }
+  };
+
+  /** Approve all items that have prices set. Flag items without prices. */
+  const handleApproveAll = async () => {
+    setShowApproveAllModal(false);
+    const pending = items.filter(i => i.draftStatus !== 'PUBLISHED' && !approvedIds.has(i.id));
+    const unpriced: string[] = [];
+    const toApprove: Item[] = [];
+    for (const item of pending) {
+      const priceStr = getPriceInput(item.id);
+      const priceVal = parseFloat(priceStr);
+      if (!priceStr.trim() || isNaN(priceVal) || priceVal <= 0) {
+        unpriced.push(item.id);
+      } else {
+        toApprove.push(item);
+      }
+    }
+    if (unpriced.length > 0) {
+      setPriceErrors(new Set(unpriced));
+      if (toApprove.length === 0) {
+        showToast(`${unpriced.length} item${unpriced.length !== 1 ? 's' : ''} need a price before publishing.`, 'error');
+        return;
+      }
+      showToast(`Publishing ${toApprove.length} priced items. ${unpriced.length} item${unpriced.length !== 1 ? 's' : ''} need a price.`, 'info');
+    }
+    // Save prices and publish priced items
+    for (const item of toApprove) {
+      const priceStr = getPriceInput(item.id);
+      const priceVal = parseFloat(priceStr);
+      const editState = getEditState(item);
+      try {
+        await updateItemMutation.mutateAsync({
+          itemId: item.id,
+          updates: {
+            price: priceVal,
+            title: editState.title,
+            category: editState.category,
+            condition: editState.condition,
+            conditionGrade: editState.conditionGrade,
+            tags: editState.tags,
+          },
+        });
+        await api.post(`/items/${item.id}/publish`);
+        setApprovedIds(prev => new Set(prev).add(item.id));
+      } catch {
+        // silent per-item — overall toast shown below
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+    if (toApprove.length > 0) {
+      showToast(`${toApprove.length} item${toApprove.length !== 1 ? 's' : ''} published!`, 'success');
+    }
+  };
+
+  /** Discard all pending items (delete). */
+  const handleDiscardAll = () => {
+    setShowDiscardAllModal(false);
+    const pendingIds = items
+      .filter(i => i.draftStatus !== 'PUBLISHED' && !approvedIds.has(i.id))
+      .map(i => i.id);
+    if (pendingIds.length === 0) return;
+    deleteMutation.mutate(pendingIds);
+  };
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
-        <div className="max-w-6xl mx-auto px-4">
+      <div className="min-h-screen bg-[#F4EFE7] py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <Skeleton className="h-10 w-48 mb-8" />
           <div className="space-y-4">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-56 w-full rounded-xl" />
+            <Skeleton className="h-56 w-full rounded-xl" />
           </div>
         </div>
       </div>
     );
   }
 
+  // ── Derived counts ──────────────────────────────────────────────────────────
+  const pendingItems = items.filter(i => i.draftStatus !== 'PUBLISHED' && !approvedIds.has(i.id));
+  const publishedCount = items.filter(i => i.draftStatus === 'PUBLISHED').length + approvedIds.size;
+  const totalCount = items.length;
+  const queueEmpty = pendingItems.length === 0 && totalCount > 0;
+
+  // ── Rarity badge colors (light palette) ────────────────────────────────────
+  const rarityColors: Record<string, { bg: string; fg: string }> = {
+    COMMON:    { bg: 'rgba(20,18,14,0.05)',    fg: 'rgba(26,24,20,0.62)' },
+    UNCOMMON:  { bg: 'rgba(63,122,75,0.10)',   fg: '#3F7A4B' },
+    RARE:      { bg: 'rgba(58,110,180,0.12)',  fg: '#3A6EB4' },
+    LEGENDARY: { bg: 'rgba(200,85,43,0.10)',   fg: '#C8552B' },
+  };
+
+  const conditionOptions = [
+    { value: 'NEW',           label: 'New' },
+    { value: 'USED',          label: 'Used' },
+    { value: 'REFURBISHED',   label: 'Refurb' },
+    { value: 'PARTS_OR_REPAIR', label: 'Parts' },
+  ];
+
   return (
     <>
       <Head>
-        <title>Review & Publish - FindA.Sale</title>
+        <title>Smart Review Queue - FindA.Sale</title>
       </Head>
 
-      <main className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="mb-8 flex items-center justify-between">
-            <Link
-              href={`/organizer/add-items/${saleId}`}
-              className="text-amber-700 hover:text-amber-800 text-sm font-medium inline-flex items-center gap-1"
-            >
-              &larr; Back to + Items
-            </Link>
-            <button
-              onClick={() => setShowBuyerPreview(true)}
-              className="px-4 py-2 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 font-medium text-sm"
-            >
-              👁 Buyer Preview
-            </button>
+      {/* Photo zoom overlay */}
+      {zoomedPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
+          onClick={() => setZoomedPhoto(null)}
+        >
+          <img
+            src={zoomedPhoto}
+            alt="Photo zoom"
+            className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+          />
+        </div>
+      )}
+
+      {/* Approve-all confirmation modal */}
+      {showApproveAllModal && (
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#FBF8F2] rounded-2xl border border-black/10 shadow-2xl overflow-hidden">
+            <div className="p-7">
+              <p className="text-[10px] font-mono tracking-widest uppercase text-[#C8552B] mb-2">Confirm publish</p>
+              <h2 className="text-xl font-semibold tracking-tight text-[#1A1814] mb-2">
+                Publish items to this sale?
+              </h2>
+              <p className="text-sm text-[rgba(26,24,20,0.62)] leading-relaxed">
+                Each item will go live with the values currently shown — Smart's title,
+                category, condition, your price, and tags. You can edit any item later
+                from the manager.
+              </p>
+              {/* Validation note */}
+              {pendingItems.some(i => {
+                const p = getPriceInput(i.id);
+                return !p.trim() || isNaN(parseFloat(p)) || parseFloat(p) <= 0;
+              }) && (
+                <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                  Items without a price will be skipped — approve only priced items.
+                </div>
+              )}
+            </div>
+            <div className="px-7 pb-7 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowApproveAllModal(false)}
+                className="px-4 py-2 rounded-lg border border-black/18 text-sm font-medium text-[#1A1814] hover:bg-black/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApproveAll}
+                className="px-4 py-2 rounded-lg bg-[#C8552B] text-white text-sm font-semibold hover:bg-[#b04825] transition-colors"
+              >
+                Publish priced items
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Discard-all confirmation modal */}
+      {showDiscardAllModal && (
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#FBF8F2] rounded-2xl border border-black/10 shadow-2xl overflow-hidden">
+            <div className="p-7">
+              <p className="text-[10px] font-mono tracking-widest uppercase text-red-600 mb-2">Destructive action</p>
+              <h2 className="text-xl font-semibold tracking-tight text-[#1A1814] mb-2">
+                Discard {pendingItems.length} item{pendingItems.length !== 1 ? 's' : ''}?
+              </h2>
+              <p className="text-sm text-[rgba(26,24,20,0.62)] leading-relaxed">
+                This permanently removes these items and their photos. This cannot be undone.
+              </p>
+            </div>
+            <div className="px-7 pb-7 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDiscardAllModal(false)}
+                className="px-4 py-2 rounded-lg border border-black/18 text-sm font-medium text-[#1A1814] hover:bg-black/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDiscardAll}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {deleteMutation.isPending ? 'Discarding…' : 'Discard all'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="min-h-screen bg-[#F4EFE7]" style={{ fontFamily: 'Inter, sans-serif' }}>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-20 pt-8">
+
+          {/* ── Page header ── */}
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1">
+                Item Manager · Smart Review
+              </p>
+              <h1
+                className="text-3xl font-semibold tracking-tight text-[#1A1814]"
+                style={{ fontFamily: 'Inter Tight, sans-serif', letterSpacing: '-0.02em' }}
+              >
+                {itemsLoading
+                  ? 'Loading queue…'
+                  : queueEmpty
+                  ? `All ${totalCount} items are live`
+                  : `Review ${pendingItems.length} item${pendingItems.length !== 1 ? 's' : ''} before they go live`}
+              </h1>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {saleId && (
+                <Link
+                  href={`/sales/${saleId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-2 text-sm text-[#C8552B] hover:underline transition-colors"
+                >
+                  View live sale →
+                </Link>
+              )}
+              <Link
+                href={`/organizer/add-items/${saleId}`}
+                className="px-3 py-2 rounded-lg border border-black/18 text-sm font-medium text-[rgba(26,24,20,0.62)] hover:bg-black/5 transition-colors"
+              >
+                ← Back
+              </Link>
+            </div>
           </div>
 
-          {showBuyerPreview ? (
-            <>
-              <div className="mb-6">
-                <button
-                  onClick={() => setShowBuyerPreview(false)}
-                  className="px-4 py-2 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 font-medium text-sm"
-                >
-                  Back to Editing
-                </button>
-              </div>
-
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
-                <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold mb-4">
-                  Preview only
+          {/* ── Sticky bulk actions bar ── */}
+          {!itemsLoading && !queueEmpty && (
+            <div className="sticky top-4 z-10 mb-5">
+              <div
+                className="bg-[#FBF8F2] rounded-xl border border-black/10 px-4 py-3 flex items-center justify-between gap-4 shadow-sm"
+              >
+                {/* Left: count + progress */}
+                <div className="flex items-center gap-4 min-w-0">
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[#1A1814]">{pendingItems.length} pending review</p>
+                    <p className="text-xs text-[rgba(26,24,20,0.62)]">{publishedCount} of {totalCount} published</p>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="hidden sm:block w-36">
+                    <div className="h-1.5 rounded-full bg-black/6 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[#3F7A4B] transition-all"
+                        style={{ width: totalCount > 0 ? `${(publishedCount / totalCount) * 100}%` : '0%' }}
+                      />
+                    </div>
+                    <p className="mt-1 text-[10px] font-mono tracking-wide text-[rgba(26,24,20,0.4)]">
+                      {totalCount > 0 ? Math.round((publishedCount / totalCount) * 100) : 0}% published
+                    </p>
+                  </div>
                 </div>
-                <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">Buyer Preview</h2>
 
-                <div className="grid grid-cols-2 gap-4">
-                  {previewItems.map((item) => (
-                    <div key={item.id} className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                      <div className="aspect-square bg-warm-100 dark:bg-gray-700 overflow-hidden">
-                        {item.photoUrls[0] && (
-                          <img
-                            key={item.photoUrls[0]}
-                            src={buildCloudinaryUrl(item.photoUrls[0], {
-                              aspectRatio: '4:3',
-                              backgroundRemoved: item.backgroundRemoved,
-                            })}
-                            alt={item.title}
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer-when-downgrade"
-                            onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"%3E%3Crect width="400" height="400" fill="%23f3f4f6"/%3E%3Ctext x="50%25" y="50%25" font-size="120" text-anchor="middle" dy=".3em" fill="%23d1d5db"%3E📷%3C/text%3E%3C/svg%3E';
-                            }}
-                          />
+                {/* Right: actions */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => setShowDiscardAllModal(true)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-[rgba(26,24,20,0.62)] hover:bg-black/6 border border-transparent hover:border-black/10 transition-colors"
+                  >
+                    Discard all
+                  </button>
+                  <Link
+                    href={`/organizer/label-composer/${saleId}`}
+                    className="hidden sm:block px-3 py-1.5 rounded-lg text-xs font-medium text-[rgba(26,24,20,0.62)] hover:bg-black/6 border border-black/18 transition-colors"
+                  >
+                    Print labels
+                  </Link>
+                  <button
+                    onClick={() => setShowApproveAllModal(true)}
+                    className="px-3 py-1.5 rounded-lg bg-[#C8552B] text-white text-xs font-semibold hover:bg-[#b04825] transition-colors"
+                  >
+                    Approve all
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Loading state ── */}
+          {itemsLoading && (
+            <div className="space-y-4">
+              {[1, 2, 3].map(n => (
+                <Skeleton key={n} className="h-56 w-full rounded-xl" />
+              ))}
+            </div>
+          )}
+
+          {/* ── Empty / success state ── */}
+          {!itemsLoading && queueEmpty && (
+            <div className="mt-8 flex justify-center">
+              <div className="w-full max-w-lg bg-[#FBF8F2] rounded-2xl border border-black/10 p-12 text-center">
+                <div
+                  className="w-14 h-14 rounded-full inline-flex items-center justify-center mb-6"
+                  style={{ background: 'rgba(63,122,75,0.12)', color: '#3F7A4B' }}
+                >
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12l4 4 10-10" />
+                  </svg>
+                </div>
+                <p className="text-[10px] font-mono tracking-widest uppercase text-[#3F7A4B] mb-2">Queue clear</p>
+                <h2
+                  className="text-2xl font-semibold tracking-tight text-[#1A1814] mb-3"
+                  style={{ fontFamily: 'Inter Tight, sans-serif', letterSpacing: '-0.02em' }}
+                >
+                  All {totalCount} items are live
+                </h2>
+                <p className="text-sm text-[rgba(26,24,20,0.62)] mb-8 leading-relaxed">
+                  Smart-tagged items appear in saved-search alerts within the hour.
+                  You can edit any item from the manager.
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <Link
+                    href={`/sale/${saleId}`}
+                    className="px-4 py-2 rounded-lg bg-[#C8552B] text-white text-sm font-semibold hover:bg-[#b04825] transition-colors"
+                  >
+                    View sale →
+                  </Link>
+                  <Link
+                    href={`/organizer/add-items/${saleId}`}
+                    className="px-4 py-2 rounded-lg border border-black/18 text-sm font-medium text-[#1A1814] hover:bg-black/5 transition-colors"
+                  >
+                    Open item manager
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── No items at all ── */}
+          {!itemsLoading && items.length === 0 && (
+            <div className="mt-12 text-center">
+              <p className="text-[rgba(26,24,20,0.62)] mb-4">No items in this sale yet.</p>
+              <Link
+                href={`/organizer/add-items/${saleId}`}
+                className="text-sm text-[#C8552B] font-medium hover:underline"
+              >
+                ← Add items
+              </Link>
+            </div>
+          )}
+
+          {/* ── Review cards ── */}
+          {!itemsLoading && pendingItems.length > 0 && (
+            <div className="space-y-4">
+              {pendingItems.map((item) => {
+                const editState = getEditState(item);
+                const priceStr = getPriceInput(item.id);
+                const hasError = priceErrors.has(item.id);
+                const currentTags = editState.tags || item.tags || [];
+                const rarityKey = item.rarity && rarityColors[item.rarity] ? item.rarity : 'COMMON';
+
+                return (
+                  <div
+                    key={item.id}
+                    ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
+                    className="relative bg-[#FBF8F2] rounded-xl border border-black/10 overflow-hidden"
+                    style={{ boxShadow: '0 1px 3px rgba(20,18,14,0.06)' }}
+                  >
+                    {/* Review stripe — amber, persists until approved */}
+                    <div
+                      className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl"
+                      style={{ background: hasError ? '#C04A2B' : '#A87420' }}
+                    />
+
+                    <div className="pl-5 pr-5 pt-5 pb-5">
+                      {/* Smart chip row */}
+                      <div className="flex items-center justify-between mb-4">
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono tracking-widest uppercase"
+                          style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                            <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
+                          </svg>
+                          Smart
+                        </span>
+                        {item.isAiTagged && item.aiConfidence != null && (
+                          <span className="text-[10px] font-mono tracking-wide text-[rgba(26,24,20,0.4)]">
+                            {Math.round(item.aiConfidence * 100)}% confidence
+                          </span>
                         )}
                       </div>
-                      <div className="p-3">
-                        <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm truncate">
-                          {item.title}
-                        </p>
-                        <div className="text-amber-700 font-bold text-sm mt-1 flex items-center gap-1">
-                          {item.price != null ? (
-                            item.priceBeforeMarkdown && item.priceBeforeMarkdown > item.price ? (
-                              <>
-                                <span className="line-through text-gray-400 dark:text-gray-500 text-xs">
-                                  ${item.priceBeforeMarkdown.toFixed(2)}
-                                </span>
-                                <span className="text-green-600 dark:text-green-400">
-                                  ${item.price.toFixed(2)}
-                                </span>
-                              </>
+
+                      {/* Desktop layout: photo | fields | price rail */}
+                      <div className="flex gap-5">
+
+                        {/* Thumbnail */}
+                        <div className="flex-shrink-0 w-28 sm:w-32">
+                          <button
+                            type="button"
+                            onClick={() => item.photoUrls[0] && setZoomedPhoto(item.photoUrls[0])}
+                            className="block w-full aspect-square rounded-lg overflow-hidden border border-black/10 bg-[rgba(20,18,14,0.04)] focus:outline-none"
+                            title="Tap to zoom"
+                          >
+                            {item.photoUrls[0] ? (
+                              <img
+                                src={item.photoUrls[0]}
+                                alt={item.title}
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer-when-downgrade"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" font-size="24" text-anchor="middle" dy=".3em" fill="%239ca3af"%3E📷%3C/text%3E%3C/svg%3E';
+                                }}
+                              />
                             ) : (
-                              `$${item.price.toFixed(2)}`
-                            )
-                          ) : (
-                            'No price'
-                          )}
+                              <div className="w-full h-full flex items-center justify-center text-2xl text-[rgba(26,24,20,0.3)]">📷</div>
+                            )}
+                          </button>
+                          <p className="mt-1 text-center text-[10px] font-mono text-[rgba(26,24,20,0.4)]">
+                            {item.photoUrls.length} photo{item.photoUrls.length !== 1 ? 's' : ''}
+                          </p>
                         </div>
-                        <p className="text-warm-600 dark:text-warm-400 text-xs mt-1">{item.category ? decodeHtmlEntities(item.category) : 'Uncategorized'}</p>
+
+                        {/* Main fields */}
+                        <div className="flex-1 min-w-0 space-y-3">
+
+                          {/* Title */}
+                          <div>
+                            <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1">
+                              Title <span className="text-[#C8552B]">· Smart</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={editState.title}
+                              onChange={(e) => handleEditChange(item.id, 'title', e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg border border-black/18 bg-white text-[#1A1814] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
+                              style={{ fontFamily: 'Inter Tight, sans-serif' }}
+                            />
+                          </div>
+
+                          {/* Category + Condition row */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1">
+                                Category <span className="text-[#C8552B]">· Smart</span>
+                              </label>
+                              <EbayCategoryPicker
+                                value={editState.category}
+                                onChange={({ leafCategoryName, leafCategoryId, l1CategoryName }) => {
+                                  handleEditChange(item.id, 'category', l1CategoryName);
+                                  handleEditChange(item.id, 'ebayCategoryId', leafCategoryId);
+                                  handleEditChange(item.id, 'ebayCategoryName', leafCategoryName);
+                                }}
+                                label=""
+                                placeholder="Select category…"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1">
+                                Condition <span className="text-[#C8552B]">· Smart</span>
+                              </label>
+                              {/* Segmented control */}
+                              <div className="inline-flex w-full bg-[rgba(20,18,14,0.05)] p-0.5 rounded-lg border border-black/10">
+                                {conditionOptions.map(opt => (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => handleEditChange(item.id, 'condition', opt.value)}
+                                    className={`flex-1 py-1.5 text-xs font-mono rounded-md transition-all ${
+                                      editState.condition === opt.value
+                                        ? 'bg-white text-[#1A1814] font-semibold shadow-sm'
+                                        : 'text-[rgba(26,24,20,0.62)] hover:text-[#1A1814]'
+                                    }`}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Tags row */}
+                          <div>
+                            <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1.5">
+                              Search tags <span className="text-[#C8552B]">· Smart</span>
+                            </label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {currentTags.map(tag => (
+                                <span
+                                  key={tag}
+                                  className="inline-flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full text-[11px] font-mono"
+                                  style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}
+                                >
+                                  {tag}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveTag(item.id, tag)}
+                                    className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-[rgba(200,85,43,0.2)] transition-colors"
+                                  >
+                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                      <path d="M6 6l12 12M18 6l-12 12" />
+                                    </svg>
+                                  </button>
+                                </span>
+                              ))}
+                              {/* Add tag inline */}
+                              <input
+                                type="text"
+                                value={addTagInputs.get(item.id) ?? ''}
+                                onChange={(e) => setAddTagInputs(prev => new Map(prev).set(item.id, e.target.value))}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleAddCustomTag(item.id, addTagInputs.get(item.id) ?? '');
+                                    setAddTagInputs(prev => new Map(prev).set(item.id, ''));
+                                  }
+                                }}
+                                placeholder="+ tag"
+                                className="inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-[rgba(20,18,14,0.05)] text-[rgba(26,24,20,0.62)] border border-transparent focus:outline-none focus:border-[rgba(26,24,20,0.2)] placeholder-[rgba(26,24,20,0.4)]"
+                                style={{ width: '5rem' }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Rarity picker */}
+                          <div>
+                            <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1.5">
+                              Rarity <span className="text-[#C8552B]">· Smart</span>
+                            </label>
+                            <div className="flex gap-1.5">
+                              {(['COMMON', 'UNCOMMON', 'RARE', 'LEGENDARY'] as const).map(r => {
+                                const rc = rarityColors[r];
+                                const sel = rarityKey === r;
+                                return (
+                                  <button
+                                    key={r}
+                                    type="button"
+                                    onClick={() => updateItemMutation.mutate({ itemId: item.id, updates: { rarity: r } as any })}
+                                    className="flex-1 py-1.5 text-center rounded-lg text-[10px] font-mono tracking-wide transition-all border"
+                                    style={{
+                                      background: sel ? rc.bg : 'transparent',
+                                      color: sel ? rc.fg : 'rgba(26,24,20,0.4)',
+                                      borderColor: sel ? 'transparent' : 'rgba(20,18,14,0.10)',
+                                      fontWeight: sel ? 700 : 500,
+                                    }}
+                                  >
+                                    {r.slice(0, 4)}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right rail: price + actions */}
+                        <div className="flex-shrink-0 w-44 sm:w-52 flex flex-col gap-3">
+
+                          {/* ── PRICE FIELD — Critical rule: never pre-fill aiSuggestedPrice ── */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className={`text-[10px] font-mono tracking-widest uppercase ${hasError ? 'text-[#C04A2B]' : 'text-[rgba(26,24,20,0.4)]'}`}>
+                                Your price{hasError ? ' · Required' : ''}
+                              </label>
+                              {/* aiSuggestedPrice reference — display only from PriceSuggestion */}
+                            </div>
+                            {/* PriceSuggestion shows the Smart reference price (read-only) */}
+                            <div className="mb-1.5">
+                              <PriceSuggestion
+                                itemId={item.id}
+                                currentPrice={null}
+                                compact
+                              />
+                            </div>
+                            {/* Price input — starts empty, organizer must type */}
+                            <div
+                              className="flex items-center gap-1 px-3 py-2.5 rounded-lg border-2 bg-white transition-colors"
+                              style={{ borderColor: hasError ? '#C04A2B' : 'rgba(20,18,14,0.18)' }}
+                            >
+                              <span
+                                className="text-xl font-medium"
+                                style={{ fontFamily: 'Inter Tight, sans-serif', color: 'rgba(26,24,20,0.4)' }}
+                              >
+                                $
+                              </span>
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={priceStr}
+                                onChange={(e) => setPriceInput(item.id, e.target.value)}
+                                placeholder="0.00"
+                                aria-label="Your price"
+                                className="flex-1 min-w-0 bg-transparent text-xl font-semibold text-[#1A1814] focus:outline-none placeholder-[rgba(26,24,20,0.25)]"
+                                style={{ fontFamily: 'Inter Tight, sans-serif' }}
+                              />
+                            </div>
+                            {hasError && (
+                              <p className="mt-1 text-xs text-[#C04A2B] flex items-center gap-1">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                  <circle cx="12" cy="12" r="9" /><path d="M12 8v.01M11 12h1v5h1" />
+                                </svg>
+                                Set a price before publishing
+                              </p>
+                            )}
+                            {!priceStr && !hasError && (
+                              <p className="mt-1 text-[11px] text-[rgba(26,24,20,0.4)] italic">
+                                Suggestion above is a reference. Type your price.
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex flex-col gap-2 mt-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleApproveItem(item)}
+                              disabled={updateItemMutation.isPending}
+                              className="w-full py-2.5 rounded-lg bg-[#C8552B] text-white text-sm font-semibold hover:bg-[#b04825] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M5 12l4 4 10-10" />
+                              </svg>
+                              Approve
+                            </button>
+                            <Link
+                              href={`/organizer/edit-item/${item.id}`}
+                              className="w-full py-2 rounded-lg border border-black/18 text-sm font-medium text-[rgba(26,24,20,0.62)] hover:bg-black/5 transition-colors text-center"
+                            >
+                              Edit more
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setConfirmState({
+                                  open: true,
+                                  title: 'Delete Item',
+                                  message: `Delete "${item.title || 'this item'}"? This cannot be undone.`,
+                                  onConfirm: () => {
+                                    deleteMutation.mutate([item.id]);
+                                    setConfirmState(s => ({ ...s, open: false }));
+                                  },
+                                });
+                              }}
+                              disabled={deleteMutation.isPending}
+                              className="w-full py-1.5 text-xs text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                            >
+                              Discard
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expanded detail panel — toggle */}
+                      <div className="mt-4 pt-4 border-t border-black/8">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleExpand(item.id)}
+                          className="text-xs font-medium text-[rgba(26,24,20,0.5)] hover:text-[#1A1814] transition-colors flex items-center gap-1"
+                        >
+                          {expandedItemId === item.id ? '▲ Less details' : '▼ More details (description, condition grade, listing type)'}
+                        </button>
+
+                        {expandedItemId === item.id && (
+                          <div className="mt-4 space-y-4">
+                            {/* Photos manager */}
+                            <div>
+                              <input
+                                ref={(ref) => {
+                                  if (ref && !(window as any)[`uploadInput_${item.id}`]) {
+                                    (window as any)[`uploadInput_${item.id}`] = ref;
+                                  }
+                                }}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                hidden
+                                onChange={(e) => handlePhotoUpload(item.id, e.target.files, 'upload')}
+                              />
+                              <ItemPhotoManager
+                                itemId={item.id}
+                                initialPhotos={item.photoUrls || []}
+                                headerActions={
+                                  <div className="flex gap-1">
+                                    <button type="button" title="Upload files" onClick={() => ((window as any)[`uploadInput_${item.id}`] as any)?.click()}
+                                      className="w-7 h-7 flex items-center justify-center bg-amber-100 text-amber-700 rounded hover:bg-amber-200 text-sm">📁</button>
+                                    <button type="button" title="Camera" onClick={() => { setInlineCaptureMode('regular'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineRapidItems([{ id: item.id, thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls || [] }]); setInlineCameraOpen(true); }}
+                                      className="w-7 h-7 flex items-center justify-center bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm">📷</button>
+                                    <button type="button" title="Rapidfire" onClick={() => { setInlineCaptureMode('rapidfire'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineRapidItems([{ id: item.id, thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls || [] }]); setInlineCameraOpen(true); }}
+                                      className="w-7 h-7 flex items-center justify-center bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-sm">⚡</button>
+                                  </div>
+                                }
+                              />
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                              <label className="block text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1">Description</label>
+                              <textarea
+                                rows={3}
+                                value={editState.description}
+                                onChange={(e) => handleEditChange(item.id, 'description', e.target.value)}
+                                className="w-full border border-black/18 bg-white rounded-lg px-3 py-2 text-sm text-[#1A1814] focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
+                              />
+                            </div>
+
+                            {/* Condition grade */}
+                            <div>
+                              <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1 block">
+                                Condition Grade
+                                {item.suggestedConditionGrade && (
+                                  <span className="ml-2 text-[#C8552B] font-normal">Auto-suggests: {item.suggestedConditionGrade}</span>
+                                )}
+                              </label>
+                              <div className="flex gap-2">
+                                {(['S','A','B','C','D'] as const).map(grade => {
+                                  const gradeLabels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
+                                  const current = editState.conditionGrade ?? item.conditionGrade;
+                                  return (
+                                    <button key={grade} onClick={() => handleConditionGradeChange(item, grade)}
+                                      className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${current === grade ? 'bg-[#C8552B] text-white border-[#C8552B]' : 'bg-white text-[rgba(26,24,20,0.62)] border-black/18 hover:border-[#C8552B]'}`}
+                                      title={gradeLabels[grade]}>
+                                      {grade}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Listing type */}
+                            <div>
+                              <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1 block">Listing Type</label>
+                              <select
+                                value={editState.listingType}
+                                onChange={(e) => handleEditChange(item.id, 'listingType', e.target.value)}
+                                className="w-full px-3 py-2 border border-black/18 bg-white rounded-lg text-sm text-[#1A1814] focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
+                              >
+                                <option value="FIXED">Fixed Price</option>
+                                <option value="AUCTION">Auction</option>
+                                <option value="REVERSE_AUCTION">Reverse Auction</option>
+                              </select>
+                            </div>
+
+                            {editState.listingType === 'REVERSE_AUCTION' && (
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1 block">Daily drop ($)</label>
+                                  <input type="number" min="0" step="0.01"
+                                    value={(editState.reverseDailyDrop || 0) / 100}
+                                    onChange={(e) => handleEditChange(item.id, 'reverseDailyDrop', Math.round(parseFloat(e.target.value || '0') * 100))}
+                                    placeholder="0.00" aria-label="Daily drop"
+                                    className="w-full border border-black/18 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40" />
+                                </div>
+                                <div>
+                                  <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1 block">Floor price ($)</label>
+                                  <input type="number" min="0" step="0.01"
+                                    value={(editState.reverseFloorPrice || 0) / 100}
+                                    onChange={(e) => handleEditChange(item.id, 'reverseFloorPrice', Math.round(parseFloat(e.target.value || '0') * 100))}
+                                    placeholder="0.00" aria-label="Floor price"
+                                    className="w-full border border-black/18 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40" />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Price research panel */}
+                            <div>
+                              <PriceResearchPanel
+                                itemId={item.id}
+                                itemTitle={editState.title}
+                                itemDescription={editState.description}
+                                category={editState.category}
+                                condition={editState.condition}
+                                currentPrice={editState.price}
+                                photoUrls={item.photoUrls}
+                                collapsed={true}
+                                onPriceSelect={(price) => {
+                                  // Research panel sets editor price, NOT the queue price input
+                                  // Organizer still must type into the queue price field to approve
+                                  handleEditChange(item.id, 'price', price);
+                                  setPriceInput(item.id, String(price));
+                                }}
+                              />
+                              <div className="mt-2">
+                                <PricingSignalBanners itemId={item.id} currentPrice={editState.price} />
+                              </div>
+                            </div>
+
+                            {/* eBay push toggle */}
+                            {ebayConnected && tier !== 'SIMPLE' && (
+                              <div className="flex items-center gap-2 py-2 px-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                <input type="checkbox" id={`ebay-push-${item.id}`}
+                                  checked={ebayPushItems[item.id] ?? false}
+                                  onChange={(e) => setEbayPushItems(prev => ({ ...prev, [item.id]: e.target.checked }))}
+                                  className="h-4 w-4 rounded border-gray-300 accent-blue-600" />
+                                <label htmlFor={`ebay-push-${item.id}`} className="text-sm font-medium text-blue-700 cursor-pointer">
+                                  Also push to eBay
+                                </label>
+                              </div>
+                            )}
+
+                            {/* Save changes button (for expanded details) */}
+                            <div className="flex justify-end pt-2 border-t border-black/8">
+                              <button
+                                onClick={() => handleSaveItem(item)}
+                                disabled={updateItemMutation.isPending}
+                                className="px-4 py-2 bg-[rgba(20,18,14,0.08)] hover:bg-[rgba(20,18,14,0.12)] text-[#1A1814] text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+                              >
+                                {updateItemMutation.isPending ? 'Saving…' : 'Save details'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Published items list (compact, below queue) ── */}
+          {!itemsLoading && items.filter(i => i.draftStatus === 'PUBLISHED' || approvedIds.has(i.id)).length > 0 && pendingItems.length > 0 && (
+            <div className="mt-8">
+              <p className="text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-3">
+                Already live ({publishedCount})
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {items
+                  .filter(i => i.draftStatus === 'PUBLISHED' || approvedIds.has(i.id))
+                  .map(item => (
+                    <div key={item.id} className="bg-[#FBF8F2] rounded-lg border border-black/8 overflow-hidden">
+                      <div className="aspect-square overflow-hidden bg-[rgba(20,18,14,0.04)]">
+                        {item.photoUrls[0] ? (
+                          <img src={item.photoUrls[0]} alt={item.title} className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer-when-downgrade"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" fill="%23e5e7eb"/%3E%3C/svg%3E'; }} />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xl text-[rgba(26,24,20,0.3)]">📷</div>
+                        )}
+                      </div>
+                      <div className="p-2">
+                        <p className="text-xs font-medium text-[#1A1814] truncate">{item.title}</p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#3F7A4B]" />
+                          <span className="text-[10px] text-[#3F7A4B] font-medium">Live</span>
+                        </div>
                       </div>
                     </div>
                   ))}
-                </div>
               </div>
-            </>
-          ) : (
-            <>
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
-                <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Review & Publish</h1>
-                <p className="text-warm-600 dark:text-warm-400 mb-4">
-                  {items.length} item{items.length !== 1 ? 's' : ''} in this sale.
-                  {items.filter((i) => i.draftStatus !== 'PUBLISHED').length > 0 && (
-                    <span className="ml-1 text-amber-600 font-medium">
-                      {items.filter((i) => i.draftStatus !== 'PUBLISHED').length} unpublished.
-                    </span>
-                  )}
-                </p>
-
-                {/* Sprint 1: Aggregate health bar */}
-                {items.length > 0 && (() => {
-                  const clearCount = items.filter(i => i.healthScore?.grade === 'clear').length;
-                  const blockedCount = items.filter(i => i.healthScore?.grade === 'blocked').length;
-                  return (
-                    <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-900 rounded-lg border border-warm-200 dark:border-gray-700">
-                      <div className="text-sm text-warm-700 dark:text-warm-300">
-                        <span className="font-medium">{clearCount}/{items.length} items ready to publish</span>
-                        {blockedCount > 0 && <span className="ml-2 text-red-600 font-medium">{blockedCount} blocked</span>}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Feature 61: Near-Miss Nudge — encourage completing the listing */}
-                <NearMissNudge
-                  current={items.filter((i: any) => i.photoUrls?.length > 0 && i.price > 0).length}
-                  target={items.length}
-                  reward="a fully photo'd & priced listing"
-                  unit="item"
-                />
-
-                {/* Only show Publish All if there are unpublished items */}
-                {!itemsLoading && items.filter((i) => i.draftStatus !== 'PUBLISHED').length > 0 && (
-                  <button
-                    onClick={() => {
-                      const unpublishedIds = items.filter((i) => i.draftStatus !== 'PUBLISHED').map((i) => i.id);
-                      publishMutation.mutate(unpublishedIds);
-                    }}
-                    disabled={publishMutation.isPending}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 mb-3"
-                  >
-                    {publishMutation.isPending ? 'Publishing...' : `Publish All (${items.filter((i) => i.draftStatus !== 'PUBLISHED').length} unpublished)`}
-                  </button>
-                )}
-
-                {/* Label Composer shortcut */}
-                {!itemsLoading && items.filter((i) => i.price != null).length > 0 && (
-                  <Link href={`/organizer/label-composer/${saleId}`}>
-                    <span className="block w-full text-center bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-700 dark:text-warm-300 font-semibold py-2.5 px-4 rounded-lg mb-6 cursor-pointer transition-colors">
-                      Print labels for {items.filter((i) => i.price != null).length} priced items →
-                    </span>
-                  </Link>
-                )}
-
-                {itemsLoading ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </div>
-                ) : items.length === 0 ? (
-                  <div className="text-center py-12 text-warm-600 dark:text-warm-400">
-                    <p>No items in this sale yet.</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Select All Header */}
-                    <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-3 mb-3 flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedItems.size === items.length && items.length > 0}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedItems(new Set(items.map((i) => i.id)));
-                          } else {
-                            setSelectedItems(new Set());
-                          }
-                        }}
-                        className="w-4 h-4 rounded border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                      />
-                      <span className="text-sm font-medium text-warm-700 dark:text-warm-300">
-                        {selectedItems.size === 0
-                          ? `Select all ${items.length} item${items.length !== 1 ? 's' : ''}`
-                          : `${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''} selected`}
-                      </span>
-                    </div>
-
-                    {selectedItems.size > 0 && (
-                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg p-3 mb-3 flex flex-wrap items-center gap-3">
-                        <span className="text-sm font-medium text-amber-800">{selectedItems.size} selected</span>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="Bulk price..."
-                            value={bulkPrice}
-                            aria-label="Bulk price..." onChange={(e) => setBulkPrice(e.target.value)}
-                            className="border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm w-28"
-                          />
-                          <button
-                            onClick={handleBulkPrice}
-                            disabled={!bulkPrice || bulkUpdateMutation.isPending}
-                            className="px-3 py-1 bg-amber-600 text-white text-sm rounded disabled:opacity-50"
-                          >
-                            Set Price
-                          </button>
-                        </div>
-                        <div className="flex-1">
-                          <EbayCategoryPicker
-                            value={bulkCategory}
-                            onChange={(payload) => { setBulkCategory(payload.l1CategoryName); handleBulkCategory(payload); }}
-                            label=""
-                            placeholder="Bulk category..."
-                          />
-                        </div>
-                        <button
-                          onClick={() => {
-                            setConfirmState({
-                              open: true,
-                              title: 'Delete Items',
-                              message: `Delete ${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''}? This cannot be undone.`,
-                              onConfirm: () => {
-                                deleteMutation.mutate(Array.from(selectedItems));
-                                setConfirmState(s => ({ ...s, open: false }));
-                              },
-                            });
-                          }}
-                          disabled={deleteMutation.isPending}
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded disabled:opacity-50"
-                        >
-                          {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
-                        </button>
-                        <button
-                          onClick={() => setSelectedItems(new Set())}
-                          className="px-3 py-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-warm-700 dark:text-warm-300 text-sm rounded hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    )}
-                    {/* Column headers removed — status line on each card replaces the old header row */}
-                    {items.length > 0 && (
-                      <div className="flex items-center gap-2 mb-3">
-                        {(['name', 'price', 'status', 'date'] as const).map((option) => (
-                          <button
-                            key={option}
-                            onClick={() => {
-                              if (sortBy === option) {
-                                setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                              } else {
-                                setSortBy(option);
-                                setSortOrder('desc');
-                              }
-                            }}
-                            className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                              sortBy === option
-                                ? 'bg-amber-500 text-white'
-                                : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-700 hover:bg-warm-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            {option.charAt(0).toUpperCase() + option.slice(1)}
-                            {sortBy === option && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    <div className="space-y-3">
-                      {getSortedItems(items).map((item) => {
-                      const conf = confidenceLabel(item.aiConfidence, item.isAiTagged);
-                      return (
-                        <div
-                          key={item.id}
-                          ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
-                          className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden"
-                        >
-                          {/* Collapsed row — always visible */}
-                          <div
-                            className={`p-3 sm:p-4 flex items-start gap-3 sm:gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-l-4 ${
-                              item.healthScore?.grade === 'clear' ? 'border-green-500' :
-                              item.healthScore?.grade === 'nudge' ? 'border-amber-500' :
-                              item.healthScore?.grade === 'blocked' ? 'border-red-500' :
-                              'border-warm-300 dark:border-gray-600'
-                            }`}
-                            onClick={() => handleToggleExpand(item.id)}
-                          >
-                            {/* Left column: checkbox + arrow + delete (narrow, stacked) */}
-                            <div className="flex flex-col items-center justify-start gap-1 flex-shrink-0 pt-1">
-                              <input
-                                type="checkbox"
-                                checked={selectedItems.has(item.id)}
-                                disabled={item.healthScore?.grade === 'blocked'}
-                                title={item.healthScore?.grade === 'blocked' ? 'This item must be reviewed before publishing' : undefined}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  const next = new Set(selectedItems);
-                                  if (e.target.checked) next.add(item.id);
-                                  else next.delete(item.id);
-                                  setSelectedItems(next);
-                                }}
-                                className={`w-4 h-4 rounded border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-amber-600 focus:ring-amber-500 ${item.healthScore?.grade === 'blocked' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                              <span className="text-warm-400 text-xs">{expandedItemId === item.id ? '▲' : '▼'}</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setConfirmState({
-                                    open: true,
-                                    title: 'Delete Item',
-                                    message: `Delete "${item.title || 'this item'}"? This cannot be undone.`,
-                                    onConfirm: () => {
-                                      deleteMutation.mutate([item.id]);
-                                      setConfirmState(s => ({ ...s, open: false }));
-                                    },
-                                  });
-                                }}
-                                disabled={deleteMutation.isPending}
-                                className="sm:hidden text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 p-0.5 mt-1"
-                                aria-label="Delete item"
-                              >
-                                🗑️
-                              </button>
-                            </div>
-
-                            {/* Photo with mobile status badge below */}
-                            <div className="flex-shrink-0 w-14 sm:w-16 flex flex-col items-stretch">
-                              {item.photoUrls[0] ? (
-                                <img
-                                  key={item.photoUrls[0]}
-                                  src={item.photoUrls[0]}
-                                  alt={item.title}
-                                  className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded"
-                                  referrerPolicy="no-referrer-when-downgrade"
-                                  onError={(e) => {
-                                    (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" font-size="24" text-anchor="middle" dy=".3em" fill="%239ca3af"%3E📷%3C/text%3E%3C/svg%3E';
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xl sm:text-2xl">📷</div>
-                              )}
-                              {/* Status badge — mobile only, sits below thumbnail */}
-                              <span className={`sm:hidden text-center text-[10px] font-bold py-0.5 rounded-b ${
-                                item.draftStatus === 'PUBLISHED' ? 'bg-green-500/80 text-white' :
-                                item.draftStatus === 'PENDING_REVIEW' ? 'bg-amber-500/80 text-white' :
-                                'bg-gray-500/80 text-white'
-                              }`}>
-                                {item.draftStatus === 'PUBLISHED' ? 'Live' : item.draftStatus === 'PENDING_REVIEW' ? 'Pending' : 'Draft'}
-                              </span>
-                            </div>
-
-                            {/* Main content area: title, price, category, health bar */}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm sm:text-base line-clamp-2 sm:line-clamp-1">{item.title}</p>
-                              <p className="text-xs sm:text-sm text-warm-600 dark:text-warm-400 flex items-center gap-1 flex-wrap">
-                                {item.price != null ? (
-                                  item.priceBeforeMarkdown && item.priceBeforeMarkdown > item.price ? (
-                                    <>
-                                      <span className="line-through text-gray-400 dark:text-gray-500 text-xs">
-                                        ${item.priceBeforeMarkdown.toFixed(2)}
-                                      </span>
-                                      <span className="text-green-600 dark:text-green-400">
-                                        ${item.price.toFixed(2)}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span>${item.price.toFixed(2)}</span>
-                                  )
-                                ) : (
-                                  <span className="text-red-500 dark:text-red-400">No price set</span>
-                                )}
-                                <span>·</span>
-                                <span className="truncate">{item.category ? decodeHtmlEntities(item.category) : 'Uncategorized'}</span>
-                              </p>
-                              {/* Legendary suggestion chip */}
-                              {item.price != null && item.price >= 75 && !item.isLegendary && (
-                                <div className="mt-1.5 inline-flex items-center gap-1.5 bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-600 rounded-full px-2.5 py-1 transition-all">
-                                  <span className="text-sm">⭐</span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      updateItemMutation.mutate({
-                                        itemId: item.id,
-                                        updates: { isLegendary: true },
-                                      });
-                                    }}
-                                    disabled={updateItemMutation.isPending}
-                                    className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 transition-colors disabled:opacity-50 cursor-pointer"
-                                  >
-                                    {updateItemMutation.isPending ? 'Setting...' : 'Legendary?'}
-                                  </button>
-                                </div>
-                              )}
-                              {/* Legendary confirmation badge (shown after marked legendary) */}
-                              {item.price != null && item.price >= 75 && item.isLegendary && (
-                                <div className="mt-1.5 inline-flex items-center gap-1.5 bg-green-100 dark:bg-green-900/40 border border-green-300 dark:border-green-600 rounded-full px-2.5 py-1">
-                                  <span className="text-sm">⭐</span>
-                                  <span className="text-xs font-semibold text-green-700 dark:text-green-300">Legendary</span>
-                                </div>
-                              )}
-                              {/* Status line — compact, single row */}
-                              {item.draftStatus === 'PUBLISHED' ? (
-                                <p className="mt-1 text-xs font-semibold flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                                  <span>●</span>
-                                  <span>Published</span>
-                                </p>
-                              ) : item.healthScore && (
-                                <p className={`mt-1 text-xs font-semibold flex items-center gap-1 ${
-                                  item.healthScore.grade === 'clear'
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : item.healthScore.grade === 'nudge'
-                                    ? 'text-amber-600 dark:text-amber-400'
-                                    : 'text-red-600 dark:text-red-400'
-                                }`}>
-                                  <span>●</span>
-                                  <span>
-                                    {item.healthScore.grade === 'clear' ? 'Ready to Publish' :
-                                     item.healthScore.grade === 'nudge' ? 'Needs Review' :
-                                     'Cannot Publish'}
-                                  </span>
-                                </p>
-                              )}
-                            </div>
-
-                            {/* Right column: actions + metadata (hidden on mobile, visible on sm+) */}
-                            <div className="hidden sm:flex items-center gap-1 sm:gap-3 flex-shrink-0">
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                item.draftStatus === 'PUBLISHED'
-                                  ? 'bg-green-100 text-green-700'
-                                  : item.draftStatus === 'PENDING_REVIEW'
-                                  ? 'bg-amber-100 text-amber-700'
-                                  : 'bg-warm-100 dark:bg-gray-700 text-warm-600'
-                              }`}>
-                                {item.draftStatus === 'PUBLISHED' ? 'Published' : item.draftStatus === 'PENDING_REVIEW' ? 'Pending' : 'Draft'}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setConfirmState({
-                                    open: true,
-                                    title: 'Delete Item',
-                                    message: `Delete "${item.title || 'this item'}"? This cannot be undone.`,
-                                    onConfirm: () => {
-                                      deleteMutation.mutate([item.id]);
-                                      setConfirmState(s => ({ ...s, open: false }));
-                                    },
-                                  });
-                                }}
-                                disabled={deleteMutation.isPending}
-                                className="text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 p-1"
-                                aria-label="Delete item"
-                              >
-                                🗑️
-                              </button>
-                            </div>
-
-                            {/* Mobile delete moved to left column above */}
-                          </div>
-
-                          {/* Expanded edit panel */}
-                          {expandedItemId === item.id && (() => {
-                            const editState = getEditState(item);
-                            return (
-                              <div className="border-t border-warm-200 dark:border-gray-700 p-4 bg-warm-50 dark:bg-gray-900 space-y-4">
-
-                                {/* Photos */}
-                                <div>
-                                  <input
-                                    ref={(ref) => {
-                                      if (ref && !(window as any)[`uploadInput_${item.id}`]) {
-                                        (window as any)[`uploadInput_${item.id}`] = ref;
-                                      }
-                                    }}
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    hidden
-                                    onChange={(e) => handlePhotoUpload(item.id, e.target.files, 'upload')}
-                                  />
-                                  <ItemPhotoManager
-                                    itemId={item.id}
-                                    initialPhotos={item.photoUrls || []}
-                                    headerActions={
-                                      <div className="flex gap-1">
-                                        <button
-                                          type="button"
-                                          title="Upload files"
-                                          onClick={() => ((window as any)[`uploadInput_${item.id}`] as any)?.click()}
-                                          className="w-7 h-7 flex items-center justify-center bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded hover:bg-amber-200 dark:hover:bg-amber-800 text-sm"
-                                        >
-                                          📁
-                                        </button>
-                                        <button
-                                          type="button"
-                                          title="Camera"
-                                          onClick={() => { setInlineCaptureMode('regular'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineRapidItems([{ id: item.id, thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls || [] }]); setInlineCameraOpen(true); }}
-                                          className="w-7 h-7 flex items-center justify-center bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 text-sm"
-                                        >
-                                          📷
-                                        </button>
-                                        <button
-                                          type="button"
-                                          title="Rapidfire"
-                                          onClick={() => { setInlineCaptureMode('rapidfire'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineRapidItems([{ id: item.id, thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls || [] }]); setInlineCameraOpen(true); }}
-                                          className="w-7 h-7 flex items-center justify-center bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-800 text-sm"
-                                        >
-                                          ⚡
-                                        </button>
-                                      </div>
-                                    }
-                                  />
-                                </div>
-
-                                {/* Health Status Section */}
-                                {item.healthScore && (() => {
-                                  const hs = item.healthScore;
-
-                                  // Determine what's ready (at max value)
-                                  const readyItems = [];
-                                  if (hs.breakdown.photo === 40) readyItems.push(`${item.photoUrls.length} good photos ✓`);
-                                  if (hs.breakdown.photo > 0 && hs.breakdown.photo < 40) readyItems.push(`${item.photoUrls.length} photos ✓`);
-                                  if (hs.breakdown.title === 20) readyItems.push('Clear title ✓');
-                                  if (hs.breakdown.description === 20) readyItems.push('Full description ✓');
-                                  if (hs.breakdown.tags === 15) readyItems.push('3+ tags ✓');
-                                  if (hs.breakdown.price === 5) readyItems.push('Price set ✓');
-                                  if (hs.breakdown.category === 5) readyItems.push('Category selected ✓');
-                                  if (hs.breakdown.conditionGrade === 5) readyItems.push('Condition graded ✓');
-
-                                  // Determine what must be fixed (at 0 value, only if blocked)
-                                  const mustFix = [];
-                                  if (hs.grade === 'blocked') {
-                                    if (hs.breakdown.photo === 0) mustFix.push('Add at least one photo');
-                                    if (hs.breakdown.title === 0) mustFix.push('Add a title to your item');
-                                    if (hs.breakdown.price === 0) mustFix.push('Set a price');
-                                    if (hs.breakdown.category === 0) mustFix.push('Select a category');
-                                    if (hs.breakdown.conditionGrade === 0) mustFix.push('Grade the condition');
-                                  }
-
-                                  // Determine improvements (not at max, only if nudge)
-                                  const improvements = [];
-                                  if (hs.grade === 'nudge') {
-                                    if (hs.breakdown.photo < 40 && hs.breakdown.photo > 0) improvements.push(`Add more photos (have ${item.photoUrls.length})`);
-                                    if (hs.breakdown.photo === 0) improvements.push('Add at least one photo');
-                                    if (hs.breakdown.title < 20 && hs.breakdown.title > 0) improvements.push('Make title longer (15+ chars)');
-                                    if (hs.breakdown.title === 0) improvements.push('Add a title');
-                                    if (hs.breakdown.description < 20 && hs.breakdown.description > 0) improvements.push('Add more details (50+ chars)');
-                                    if (hs.breakdown.description === 0) improvements.push('Add a description');
-                                    if (hs.breakdown.tags < 15 && hs.breakdown.tags > 0) improvements.push(`Add more tags (have ${(item.tags?.length) || 0})`);
-                                    if (hs.breakdown.tags === 0) improvements.push('Add tags');
-                                    if (hs.breakdown.price === 0) improvements.push('Set a price');
-                                    if ((hs.breakdown.category ?? 0) < 5 && (hs.breakdown.category ?? 0) > 0) improvements.push('Choose a more specific category');
-                                    if ((hs.breakdown.category ?? 0) === 0) improvements.push('Select a category');
-                                    if ((hs.breakdown.conditionGrade ?? 0) < 5 && (hs.breakdown.conditionGrade ?? 0) > 0) improvements.push('Grade the condition more completely');
-                                    if (hs.breakdown.conditionGrade === 0) improvements.push('Grade the condition');
-                                  }
-
-                                  return (
-                                    <div className="border border-warm-200 dark:border-gray-700 rounded-md p-3 bg-white dark:bg-gray-800">
-                                      <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">Health Status</h4>
-
-                                      {/* What's Ready */}
-                                      {readyItems.length > 0 && (
-                                        <div className="mb-3">
-                                          <p className="text-xs font-medium text-green-600 dark:text-green-400 mb-1.5">What's Ready</p>
-                                          <ul className="space-y-0.5">
-                                            {readyItems.map((item, i) => (
-                                              <li key={i} className="text-xs text-warm-700 dark:text-warm-300">{item}</li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-
-                                      {/* Must Fix (only if blocked) */}
-                                      {hs.grade === 'blocked' && mustFix.length > 0 && (
-                                        <div className="mb-3 bg-red-50 dark:bg-red-900/20 rounded px-2 py-1.5">
-                                          <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Must Fix</p>
-                                          <ul className="space-y-0.5">
-                                            {mustFix.map((item, i) => (
-                                              <li key={i} className="text-xs text-red-700 dark:text-red-300">⚠️ {item}</li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-
-                                      {/* Improvements (only if nudge) */}
-                                      {hs.grade === 'nudge' && improvements.length > 0 && (
-                                        <div className="mb-3 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1.5">
-                                          <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">Improvements</p>
-                                          <ul className="space-y-0.5">
-                                            {improvements.map((item, i) => (
-                                              <li key={i} className="text-xs text-amber-700 dark:text-amber-300">→ {item}</li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-
-                                      {/* Optional (always show) */}
-                                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded px-2 py-1.5">
-                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Optional</p>
-                                        <ul className="space-y-0.5">
-                                          <li className="text-xs text-gray-600 dark:text-gray-300">• Add tags (helps discovery)</li>
-                                          <li className="text-xs text-gray-600 dark:text-gray-300">• Add condition details (builds trust)</li>
-                                        </ul>
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-
-                                {/* AI Confidence — show only if AI-tagged */}
-                                {item.isAiTagged && item.aiConfidence != null && (
-                                  <div className="text-xs text-warm-600 dark:text-warm-400 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                                    {Math.round(item.aiConfidence * 100)}% confidence in auto suggested fields. Review and adjust as needed.
-                                  </div>
-                                )}
-
-                                {/* Title */}
-                                <div>
-                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Title</label>
-                                  <input
-                                    type="text"
-                                    value={editState.title}
-                                    onChange={(e) => handleEditChange(item.id, 'title', e.target.value)}
-                                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                  />
-                                </div>
-
-                                {/* Description */}
-                                <div>
-                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Description</label>
-                                  <textarea
-                                    rows={3}
-                                    value={editState.description}
-                                    onChange={(e) => handleEditChange(item.id, 'description', e.target.value)}
-                                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                  />
-                                </div>
-
-                                {/* Price */}
-                                <div>
-                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Price ($)</label>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={editState.price}
-                                    onChange={(e) => handleEditChange(item.id, 'price', parseFloat(e.target.value) || 0)}
-                                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                  />
-                                  <div className="mt-3">
-                                    <PriceResearchPanel
-                                      itemId={item.id}
-                                      itemTitle={editState.title}
-                                      itemDescription={editState.description}
-                                      category={editState.category}
-                                      condition={editState.condition}
-                                      currentPrice={editState.price}
-                                      photoUrls={item.photoUrls}
-                                      collapsed={true}
-                                      onPriceSelect={(price) => handleEditChange(item.id, 'price', price)}
-                                    />
-                                  </div>
-
-                                  {/* Pricing Signals: Sleeper patterns & brand premiums */}
-                                  <div className="mt-3">
-                                    <PricingSignalBanners itemId={item.id} currentPrice={editState.price} />
-                                  </div>
-                                </div>
-
-                                {/* Category + Condition */}
-                                <div className="flex gap-3">
-                                  <div className="flex-1">
-                                    <EbayCategoryPicker
-                                      value={editState.category}
-                                      onChange={({ leafCategoryName, leafCategoryId, l1CategoryName }) => {
-                                        handleEditChange(item.id, 'category', l1CategoryName);
-                                        handleEditChange(item.id, 'ebayCategoryId', leafCategoryId);
-                                        handleEditChange(item.id, 'ebayCategoryName', leafCategoryName);
-                                      }}
-                                      label="Category"
-                                      placeholder="Select category..."
-                                    />
-                                  </div>
-                                  <div className="flex-1">
-                                    <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Condition</label>
-                                    <select
-                                      value={editState.condition}
-                                      onChange={(e) => handleEditChange(item.id, 'condition', e.target.value)}
-                                      className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                    >
-                                      <option value="">Select condition...</option>
-                                      <option value="NEW">New</option>
-                                      <option value="USED">Used</option>
-                                      <option value="REFURBISHED">Refurbished</option>
-                                      <option value="PARTS_OR_REPAIR">Parts or Repair</option>
-                                    </select>
-                                  </div>
-                                </div>
-
-                                {/* #64: Condition Grade Picker */}
-                                <div className="mt-3">
-                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                                    Condition Grade
-                                    {item.suggestedConditionGrade && (
-                                      <span className="ml-2 text-xs text-indigo-500 font-normal">Auto-suggests: {item.suggestedConditionGrade}</span>
-                                    )}
-                                  </label>
-                                  <div className="flex gap-2">
-                                    {(['S','A','B','C','D'] as const).map(grade => {
-                                      const labels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
-                                      const current = editState.conditionGrade ?? item.conditionGrade;
-                                      const isRefreshing = refreshingPriceItemId === item.id;
-                                      return (
-                                        <button
-                                          key={grade}
-                                          onClick={() => handleConditionGradeChange(item, grade)}
-                                          disabled={isRefreshing}
-                                          className={`flex-1 py-1.5 text-xs font-bold rounded border transition-colors ${current === grade ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-indigo-400'} ${isRefreshing ? 'opacity-50 cursor-wait' : ''}`}
-                                          title={isRefreshing ? 'Refreshing price...' : labels[grade]}
-                                        >
-                                          {grade}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                  <div className="text-xs text-gray-400 mt-0.5">
-                                    {(['S','A','B','C','D'] as const).map(g => {
-                                      const labels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
-                                      return `${g}=${labels[g]}`;
-                                    }).join(' · ')}
-                                  </div>
-                                </div>
-
-                                {/* Listing Type Dropdown */}
-                                <div className="mt-3">
-                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                                    Listing Type
-                                  </label>
-                                  <select
-                                    value={editState.listingType}
-                                    onChange={(e) => handleEditChange(item.id, 'listingType', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                  >
-                                    <option value="FIXED">Fixed Price</option>
-                                    <option value="AUCTION">Auction</option>
-                                    <option value="REVERSE_AUCTION">Reverse Auction</option>
-                                  </select>
-                                </div>
-
-                                {/* Reverse Auction Sub-fields */}
-                                {editState.listingType === 'REVERSE_AUCTION' && (
-                                  <div className="mt-3 space-y-2">
-                                    <div>
-                                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                                        Daily drop ($)
-                                      </label>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={(editState.reverseDailyDrop || 0) / 100}
-                                        onChange={(e) => {
-                                          const cents = Math.round(parseFloat(e.target.value || '0') * 100);
-                                          handleEditChange(item.id, 'reverseDailyDrop', cents);
-                                        }}
-                                        placeholder="0.00"
-                                        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                       aria-label="0.00" />
-                                    </div>
-                                    <div>
-                                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                                        Floor price ($)
-                                      </label>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={(editState.reverseFloorPrice || 0) / 100}
-                                        onChange={(e) => {
-                                          const cents = Math.round(parseFloat(e.target.value || '0') * 100);
-                                          handleEditChange(item.id, 'reverseFloorPrice', cents);
-                                        }}
-                                        placeholder="0.00"
-                                        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                       aria-label="0.00" />
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Sprint 1: Tag Picker */}
-                                <div className="mt-3">
-                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Tags</label>
-
-                                  {/* Suggested tag chips — suppressed tags (removed ≥2 times) are hidden; grouped by type */}
-                                  {item.suggestedTags && item.suggestedTags.length > 0 && (() => {
-                                    const visibleTags = item.suggestedTags.filter(tag => (removedTagCounts.get(tag) ?? 0) < 2);
-                                    if (visibleTags.length === 0) return null;
-                                    const grouped = groupTagsByType(visibleTags);
-                                    const currentTags = getEditState(item).tags || item.tags || [];
-                                    return (
-                                      <div className="mb-2 space-y-1">
-                                        {grouped.map(({ group, tags: groupTags }) => (
-                                          <div key={group} className="flex flex-wrap items-center gap-1">
-                                            {group !== 'Other' && (
-                                              <span className="text-xs text-gray-400 dark:text-gray-500 font-medium w-14 shrink-0">{group}:</span>
-                                            )}
-                                            {group === 'Other' && (
-                                              <span className="text-xs text-gray-400 dark:text-gray-500 font-medium w-14 shrink-0">Tags:</span>
-                                            )}
-                                            <div className="flex flex-wrap gap-1">
-                                              {groupTags.map(tag => (
-                                                <button
-                                                  key={tag}
-                                                  onClick={() => handleAddTag(item.id, tag)}
-                                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition-colors
-                                                    ${currentTags.includes(tag)
-                                                      ? 'bg-indigo-100 border-indigo-400 text-indigo-700'
-                                                      : 'bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-indigo-300'
-                                                    }`}
-                                                >
-                                                  {tag}
-                                                </button>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    );
-                                  })()}
-
-                                  {/* BUG 4 FIX: Removed curated tag list (AI already suggests tags) */}
-                                  {/* Custom tag input */}
-                                  <input
-                                    type="text"
-                                    placeholder="Add a custom tag..."
-                                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                    aria-label="Add a custom tag..." onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        handleAddCustomTag(item.id, (e.target as HTMLInputElement).value);
-                                        (e.target as HTMLInputElement).value = '';
-                                      }
-                                    }}
-                                  />
-
-                                  {/* Current tags display */}
-                                  <div className="flex flex-wrap gap-1">
-                                    {(getEditState(item).tags || item.tags || []).map(tag => (
-                                      <span key={tag} className="inline-flex items-center bg-indigo-50 text-indigo-700 text-xs px-2 py-0.5 rounded-full">
-                                        {tag}
-                                        <button
-                                          onClick={() => handleRemoveTag(item.id, tag)}
-                                          className="ml-1 text-indigo-400 hover:text-indigo-700 font-bold"
-                                        >
-                                          ×
-                                        </button>
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {/* Quantity */}
-                                <div className="w-32">
-                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Quantity</label>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={editState.quantity}
-                                    onChange={(e) => handleEditChange(item.id, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
-                                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                  />
-                                </div>
-
-                                {/* eBay Push Toggle — only show if eBay connected and not SIMPLE tier */}
-                                {ebayConnected && tier !== 'SIMPLE' && (
-                                  <div className="flex items-center gap-2 py-2 px-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-                                    <input
-                                      type="checkbox"
-                                      id={`ebay-push-${item.id}`}
-                                      checked={ebayPushItems[item.id] ?? false}
-                                      onChange={(e) => {
-                                        setEbayPushItems((prev) => ({
-                                          ...prev,
-                                          [item.id]: e.target.checked,
-                                        }));
-                                      }}
-                                      className="h-4 w-4 rounded border-gray-300 accent-blue-600"
-                                    />
-                                    <label
-                                      htmlFor={`ebay-push-${item.id}`}
-                                      className="text-sm font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
-                                    >
-                                      Also push to eBay
-                                    </label>
-                                  </div>
-                                )}
-
-                                {/* Actions */}
-                                <div className="flex items-center justify-between pt-1 border-t border-warm-200 dark:border-gray-700">
-                                  <div className="flex items-center gap-3">
-                                    <Link
-                                      href={`/organizer/edit-item/${item.id}`}
-                                      className="text-sm text-amber-700 hover:text-amber-800 font-medium underline"
-                                    >
-                                      Full Edit Page →
-                                    </Link>
-                                    <button
-                                      onClick={() => handlePublishItem(item)}
-                                      disabled={updateItemMutation.isPending || item.healthScore?.grade === 'blocked'}
-                                      title={item.healthScore?.grade === 'blocked' ? 'This item must be reviewed before publishing' : ''}
-                                      className={`px-3 py-1.5 text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
-                                        item.draftStatus === 'PUBLISHED'
-                                          ? 'bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 hover:bg-warm-200'
-                                          : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400'
-                                      }`}
-                                    >
-                                      {item.draftStatus === 'PUBLISHED' ? 'Unpublish' : 'Publish'}
-                                    </button>
-                                  </div>
-                                  <button
-                                    onClick={() => handleSaveItem(item)}
-                                    disabled={updateItemMutation.isPending}
-                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
-                                  >
-                                    {updateItemMutation.isPending ? 'Saving...' : 'Save Changes'}
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      );
-                    })}
-                    </div>
-                  </>
-                )}
-              </div>
-            </>
+            </div>
           )}
         </div>
 
+        {/* Inline camera */}
         {inlineCameraOpen && inlineCaptureItemId ? (
           <RapidCapture
             rapidItems={inlineRapidItems}
@@ -1676,14 +1631,14 @@ const ReviewPage = () => {
           />
         ) : null}
 
-      <ConfirmDialog
-        isOpen={confirmState.open}
-        title={confirmState.title}
-        message={confirmState.message}
-        onConfirm={() => confirmState.onConfirm()}
-        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
-        variant="danger"
-      />
+        <ConfirmDialog
+          isOpen={confirmState.open}
+          title={confirmState.title}
+          message={confirmState.message}
+          onConfirm={() => confirmState.onConfirm()}
+          onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+          variant="danger"
+        />
       </main>
     </>
   );

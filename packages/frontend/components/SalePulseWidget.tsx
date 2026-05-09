@@ -1,18 +1,25 @@
 /**
  * Sale Pulse Widget — Feature #230
- * Engagement score card with buzz meter (0-100), 3 sub-metrics, "Boost visibility" link
+ * Engagement score card with buzz meter (0-100), 3 sub-metrics, "Boost visibility" link.
+ * Brief E: Includes "Message your followers" quick-compose entry point.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import Link from 'next/link';
 import Tooltip from './Tooltip';
+import BroadcastComposer from './BroadcastComposer';
 
 interface SalePulseWidgetProps {
   saleId: string;
+  /** Optional: pass follower count and organizer name to pre-fill the quick-compose */
+  followerCount?: number;
+  organizerName?: string;
+  tier?: string;
 }
 
-export default function SalePulseWidget({ saleId }: SalePulseWidgetProps) {
+export default function SalePulseWidget({ saleId, followerCount = 0, organizerName, tier }: SalePulseWidgetProps) {
+  const [showComposer, setShowComposer] = useState(false);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['sale-pulse', saleId],
     queryFn: () => api.get(`/organizers/sale-pulse/${saleId}`).then((r) => r.data),
@@ -87,12 +94,40 @@ export default function SalePulseWidget({ saleId }: SalePulseWidgetProps) {
         </div>
       </div>
 
-      <Link
-        href={`/organizer/ripples?saleId=${saleId}`}
-        className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-      >
-        Boost visibility →
-      </Link>
+      <div className="flex items-center justify-between mt-1">
+        <Link
+          href={`/organizer/ripples?saleId=${saleId}`}
+          className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          Boost visibility →
+        </Link>
+        {/* Brief E: Quick-compose entry point — opens BroadcastComposer pre-loaded with Sale Day template */}
+        {followerCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowComposer(true)}
+            className="text-sm text-amber-600 dark:text-amber-400 hover:underline font-medium"
+          >
+            Message {followerCount} followers →
+          </button>
+        )}
+      </div>
+
+      {/* Quick-compose overlay */}
+      {showComposer && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+            <BroadcastComposer
+              tier={tier}
+              followerCount={followerCount}
+              organizerName={organizerName}
+              quickComposeSaleId={saleId}
+              onClose={() => setShowComposer(false)}
+              onSent={() => setShowComposer(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
