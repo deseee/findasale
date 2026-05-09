@@ -206,7 +206,7 @@ export async function getOrCreateScrapedOrganizer(
   if (googlePlaceId) {
     const byPlaceId = await prisma.organizer.findFirst({
       where: { googlePlaceId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true },
     });
     if (byPlaceId) {
       // Backfill missing source IDs and email, merge corroboration data
@@ -219,6 +219,8 @@ export async function getOrCreateScrapedOrganizer(
       if (validEmail && !byPlaceId.contactEmail) updates.contactEmail = validEmail;
       if (phone && !byPlaceId.phone) updates.phone = phone;
       if (website && !byPlaceId.website) updates.website = website;
+      if (lat !== undefined && lat !== null && !byPlaceId.lat) updates.lat = lat;
+      if (lng !== undefined && lng !== null && !byPlaceId.lng) updates.lng = lng;
 
       // Corroboration merge: increment source count and update sourcesJson
       const newSourceCount = (byPlaceId.sourceCount || 1) + 1;
@@ -242,7 +244,7 @@ export async function getOrCreateScrapedOrganizer(
   if (foursquareVenueId) {
     const byFoursquare = await prisma.organizer.findFirst({
       where: { foursquareVenueId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true },
     });
     if (byFoursquare) {
       const updates: Record<string, unknown> = {};
@@ -254,6 +256,8 @@ export async function getOrCreateScrapedOrganizer(
       if (validEmail && !byFoursquare.contactEmail) updates.contactEmail = validEmail;
       if (phone && !byFoursquare.phone) updates.phone = phone;
       if (website && !byFoursquare.website) updates.website = website;
+      if (lat !== undefined && lat !== null && !byFoursquare.lat) updates.lat = lat;
+      if (lng !== undefined && lng !== null && !byFoursquare.lng) updates.lng = lng;
 
       // Corroboration merge
       const newSourceCount = (byFoursquare.sourceCount || 1) + 1;
@@ -277,7 +281,7 @@ export async function getOrCreateScrapedOrganizer(
   if (hereBusinessId) {
     const byHere = await prisma.organizer.findFirst({
       where: { hereBusinessId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true },
     });
     if (byHere) {
       const updates: Record<string, unknown> = {};
@@ -289,6 +293,8 @@ export async function getOrCreateScrapedOrganizer(
       if (validEmail && !byHere.contactEmail) updates.contactEmail = validEmail;
       if (phone && !byHere.phone) updates.phone = phone;
       if (website && !byHere.website) updates.website = website;
+      if (lat !== undefined && lat !== null && !byHere.lat) updates.lat = lat;
+      if (lng !== undefined && lng !== null && !byHere.lng) updates.lng = lng;
 
       // Corroboration merge
       const newSourceCount = (byHere.sourceCount || 1) + 1;
@@ -312,7 +318,7 @@ export async function getOrCreateScrapedOrganizer(
   const dedupeKey = generateDedupeKey(businessName, city);
   const byDedupeKey = await prisma.organizer.findFirst({
     where: { dedupeKey },
-    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true },
   });
 
   if (byDedupeKey) {
@@ -326,6 +332,8 @@ export async function getOrCreateScrapedOrganizer(
     if (validEmail && !byDedupeKey.contactEmail) updates.contactEmail = validEmail;
     if (phone && !byDedupeKey.phone) updates.phone = phone;
     if (website && !byDedupeKey.website) updates.website = website;
+    if (lat !== undefined && lat !== null && !byDedupeKey.lat) updates.lat = lat;
+    if (lng !== undefined && lng !== null && !byDedupeKey.lng) updates.lng = lng;
 
     // Corroboration merge
     const newSourceCount = (byDedupeKey.sourceCount || 1) + 1;
@@ -351,7 +359,7 @@ export async function getOrCreateScrapedOrganizer(
       isUnmanagedListing: true,
       address: { contains: city },
     },
-    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, dedupeKey: true, sourceCount: true, sourcesJson: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, dedupeKey: true, sourceCount: true, sourcesJson: true, lat: true, lng: true },
   });
 
   const normalizedName = normalizeName(businessName);
@@ -369,6 +377,8 @@ export async function getOrCreateScrapedOrganizer(
     if (validEmail && !existing.contactEmail) updates.contactEmail = validEmail;
     if (phone && !existing.phone) updates.phone = phone;
     if (website && !existing.website) updates.website = website;
+    if (lat !== undefined && lat !== null && !existing.lat) updates.lat = lat;
+    if (lng !== undefined && lng !== null && !existing.lng) updates.lng = lng;
 
     // Corroboration merge
     const newSourceCount = (existing.sourceCount || 1) + 1;
@@ -683,6 +693,14 @@ export async function ingestScrapedListing(
     // organizerId is only used as a fallback when the listing has no named organizer.
     let finalOrganizerId: string;
     if (listing.organizerName && listing.organizerName.trim()) {
+      const orgLat: number | undefined =
+        (listing as any).lat ??
+        (listing.scrapedMetadata?.lat as number | undefined) ??
+        undefined;
+      const orgLng: number | undefined =
+        (listing as any).lng ??
+        (listing.scrapedMetadata?.lng as number | undefined) ??
+        undefined;
       const createdOrgId = await getOrCreateScrapedOrganizer(
         listing.organizerName.trim(),
         listing.sourceName,
@@ -695,7 +713,9 @@ export async function ingestScrapedListing(
         listing.businessCategory,
         listing.organizerEmail,
         listing.organizerPhone,
-        listing.organizerWebsite
+        listing.organizerWebsite,
+        orgLat,
+        orgLng
       );
       // ADR-075: If organizer was rejected due to off-target category, skip this listing
       if (createdOrgId === null) {
