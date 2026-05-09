@@ -1,0 +1,27 @@
+name: Scrape Texas Auctioneer Licenses
+
+on:
+  schedule:
+    - cron: '0 9 * * 4'
+  workflow_dispatch:
+
+concurrency:
+  group: scrape-texas-licensing
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Trigger Texas licensing scraper
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.OUTREACH_SECRET }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.RAILWAY_BACKEND_URL }}/run-texas-licensing" \
+            -d '{}'

@@ -1,0 +1,31 @@
+name: Scrape Delaware Auctioneer Licenses
+
+on:
+  schedule:
+    - cron: '0 7 * * 2'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Delaware Licensing Scraper
+        env:
+          OUTREACH_SECRET: ${{ secrets.INTERNAL_API_TOKEN }}
+          RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
+        run: |
+          curl -X POST \
+            -H "x-internal-secret: ${OUTREACH_SECRET}" \
+            "${RAILWAY_BACKEND_URL}/api/internal/scraper/run-delaware-licensing" \
+            --fail-with-body \
+            --connect-timeout 10 \
+            --max-time 3600
