@@ -13,6 +13,7 @@ import {
   bulkUpsertEnrichedSales,
 } from '../controllers/internalSaleDetailEnrichmentController';
 import { sendOutreachEmails } from '../jobs/outreachEmailsCron';
+import { runWebsiteEnrichmentBackfill } from '../jobs/websiteEnrichmentJob';
 import { runCategorySync } from '../jobs/categorySyncCron';
 import { runLeadScoringBackfill } from '../services/leadScoringService';
 import { runScrapeRun } from '../services/scraper/index';
@@ -735,6 +736,17 @@ router.post('/scoring/run-backfill', requireSecret, async (req: express.Request,
   } catch (err: any) {
     console.error('[LeadScoring] Backfill route error:', err);
     if (!res.headersSent) res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /api/internal/enrichment/run-website-backfill — enrich licensed organizers with no website (protected)
+router.post('/enrichment/run-website-backfill', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    // Respond immediately — backfill is long-running
+    res.status(202).json({ ok: true, message: 'Website enrichment backfill started' });
+    runWebsiteEnrichmentBackfill().catch(err => console.error('[WebsiteEnrichment] Backfill route error:', err));
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

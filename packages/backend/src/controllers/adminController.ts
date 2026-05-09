@@ -8,7 +8,9 @@ import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 // GET /api/admin/stats — platform overview
 export const getStats = async (req: AuthRequest, res: Response) => {
   try {
-    const totalUsers = await prisma.user.count();
+    const totalUsers = await prisma.user.count({
+      where: { email: { not: { endsWith: '@system.finda.sale' } } },
+    });
     // CONTAMINATION FIX: Count only real organizers, exclude isUnmanagedListing: true
     const totalOrganizers = await prisma.organizer.count({
       where: { isUnmanagedListing: false },
@@ -32,6 +34,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const newUsersLast7d = await prisma.user.count({
       where: {
         createdAt: { gte: sevenDaysAgo },
+        email: { not: { endsWith: '@system.finda.sale' } },
       },
     });
 
@@ -204,7 +207,10 @@ export const getStats = async (req: AuthRequest, res: Response) => {
 
       // New signups
       const signupCount = await prisma.user.count({
-        where: { createdAt: { gte: dayStart, lt: dayEnd } },
+        where: {
+          createdAt: { gte: dayStart, lt: dayEnd },
+          email: { not: { endsWith: '@system.finda.sale' } },
+        },
       });
       sparklines.signups.push(signupCount);
 
