@@ -1,24 +1,25 @@
 /**
  * Pennsylvania Business Registry Scraper (Phase 2)
- * Data source: PA Registered Businesses by County (data.pa.gov)
- * CSV URL: https://data.pa.gov/api/views/xvd7-5r2c/rows.csv?accessType=DOWNLOAD
- * Covers all 14 secondhand sale types via keyword filter
+ * Source: PA Open Data Portal Socrata JSON API (paginated) — dataset xvd7-5r2c
+ *   https://data.pa.gov/resource/xvd7-5r2c.json
+ * NOTE: Bulk CSV (rows.csv?accessType=DOWNLOAD) exceeds Node.js string limit
+ *   (ERR_STRING_TOO_LONG). Socrata paginated JSON is memory-safe.
  * ADR-073: Directory Scraper Phase 2 — State business licensing data
  *
  * Matches all secondary sale business types:
  *   - Always-include activities: AUCTIONEER, PAWNBROKER, JUNK DEALER,
- *     SECONDHAND DEALER, CONSIGNMENT
+ *     SECONDHAND DEALER, CONSIGNMENT (substring match on activity field)
  *   - All other rows: keyword filter on business name
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
 
-const PA_OPEN_DATA_CSV_URL =
-  'https://data.pa.gov/api/views/xvd7-5r2c/rows.csv?accessType=DOWNLOAD';
+const PA_SOCRATA_URL = 'https://data.pa.gov/resource/xvd7-5r2c.json';
 const PA_OPEN_DATA_DOMAIN = 'data.pa.gov';
+const PAGE_SIZE = 5000;
 
-// Activities that always indicate a secondhand-sale business — include regardless of name
+// Activities that always indicate a secondhand-sale business — substring match
 const ALWAYS_INCLUDE_ACTIVITIES = new Set([
   'AUCTIONEER',
   'PAWNBROKER',
@@ -86,35 +87,6 @@ const EXCLUDE_FRAGMENTS = [
 ];
 
 /**
- * Parse a single CSV line respecting quoted fields (commas inside quotes are ignored).
- */
-function parseCsvLine(line: string): string[] {
-  const fields: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        // Escaped quote inside a quoted field
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch === ',' && !inQuotes) {
-      fields.push(current.trim());
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  fields.push(current.trim());
-  return fields;
-}
-
-/**
  * Return true if the business name matches at least one keyword (case-insensitive).
  */
 function nameMatchesKeyword(name: string): boolean {
@@ -141,175 +113,120 @@ function mapCategory(activity: string): string {
 
 /**
  * Pennsylvania Business Registry secondary sale scraper.
- * Fetches all PA registered business records and filters to secondhand-sale
- * matches using activity codes and keyword matching on business name.
+ * Uses Socrata paginated JSON API ($limit/$offset) — avoids OOM from bulk CSV.
  */
 export async function runPennsylvaniaPhase2Scraper(): Promise<void> {
   let totalFetched = 0;
   let totalMatched = 0;
   let totalUpserted = 0;
+  let offset = 0;
+  let hasMore = true;
+  let columnsLogged = false;
 
-  console.log('[PennsylvaniaPhase2] Starting secondary sale scraper via PA Open Data Portal');
-  console.log(`[PennsylvaniaPhase2] Source: ${PA_OPEN_DATA_CSV_URL}`);
+  console.log('[PennsylvaniaPhase2] Starting secondary sale scraper via PA Socrata JSON API');
+  console.log(`[PennsylvaniaPhase2] Source: ${PA_SOCRATA_URL}`);
 
   try {
-    await defaultRateLimiter.waitBeforeRequest(PA_OPEN_DATA_DOMAIN);
+    while (hasMore) {
+      await defaultRateLimiter.waitBeforeRequest(PA_OPEN_DATA_DOMAIN);
 
-    const response = await fetch(PA_OPEN_DATA_CSV_URL, {
-      method: 'GET',
-      headers: {
-        Accept: 'text/csv,*/*',
-      },
-      signal: AbortSignal.timeout(600000),
-    });
+      const params = new URLSearchParams({
+        $limit: String(PAGE_SIZE),
+        $offset: String(offset),
+      });
+      const url = `${PA_SOCRATA_URL}?${params.toString()}`;
 
-    if (!response.ok) {
-      console.error(
-        `[PennsylvaniaPhase2] CSV fetch failed: HTTP ${response.status} from ${PA_OPEN_DATA_CSV_URL}`
-      );
-      return;
-    }
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(60000),
+      });
 
-    const csvText = await response.text();
-    const lines = csvText.split('\n');
-
-    if (lines.length < 2) {
-      console.warn('[PennsylvaniaPhase2] CSV response appears empty or malformed');
-      return;
-    }
-
-    // Parse header row — normalise to lowercase with single spaces
-    const headers = parseCsvLine(lines[0]).map((h) =>
-      h.toLowerCase().replace(/\s+/g, ' ').trim()
-    );
-
-    console.log('[PennsylvaniaPhase2] CSV headers found:', headers.join(', '));
-
-    const col = (name: string): number => headers.indexOf(name);
-
-    // PA Socrata column probe — try multiple common variations
-    const iBusinessName =
-      col('business name') !== -1 ? col('business name') :
-      col('trade name') !== -1 ? col('trade name') :
-      col('business_name') !== -1 ? col('business_name') :
-      col('entity name') !== -1 ? col('entity name') :
-      col('name') !== -1 ? col('name') : -1;
-
-    const iTradeName =
-      col('trade name') !== -1 ? col('trade name') :
-      col('trade_name') !== -1 ? col('trade_name') :
-      col('dba') !== -1 ? col('dba') : -1;
-
-    const iCity =
-      col('city') !== -1 ? col('city') :
-      col('principal city') !== -1 ? col('principal city') :
-      col('mailing city') !== -1 ? col('mailing city') :
-      col('business city') !== -1 ? col('business city') : -1;
-
-    const iState =
-      col('state') !== -1 ? col('state') :
-      col('principal state') !== -1 ? col('principal state') :
-      col('business state') !== -1 ? col('business state') : -1;
-
-    const iZip =
-      col('zip') !== -1 ? col('zip') :
-      col('zip code') !== -1 ? col('zip code') :
-      col('zip_code') !== -1 ? col('zip_code') :
-      col('postal code') !== -1 ? col('postal code') :
-      col('principal zip') !== -1 ? col('principal zip') : -1;
-
-    const iLicenseNumber =
-      col('license number') !== -1 ? col('license number') :
-      col('license_number') !== -1 ? col('license_number') :
-      col('license no') !== -1 ? col('license no') :
-      col('registration number') !== -1 ? col('registration number') :
-      col('business id') !== -1 ? col('business id') : -1;
-
-    const iActivity =
-      col('business activity') !== -1 ? col('business activity') :
-      col('activity') !== -1 ? col('activity') :
-      col('type') !== -1 ? col('type') :
-      col('license type') !== -1 ? col('license type') :
-      col('business type') !== -1 ? col('business type') : -1;
-
-    if (iBusinessName === -1) {
-      console.error(
-        '[PennsylvaniaPhase2] Could not find business name column in CSV header. Headers found:',
-        headers.join(', ')
-      );
-      return;
-    }
-
-    totalFetched = lines.length - 1;
-    console.log(`[PennsylvaniaPhase2] CSV fetched — ${totalFetched} data rows`);
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      try {
-        const fields = parseCsvLine(line);
-
-        const businessNameRaw = iBusinessName >= 0 ? (fields[iBusinessName] || '').trim() : '';
-        const tradeNameRaw    = iTradeName    >= 0 ? (fields[iTradeName]    || '').trim() : '';
-        const activityRaw     = iActivity     >= 0 ? (fields[iActivity]     || '').trim() : '';
-        const activity        = activityRaw.toUpperCase();
-
-        // Composite name: prefer trade name; fall back to business name
-        const displayName = tradeNameRaw || businessNameRaw;
-
-        if (!displayName) continue;
-
-        // Determine whether this row qualifies
-        const alwaysInclude = ALWAYS_INCLUDE_ACTIVITIES.has(activity);
-        const keywordMatch  = !alwaysInclude && nameMatchesKeyword(displayName);
-
-        if (!alwaysInclude && !keywordMatch) continue;
-
-        // Filter out false positives by name
-        if (nameIsExcluded(displayName)) continue;
-
-        totalMatched++;
-
-        const licenseNumber = iLicenseNumber >= 0 ? (fields[iLicenseNumber] || '').trim() : '';
-        const city          = iCity          >= 0 ? (fields[iCity]           || '').trim() : '';
-        const zip           = iZip           >= 0 ? (fields[iZip]            || '').trim() : '';
-
-        // dedupeKey: prefer license number, fall back to slugified name
-        const slugifiedName = displayName
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, '-')
-          .replace(/-+/g, '-')
-          .slice(0, 40);
-        const dedupeKey        = `PA-SECONDARY-${licenseNumber || slugifiedName}`;
-        const businessCategory = mapCategory(activity);
-        const isStateLicensed  = alwaysInclude;
-
-        console.log(
-          `[PennsylvaniaPhase2] Match #${totalMatched}: "${displayName}" (${city || 'PA'}) — activity: ${activity || 'keyword'} — dedupeKey: ${dedupeKey} — stateLicensed: ${isStateLicensed}`
-        );
-
-        const orgId = await getOrCreateScrapedOrganizer(
-          displayName,              // businessName
-          'PennsylvaniaPhase2',     // sourceName
-          city || 'Pennsylvania',   // city
-          'PA',                     // state
-          undefined,                // esnOrgId
-          undefined,                // googlePlaceId
-          undefined,                // foursquareVenueId
-          undefined,                // hereBusinessId
-          businessCategory,         // businessCategory
-          undefined,                // contactEmail
-          undefined,                // phone
-          undefined                 // website
-        );
-
-        if (orgId) {
-          totalUpserted++;
-        }
-      } catch (rowErr) {
-        console.error(`[PennsylvaniaPhase2] Error on row ${i}:`, rowErr);
+      if (!response.ok) {
+        console.error(`[PennsylvaniaPhase2] JSON fetch failed: HTTP ${response.status} at offset ${offset}`);
+        break;
       }
+
+      const rows = (await response.json()) as Record<string, string>[];
+
+      if (!Array.isArray(rows) || rows.length === 0) {
+        console.log(`[PennsylvaniaPhase2] No more records at offset ${offset}`);
+        break;
+      }
+
+      if (!columnsLogged) {
+        console.log('[PennsylvaniaPhase2] JSON columns found:', Object.keys(rows[0]).join(', '));
+        columnsLogged = true;
+      }
+
+      totalFetched += rows.length;
+
+      for (const row of rows) {
+        try {
+          // Column probe — PA Socrata JSON uses lowercase_underscore keys
+          const businessNameRaw =
+            row['name'] ?? row['business_name'] ??
+            row['businessname'] ?? row['entity_name'] ?? '';
+
+          const tradeNameRaw =
+            row['trade_name'] ?? row['tradename'] ?? row['dba'] ?? '';
+
+          const displayName = (tradeNameRaw || businessNameRaw).trim();
+          if (!displayName) continue;
+
+          const activityRaw =
+            row['business_activity'] ?? row['businessactivity'] ??
+            row['activity'] ?? row['license_type'] ??
+            row['type'] ?? '';
+          const activity = activityRaw.trim().toUpperCase();
+
+          // Substring match on activity field (PA compound codes like "AUCTIONEER LICENSE")
+          const alwaysInclude = [...ALWAYS_INCLUDE_ACTIVITIES].some((t) => activity.includes(t));
+          const keywordMatch  = !alwaysInclude && nameMatchesKeyword(displayName);
+
+          if (!alwaysInclude && !keywordMatch) continue;
+          if (nameIsExcluded(displayName)) continue;
+
+          totalMatched++;
+
+          const licenseNumber =
+            (row['license_number'] ?? row['licensenumber'] ??
+             row['registration_number'] ?? row['business_id'] ?? '').trim();
+          const city = (row['city'] ?? row['principal_city'] ?? '').trim();
+
+          const slugifiedName = displayName
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '-')
+            .replace(/-+/g, '-')
+            .slice(0, 40);
+          const dedupeKey      = `PA-SECONDARY-${licenseNumber || slugifiedName}`;
+          const businessCategory = mapCategory(activity);
+
+          console.log(`[PennsylvaniaPhase2] Matched: ${dedupeKey} — ${displayName} (${activity || 'keyword'})`);
+
+          const orgId = await getOrCreateScrapedOrganizer(
+            displayName,              // businessName
+            'PennsylvaniaPhase2',     // sourceName
+            city || 'Pennsylvania',   // city
+            'PA',                     // state
+            undefined,                // esnOrgId
+            undefined,                // googlePlaceId
+            undefined,                // foursquareVenueId
+            undefined,                // hereBusinessId
+            businessCategory,         // businessCategory
+            undefined,                // contactEmail
+            undefined,                // phone
+            undefined                 // website
+          );
+
+          if (orgId) totalUpserted++;
+        } catch (rowErr) {
+          console.error('[PennsylvaniaPhase2] Row error:', rowErr);
+        }
+      }
+
+      offset += rows.length;
+      if (rows.length < PAGE_SIZE) hasMore = false;
     }
 
     console.log(

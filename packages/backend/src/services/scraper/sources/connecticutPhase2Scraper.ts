@@ -196,8 +196,12 @@ export async function runConnecticutPhase2Scraper(): Promise<void> {
 
           if (!displayName) continue;
 
-          const alwaysInclude = ALWAYS_INCLUDE_ACTIVITIES.has(credentialType);
-          const broaderMatch  = BROADER_ACTIVITIES.has(credentialType) && nameMatchesKeyword(displayName);
+          // Use substring matching — CT credentialtype values are compound strings
+          // e.g. "AUCTIONEER - RESIDENT INDIVIDUAL", not just "AUCTIONEER"
+          const alwaysInclude = [...ALWAYS_INCLUDE_ACTIVITIES].some((t) => credentialType.includes(t));
+          const broaderMatch  = (
+            [...BROADER_ACTIVITIES].some((t) => credentialType.includes(t)) || !credentialType
+          ) && nameMatchesKeyword(displayName);
 
           if (!alwaysInclude && !broaderMatch) continue;
           if (nameIsExcluded(displayName)) continue;
