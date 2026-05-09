@@ -4,9 +4,25 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S701 — 50-State Scraper Audit + Tier 1 Phase 2 Rewrites (12 states) + 4 New Phase 2 Scrapers (COMPLETE)**
+**Latest: S702 — Phase 2 Scraper Fixes (CT/PA/VA/NJ/WA) + All 28 Phase 2 Scrapers Wired into internal.ts + VA General Scraper (COMPLETE — pushblock below)**
 
-S701 completed a full 50-state data source audit (new doc: `claude_docs/strategy/scraper-data-sources-50-states.md`), rewrote all existing narrow pawnbroker-only Phase 2 scrapers to use correct broad public datasets covering all 14 secondhand sale types, and created 4 new Tier 1 Phase 2 scrapers. Patrick already pushed: AK, CT, IL, NV, NY, OR, NJ (7 rewrites) in commits 79e93038+17e1a103. Remaining pushblock below.
+S702 fixed 5 broken Phase 2 scrapers, wired all 28 Phase 2 scrapers into Express routes (they had zero routes before — none could be triggered), and built a new Virginia general business scraper targeting Norfolk's Socrata dataset. Dashboard screenshot showed 32,110 scraped orgs, Geocoded=0%, only 7,884 scored of 32k, NY Phase 2 pulling construction/landscaping businesses (incidental secondhand dealer licenses). Next session: investigate geocoding=0%, GitHub Actions audit, scoring backfill for ~24k unscored orgs, outreach warming strategy.
+
+**Completed this session:**
+- **CT Phase 2 fixed** — Two bugs: (1) Column names probed with underscores but CT Socrata uses compact `credentialtype`/`name`/`credentialnumber` — fixed. (2) `ALWAYS_INCLUDE_ACTIVITIES.has()` exact match fails on compound CT values like `"AUCTIONEER - RESIDENT INDIVIDUAL"` — switched to `.some(t => credentialType.includes(t))` substring matching.
+- **PA Phase 2 fixed** — Was bulk CSV (`rows.csv?accessType=DOWNLOAD`) hitting Node.js ERR_STRING_TOO_LONG (OOM) on 536MB+ file. Rewrote to Socrata paginated JSON (`data.pa.gov/resource/xvd7-5r2c.json`, PAGE_SIZE=5000). Same pattern as CT.
+- **VA Phase 2 fixed** — Old DPOR URLs were `ListDownloads/Auctioneer.txt` (404). Replaced with confirmed numbered files at `Records%20and%20Documents/Regulant%20List/2905–2908__crnt.txt`. Removed `break` so all 4 files are processed (117 records from separate license types).
+- **NJ Phase 2 fixed** — Mangled quote characters (`'"''` → `'"'`) in parseCsvLine and extractText broke esbuild compilation. Both occurrences fixed.
+- **WA Phase 2 — still broken** — data.wa.gov dataset locked at both endpoints (JSON: 403 requires app token, CSV: 400). Scraper exists, registered, but returns 0. Needs DOL data request or alt source.
+- **ALL 28 Phase 2 scrapers wired into internal.ts** — Critical gap: all 28 Phase 2 scraper files existed but had zero Express routes. None could be triggered via workflow or API. All now registered as `POST /api/internal/scraper/run-[state]-phase2`, protected by `requireSecret`.
+- **virginiaGeneralPhase2Scraper.ts (NEW)** — Targets Norfolk Socrata (`data.norfolk.gov/resource/dpi6-sct5.json`, ~9,800 records). Note: data.virginia.gov does NOT host a statewide general business license Socrata API — the audit URL resolves to city-level mirrors only. DPOR auctioneers covered by existing `virginiaPhase2Scraper.ts`.
+- **Dashboard observations** — Geocoded=0% (map discovery broken), 32,110 total orgs but only 7,884 scored, NY additions include construction/renovation companies (technically licensed as secondhand dealers but poor quality leads), outreach still at zero (no sends yet).
+
+**Pending Patrick actions:**
+- Push this session's pushblock (below)
+- All S701 pending pushblocks still pending if not already pushed
+- Railway env vars still needed: `MAILERLITE_COLD_GROUP_ID`, `MAILERLITE_WARM_GROUP_ID`, `MAILERLITE_HOT_GROUP_ID`
+- S698 migration: `prisma migrate deploy` + `prisma generate` if not yet run
 
 **Completed this session:**
 - **50-state data source audit** — Full Tier 1–4 classification for all 50 states. Tier 1 (10 states): free API/CSV, build immediately. Tier 2 (11 states): moderate effort. Tier 3 (10 states): paid/FOIA. Tier 4 (18 states): city-by-city only. NAICS code filtering documented. FOIA targets identified.
@@ -840,7 +856,13 @@ Seeded 5 auction items on user2's production auction sale. QA run found two bugs
 
 ---
 
-## Recent Sessions (S701–S697)
+## Recent Sessions (S702–S697)
+
+### S702 — Phase 2 Scraper Fixes + internal.ts Wiring + VA General Scraper (COMPLETE — pushblock below)
+
+CT fixed (column name probe + substring matching). PA fixed (Socrata JSON pagination replaces OOM bulk CSV). VA DPOR fixed (correct numbered file URLs, all 4 processed). NJ syntax fixed (mangled quotes). WA still broken (dataset locked at both endpoints). BIGGEST fix: all 28 Phase 2 scrapers now have Express routes in internal.ts — they had zero routes before this session. Virginia general scraper added (Norfolk Socrata). Dashboard: 32,110 orgs, Geocoded=0%, ~24k unscored, NY quality issue (incidental secondhand dealer licenses). Next: geocoding investigation, GitHub Actions audit, scoring backfill, outreach warming strategy.
+
+---
 
 ### S701 — 50-State Scraper Audit + Tier 1 Phase 2 Rewrites (COMPLETE — pushblock below)
 
@@ -1111,31 +1133,65 @@ Full Google Maps Platform incident response and lockdown. Root cause: monthly Gi
 
 ---
 
-## Next Session — S702
+## Next Session — S703
 
-### Step 0 — S701 pushblock (run first)
+### Step 0 — Push S702 pushblock first
 
-See patrick-dashboard.md for the complete copy-paste pushblock.
+```powershell
+git add packages/backend/src/routes/internal.ts
+git add packages/backend/src/services/scraper/sources/connecticutPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/pennsylvaniaPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/virginiaPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/newjerseyPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/washingtonPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/virginiaGeneralPhase2Scraper.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat(scraper): wire all 28 Phase 2 scrapers into internal.ts, fix CT/PA/VA/NJ, add VA general (Norfolk) — S702"
+.\push.ps1
+```
 
-### Step 1 — Remaining Patrick manual actions
+### Step 1 — Investigate Geocoded = 0%
 
-- `git rm ".github/workflows/scrape-nc-licensing.yml"` (untracked junk from S691)
-- `git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"` (space-named duplicate)
+Dashboard shows 0% geocoding across 32,110 orgs. This kills map discovery. Use Chrome + Railway logs to determine:
+- Is the geocoding enrichment job even registered/running?
+- Is the geocoding service (what provider?) configured with a valid API key?
+- Check `packages/backend/src/jobs/` for any geocoding job and its cron schedule.
+- Check Railway env vars for `GEOCODING_API_KEY` or similar.
+- Fix or escalate with a plan.
+
+### Step 2 — GitHub Actions audit (Chrome + GitHub MCP)
+
+Open GitHub → Actions tab for `deseee/findasale`. Check:
+- Are the Phase 2 workflow YMLs present and enabled? (scrape-ct-phase2.yml etc. — many were created last sessions but may not all be pushed)
+- Are the Phase 1 licensing YMLs all present and enabled?
+- Are any workflows failing? What's the last run status for scraper workflows?
+- Do the workflow YML files call the correct `/api/internal/scraper/run-[state]-phase2` routes?
+- Fix any broken or missing workflows.
+
+### Step 3 — Scoring backfill for ~24k unscored orgs
+
+Dashboard: 32,110 total, only 7,884 scored. ~24k have no tier. Trigger the scoring backfill route:
+`POST /api/internal/scoring/run-backfill` with the internal secret header.
+Confirm all orgs get scored. Verify COLD/WARM/HOT distribution afterward.
+
+### Step 4 — Outreach warming period strategy
+
+0 emails sent so far. Email domain warming is required before bulk sends. Plan needed:
+- What warming schedule should we use? (typical: start at 20-50/day, double weekly)
+- Which segment gets the first sends? (HOT tier first — highest quality, most likely to engage)
+- What's the first email? (not a cold pitch — a "we found your business" warm intro)
+- Is `OUTREACH_ENABLED` set to `true` on Railway? If not, what's the gate?
+- Draft the warming period email sequence (Day 1 / Week 1 / Week 2 / Month 1) for the initial 50-100 organizers.
+- Check MailerLite setup: are the COLD/WARM/HOT groups created? Are the 3 env vars set?
+
+### Step 5 — Remaining Patrick manual actions
+
 - Add Railway env vars: `MAILERLITE_COLD_GROUP_ID`, `MAILERLITE_WARM_GROUP_ID`, `MAILERLITE_HOT_GROUP_ID`
-- Delete `GOOGLE_PLACES_API_KEY` from Railway env vars + GitHub Secrets (S695 lockdown)
-- Wire `emailDiscoveryJob` into cron scheduler + set `EMAIL_DISCOVERY_ENABLED=true`
+- Wire `emailDiscoveryJob` into cron scheduler + set `EMAIL_DISCOVERY_ENABLED=true` on Railway
 - Run S698 migration if not already done: `prisma migrate deploy` + `prisma generate`
-
-### Step 2 — QA (#174 Standard Auction bid flow)
-
-Reverse auction badge ✅ verified S700. Standard bid flow still unverified:
-- Login: user12@example.com / Seedy2025!
-- URL: finda.sale/sales/c5hykxxecanngwcrkvq92n1va
-- Bid $30 on Vintage Brass Compass ($25 start) — verify bid accepted, item shows RESERVED
-
-### Step 3 — Tier 2 Phase 2 scrapers (next dispatch wave)
-
-Remaining Tier 2 states not yet built: FL (DBPR CSV), SC (DCA XLS + LLR), MD (Judiciary HTML), OH (eLicense HTML), OK (OKDOCC PDF monthly), LA (OFI + LALB HTML), MS (Auctioneer Commission HTML). All sourced in `claude_docs/strategy/scraper-data-sources-50-states.md`.
+- `git rm ".github/workflows/scrape-nc-licensing.yml"` (junk from S691)
+- `git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"` (space-named duplicate)
 
 ---
 

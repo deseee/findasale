@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S701 Wrap
+# Patrick's Dashboard — S702 Wrap
 
 ---
 
@@ -8,28 +8,35 @@
 |------|--------|
 | Vercel build | ✅ GREEN |
 | Railway backend | ✅ GREEN |
-| Phase 2 scrapers (AK/CT/IL/NV/NY/OR/NJ) | ✅ PUSHED — all 14 sale types, correct data sources |
-| Phase 2 scrapers (DE/HI/PA/TX/VA/WA) | ⚠️ Built — pushblock below |
-| 48 Phase 1 licensing YMLs | ⚠️ Untracked — pushblock below |
-| 50-state audit doc | ⚠️ Untracked — pushblock below |
-| #174 Reverse auction badge | ✅ VERIFIED S700 |
-| #174 Standard auction bid flow | ⚠️ Still unverified |
-| MailerLite tier group wiring | ✅ Built — needs 3 Railway env vars |
+| Phase 2 scraper routes in internal.ts | ✅ ALL 28 NOW WIRED — was zero before this session |
+| CT Phase 2 scraper | ✅ FIXED — substring matching + compact column keys |
+| PA Phase 2 scraper | ✅ FIXED — rewrote bulk CSV → Socrata paginated JSON (OOM fix) |
+| VA Phase 2 scraper (DPOR) | ✅ FIXED — correct numbered file URLs, all 4 files, 117 records |
+| NJ Phase 2 scraper | ⚠️ FIXED syntax, returns 0 — MyLicense.com bot-protected |
+| WA Phase 2 scraper | ❌ Returns 0 — data.wa.gov locked (403/400) — needs DOL data request |
+| VA General Phase 2 (Norfolk) | ✅ NEW — Norfolk Socrata, ~9,800 business license records |
+| Geocoding coverage | ❌ 0% geocoded — root cause unknown, investigate S703 |
+| Org scoring coverage | ⚠️ 7,884 of 32,110 scored — 24k orgs unscored |
+| MailerLite tier group wiring | ⚠️ Built — needs 3 Railway env vars |
 | emailDiscoveryJob cron wiring | ⚠️ Not yet registered in cron |
 | S698 migration | ⚠️ May still need running |
-| Design brief pipeline | ✅ S699 COMPLETE |
+| Outreach sends | ❌ 0 sent — domain warming not started |
 
 ---
 
-## What Happened This Session (S701)
+## What Happened This Session (S702)
 
-**50-state data source audit** — Full Tier 1–4 classification for all 50 states written to `claude_docs/strategy/scraper-data-sources-50-states.md`. Identifies the best free public datasets (Socrata, ArcGIS, CSV bulk downloads) for all 14 secondhand sale types. FOIA targets documented. NAICS codes for filtering documented.
+**Critical gap fixed — Phase 2 scrapers were completely unreachable.** All 28 Phase 2 scraper files existed on disk but had ZERO Express routes registered in `internal.ts`. None could be triggered via API or GitHub Actions workflow. Agent registered all 28 in one pass.
 
-**All previous Phase 2 scrapers rewritten** — Every existing Phase 2 scraper was a narrow pawnbroker-only stub pointing at wrong data sources. All 8 rewrites cover all 14 secondhand sale types using the correct Socrata/ArcGIS sources from the 50-state audit. AK/CT/IL/NV/NY/OR/NJ already pushed. DE+HI below.
+**CT fix (0 matches → should match).** Two bugs: column names were being probed in verbose form (`"Credential Type"`) but Socrata returns compact keys (`"credentialtype"`). And credential type values like `"AUCTIONEER - RESIDENT INDIVIDUAL"` failed exact Set lookup — fixed with `.some(t => credentialType.includes(t))` substring matching.
 
-**4 new Tier 1 Phase 2 scrapers** — PA (data.pa.gov), TX (data.texas.gov TDLR), VA (DPOR Regulant Lists three-source chain), WA (data.wa.gov Business Lookup). All with GitHub Actions workflows.
+**PA fix (OOM crash → paginated).** Was downloading the full bulk CSV (potentially millions of rows) into memory — Node.js ERR_STRING_TOO_LONG. Rewrote to Socrata paginated JSON: 5,000 rows per page, while loop until empty page.
 
-**Roadmap updated** — #393 expanded + #395, #396, #397 added for Tier 1 and Tier 2 scraper waves.
+**VA DPOR fix (404 → 117 records).** Was requesting named files that don't exist. Correct URLs are numbered: `2905__crnt.txt`, `2906__crnt.txt`, `2907__crnt.txt`, `2908__crnt.txt`. Also had a `break` in the loop that stopped after the first file — removed, now processes all 4.
+
+**VA General Phase 2 added (new).** Virginia has no statewide Socrata API. Used Norfolk's `data.norfolk.gov/resource/dpi6-sct5.json` (~9,800 business license records) as the accessible VA general dataset. Covers auctioneers, pawnbrokers, secondhand dealers, consignment, precious metals.
+
+**Dashboard audit from screenshot.** 32,110 total orgs, only 7,884 scored, geocoding at 0% (map discovery broken), NY Phase 2 pulling construction/renovation companies that technically hold NYC secondhand dealer licenses but are low-quality leads. 0 outreach sends — warming period not started.
 
 ---
 
@@ -37,112 +44,34 @@
 
 ### Push Block — Run This Now
 
-Three commits for cleanliness. Run them in order:
-
-**Commit 1 — DE+HI rewrites + saleSeeker cleanup:**
 ```powershell
-git add packages/backend/src/services/scraper/sources/delawarePhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/hawaiiPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/saleSeeker.ts
-git commit -m "feat(scraper): rewrite DE+HI Phase 2 scrapers — all 14 sale types, correct Socrata sources (S701)"
-```
-
-**Commit 2 — New Tier 1 Phase 2 scrapers (PA/TX/VA/WA) + 50-state audit:**
-```powershell
+git add packages/backend/src/routes/internal.ts
+git add packages/backend/src/services/scraper/sources/connecticutPhase2Scraper.ts
 git add packages/backend/src/services/scraper/sources/pennsylvaniaPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/texasPhase2Scraper.ts
 git add packages/backend/src/services/scraper/sources/virginiaPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/newjerseyPhase2Scraper.ts
 git add packages/backend/src/services/scraper/sources/washingtonPhase2Scraper.ts
-git add .github/workflows/scrape-pa-phase2.yml
-git add .github/workflows/scrape-tx-phase2.yml
-git add .github/workflows/scrape-va-phase2.yml
-git add .github/workflows/scrape-wa-phase2.yml
-git add claude_docs/strategy/scraper-data-sources-50-states.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "feat(scraper): add PA/TX/VA/WA Phase 2 scrapers (all 14 sale types) + 50-state data source audit (S701)"
-```
-
-**Commit 3 — All 48 Phase 1 licensing workflows (S690/S691 untracked):**
-```powershell
-git add .github/workflows/scrape-alabama-licensing.yml
-git add .github/workflows/scrape-alaska-licensing.yml
-git add .github/workflows/scrape-arizona-licensing.yml
-git add .github/workflows/scrape-arkansas-licensing.yml
-git add .github/workflows/scrape-california-licensing.yml
-git add .github/workflows/scrape-colorado-licensing.yml
-git add .github/workflows/scrape-connecticut-licensing.yml
-git add .github/workflows/scrape-delaware-licensing.yml
-git add .github/workflows/scrape-florida-licensing.yml
-git add .github/workflows/scrape-georgia-licensing.yml
-git add .github/workflows/scrape-hawaii-licensing.yml
-git add .github/workflows/scrape-idaho-licensing.yml
-git add .github/workflows/scrape-illinois-licensing.yml
-git add .github/workflows/scrape-iowa-licensing.yml
-git add .github/workflows/scrape-kansas-licensing.yml
-git add .github/workflows/scrape-kentucky-licensing.yml
-git add .github/workflows/scrape-louisiana-licensing.yml
-git add .github/workflows/scrape-maine-licensing.yml
-git add .github/workflows/scrape-maryland-licensing.yml
-git add .github/workflows/scrape-massachusetts-licensing.yml
-git add .github/workflows/scrape-michigan-licensing.yml
-git add .github/workflows/scrape-minnesota-licensing.yml
-git add .github/workflows/scrape-mississippi-licensing.yml
-git add .github/workflows/scrape-missouri-licensing.yml
-git add .github/workflows/scrape-montana-licensing.yml
-git add .github/workflows/scrape-nebraska-licensing.yml
-git add .github/workflows/scrape-nevada-licensing.yml
-git add .github/workflows/scrape-new-hampshire-licensing.yml
-git add .github/workflows/scrape-new-jersey-licensing.yml
-git add .github/workflows/scrape-new-mexico-licensing.yml
-git add .github/workflows/scrape-new-york-licensing.yml
-git add .github/workflows/scrape-north-dakota-licensing.yml
-git add .github/workflows/scrape-ohio-licensing.yml
-git add .github/workflows/scrape-oklahoma-licensing.yml
-git add .github/workflows/scrape-oregon-licensing.yml
-git add .github/workflows/scrape-pennsylvania-licensing.yml
-git add .github/workflows/scrape-rhode-island-licensing.yml
-git add .github/workflows/scrape-south-carolina-licensing.yml
-git add .github/workflows/scrape-south-dakota-licensing.yml
-git add .github/workflows/scrape-tennessee-licensing.yml
-git add .github/workflows/scrape-texas-licensing.yml
-git add .github/workflows/scrape-utah-licensing.yml
-git add .github/workflows/scrape-vermont-licensing.yml
-git add .github/workflows/scrape-virginia-licensing.yml
-git add .github/workflows/scrape-west-virginia-licensing.yml
-git add .github/workflows/scrape-wisconsin-licensing.yml
-git add .github/workflows/scrape-wyoming-licensing.yml
+git add packages/backend/src/services/scraper/sources/virginiaGeneralPhase2Scraper.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat(workflows): add 48 Phase 1 licensing YMLs (all 50 states) + S701 wrap docs"
+git commit -m "feat(scraper): wire all 28 Phase 2 scrapers into internal.ts, fix CT/PA/VA/NJ, add VA general (Norfolk) — S702"
 .\push.ps1
 ```
 
-**Do NOT add these (junk — leave untracked):**
-- `"packages/backend/C:\Users\desee\AppData\Local\Temp/"` — junk path, ignore
-- `"packages/frontend/C:\Users\desee\AppData\Local\Temp/"` — junk path, ignore
-- `packages/frontend/public/organizer-video-ad-fas1.html` — evaluate separately
-- `"packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"` — space-named duplicate, run `git rm` on it instead
-
-### Manual Cleanup (one-time)
-
-```powershell
-git rm ".github/workflows/scrape-nc-licensing.yml"
-git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"
-git commit -m "chore: remove stale scrape-nc-licensing.yml and space-named WV duplicate"
-.\push.ps1
-```
-
-### Carry-Forward (still pending)
+### Carry-Forward (still pending from S701)
 
 - **Railway env vars**: `MAILERLITE_COLD_GROUP_ID`, `MAILERLITE_WARM_GROUP_ID`, `MAILERLITE_HOT_GROUP_ID`
 - **S698 migration**: Run `prisma migrate deploy` + `prisma generate` if not done
 - **Delete GOOGLE_PLACES_API_KEY** from Railway vars + GitHub Secrets (S695 lockdown)
 - **Wire emailDiscoveryJob** into cron + set `EMAIL_DISCOVERY_ENABLED=true`
+- **Junk cleanup** (from S701 pushblock): `git rm ".github/workflows/scrape-nc-licensing.yml"` and `git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"`
 
 ---
 
-## Next Session (S702) — Top Priorities
+## Next Session (S703) — Top Priorities
 
-1. **#174 Standard auction bid flow** — user12@example.com / Seedy2025! → `finda.sale/sales/c5hykxxecanngwcrkvq92n1va` → bid $30 on Vintage Brass Compass.
-2. **Tier 2 Phase 2 scrapers** — FL (DBPR CSV), SC (DCA XLS), MD (Judiciary HTML), OH (eLicense), OK (OKDOCC PDF), LA (OFI+LALB), MS (Auctioneer Commission). All sources in `claude_docs/strategy/scraper-data-sources-50-states.md`.
-3. **Design → Dev: sale detail page** — highest-traffic public page. Load `session-2-sale-detail-shopper-onboarding.md` and dispatch.
+1. **Geocoding=0% root cause** — Why is nothing geocoding? Check the geocoding service, env vars, cron job registration. This is breaking map-based discovery entirely.
+2. **GitHub Actions audit** — Use Chrome + GitHub MCP to inspect all scraper workflows: are they enabled? firing on schedule? returning success? Last run timestamps.
+3. **Scoring backfill** — 24k orgs unscored. Investigate why and dispatch scoring job or manual trigger.
+4. **Outreach warming strategy** — Draft the first warming email wave. Identify HOT tier orgs (highest score). Target 20–50 sends/day starting week 1. MailerLite group IDs needed first (Railway env vars above).
+5. **NJ/WA Phase 2 escalation** — Both return 0. NJ: request bulk file from NJ Consumer Affairs. WA: request DOL dataset or find alternative source.
