@@ -1,135 +1,216 @@
 /**
- * Delaware Office of the State Bank Commissioner — Pawnbroker License Scraper (Phase 2)
- * Scrapes licensed pawnbrokers from Delaware Banking monthly Non-Depository Institutions PDF list
- * Source: https://banking.delaware.gov/
+ * Delaware State Police Professional Licensing Section — Pawnbroker License Scraper (Phase 2)
+ * Scrapes licensed pawnbrokers from the Delaware Open Data Portal (Socrata dataset 5zy2-grhr)
+ * Source: https://data.delaware.gov/api/views/5zy2-grhr/rows.csv?accessType=DOWNLOAD
  * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data
  *
- * NOTE: Delaware publishes a monthly PDF of non-depository licensees.
- * PDF URL discovery is attempted; if not found or parsing too complex, stub returns early.
+ * The Delaware Open Data Portal publishes the full state business license database as a public CSV.
+ * We filter rows where "Business Activity" contains "PAWN" (case-insensitive).
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
 import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
+import { getOrCreateScrapedOrganizer } from '../index';
 
-const DE_BANKING_URL = 'https://banking.delaware.gov/';
-const DE_LICENSEE_LIST_URL = 'https://banking.delaware.gov/divisions/non-depository-institutions/licensed-non-depository-institutions/';
+const DE_OPEN_DATA_CSV_URL =
+  'https://data.delaware.gov/api/views/5zy2-grhr/rows.csv?accessType=DOWNLOAD';
+const DE_OPEN_DATA_DOMAIN = 'data.delaware.gov';
 
 /**
- * Scrape Delaware pawnbroker licenses from DE Office of State Bank Commissioner.
- * Attempts to fetch the non-depository institutions PDF and parse pawnbroker entries.
+ * Parse a single CSV line respecting quoted fields (commas inside quotes are ignored).
+ */
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        // Escaped quote inside a quoted field
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
+/**
+ * Scrape Delaware pawnbroker licenses from the DE Open Data Portal CSV.
  */
 export async function runDelawarePhase2Scraper(): Promise<void> {
-  const domain = new URL(DE_BANKING_URL).hostname;
-  let totalRecords = 0;
-  let createdOrganizers = 0;
+  let totalFetched = 0;
+  let totalPawn = 0;
+  let totalUpserted = 0;
 
-  console.log('[Delaware Phase2] Starting pawnbroker license scraper');
+  console.log('[Delaware Phase2] Starting pawnbroker license scraper via DE Open Data Portal');
 
   try {
-    // Step 1: Fetch the licensee list page to find the PDF link
-    await defaultRateLimiter.waitBeforeRequest(domain);
+    await defaultRateLimiter.waitBeforeRequest(DE_OPEN_DATA_DOMAIN);
 
-    const pageResponse = await fetch(DE_LICENSEE_LIST_URL, {
+    const response = await fetch(DE_OPEN_DATA_CSV_URL, {
       method: 'GET',
       headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
+        Accept: 'text/csv,*/*',
       },
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(60000),
     });
 
-    if (!pageResponse.ok) {
-      console.warn(
-        `[Delaware Phase2] Portal blocked — TODO: Playwright/headless browser. HTTP ${pageResponse.status} from ${DE_LICENSEE_LIST_URL}`
+    if (!response.ok) {
+      console.error(
+        `[Delaware Phase2] CSV fetch failed: HTTP ${response.status} from ${DE_OPEN_DATA_CSV_URL}`
       );
       return;
     }
 
-    const html = await pageResponse.text();
+    const csvText = await response.text();
+    const lines = csvText.split('\n');
 
-    // Step 2: Find PDF link for the pawnbroker / non-depository institutions list
-    const pdfLinkMatch = html.match(/href="([^"]*\.pdf[^"]*)"/gi);
+    if (lines.length < 2) {
+      console.warn('[Delaware Phase2] CSV response appears empty or malformed');
+      return;
+    }
 
-    if (!pdfLinkMatch || pdfLinkMatch.length === 0) {
-      console.warn(
-        '[Delaware Phase2] Portal blocked — TODO: Playwright/headless browser. No PDF links found on licensee page — page may require JS rendering'
+    // Parse header row to build column index map
+    const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, ' ').trim());
+
+    const colIndex = (name: string): number => headers.indexOf(name);
+
+    const iBusinessName = colIndex('business name');
+    const iTradeName = colIndex('trade name');
+    const iBusinessActivity = colIndex('business activity');
+    const iValidTo = colIndex('current license valid to');
+    const iAddress1 = colIndex('address 1');
+    const iCity = colIndex('city');
+    const iState = colIndex('state');
+    const iZip = colIndex('zip');
+    const iLicenseNumber = colIndex('license number');
+
+    if (iBusinessActivity === -1 || iBusinessName === -1) {
+      console.error(
+        '[Delaware Phase2] Could not find required columns in CSV header. Headers found:',
+        headers.join(', ')
       );
       return;
     }
 
-    // Look for pawnbroker-related PDF links
-    const pawnPdfLinks = pdfLinkMatch.filter(
-      (link) =>
-        link.toLowerCase().includes('pawn') ||
-        link.toLowerCase().includes('non-dep') ||
-        link.toLowerCase().includes('nondep') ||
-        link.toLowerCase().includes('licensee')
-    );
+    totalFetched = lines.length - 1;
+    console.log(`[Delaware Phase2] CSV fetched — ${totalFetched} rows (excluding header)`);
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const fields = parseCsvLine(line);
+
+      const businessActivity = iBusinessActivity >= 0 ? (fields[iBusinessActivity] || '') : '';
+      if (!businessActivity.toUpperCase().includes('PAWN')) continue;
+
+      totalPawn++;
+
+      const businessNameRaw = iBusinessName >= 0 ? (fields[iBusinessName] || '').trim() : '';
+      const tradeNameRaw = iTradeName >= 0 ? (fields[iTradeName] || '').trim() : '';
+      const businessName = tradeNameRaw || businessNameRaw;
+      const licenseNumber = iLicenseNumber >= 0 ? (fields[iLicenseNumber] || '').trim() : '';
+      const address1 = iAddress1 >= 0 ? (fields[iAddress1] || '').trim() : '';
+      const city = iCity >= 0 ? (fields[iCity] || '').trim() : '';
+      const state = iState >= 0 ? (fields[iState] || '').trim() : 'DE';
+      const zip = iZip >= 0 ? (fields[iZip] || '').trim() : '';
+      const validTo = iValidTo >= 0 ? (fields[iValidTo] || '').trim() : '';
+
+      if (!businessName) continue;
+
+      const address = [address1, city, `${state} ${zip}`.trim()].filter(Boolean).join(', ');
+      const dedupeKey = `DE-PAWN-${licenseNumber || businessName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+
+      // Parse license expiry date gracefully
+      let licenseExpiry: Date | null = null;
+      if (validTo) {
+        const parsed = new Date(validTo);
+        if (!isNaN(parsed.getTime())) {
+          licenseExpiry = parsed;
+        }
+      }
+
+      console.log(
+        `[Delaware Phase2] Processing: ${businessName} (License ${licenseNumber || 'N/A'}) in ${city}, DE`
+      );
+
+      try {
+        // Check for existing record by dedupeKey first
+        const existing = await prisma.organizer.findFirst({
+          where: { dedupeKey },
+          select: { id: true },
+        });
+
+        if (existing) {
+          await prisma.organizer.update({
+            where: { id: existing.id },
+            data: {
+              licenseNumber: licenseNumber || undefined,
+              licenseState: 'DE',
+              isStateLicensed: true,
+              directoryMostRecentSource: 'DelawarePhase2',
+              directoryMostRecentAt: new Date(),
+            },
+          });
+          totalUpserted++;
+        } else {
+          const organizerId = await getOrCreateScrapedOrganizer(
+            businessName,
+            'DelawarePhase2',
+            city || 'Delaware',
+            'DE',
+            undefined, // esnOrgId
+            undefined, // googlePlaceId
+            undefined, // foursquareVenueId
+            undefined, // hereBusinessId
+            'PAWN_SHOP'
+          );
+
+          if (organizerId) {
+            await prisma.organizer.update({
+              where: { id: organizerId },
+              data: {
+                address: address || undefined,
+                licenseNumber: licenseNumber || undefined,
+                licenseState: 'DE',
+                isStateLicensed: true,
+                isUnmanagedListing: true,
+                dedupeKey,
+                directoryMostRecentSource: 'DelawarePhase2',
+                directoryMostRecentAt: new Date(),
+              },
+            });
+            totalUpserted++;
+          }
+        }
+
+        if (totalPawn % 25 === 0) {
+          console.log(
+            `[Delaware Phase2] Progress: ${totalPawn} pawn rows processed, ${totalUpserted} upserted`
+          );
+        }
+      } catch (err) {
+        console.error(`[Delaware Phase2] Error processing ${businessName}:`, err);
+      }
+    }
 
     console.log(
-      `[Delaware Phase2] Found ${pdfLinkMatch.length} PDF links, ${pawnPdfLinks.length} potentially pawnbroker-related`
+      `[Delaware Phase2] Completed — ${totalFetched} rows fetched, ${totalPawn} pawn matches, ${totalUpserted} upserted`
     );
-
-    if (pawnPdfLinks.length === 0) {
-      console.warn(
-        '[Delaware Phase2] Portal blocked — TODO: Playwright/headless browser. Could not identify pawnbroker PDF — manual URL inspection required'
-      );
-      return;
-    }
-
-    // Extract the href URL from the first matching link
-    const hrefMatch = pawnPdfLinks[0].match(/href="([^"]+)"/i);
-    if (!hrefMatch) {
-      console.warn('[Delaware Phase2] Portal blocked — TODO: Playwright/headless browser. Could not parse PDF URL');
-      return;
-    }
-
-    let pdfUrl = hrefMatch[1];
-    if (pdfUrl.startsWith('/')) {
-      pdfUrl = `https://banking.delaware.gov${pdfUrl}`;
-    }
-
-    console.log(`[Delaware Phase2] Attempting to fetch PDF: ${pdfUrl}`);
-
-    // Step 3: Fetch the PDF — binary fetch for text parsing
-    await defaultRateLimiter.waitBeforeRequest(domain);
-
-    const pdfResponse = await fetch(pdfUrl, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'application/pdf,*/*',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!pdfResponse.ok) {
-      console.warn(`[Delaware Phase2] Portal blocked — TODO: Playwright/headless browser. PDF fetch failed: HTTP ${pdfResponse.status}`);
-      return;
-    }
-
-    const contentType = pdfResponse.headers.get('content-type') || '';
-    if (!contentType.includes('pdf')) {
-      console.warn(
-        `[Delaware Phase2] Portal blocked — TODO: Playwright/headless browser. Unexpected content type: ${contentType}. PDF binary parsing requires pdf-parse library.`
-      );
-      return;
-    }
-
-    // PDF binary parsing requires a library like pdf-parse which is not available in this runtime.
-    // TODO: Install pdf-parse, extract text, then parse pawnbroker lines matching pattern:
-    //   "PAWNBROKER" license type with business name, address, city fields
-    console.warn(
-      '[Delaware Phase2] Portal blocked — TODO: Playwright/headless browser. PDF found but binary parsing requires pdf-parse library. Install pdf-parse and implement text extraction.'
-    );
-    return;
   } catch (err) {
-    console.warn('[Delaware Phase2] Portal blocked — TODO: Playwright/headless browser', err);
+    console.error('[Delaware Phase2] Scraper error:', err);
     return;
   }
 }
