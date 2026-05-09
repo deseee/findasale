@@ -41,6 +41,8 @@ export const ingestFromGitHubActions = async (req: Request, res: Response): Prom
     res.json({ stats });
   } catch (error) {
     console.error('[internalScraperController] Ingest error:', error);
-    res.status(500).json({ message: 'Ingest failed', error: error instanceof Error ? error.message : String(error) });
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Ingest failed', error: error instanceof Error ? error.message : String(error) });
+    }
   }
 };
