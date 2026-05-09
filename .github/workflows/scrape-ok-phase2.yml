@@ -32,17 +32,18 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
-        run: npx tsx -e "
-          import { runOklahomaphase2Scraper } from './src/services/scraper/sources/oklahomaphase2Scraper';
-          try {
-            await runOklahomaphase2Scraper();
-            console.log('✓ Oklahoma Phase 2 scraper completed successfully');
-            process.exit(0);
-          } catch (err) {
-            console.error('✗ Oklahoma Phase 2 scraper failed:', err);
-            process.exit(1);
-          }
-        "
+        run: |
+          npx tsx -e '
+            import { runOklahomaphase2Scraper } from "./src/services/scraper/sources/oklahomaphase2Scraper";
+            try {
+              await runOklahomaphase2Scraper();
+              console.log("Oklahoma Phase 2 scraper completed successfully");
+              process.exit(0);
+            } catch (err) {
+              console.error("Oklahoma Phase 2 scraper failed:", err);
+              process.exit(1);
+            }
+          '
 
       - name: Notify on failure
         if: failure()

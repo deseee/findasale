@@ -32,17 +32,18 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
-        run: npx tsx -e "
-          import { runNewJerseyPhase2Scraper } from './src/services/scraper/sources/newjerseyPhase2Scraper';
-          try {
-            await runNewJerseyPhase2Scraper();
-            console.log('✓ New Jersey Phase 2 scraper completed successfully');
-            process.exit(0);
-          } catch (err) {
-            console.error('✗ New Jersey Phase 2 scraper failed:', err);
-            process.exit(1);
-          }
-        "
+        run: |
+          npx tsx -e '
+            import { runNewJerseyPhase2Scraper } from "./src/services/scraper/sources/newjerseyPhase2Scraper";
+            try {
+              await runNewJerseyPhase2Scraper();
+              console.log("New Jersey Phase 2 scraper completed successfully");
+              process.exit(0);
+            } catch (err) {
+              console.error("New Jersey Phase 2 scraper failed:", err);
+              process.exit(1);
+            }
+          '
 
       - name: Notify on failure
         if: failure()
