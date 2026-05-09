@@ -22,7 +22,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v3
         with:
           version: 8
 
@@ -44,7 +44,7 @@ jobs:
         run: |
           npx tsx -e '
             import { runVirginiaPhase2Scraper } from "./src/services/scraper/sources/virginiaPhase2Scraper";
-            try {
+            (async () => { try {
               await runVirginiaPhase2Scraper();
               console.log("Virginia Phase 2 scraper completed successfully");
               process.exit(0);
@@ -52,16 +52,5 @@ jobs:
               console.error("Virginia Phase 2 scraper failed:", err);
               process.exit(1);
             }
+            })();
           '
-
-      - name: Notify on failure
-        if: failure()
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: 1,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: 'Virginia Phase 2 DPOR scraper failed. Check workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-            })

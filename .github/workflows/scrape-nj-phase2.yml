@@ -22,15 +22,17 @@ jobs:
           cache: 'pnpm'
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-
       - name: Generate Prisma client
         run: npx prisma generate
         working-directory: packages/database
+
       - name: Run New Jersey Phase 2 Scraper
         working-directory: packages/backend
         env:
@@ -49,14 +51,3 @@ jobs:
             }
             })();
           '
-      - name: Notify on failure
-        if: failure()
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: 1,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '⚠️ New Jersey Phase 2 pawnbroker scraper failed. Check workflow logs.'
-            })
