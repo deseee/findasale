@@ -1164,11 +1164,11 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
       select: {
         id: true,
         businessName: true,
-        city: true,
+        address: true,
         leadTier: true,
         leadScore: true,
         scrapedEmail: true,
-        sourceName: true,
+        directoryMostRecentSource: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
