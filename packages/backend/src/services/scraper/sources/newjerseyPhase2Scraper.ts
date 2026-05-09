@@ -152,7 +152,7 @@ function extractText(html: string): string {
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"''')
+    .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .trim();
 }
