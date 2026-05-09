@@ -29,6 +29,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: packages/database
       - name: Run Delaware Phase 2 Scraper
         working-directory: packages/backend
         env:
