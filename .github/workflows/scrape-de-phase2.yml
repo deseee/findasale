@@ -37,7 +37,7 @@ jobs:
         run: |
           npx tsx -e '
             import { runDelawarePhase2Scraper } from "./src/services/scraper/sources/delawarePhase2Scraper";
-            try {
+            (async () => { try {
               await runDelawarePhase2Scraper();
               console.log("Delaware Phase 2 scraper completed successfully");
               process.exit(0);
@@ -45,4 +45,5 @@ jobs:
               console.error("Delaware Phase 2 scraper failed:", err);
               process.exit(1);
             }
+            })();
           '

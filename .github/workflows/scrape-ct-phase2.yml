@@ -38,7 +38,7 @@ jobs:
         run: |
           npx tsx -e '
             import { runConnecticutPhase2Scraper } from "./src/services/scraper/sources/connecticutPhase2Scraper";
-            try {
+            (async () => { try {
               await runConnecticutPhase2Scraper();
               console.log("Connecticut Phase 2 scraper completed successfully");
               process.exit(0);
@@ -46,4 +46,5 @@ jobs:
               console.error("Connecticut Phase 2 scraper failed:", err);
               process.exit(1);
             }
+            })();
           '

@@ -38,7 +38,7 @@ jobs:
         run: |
           npx tsx -e '
             import { runHawaiiPhase2Scraper } from "./src/services/scraper/sources/hawaiiPhase2Scraper";
-            try {
+            (async () => { try {
               await runHawaiiPhase2Scraper();
               console.log("Hawaii Phase 2 scraper completed successfully");
               process.exit(0);
@@ -46,4 +46,5 @@ jobs:
               console.error("Hawaii Phase 2 scraper failed:", err);
               process.exit(1);
             }
+            })();
           '

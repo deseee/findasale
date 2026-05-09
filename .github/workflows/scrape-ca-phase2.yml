@@ -42,7 +42,7 @@ jobs:
         run: |
           npx tsx -e '
             import { runCaliforniaPhase2Scraper } from "./src/services/scraper/sources/californiaPhase2Scraper";
-            try {
+            (async () => { try {
               await runCaliforniaPhase2Scraper();
               console.log("California Phase 2 scraper completed successfully");
               process.exit(0);
@@ -50,4 +50,5 @@ jobs:
               console.error("California Phase 2 scraper failed:", err);
               process.exit(1);
             }
+            })();
           '

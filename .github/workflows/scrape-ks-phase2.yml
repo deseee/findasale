@@ -37,7 +37,7 @@ jobs:
         run: |
           npx tsx -e '
             import { runKansasPhase2Scraper } from "./src/services/scraper/sources/kansasPhase2Scraper";
-            try {
+            (async () => { try {
               await runKansasPhase2Scraper();
               console.log("Kansas Phase 2 scraper completed successfully");
               process.exit(0);
@@ -45,4 +45,5 @@ jobs:
               console.error("Kansas Phase 2 scraper failed:", err);
               process.exit(1);
             }
+            })();
           '

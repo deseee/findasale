@@ -37,7 +37,7 @@ jobs:
         run: |
           npx tsx -e '
             import { runRhodeIslandPhase2Scraper } from "./src/services/scraper/sources/rhodeislandPhase2Scraper";
-            try {
+            (async () => { try {
               await runRhodeIslandPhase2Scraper();
               console.log("Rhode Island Phase 2 scraper completed successfully");
               process.exit(0);
@@ -45,4 +45,5 @@ jobs:
               console.error("Rhode Island Phase 2 scraper failed:", err);
               process.exit(1);
             }
+            })();
           '
