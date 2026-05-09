@@ -70,6 +70,35 @@ import { runUtahLicensingScraper } from '../services/scraper/sources/utahLicensi
 import { runOsmScraper } from '../services/scraper/osmScraper';
 import { scrapeTheSaleSeker, DEFAULT_METROS } from '../services/scraper/sources/saleSeeker';
 import { runAuctionZipScraper } from '../services/scraper/sources/auctionZipScraper';
+import { runAlaskaPhase2Scraper } from '../services/scraper/sources/alaskaPhase2Scraper';
+import { runArizonaPhase2Scraper } from '../services/scraper/sources/arizonaPhase2Scraper';
+import { runCaliforniaPhase2Scraper } from '../services/scraper/sources/californiaPhase2Scraper';
+import { runColoradoPhase2Scraper } from '../services/scraper/sources/coloradoPhase2Scraper';
+import { runConnecticutPhase2Scraper } from '../services/scraper/sources/connecticutPhase2Scraper';
+import { runDelawarePhase2Scraper } from '../services/scraper/sources/delawarePhase2Scraper';
+import { runHawaiiPhase2Scraper } from '../services/scraper/sources/hawaiiPhase2Scraper';
+import { runIdahoPhase2Scraper } from '../services/scraper/sources/idahoPhase2Scraper';
+import { runIllinoisPhase2Scraper } from '../services/scraper/sources/illinoisPhase2Scraper';
+import { runKansasPhase2Scraper } from '../services/scraper/sources/kansasPhase2Scraper';
+import { runMichiganPhase2Scraper } from '../services/scraper/sources/michiganPhase2Scraper';
+import { runMinnesotaPhase2Scraper } from '../services/scraper/sources/minnesotaPhase2Scraper';
+import { runMissouriPhase2Scraper } from '../services/scraper/sources/missouriPhase2Scraper';
+import { runMontanaPhase2Scraper } from '../services/scraper/sources/montanaPhase2Scraper';
+import { runNebraskaPhase2Scraper } from '../services/scraper/sources/nebraskaPhase2Scraper';
+import { runNevadaPhase2Scraper } from '../services/scraper/sources/nevadaPhase2Scraper';
+import { runNewJerseyPhase2Scraper } from '../services/scraper/sources/newjerseyPhase2Scraper';
+import { runNewMexicoPhase2Scraper } from '../services/scraper/sources/newmexicoPhase2Scraper';
+import { runNewYorkPhase2Scraper } from '../services/scraper/sources/newyorkPhase2Scraper';
+import { runOklahomaphase2Scraper } from '../services/scraper/sources/oklahomaphase2Scraper';
+import { runOregonPhase2Scraper } from '../services/scraper/sources/oregonPhase2Scraper';
+import { runPennsylvaniaPhase2Scraper } from '../services/scraper/sources/pennsylvaniaPhase2Scraper';
+import { runRhodeIslandPhase2Scraper } from '../services/scraper/sources/rhodeislandPhase2Scraper';
+import { runTexasPhase2Scraper } from '../services/scraper/sources/texasPhase2Scraper';
+import { runUtahPhase2Scraper } from '../services/scraper/sources/utahPhase2Scraper';
+import { runVirginiaPhase2Scraper } from '../services/scraper/sources/virginiaPhase2Scraper';
+import { runWashingtonPhase2Scraper } from '../services/scraper/sources/washingtonPhase2Scraper';
+import { runWyomingPhase2Scraper } from '../services/scraper/sources/wyomingPhase2Scraper';
+import { runVirginiaGeneralPhase2Scraper } from '../services/scraper/sources/virginiaGeneralPhase2Scraper';
 
 const router = express.Router();
 
@@ -747,6 +776,325 @@ router.post('/enrichment/run-website-backfill', requireSecret, async (req: expre
     runWebsiteEnrichmentBackfill().catch(err => console.error('[WebsiteEnrichment] Backfill route error:', err));
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /api/internal/scraper/run-alaska-phase2 — Alaska Phase 2 business registry scraper
+router.post('/scraper/run-alaska-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runAlaskaPhase2Scraper();
+    res.json({ success: true, message: 'Alaska Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[AlaskaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-arizona-phase2 — Arizona Phase 2 business registry scraper
+router.post('/scraper/run-arizona-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runArizonaPhase2Scraper();
+    res.json({ success: true, message: 'Arizona Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[ArizonaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-california-phase2 — California Phase 2 business registry scraper
+router.post('/scraper/run-california-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runCaliforniaPhase2Scraper();
+    res.json({ success: true, message: 'California Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[CaliforniaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-colorado-phase2 — Colorado Phase 2 business registry scraper
+router.post('/scraper/run-colorado-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runColoradoPhase2Scraper();
+    res.json({ success: true, message: 'Colorado Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[ColoradoPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-connecticut-phase2 — Connecticut Phase 2 business registry scraper
+router.post('/scraper/run-connecticut-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runConnecticutPhase2Scraper();
+    res.json({ success: true, message: 'Connecticut Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[ConnecticutPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-delaware-phase2 — Delaware Phase 2 business registry scraper
+router.post('/scraper/run-delaware-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runDelawarePhase2Scraper();
+    res.json({ success: true, message: 'Delaware Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[DelawarePhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-hawaii-phase2 — Hawaii Phase 2 business registry scraper
+router.post('/scraper/run-hawaii-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runHawaiiPhase2Scraper();
+    res.json({ success: true, message: 'Hawaii Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[HawaiiPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-idaho-phase2 — Idaho Phase 2 business registry scraper
+router.post('/scraper/run-idaho-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runIdahoPhase2Scraper();
+    res.json({ success: true, message: 'Idaho Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[IdahoPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-illinois-phase2 — Illinois Phase 2 business registry scraper
+router.post('/scraper/run-illinois-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runIllinoisPhase2Scraper();
+    res.json({ success: true, message: 'Illinois Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[IllinoisPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-kansas-phase2 — Kansas Phase 2 business registry scraper
+router.post('/scraper/run-kansas-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runKansasPhase2Scraper();
+    res.json({ success: true, message: 'Kansas Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[KansasPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-michigan-phase2 — Michigan Phase 2 business registry scraper
+router.post('/scraper/run-michigan-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runMichiganPhase2Scraper();
+    res.json({ success: true, message: 'Michigan Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[MichiganPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-minnesota-phase2 — Minnesota Phase 2 business registry scraper
+router.post('/scraper/run-minnesota-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runMinnesotaPhase2Scraper();
+    res.json({ success: true, message: 'Minnesota Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[MinnesotaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-missouri-phase2 — Missouri Phase 2 business registry scraper
+router.post('/scraper/run-missouri-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runMissouriPhase2Scraper();
+    res.json({ success: true, message: 'Missouri Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[MissouriPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-montana-phase2 — Montana Phase 2 business registry scraper
+router.post('/scraper/run-montana-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runMontanaPhase2Scraper();
+    res.json({ success: true, message: 'Montana Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[MontanaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-nebraska-phase2 — Nebraska Phase 2 business registry scraper
+router.post('/scraper/run-nebraska-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runNebraskaPhase2Scraper();
+    res.json({ success: true, message: 'Nebraska Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[NebraskaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-nevada-phase2 — Nevada Phase 2 business registry scraper
+router.post('/scraper/run-nevada-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runNevadaPhase2Scraper();
+    res.json({ success: true, message: 'Nevada Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[NevadaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-new-jersey-phase2 — New Jersey Phase 2 business registry scraper
+router.post('/scraper/run-new-jersey-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runNewJerseyPhase2Scraper();
+    res.json({ success: true, message: 'New Jersey Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[NewJerseyPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-new-mexico-phase2 — New Mexico Phase 2 business registry scraper
+router.post('/scraper/run-new-mexico-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runNewMexicoPhase2Scraper();
+    res.json({ success: true, message: 'New Mexico Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[NewMexicoPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-new-york-phase2 — New York Phase 2 business registry scraper
+router.post('/scraper/run-new-york-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runNewYorkPhase2Scraper();
+    res.json({ success: true, message: 'New York Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[NewYorkPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-oklahoma-phase2 — Oklahoma Phase 2 business registry scraper
+router.post('/scraper/run-oklahoma-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runOklahomaphase2Scraper();
+    res.json({ success: true, message: 'Oklahoma Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[OklahomaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-oregon-phase2 — Oregon Phase 2 business registry scraper
+router.post('/scraper/run-oregon-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runOregonPhase2Scraper();
+    res.json({ success: true, message: 'Oregon Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[OregonPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-pennsylvania-phase2 — Pennsylvania Phase 2 business registry scraper
+router.post('/scraper/run-pennsylvania-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runPennsylvaniaPhase2Scraper();
+    res.json({ success: true, message: 'Pennsylvania Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[PennsylvaniaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-rhode-island-phase2 — Rhode Island Phase 2 business registry scraper
+router.post('/scraper/run-rhode-island-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runRhodeIslandPhase2Scraper();
+    res.json({ success: true, message: 'Rhode Island Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[RhodeIslandPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-texas-phase2 — Texas Phase 2 business registry scraper
+router.post('/scraper/run-texas-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runTexasPhase2Scraper();
+    res.json({ success: true, message: 'Texas Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[TexasPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-utah-phase2 — Utah Phase 2 business registry scraper
+router.post('/scraper/run-utah-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runUtahPhase2Scraper();
+    res.json({ success: true, message: 'Utah Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[UtahPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-virginia-phase2 — Virginia Phase 2 business registry scraper
+router.post('/scraper/run-virginia-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runVirginiaPhase2Scraper();
+    res.json({ success: true, message: 'Virginia Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[VirginiaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-washington-phase2 — Washington Phase 2 business registry scraper
+router.post('/scraper/run-washington-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runWashingtonPhase2Scraper();
+    res.json({ success: true, message: 'Washington Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[WashingtonPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-wyoming-phase2 — Wyoming Phase 2 business registry scraper
+router.post('/scraper/run-wyoming-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runWyomingPhase2Scraper();
+    res.json({ success: true, message: 'Wyoming Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[WyomingPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-virginia-general-phase2 — Virginia general business registry (Norfolk/city-level)
+router.post('/scraper/run-virginia-general-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runVirginiaGeneralPhase2Scraper();
+    res.json({ success: true, message: 'Virginia General Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[VirginiaGeneralPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
