@@ -1,210 +1,297 @@
 /**
- * Hawaii Division of Financial Institutions (DFI) — Pawnbroker License Scraper (Phase 2)
+ * Honolulu Open Data (Socrata) — Secondary Sale Business Scraper (Phase 2)
+ * Source: https://data.honolulu.gov/resource/9k54-ztb8.json
+ * Dataset: City and County of Honolulu business registrations
+ * ADR-073: Directory Scraper Phase 2 — State/city business licensing data
  *
- * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data
- * (no statewide auctioneer licensing law in HI; pawnbrokers regulated under HRS §445-21+)
+ * Honolulu county covers the main Hawaii market. This scraper fetches the
+ * business registration dataset and filters by license type and keyword.
  *
- * DATA SOURCE STATUS (verified 2026-05-09):
- *   - Hawaii DFI (under DCCA) licenses pawnbrokers under HRS Chapter 445.
- *   - Primary portal: https://pvl.ehawaii.gov/pvlsearch/app — returns HTTP 200 but page
- *     is JavaScript-rendered (React/Angular SPA). Static HTML fetch returns no license-type
- *     options or form inputs — requires a headless browser to interact.
- *   - https://cca.hawaii.gov/dfi/licensees/ returns 404 — page does not exist.
- *   - DCCA DCCA has a combined professional license portal at pvl.ehawaii.gov but it
- *     appears to use a client-side API that requires session tokens obtained via JS execution.
+ * Always-include license types: PAWNBROKER, SECONDHAND DEALER, AUCTIONEER,
+ *   JUNK DEALER, CONSIGNMENT
+ * Broader + keyword match: RETAIL, DEALER, MERCHANDISE
  *
- * UNBLOCKING OPTIONS (in priority order):
- *   1. Discover the pvl.ehawaii.gov API:
- *      Open Chrome DevTools → Network tab → navigate to pvl.ehawaii.gov/pvlsearch/app
- *      → search for "Pawnbroker" → capture the XHR/fetch call. The API endpoint and
- *      required headers/tokens can then be hardcoded here.
- *      Likely pattern: GET https://pvl.ehawaii.gov/pvlsearch/api/licenses?type=PAWNBROKER
- *   2. Hawaii Open Data: https://opendata.hawaii.gov — search "pawnbroker" or "DFI".
- *      If a Socrata dataset exists, use the standard JSON API.
- *   3. DCCA direct inquiry: https://cca.hawaii.gov or (808) 586-2820.
- *      Request the pawnbroker licensee list under HRS §92F (Uniform Information Practices Act).
- *   4. NMLS consumer access: https://nmlsconsumeraccess.org — may cover HI pawnbrokers
- *      if they are treated as regulated lenders under Hawaii law.
+ * Paginated Socrata JSON API with $limit/$offset until response < limit.
+ *
+ * Graceful fallback: if the Honolulu endpoint returns 404 or 0 records, logs a
+ * note about the DCCA PVL dataset on opendata.hawaii.gov and returns.
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
+import { getOrCreateScrapedOrganizer } from '../index';
 
-const LIVE_ENDPOINT_AVAILABLE = false;
+const HI_API_BASE = 'https://data.honolulu.gov/resource/9k54-ztb8.json';
+const HI_DOMAIN = 'data.honolulu.gov';
+const PAGE_LIMIT = 5000;
 
-// Placeholder — update once the pvl.ehawaii.gov API endpoint is discovered
-const HI_API_URL = 'https://pvl.ehawaii.gov/pvlsearch/api/licenses';
+// License types that always indicate a secondhand-sale business
+const ALWAYS_INCLUDE_TYPES = new Set([
+  'PAWNBROKER',
+  'SECONDHAND DEALER',
+  'AUCTIONEER',
+  'JUNK DEALER',
+  'CONSIGNMENT',
+  'AUCTION',
+  'SECONDHAND',
+  'PAWN',
+]);
 
-interface HiLicenseRecord {
-  businessName: string;
-  licenseNumber: string;
-  city: string;
-  island?: string;
-  address?: string;
-  phone?: string;
+// Broader license types requiring keyword match on business name
+const BROADER_TYPES = new Set([
+  'RETAIL',
+  'DEALER',
+  'MERCHANDISE',
+]);
+
+// Keywords — any match includes the row when paired with a broader type
+const SALE_TYPE_KEYWORDS = [
+  'pawn',
+  'estate sale',
+  'consign',
+  'thrift',
+  'resale',
+  'antique',
+  'vintage',
+  'collectible',
+  'flea market',
+  'swap meet',
+  'liquidat',
+  'salvage',
+  'junk dealer',
+  'used goods',
+  'auction',
+  'secondhand',
+  'second hand',
+  'pre-owned',
+  'preowned',
+  'surplus',
+  'rummage',
+];
+
+// False-positive name fragments
+const EXCLUDE_FRAGMENTS = [
+  'real estate',
+  'realty',
+  'realtor',
+  'restaurant',
+  'petroleum',
+  'dental',
+  'medical',
+  'pharmacy',
+  'funeral',
+  'insurance',
+  'tax service',
+  'accounting',
+  'attorney',
+  'law office',
+  'landscaping',
+  'construction',
+  'plumbing',
+  'electrical',
+  'roofing',
+  'automotive repair',
+  'car wash',
+  'dry clean',
+  'laundry',
+  'hair salon',
+  'nail salon',
+  'tattoo',
+  'massage',
+  'yoga',
+  'daycare',
+];
+
+function licenseTypeAlwaysInclude(licenseType: string): boolean {
+  const upper = licenseType.toUpperCase();
+  return Array.from(ALWAYS_INCLUDE_TYPES).some((t) => upper.includes(t));
 }
 
-const extractText = (html: string): string =>
-  html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .trim();
-
-async function fetchAllRecords(): Promise<HiLicenseRecord[]> {
-  /**
-   * TODO: Implement once the pvl.ehawaii.gov API endpoint is confirmed via DevTools.
-   *
-   * Expected pattern (update params once API is discovered):
-   *   await defaultRateLimiter.waitBeforeRequest(new URL(HI_API_URL).hostname);
-   *   const res = await fetch(`${HI_API_URL}?licenseType=PAWNBROKER&status=ACTIVE`, {
-   *     headers: {
-   *       'User-Agent': getRandomUserAgent(),
-   *       Accept: 'application/json',
-   *       // Add any required session headers discovered from DevTools
-   *     },
-   *     signal: AbortSignal.timeout(30000),
-   *   });
-   *   const json = await res.json();
-   *   return (json.licenses ?? json.results ?? json).map((r: any) => ({
-   *     businessName: r.businessName ?? r.name ?? '',
-   *     licenseNumber: r.licenseNumber ?? r.id ?? '',
-   *     city: r.city ?? '',
-   *     island: r.island ?? '',
-   *     address: r.address ?? '',
-   *     phone: r.phone ?? '',
-   *   }));
-   */
-  return [];
+function licenseTypeIsBroader(licenseType: string): boolean {
+  const upper = licenseType.toUpperCase();
+  return Array.from(BROADER_TYPES).some((t) => upper.includes(t));
 }
 
-async function upsertRecord(record: HiLicenseRecord): Promise<boolean> {
-  const { businessName, licenseNumber, city, island, address, phone } = record;
-  if (!businessName || !licenseNumber) return false;
-
-  const dedupeKey = `HI-PAWN-${licenseNumber}`;
-  const slug = businessName
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 30)
-    .replace(/-$/, '');
-  const citySlug = (city || island || 'hi')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-    .slice(0, 20);
-
-  const existing = await prisma.organizer.findFirst({
-    where: {
-      OR: [
-        { licenseNumber: dedupeKey },
-        {
-          businessName: { equals: businessName, mode: 'insensitive' },
-          licenseState: 'HI',
-        },
-      ],
-    },
-    select: { id: true },
-  });
-
-  if (existing) {
-    await prisma.organizer.update({
-      where: { id: existing.id },
-      data: {
-        licenseNumber: dedupeKey,
-        licenseState: 'HI',
-        isStateLicensed: true,
-        directoryMostRecentSource: 'HawaiiPhase2',
-        directoryMostRecentAt: new Date(),
-        ...(city && { city }),
-        ...(phone && { phone }),
-      },
-    });
-    return false;
-  }
-
-  const locationStr = city
-    ? `${city}, HI`
-    : island
-    ? `${island}, Hawaii`
-    : 'Hawaii';
-
-  await prisma.organizer.create({
-    data: {
-      businessName,
-      phone: phone ?? null,
-      address: address ?? locationStr,
-      city: city || island || null,
-      bio: `Licensed pawnbroker in ${locationStr}.`,
-      isClaimed: false,
-      isUnmanagedListing: true,
-      licenseNumber: dedupeKey,
-      licenseState: 'HI',
-      isStateLicensed: true,
-      businessCategory: 'PAWN_SHOP',
-      directoryMostRecentSource: 'HawaiiPhase2',
-      directoryMostRecentAt: new Date(),
-      user: {
-        create: {
-          email: `scraper+${slug}-${citySlug}-hi-hiphase2@system.finda.sale`,
-          name: businessName,
-          password: null,
-          role: 'ORGANIZER',
-          roles: ['ORGANIZER'],
-        },
-      },
-    },
-  });
-  return true;
+function nameMatchesKeyword(name: string): boolean {
+  const lower = name.toLowerCase();
+  return SALE_TYPE_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
+function nameIsExcluded(name: string): boolean {
+  const lower = name.toLowerCase();
+  return EXCLUDE_FRAGMENTS.some((frag) => lower.includes(frag));
+}
+
+function mapCategory(licenseType: string): string {
+  const upper = licenseType.toUpperCase();
+  if (upper.includes('AUCTION')) return 'AUCTION_HOUSE';
+  return 'RESALE_SHOP';
+}
+
+/**
+ * Honolulu Open Data secondary sale scraper.
+ * Fetches all business registrations via paginated Socrata JSON API and
+ * filters to secondhand-sale matches.
+ *
+ * If the endpoint returns 404 or no data, logs gracefully with a note
+ * about the DCCA PVL dataset on opendata.hawaii.gov.
+ */
 export async function runHawaiiPhase2Scraper(): Promise<void> {
-  console.log('[HawaiiPhase2] Starting pawnbroker license scraper');
+  let totalFetched = 0;
+  let totalMatched = 0;
+  let totalUpserted = 0;
+  let offset = 0;
+  let endpointAvailable = false;
 
-  if (!LIVE_ENDPOINT_AVAILABLE) {
-    console.warn(
-      '[HawaiiPhase2] STUB MODE: pvl.ehawaii.gov is JS-rendered (SPA) — ' +
-        'static fetch returns no license data. Requires DevTools API discovery or headless browser. ' +
-        'See scraper header comments for unblocking options. ' +
-        'Set LIVE_ENDPOINT_AVAILABLE = true and implement fetchAllRecords() once API is confirmed.'
-    );
-    console.log('[HawaiiPhase2] Scraper exited (stub mode) — 0 records processed');
-    return;
-  }
-
-  let totalRecords = 0;
-  let createdOrganizers = 0;
+  console.log('[HawaiiPhase2] Starting secondary sale scraper via Honolulu Open Data');
+  console.log(`[HawaiiPhase2] Source: ${HI_API_BASE}`);
 
   try {
-    const records = await fetchAllRecords();
-    console.log(`[HawaiiPhase2] Fetched ${records.length} records`);
+    while (true) {
+      const url = `${HI_API_BASE}?$limit=${PAGE_LIMIT}&$offset=${offset}`;
+      await defaultRateLimiter.waitBeforeRequest(HI_DOMAIN);
 
-    for (const record of records) {
-      try {
-        const created = await upsertRecord(record);
-        if (created) createdOrganizers++;
-        totalRecords++;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(60000),
+      });
 
-        if (totalRecords % 50 === 0) {
-          console.log(
-            `[HawaiiPhase2] Progress: ${totalRecords} processed, ${createdOrganizers} created`
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.warn(
+            '[HawaiiPhase2] Honolulu endpoint returned 404. ' +
+            'The dataset may have been removed or relocated. ' +
+            'TODO: Switch to the DCCA PVL dataset on opendata.hawaii.gov — ' +
+            'search for "Professional and Vocational Licensing" at ' +
+            'https://opendata.hawaii.gov/dataset?q=license&sort=score+desc for ' +
+            'auctioneer, pawnbroker, and secondhand dealer license records statewide.'
+          );
+        } else {
+          console.error(
+            `[HawaiiPhase2] API fetch failed: HTTP ${response.status} at offset ${offset}`
           );
         }
-
-        await new Promise((r) => setTimeout(r, 2000));
-      } catch (err) {
-        console.error(`[HawaiiPhase2] Error processing ${record.businessName}:`, err);
+        break;
       }
+
+      const records: Record<string, string>[] = await response.json();
+
+      if (!Array.isArray(records) || records.length === 0) {
+        if (offset === 0 && !endpointAvailable) {
+          console.warn(
+            '[HawaiiPhase2] Honolulu endpoint returned 0 records on first page. ' +
+            'Dataset may be empty or require a different query. ' +
+            'TODO: Try the DCCA PVL dataset on opendata.hawaii.gov for statewide ' +
+            'auctioneer, pawnbroker, and secondhand dealer license data.'
+          );
+        } else {
+          console.log(`[HawaiiPhase2] No more records at offset ${offset}`);
+        }
+        break;
+      }
+
+      endpointAvailable = true;
+      totalFetched += records.length;
+      console.log(`[HawaiiPhase2] Page offset ${offset}: ${records.length} records`);
+
+      for (const record of records) {
+        try {
+          // Status filter — active only
+          const status = (
+            record['status'] ||
+            record['license_status'] ||
+            record['business_status'] ||
+            ''
+          ).trim().toUpperCase();
+          if (status && status !== 'ACTIVE' && status !== 'ISSUED' && status !== 'CURRENT') continue;
+
+          // Resolve license type from common field variants
+          const licenseTypeRaw = (
+            record['license_type'] ||
+            record['license_description'] ||
+            record['business_type'] ||
+            record['type'] ||
+            ''
+          ).trim();
+
+          // Resolve business name
+          const businessName = (
+            record['business_name'] ||
+            record['dba_name'] ||
+            record['licensee_name'] ||
+            record['name'] ||
+            ''
+          ).trim();
+
+          if (!businessName) continue;
+
+          // Determine inclusion
+          const alwaysInclude = licenseTypeAlwaysInclude(licenseTypeRaw);
+          const broaderMatch = licenseTypeIsBroader(licenseTypeRaw) && nameMatchesKeyword(businessName);
+          const keywordFallback = !licenseTypeRaw && nameMatchesKeyword(businessName);
+
+          if (!alwaysInclude && !broaderMatch && !keywordFallback) continue;
+          if (nameIsExcluded(businessName)) continue;
+
+          totalMatched++;
+
+          const licenseNumber = (
+            record['license_number'] ||
+            record['license_no'] ||
+            record['business_license'] ||
+            ''
+          ).trim();
+
+          const city = (
+            record['city'] ||
+            record['location_city'] ||
+            'Honolulu'
+          ).trim();
+
+          const zip = (record['zip'] || record['zip_code'] || '').trim();
+
+          const address = (
+            record['address'] ||
+            record['location_address'] ||
+            record['street_address'] ||
+            ''
+          ).trim();
+
+          const dedupeKey = `HI-SECONDARY-${licenseNumber || businessName.toLowerCase().replace(/\s+/g, '-')}`;
+          const businessCategory = mapCategory(licenseTypeRaw);
+
+          const orgId = await getOrCreateScrapedOrganizer(
+            businessName,
+            'HawaiiPhase2',
+            city || 'Honolulu',
+            'HI',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            businessCategory,
+            undefined,
+            undefined,
+            undefined
+          );
+
+          if (orgId) {
+            totalUpserted++;
+          }
+        } catch (rowErr) {
+          console.error('[HawaiiPhase2] Error processing record:', rowErr);
+        }
+      }
+
+      if (records.length < PAGE_LIMIT) break;
+      offset += PAGE_LIMIT;
     }
 
     console.log(
-      `[HawaiiPhase2] Scraper completed: ${totalRecords} records processed, ${createdOrganizers} organizers created`
+      `[HawaiiPhase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`
     );
   } catch (error) {
-    console.error('[HawaiiPhase2] Scraper error:', error);
+    console.error('[HawaiiPhase2] Scraper fatal error:', error);
     throw error;
   }
 }
