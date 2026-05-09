@@ -373,6 +373,14 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     <span>Bid Review</span>
                   </Link>
                   <Link
+                    href="/admin/scrape-pool"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Network size={14} className="text-red-400" />
+                    <span>Scrape Pool</span>
+                  </Link>
+                  <Link
                     href="/admin/disputes"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
