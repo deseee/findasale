@@ -86,10 +86,10 @@ function parseCsvLine(line: string): string[] {
 
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
-    if (ch === """) {
-      if (inQuotes && line[i + 1] === """) {
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
         // Escaped quote inside a quoted field
-        current += """;
+        current += '"';
         i++;
       } else {
         inQuotes = !inQuotes;
@@ -163,8 +163,7 @@ export async function runOregonPhase2Scraper(): Promise<void> {
     }
 
     const csvText = await response.text();
-    const lines = csvText.split("
-");
+    const lines = csvText.split("\n");
 
     if (lines.length < 2) {
       console.warn("[OregonPhase2] CSV response appears empty or malformed");
