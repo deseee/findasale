@@ -4,7 +4,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S703 — Design Overhaul: All 7 Surfaces Complete (Tier 1 + Tier 2 + Tier 3) — PUSHBLOCK BELOW**
+**Latest: S703 — Geocoded=0% Root Cause Found & Fixed + ERR_HTTP_HEADERS_SENT Guard (COMPLETE — pushblock below)**
+
+Root cause of geocoding dropout: `getOrCreateScrapedOrganizer()` was called with 12 args instead of 14 — lat/lng were never passed. All 5 dedup paths (byPlaceId, byFoursquare, byHere, byDedupeKey, existing) also never backfilled lat/lng on existing orgs. Fixed: extract orgLat/orgLng from `listing.lat ?? listing.scrapedMetadata?.lat` before the call; all 5 dedup paths now select lat/lng and backfill when null. Next HERE/Foursquare scraper run will geocode new orgs and backfill existing ones hit by dedup. Added `res.headersSent` guard to `internalScraperController.ts` to suppress `ERR_HTTP_HEADERS_SENT` unhandled rejection in Railway logs.
+
+**Completed this session:**
+- **Geocoding dropout fix** (`packages/backend/src/services/scraper/index.ts`) — Extract orgLat/orgLng from listing before passing to `getOrCreateScrapedOrganizer()` (args 13/14 were missing). All 5 dedup paths now select lat/lng and null-safe backfill. TS: 0 errors.
+- **ERR_HTTP_HEADERS_SENT guard** (`packages/backend/src/controllers/internalScraperController.ts`) — `if (!res.headersSent)` guard in catch block prevents double-response unhandled rejection.
+- **5 prior-session files committed** — `emailReminderService.ts`, `emailTemplateService.ts`, `followerNotificationService.ts`, `weeklyEmailService.ts`, `create-sale.tsx` pushed without inspection per Patrick's instruction.
+
+**Previous: S703 — Design Overhaul: All 7 Surfaces Complete (Tier 1 + Tier 2 + Tier 3) — COMPLETE**
 
 Design overhaul across the full product UI using the organizer-storefront design handoff (zip 5). All surfaces redesigned with FS_TONES tokens: light parchment bg (#F4EFE7), dark (#0B0F17), Inter Tight headings, JetBrains Mono labels, accent #C8552B light / #E97C4D dark. TS check: 0 errors on all verifiable files (sale detail + storefront need Patrick to run tsc locally — VM env issue).
 
@@ -1160,65 +1169,28 @@ Full Google Maps Platform incident response and lockdown. Root cause: monthly Gi
 
 ---
 
-## Next Session — S703
+## Next Session — S704
 
-### Step 0 — Push S702 pushblock first
+### Step 1 — GitHub Actions audit
 
-```powershell
-git add packages/backend/src/routes/internal.ts
-git add packages/backend/src/services/scraper/sources/connecticutPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/pennsylvaniaPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/virginiaPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/newjerseyPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/washingtonPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/virginiaGeneralPhase2Scraper.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "feat(scraper): wire all 28 Phase 2 scrapers into internal.ts, fix CT/PA/VA/NJ, add VA general (Norfolk) — S702"
-.\push.ps1
-```
+Open GitHub → Actions tab for `deseee/findasale`. Check which Phase 2 workflow YMLs are present and enabled, whether they're firing on schedule, and what last-run status is for scraper workflows. Fix any broken or missing workflows.
 
-### Step 1 — Investigate Geocoded = 0%
+### Step 2 — Scoring backfill for ~24k unscored orgs
 
-Dashboard shows 0% geocoding across 32,110 orgs. This kills map discovery. Use Chrome + Railway logs to determine:
-- Is the geocoding enrichment job even registered/running?
-- Is the geocoding service (what provider?) configured with a valid API key?
-- Check `packages/backend/src/jobs/` for any geocoding job and its cron schedule.
-- Check Railway env vars for `GEOCODING_API_KEY` or similar.
-- Fix or escalate with a plan.
+Dashboard: 32,110 total, only 7,884 scored. Trigger `POST /api/internal/scoring/run-backfill` with the internal secret header. Verify COLD/WARM/HOT distribution afterward.
 
-### Step 2 — GitHub Actions audit (Chrome + GitHub MCP)
+### Step 3 — Outreach warming period strategy
 
-Open GitHub → Actions tab for `deseee/findasale`. Check:
-- Are the Phase 2 workflow YMLs present and enabled? (scrape-ct-phase2.yml etc. — many were created last sessions but may not all be pushed)
-- Are the Phase 1 licensing YMLs all present and enabled?
-- Are any workflows failing? What's the last run status for scraper workflows?
-- Do the workflow YML files call the correct `/api/internal/scraper/run-[state]-phase2` routes?
-- Fix any broken or missing workflows.
+0 emails sent. Plan the warming schedule (start 20–50/day, double weekly), identify HOT tier targets for wave 1, draft the first warming email. Check MailerLite group setup and whether Railway env vars are set.
 
-### Step 3 — Scoring backfill for ~24k unscored orgs
-
-Dashboard: 32,110 total, only 7,884 scored. ~24k have no tier. Trigger the scoring backfill route:
-`POST /api/internal/scoring/run-backfill` with the internal secret header.
-Confirm all orgs get scored. Verify COLD/WARM/HOT distribution afterward.
-
-### Step 4 — Outreach warming period strategy
-
-0 emails sent so far. Email domain warming is required before bulk sends. Plan needed:
-- What warming schedule should we use? (typical: start at 20-50/day, double weekly)
-- Which segment gets the first sends? (HOT tier first — highest quality, most likely to engage)
-- What's the first email? (not a cold pitch — a "we found your business" warm intro)
-- Is `OUTREACH_ENABLED` set to `true` on Railway? If not, what's the gate?
-- Draft the warming period email sequence (Day 1 / Week 1 / Week 2 / Month 1) for the initial 50-100 organizers.
-- Check MailerLite setup: are the COLD/WARM/HOT groups created? Are the 3 env vars set?
-
-### Step 5 — Remaining Patrick manual actions
+### Step 4 — Patrick pending manual actions
 
 - Add Railway env vars: `MAILERLITE_COLD_GROUP_ID`, `MAILERLITE_WARM_GROUP_ID`, `MAILERLITE_HOT_GROUP_ID`
 - Wire `emailDiscoveryJob` into cron scheduler + set `EMAIL_DISCOVERY_ENABLED=true` on Railway
 - Run S698 migration if not already done: `prisma migrate deploy` + `prisma generate`
 - `git rm ".github/workflows/scrape-nc-licensing.yml"` (junk from S691)
 - `git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"` (space-named duplicate)
+- Delete `GOOGLE_PLACES_API_KEY` from Railway vars + GitHub Secrets (S695 lockdown)
 
 ---
 

@@ -6,24 +6,36 @@
 
 | Area | Status |
 |------|--------|
-| Vercel build | ✅ GREEN (pending this push) |
+| Vercel build | ✅ GREEN |
 | Railway backend | ✅ GREEN |
-| Sale detail page `/sales/[id]` | ✅ REDESIGNED — new design tokens, hero, sticky CTAs |
-| Sale creation wizard | ✅ REDESIGNED — 5-step, Online Only toggle wired (schema TODO) |
-| Email design system | ✅ REBUILT — 5 modules, 4 new email types, backward compat |
-| Smart review queue | ✅ REDESIGNED — amber stripes, price enforcement, View live sale link |
-| Sale type badge system | ✅ NEW component — SaleTypeBadge, all 5 types |
-| Broadcast composer | ✅ NEW component — 2-panel, templates, tier gates |
-| Organizer storefront v0.2 | ✅ REDESIGNED — parchment default, hero, stats strip, right rail |
-| Schema gap: isOnlineOnly | ⚠️ UI wired (TODO comment), needs future migration |
-| Schema gap: saleSubtype | ⚠️ UI wired (TODO comment), needs future migration |
-| Geocoding coverage | ❌ 0% geocoded — carry-forward from S702, investigate |
+| Geocoding root cause | ✅ FIXED — lat/lng args 13/14 were missing from all scraper ingest calls; all 5 dedup paths now backfill |
+| Geocoding coverage | ⚠️ Will recover on next HERE/Foursquare scraper run — 0% until then |
+| ERR_HTTP_HEADERS_SENT | ✅ FIXED — res.headersSent guard in internalScraperController.ts |
+| Sale detail page `/sales/[id]` | ✅ REDESIGNED (S703 design session) |
+| Sale creation wizard | ✅ REDESIGNED (S703 design session) |
+| Email design system | ✅ REBUILT (S703 design session) |
+| Smart review queue | ✅ REDESIGNED (S703 design session) |
+| Sale type badge system | ✅ NEW component (S703 design session) |
+| Broadcast composer | ✅ NEW component (S703 design session) |
+| Organizer storefront v0.2 | ✅ REDESIGNED (S703 design session) |
+| Scoring backfill | ❌ ~24k orgs unscored — needs S704 trigger |
+| GitHub Actions audit | ❌ Not yet done — Phase 2 workflows need verification |
 | MailerLite tier group wiring | ⚠️ Built — needs 3 Railway env vars |
 | S698 migration | ⚠️ May still need running if not done |
 
 ---
 
-## What Happened This Session (S702)
+## What Happened This Session (S703)
+
+**Geocoding dropout root cause found and fixed.** 0% geocoding across 32,110 orgs traced to a single bug: `getOrCreateScrapedOrganizer()` was called with 12 arguments instead of 14 — lat and lng were never passed. HERE and Foursquare store coordinates in `scrapedMetadata`, not top-level fields, so the extraction had to be explicit. All 5 dedup paths (byPlaceId, byFoursquare, byHere, byDedupeKey, existing normalized name) also lacked lat/lng backfill — meaning even when an existing org was found, coordinates were never written. All fixed. Next scraper run will geocode new orgs and backfill existing ones.
+
+**ERR_HTTP_HEADERS_SENT suppressed.** The ingest controller's catch block was firing after a success response had already been sent, causing an unhandled rejection in Railway logs. Added `if (!res.headersSent)` guard.
+
+**5 prior-session files committed** (emailReminderService, emailTemplateService, followerNotificationService, weeklyEmailService, create-sale.tsx).
+
+---
+
+## What Happened Last Session (S702)
 
 **Critical gap fixed — Phase 2 scrapers were completely unreachable.** All 28 Phase 2 scraper files existed on disk but had ZERO Express routes registered in `internal.ts`. None could be triggered via API or GitHub Actions workflow. Agent registered all 28 in one pass.
 
@@ -41,36 +53,30 @@
 
 ## Patrick Actions Needed
 
-### Push Block — Run This Now
+### Push Block — Run This Now (S703 wrap)
 
 ```powershell
-git add packages/backend/src/routes/internal.ts
-git add packages/backend/src/services/scraper/sources/connecticutPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/pennsylvaniaPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/virginiaPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/newjerseyPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/washingtonPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sources/virginiaGeneralPhase2Scraper.ts
+git add packages/backend/src/services/scraper/index.ts
+git add packages/backend/src/controllers/internalScraperController.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat(scraper): wire all 28 Phase 2 scrapers into internal.ts, fix CT/PA/VA/NJ, add VA general (Norfolk) — S702"
+git commit -m "fix(scraper): geocoding dropout — pass lat/lng to getOrCreateScrapedOrganizer, backfill all 5 dedup paths; fix ERR_HTTP_HEADERS_SENT guard — S703"
 .\push.ps1
 ```
 
-### Carry-Forward (still pending from S701)
+### Carry-Forward (still pending)
 
 - **Railway env vars**: `MAILERLITE_COLD_GROUP_ID`, `MAILERLITE_WARM_GROUP_ID`, `MAILERLITE_HOT_GROUP_ID`
 - **S698 migration**: Run `prisma migrate deploy` + `prisma generate` if not done
 - **Delete GOOGLE_PLACES_API_KEY** from Railway vars + GitHub Secrets (S695 lockdown)
 - **Wire emailDiscoveryJob** into cron + set `EMAIL_DISCOVERY_ENABLED=true`
-- **Junk cleanup** (from S701 pushblock): `git rm ".github/workflows/scrape-nc-licensing.yml"` and `git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"`
+- **Junk cleanup**: `git rm ".github/workflows/scrape-nc-licensing.yml"` and `git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"`
 
 ---
 
-## Next Session (S703) — Top Priorities
+## Next Session (S704) — Top Priorities
 
-1. **Geocoding=0% root cause** — Why is nothing geocoding? Check the geocoding service, env vars, cron job registration. This is breaking map-based discovery entirely.
-2. **GitHub Actions audit** — Use Chrome + GitHub MCP to inspect all scraper workflows: are they enabled? firing on schedule? returning success? Last run timestamps.
-3. **Scoring backfill** — 24k orgs unscored. Investigate why and dispatch scoring job or manual trigger.
-4. **Outreach warming strategy** — Draft the first warming email wave. Identify HOT tier orgs (highest score). Target 20–50 sends/day starting week 1. MailerLite group IDs needed first (Railway env vars above).
-5. **NJ/WA Phase 2 escalation** — Both return 0. NJ: request bulk file from NJ Consumer Affairs. WA: request DOL dataset or find alternative source.
+1. **GitHub Actions audit** — Verify Phase 2 workflow YMLs are present, enabled, firing on schedule, and calling correct routes. Fix any broken/missing.
+2. **Scoring backfill** — Trigger `POST /api/internal/scoring/run-backfill`. ~24k orgs unscored. Verify HOT/WARM/COLD distribution after.
+3. **Outreach warming strategy** — Plan warming schedule, first email content, MailerLite group IDs. Target HOT tier first, 20–50 sends/day.
+4. **Patrick manual actions** — Railway env vars, S698 migration, emailDiscoveryJob wire-up, junk git rm, GOOGLE_PLACES_API_KEY delete.
