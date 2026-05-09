@@ -152,7 +152,7 @@ export async function runOregonPhase2Scraper(): Promise<void> {
       headers: {
         Accept: "text/csv,*/*",
       },
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(600000),
     });
 
     if (!response.ok) {
