@@ -18,11 +18,14 @@ import { getOrCreateScrapedOrganizer } from '../index';
 const DPOR_DOMAIN = 'www.dpor.virginia.gov';
 const VA_OPEN_DATA_DOMAIN = 'data.virginia.gov';
 
-// Known direct download URLs for DPOR regulant lists (try in order)
+// Known direct download URLs for DPOR Auctioneer Board regulant lists
+// Confirmed from https://www.dpor.virginia.gov/RegulantLists (2026-05-09)
+// These are ALL processed — not short-circuited on first success
 const DPOR_AUCTIONEER_URLS = [
-  'https://www.dpor.virginia.gov/sites/default/files/ListDownloads/Auctioneer.txt',
-  'https://www.dpor.virginia.gov/sites/default/files/ListDownloads/Auctioneers.txt',
-  'https://www.dpor.virginia.gov/sites/default/files/ListDownloads/auctioneer.txt',
+  'https://www.dpor.virginia.gov/sites/default/files/Records%20and%20Documents/Regulant%20List/2905__crnt.txt', // Auctioneer Individual
+  'https://www.dpor.virginia.gov/sites/default/files/Records%20and%20Documents/Regulant%20List/2906__crnt.txt', // Auctioneer Firm
+  'https://www.dpor.virginia.gov/sites/default/files/Records%20and%20Documents/Regulant%20List/2907__crnt.txt', // Auctioneer Individual
+  'https://www.dpor.virginia.gov/sites/default/files/Records%20and%20Documents/Regulant%20List/2908__crnt.txt', // Auctioneer Firm
 ];
 
 const DPOR_REGULANT_LIST_PAGE = 'https://www.dpor.virginia.gov/RegulantLists';
@@ -393,7 +396,7 @@ export async function runVirginiaPhase2Scraper(): Promise<void> {
 
   console.log('[Virginia Phase2] Starting secondary sale scraper via DPOR Regulant Lists');
 
-  // Source 1: Try known DPOR Auctioneer direct URLs
+  // Source 1: Fetch all 4 DPOR Auctioneer Board files (each is a distinct license type)
   for (const url of DPOR_AUCTIONEER_URLS) {
     console.log(`[Virginia Phase2] Trying direct DPOR URL: ${url}`);
     const text = await tryFetch(url, DPOR_DOMAIN, 'text/plain,*/*');
@@ -404,7 +407,7 @@ export async function runVirginiaPhase2Scraper(): Promise<void> {
       totalUpserted += upserted;
       anySourceSucceeded = true;
       console.log(`[Virginia Phase2] DPOR direct: matched ${matched}, upserted ${upserted}`);
-      break;
+      // NOTE: no break — process all 4 files (different license types)
     }
   }
 
