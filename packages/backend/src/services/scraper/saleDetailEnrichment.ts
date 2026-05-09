@@ -329,6 +329,10 @@ async function fetchSalePageHTML(sourceUrl: string, saleId?: string): Promise<st
  * Enrich a single sale with description + photos from its sourceUrl
  */
 export async function enrichSaleDetails(saleId: string, sourceUrl: string): Promise<boolean> {
+  if (!sourceUrl || sourceUrl === 'undefined') {
+    if (DEBUG) console.log(`[SaleDetailEnrichment] Skipping sale ${saleId} — no sourceUrl`);
+    return false;
+  }
   try {
     await defaultRateLimiter.waitBeforeRequest(new URL(sourceUrl).hostname);
 

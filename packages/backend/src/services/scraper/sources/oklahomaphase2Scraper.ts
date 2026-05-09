@@ -1,130 +1,115 @@
 /**
  * Oklahoma Department of Consumer Credit — Pawnbroker License Scraper (Phase 2)
- * Scrapes licensed pawnbrokers from Oklahoma DOC pawnbroker roster PDF
- * Source: https://oklahoma.gov/content/dam/ok/en/okdocc/documents/rosters/4.30.2026.PB-ALL.pdf
- * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data (no auctioneer licensing in OK)
+ * Scrapes licensed pawnbrokers from the ODCC public licensee search
+ * Source: https://www.okdocc.state.ok.us/OKApps/license/listsearch.aspx
+ * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data
  */
 
-import { RateLimiter, defaultRateLimiter } from '../rateLimiter';
+import { defaultRateLimiter } from '../rateLimiter';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const OKLAHOMA_PDF_URL = 'https://oklahoma.gov/content/dam/ok/en/okdocc/documents/rosters/4.30.2026.PB-ALL.pdf';
+const ODCC_SEARCH_URL =
+  'https://www.okdocc.state.ok.us/OKApps/license/listsearch.aspx';
 
 /**
- * Scrape Oklahoma pawnbroker licenses from state DOC roster PDF.
- * Fetches the PDF and parses it as text to extract business information.
+ * Scrape Oklahoma pawnbroker licenses from the ODCC licensee search.
  */
 export async function runOklahomaphase2Scraper(): Promise<void> {
-  const rateLimiter = defaultRateLimiter;
-  const domain = new URL(OKLAHOMA_PDF_URL).hostname;
+  const domain = new URL(ODCC_SEARCH_URL).hostname;
   let totalRecords = 0;
   let createdOrganizers = 0;
 
   try {
-    console.log('[OklahomaPdf2] Starting pawnbroker license scraper');
+    console.log('[OklahomaPhase2] Starting pawnbroker license scraper');
 
-    // Fetch the PDF
-    await rateLimiter.waitBeforeRequest(domain);
+    // Step 1: Fetch the search page to get ASP.NET form tokens
+    await defaultRateLimiter.waitBeforeRequest(domain);
 
-    const pdfResponse = await fetch(OKLAHOMA_PDF_URL, {
+    const initResponse = await fetch(ODCC_SEARCH_URL, {
       method: 'GET',
       headers: {
         'User-Agent': getRandomUserAgent(),
-        Accept: 'application/pdf',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Encoding': 'gzip, deflate',
         Connection: 'keep-alive',
       },
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!initResponse.ok) {
+      throw new Error(`Failed to load ODCC search page: ${initResponse.status}`);
+    }
+
+    const initHtml = await initResponse.text();
+    console.log('[OklahomaPhase2] Loaded ODCC search page');
+
+    const viewStateMatch = initHtml.match(/id="__VIEWSTATE"\s+value="([^"]+)"/);
+    const eventValidationMatch = initHtml.match(/id="__EVENTVALIDATION"\s+value="([^"]+)"/);
+    const viewStateGeneratorMatch = initHtml.match(/id="__VIEWSTATEGENERATOR"\s+value="([^"]+)"/);
+
+    const viewState = viewStateMatch ? viewStateMatch[1] : '';
+    const eventValidation = eventValidationMatch ? eventValidationMatch[1] : '';
+    const viewStateGenerator = viewStateGeneratorMatch ? viewStateGeneratorMatch[1] : '';
+
+    // Step 2: POST search for active Pawnbroker licenses
+    await defaultRateLimiter.waitBeforeRequest(domain);
+
+    const searchBody = new URLSearchParams({
+      __VIEWSTATE: viewState,
+      __VIEWSTATEGENERATOR: viewStateGenerator,
+      __EVENTVALIDATION: eventValidation,
+      ctl00$MainContent$ddlLicenseType: 'PAWN',
+      ctl00$MainContent$ddlStatus: 'Active',
+      ctl00$MainContent$btnSearch: 'Search',
+    });
+
+    const searchResponse = await fetch(ODCC_SEARCH_URL, {
+      method: 'POST',
+      headers: {
+        'User-Agent': getRandomUserAgent(),
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Referer: ODCC_SEARCH_URL,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      body: searchBody.toString(),
       signal: AbortSignal.timeout(60000),
     });
 
-    if (!pdfResponse.ok) {
-      throw new Error(`Failed to fetch PDF: ${pdfResponse.status}`);
+    if (!searchResponse.ok) {
+      throw new Error(`ODCC search POST failed: ${searchResponse.status}`);
     }
 
-    const pdfContent = await pdfResponse.text();
+    const resultsHtml = await searchResponse.text();
+    console.log('[OklahomaPhase2] Received search results');
 
-    console.log('[OklahomaPdf2] Fetched and extracted PDF content');
+    const tableRowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
+    const rows = resultsHtml.match(tableRowRegex) || [];
+    console.log(`[OklahomaPhase2] Found ${rows.length} table rows`);
 
-    // Parse the PDF text content
-    // The roster typically has entries in the format:
-    // Business Name | City | License Number
-    // or similar tabular format separated by whitespace
+    const extractText = (html: string): string =>
+      html
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim();
 
-    // Split into lines and filter out empty/header lines
-    const lines = pdfContent
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
+    for (const row of rows) {
+      const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/g;
+      const cells = row.match(cellRegex) || [];
+      if (cells.length < 2) continue;
 
-    console.log(`[OklahomaPdf2] Extracted ${lines.length} lines from PDF`);
+      const businessName = extractText(cells[0]);
+      if (!businessName || businessName.toLowerCase() === 'business name') continue;
 
-    // Track which lines are headers (usually contain "Name", "City", "License", etc.)
-    let dataStartIdx = 0;
-    for (let i = 0; i < lines.length; i++) {
-      if (
-        lines[i].toLowerCase().includes('name') ||
-        lines[i].toLowerCase().includes('business') ||
-        lines[i].toLowerCase().includes('city')
-      ) {
-        dataStartIdx = i + 1; // Start reading data after headers
-        break;
-      }
-    }
-
-    // Process each line as a potential record
-    for (let i = dataStartIdx; i < lines.length; i++) {
-      const line = lines[i];
-
-      // Skip page breaks, footer lines, and empty content
-      if (
-        line.includes('Page') ||
-        line.includes('Oklahoma Department') ||
-        line.includes('Pawn Broker') ||
-        line.length < 5
-      ) {
-        continue;
-      }
-
-      // Split line by multiple spaces or tabs to extract fields
-      const parts = line.split(/\s{2,}|[\t]+/).map((s) => s.trim());
-
-      if (parts.length < 2) {
-        continue; // Need at least business name and city/license
-      }
-
-      const businessName = parts[0];
-      let city = '';
-      let licenseNumber = '';
-
-      // Try to extract city and license number from remaining parts
-      if (parts.length >= 3) {
-        city = parts[1];
-        licenseNumber = parts[2];
-      } else if (parts.length === 2) {
-        // If only 2 parts, second could be city or license
-        // License numbers are usually numeric or contain dashes
-        if (/^\d+[-\d]*$/.test(parts[1])) {
-          licenseNumber = parts[1];
-          city = 'OK'; // Default if not specified
-        } else {
-          city = parts[1];
-          licenseNumber = `OK-${totalRecords + 1}`;
-        }
-      }
-
-      // Validate that we have a business name
-      if (!businessName || businessName.length < 3) {
-        continue;
-      }
+      const licenseNumber = cells.length > 1 ? extractText(cells[1]) : `OK-${totalRecords + 1}`;
+      const city = cells.length > 2 ? extractText(cells[2]) : 'Oklahoma';
 
       totalRecords++;
+      console.log(`[OklahomaPhase2] Processing: ${businessName} (${licenseNumber}), ${city}, OK`);
 
-      console.log(
-        `[OklahomaPdf2] Processing: ${businessName} (License ${licenseNumber}) in ${city}, OK`
-      );
-
-      // Upsert organizer with pawnbroker licensing data
       try {
         const existing = await prisma.organizer.findFirst({
           where: {
@@ -135,38 +120,41 @@ export async function runOklahomaphase2Scraper(): Promise<void> {
         });
 
         if (existing) {
-          // Update existing
           await prisma.organizer.update({
             where: { id: existing.id },
             data: {
               licenseNumber,
               licenseState: 'OK',
               isStateLicensed: true,
-              directoryMostRecentSource: 'OklahomaPdf2',
+              directoryMostRecentSource: 'OklahomaPhase2',
               directoryMostRecentAt: new Date(),
             },
           });
         } else {
-          // Create new
-          const slug = businessName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
-          const citySlug = city.toLowerCase().replace(/[^a-z0-9]/g, '-');
-          const newOrg = await prisma.organizer.create({
+          const slug = businessName
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '-')
+            .replace(/-+/g, '-')
+            .slice(0, 30)
+            .replace(/-$/, '');
+
+          await prisma.organizer.create({
             data: {
               businessName,
               phone: null,
-              address: `${city}, OK`,
-              bio: `Licensed pawnbroker in ${city}, Oklahoma.`,
+              address: city ? `${city}, Oklahoma` : 'Oklahoma',
+              bio: 'Licensed pawnbroker in Oklahoma.',
               isClaimed: false,
               isUnmanagedListing: true,
               licenseNumber,
               licenseState: 'OK',
               isStateLicensed: true,
               businessCategory: 'PAWN_SHOP',
-              directoryMostRecentSource: 'OklahomaPdf2',
+              directoryMostRecentSource: 'OklahomaPhase2',
               directoryMostRecentAt: new Date(),
               user: {
                 create: {
-                  email: `scraper+${slug}-${citySlug}-ok-oklahomapdf2@system.finda.sale`,
+                  email: `scraper+${slug}-ok-oklahomaphase2@system.finda.sale`,
                   name: businessName,
                   password: null,
                   role: 'ORGANIZER',
@@ -179,20 +167,16 @@ export async function runOklahomaphase2Scraper(): Promise<void> {
         }
 
         if (totalRecords % 50 === 0) {
-          console.log(
-            `[OklahomaPdf2] Progress: processed ${totalRecords} records, created ${createdOrganizers} organizers`
-          );
+          console.log(`[OklahomaPhase2] Progress: ${totalRecords} processed, ${createdOrganizers} created`);
         }
       } catch (err) {
-        console.error(`[OklahomaPdf2] Error processing ${businessName}:`, err);
+        console.error(`[OklahomaPhase2] Error processing ${businessName}:`, err);
       }
     }
 
-    console.log(
-      `[OklahomaPdf2] Scraper completed: processed ${totalRecords} records, created ${createdOrganizers} organizers`
-    );
+    console.log(`[OklahomaPhase2] Completed: ${totalRecords} records processed, ${createdOrganizers} organizers created`);
   } catch (error) {
-    console.error('[OklahomaPdf2] Scraper error:', error);
+    console.error('[OklahomaPhase2] Scraper error:', error);
     throw error;
   }
 }
