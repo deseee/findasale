@@ -1,272 +1,293 @@
 /**
- * Oregon Division of Financial Regulation (DFR) — Pawnbroker License Scraper (Phase 2)
- * Scrapes licensed pawnbrokers from Oregon DFR licensee database
- * Primary: https://dfr.oregon.gov/
- * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data (no auctioneer licensing in OR)
+ * Oregon Active Businesses — Secondary Sale Business Scraper (Phase 2)
+ * Source: https://data.oregon.gov/api/views/tckn-sxa6/rows.csv?accessType=DOWNLOAD
+ * Dataset: Oregon Active Businesses statewide CSV
+ * ADR-073: Directory Scraper Phase 2 — State business licensing data
  *
- * OR DFR has known bot-protection concerns. This scraper:
- * 1. Attempts the DFR licensee search with conservative rate limiting
- * 2. Checks for downloadable CSV/Excel licensee lists as primary fallback
- * 3. Stubs gracefully with TODO if all approaches are blocked
+ * Oregon has no state auctioneer licensing — this scraper uses business name
+ * keyword filtering only (no license_type column available).
+ *
+ * Matches secondary sale business types via SALE_TYPE_KEYWORDS on
+ * business name, excluding false-positive fragments in EXCLUDE_FRAGMENTS.
  */
 
-import { defaultRateLimiter } from '../rateLimiter';
-import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
+import { defaultRateLimiter } from "../rateLimiter";
+import { getOrCreateScrapedOrganizer } from "../index";
 
-const OR_DFR_BASE_URL = 'https://dfr.oregon.gov';
-// Oregon DFR licensee search for pawnbrokers
-const OR_DFR_SEARCH_URL = 'https://dfr.oregon.gov/business/register/Pages/pawnbrokers.aspx';
-// OR DFR sometimes posts downloadable Excel licensee lists
-const OR_DFR_LICENSEE_EXCEL_URL = 'https://dfr.oregon.gov/business/register/Documents/pawnbroker-licensees.xlsx';
-const OR_DFR_LICENSEE_CSV_URL = 'https://dfr.oregon.gov/business/register/Documents/pawnbroker-licensees.csv';
-const RATE_DELAY_MS = 3000;
+const OR_OPEN_DATA_CSV_URL =
+  "https://data.oregon.gov/api/views/tckn-sxa6/rows.csv?accessType=DOWNLOAD";
+const OR_OPEN_DATA_DOMAIN = "data.oregon.gov";
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// Case-insensitive keywords — any match includes the row
+const SALE_TYPE_KEYWORDS = [
+  "pawn",
+  "estate sale",
+  "consign",
+  "thrift",
+  "resale",
+  "antique",
+  "vintage",
+  "collectible",
+  "flea market",
+  "swap meet",
+  "liquidat",
+  "salvage",
+  "junk dealer",
+  "used goods",
+  "auction",
+  "secondhand",
+  "second hand",
+  "pre-owned",
+  "preowned",
+  "surplus",
+  "rummage",
+];
+
+// False-positive name fragments — exclude row if business name contains any of these
+const EXCLUDE_FRAGMENTS = [
+  "real estate",
+  "realty",
+  "realtor",
+  "restaurant",
+  "petroleum",
+  "dental",
+  "medical",
+  "pharmacy",
+  "funeral",
+  "insurance",
+  "tax service",
+  "accounting",
+  "attorney",
+  "law office",
+  "landscaping",
+  "construction",
+  "plumbing",
+  "electrical",
+  "roofing",
+  "automotive repair",
+  "car wash",
+  "dry clean",
+  "laundry",
+  "hair salon",
+  "nail salon",
+  "tattoo",
+  "massage",
+  "yoga",
+  "daycare",
+];
+
+/**
+ * Parse a single CSV line respecting quoted fields (commas inside quotes are ignored).
+ */
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === """) {
+      if (inQuotes && line[i + 1] === """) {
+        // Escaped quote inside a quoted field
+        current += """;
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === "," && !inQuotes) {
+      fields.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  fields.push(current.trim());
+  return fields;
 }
 
 /**
- * Scrape Oregon DFR pawnbroker licenses.
- * Attempts HTML page parse first, then downloadable file fallback.
- * Exits gracefully with TODO if portal is bot-protected.
+ * Return true if the business name matches at least one keyword (case-insensitive).
+ */
+function nameMatchesKeyword(name: string): boolean {
+  const lower = name.toLowerCase();
+  return SALE_TYPE_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+/**
+ * Return true if the business name contains a false-positive fragment.
+ */
+function nameIsExcluded(name: string): boolean {
+  const lower = name.toLowerCase();
+  return EXCLUDE_FRAGMENTS.some((frag) => lower.includes(frag));
+}
+
+/**
+ * Map a business name to a valid getOrCreateScrapedOrganizer category.
+ * Oregon has no license type column — infer from business name.
+ */
+function mapCategory(businessName: string): string {
+  const lower = businessName.toLowerCase();
+  if (lower.includes("auction")) return "AUCTION_HOUSE";
+  return "RESALE_SHOP";
+}
+
+/**
+ * Oregon Active Businesses secondary sale scraper.
+ * Fetches all Oregon active business records and filters to secondhand-sale
+ * matches using keyword matching on business name.
  */
 export async function runOregonPhase2Scraper(): Promise<void> {
-  const rateLimiter = defaultRateLimiter;
-  const domain = new URL(OR_DFR_BASE_URL).hostname;
-  let totalRecords = 0;
-  let createdOrganizers = 0;
+  let totalFetched = 0;
+  let totalMatched = 0;
+  let totalUpserted = 0;
+
+  console.log("[OregonPhase2] Starting secondary sale scraper via OR Open Data Portal");
+  console.log(`[OregonPhase2] Source: ${OR_OPEN_DATA_CSV_URL}`);
 
   try {
-    console.log('[OregonPhase2] Starting Oregon DFR pawnbroker license scraper');
+    await defaultRateLimiter.waitBeforeRequest(OR_OPEN_DATA_DOMAIN);
 
-    // Step 1: Attempt direct pawnbroker page
-    await rateLimiter.waitBeforeRequest(domain);
-
-    const pageResponse = await fetch(OR_DFR_SEARCH_URL, {
-      method: 'GET',
+    const response = await fetch(OR_OPEN_DATA_CSV_URL, {
+      method: "GET",
       headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        Connection: 'keep-alive',
+        Accept: "text/csv,*/*",
       },
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(120000),
     });
 
-    if (!pageResponse.ok) {
-      console.warn(`[OregonPhase2] DFR pawnbroker page failed: ${pageResponse.status}`);
-      if (pageResponse.status === 403) {
-        console.warn(
-          '[OregonPhase2] 403 Forbidden — bot protection active. ' +
-          'TODO: Oregon DFR blocks server-side requests. Options: ' +
-          '1. Check https://dfr.oregon.gov/business/register/Pages/pawnbrokers.aspx for downloadable list links. ' +
-          '2. Try https://dfr.oregon.gov/business/register/Documents/pawnbroker-licensees.xlsx directly. ' +
-          '3. Contact OR DFR at dfr.insuranceconsumer@oregon.gov to request bulk data.'
-        );
-        // Still try the downloadable file — direct file downloads bypass bot protection more often
-        await sleep(RATE_DELAY_MS);
-        const downloaded = await tryDownloadableFile(domain, rateLimiter, createdOrganizers, totalRecords);
-        if (!downloaded) {
-          console.warn('[OregonPhase2] All approaches blocked. Exiting gracefully.');
-        }
-        return;
-      }
-      return;
-    }
-
-    const html = await pageResponse.text();
-    console.log(`[OregonPhase2] DFR page fetched (${html.length} bytes)`);
-
-    // Check for captcha/bot protection
-    if (
-      html.includes('captcha') ||
-      html.includes('CAPTCHA') ||
-      html.includes('Cloudflare') ||
-      html.includes('cf-browser-verification') ||
-      html.length < 500
-    ) {
-      console.warn(
-        '[OregonPhase2] Bot protection detected on DFR portal. ' +
-        'TODO: Oregon DFR uses Cloudflare or similar protection. ' +
-        'Try downloading the licensee Excel file directly: ' +
-        `${OR_DFR_LICENSEE_EXCEL_URL}`
-      );
-      await sleep(RATE_DELAY_MS);
-      await tryDownloadableFile(domain, rateLimiter, createdOrganizers, totalRecords);
-      return;
-    }
-
-    // Check if page contains a downloadable file link — prefer that over HTML parsing
-    const xlsxMatch = html.match(/href="([^"]*\.xlsx[^"]*)"/i);
-    const csvMatch = html.match(/href="([^"]*\.csv[^"]*)"/i);
-    const pdfMatch = html.match(/href="([^"]*pawnbroker[^"]*\.pdf[^"]*)"/i);
-
-    if (xlsxMatch || csvMatch) {
-      const fileUrl = xlsxMatch
-        ? (xlsxMatch[1].startsWith('http') ? xlsxMatch[1] : `${OR_DFR_BASE_URL}${xlsxMatch[1]}`)
-        : (csvMatch![1].startsWith('http') ? csvMatch![1] : `${OR_DFR_BASE_URL}${csvMatch![1]}`);
-      console.log(`[OregonPhase2] Found downloadable licensee file: ${fileUrl}`);
-
-      // TODO: Implement XLSX/CSV parsing for Oregon DFR downloadable licensee list.
-      // The file at ${fileUrl} likely contains columns: Business Name, License Number, City, Status.
-      // Use a CSV parser or xlsx library (already available in the project) to parse and upsert.
-      // For now, log the URL and return — implement file parsing in next iteration.
-      console.warn(
-        `[OregonPhase2] Downloadable file found but XLSX/CSV parsing not yet implemented. ` +
-        `TODO: Add xlsx parsing to process ${fileUrl}`
+    if (!response.ok) {
+      console.error(
+        `[OregonPhase2] CSV fetch failed: HTTP ${response.status} from ${OR_OPEN_DATA_CSV_URL}`
       );
       return;
     }
 
-    // Parse HTML table rows from the page
-    const extractText = (cellHtml: string): string => {
-      return cellHtml
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .trim();
-    };
+    const csvText = await response.text();
+    const lines = csvText.split("
+");
 
-    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
-    let rowMatch: RegExpExecArray | null;
+    if (lines.length < 2) {
+      console.warn("[OregonPhase2] CSV response appears empty or malformed");
+      return;
+    }
 
-    while ((rowMatch = rowRegex.exec(html)) !== null) {
-      const rowHtml = rowMatch[1];
-      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/g;
-      const cells: string[] = [];
-      let cellMatch: RegExpExecArray | null;
+    // Parse header row — normalise to lowercase with single spaces
+    const headers = parseCsvLine(lines[0]).map((h) =>
+      h.toLowerCase().replace(/\s+/g, " ").trim()
+    );
 
-      while ((cellMatch = cellRegex.exec(rowHtml)) !== null) {
-        cells.push(extractText(cellMatch[1]));
-      }
+    console.log("[OregonPhase2] CSV headers found:", headers.join(", "));
 
-      if (cells.length < 2) continue;
+    const col = (name: string): number => headers.indexOf(name);
 
-      const licenseNumber = cells[0];
-      const businessName = cells[1];
-      const city = cells.length > 2 ? cells[2] : '';
+    // OR Socrata column probe — try multiple common variations
+    const iBusinessName =
+      col("business name") !== -1 ? col("business name") :
+      col("business_name") !== -1 ? col("business_name") :
+      col("entity name") !== -1 ? col("entity name") :
+      col("entity_name") !== -1 ? col("entity_name") :
+      col("name") !== -1 ? col("name") : -1;
 
-      if (!licenseNumber || !businessName || licenseNumber === 'License Number' || licenseNumber === 'License #') continue;
+    const iCity =
+      col("city") !== -1 ? col("city") :
+      col("principal city") !== -1 ? col("principal city") :
+      col("principal_city") !== -1 ? col("principal_city") :
+      col("mailing city") !== -1 ? col("mailing city") : -1;
 
-      totalRecords++;
+    const iZip =
+      col("zip") !== -1 ? col("zip") :
+      col("zip code") !== -1 ? col("zip code") :
+      col("zip_code") !== -1 ? col("zip_code") :
+      col("postal code") !== -1 ? col("postal code") :
+      col("principal zip") !== -1 ? col("principal zip") : -1;
 
-      console.log(`[OregonPhase2] Processing: ${businessName} (${licenseNumber}) in ${city || 'OR'}`);
+    const iAddress =
+      col("address") !== -1 ? col("address") :
+      col("principal address") !== -1 ? col("principal address") :
+      col("principal_address") !== -1 ? col("principal_address") :
+      col("street address") !== -1 ? col("street address") : -1;
+
+    const iRegistryNumber =
+      col("registry number") !== -1 ? col("registry number") :
+      col("registry_number") !== -1 ? col("registry_number") :
+      col("business id") !== -1 ? col("business id") :
+      col("business_id") !== -1 ? col("business_id") :
+      col("entity number") !== -1 ? col("entity number") : -1;
+
+    if (iBusinessName === -1) {
+      console.error(
+        "[OregonPhase2] Could not find business name column in CSV header. Headers found:",
+        headers.join(", ")
+      );
+      return;
+    }
+
+    totalFetched = lines.length - 1;
+    console.log(`[OregonPhase2] CSV fetched — ${totalFetched} data rows`);
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
 
       try {
-        const existing = await prisma.organizer.findFirst({
-          where: {
-            businessName: { equals: businessName, mode: 'insensitive' },
-            licenseState: 'OR',
-          },
-          select: { id: true },
-        });
+        const fields = parseCsvLine(line);
 
-        if (existing) {
-          await prisma.organizer.update({
-            where: { id: existing.id },
-            data: {
-              licenseNumber,
-              licenseState: 'OR',
-              isStateLicensed: true,
-              directoryMostRecentSource: 'OregonPhase2',
-              directoryMostRecentAt: new Date(),
-            },
-          });
-        } else {
-          const slug = businessName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
-          const citySlug = (city || 'or').toLowerCase().replace(/[^a-z0-9]/g, '-');
-          await prisma.organizer.create({
-            data: {
-              businessName,
-              phone: null,
-              address: city ? `${city}, OR` : 'Oregon',
-              city: city || 'Oregon',
-              state: 'OR',
-              bio: `Licensed pawnbroker in ${city || 'Oregon'}.`,
-              isClaimed: false,
-              isUnmanagedListing: true,
-              licenseNumber,
-              licenseState: 'OR',
-              isStateLicensed: true,
-              businessCategory: 'PAWN_SHOP',
-              directoryMostRecentSource: 'OregonPhase2',
-              directoryMostRecentAt: new Date(),
-              user: {
-                create: {
-                  email: `scraper+${slug}-${citySlug}-or-orphase2@system.finda.sale`,
-                  name: businessName,
-                  password: null,
-                  role: 'ORGANIZER',
-                  roles: ['ORGANIZER'],
-                },
-              },
-            },
-          });
-          createdOrganizers++;
+        const displayName = iBusinessName >= 0 ? (fields[iBusinessName] || "").trim() : "";
+
+        if (!displayName) continue;
+
+        // Filter: business name must match at least one sale-type keyword
+        if (!nameMatchesKeyword(displayName)) continue;
+
+        // Filter out false positives by name
+        if (nameIsExcluded(displayName)) continue;
+
+        totalMatched++;
+
+        const registryNumber = iRegistryNumber >= 0 ? (fields[iRegistryNumber] || "").trim() : "";
+        const city           = iCity           >= 0 ? (fields[iCity]           || "").trim() : "";
+        const zip            = iZip            >= 0 ? (fields[iZip]            || "").trim() : "";
+        const address1       = iAddress        >= 0 ? (fields[iAddress]        || "").trim() : "";
+
+        // dedupeKey: prefer registry number, fall back to slugified name
+        const slugifiedName = displayName
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "-")
+          .replace(/-+/g, "-")
+          .slice(0, 40);
+        const dedupeKey      = `OR-SECONDARY-${registryNumber || slugifiedName}`;
+        const businessCategory = mapCategory(displayName);
+
+        console.log(`[OregonPhase2] Matched: ${dedupeKey} — ${displayName}`);
+
+        const orgId = await getOrCreateScrapedOrganizer(
+          displayName,                  // businessName
+          "OregonPhase2",               // sourceName
+          city || "Oregon",             // city
+          "OR",                         // state
+          undefined,                    // esnOrgId
+          undefined,                    // googlePlaceId
+          undefined,                    // foursquareVenueId
+          undefined,                    // hereBusinessId
+          businessCategory,             // businessCategory
+          undefined,                    // contactEmail
+          undefined,                    // phone
+          undefined                     // website
+        );
+
+        if (orgId) {
+          totalUpserted++;
         }
-
-        if (totalRecords % 50 === 0) {
-          console.log(
-            `[OregonPhase2] Progress: ${totalRecords} records processed, ${createdOrganizers} created`
-          );
-        }
-
-        await sleep(RATE_DELAY_MS);
-      } catch (err) {
-        console.error(`[OregonPhase2] Error processing ${businessName}:`, err);
+      } catch (rowErr) {
+        console.error(`[OregonPhase2] Error on row ${i}:`, rowErr);
       }
     }
 
     console.log(
-      `[OregonPhase2] Scraper completed: ${totalRecords} records processed, ${createdOrganizers} created`
+      `[OregonPhase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`
     );
   } catch (error) {
-    console.error('[OregonPhase2] Scraper error:', error);
+    console.error("[OregonPhase2] Scraper fatal error:", error);
     throw error;
   }
-}
-
-/**
- * Attempt to download the Oregon DFR pawnbroker licensee file directly.
- * Direct file downloads (xlsx/csv) often bypass bot protection that affects HTML page requests.
- */
-async function tryDownloadableFile(
-  domain: string,
-  rateLimiter: typeof defaultRateLimiter,
-  createdOrganizers: number,
-  totalRecords: number
-): Promise<boolean> {
-  for (const fileUrl of [OR_DFR_LICENSEE_EXCEL_URL, OR_DFR_LICENSEE_CSV_URL]) {
-    console.log(`[OregonPhase2] Attempting direct file download: ${fileUrl}`);
-    await rateLimiter.waitBeforeRequest(domain);
-
-    const response = await fetch(fileUrl, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: '*/*',
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (response.ok) {
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('spreadsheet') || contentType.includes('excel') || contentType.includes('csv') || contentType.includes('octet-stream')) {
-        console.warn(
-          `[OregonPhase2] Downloadable file available at ${fileUrl}. ` +
-          'TODO: XLSX/CSV parsing not yet implemented. ' +
-          'Add xlsx library parsing here to extract: businessName, licenseNumber, city columns.'
-        );
-        return true;
-      }
-    } else {
-      console.warn(`[OregonPhase2] File download failed for ${fileUrl}: ${response.status}`);
-    }
-  }
-
-  return false;
 }

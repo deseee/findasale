@@ -495,7 +495,7 @@ export async function scrapeTheSaleSeker(
     if (!response.ok) {
       if (response.status === 429) {
         const retryAfter = response.headers.get('Retry-After');
-        rateLimiter.recordBackoff(domain, retryAfter ? parseInt(retryAfter, 10) : 60);
+        rateLimiter.recordBackoff(domain, parseInt(retryAfter ?? '60', 10));
       }
       console.warn(`[TheSaleSeker] Search page returned ${response.status}`);
       return stats;
