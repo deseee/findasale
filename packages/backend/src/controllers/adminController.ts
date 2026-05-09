@@ -1143,18 +1143,18 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
     });
 
     // Last scrape runs grouped by source
-    const scrapeRuns = await prisma.scrapeRun.findMany({
+    const scrapeRuns = await prisma.scrapedSalesJob.findMany({
       orderBy: { createdAt: 'desc' },
       take: 100,
-      select: { sourceName: true, createdAt: true },
+      select: { source: true, createdAt: true },
     });
 
     const lastScrapeRunsBySource: Record<string, string> = {};
     const sourceNames = new Set<string>();
     scrapeRuns.forEach((run: any) => {
-      if (run.sourceName && !sourceNames.has(run.sourceName)) {
-        lastScrapeRunsBySource[run.sourceName] = run.createdAt.toISOString();
-        sourceNames.add(run.sourceName);
+      if (run.source && !sourceNames.has(run.source)) {
+        lastScrapeRunsBySource[run.source] = run.createdAt.toISOString();
+        sourceNames.add(run.source);
       }
     });
 
