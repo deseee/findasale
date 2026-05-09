@@ -735,7 +735,10 @@ model Sale {
   tags                        String[]
   status                      String                   @default("DRAFT") // DRAFT, PUBLISHED, ENDED
   isAuctionSale               Boolean                  @default(false) // Deprecated: use saleType instead
-  saleType                    String                   @default("ESTATE") // B1: ESTATE | YARD | AUCTION | FLEA_MARKET
+  saleType                    String                   @default("ESTATE") // B1: ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL
+  // Design S703: Online-only + subtype (UI wired, schema lands here)
+  isOnlineOnly                Boolean                  @default(false) // true = no physical address required; Online Only sales
+  saleSubtype                 String? // 'moving' | 'storage_auction' | 'pop_up' | 'benefit' | 'virtual'
   qrScanCount                 Int                      @default(0)
   endingSoonNotified          Boolean                  @default(false) // Track if "Sale Ending Soon" notification has been sent
   // Feature #35: Front Door Locator — entrance/parking location
