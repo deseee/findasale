@@ -2,6 +2,7 @@ import { prisma } from '../index';
 import { Resend } from 'resend';
 import twilio from 'twilio';
 import { sendPushNotification } from '../utils/webpush';
+import { buildSaleDayReminderEmail } from './emailTemplateService';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -54,70 +55,24 @@ const formatSaleDateTime = (date: Date): string => {
 
 const getEmailTemplate = (reminder: ReminderEmail, unsubToken: string): { subject: string; html: string } => {
   const formattedDate = formatSaleDateTime(reminder.startDate);
+  const dateOnly = reminder.startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const timeOnly = reminder.startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-  if (reminder.reminderType === 'one-day') {
-    return {
-      subject: `Reminder: ${reminder.saleName} starts tomorrow!`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Don't forget about ${reminder.saleName}!</h2>
-          <p style="font-size: 16px; color: #666;">This sale starts tomorrow:</p>
+  const subject = reminder.reminderType === 'one-day'
+    ? `Your sale is tomorrow — ${reminder.saleName}`
+    : `${reminder.saleName} starts in 2 hours!`;
 
-          <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #333;">${reminder.saleName}</h3>
-            <p style="margin: 8px 0; color: #666;">
-              📍 ${reminder.saleAddress}
-            </p>
-            <p style="margin: 8px 0; color: #666;">
-              🕐 ${formattedDate}
-            </p>
-          </div>
+  const html = buildSaleDayReminderEmail({
+    saleName:     reminder.saleName,
+    saleDate:     reminder.reminderType === 'one-day' ? dateOnly : formattedDate,
+    saleTime:     reminder.reminderType === 'one-day' ? `Opens ${timeOnly}` : `Starting at ${timeOnly}`,
+    saleAddress:  reminder.saleAddress,
+    ctaUrl:       reminder.saleUrl,
+    reminderType: reminder.reminderType,
+    unsubUrl:     `${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?token=${unsubToken}`,
+  });
 
-          <p style="font-size: 16px; color: #666;">
-            <a href="${reminder.saleUrl}" style="background: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">
-              View Sale Details
-            </a>
-          </p>
-
-          <p style="font-size: 14px; color: #999; margin-top: 30px;">
-            You're receiving this because you're watching this sale on FindA.Sale.<br/>
-            <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?token=${unsubToken}" style="color: #999;">Unsubscribe from reminders</a>
-          </p>
-        </div>
-      `,
-    };
-  }
-
-  return {
-    subject: `${reminder.saleName} starts in 2 hours!`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Sale happening soon!</h2>
-        <p style="font-size: 16px; color: #666;">This sale you're watching starts in just 2 hours:</p>
-
-        <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #333;">${reminder.saleName}</h3>
-          <p style="margin: 8px 0; color: #666;">
-            📍 ${reminder.saleAddress}
-          </p>
-          <p style="margin: 8px 0; color: #666;">
-            🕐 ${formattedDate}
-          </p>
-        </div>
-
-        <p style="font-size: 16px; color: #666;">
-          <a href="${reminder.saleUrl}" style="background: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">
-            Get Directions & Details
-          </a>
-        </p>
-
-        <p style="font-size: 14px; color: #999; margin-top: 30px;">
-          You're receiving this because you're watching this sale on FindA.Sale.<br/>
-          <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?token=${unsubToken}" style="color: #999;">Unsubscribe from reminders</a>
-        </p>
-      </div>
-    `,
-  };
+  return { subject, html };
 };
 
 // EM2/EM3: Shared retry helper with exponential backoff — used for both email and SMS sends

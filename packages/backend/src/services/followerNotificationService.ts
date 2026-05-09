@@ -11,6 +11,7 @@
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService';
 import { Resend } from 'resend';
+import { buildNewSaleAlertEmail } from './emailTemplateService';
 import { sendPushNotification } from '../utils/webpush';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -64,34 +65,20 @@ export const notifyFollowersOfNewSale = async (sale: SaleInfo): Promise<void> =>
       // ── Email ──────────────────────────────────────────────────────────────
       if (follow.notifyEmail && follow.user.email) {
         try {
-          await resend.emails.send({
+await resend.emails.send({
             from:    process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
             to:      follow.user.email,
-            subject: `New sale from ${organizer.businessName}: ${sale.title}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #333;">${organizer.businessName} just posted a new sale!</h2>
-
-                <div style="background: #fef3c7; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #d97706;">
-                  <h3 style="margin-top: 0; color: #333;">${sale.title}</h3>
-                  <p style="margin: 8px 0; color: #666;">📍 ${sale.address}, ${sale.city}, ${sale.state}</p>
-                  <p style="margin: 8px 0; color: #666;">🕐 ${formattedDate}</p>
-                </div>
-
-                <p>
-                  <a href="${saleUrl}"
-                     style="background: #d97706; color: white; padding: 10px 20px;
-                            text-decoration: none; border-radius: 4px; display: inline-block;">
-                    View Sale Details
-                  </a>
-                </p>
-
-                <p style="font-size: 14px; color: #999; margin-top: 30px;">
-                  You're receiving this because you follow ${organizer.businessName} on FindA.Sale.<br/>
-                  <a href="${manageUrl}" style="color: #999;">Manage your follows</a>
-                </p>
-              </div>
-            `,
+            subject: `${organizer.businessName} just posted a sale near you`,
+            html:    buildNewSaleAlertEmail({
+              organizerName: organizer.businessName,
+              sale: {
+                title:     sale.title,
+                dateRange: formattedDate,
+                address:   `${sale.address}, ${sale.city}, ${sale.state}`,
+                saleUrl,
+              },
+              unsubUrl: `${process.env.FRONTEND_URL || 'https://finda.sale'}/unsubscribe?reason=follows&org=${sale.organizerId}`,
+            }),
           });
         } catch (err: any) {
           console.error(

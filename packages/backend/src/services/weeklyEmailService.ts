@@ -4,6 +4,7 @@
 import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { regionConfig } from '../config/regionConfig';
+import { buildEmail } from './emailTemplateService';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -93,7 +94,7 @@ const buildPersonalizedPicks = async (
   return picks;
 };
 
-// Build HTML email template
+// Build HTML email using the FindA.Sale design system
 const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubToken: string): string => {
   const formatDate = (d: Date) => {
     const now = new Date();
@@ -104,90 +105,42 @@ const buildEmailHtml = (name: string, picks: WeeklyPickItem[], unsubToken: strin
     return `${dateStr} (In ${daysUntil} days)`;
   };
 
-  const itemCards = picks
-    .map(
-      (item) => `
-    <div style="border:1px solid #e5e7eb; border-radius:8px; padding:14px; margin-bottom:12px; background:#fff; overflow:hidden;">
-      ${
-        item.photoUrls?.[0]
-          ? `<img src="${item.photoUrls[0]}" alt="${item.title}" style="width:100%; max-height:180px; object-fit:cover; border-radius:6px; margin-bottom:12px; display:block;" />`
-          : ''
-      }
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-        <div style="flex:1;">
-          <div style="font-weight:600; font-size:15px; color:#1f2937; margin-bottom:4px;">${item.title}</div>
-          ${
-            item.category
-              ? `<div style="display:inline-block; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; margin-bottom:8px;">${item.category}</div>`
-              : ''
-          }
-        </div>
-      </div>
-      ${
-        item.price
-          ? `<div style="color:#d97706; font-weight:700; font-size:18px; margin-bottom:8px;">$${(item.price / 100).toFixed(2)}</div>`
-          : ''
-      }
-      <div style="color:#6b7280; font-size:13px; font-weight:600; margin-bottom:2px;">${item.saleName}</div>
-      <div style="color:#6b7280; font-size:12px; margin-bottom:12px;">${item.saleCity} · ${formatDate(item.saleStartDate)}</div>
-      <a href="${FRONTEND_URL}/items/${item.id}" style="display:inline-block; padding:8px 16px; background:#d97706; color:#fff; border-radius:6px; text-decoration:none; font-size:14px; font-weight:600;">View Item</a>
-    </div>`
-    )
-    .join('');
+  const itemCardsHtml = picks.map((item) => {
+    const price = item.price ? item.price / 100 : 0;
+    const priceStr = price > 0 ? `$${price.toFixed(2)}` : '';
+    const photoHtml = item.photoUrls?.[0]
+      ? `<img src="${item.photoUrls[0]}" alt="${item.title}" style="width:100%; max-height:160px; object-fit:cover; border-radius:6px; margin-bottom:10px; display:block;" />`
+      : '';
+    return `
+<div style="border:1px solid #E8E2D8; border-radius:8px; padding:14px; margin-bottom:12px; background:#ffffff;">
+  ${photoHtml}
+  <div style="font-weight:600; font-size:15px; color:#1A1814; margin-bottom:4px;">${item.title}</div>
+  ${priceStr ? `<div style="color:#C8552B; font-weight:700; font-size:16px; margin-bottom:4px;">${priceStr}</div>` : ''}
+  ${item.category ? `<div style="color:rgba(26,24,20,0.62); font-size:13px; margin-bottom:6px;">${item.category}</div>` : ''}
+  <div style="color:rgba(26,24,20,0.62); font-size:12px; margin-bottom:10px;">${item.saleName} &middot; ${item.saleCity} &middot; ${formatDate(item.saleStartDate)}</div>
+  <a href="${FRONTEND_URL}/items/${item.id}" style="display:inline-block; padding:6px 14px; background-color:#C8552B; color:#ffffff; border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">View Item</a>
+</div>`;
+  }).join('');
 
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0; padding:0; background:#fafaf9; font-family:Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafaf9; padding:24px 16px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.08);">
+  const priceMin = picks.some(p => p.price) ? Math.min(...picks.filter(p => p.price).map(p => p.price!)) / 100 : 0;
+  const priceMax = picks.some(p => p.price) ? Math.max(...picks.filter(p => p.price).map(p => p.price!)) / 100 : 0;
+  const priceRange = picks.some(p => p.price) ? ` Prices from $${priceMin.toFixed(0)} to $${priceMax.toFixed(0)}.` : '';
 
-          <!-- Header -->
-          <tr>
-            <td style="background:#d97706; padding:28px 32px; text-align:center;">
-              <span style="font-size:26px; font-weight:700; color:#fff;">FindA.Sale</span>
-              <p style="margin:8px 0 0; font-size:15px; color:#fde68a; font-weight:500;">Your Weekly Sale Picks</p>
-            </td>
-          </tr>
-
-          <!-- Body -->
-          <tr>
-            <td style="padding:28px 32px;">
-              <p style="font-size:15px; color:#374151; margin:0 0 12px;">Hi ${name},</p>
-              <p style="font-size:15px; color:#374151; margin:0 0 24px;">We found <strong>${picks.length} items</strong> across this week's sales that match what you've been looking at. Prices range from $${Math.min(...picks.map(p => p.price || 0)).toFixed(0)} to $${Math.max(...picks.map(p => p.price || 0)).toFixed(0)}. First dibs on these goes quickly.</p>
-
-              <div>
-                ${itemCards}
-              </div>
-
-              <div style="text-align:center; margin-top:28px; padding-top:28px; border-top:1px solid #e5e7eb;">
-                <a href="${FRONTEND_URL}" style="display:inline-block; padding:12px 28px; background:#d97706; color:#fff; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px;">Browse All Sales</a>
-              </div>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding:20px 32px; background:#f9f7f4; border-top:1px solid #e5e7eb; text-align:center;">
-              <p style="font-size:12px; color:#9ca3af; margin:0;">
-                <a href="${FRONTEND_URL}/profile?tab=notifications" style="color:#6b7280; text-decoration:none; font-weight:600;">Manage frequency</a> ·
-                <a href="${FRONTEND_URL}/profile?tab=categories" style="color:#6b7280; text-decoration:none;">Update interests</a> ·
-                <a href="${FRONTEND_URL}/unsubscribe?token=${unsubToken}" style="color:#9ca3af; text-decoration:none;">Unsubscribe</a><br/>
-                <span style="color:#d1d5db; font-size:11px; margin-top:8px; display:block;">You're receiving this because you have an account at FindA.Sale.</span>
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-};
+  return buildEmail({
+    preheader: `${picks.length} sale finds this week matched what you've been looking for.`,
+    headline: `Your picks this week, ${name}.`,
+    body: `
+<p style="margin:0 0 16px; color:rgba(26,24,20,0.62);">
+  We found <strong>${picks.length} item${picks.length !== 1 ? 's' : ''}</strong> across this week's sales that match what you've been looking at.${priceRange} First dibs goes quickly.
+</p>
+${itemCardsHtml}
+    `,
+    ctaText: 'Browse all sales',
+    ctaUrl: FRONTEND_URL,
+    unsubLabel: 'Unsubscribe from weekly picks',
+    unsubUrl: `${FRONTEND_URL}/unsubscribe?token=${unsubToken}`,
+  });
+};;
 
 // Send weekly picks email to a single user
 const sendWeeklyPicksEmail = async (email: string, userId: string, name: string, picks: WeeklyPickItem[]): Promise<void> => {
