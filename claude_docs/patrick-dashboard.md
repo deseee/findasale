@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S699 Wrap
+# Patrick's Dashboard — S700 Wrap
 
 ---
 
@@ -7,81 +7,57 @@
 | Area | Status |
 |------|--------|
 | Vercel build | ✅ GREEN |
-| Railway backend | ✅ GREEN |
-| Google OAuth | ⚠️ Still broken (root cause unclear) |
+| Railway backend | ✅ GREEN (crash loop fixed S700) |
+| Google OAuth | ⚠️ Still broken |
 | Login (email/password) | ✅ Working |
 | MCP Server (mcp.finda.sale) | ✅ LIVE — 7 tools |
-| S698 push block | ⚠️ STILL PENDING — push + migration needed |
-| 18-state licensing scrapers | ✅ COMPLETE — all corrected S697 |
-| Phase 2 scrapers | ✅ AK / NJ / WY / OK built |
-| Phase 2 research (blocked states) | 🔴 AZ/DE/ID/IL/KS/MI/MN/MO all city-level or restricted |
-| Outreach lead priority | ✅ HOT 40% / WARM 35% / COLD 25% |
-| MailerLite tier group wiring | ✅ BUILT — needs 3 Railway env vars + S698 push |
-| Email discovery schema | ✅ BUILT — needs S698 push + `prisma migrate deploy` |
-| #174 Auction QA | 🟡 2 P0s fixed (bid amount + reverse auction display). QA after S698 push deploys. |
+| S698 push block | ⚠️ STILL PENDING — migration needed after push |
+| Phase 2 YAML workflows | ✅ All 4 fixed + confirmed green (S700) |
+| Oklahoma Phase 2 scraper | ✅ Built (S700) |
+| #174 Reverse auction badge | ✅ VERIFIED S700 (price decays correctly, badge renders) |
+| #174 Standard auction bid flow | ⚠️ Still unverified (bid $30 on Vintage Brass Compass needed) |
 | Design brief pipeline | ✅ S699 COMPLETE — 5 briefs + implementation order |
+| MailerLite tier group wiring | ✅ BUILT — needs 3 Railway env vars + S698 push |
 
 ---
 
-## What Happened This Session (S699)
+## What Happened This Session (S700)
 
-Pure design strategy session — no code changes, all documentation.
+Crash fixes, scraper repair, null guard, and reverse auction QA.
 
-Reviewed all 5 Claude Design handoff zip files (the returns from design Sessions 1–5). Synthesized findings, answered design's open questions, and created 5 design brief documents that drive future implementation.
+**Railway crash fixed** — `emailDiscoveryService.ts` imported from `'../db'` which doesn't exist. Changed to `'../lib/prisma'` and replaced 3× `db.organizer` → `prisma.organizer`. MCP-pushed (before ban took effect), commit `641d1c6`. Backend is healthy again.
 
-**Files created:**
-- `claude_docs/design/storefront-design-reply-v1.md` — answers to all 11 design question categories
-- `claude_docs/design/session-2-sale-detail-shopper-onboarding.md` — sale detail page brief (all states + shopper first-run)
-- `claude_docs/design/session-3-organizer-sale-creation-wizard.md` — 5-step wizard + item manager + quick-add flow
-- `claude_docs/design/session-4-email-design-system.md` — base template + 5 modules + 7 emails
-- `claude_docs/design/session-5-smart-queue-broadcast-saletypes.md` — Smart queue, broadcast composer, sale type matrix
+**Phase 2 workflow YAMLs fixed** — All 4 (AK/NJ/WY/OK) had invalid multiline YAML syntax in the `run:` field that caused GitHub Actions to reject them entirely ("No jobs were run"). Fixed to `run: |` block scalar. You confirmed "all green" after push.
 
-**Key design decisions locked this session:**
-- Light is the default public tone; dark is organizer-selectable (not a global toggle)
-- `aiSuggestedPrice` is always a ghost placeholder — never pre-fill, organizer must type
-- No "AI" in any copy — "Smart" or "Auto" only
-- DRAFT / PUBLISHED / ENDED are schema values; UPCOMING / LIVE are rendered, never stored
-- Storefront identity = Simple / Pro / Teams; BRONZE/SILVER/GOLD = activity reputation tier (different things)
-- Subtypes (Moving Sale, Pop-Up, Charity, Storage Auction) are display-layer — no new schema enums
-- One dev gap: Online Only toggle was designed in the sale-types canvas but dev must integrate it into wizard Step 2 (not Step 1)
+**Oklahoma scraper created** — The `oklahomaphase2Scraper.ts` file was missing (the OK workflow was importing a file that didn't exist). Built from the WY template, targeting the Oklahoma ODCC licensing portal.
 
-**Implementation priority:**
+**saleDetailEnrichment null guard** — Railway logs showed `TypeError: Invalid URL` with `input: 'undefined'` when a scraped sale had no `sourceUrl`. Added an early return before the URL parse.
 
-| Priority | Surface | Why |
-|----------|---------|-----|
-| 1st | Sale detail page (Session 2) | Highest-traffic page, Google cold traffic lands here |
-| 2nd | Sale creation wizard (Session 3) | Activation gate — organizers who finish it are retained |
-| 3rd | Email design system (Session 4) | Every user receives these; unlocks broadcast template too |
-| 4th | Smart review queue (Session 5 Brief D) | Completes camera pipeline (PENDING_REVIEW state) |
-| 5th | Broadcast composer (Session 5 Brief E) | Schema already exists (#356), Pro/Teams monetization |
-| 6th | Sale type badge system (Session 5 Brief F) | Display-only, no schema changes |
-| 7th | Storefront v0.2 | Light-default flip, not blocking anything |
+**#174 Reverse auction ✅ VERIFIED** — Navigated to the Vintage Brass Compass item as Leo Thomas. The amber "Price Drops Daily" badge rendered correctly: current price $75.00 (started at $120, drops $15/day, 3 days elapsed = $75), floor $45. Working exactly as designed.
+
+**MCP push ban confirmed** — Going forward, all file deliveries use pushblocks only. No more MCP push (too many conflicts).
 
 ---
 
 ## Patrick Actions Needed
 
-**Step 1 — S699 push (design docs + wrap docs):**
+**Step 1 — S700 wrap push:**
 ```powershell
-git add claude_docs/design/storefront-design-reply-v1.md
-git add "claude_docs/design/session-2-sale-detail-shopper-onboarding.md"
-git add "claude_docs/design/session-3-organizer-sale-creation-wizard.md"
-git add "claude_docs/design/session-4-email-design-system.md"
-git add "claude_docs/design/session-5-smart-queue-broadcast-saletypes.md"
+git add packages/backend/src/services/scraper/sources/oklahomaphase2Scraper.ts
+git add packages/backend/src/services/scraper/saleDetailEnrichment.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S699: Design brief pipeline — 5 sessions + implementation order"
+git commit -m "S700: oklahomaphase2Scraper, saleDetailEnrichment null guard, wrap docs"
 .\push.ps1
 ```
 
-**Step 2 — S698 push (still pending from last session — includes auction P0 fixes + scraper phone/website dropout fix):**
+**Step 2 — S698 push (still pending — auction P0 fixes + scraper + MailerLite):**
 ```powershell
 git add claude_docs/strategy/email-discovery-spec.md
 git add packages/backend/src/services/mailerliteService.ts
 git add packages/backend/src/jobs/outreachEmailsCron.ts
 git add packages/database/prisma/schema.prisma
 git add packages/database/prisma/migrations/20260508000002_email_discovery_fields/migration.sql
-git add packages/backend/src/services/emailDiscoveryService.ts
 git add packages/backend/src/controllers/itemController.ts
 git add packages/frontend/pages/items/[id].tsx
 git add packages/frontend/components/ReverseAuctionBadge.tsx
@@ -104,7 +80,7 @@ npx prisma generate
 ```
 
 **Step 4 — Add Railway env vars** (Railway dashboard → findasale-backend → Variables):
-- `MAILERLITE_COLD_GROUP_ID` — get from MailerLite dashboard → Subscribers → Groups
+- `MAILERLITE_COLD_GROUP_ID`
 - `MAILERLITE_WARM_GROUP_ID`
 - `MAILERLITE_HOT_GROUP_ID`
 
@@ -112,15 +88,12 @@ npx prisma generate
 - Railway dashboard → findasale-backend → Variables
 - GitHub repo → Settings → Secrets → Actions
 
-**Step 6 — QA #174 Auction** (bid fix is deployed):
-Login user12@example.com / Seedy2025! → finda.sale/sales/c5hykxxecanngwcrkvq92n1va
-
 ---
 
-## Next Session (S700) — Top Priorities
+## Next Session (S701) — Top Priorities
 
-1. **#174 Auction QA** — login user12, bid on Vintage Brass Compass, verify reverse auction price drop
-2. **Wire emailDiscoveryJob into cron scheduler** — job is built but not registered; add to jobRunner + `EMAIL_DISCOVERY_ENABLED=true` env var
-3. **Illinois Phase 2 scraper** — IDFPR eLicense portal needs manual inspection to confirm if machine-readable
-4. **QA #352/#353 settings** — verify tagline/yearFounded persist after S697/S698 push
-5. **Design → Dev: sale detail page (Session 2)** — highest-priority implementation handoff
+1. **Design → Dev: sale detail page (Session 2 brief)** — highest-traffic public page, Google cold traffic lands here. Load `session-2-sale-detail-shopper-onboarding.md` and dispatch findasale-dev.
+2. **Wire emailDiscoveryJob into cron scheduler** — job is built but not registered; needs `EMAIL_DISCOVERY_ENABLED=true` env var + registration in jobRunner.
+3. **Standard auction bid flow QA** — user12@example.com / Seedy2025! → `finda.sale/sales/c5hykxxecanngwcrkvq92n1va` → bid $30 on Vintage Brass Compass.
+4. **QA #352/#353 settings** — tagline/yearFounded persist check (S697 fix deployed).
+5. **Illinois Phase 2 scraper** — IDFPR eLicense portal needs manual inspection.

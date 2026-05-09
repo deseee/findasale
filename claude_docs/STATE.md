@@ -4,7 +4,25 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S699 — Design Strategy Session: 5 design briefs commissioned + implementation order mapped (COMPLETE — push block below)**
+**Latest: S700 — Railway Crash Fix + Phase 2 YAML Fix + OK Scraper + Null URL Guard + #174 Reverse Auction QA ✅ (COMPLETE)**
+
+S700 resolved a Railway crash loop, fixed all 4 Phase 2 workflow YAMLs, created the missing Oklahoma scraper, patched a null URL crash in saleDetailEnrichment, and verified the reverse auction badge end-to-end in Chrome. MCP push banned from this session forward — pushblock only.
+
+**Completed this session:**
+- **emailDiscoveryService crash fixed** — `import { db } from '../db'` → `import { prisma } from '../lib/prisma'` + 3× `db.organizer` → `prisma.organizer`. Railway was crash-looping on boot. MCP-pushed (before ban), commit `641d1c6`.
+- **Phase 2 YAML syntax fixed (all 4)** — `scrape-ak-phase2.yml`, `scrape-nj-phase2.yml`, `scrape-wy-phase2.yml`, `scrape-ok-phase2.yml` were using invalid YAML multiline double-quoted `run:` strings. Fixed to `run: |` block scalar with single-quoted tsx. Patrick confirmed "all green" after push.
+- **oklahomaphase2Scraper.ts created** — File was missing, breaking the OK workflow. Created via bash heredoc. Targets ODCC ASP.NET form (`okdocc.state.ok.us`), two-step GET/POST, parses table rows, upserts with `licenseState: 'OK'`, `businessCategory: 'PAWN_SHOP'`.
+- **saleDetailEnrichment null URL guard** — `new URL(undefined)` was throwing `TypeError: Invalid URL` when a sale had no `sourceUrl`. Added early return guard at top of `enrichSaleDetails()`.
+- **#174 Reverse auction ✅ VERIFIED** — Navigated to `finda.sale/items/ce65ser7xo2ef073v8w3ud0ac` as Leo Thomas (user12@example.com). After fresh page load: ReverseAuctionBadge rendered amber, "Price Drops Daily" copy present, current price $75.00 (correct: $120 − 3 days × $15 = $75), drops $15.00/day, floor $45.00. Price label "Current Price". ✅ full verification.
+
+**Pending Patrick actions (carry-forward):**
+- Railway env vars: `MAILERLITE_COLD_GROUP_ID`, `MAILERLITE_WARM_GROUP_ID`, `MAILERLITE_HOT_GROUP_ID`
+- S698 migration still needs running if not done: `prisma migrate deploy` + `prisma generate`
+- Wire `emailDiscoveryJob` into cron scheduler + set `EMAIL_DISCOVERY_ENABLED=true`
+
+---
+
+**Previous: S699 — Design Strategy Session: 5 design briefs commissioned + implementation order mapped (COMPLETE — push block below)**
 
 S699 was a pure design strategy session. Reviewed all 5 Claude Design handoff zip files (Sessions 1–5). Created 5 design brief/reply documents in `claude_docs/design/`. Answered all design open questions. Mapped implementation priority against the roadmap. No code changes this session — all deliverables are documentation files for the design pipeline.
 
@@ -800,7 +818,7 @@ Settlement Hub (#228): `platformFeeAmount` + `netProceeds` computed at creation.
 | Modal focus traps (34 modals) | ✅ S681 VERIFIED — MessageComposeModal tested. Tab trap ✅, Escape ✅, focus-on-open ✅ (fix shipped). Other modals assumed covered by AccessibleModal fix. | — | S664 |
 | Claim verify flow | ✅ S688 VERIFIED — All 3 states confirmed: invalid token → "Invalid Link", valid token → "Email Verified!" with business name, already-used → "Already Verified". | — | S667 |
 | NSFW detection | Code shipped S667 but not browser-tested | Upload an image via organizer flow, confirm Cloudinary moderation runs | S667 |
-| **#174 Auction — bid flow + reverse auction** | `items/[id].tsx` `maxBidAmount` fix needs deploy. Data is seeded (sale `c5hykxxecanngwcrkvq92n1va`, user2@example.com). | Push `items/[id].tsx`, then QA: login as user12/Seedy2025!, navigate to sale, bid on Vintage Brass Compass ($30 on $25 start), verify reverse auction item shows ~$75 dropping price, check organizer bid view. | S693 |
+| **#174 Reverse auction badge** | ✅ S700 VERIFIED — `finda.sale/items/ce65ser7xo2ef073v8w3ud0ac` as user12. Badge renders amber, price $75 (correct decay: $120 − 3×$15), floor $45, "Price Drops Daily". Bid flow (standard auction) still UNVERIFIED — needs user12 to place $30 bid on Vintage Brass Compass on sale `c5hykxxecanngwcrkvq92n1va`. | — | S693 |
 | #251 priceBeforeMarkdown | No production item with markdownApplied=true | Seed item with markdownApplied=true, verify strikethrough price renders | S661 |
 | #235 DonationModal | ✅ S689 VERIFIED end-to-end. Two-iteration fix: double /api/ prefix (S688) + auth/me subscriptionLapsed field (S689). PRO tier gate opens correctly, all 3 steps render. | — | S661 |
 | AI listing enrichment | Fire-and-forget — needs scraped sale with description >50 chars | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` | S651 |
@@ -815,7 +833,13 @@ Seeded 5 auction items on user2's production auction sale. QA run found two bugs
 
 ---
 
-## Recent Sessions (S693–S699)
+## Recent Sessions (S700–S699)
+
+### S700 — Railway Crash Fix + Phase 2 YAML Fix + OK Scraper + Null URL Guard + #174 Reverse Auction QA ✅ (COMPLETE)
+
+emailDiscoveryService crash fixed (`'../db'` → `'../lib/prisma'`) — MCP-pushed commit `641d1c6`. All 4 Phase 2 workflow YAMLs fixed (multiline double-quoted `run:` → `run: |` block scalar). `oklahomaphase2Scraper.ts` created (was missing, breaking OK workflow). `saleDetailEnrichment.ts` null URL guard added (`new URL(undefined)` crash patched). #174 reverse auction badge ✅ VERIFIED in Chrome as user12: price $75.00 (correct decay), floor $45, "Price Drops Daily" amber badge. MCP push banned this session — pushblock only going forward. S698 env vars + migration still pending.
+
+---
 
 ### S699 — Design Strategy Session: 5 briefs + implementation order (COMPLETE — push block provided)
 
@@ -1074,9 +1098,26 @@ Full Google Maps Platform incident response and lockdown. Root cause: monthly Gi
 
 ---
 
-## Next Session — S700
+## Next Session — S701
 
-### Step 0 — All S691–S697 pushes complete ✅ (verified S698)
+### Step 0 — S700 push block
+
+Push remaining S700 files that weren't already on GitHub:
+
+```powershell
+git add packages/backend/src/services/scraper/sources/oklahomaphase2Scraper.ts
+git add packages/backend/src/services/scraper/saleDetailEnrichment.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S700: oklahomaphase2Scraper, saleDetailEnrichment null guard, wrap docs"
+.\push.ps1
+```
+
+Already on GitHub (no need to re-add):
+- `packages/backend/src/services/emailDiscoveryService.ts` — MCP-pushed commit `641d1c6`
+- All 4 Phase 2 workflow YMLs (AK/NJ/WY/OK) — Patrick confirmed "all green" after push
+
+### Step 0b — All S691–S697 pushes complete ✅ (verified S698)
 
 All push blocks cleared. S691–S697 commits confirmed on GitHub.
 
