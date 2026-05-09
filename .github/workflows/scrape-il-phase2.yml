@@ -1,0 +1,58 @@
+name: Scrape Illinois Pawnbroker Licenses (Phase 2)
+
+on:
+  schedule:
+    # Monday 11:00 AM UTC
+    - cron: '0 11 * * 1'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: Illinois Phase 2 Pawnbroker Scraper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Illinois Phase 2 Scraper
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { runIllinoisPhase2Scraper } from "./src/services/scraper/sources/illinoisPhase2Scraper";
+            try {
+              await runIllinoisPhase2Scraper();
+              console.log("Illinois Phase 2 scraper completed successfully");
+              process.exit(0);
+            } catch (err) {
+              console.error("Illinois Phase 2 scraper failed:", err);
+              process.exit(1);
+            }
+          '
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: 1,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️ Illinois Phase 2 pawnbroker scraper failed. Check workflow logs for details.'
+            })
