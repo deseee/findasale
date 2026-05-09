@@ -1,11 +1,20 @@
 /**
- * Delaware State Police Professional Licensing Section — Pawnbroker License Scraper (Phase 2)
- * Scrapes licensed pawnbrokers from the Delaware Open Data Portal (Socrata dataset 5zy2-grhr)
- * Source: https://data.delaware.gov/api/views/5zy2-grhr/rows.csv?accessType=DOWNLOAD
+ * Delaware Pawnbroker License Scraper (Phase 2) — NO PUBLIC DATA SOURCE
  * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data
  *
- * The Delaware Open Data Portal publishes the full state business license database as a public CSV.
- * We filter rows where "Business Activity" contains "PAWN" (case-insensitive).
+ * RESEARCH FINDING (S701):
+ * Delaware pawnbroker licenses are issued by the Delaware State Police Professional
+ * Licensing Section (dsp.delaware.gov), NOT the Division of Revenue. DSP does NOT
+ * publish a public online list of licensed pawnbrokers.
+ *
+ * The Delaware Open Data Portal (data.delaware.gov, dataset 5zy2-grhr) was checked —
+ * it contains 118k+ Division of Revenue business licenses but has NO "PAWNBROKER"
+ * activity category. Pawnbroker = DSP license, not a Division of Revenue license.
+ *
+ * ONLY PATH FORWARD: FOIA request to dsp-prolicense@delaware.gov
+ * Subject: "FOIA Request — Current Licensed Pawnbroker List under Title 24 Chapter 23"
+ *
+ * This scraper exits cleanly with zero records until a FOIA list is obtained.
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
@@ -46,9 +55,17 @@ function parseCsvLine(line: string): string[] {
 }
 
 /**
- * Scrape Delaware pawnbroker licenses from the DE Open Data Portal CSV.
+ * Delaware pawnbroker scraper — stubs out pending FOIA.
+ * No public data source exists. See file header for details.
  */
 export async function runDelawarePhase2Scraper(): Promise<void> {
+  console.log('[Delaware Phase2] No public data source — pawnbroker licenses issued by DE State Police (DSP), not Division of Revenue.');
+  console.log('[Delaware Phase2] Awaiting FOIA response from dsp-prolicense@delaware.gov — zero records this run.');
+  return;
+
+  // Dead code below retained for when FOIA list is received and can be imported as CSV.
+  // To activate: obtain CSV from DSP, parse with parseCsvLine(), upsert via getOrCreateScrapedOrganizer().
+  // eslint-disable-next-line no-unreachable
   let totalFetched = 0;
   let totalPawn = 0;
   let totalUpserted = 0;
