@@ -35,7 +35,7 @@ jobs:
         run: |
           npx tsx -e '
             import { runAlaskaPhase2Scraper } from "./src/services/scraper/sources/alaskaPhase2Scraper";
-            try {
+            (async () => { try {
               await runAlaskaPhase2Scraper();
               console.log("Alaska Phase 2 scraper completed successfully");
               process.exit(0);
@@ -43,8 +43,8 @@ jobs:
               console.error("Alaska Phase 2 scraper failed:", err);
               process.exit(1);
             }
+            })();
           '
-
       - name: Notify on failure
         if: failure()
         uses: actions/github-script@v6

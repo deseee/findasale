@@ -37,7 +37,7 @@ jobs:
         run: |
           npx tsx -e '
             import { runIllinoisPhase2Scraper } from "./src/services/scraper/sources/illinoisPhase2Scraper";
-            try {
+            (async () => { try {
               await runIllinoisPhase2Scraper();
               console.log("Illinois Phase 2 scraper completed successfully");
               process.exit(0);
@@ -45,4 +45,5 @@ jobs:
               console.error("Illinois Phase 2 scraper failed:", err);
               process.exit(1);
             }
+            })();
           '

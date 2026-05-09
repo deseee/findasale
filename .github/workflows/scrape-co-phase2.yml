@@ -38,7 +38,7 @@ jobs:
         run: |
           npx tsx -e '
             import { runColoradoPhase2Scraper } from "./src/services/scraper/sources/coloradoPhase2Scraper";
-            try {
+            (async () => { try {
               await runColoradoPhase2Scraper();
               console.log("Colorado Phase 2 scraper completed successfully");
               process.exit(0);
@@ -46,4 +46,5 @@ jobs:
               console.error("Colorado Phase 2 scraper failed:", err);
               process.exit(1);
             }
+            })();
           '
