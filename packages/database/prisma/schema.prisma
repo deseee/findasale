@@ -270,6 +270,8 @@ model Organizer {
   businessName            String
   phone                   String?
   address                 String
+  lat                     Float?   // Geocoded latitude for map display
+  lng                     Float?   // Geocoded longitude for map display
   bio                     String? // Organizer bio/description (optional)
   tagline                 String?  // Short one-liner for organizer profile
   yearFounded             Int?     // Year organizer was established
