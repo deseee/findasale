@@ -466,11 +466,11 @@ export async function scrapeTheSaleSeker(
       return stats;
     }
 
-    const city = metroMatch[1]
+    const city = metroMatch![1]
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
-    const state = metroMatch[2].toUpperCase();
+    const state = metroMatch![2].toUpperCase();
 
     // Build search URL — most aggregators support a search or directory endpoint
     // Without access to internal site structure, use robots.txt discovery
@@ -495,7 +495,7 @@ export async function scrapeTheSaleSeker(
     if (!response.ok) {
       if (response.status === 429) {
         const retryAfter = response.headers.get('Retry-After');
-        rateLimiter.recordBackoff(domain, retryAfter ? parseInt(retryAfter) : 60);
+        rateLimiter.recordBackoff(domain, retryAfter ? parseInt(retryAfter, 10) : 60);
       }
       console.warn(`[TheSaleSeker] Search page returned ${response.status}`);
       return stats;
