@@ -1,5 +1,7 @@
 # PROJECT STATE
 
+Sections: §Current Status | §Pool Audit Findings | §Blocked Queue | §Recent Sessions | §Next Session
+
 FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate sales, yard sales, auctions, flea markets, consignment) connecting them with shoppers. Backend: Node.js/Prisma/PostgreSQL on Railway. Frontend: Next.js on Vercel.
 
 ---
@@ -15,7 +17,7 @@ S705 fixed the Railway crash from S704 (garagesalefinder.ts missing), hardened e
 
 ---
 
-## S706 Pool Audit Findings
+## Pool Audit Findings
 
 Run: 2026-05-10. Railway DB queried directly via psycopg2.
 
@@ -47,13 +49,12 @@ Run: 2026-05-10. Railway DB queried directly via psycopg2.
 
 ---
 
-## Blocked/Unverified Queue
+## Blocked Queue
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| NSFW detection | Code shipped S667 but not browser-tested | Upload image via organizer flow, confirm Cloudinary moderation runs | S667 |
-| #174 Auction bid flow | Bid fix deployed, not yet Chrome-verified | Login user12/Seedy2025!, go to /sales/c5hykxxecanngwcrkvq92n1va, place $30 bid on Vintage Brass Compass | S693 |
-| #251 priceBeforeMarkdown | No production item with markdownApplied=true | Seed item, verify strikethrough price renders | S661 |
+| #174 Auction bid form UX | Bid protection works but form stays visible on ended auctions | SaleCard/item page should show disabled state when auction ended, not active form | S707 |
+| #251 priceBeforeMarkdown on card | Item detail renders strikethrough correctly; SaleCard component does not | Fix SaleCard to render priceBeforeMarkdown/Sale badge when markdownApplied=true | S707 |
 | AI listing enrichment | Fire-and-forget | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` | S651 |
 | CategoryTopFinds TrendingSection | Cron runs 05:00 UTC — no data until first run | QA after nightly run; verify TrendingSection on `/categories/[category]` | S647 |
 | Outreach pipeline open/click tracking | Can't verify without real sends | After first cron run: check Railway logs, confirm pixel route 200 | S647 |
@@ -110,7 +111,6 @@ Admin trigger endpoint: POST /api/internal/scraper/run-florida-phase2 (+ ohio, n
 
 Clear the QA backlog before turning on outreach. Run in this order:
 1. **#174 Auction bid flow** — Login user12/Seedy2025!, go to /sales/c5hykxxecanngwcrkvq92n1va, place $30 bid on Vintage Brass Compass. Verify bid accepted, price updates, re-bid rejected.
-2. **NSFW detection** — Upload an image via organizer flow, confirm Cloudinary moderation runs (Railway logs `[Cloudinary]`).
 3. **#251 priceBeforeMarkdown** — Seed an item with markdownApplied=true, verify strikethrough price renders on sale detail.
 
 ### Priority 3 — Flip OUTREACH_ENABLED + monitor

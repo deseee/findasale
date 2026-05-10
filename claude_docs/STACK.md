@@ -1,5 +1,7 @@
 # STACK LOCK
 
+Sections: §Frontend | §Backend | §Database | §Maps & Geocoding | §Image Storage | §Infrastructure | §Fee Structure | §Architecture Principles | §Deploy Risk Matrix
+
 This document defines locked technical decisions.
 Stack changes require explicit user approval.
 No silent library substitutions.

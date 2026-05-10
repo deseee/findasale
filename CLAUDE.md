@@ -513,10 +513,14 @@ git commit -m "..."
 | Model routing | `operations/model-routing.md` |
 | QA accountability | `operations/orchestrator-qa-accountability.md` |
 | Wrap protocol | `operations/WRAP_PROTOCOL_QUICK_REFERENCE.md` |
-| Decisions log | `decisions-log.md` |
-| Tech stack | `STACK.md` |
-| Security | `SECURITY.md` |
-| Recovery | `RECOVERY.md` |
+| Decisions log | `decisions-log.md` — scan index line at top for session IDs; read only the section(s) you need |
+| Tech stack | `STACK.md §Frontend` (UI libs) · `§Backend` (runtime/auth/payments) · `§Database` · `§Infrastructure` (deploy targets) · `§Fee Structure` (commission rates) · `§Deploy Risk Matrix` (change risk levels) |
+| Security | `SECURITY.md §6 Secrets Handling` (DB/API keys, never-commit rules) · `§8 Deployment Safety Checklist` · `§4 Safe Execution Mode` (subagent constraints) · `§7 Incident Response` |
+| Recovery | `RECOVERY.md §Decision Trees` (triage flowchart) · `§10 Backend Crash Loop` · `§11 Migration Drift` · `§1 Context Overflow` |
+| Sprint status / in-flight work | `STATE.md §Current Status` |
+| QA backlog / unverified features | `STATE.md §Blocked Queue` |
+| Recent session summaries | `STATE.md §Recent Sessions` |
+| Next session priorities / Patrick actions | `STATE.md §Next Session` |
 | File creation paths | `operations/file-creation-schema.md` |
 
 ---

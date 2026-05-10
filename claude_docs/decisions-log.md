@@ -3,6 +3,8 @@
 Append-only. Max 3 lines per decision. Oldest entries pruned after 30 days.
 Only decisions that affect future sessions — not implementation details.
 
+Index (newest first): S687 Scraper Source Allowlist | S626 Organizer Acquisition Pipeline | S575 QR Geofence | S550 Referral XP Phone Gate | S441 Team Collaboration | S436 Sale Hubs/Flea Market | S413 Brand-Spreading Ungated | S392 TEAMS Member Limit / ALA CARTE / Support Tiers / Feature Names | S342 Roadmap Feature Decisions | S341 Hold-to-Pay Architecture / Platform Fee Model | S332 Hold Button (6 sub-decisions) | S274 Follow Network / BrandFollow / Haul Posts | S268 Gamification / Support Stack / POS Tiers / Homepage / Brand Kit / ALA CARTE Fee / Shopper Settings | S251 Gamification Loop / Wishlist Consolidation / Support Tiers / Page Consolidation | S237 Email Provider | S198 Roadmap Schema | S176 Tier+Pricing Audit | S170 Subagent Gate | S166 Condition Grading / Brand Kit Schema | S153 Cash POS Fee | S146 Camera Workflow v2 | S143 Fleet Redesign Phase 2 | S141 Fleet Redesign
+
 ---
 
 ## 2026-05-08 (S687) — Scraper Source Allowlist Decisions
