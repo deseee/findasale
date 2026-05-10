@@ -1,0 +1,53 @@
+name: Scrape Georgia Secondary Sale Licenses (Phase 2)
+
+on:
+  schedule:
+    # Monday 7:00 AM UTC (staggered from other Phase 2 scrapers)
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: Georgia Phase 2 Secondary Sale Scraper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: packages/database
+
+      - name: Run Georgia Phase 2 Scraper
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { runGeorgiaPhase2Scraper } from "./src/services/scraper/sources/georgiaPhase2Scraper";
+            (async () => { try {
+              await runGeorgiaPhase2Scraper();
+              console.log("Georgia Phase 2 scraper completed successfully");
+              process.exit(0);
+            } catch (err) {
+              console.error("Georgia Phase 2 scraper failed:", err);
+              process.exit(1);
+            }
+            })();
+          '
