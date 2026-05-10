@@ -36,7 +36,7 @@ jobs:
       - name: Run Arizona Phase 2 Scraper
         working-directory: packages/backend
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
           npx tsx -e '
