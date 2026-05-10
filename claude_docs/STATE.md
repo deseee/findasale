@@ -4,7 +4,38 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S703 — Geocoded=0% Root Cause Found & Fixed + ERR_HTTP_HEADERS_SENT Guard (COMPLETE — pushblock below)**
+**Latest: S704 — GarageSaleFinder Scraper Rebuilt + ESN Timeout Fixed + Admin Scraper UI Improved (COMPLETE — pushblock below)**
+
+S704 fixed the fully broken GarageSaleFinder scraper (site redesign broke URL structure + all HTML selectors), raised the ESN GitHub Actions timeout from 25→60 min (was killing every nightly run at exactly the limit), added a searchable metro datalist to the admin scraper trigger UI, fixed blank organizer column + "Not sent" email status in Scraped Sales Overview, and fixed `&` vs `and` duplicate organizer records.
+
+**Completed this session:**
+- **GarageSaleFinder URL fix** (`garagesalefinder.ts`) — `metroToUrl()` was building `/garage-sales/US/{STATE}/{City}` paths (404 after site redesign). Fixed: `/yard-sales/{metro-slug}/`. Root cause of all-zero runs.
+- **GarageSaleFinder link regex fix** — `/\/garage-sales\/\d+/` matched nothing on new site. Fixed: `/\/s\/[A-Za-z0-9]+\//` with `/gallery` exclusion.
+- **GarageSaleFinder HTML parser rebuilt** (`htmlParser.ts`) — all selectors broken (`.sale-title`, `.address`, `.dates` classes no longer exist). Replaced with itemprop microdata selectors: `h2[itemprop="name"]`, `[itemprop="address"]`, `meta[itemprop="startDate"]`, `meta[itemprop="endDate"]`, `img[itemprop="image"]`. Dates now parse from real metadata instead of defaulting to today/today+1.
+- **ESN GitHub Actions timeout fix** (`.github/workflows/scrape-estatesalesnet.yml`) — `timeout-minutes: 25` → `60`. ESN scraper consistently takes ~25-30 min; 5 consecutive nightly runs were cancelled at exactly 25m 18-20s.
+- **Admin scraper metro picker** (`scraper.tsx`) — replaced free-text input with `<datalist>` combo box backed by `/api/admin/scraper/metros` endpoint returning all 351 national metro slugs. Type to filter, no need to remember slug format.
+- **`/api/admin/scraper/metros` endpoint** (`adminController.ts` + `admin.ts`) — `getScrapeMetros()` handler using dynamic import of `NATIONAL_METROS` from `scraperCron.ts`. `NATIONAL_METROS` exported.
+- **Organizer column fix** (`scraper.tsx`) — Frontend interface declared `organizer.name` but backend returns `organizer.businessName`. Fixed in both interface declaration and display code.
+- **claimEmails "Not sent" fix** (`scraperController.ts`) — `getScrapedSales()` Prisma include block never included `claimEmails` relation. Added with `sentAt`, `claimed`, `orderBy: sentAt desc`, `take: 1`.
+- **`&` vs `and` duplicate organizer fix** (`scraper/index.ts`) — `normalizeName()` and `generateDedupeKey()` were stripping `&` after lowercasing but before converting to `and`. "Amanda & Bobby's..." and "Amanda and Bobby..." produced different dedupeKeys → two separate organizer records. Fixed: expand `&` → `and` and `+` → `and` BEFORE stripping non-alphanumeric chars. Confirmed: Amanda rows now show same organizer (two sales, one org — expected).
+
+**Pending Patrick actions:**
+- Push all 9 files (pushblock below)
+
+**Files changed this session:**
+1. `packages/backend/src/services/scraper/sources/garagesalefinder.ts`
+2. `packages/backend/src/services/scraper/htmlParser.ts`
+3. `packages/backend/src/jobs/scraperCron.ts`
+4. `packages/backend/src/controllers/adminController.ts`
+5. `packages/backend/src/routes/admin.ts`
+6. `packages/frontend/pages/admin/scraper.tsx`
+7. `packages/backend/src/controllers/scraperController.ts`
+8. `packages/backend/src/services/scraper/index.ts`
+9. `.github/workflows/scrape-estatesalesnet.yml`
+
+---
+
+**Previous: S703 — Geocoded=0% Root Cause Found & Fixed + ERR_HTTP_HEADERS_SENT Guard (COMPLETE — pushblock below)**
 
 Root cause of geocoding dropout: `getOrCreateScrapedOrganizer()` was called with 12 args instead of 14 — lat/lng were never passed. All 5 dedup paths (byPlaceId, byFoursquare, byHere, byDedupeKey, existing) also never backfilled lat/lng on existing orgs. Fixed: extract orgLat/orgLng from `listing.lat ?? listing.scrapedMetadata?.lat` before the call; all 5 dedup paths now select lat/lng and backfill when null. Next HERE/Foursquare scraper run will geocode new orgs and backfill existing ones hit by dedup. Added `res.headersSent` guard to `internalScraperController.ts` to suppress `ERR_HTTP_HEADERS_SENT` unhandled rejection in Railway logs.
 
@@ -892,7 +923,13 @@ Seeded 5 auction items on user2's production auction sale. QA run found two bugs
 
 ---
 
-## Recent Sessions (S702–S697)
+## Recent Sessions (S704–S697)
+
+### S704 — GarageSaleFinder Rebuilt + ESN Timeout Fix + Admin Scraper UI (COMPLETE — pushblock below)
+
+GarageSaleFinder site redesign broke URL structure and all HTML selectors — scraper was producing 0/0/0/0 every run. Rebuilt: new URL format `/yard-sales/{metro-slug}/`, new link regex `/\/s\/[A-Za-z0-9]+\//`, all itemprop microdata selectors. ESN GitHub Actions timeout raised 25→60 min (5 nightly runs all cancelled at exactly 25m 18-20s). Admin scraper trigger UI upgraded: free-text metro input replaced with `<datalist>` combo box backed by 351-metro API endpoint. Blank organizer column fixed (businessName vs name mismatch). claimEmails "Not sent" fixed (Prisma include block was missing the relation). `&` vs `and` dedupeKey divergence fixed (expand before strip, not after). 9 files changed.
+
+---
 
 ### S702 — Phase 2 Scraper Fixes + internal.ts Wiring + VA General Scraper (COMPLETE — pushblock below)
 
@@ -1169,19 +1206,58 @@ Full Google Maps Platform incident response and lockdown. Root cause: monthly Gi
 
 ---
 
-## Next Session — S704
+## Next Session — S705
 
-### Step 1 — GitHub Actions audit
+### Priority 1 — Push S704 changes (9 files)
 
-Open GitHub → Actions tab for `deseee/findasale`. Check which Phase 2 workflow YMLs are present and enabled, whether they're firing on schedule, and what last-run status is for scraper workflows. Fix any broken or missing workflows.
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
 
-### Step 2 — Scoring backfill for ~24k unscored orgs
+git add packages/backend/src/services/scraper/sources/garagesalefinder.ts
+git add packages/backend/src/services/scraper/htmlParser.ts
+git add packages/backend/src/jobs/scraperCron.ts
+git add packages/backend/src/controllers/adminController.ts
+git add packages/backend/src/routes/admin.ts
+git add packages/frontend/pages/admin/scraper.tsx
+git add packages/backend/src/controllers/scraperController.ts
+git add packages/backend/src/services/scraper/index.ts
+git add .github/workflows/scrape-estatesalesnet.yml
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S704: GarageSaleFinder rebuilt + ESN timeout fix + admin metro picker + organizer dedup fix
 
-Dashboard: 32,110 total, only 7,884 scored. Trigger `POST /api/internal/scoring/run-backfill` with the internal secret header. Verify COLD/WARM/HOT distribution afterward.
+- GarageSaleFinder: new URL format /yard-sales/{metro}/, itemprop selectors, link regex fix
+- ESN GitHub Actions timeout 25→60 min (was killing every nightly run)
+- Admin scraper: datalist metro picker with 351 national metros
+- Scraped Sales: businessName field fix, claimEmails include fix
+- Organizer dedup: expand & → and before stripping (prevents duplicate org records)"
+.\push.ps1
+```
 
-### Step 3 — Outreach warming period strategy
+### Priority 2 — Re-audit scraped organizer pool quality
 
-0 emails sent. Plan the warming schedule (start 20–50/day, double weekly), identify HOT tier targets for wave 1, draft the first warming email. Check MailerLite group setup and whether Railway env vars are set.
+Patrick's intent: verify the pool is clean before any outreach goes out. Run this audit before enabling any email sends.
+
+**Dispatch `findasale-dev` or query Railway DB directly:**
+1. Pull organizer pool breakdown: total orgs, by source (EstateSalesNet / Foursquare / HEREPlaces / OSM / GarageSaleFinder / state licensing), by tier (HOT/WARM/COLD), by `contactEmail IS NOT NULL`, by `isUnmanagedListing = true`
+2. Sample 20 COLD orgs and 20 WARM orgs — spot check businessName, city, website, phone. Are these recognizable resale businesses or garbage data (construction companies, accountants, etc.)?
+3. NY Phase 2 incidental data: filter orgs where `licenseState = 'NY'` and inspect businessName samples — how many are non-resale (construction, landscaping)?
+4. Score distribution after any backfill
+5. Report: what percentage of the pool looks like real estate/yard/auction organizers vs. noise?
+
+**After audit:** decide whether to trigger outreach or first clean the pool (e.g., NY Phase 2 filter tightening).
+
+### Priority 3 — Patrick pending manual actions
+
+- Add Railway env vars: `MAILERLITE_COLD_GROUP_ID`, `MAILERLITE_WARM_GROUP_ID`, `MAILERLITE_HOT_GROUP_ID`
+- Wire `emailDiscoveryJob` into cron scheduler + set `EMAIL_DISCOVERY_ENABLED=true` on Railway
+- Run S698 migration if not already done: `prisma migrate deploy` + `prisma generate`
+- `git rm ".github/workflows/scrape-nc-licensing.yml"` (junk from S691)
+- `git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"` (space-named duplicate)
+
+### Priority 4 — Scoring backfill for ~24k unscored orgs
+
+After S704 push lands and scraper improvements are in: trigger `POST /api/internal/scoring/run-backfill`. Verify COLD/WARM/HOT distribution afterward. Previous: 7,884 scored — COLD=3,235 WARM=4,662 HOT=0.
 
 ### Step 4 — Patrick pending manual actions
 
