@@ -164,13 +164,10 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // If businessCategory is explicitly in the allowlist, keep it
-      if (org.businessCategory && VALID_CATEGORIES.has(org.businessCategory)) {
-        keepCount++;
-        continue;
-      }
-
-      // If businessName contains secondary-sale keywords, keep it
+      // For licensing/Phase2 records, skip the category check entirely —
+      // categories were auto-assigned during scraping and are unreliable
+      // (e.g., parking companies and construction firms got RESALE_SHOP).
+      // Only business name keywords are a trustworthy signal here.
       if (hasKeepKeyword(org.businessName)) {
         keepCount++;
         continue;

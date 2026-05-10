@@ -1025,16 +1025,18 @@ export const updateCuratorEntry = async (req: AuthRequest, res: Response) => {
 // GET /api/admin/scrape-pool-stats — scrape pool analytics dashboard
 export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
   try {
+    const activeScrapedWhere = { isUnmanagedListing: true, directoryStatus: { not: 'CLOSED' as const } };
+
     // Total scraped organizers
     const totalScrapedOrgs = await prisma.organizer.count({
-      where: { isUnmanagedListing: true },
+      where: activeScrapedWhere,
     });
 
     // Tier distribution for scraped orgs
     const tierDistribution = await prisma.organizer.groupBy({
       by: ['leadTier'],
       _count: true,
-      where: { isUnmanagedListing: true },
+      where: activeScrapedWhere,
     });
 
     const tierMap: Record<string, number> = {
@@ -1051,7 +1053,7 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
 
     // Lead score stats for scraped orgs
     const scrapedOrgs = await prisma.organizer.findMany({
-      where: { isUnmanagedListing: true },
+      where: activeScrapedWhere,
       select: { leadScore: true },
       take: 10000,
     });
@@ -1082,7 +1084,7 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
 
     // Enrichment coverage
     const enrichmentOrgs = await prisma.organizer.findMany({
-      where: { isUnmanagedListing: true },
+      where: activeScrapedWhere,
       select: {
         scrapedEmail: true,
         contactEmail: true,
@@ -1111,7 +1113,7 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
     // Outreach status
     const outreachOrgsWithSent = await prisma.organizer.findMany({
       where: {
-        isUnmanagedListing: true,
+        ...activeScrapedWhere,
         outreachAuditLogs: {
           some: { event: 'SENT' },
         },
@@ -1122,7 +1124,7 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
 
     const outreachOrgsWithOpened = await prisma.organizer.findMany({
       where: {
-        isUnmanagedListing: true,
+        ...activeScrapedWhere,
         outreachAuditLogs: {
           some: { event: 'OPENED' },
         },
@@ -1133,7 +1135,7 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
 
     const outreachOrgsWithBounced = await prisma.organizer.findMany({
       where: {
-        isUnmanagedListing: true,
+        ...activeScrapedWhere,
         outreachAuditLogs: {
           some: { event: 'BOUNCED' },
         },
@@ -1160,7 +1162,7 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
 
     // Recent additions (last 50 scraped orgs)
     const recentAdditions = await prisma.organizer.findMany({
-      where: { isUnmanagedListing: true },
+      where: activeScrapedWhere,
       select: {
         id: true,
         businessName: true,
