@@ -139,6 +139,8 @@ interface Sale {
   // Feature #24: Configurable hold duration per sale
   holdDurationHours?: number;
   returnWindowHours?: number | null;
+  // Feature #84: Day-of approach notes
+  notes?: string | null;
 }
 
 interface Bid {
