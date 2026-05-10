@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S707
+# Patrick's Dashboard — S708
 
 ---
 
@@ -7,25 +7,37 @@
 | Area | Status |
 |------|--------|
 | Vercel build | ✅ GREEN |
-| Railway backend | ✅ GREEN |
-| OUTREACH_ENABLED | ⚠️ FALSE — ready to flip (pending scraper smoke test) |
-| getSaleActivity crash | ✅ FIXED S707 — orphaned Favorite FK now gracefully caught |
-| #251 priceBeforeMarkdown | ✅ FIXED S707 — strikethrough + Sale badge on item detail page |
-| #174 Auction bid form UX | ✅ FIXED S707 — item page shows "Auction Closed" state |
-| #174 SaleCard auction state | ❌ PENDING — SaleCard still shows active form on ended auctions |
-| #251 SaleCard markdown price | ❌ PENDING — SaleCard doesn't show strikethrough/Sale badge yet |
-| FL/OH/NC/GA Phase 2 scrapers | ✅ BUILT (S706) — smoke test needed before outreach goes live |
-| Canada411.ca scraper | ⏳ QUEUED — ON/BC/AB, roadmap #419 |
-| COLD noise remediation | ⏳ QUEUED — keyword blocklist for leadScoringService |
-| #418 Phase 2 batch | ⏳ QUEUED — 4–6 more states (AL, AR, IA, KY, LA, ME) |
+| Railway backend | ✅ GREEN (crash fixed — AL/KY/ME stubs deployed) |
+| OUTREACH_ENABLED | ⚠️ FALSE — flip after S708 push lands |
+| COLD noise backfill | 🔄 RUNNING — 38,408 orgs, confirmed active in Railway logs |
+| #251 SaleCard Sale badge | ✅ FIXED S708 — push pending |
+| #174 auctionIsOver on sale page | ✅ FIXED S708 — push pending |
+| FL Phase 2 | ✅ 102 DBPR auctioneers (FDACS pawnshop GH Actions IP block, graceful) |
+| OH / GA Phase 2 | ✅ Documented stubs (all sources GH Actions blocked) |
+| Canada411 scraper | ✅ BUILT S708 — ON/BC/AB, push pending |
+| AR/IA/WI/LA/MS/SC Phase 2 | ✅ BUILT S708 — push pending |
+| AL/KY/ME Phase 2 | ✅ Documented stubs — already pushed (Railway crash fix) |
+| COLD noise blocklist | ✅ BUILT S708 — 51-term blocklist, suppressOutreach=true — push pending |
 
 ---
 
 ## Patrick Actions Needed
 
-None outstanding. All S707 fixes were pushed and human-verified.
+**⚠️ Push required now:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/services/scraper/sources/floridaPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/georgiaPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sources/ohioPhase2Scraper.ts
+git add packages/backend/src/routes/internal.ts
+git add packages/backend/src/controllers/saleController.ts
+git add packages/frontend/components/SaleCard.tsx
+git add packages/frontend/pages/sales/[id].tsx
+git commit -m "feat: FL/OH/GA Phase 2 fixes, SaleCard markdown badge, auctionIsOver fix, Phase 2 internal routes"
+.\push.ps1
+```
 
-Next session (S708): Claude will run scraper smoke tests, then prompt you to flip `OUTREACH_ENABLED=true` in Railway after confirmation.
+**After push:** Flip `OUTREACH_ENABLED=true` in Railway dashboard → Variables → backend service.
 
 ---
 
