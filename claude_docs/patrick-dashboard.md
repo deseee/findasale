@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S706
+# Patrick's Dashboard — S706-meta
 
 ---
 
@@ -20,13 +20,15 @@
 
 ## Patrick Actions Needed
 
-**1. Flip OUTREACH_ENABLED** — Option A confirmed (197 high-confidence orgs). Go to Railway → findasale backend service → Variables → set `OUTREACH_ENABLED=true`. First cron window fires within ~6 hours.
+**1. Install two updated skills** — click Save Skill on both cards Claude presented (findasale-dev + conversation-defaults).
 
-**2. Push S706 files** — see pushblock below.
+**2. Flip OUTREACH_ENABLED** — Option A confirmed (197 high-confidence orgs). Railway → backend → Variables → `OUTREACH_ENABLED=true`.
+
+**3. Push combined S706 + S706-meta files** — see pushblock below.
 
 ---
 
-## S706 Files to Push
+## Combined Push Block (S706 + S706-meta)
 
 ```powershell
 git add packages/backend/src/services/scraper/sources/floridaPhase2Scraper.ts
@@ -38,10 +40,15 @@ git add .github/workflows/scrape-fl-phase2.yml
 git add .github/workflows/scrape-oh-phase2.yml
 git add .github/workflows/scrape-nc-phase2.yml
 git add .github/workflows/scrape-ga-phase2.yml
+git add claude_docs/strategy/roadmap.md
+git add CONTEXT.md
+git add CLAUDE.md
+git add claude_docs/STACK.md
+git add claude_docs/decisions-log.md
+git add claude_docs/operations/canonical-sources.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "S706: FL/OH/NC/GA Phase 2 scrapers + internal.ts truncation fix + WA/WY routes restored"
+git commit -m "S706+meta: Phase 2 scrapers + ICM workflow infrastructure (CONTEXT.md routing, Handoff Contract, section anchors, canonical sources)"
 .\push.ps1
 ```
 

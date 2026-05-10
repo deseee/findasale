@@ -131,7 +131,7 @@ These are decisions that block other work. Only Patrick can decide.
 |  82 | Trademark — FindA.Sale | LEGAL | File USPTO trademark? ~$250–400/class + attorney fees | Legal | No |
 |  83 | Trade Secret Housekeeping | LEGAL | Document proprietary algorithms as trade secrets + NDA review | Legal | No |
 |  84 | ExplorerProfile Schema | ARCH | RESOLVED S352 — Option A: all gamification fields (guildXp, explorerRank, huntPassActive, huntPassExpiry) already exist on User model. No schema change needed. GET /api/xp/profile already existed; service response shape corrected + GRANDMASTER threshold fixed (10000→5000). Dashboard fully wired. | None — resolved | No |
-| 394 | Content Moderation (NSFW) | ORG | aws_rek_tagging removed S692 — was blocking 100% of photo uploads (paid add-on not active). Options: (A) Re-enable via Cloudinary Rekognition add-on (~$0.001/image), (B) Use Cloudinary's built-in moderation (no add-on required, free tier available), (C) Leave off for beta. Recommendation: option B or C for now. | Upload safety | No |
+| 394 | Content Moderation (NSFW) | DEFERRED | CLOSED S707 — add-on not active, moderation call removed S692. Not a priority for beta. Revisit if abuse becomes a problem post-launch. | Upload safety | No |
 
 
 ## Only Human Left

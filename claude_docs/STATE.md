@@ -97,6 +97,10 @@ Full 50-state data source audit. Roadmap #395–#397 added. All Phase 2 scrapers
 
 37,531 orgs scored via backfill. Pool quality audit: COLD=32,163 / WARM=5,232 / HOT=136. Outreach cohort decided: Option A (197 high-confidence emails, emailDiscoveryConfidence > 0.60). FL Phase 2 (DBPR CSV ~1,440 records), OH Phase 2 (license.ohio.gov Secondhand Dealer + Pawnbroker + Consignment), NC Phase 2 (NCALB + NC SoS Socrata dual-source), GA Phase 2 (GA SOS eCorp keyword search) — all 4 shipped with scraper files, GitHub Actions ymls (Mon staggered 6:15–7:00 UTC), and internal.ts routes. internal.ts WA+WY Phase 2 truncation fixed, export default router restored. Canadian directory research complete: Canada411.ca = BUILD, YP.ca/Kijiji = SKIP.
 
+### S706-meta — ICM Workflow Infrastructure (COMPLETE — push pending)
+
+Researched Jake Van Clief's Interpreted Context Methodology. Dispatched workflow + power-user agents to evaluate fit. Implemented 5 structural improvements: (1) `CONTEXT.md` routing layer at project root — maps session type to CLAUDE.md sections to load, prevents 517-line full load every session; (2) Handoff Contract template added to findasale-dev SKILL.md — Inputs/Outputs/Audit tables required on every dev return; (3) Setup Warmup routine added to conversation-defaults SKILL.md — any agent can invoke `setup` for pre-task orientation; (4) Section anchors added to STATE.md, STACK.md, decisions-log.md; CLAUDE.md reference table updated with section-level citations; (5) `claude_docs/operations/canonical-sources.md` created — maps 24 information types to canonical homes, includes drift smell-test and Known Active Drift table. Stale Neon→Railway reference fixed in findasale-dev SKILL.md. Old context.md confirmed auto-generated (2,857 lines of file-tree dumps) — overwrite with CONTEXT.md was safe. Memory saved: feedback_icm_patterns.md. Skills repackaged: findasale-dev.skill + conversation-defaults.skill (Patrick to reinstall via Cowork UI).
+
 ---
 
 ## Next Session — S707
