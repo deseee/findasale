@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S704 Wrap
+# Patrick's Dashboard — S705 Wrap
 
 ---
 
@@ -7,79 +7,73 @@
 | Area | Status |
 |------|--------|
 | Vercel build | ✅ GREEN |
-| Railway backend | ✅ GREEN |
-| GarageSaleFinder scraper | ✅ FIXED — site redesign had broken URL format + all HTML selectors; 0/0/0/0 every run |
-| ESN nightly scraper | ✅ FIXED — timeout raised 25→60 min (was killing every nightly run) |
-| Admin scraper metro picker | ✅ NEW — datalist combo box with 351 metros; no more guessing slug format |
-| Organizer column in Scraped Sales | ✅ FIXED — businessName vs name field mismatch |
-| claimEmails "Not sent" | ✅ FIXED — Prisma include block now includes claimEmails relation |
-| `&` vs `and` duplicate orgs | ✅ FIXED — normalize expands & → and before stripping |
-| Geocoding coverage | ⚠️ Will recover on next HERE/Foursquare run (fix was in S703) |
-| Scoring backfill | ❌ ~24k orgs unscored — needs S705 trigger |
-| MailerLite tier group wiring | ⚠️ Built — needs 3 Railway env vars |
-| Outreach pool quality | ⚠️ Re-audit before enabling any sends (S705 priority) |
+| Railway backend | ✅ GREEN (crash fixed this session) |
+| OUTREACH_ENABLED | ⚠️ FALSE — flip to true after final pushblock lands |
+| Email discovery quality | ✅ FIXED — junk gate + 28 DCE deleted + 471 orgs downgraded |
+| Canada outreach exclusion | ✅ FIXED — 1,208 CA orgs excluded until platform ships |
+| GarageSaleFinder outreach exclusion | ✅ FIXED — consumer posts never reach outreach queue |
+| Source attribution (licensing scrapers) | ✅ FIXED — directoryMostRecentSource now set |
+| GarageSaleFinder route + workflow | ✅ NEW — Wednesdays 5AM UTC |
+| Foursquare Canada coverage | ✅ EXPANDED — 7→17 metros |
+| CLAUDE.md push rule | ✅ HARDENED — pushblock-only, absolute |
+| Scoring backfill | ❌ Still pending — never triggered this session |
+| MailerLite env vars | ⚠️ Still needs MAILERLITE_COLD/WARM/HOT_GROUP_ID in Railway |
 | S698 migration | ⚠️ May still need running if not done |
 
 ---
 
-## What Happened This Session (S704)
+## What Happened This Session (S705)
 
-**GarageSaleFinder scraper completely rebuilt.** After GarageSaleFinder.com redesigned their site, the scraper was producing 0 created / 0 updated / 0 skipped on every run. Root cause: the URL builder was generating `/garage-sales/US/{STATE}/{City}` paths that return 404. New URL format is `/yard-sales/{metro-slug}/`. Also fixed the link regex (detail pages moved from `/garage-sales/123456` numeric to `/s/abc123/` alphanumeric) and all HTML selectors (`.sale-title`, `.address`, `.dates` classes no longer exist — replaced with itemprop microdata: `h2[itemprop="name"]`, `[itemprop="address"]`, `meta[itemprop="startDate"]`, `meta[itemprop="endDate"]`, `img[itemprop="image"]`). Dates now parse from real metadata instead of defaulting to today/today+1.
+**Railway crashed on startup.** `garagesalefinder.ts` was never pushed in S704. `internal.ts` imported it → `MODULE_NOT_FOUND` on boot. Fixed immediately via emergency MCP push (documented as the incident that locked the pushblock-only rule in CLAUDE.md §5).
 
-**ESN GitHub Actions timeout fixed.** The nightly EstateSalesNet scraper was being killed at exactly 25 minutes every single night — the GitHub Actions `timeout-minutes: 25` was set too low for a job that consistently takes 25–30 minutes. Five consecutive runs all cancelled at 25m 18-20s. Raised to 60 minutes.
+**Email discovery pipeline hardened.** The spot-check revealed serious quality problems: Wix template addresses, GoDaddy fillers, `user@domain.com`, J.Crew, Goodwill, barber shops — all scored confidence=0.95. Patched `emailDiscoveryService.ts` with a 22-domain blocklist, hex local-part rejection, confidence calibration penalties, a 0.60 minimum storage threshold, and a format regex gate. **DB cleaned:** 28 junk `DirectoryClaimEmail` records deleted from the live outreach queue, 471 organizer junk emails downgraded to confidence=0.0. `seedDirectoryClaimEmails.ts` now permanently blocks confidence=0.0 records from re-entering the queue.
 
-**Admin scraper trigger UI improved.** Patrick's feedback: "I don't have a list of slugs handy and will forget them over time." Replaced the free-text metro input with a `<datalist>` combo box. Type "chicago" and matching slugs appear. The metro list comes from a new `/api/admin/scraper/metros` endpoint that serves all 351 national metros from `NATIONAL_METROS`.
+**Canada + GarageSaleFinder outreach exclusions added.** `outreachEmailsCron.ts` now filters out all 18 Canadian province/territory address patterns and any organizer scraped from GarageSaleFinder (consumer homeowner posts, not organizer businesses).
 
-**Three Scraped Sales Overview bugs fixed.** (1) Organizer column was blank — frontend interface declared `organizer.name` but backend sends `organizer.businessName`. (2) Email Sent column always showed "Not sent" — `getScrapedSales()` never included `claimEmails` in the Prisma query. (3) `&` vs `and` was creating duplicate organizer records — "Amanda & Bobby's Estate Sale Services" and "Amanda and Bobby Estate Sale Services" got different dedupeKeys. Fixed by expanding `&` → `and` before stripping.
+**Source attribution gap closed.** `scraper/index.ts` now sets `directoryMostRecentSource` for licensing scrapers automatically (via `isStateLicensed=true` → `'StateLicensing'`). All 5 dedup paths updated.
 
----
+**Foursquare Canada expanded.** Was covering 7 Canadian metros. Now covers all 17 metros that HERE Places and Facebook Events already cover (added Hamilton, London, Kitchener, Windsor, St. Catharines ON; Victoria, Kelowna, Abbotsford BC; Saskatoon, Regina SK).
 
-## What Happened Last Session (S703)
-
-Geocoding dropout root cause fixed (lat/lng args 13/14 were missing from all scraper ingest calls). ERR_HTTP_HEADERS_SENT guard added. Design overhaul shipped (sale detail, creation wizard, email system, smart review queue, broadcast composer, storefront v0.2).
+**Pipeline audit findings → roadmap.** 22 US states still missing Phase 2 scrapers. FL, OH, NC, GA are the highest-priority gaps (large estate sale markets). Canadian organizer directory sources not yet built (BBB Canada, YellowPages.ca, Kijiji). Both added as roadmap #417–#419.
 
 ---
 
 ## Patrick Actions Needed
 
-### Push Block — Run This Now (S704 wrap)
+### Final S705 Pushblock
 
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-
-git add packages/backend/src/services/scraper/sources/garagesalefinder.ts
-git add packages/backend/src/services/scraper/htmlParser.ts
-git add packages/backend/src/jobs/scraperCron.ts
-git add packages/backend/src/controllers/adminController.ts
-git add packages/backend/src/routes/admin.ts
-git add packages/frontend/pages/admin/scraper.tsx
-git add packages/backend/src/controllers/scraperController.ts
-git add packages/backend/src/services/scraper/index.ts
-git add .github/workflows/scrape-estatesalesnet.yml
+git add packages/backend/src/scripts/seedDirectoryClaimEmails.ts
+git add packages/backend/src/services/scraper/sources/foursquarePlaces.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S704: GarageSaleFinder rebuilt + ESN timeout fix + admin metro picker + organizer dedup fix
-
-- GarageSaleFinder: new URL format /yard-sales/{metro}/, itemprop selectors, link regex fix
-- ESN GitHub Actions timeout 25→60 min (was killing every nightly run)
-- Admin scraper: datalist metro picker with 351 national metros
-- Scraped Sales: businessName field fix, claimEmails include fix
-- Organizer dedup: expand & → and before stripping (prevents duplicate org records)"
+git add claude_docs/strategy/roadmap.md
+git commit -m "S705: email discovery quality gates + Foursquare Canada 17-metro + roadmap #417-419"
 .\push.ps1
 ```
 
-### Carry-Forward (still pending)
+Then: **flip `OUTREACH_ENABLED=true`** in Railway env vars.
+
+### Carry-Forward
 
 - **Railway env vars**: `MAILERLITE_COLD_GROUP_ID`, `MAILERLITE_WARM_GROUP_ID`, `MAILERLITE_HOT_GROUP_ID`
 - **S698 migration**: Run `prisma migrate deploy` + `prisma generate` if not done
-- **Wire emailDiscoveryJob** into cron + set `EMAIL_DISCOVERY_ENABLED=true`
+- **Scoring backfill**: `POST /api/internal/scoring/run-backfill` (still ~24k unscored orgs)
 - **Junk cleanup**: `git rm ".github/workflows/scrape-nc-licensing.yml"` and `git rm "packages/backend/src/services/scraper/sources/westVirginia LicensingScraper.ts"`
 
 ---
 
-## Next Session (S705) — Top Priorities
+## Next Session (S706) — Parallel Roadmap Dispatch
 
-1. **Push S704** — 9 files + STATE.md + patrick-dashboard.md (pushblock above)
-2. **Re-audit scraper pool quality** — Before any email sends, sample orgs by source and spot-check businessName, city, website. Especially NY Phase 2 (may have non-resale noise). Decide: send to current pool or clean first.
-3. **Scoring backfill** — Trigger `POST /api/internal/scoring/run-backfill`. ~24k orgs unscored. Check HOT/WARM/COLD split after.
-4. **Patrick manual actions** — Railway env vars, S698 migration, emailDiscoveryJob, junk git rm.
+Dispatch these in parallel (no file conflicts between groups):
+
+**Group A — Phase 2 scrapers for FL, OH, NC, GA (#417)**
+4 parallel dev agents, one per state. Each: scraper file + internal.ts route + GitHub Actions workflow. Source refs in roadmap #417.
+
+**Group B — Canadian organizer directory research (#419)**
+One Innovation or research agent: audit BBB Canada, YellowPages.ca, Kijiji Business, Canada411 for scrapability and data quality. Return: which 2–3 sources are worth building, estimated record counts for ON/BC/AB, ToS risk assessment.
+
+**Group C — Any BROKEN items from roadmap**
+Read roadmap at session start for all BROKEN-flagged items and prioritize those before new feature work.
+
+Scoring backfill should be triggered at session start (single HTTP call, doesn't need a session).

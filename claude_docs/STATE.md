@@ -4,7 +4,47 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S704 — GarageSaleFinder Scraper Rebuilt + ESN Timeout Fixed + Admin Scraper UI Improved (COMPLETE — pushblock below)**
+**Latest: S705 — Outreach Pipeline Quality Pass + Emergency Railway Crash Fix (COMPLETE)**
+
+S705 fixed a Railway backend crash caused by a missing module, hardened the email discovery pipeline against junk data, added Canada/GarageSaleFinder outreach exclusions, fixed source attribution on licensing scrapers, expanded Foursquare Canada coverage, and cleaned 499 junk email records from the DB. OUTREACH_ENABLED is currently false — safe to re-enable after final pushblock lands.
+
+**Completed this session:**
+- **Railway crash fix** (emergency MCP push) — `garagesalefinder.ts` was never pushed in S704. `internal.ts` imported it → Railway `MODULE_NOT_FOUND` on boot. Fixed via emergency MCP push of the file. Patrick then synced with `git fetch && git pull` and committed the camelCase variant.
+- **Canada outreach exclusion** — `outreachEmailsCron.ts` `baseWhere` now excludes 18 Canadian province/territory address patterns + the `Canada` keyword. 1,208 Canadian orgs correctly excluded until roadmap #367-#371 ships.
+- **GarageSaleFinder outreach exclusion** — `directoryMostRecentSource: 'GarageSaleFinder'` excluded from outreach. Consumer homeowner yard sale posts, not organizer businesses.
+- **Source attribution** — `scraper/index.ts` `getOrCreateScrapedOrganizer()` now accepts `sourceLabel` param. Licensing scrapers auto-tagged `'StateLicensing'` via `isStateLicensed=true`. All 5 dedup paths write `directoryMostRecentSource` + `directoryMostRecentAt`.
+- **GarageSaleFinder route + workflow** — `POST /api/internal/scraper/run-garagesalefinder` added to `internal.ts`. `.github/workflows/scrape-garagesalefinder.yml` added (Wednesdays 5:00 AM UTC).
+- **Email discovery quality gates** — `emailDiscoveryService.ts` patched with: 22-domain blocklist (Wix, GoDaddy, major retailers), hex local-part rejection, confidence calibration penalties (pattern-only capped 0.70, domain mismatch −0.10, residential −0.05), 0.60 minimum threshold, format regex gate.
+- **Junk email DB cleanup** — 28 junk `DirectoryClaimEmail` records deleted from outreach queue. 471 `Organizer.contactEmail` junk records downgraded to `emailDiscoveryConfidence=0.0`. `seedDirectoryClaimEmails.ts` now filters `NOT: { emailDiscoveryConfidence: 0.0 }` at query time.
+- **Foursquare Canada expansion** — `foursquarePlaces.ts` `CANADIAN_METROS` expanded from 7 to 17 metros, matching HERE Places + Facebook Events coverage (Hamilton ON, London ON, Kitchener ON, Windsor ON, St. Catharines ON, Victoria BC, Kelowna BC, Abbotsford BC, Saskatoon SK, Regina SK added).
+- **CLAUDE.md push rule hardened** — `§5` rewritten: pushblock-only strategy is now absolute. MCP push reserved for production-down emergencies only. S705 garagesalefinder crash documented as the incident that locked this rule.
+
+**Files changed this session:**
+1. `packages/backend/src/jobs/outreachEmailsCron.ts` — Canada + GarageSaleFinder exclusions
+2. `packages/backend/src/services/scraper/index.ts` — sourceLabel attribution
+3. `packages/backend/src/routes/internal.ts` — run-garagesalefinder route
+4. `.github/workflows/scrape-garagesalefinder.yml` — NEW workflow
+5. `packages/backend/src/services/emailDiscoveryService.ts` — quality gates
+6. `packages/backend/src/scripts/seedDirectoryClaimEmails.ts` — confidence=0.0 filter
+7. `packages/backend/src/services/scraper/sources/foursquarePlaces.ts` — 17-metro Canada expansion
+8. `CLAUDE.md` — pushblock-only rule absolute
+
+**DB changes (already applied — no migration needed):**
+- 28 `DirectoryClaimEmail` junk rows deleted
+- 471 `Organizer.emailDiscoveryConfidence` set to 0.0
+
+**Pending Patrick actions:**
+```powershell
+git add packages/backend/src/scripts/seedDirectoryClaimEmails.ts
+git add packages/backend/src/services/scraper/sources/foursquarePlaces.ts
+git commit -m "fix: junk email seed gate + Foursquare Canada 17-metro expansion"
+.\push.ps1
+```
+Then flip `OUTREACH_ENABLED=true` in Railway env vars.
+
+---
+
+**Previous: S704 — GarageSaleFinder Scraper Rebuilt + ESN Timeout Fixed + Admin Scraper UI Improved (COMPLETE — pushblock below)**
 
 S704 fixed the fully broken GarageSaleFinder scraper (site redesign broke URL structure + all HTML selectors), raised the ESN GitHub Actions timeout from 25→60 min (was killing every nightly run at exactly the limit), added a searchable metro datalist to the admin scraper trigger UI, fixed blank organizer column + "Not sent" email status in Scraped Sales Overview, and fixed `&` vs `and` duplicate organizer records.
 

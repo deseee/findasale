@@ -21,14 +21,31 @@ const FOURSQUARE_API_BASE = 'https://places-api.foursquare.com/places/search';
 const FOURSQUARE_API_VERSION = '2025-06-17';
 const REQUEST_DELAY_MS = 300;
 
-// Canadian metros (excluding Montreal/Quebec City per suppressOutreach policy at DB level)
+// Canadian metros — matches HERE Places + Facebook Events 17-metro list (S705)
+// Excluding Montreal/Quebec City: Bill 96 French language law (roadmap #369)
 const CANADIAN_METROS = [
+  // Ontario (Phase 1)
   'Toronto, ON',
+  'Ottawa, ON',
+  'Hamilton, ON',
+  'London, ON',
+  'Kitchener, ON',
+  'Windsor, ON',
+  'St. Catharines, ON',
+  // British Columbia (Phase 1)
   'Vancouver, BC',
+  'Victoria, BC',
+  'Kelowna, BC',
+  'Abbotsford, BC',
+  // Alberta (Phase 1)
   'Calgary, AB',
   'Edmonton, AB',
-  'Ottawa, ON',
+  // Manitoba (Phase 2)
   'Winnipeg, MB',
+  // Saskatchewan (Phase 2)
+  'Saskatoon, SK',
+  'Regina, SK',
+  // Atlantic (Phase 2)
   'Halifax, NS',
 ];
 
