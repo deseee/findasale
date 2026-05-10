@@ -20,6 +20,86 @@
 
 import { prisma } from '../lib/prisma';
 
+// ─── Non-resale blocklist ─────────────────────────────────────────────────────
+
+/**
+ * Lowercase substrings that strongly indicate a non-resale business.
+ * Any organizer whose businessName matches one of these will have
+ * suppressOutreach set to true during lead scoring backfill.
+ */
+export const BUSINESS_NAME_BLOCKLIST: string[] = [
+  // Security / alarm
+  'alarm',
+  'security system',
+  'surveillance',
+
+  // IT / consulting
+  'computer consultant',
+  'it consultant',
+  'technology consultant',
+
+  // Trades / construction
+  'contractor',
+  'construction',
+  'roofing',
+  'gutter',
+  'siding',
+  'plumbing',
+  'electrical',
+  'hvac',
+
+  // Telecom
+  'wireless',
+  'telecom',
+  'cellular',
+
+  // Home improvement (non-resale)
+  'tile',
+  'flooring',
+  'countertop',
+
+  // Medical / healthcare
+  'dental',
+  'medical',
+  'healthcare',
+  'physician',
+
+  // Real estate (excluding estate sale orgs)
+  'real estate agent',
+  'real estate broker',
+  'real estate company',
+  'real estate group',
+  'real estate team',
+  'real estate office',
+  'realty',
+
+  // Insurance
+  'insurance agent',
+  'insurance broker',
+
+  // Auto dealerships
+  'auto dealer',
+  'car dealer',
+  'vehicle dealer',
+  'auto sales',
+  'car sales',
+
+  // Grocery / pharmacy
+  'grocery',
+  'supermarket',
+  'pharmacy',
+];
+
+/**
+ * Returns true if the business name contains any substring from the blocklist.
+ * Case-insensitive. Safe to call with null/undefined — returns false.
+ */
+export function matchesNonResaleBlocklist(businessName: string | null | undefined): boolean {
+  if (!businessName) return false;
+  const lower = businessName.toLowerCase();
+  return BUSINESS_NAME_BLOCKLIST.some((term) => lower.includes(term));
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type LeadTier = 'COLD' | 'WARM' | 'HOT' | 'ENTERPRISE';
@@ -146,6 +226,7 @@ export interface BackfillStats {
   warm: number;
   hot: number;
   enterprise: number;
+  suppressed: number;
   durationMs: number;
 }
 
@@ -165,6 +246,7 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
     warm: 0,
     hot: 0,
     enterprise: 0,
+    suppressed: 0,
     durationMs: 0,
   };
 
@@ -184,6 +266,8 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
       orderBy: { id: 'asc' },
       select: {
         id: true,
+        businessName: true,
+        suppressOutreach: true,
         contactEmail: true,
         scrapedEmail: true,
         phone: true,
@@ -201,33 +285,40 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
 
     cursor = batch[batch.length - 1].id;
 
-    // Score all organizers in this batch
+    // Score all organizers in this batch; flag non-resale names for suppression
     const updates = batch.map((org) => {
       const { score, tier } = calculateLeadScore(org);
-      return { id: org.id, score, tier };
+      const blocklisted = matchesNonResaleBlocklist(org.businessName);
+      const shouldSuppress = org.suppressOutreach || blocklisted;
+      if (blocklisted) {
+        console.log(`[LeadScoring] Suppressed: ${org.businessName} (matched blocklist)`);
+      }
+      return { id: org.id, score, tier, shouldSuppress };
     });
 
     // Write in parallel — each update is small
     await Promise.all(
-      updates.map(({ id, score, tier }) =>
+      updates.map(({ id, score, tier, shouldSuppress }) =>
         prisma.organizer.update({
           where: { id },
           data: {
             leadScore: score,
             leadTier: tier,
             lastScoredAt: now,
+            suppressOutreach: shouldSuppress,
           },
         })
       )
     );
 
     // Accumulate tier stats
-    for (const { tier } of updates) {
+    for (const { tier, shouldSuppress } of updates) {
       stats.scored++;
       if (tier === 'COLD') stats.cold++;
       else if (tier === 'WARM') stats.warm++;
       else if (tier === 'HOT') stats.hot++;
       else if (tier === 'ENTERPRISE') stats.enterprise++;
+      if (shouldSuppress) stats.suppressed++;
     }
 
     console.log(
@@ -246,7 +337,8 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
   console.log(
     `[leadScoring] Backfill complete in ${stats.durationMs}ms — ` +
     `${stats.scored} scored: ` +
-    `COLD=${stats.cold} WARM=${stats.warm} HOT=${stats.hot} ENTERPRISE=${stats.enterprise}`
+    `COLD=${stats.cold} WARM=${stats.warm} HOT=${stats.hot} ENTERPRISE=${stats.enterprise} ` +
+    `SUPPRESSED=${stats.suppressed}`
   );
 
   return stats;

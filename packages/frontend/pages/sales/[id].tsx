@@ -1396,15 +1396,23 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                                     <AuctionCountdown endTime={item.auctionEndTime} onExpired={() => queryClient.invalidateQueries({ queryKey: ['sale', id] })} />
                                   )}
                                 </div>
-                                {!isOrganizer && user && item.status === 'AVAILABLE' && item.auctionEndTime && mounted && new Date(item.auctionEndTime) > new Date() && (
-                                  <div className="flex">
-                                    <input type="number" step="0.01" min={(item.currentBid || item.auctionStartPrice) + (item.bidIncrement || 1)} value={bidAmounts[item.id] || ''} onChange={(e) => handleBidAmountChange(item.id, e.target.value)} className="flex-grow px-2 py-1 border border-warm-300 dark:border-gray-600 rounded-l text-xs dark:bg-gray-700 dark:text-warm-100" placeholder="Bid amount" aria-label="Enter bid amount" />
-                                    <button onClick={() => handlePlaceBid(item.id)} disabled={biddingItemId === item.id} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-2 py-1 rounded-r disabled:opacity-50">
-                                      {biddingItemId === item.id ? '...' : 'Bid'}
-                                    </button>
-                                  </div>
-                                )}
-                                {item.status === 'AUCTION_ENDED' && <div className="text-xs text-center py-1.5 bg-warm-100 dark:bg-gray-700 rounded text-warm-600 dark:text-gray-400">Auction ended</div>}
+                                {(() => {
+                                  const auctionIsOver = item.status === 'AUCTION_ENDED' ||
+                                    (item.auctionEndTime && new Date(item.auctionEndTime) <= new Date());
+                                  return (
+                                    <>
+                                      {!isOrganizer && user && !auctionIsOver && item.status === 'AVAILABLE' && item.auctionEndTime && mounted && (
+                                        <div className="flex">
+                                          <input type="number" step="0.01" min={(item.currentBid || item.auctionStartPrice) + (item.bidIncrement || 1)} value={bidAmounts[item.id] || ''} onChange={(e) => handleBidAmountChange(item.id, e.target.value)} className="flex-grow px-2 py-1 border border-warm-300 dark:border-gray-600 rounded-l text-xs dark:bg-gray-700 dark:text-warm-100" placeholder="Bid amount" aria-label="Enter bid amount" />
+                                          <button onClick={() => handlePlaceBid(item.id)} disabled={biddingItemId === item.id} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-2 py-1 rounded-r disabled:opacity-50">
+                                            {biddingItemId === item.id ? '...' : 'Bid'}
+                                          </button>
+                                        </div>
+                                      )}
+                                      {auctionIsOver && <div className="text-xs text-center py-1.5 bg-warm-100 dark:bg-gray-700 rounded text-warm-600 dark:text-gray-400">Auction ended</div>}
+                                    </>
+                                  );
+                                })()}
                               </div>
                             ) : (
                               <div className="flex items-center justify-between">

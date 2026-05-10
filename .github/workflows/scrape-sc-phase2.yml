@@ -1,0 +1,53 @@
+name: Scrape South Carolina LLR Additional Licenses (Phase 2)
+
+on:
+  schedule:
+    # Monday 12:45 PM UTC (staggered from other Phase 2 scrapers)
+    - cron: '45 12 * * 1'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: South Carolina Phase 2 Pawnbroker & Secondhand Dealer Scraper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: packages/database
+
+      - name: Run South Carolina Phase 2 Scraper
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { runSouthCarolinaPhase2Scraper } from "./src/services/scraper/sources/southCarolinaPhase2Scraper";
+            (async () => { try {
+              await runSouthCarolinaPhase2Scraper();
+              console.log("South Carolina Phase 2 scraper completed successfully");
+              process.exit(0);
+            } catch (err) {
+              console.error("South Carolina Phase 2 scraper failed:", err);
+              process.exit(1);
+            }
+            })();
+          '

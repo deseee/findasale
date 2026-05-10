@@ -1,0 +1,52 @@
+name: Scrape Canada411 Secondary Sale Directory
+
+on:
+  schedule:
+    # Monday 4:30 PM UTC — avoids overlap with US scrapers
+    - cron: '30 16 * * 1'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: Canada411 Directory Scraper (ON, BC, AB)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: packages/database
+
+      - name: Run Canada411 Scraper
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { runCanada411Scraper } from "./src/services/scraper/sources/canada411Scraper";
+            (async () => { try {
+              await runCanada411Scraper();
+              process.exit(0);
+            } catch (err) {
+              console.error("Canada411 scraper failed:", err);
+              process.exit(1);
+            }
+            })();
+          '
