@@ -1404,7 +1404,7 @@ function Step4({ c, form, setForm }: Step4Props) {
         sub={isAuction
           ? 'Auction-specific settings. These appear on the public listing and shape how items get added next.'
           : isDormDash
-          ? 'Tags help shoppers filter by what they need. Tip: add room tags to your items (e.g. "Room 204", "Study") so shoppers can find what they're looking for.'
+          ? 'Tags help shoppers filter by what they need. Tip: add room tags to your items (e.g. "Room 204", "Study") so shoppers can find what they\'re looking for.'
           : 'Tags help shoppers filter; notes go directly on the public listing. Both are optional but help conversion.'}
         c={c}
       />
