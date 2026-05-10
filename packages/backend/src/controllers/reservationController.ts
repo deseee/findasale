@@ -8,6 +8,7 @@ import { sendHoldPlacedAlert, sendHoldPlacedToShopper, sendHoldStatusToShopper }
 import { checkForFraud, calculateConfidenceScore } from '../services/fraudDetectionService';
 import { getRankBenefits, calculateRankFromXp } from '../utils/rankUtils';
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
+import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature #397: Crew Invasion flash discount
 
 const DEFAULT_HOLD_MINUTES = 30; // Feature #121: fallback hold duration in minutes
 const EN_ROUTE_RADIUS_M = 16093; // 10 miles in meters — en route grace zone
@@ -338,6 +339,13 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       }
     } catch (err) {
       console.error('[alert] Exception when sending shopper hold notification:', err);
+    }
+
+    // Feature #397: Crew Invasion — check if ≥3 shoppers are holding at this sale (non-blocking)
+    if (item.saleId) {
+      checkCrewInvasion(item.saleId, req.user!.id).catch(err =>
+        console.error('[crewInvasion] check error:', err)
+      );
     }
 
     res.status(201).json(reservation);

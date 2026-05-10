@@ -368,3 +368,149 @@ export async function awardQualityTierXp(
   }
 }
 
+
+/**
+ * Award org referral first-sale reward to the organizer who referred `referredUserId`.
+ * Fires when `referredUserId`'s organizer publishes their first sale.
+ *
+ * Reward: extend referrer's referralDiscountExpiry by 30 days (free tier upgrade).
+ * Idempotency: checked via pointsTransaction type 'REFERRAL_ORG_FIRST_SALE' scoped to the
+ * referredUserId description, so multiple referred orgs can each trigger a reward.
+ *
+ * @param referredUserId — userId of the organizer who just published their first sale
+ */
+export async function awardOrgReferralFirstSale(referredUserId: string): Promise<void> {
+  try {
+    // Find the ReferralReward record that tracks who referred this organizer at signup
+    const signupReferral = await prisma.referralReward.findFirst({
+      where: { referredUserId },
+      select: { referrerId: true },
+    });
+
+    if (!signupReferral) {
+      // This organizer wasn't referred by anyone — nothing to do
+      return;
+    }
+
+    const referrerId = signupReferral.referrerId;
+
+    // Idempotency: check if this exact referral has already been rewarded
+    // Use pointsTransaction description to scope per referred organizer
+    const alreadyRewarded = await prisma.pointsTransaction.findFirst({
+      where: {
+        userId: referrerId,
+        type: 'REFERRAL_ORG_FIRST_SALE',
+        description: {
+          contains: referredUserId,
+        },
+      },
+    });
+
+    if (alreadyRewarded) {
+      return;
+    }
+
+    // Find the referrer's organizer profile for businessName (for notification) and discount expiry
+    const referrerOrganizer = await prisma.organizer.findUnique({
+      where: { userId: referrerId },
+      select: { id: true, referralDiscountExpiry: true },
+    });
+
+    // Find the referred organizer's businessName for the notification message
+    const referredOrganizer = await prisma.organizer.findUnique({
+      where: { userId: referredUserId },
+      select: { businessName: true },
+    });
+
+    const businessName = referredOrganizer?.businessName ?? 'Your referral';
+
+    // Award 50 XP to the referrer (tracks idempotency via pointsTransaction)
+    await awardXp(referrerId, 'REFERRAL_ORG_FIRST_SALE', XP_AWARDS.REFERRAL_ORG_FIRST_SALE, {
+      description: `Referred organizer first sale: ${referredUserId}`,
+    });
+
+    // Extend referralDiscountExpiry by 30 days (free tier upgrade benefit)
+    if (referrerOrganizer) {
+      const now = new Date();
+      const currentExpiry = referrerOrganizer.referralDiscountExpiry;
+      // If expiry is in the future, extend from it; otherwise extend from now
+      const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
+      const newExpiry = new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+      await prisma.organizer.update({
+        where: { id: referrerOrganizer.id },
+        data: { referralDiscountExpiry: newExpiry },
+      });
+    }
+
+    // Notify the referrer
+    await prisma.notification.create({
+      data: {
+        userId: referrerId,
+        type: 'referral_org_first_sale',
+        title: 'Your referral just published their first sale!',
+        body: `${businessName} just published their first sale. You've earned a 30-day reward on your account.`,
+        link: '/organizer/referrals',
+        channel: 'OPERATIONAL',
+      },
+    });
+  } catch (error) {
+    console.error('[referralService] awardOrgReferralFirstSale error:', error);
+    // Intentionally re-throw — caller wraps in .catch() so this is safe
+    throw error;
+  }
+}
+
+/**
+ * Get organizer referral stats for the referral dashboard page.
+ * Returns: referral link, total orgs referred, how many published first sale, rewards earned.
+ *
+ * @param userId — the organizer's userId
+ */
+export async function getOrgReferralStats(userId: string): Promise<{
+  referralCode: string | null;
+  referralLink: string;
+  totalOrgsReferred: number;
+  firstSalePublished: number;
+  totalXpEarned: number;
+}> {
+  // Get referral code
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { referralCode: true },
+  });
+
+  const referralCode = user?.referralCode ?? null;
+  const referralLink = referralCode
+    ? `https://finda.sale/signup?ref=${referralCode}`
+    : '';
+
+  // Find all orgs this user referred at signup
+  const signupReferrals = await prisma.referralReward.findMany({
+    where: { referrerId: userId },
+    select: { referredUserId: true },
+  });
+
+  const totalOrgsReferred = signupReferrals.length;
+
+  // Count how many of those referred users have published a first sale
+  // (identified by a REFERRAL_ORG_FIRST_SALE pointsTransaction containing their userId)
+  const firstSaleTransactions = await prisma.pointsTransaction.findMany({
+    where: {
+      userId,
+      type: 'REFERRAL_ORG_FIRST_SALE',
+    },
+    select: { points: true },
+  });
+
+  const firstSalePublished = firstSaleTransactions.length;
+  const totalXpEarned = firstSaleTransactions.reduce((sum, t) => sum + t.points, 0);
+
+  return {
+    referralCode,
+    referralLink,
+    totalOrgsReferred,
+    firstSalePublished,
+    totalXpEarned,
+  };
+}

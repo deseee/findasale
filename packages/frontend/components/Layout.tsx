@@ -333,6 +333,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <DollarSign size={16} className="text-amber-500" />
               <span>Earnings</span>
             </Link>
+            <Link href="/organizer/referrals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Refer other organizers and earn rewards">
+              <Gift size={16} className="text-amber-500" />
+              <span>Referrals</span>
+            </Link>
             <Link href="/organizer/affiliate" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Earn commissions by referring other organizers">
               <Gift size={16} className="text-amber-500" />
               <span>Affiliate Program</span>
@@ -1125,6 +1129,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/print-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Printer size={14} className="inline mr-2 text-amber-500" /> Print Kit
                     </Link>
+                    <Link href="/organizer/starter-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <BookOpen size={14} className="inline mr-2 text-amber-500" /> Starter Kit
+                    </Link>
                   </>
                 )}
 
@@ -1152,6 +1159,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/organizer/earnings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <DollarSign size={14} className="inline mr-2 text-amber-500" /> Earnings
+                    </Link>
+                    <Link href="/organizer/referrals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Gift size={14} className="inline mr-2 text-amber-500" /> Referrals
                     </Link>
                     <Link href="/organizer/payouts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Wallet size={14} className="inline mr-2 text-amber-500" /> Payouts
@@ -1813,10 +1823,4 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       {/* Become Organizer Modal */}
       <BecomeOrganizerModal
         isOpen={showBecomeOrganizerModal}
-        onClose={() => setShowBecomeOrganizerModal(false)}
-      />
-    </div>
-  );
-};
-
-export default Layout;
+       

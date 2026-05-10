@@ -4,6 +4,13 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
 
+interface CanadaStats {
+  totalOrganizers: number;
+  totalSales: number;
+  totalRevenue: number;
+  topProvinces: { province: string; count: number }[];
+}
+
 interface Stats {
   // existing
   totalUsers: number;
@@ -35,6 +42,7 @@ interface Stats {
     transactionRevenue: number[];
     newSales: number[];
   };
+  canadaStats?: CanadaStats;
 }
 
 interface RecentActivity {
@@ -50,6 +58,7 @@ const AdminDashboard = () => {
   const [activity, setActivity] = useState<RecentActivity | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [geoFilter, setGeoFilter] = useState<'ALL' | 'US' | 'CA'>('ALL');
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -67,8 +76,9 @@ const AdminDashboard = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        const statsUrl = geoFilter === 'CA' ? '/admin/stats?country=CA' : '/admin/stats';
         const [statsRes, activityRes] = await Promise.all([
-          api.get('/admin/stats'),
+          api.get(statsUrl),
           api.get('/admin/activity'),
         ]);
         setStats(statsRes.data);
@@ -84,7 +94,7 @@ const AdminDashboard = () => {
     if (user?.roles?.includes('ADMIN')) {
       fetchData();
     }
-  }, [user]);
+  }, [user, geoFilter]);
 
   if (isLoading || loading) {
     return (
@@ -122,7 +132,24 @@ const AdminDashboard = () => {
   return (
     <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Admin Dashboard</h1>
-        <p className="text-warm-600 dark:text-warm-400 mb-8">Welcome, {user.name}. Manage your platform here.</p>
+        <p className="text-warm-600 dark:text-warm-400 mb-4">Welcome, {user.name}. Manage your platform here.</p>
+
+        {/* #370 Geography Filter */}
+        <div className="flex gap-2 mb-8">
+          {(['ALL', 'US', 'CA'] as const).map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setGeoFilter(filter)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition border ${
+                geoFilter === filter
+                  ? 'bg-amber-600 text-white border-amber-600'
+                  : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border-warm-300 dark:border-gray-600 hover:border-amber-400'
+              }`}
+            >
+              {filter === 'ALL' ? 'All Regions' : filter === 'US' ? '🇺🇸 United States' : '🇨🇦 Canada'}
+            </button>
+          ))}
+        </div>
 
         {/* Row 1: Money KPIs */}
         {stats && (
@@ -300,6 +327,47 @@ const AdminDashboard = () => {
               </div>
             )}
           </>
+        )}
+
+        {/* #370 Canada Analytics Cards */}
+        {geoFilter === 'CA' && stats?.canadaStats && (
+          <div className="mb-8">
+            <h2 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-4 flex items-center gap-2">
+              <span>🇨🇦</span> Canada Overview
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-red-500">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">CA Organizers</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{stats.canadaStats.totalOrganizers}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Canadian accounts</p>
+              </div>
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-red-500">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">CA Sales</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{stats.canadaStats.totalSales}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Total sales by CA organizers</p>
+              </div>
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-red-500">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">CA Revenue</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{formatCurrency(stats.canadaStats.totalRevenue)}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Total purchase value</p>
+              </div>
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-red-500">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Top Provinces</h3>
+                <div className="mt-2 space-y-1">
+                  {stats.canadaStats.topProvinces.length > 0 ? (
+                    stats.canadaStats.topProvinces.map((p) => (
+                      <div key={p.province} className="flex justify-between text-sm">
+                        <span className="text-warm-700 dark:text-warm-300 font-medium">{p.province}</span>
+                        <span className="text-warm-500 dark:text-warm-400">{p.count}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-warm-500 dark:text-warm-400 text-sm">No province data yet</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Quick Links */}

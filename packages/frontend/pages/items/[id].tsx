@@ -547,25 +547,16 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
           saleName={item.sale?.title || 'FindA.Sale'}
           saleId={item.sale?.id || ''}
           organizer={ogData?.organizer}
+          canonicalUrl={`https://finda.sale/items/${item.id}`}
         />
       ) : (
         // CSR fallback — used only when getServerSideProps didn't return ogData
-        <Head>
-          <title>{item.title} - FindA.Sale</title>
-          <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/items/${item.id}`} />
-          <meta name="description" content={item.description} />
-          <meta property="og:title" content={`${item.title} — ${item.sale?.title || 'FindA.Sale'}`} />
-          <meta property="og:description" content={item.description} />
-          <meta property="og:image" content={item.photoUrls[0] || ''} />
-          <meta property="og:image:width" content="1200" />
-          <meta property="og:image:height" content="630" />
-          <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/items/${item.id}`} />
-          <meta property="og:type" content="product" />
-          <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content={`${item.title} — ${item.sale?.title || 'FindA.Sale'}`} />
-          <meta name="twitter:description" content={item.description} />
-          <meta name="twitter:image" content={item.photoUrls[0] || ''} />
-        </Head>
+        <ItemOGMeta
+          item={{ ...item, photos: item.photoUrls.map(url => ({ url })) }}
+          saleName={item.sale?.title || 'FindA.Sale'}
+          saleId={item.sale?.id || ''}
+          canonicalUrl={`https://finda.sale/items/${item.id}`}
+        />
       )}
 
       {/* Product schema.org + Offer JSON-LD */}
@@ -1306,47 +1297,4 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     clearTimeout(timeout);
 
     if (!res.ok) {
-      return { props: { ogData: null, initialData: null } };
-    }
-    const item = await res.json();
-
-    // Safeguard: check that item has required fields for OG data
-    if (!item?.id || !item?.title) {
-      return { props: { ogData: null, initialData: null } };
-    }
-
-    const ogData: OGItemData = {
-      id: item.id,
-      title: item.title || '',
-      description: item.description || '',
-      price: typeof item.price === 'number' ? item.price : null,
-      condition: item.condition || null,
-      photoUrl: Array.isArray(item.photoUrls) && item.photoUrls.length > 0
-        ? item.photoUrls[0]
-        : null,
-      saleId: item.sale?.id || '',
-      saleName: item.sale?.title || 'FindA.Sale',
-      organizer: item.sale?.organizer ? {
-        subscriptionTier: item.sale.organizer.subscriptionTier,
-        removeWatermarkEnabled: item.sale.organizer.removeWatermarkEnabled,
-      } : undefined,
-    };
-
-    // JSON-LD: Extract full item data for structured data injection
-    const initialData: InitialItemData = {
-      id: item.id,
-      title: item.title || '',
-      description: item.description || '',
-      price: typeof item.price === 'number' ? item.price : null,
-      priceBeforeMarkdown: typeof item.priceBeforeMarkdown === 'number' ? item.priceBeforeMarkdown : null,
-      photoUrls: Array.isArray(item.photoUrls) ? item.photoUrls : [],
-      status: item.status || 'AVAILABLE',
-    };
-
-    return { props: { ogData, initialData } };
-  } catch (error) {
-    // Fail open — page still works, OG tags fall back to CSR version
-    console.error('[items/[id] getServerSideProps error]', error);
-    return { props: { ogData: null, initialData: null } };
-  }
-}
+      return { prop

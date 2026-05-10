@@ -12,7 +12,7 @@ import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, ge
 import { createDonation, getDonations, generateReceipt } from '../controllers/donationController';
 import { getCheatsheet, getItemsForLabels, createLabelBatch, printLabelBatch } from '../controllers/labelComposerController';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
-import { awardOrganizerClaimedXp } from '../services/referralService';
+import { awardOrganizerClaimedXp, getOrgReferralStats, generateReferralCode } from '../services/referralService';
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 
 const router = Router();
@@ -520,6 +520,26 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/organizers/me/referral-stats — Feature #398: Org referral loop dashboard stats
+// Returns referral link, total orgs referred, first-sale count, XP earned
+router.get('/me/referral-stats', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    // Generate referral code if the organizer doesn't have one yet
+    await generateReferralCode(req.user.id);
+
+    const stats = await getOrgReferralStats(req.user.id);
+    return res.json(stats);
+  } catch (error) {
+    console.error('[referral-stats] Error:', error);
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
