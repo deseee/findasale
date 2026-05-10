@@ -114,6 +114,15 @@ import { runLouisianaPhase2Scraper } from '../services/scraper/sources/louisiana
 import { runArkansasPhase2Scraper } from '../services/scraper/sources/arkansasPhase2Scraper';
 import { runMississippiPhase2Scraper } from '../services/scraper/sources/mississippiPhase2Scraper';
 import { runSouthCarolinaPhase2Scraper } from '../services/scraper/sources/southCarolinaPhase2Scraper';
+import { runIndianaPhase2Scraper } from '../services/scraper/sources/indianaPhase2Scraper';
+import { runMarylandPhase2Scraper } from '../services/scraper/sources/marylandPhase2Scraper';
+import { runMassachusettsPhase2Scraper } from '../services/scraper/sources/massachusettsPhase2Scraper';
+import { runNewHampshirePhase2Scraper } from '../services/scraper/sources/newHampshirePhase2Scraper';
+import { runNorthDakotaPhase2Scraper } from '../services/scraper/sources/northDakotaPhase2Scraper';
+import { runSouthDakotaPhase2Scraper } from '../services/scraper/sources/southDakotaPhase2Scraper';
+import { runTennesseePhase2Scraper } from '../services/scraper/sources/tennesseePhase2Scraper';
+import { runVermontPhase2Scraper } from '../services/scraper/sources/vermontPhase2Scraper';
+import { runWestVirginiaPhase2Scraper } from '../services/scraper/sources/westVirginiaPhase2Scraper';
 
 const router = express.Router();
 
@@ -1295,6 +1304,105 @@ router.post('/scraper/run-south-carolina-phase2', requireSecret, async (req: exp
     res.json({ success: true, message: 'South Carolina Phase 2 scraper completed' });
   } catch (error: any) {
     console.error('[SouthCarolinaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-indiana-phase2 — Indiana Phase 2 secondary sale scraper (stub)
+router.post('/scraper/run-indiana-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runIndianaPhase2Scraper();
+    res.json({ success: true, message: 'Indiana Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[IndianaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-maryland-phase2 — Maryland Phase 2 secondary sale license scraper
+router.post('/scraper/run-maryland-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runMarylandPhase2Scraper();
+    res.json({ success: true, message: 'Maryland Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[MarylandPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-massachusetts-phase2 — Massachusetts Phase 2 secondary sale scraper (stub)
+router.post('/scraper/run-massachusetts-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runMassachusettsPhase2Scraper();
+    res.json({ success: true, message: 'Massachusetts Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[MassachusettsPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-new-hampshire-phase2 — New Hampshire Phase 2 secondary sale scraper (stub)
+router.post('/scraper/run-new-hampshire-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runNewHampshirePhase2Scraper();
+    res.json({ success: true, message: 'New Hampshire Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[NewHampshirePhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-north-dakota-phase2 — North Dakota Phase 2 secondary sale scraper (stub)
+router.post('/scraper/run-north-dakota-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runNorthDakotaPhase2Scraper();
+    res.json({ success: true, message: 'North Dakota Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[NorthDakotaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-south-dakota-phase2 — South Dakota Phase 2 secondary sale scraper (stub)
+router.post('/scraper/run-south-dakota-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runSouthDakotaPhase2Scraper();
+    res.json({ success: true, message: 'South Dakota Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[SouthDakotaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-tennessee-phase2 — Tennessee Phase 2 secondary sale license scraper
+router.post('/scraper/run-tennessee-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runTennesseePhase2Scraper();
+    res.json({ success: true, message: 'Tennessee Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[TennesseePhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-vermont-phase2 — Vermont Phase 2 secondary sale scraper (stub)
+router.post('/scraper/run-vermont-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runVermontPhase2Scraper();
+    res.json({ success: true, message: 'Vermont Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[VermontPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-west-virginia-phase2 — West Virginia Phase 2 secondary sale license scraper
+router.post('/scraper/run-west-virginia-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runWestVirginiaPhase2Scraper();
+    res.json({ success: true, message: 'West Virginia Phase 2 scraper completed' });
+  } catch (error: any) {
+    console.error('[WestVirginiaPhase2] Route error:', error);
     res.status(500).json({ error: error.message });
   }
 });
