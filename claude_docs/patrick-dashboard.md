@@ -9,7 +9,7 @@
 | Vercel build | ✅ GREEN |
 | Railway backend | ✅ GREEN (crash fixed — AL/KY/ME stubs deployed) |
 | OUTREACH_ENABLED | ⚠️ FALSE — flip after S708 push lands |
-| COLD noise backfill | 🔄 RUNNING — 38,408 orgs, confirmed active in Railway logs |
+| COLD noise backfill | ✅ COMPLETE — 38,408 scored in 116s. SUPPRESSED=3,498 noise orgs out of outreach queue |
 | #251 SaleCard Sale badge | ✅ FIXED S708 — push pending |
 | #174 auctionIsOver on sale page | ✅ FIXED S708 — push pending |
 | FL Phase 2 | ✅ 102 DBPR auctioneers (FDACS pawnshop GH Actions IP block, graceful) |

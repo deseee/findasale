@@ -26,10 +26,11 @@ Run: 2026-05-10. Railway DB queried directly via psycopg2.
 
 **Pool size:** 37,531 unmanaged org listings total.
 
-**Tier breakdown (post-backfill):**
-- COLD: 32,163 (85.7%)
-- WARM: 5,232 (13.9%)
-- HOT: 136 (0.4%)
+**Tier breakdown (post-S708 backfill):**
+- COLD: 32,530 (84.7%)
+- WARM: 5,663 (14.7%)
+- HOT: 215 (0.6%)
+- SUPPRESSED: 3,498 (9.1% of total — permanently out of outreach queue via COLD noise blocklist)
 
 **Source attribution:** 94.5% have NULL `directoryMostRecentSource`. Only Foursquare (1,130) and HEREPlaces (920) have tags — everything else predates the S696 source-tracking forward-fix. Provenance of ~35,481 orgs is unknown from tags alone (ESN + state licensing scrapers predated the fix).
 
