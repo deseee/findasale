@@ -1823,4 +1823,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       {/* Become Organizer Modal */}
       <BecomeOrganizerModal
         isOpen={showBecomeOrganizerModal}
-       
+        onClose={() => setShowBecomeOrganizerModal(false)}
+      />
+    </div>
+  );
+};
+
+export default Layout;
