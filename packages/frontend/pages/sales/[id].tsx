@@ -1353,7 +1353,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 </div>
               )}
 
-              {/* Category filter + per-page (if no tags) */}}
+              {/* Category filter + per-page (if no tags) */}
               {(!sale.tags || sale.tags.length === 0) && sale.items.some((item) => item.category) && (
                 <div className="flex items-center gap-3 mb-4 relative">
                   <button onClick={() => setCategoryDropdownOpen(o => !o)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-warm-700 dark:text-gray-200 hover:bg-warm-50 transition-colors">
