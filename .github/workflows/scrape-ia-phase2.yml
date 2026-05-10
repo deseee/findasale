@@ -1,0 +1,52 @@
+name: Scrape Iowa Retail Business Registrations (Phase 2)
+
+on:
+  schedule:
+    # Monday 1:00 PM UTC
+    - cron: '0 13 * * 1'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: Iowa Phase 2 Secondary Sale Scraper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: packages/database
+
+      - name: Run Iowa Phase 2 Scraper
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { runIowaPhase2Scraper } from "./src/services/scraper/sources/iowaPhase2Scraper";
+            (async () => { try {
+              await runIowaPhase2Scraper();
+              console.log("Iowa Phase 2 scraper completed successfully");
+              process.exit(0);
+            } catch (err) {
+              console.error("Iowa Phase 2 scraper failed:", err);
+              process.exit(1);
+            }
+            })();
+          '

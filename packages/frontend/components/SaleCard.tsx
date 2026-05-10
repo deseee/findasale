@@ -39,6 +39,7 @@ interface Sale {
   tags?: string[];
   favoriteCount?: number;
   maxOrganizerDiscount?: number; // D-XP-003: Max organizer discount across items
+  hasMarkdownItems?: boolean; // Bug #251: any items have auto-markdown applied
   saleType?: string; // Brief F: ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL
   boost?: { // Phase 2b: Boost badge
     boostType: string;
@@ -127,6 +128,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
   const statusBadge = getStatusBadge();
   const organizerSpecialBadge = getOrganizerSpecialBadge();
   const badge: BadgeConfig | null = organizerSpecialBadge || statusBadge;
+  const showMarkdownBadge = sale.hasMarkdownItems && !sale.isSold;
 
   return (
     <div className="bg-white dark:bg-gray-800 overflow-hidden hover:shadow-card-hover dark:hover:shadow-lg transition-all duration-300 hover:scale-105 flex flex-col h-full rounded-lg border border-warm-200 dark:border-gray-700">
@@ -179,12 +181,19 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
           </div>
         ) : null}
 
-        {badge && (
-          <div className="absolute top-2 left-2">
-            <span className={`flex items-center gap-1 px-2.5 py-1 rounded text-sm font-bold ${badge.classes} shadow`}>
-              {badge.pulse && <span className="w-2 h-2 rounded-full bg-white animate-pulse" />}
-              {badge.label}
-            </span>
+        {(badge || showMarkdownBadge) && (
+          <div className="absolute top-2 left-2 flex flex-col gap-1">
+            {badge && (
+              <span className={`flex items-center gap-1 px-2.5 py-1 rounded text-sm font-bold ${badge.classes} shadow`}>
+                {badge.pulse && <span className="w-2 h-2 rounded-full bg-white animate-pulse" />}
+                {badge.label}
+              </span>
+            )}
+            {showMarkdownBadge && (
+              <span className="px-2.5 py-1 rounded text-sm font-bold bg-red-600 text-white shadow">
+                Sale
+              </span>
+            )}
           </div>
         )}
 

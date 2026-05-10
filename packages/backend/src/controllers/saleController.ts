@@ -185,7 +185,7 @@ export const listSales = async (req: Request, res: Response) => {
             select: { id: true, businessName: true, phone: true, reputationTier: true, user: { select: { customMapPin: true } } }
           },
           items: {
-            select: { organizerDiscountAmount: true }
+            select: { organizerDiscountAmount: true, markdownApplied: true }
           },
           _count: { select: { favorites: true } },
           trails: {
@@ -226,6 +226,7 @@ export const listSales = async (req: Request, res: Response) => {
             .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
             .map((item: any) => item.organizerDiscountAmount))
         : null;
+      const hasMarkdownItems = items && items.some((item: any) => item.markdownApplied === true);
 
       // Rank-Based Early Access: compute lock status for each sale
       const locked = isSaleLocked(sale.publishedAt, userRank);
@@ -234,6 +235,7 @@ export const listSales = async (req: Request, res: Response) => {
       return {
         ...rest,
         maxOrganizerDiscount: maxOrganizerDiscount || null,
+        hasMarkdownItems: hasMarkdownItems || false,
         favoriteCount: _count?.favorites ?? 0,
         hasActiveTrail: (trails && trails.length > 0) ?? false,
         trailShareToken: trails?.[0]?.shareToken ?? null,
@@ -1029,7 +1031,7 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
         address: true, city: true, state: true, zip: true, lat: true, lng: true,
         neighborhood: true, photoUrls: true, tags: true,
         organizer: { select: { businessName: true, avgRating: true } },
-        items: { select: { organizerDiscountAmount: true } },
+        items: { select: { organizerDiscountAmount: true, markdownApplied: true } },
         _count: { select: { items: true } },
       },
       orderBy: { startDate: 'asc' },
@@ -1043,10 +1045,12 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
             .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
             .map((item: any) => item.organizerDiscountAmount))
         : null;
+      const hasMarkdownItems = convertedSale.items && convertedSale.items.some((item: any) => item.markdownApplied === true);
       const { items, ...saleWithoutItems } = convertedSale;
       return {
         ...saleWithoutItems,
-        maxOrganizerDiscount: maxOrganizerDiscount || null
+        maxOrganizerDiscount: maxOrganizerDiscount || null,
+        hasMarkdownItems: hasMarkdownItems || false,
       };
     });
 
@@ -1083,7 +1087,7 @@ export const getSalesByCity = async (req: Request, res: Response) => {
         address: true, city: true, state: true, zip: true, lat: true, lng: true,
         photoUrls: true, tags: true,
         organizer: { select: { businessName: true, avgRating: true } },
-        items: { select: { organizerDiscountAmount: true } },
+        items: { select: { organizerDiscountAmount: true, markdownApplied: true } },
         _count: { select: { items: true } },
       },
       orderBy: { startDate: 'asc' },
@@ -1104,10 +1108,12 @@ export const getSalesByCity = async (req: Request, res: Response) => {
             .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
             .map((item: any) => item.organizerDiscountAmount))
         : null;
+      const hasMarkdownItems = convertedSale.items && convertedSale.items.some((item: any) => item.markdownApplied === true);
       const { items, ...saleWithoutItems } = convertedSale;
       return {
         ...saleWithoutItems,
-        maxOrganizerDiscount: maxOrganizerDiscount || null
+        maxOrganizerDiscount: maxOrganizerDiscount || null,
+        hasMarkdownItems: hasMarkdownItems || false,
       };
     });
 
