@@ -8,18 +8,20 @@
  *   - NM RLD Financial Institutions Division licenses pawnbrokers under NMSA §56-12.
  *   - rld.nm.gov is a WordPress site with a "Verify a License" page but no scrapable
  *     licensee database — the verify portal is a UI-only page with no embedded API.
- *   - No NM open data portal dataset found for pawnbroker licensees.
+ *   - opendata.newmexico.gov returns HTTP 000 (unreachable) — portal is offline or restricted.
  *   - NM RLD does NOT appear to be on NMLS for pawnbroker licenses.
+ *   - NM SOS business search (portal.sos.nm.gov) has no public Socrata or CKAN API.
  *
  * UNBLOCKING OPTIONS (in priority order):
  *   1. NM RLD direct inquiry: https://www.rld.nm.gov/financial-institutions/
  *      Phone: (505) 476-4885. Request pawnbroker licensee list under NMSA §14-2 (Inspection of
  *      Public Records Act). They may provide a CSV or spreadsheet.
- *   2. NM Open Data: https://opendata.newmexico.gov — search "pawnbroker" or "financial institutions".
- *   3. NM RLD may have a licensee lookup at https://www.rld.nm.gov/licensing/ — probe for
+ *   2. NM SOS bulk data: https://portal.sos.nm.gov — check if a bulk entity export is available;
+ *      then keyword-filter entityname for pawn/auction/consign (same pattern as CO SOS scraper).
+ *   3. Albuquerque city business licenses: https://data.cabq.gov — check for Socrata datasets
+ *      with license type columns covering pawnbroker/secondhand dealer.
+ *   4. NM RLD may have a licensee lookup at https://www.rld.nm.gov/licensing/ — probe for
  *      hidden form endpoints or XHR calls via DevTools.
- *   4. NM SOS business search (portal.sos.nm.gov) — covers entity registration only, not pawn
- *      licenses, but may help cross-reference business names found via records request.
  */
 
 import { defaultRateLimiter } from '../rateLimiter';

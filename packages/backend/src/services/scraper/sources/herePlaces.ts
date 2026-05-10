@@ -11,7 +11,7 @@
  */
 
 import { ScrapedItem } from '../index';
-import { PLACES_QUERIES, GOOGLE_PLACES_METROS } from './googlePlaces';
+import { PLACES_QUERIES, GOOGLE_PLACES_METROS, BUSINESS_NAME_BLOCKLIST } from './googlePlaces';
 import { getRandomUserAgent } from '../userAgents';
 
 const HERE_API_BASE = 'https://discover.search.hereapi.com/v1/discover';
@@ -303,9 +303,15 @@ export async function scrapeHEREQuery(
       if (seenIds.has(place.id)) continue;
       seenIds.add(place.id);
 
-      // Apply blocklist
+      // Apply global business name blocklist (hotels, chains, restaurants, etc.)
+      const nameLower = place.title.toLowerCase();
+      if (BUSINESS_NAME_BLOCKLIST.some((block) => nameLower.includes(block))) {
+        console.debug(`[HEREPlaces] Filtered by global blocklist: "${place.title}"`);
+        continue;
+      }
+
+      // Apply per-query blocklist
       if (queryConfig.blocklist) {
-        const nameLower = place.title.toLowerCase();
         if (queryConfig.blocklist.some((block: string) => nameLower.includes(block))) continue;
       }
 

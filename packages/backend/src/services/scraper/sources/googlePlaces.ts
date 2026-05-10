@@ -58,7 +58,7 @@ interface QueryConfig {
   label: string;
 }
 
-/** 23 search queries covering the full secondhand/resale market (ADR-077 Innovation review) */
+/** 29 search queries covering the full secondhand/resale market (ADR-077 Innovation review) */
 export const PLACES_QUERIES: QueryConfig[] = [
   { query: 'antique mall', category: 'ANTIQUE_MALL', saleType: 'RETAIL', label: 'Antique Mall' },
   { query: 'antique dealer', category: 'ANTIQUE_DEALER', saleType: 'RETAIL', label: 'Antique Dealer' },
@@ -118,6 +118,19 @@ export const PLACES_QUERIES: QueryConfig[] = [
   { query: 'estate liquidator', category: 'ESTATE_SALE_CO', saleType: 'RETAIL', label: 'Estate Liquidator' },
   { query: 'surplus store', category: 'LIQUIDATION', saleType: 'RETAIL', label: 'Surplus Store' },
   { query: 'salvage store', category: 'LIQUIDATION', saleType: 'RETAIL', label: 'Salvage Store' },
+  { query: 'garage sale company', category: 'ESTATE_SALE_CO', saleType: 'RETAIL', label: 'Garage Sale Company' },
+  { query: 'yard sale organizer', category: 'ESTATE_SALE_CO', saleType: 'RETAIL', label: 'Yard Sale Organizer' },
+  { query: 'tag sale company', category: 'ESTATE_SALE_CO', saleType: 'RETAIL', label: 'Tag Sale Company' },
+  {
+    query: 'junk removal service',
+    category: 'ESTATE_SALE_CO',
+    saleType: 'RETAIL',
+    // Exclude franchise chains — target independent operators who run estate cleanouts
+    blocklist: ['1-800-got-junk', '1800gotjunk', 'junk king', 'junkluggers', 'college hunks'],
+    label: 'Junk Removal / Estate Cleanout',
+  },
+  { query: 'online auction service', category: 'AUCTION_HOUSE', saleType: 'RETAIL', label: 'Online Auction Service' },
+  { query: 'buy sell trade store', category: 'RESALE_SHOP', saleType: 'RETAIL', label: 'Buy Sell Trade Store' },
 ];
 
 // ---------------------------------------------------------------------------

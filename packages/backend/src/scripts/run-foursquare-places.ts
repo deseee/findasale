@@ -26,7 +26,7 @@ const INGEST_URL =
 const SCRAPER_KEY = process.env.INTERNAL_SCRAPER_KEY;
 
 const BATCH_SIZE = 25;
-const CONCURRENCY = 5;
+const CONCURRENCY = 2;
 
 async function main() {
   if (!SCRAPER_KEY) throw new Error('INTERNAL_SCRAPER_KEY is not set');

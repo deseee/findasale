@@ -222,15 +222,16 @@ export async function getOrCreateScrapedOrganizer(
       if (lat !== undefined && lat !== null && !byPlaceId.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byPlaceId.lng) updates.lng = lng;
 
-      // Corroboration merge: increment source count and update sourcesJson
-      const newSourceCount = (byPlaceId.sourceCount || 1) + 1;
+      // Corroboration merge: only increment if this sourceName is genuinely new
       const currentSources = (byPlaceId.sourcesJson as any[]) || [];
-      const newSource = { sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() };
-      const updatedSources = [...currentSources, newSource];
-
-      updates.sourceCount = newSourceCount;
-      updates.sourcesJson = updatedSources;
-      updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+      const sourceAlreadyPresent = currentSources.some((s: any) => s.sourceName === sourceName);
+      if (!sourceAlreadyPresent) {
+        const newSourceCount = (byPlaceId.sourceCount || 1) + 1;
+        const newSource = { sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() };
+        updates.sourceCount = newSourceCount;
+        updates.sourcesJson = [...currentSources, newSource];
+        updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+      }
       updates.updatedAt = new Date();
 
       if (Object.keys(updates).length > 0) {
@@ -259,15 +260,16 @@ export async function getOrCreateScrapedOrganizer(
       if (lat !== undefined && lat !== null && !byFoursquare.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byFoursquare.lng) updates.lng = lng;
 
-      // Corroboration merge
-      const newSourceCount = (byFoursquare.sourceCount || 1) + 1;
+      // Corroboration merge: only increment if this sourceName is genuinely new
       const currentSources = (byFoursquare.sourcesJson as any[]) || [];
-      const newSource = { sourceName, sourceId: foursquareVenueId, lastSeen: new Date().toISOString() };
-      const updatedSources = [...currentSources, newSource];
-
-      updates.sourceCount = newSourceCount;
-      updates.sourcesJson = updatedSources;
-      updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+      const sourceAlreadyPresent = currentSources.some((s: any) => s.sourceName === sourceName);
+      if (!sourceAlreadyPresent) {
+        const newSourceCount = (byFoursquare.sourceCount || 1) + 1;
+        const newSource = { sourceName, sourceId: foursquareVenueId, lastSeen: new Date().toISOString() };
+        updates.sourceCount = newSourceCount;
+        updates.sourcesJson = [...currentSources, newSource];
+        updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+      }
       updates.updatedAt = new Date();
 
       if (Object.keys(updates).length > 0) {
@@ -296,15 +298,16 @@ export async function getOrCreateScrapedOrganizer(
       if (lat !== undefined && lat !== null && !byHere.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byHere.lng) updates.lng = lng;
 
-      // Corroboration merge
-      const newSourceCount = (byHere.sourceCount || 1) + 1;
+      // Corroboration merge: only increment if this sourceName is genuinely new
       const currentSources = (byHere.sourcesJson as any[]) || [];
-      const newSource = { sourceName, sourceId: hereBusinessId, lastSeen: new Date().toISOString() };
-      const updatedSources = [...currentSources, newSource];
-
-      updates.sourceCount = newSourceCount;
-      updates.sourcesJson = updatedSources;
-      updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+      const sourceAlreadyPresent = currentSources.some((s: any) => s.sourceName === sourceName);
+      if (!sourceAlreadyPresent) {
+        const newSourceCount = (byHere.sourceCount || 1) + 1;
+        const newSource = { sourceName, sourceId: hereBusinessId, lastSeen: new Date().toISOString() };
+        updates.sourceCount = newSourceCount;
+        updates.sourcesJson = [...currentSources, newSource];
+        updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+      }
       updates.updatedAt = new Date();
 
       if (Object.keys(updates).length > 0) {
@@ -335,15 +338,16 @@ export async function getOrCreateScrapedOrganizer(
     if (lat !== undefined && lat !== null && !byDedupeKey.lat) updates.lat = lat;
     if (lng !== undefined && lng !== null && !byDedupeKey.lng) updates.lng = lng;
 
-    // Corroboration merge
-    const newSourceCount = (byDedupeKey.sourceCount || 1) + 1;
+    // Corroboration merge: only increment if this sourceName is genuinely new
     const currentSources = (byDedupeKey.sourcesJson as any[]) || [];
-    const newSource = { sourceName, sourceId: dedupeKey, lastSeen: new Date().toISOString() };
-    const updatedSources = [...currentSources, newSource];
-
-    updates.sourceCount = newSourceCount;
-    updates.sourcesJson = updatedSources;
-    updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+    const sourceAlreadyPresent = currentSources.some((s: any) => s.sourceName === sourceName);
+    if (!sourceAlreadyPresent) {
+      const newSourceCount = (byDedupeKey.sourceCount || 1) + 1;
+      const newSource = { sourceName, sourceId: dedupeKey, lastSeen: new Date().toISOString() };
+      updates.sourceCount = newSourceCount;
+      updates.sourcesJson = [...currentSources, newSource];
+      updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+    }
     updates.updatedAt = new Date();
 
     if (Object.keys(updates).length > 0) {
@@ -380,15 +384,16 @@ export async function getOrCreateScrapedOrganizer(
     if (lat !== undefined && lat !== null && !existing.lat) updates.lat = lat;
     if (lng !== undefined && lng !== null && !existing.lng) updates.lng = lng;
 
-    // Corroboration merge
-    const newSourceCount = (existing.sourceCount || 1) + 1;
+    // Corroboration merge: only increment if this sourceName is genuinely new
     const currentSources = (existing.sourcesJson as any[]) || [];
-    const newSource = { sourceName, sourceId: `${normalizedName}:${city}`, lastSeen: new Date().toISOString() };
-    const updatedSources = [...currentSources, newSource];
-
-    updates.sourceCount = newSourceCount;
-    updates.sourcesJson = updatedSources;
-    updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+    const sourceAlreadyPresent = currentSources.some((s: any) => s.sourceName === sourceName);
+    if (!sourceAlreadyPresent) {
+      const newSourceCount = (existing.sourceCount || 1) + 1;
+      const newSource = { sourceName, sourceId: `${normalizedName}:${city}`, lastSeen: new Date().toISOString() };
+      updates.sourceCount = newSourceCount;
+      updates.sourcesJson = [...currentSources, newSource];
+      updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+    }
     updates.updatedAt = new Date();
 
     // Set dedupeKey if not already set

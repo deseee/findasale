@@ -1,8 +1,25 @@
 /**
  * Kansas Office of the State Bank Commissioner — Pawnbroker License Scraper (Phase 2)
- * Scrapes licensed pawnbrokers from Kansas OSBC licensee search
  * Source: https://www.osbckansas.org/
  * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data
+ *
+ * DATA SOURCE STATUS (verified 2026-05-09):
+ *   - KS OSBC (osbckansas.org) licenses pawnbrokers. Portal is WordPress-based; the
+ *     licensee search page returns HTML but results are JS-rendered (no static table).
+ *   - data.kansas.gov / data.ks.gov — both return HTTP 000 (DNS not found / offline).
+ *   - opendata.ks.gov — no response; KS has no active public Socrata portal.
+ *   - KS Dept of Agriculture auctioneer licensing page returns HTTP 403.
+ *
+ * UNBLOCKING OPTIONS (in priority order):
+ *   1. KS OSBC public records request: https://www.osbckansas.org/about/contact-us/
+ *      Request licensed pawnbroker list under KSA §45-215 (Kansas Open Records Act).
+ *      Phone: (785) 296-2266. They may provide a CSV or XLSX.
+ *   2. KS Dept of Agriculture auctioneer list: https://www.agriculture.ks.gov/divisions-programs/aad/auctioneer-licensing
+ *      Page returns 403 to bots; try via browser or public records request for licensee list.
+ *   3. Wichita city licenses: https://www.wichita.gov/opendata — check for business license
+ *      datasets with pawnbroker/secondhand dealer categories.
+ *   4. NMLS (nmlsconsumeraccess.org) — probe for KS pawnbroker license type coverage
+ *      (consumer lending search returns 403 currently).
  *
  * NOTE: osbckansas.org uses a JS-rendered licensee search portal.
  * This is a stub implementation. Full scraping requires Playwright/headless browser.

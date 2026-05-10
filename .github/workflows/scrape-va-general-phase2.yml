@@ -1,0 +1,57 @@
+name: Scrape Virginia General Business Licenses (Phase 2)
+
+on:
+  schedule:
+    # Wednesday 11:00 AM UTC — avoids conflict with VA DPOR Phase 2 (Tuesday 10:00 AM UTC)
+    - cron: '0 11 * * 3'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: Virginia General Phase 2 Scraper
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        working-directory: packages/database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: npx prisma generate
+
+      - name: Run Virginia General Phase 2 Scraper
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { runVirginiaGeneralPhase2Scraper } from "./src/services/scraper/sources/virginiaGeneralPhase2Scraper";
+            (async () => { try {
+              await runVirginiaGeneralPhase2Scraper();
+              console.log("Virginia General Phase 2 scraper completed successfully");
+              process.exit(0);
+            } catch (err) {
+              console.error("Virginia General Phase 2 scraper failed:", err);
+              process.exit(1);
+            }
+            })();
+          '

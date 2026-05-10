@@ -99,6 +99,16 @@ export async function runNewYorkLicensingScraper(): Promise<void> {
         continue;
       }
 
+      // Only process rows where the profession column indicates auctioneers.
+      // The DOS search page may return mixed profession types; we only want
+      // AUCTION_HOUSE records — skip anything else.
+      if (!profession.toLowerCase().includes('auction')) {
+        console.log(
+          `[NewYorkLicensing] Skipping ${name} (license ${licenseNum}): profession="${profession}" is not auctioneer`
+        );
+        continue;
+      }
+
       totalRecords++;
 
       const { city, zip } = parseAddress(addressFull);

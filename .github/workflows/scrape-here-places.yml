@@ -51,6 +51,6 @@ jobs:
           SCRAPER_BATCH_COUNT: 6
           SCRAPER_QUEUE_LIMIT: 50
         run: |
-          sleep $(( ${{ matrix.batch_index }} * 5 ))
+          sleep $(( ${{ matrix.batch_index }} * 90 ))
           cd packages/backend
           ./node_modules/.bin/ts-node src/scripts/run-here-places.ts
