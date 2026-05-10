@@ -1231,4 +1231,17 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
     res.json(stats);
   } catch (error: any) {
     console.error('Error fetching scrape pool stats:', error);
-    res.status(500).json({ message: 'Failed to f
+    res.status(500).json({ message: 'Failed to fetch scrape pool stats', error: error.message });
+  }
+};
+
+// GET /api/admin/scraper/metros — return the full NATIONAL_METROS list for the admin picker
+export async function getScrapeMetros(req: Request, res: Response): Promise<void> {
+  try {
+    const { NATIONAL_METROS } = await import('../jobs/scraperCron');
+    res.json({ metros: NATIONAL_METROS });
+  } catch {
+    // Fallback if import fails — return empty so UI still works
+    res.json({ metros: [] });
+  }
+}
