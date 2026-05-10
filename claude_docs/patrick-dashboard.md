@@ -47,8 +47,19 @@ git commit -m "S706: FL/OH/NC/GA Phase 2 scrapers + internal.ts truncation fix +
 
 ---
 
-## Next Up
+## S707 Plan
 
-1. Flip OUTREACH_ENABLED=true in Railway → monitor first cron run
-2. Canada411.ca scraper (#419) — next S707 dispatch
-3. #174 Auction bid flow Chrome QA when convenient (user12/Seedy2025!, /sales/c5hykxxecanngwcrkvq92n1va)
+**Step 1 — Scraper smoke tests** (Claude runs these via admin API, checks Railway logs for each):
+- FL / OH / NC / GA Phase 2 scrapers — manual trigger, confirm records ingest without errors
+
+**Step 2 — Chrome QA sprint** (before outreach goes live):
+- #174 Auction bid flow (user12/Seedy2025!, /sales/c5hykxxecanngwcrkvq92n1va)
+- NSFW detection (upload image, check Cloudinary moderation in logs)
+- #251 priceBeforeMarkdown (seed item, verify strikethrough renders)
+
+**Step 3 — Flip OUTREACH_ENABLED** after smoke test + #174 QA pass
+
+**Step 4 — Parallel dispatch** while QA runs:
+- Canada411.ca scraper (ON/BC/AB)
+- COLD noise remediation (keyword blocklist in leadScoringService)
+- #418 Phase 2 batch — 4–6 more states (AL, AR, IA, KY, LA, ME)
