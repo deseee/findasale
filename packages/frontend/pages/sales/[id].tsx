@@ -1584,7 +1584,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 <div className="text-xs uppercase tracking-widest mb-3" style={{ fontFamily: 'ui-monospace, monospace', color: 'rgba(26,24,20,0.4)', letterSpacing: '0.1em' }}>Don't lose it</div>
                 <div className="flex flex-col gap-2">
                   <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={false} />
-                  <FavoriteButton itemId={undefined as any} saleId={sale.id} variant="full" size="md" />
+                  <FavoriteButton itemId={undefined as any} saleId={sale.id} variant="button" size="md" />
                   <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
                 </div>
                 <div className="mt-3 pt-3 border-t border-black/8 dark:border-white/8 text-xs leading-relaxed" style={{ color: 'rgba(26,24,20,0.4)' }}>
