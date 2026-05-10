@@ -115,6 +115,8 @@ interface Sale {
     listingType?: string;
     organizerDiscountAmount?: number; // D-XP-003: Organizer-funded item discount
     organizerDiscountXp?: number; // D-XP-003: XP cost of discount
+    priceBeforeMarkdown?: number | null; // Feature #91: Auto-Markdown original price
+    markdownApplied?: boolean; // Feature #91: Whether auto-markdown has been applied
   }[];
   isAuctionSale: boolean;
   // Feature 35: Front Door Locator
@@ -1407,7 +1409,15 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                             ) : (
                               <div className="flex items-center justify-between">
                                 <div>
-                                  {item.effectivePrice && item.effectivePrice !== item.price ? (
+                                  {item.markdownApplied && item.priceBeforeMarkdown && item.priceBeforeMarkdown > item.price ? (
+                                    <>
+                                      <div className="flex items-center gap-1">
+                                        <div className="text-xs line-through text-gray-400">{formatPrice(item.priceBeforeMarkdown)}</div>
+                                        <span className="text-xs font-semibold text-green-600 dark:text-green-400">Sale</span>
+                                      </div>
+                                      <div className="font-semibold text-green-600 dark:text-green-400">{formatPrice(item.effectivePrice ?? item.price)}</div>
+                                    </>
+                                  ) : item.effectivePrice && item.effectivePrice !== item.price ? (
                                     <>
                                       <div className="text-xs line-through text-gray-400">{formatPrice(item.price)}</div>
                                       <div className="font-semibold text-green-600 dark:text-green-400">{formatPrice(item.effectivePrice)}</div>

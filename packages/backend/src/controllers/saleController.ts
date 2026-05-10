@@ -1209,25 +1209,37 @@ export const getSaleActivity = async (req: Request, res: Response) => {
       });
     }
 
-    // Query for recent favorites on items in this sale
-    const recentFavorites = await prisma.favorite.findMany({
-      where: {
-        item: {
-          saleId: id,
+    // Query for recent favorites on items in this sale.
+    // Wrapped in try/catch: Favorite.userId is non-nullable in schema but orphaned
+    // FK rows can exist in the DB (user deleted without cascading), causing:
+    // PrismaClientUnknownRequestError: Field user is required to return data, got null
+    // Graceful fallback to [] keeps the activity feed alive when orphaned rows exist.
+    let recentFavorites: Array<{ id: string; createdAt: Date; user: { name: string | null } | null; item: { title: string } | null }> = [];
+    try {
+      recentFavorites = await prisma.favorite.findMany({
+        where: {
+          item: {
+            saleId: id,
+          },
         },
-      },
-      include: {
-        user: { select: { name: true } },
-        item: { select: { title: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-    });
+        include: {
+          user: { select: { name: true } },
+          item: { select: { title: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      });
+    } catch (favErr) {
+      console.error('getSaleActivity: favorites query failed (likely orphaned user FK), returning empty:', favErr);
+    }
 
-    // Query for recent purchases in this sale
+    // Query for recent purchases in this sale.
+    // Purchase.userId is nullable (walk-in POS buyers), so filter with isNot: null
+    // to exclude both null and orphaned user references.
     const recentPurchases = await prisma.purchase.findMany({
       where: {
         saleId: id,
+        user: { isNot: null },
       },
       include: {
         user: { select: { name: true } },

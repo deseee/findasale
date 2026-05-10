@@ -906,47 +906,71 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
               {!isSold && !purchaseStatus?.hasPurchased && (
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   {isAuction ? (
-                    <div className="space-y-3">
-                      {!user && (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-blue-700 dark:text-blue-300 text-sm">
-                          Sign in to place a bid on this item.
+                    (() => {
+                      const auctionEnded = item.auctionClosed ||
+                        item.auctionStatus === 'ENDED' ||
+                        (!!item.auctionEndTime && mounted && new Date(item.auctionEndTime) <= new Date());
+                      return auctionEnded ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg">
+                            <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400 text-xs font-bold rounded">
+                              Auction Closed
+                            </span>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                              This auction has ended. No further bids are accepted.
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => setShowBidHistory(!showBidHistory)}
+                            className="w-full text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 py-2 px-4 text-sm font-semibold"
+                          >
+                            {showBidHistory ? 'Hide' : 'View'} Bid History
+                          </button>
                         </div>
-                      )}
-                      <input
-                        type="number"
-                        placeholder="Enter bid amount"
-                        value={bidAmount || ''}
-                        onChange={(e) => {
-                          setBidAmount(e.target.value ? parseFloat(e.target.value) : null);
-                          setBidError('');
-                        }}
-                        disabled={!user}
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500"
-                      />
-                      {bidError && <p className="text-red-600 text-sm">{bidError}</p>}
-                      <button
-                        onClick={handlePlaceBid}
-                        disabled={isSubmittingBid || placeBidMutation.isPending || !user}
-                        title={!user ? 'Sign in to place a bid' : ''}
-                        className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
-                          user
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-700 cursor-not-allowed'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        {user ? (
-                          isSubmittingBid || placeBidMutation.isPending ? 'Placing Bid...' : 'Place Bid'
-                        ) : (
-                          'Sign in to bid'
-                        )}
-                      </button>
-                      <button
-                        onClick={() => setShowBidHistory(!showBidHistory)}
-                        className="w-full text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 py-2 px-4 text-sm font-semibold"
-                      >
-                        {showBidHistory ? 'Hide' : 'View'} Bid History
-                      </button>
-                    </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {!user && (
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-blue-700 dark:text-blue-300 text-sm">
+                              Sign in to place a bid on this item.
+                            </div>
+                          )}
+                          <input
+                            type="number"
+                            placeholder="Enter bid amount"
+                            value={bidAmount || ''}
+                            onChange={(e) => {
+                              setBidAmount(e.target.value ? parseFloat(e.target.value) : null);
+                              setBidError('');
+                            }}
+                            disabled={!user}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500"
+                          />
+                          {bidError && <p className="text-red-600 text-sm">{bidError}</p>}
+                          <button
+                            onClick={handlePlaceBid}
+                            disabled={isSubmittingBid || placeBidMutation.isPending || !user}
+                            title={!user ? 'Sign in to place a bid' : ''}
+                            className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
+                              user
+                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-700 cursor-not-allowed'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          >
+                            {user ? (
+                              isSubmittingBid || placeBidMutation.isPending ? 'Placing Bid...' : 'Place Bid'
+                            ) : (
+                              'Sign in to bid'
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setShowBidHistory(!showBidHistory)}
+                            className="w-full text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 py-2 px-4 text-sm font-semibold"
+                          >
+                            {showBidHistory ? 'Hide' : 'View'} Bid History
+                          </button>
+                        </div>
+                      );
+                    })()
                   ) : item.status === 'RESERVED' ? (
                     <div className="p-3 bg-amber-50 dark:bg-gray-800 border border-amber-200 dark:border-amber-700 rounded-lg text-center">
                       <p className="text-amber-800 dark:text-amber-300 font-semibold text-sm">🔒 This item is currently on hold</p>
