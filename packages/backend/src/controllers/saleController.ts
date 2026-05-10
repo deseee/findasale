@@ -1782,4 +1782,48 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ message: 'Failed to award XP' });
     }
 
-    // Attempt to join the virtual queue if one exists for this sal
+    // Attempt to join the virtual queue if one exists for this sale
+    let queuePosition: number | null = null;
+    try {
+      const existingEntry = await prisma.lineEntry.findUnique({
+        where: { saleId_userId: { saleId, userId } },
+      });
+      if (!existingEntry || existingEntry.status === 'CANCELLED') {
+        const lastEntry = await prisma.lineEntry.findFirst({
+          where: { saleId },
+          orderBy: { position: 'desc' },
+        });
+        const position = (lastEntry?.position ?? 0) + 1;
+        if (existingEntry) {
+          await prisma.lineEntry.update({
+            where: { id: existingEntry.id },
+            data: { position, status: 'WAITING' },
+          });
+        } else {
+          await prisma.lineEntry.create({
+            data: { saleId, userId, position, status: 'WAITING' },
+          });
+        }
+        queuePosition = position;
+      } else {
+        queuePosition = existingEntry.position;
+      }
+    } catch {
+      // Queue join is best-effort — don't fail the check-in if no line exists
+    }
+
+    res.json({
+      success: true,
+      xpEarned: finalXp,
+      alreadyCheckedIn: false,
+      saleTitle: sale.title,
+      guildXp: awardResult.newXp,
+      explorerRank: awardResult.newRank,
+      rankIncreased: awardResult.rankIncreased,
+      queuePosition,
+    });
+  } catch (error) {
+    console.error('Check-in error:', error);
+    res.status(500).json({ message: 'Server error during check-in' });
+  }
+};
