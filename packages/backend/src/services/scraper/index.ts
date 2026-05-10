@@ -88,6 +88,8 @@ export async function getOrCreateSystemOrganizer(): Promise<string> {
 function normalizeName(name: string): string {
   return name
     .toLowerCase()
+    .replace(/\s*&\s*/g, ' and ')  // expand & → and BEFORE stripping
+    .replace(/\s*\+\s*/g, ' and ') // expand + → and too
     .replace(/[^a-z0-9 ]/g, '') // Remove special chars except spaces
     .replace(/\s+/g, ' ') // Collapse multiple spaces to single
     .trim();
@@ -120,7 +122,13 @@ function geocodeToGrid(lat: number, lng: number, gridSizeMeters: number = 100): 
  * Format: normalized-name:normalized-city
  */
 function generateDedupeKey(name: string, city: string): string {
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().replace(/\s+/g, '-');
+  const normalize = (s: string) =>
+    s.toLowerCase()
+      .replace(/\s*&\s*/g, ' and ')
+      .replace(/\s*\+\s*/g, ' and ')
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim()
+      .replace(/\s+/g, '-');
   return `${normalize(name)}:${normalize(city)}`;
 }
 

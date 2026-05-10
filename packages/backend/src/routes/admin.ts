@@ -28,6 +28,7 @@ import {
   getCuratorEntries,
   updateCuratorEntry,
   getScrapePoolStats,
+  getScrapeMetros,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -114,6 +115,7 @@ router.patch('/curator/entries/:entryId', updateCuratorEntry);
 
 // ADR-073 Phase 1: Directory scraper management
 router.get('/scraper/sources', getScrapeSourcesStatus);
+router.get('/scraper/metros', getScrapeMetros);
 router.post('/scraper/runs', triggerScrapeRun);
 router.get('/scraper/runs', getScrapeRuns);
 router.get('/scraper/sales', getScrapedSales);

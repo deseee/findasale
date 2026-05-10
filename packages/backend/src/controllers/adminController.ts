@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getMonthlyAICost, resetMonthlyAICost } from '../lib/aiCostTracker';
@@ -1197,3 +1197,14 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to fetch scrape pool stats', error: error.message });
   }
 };
+
+// GET /api/admin/scraper/metros — return the full NATIONAL_METROS list for the admin picker
+export async function getScrapeMetros(req: Request, res: Response): Promise<void> {
+  try {
+    const { NATIONAL_METROS } = await import('../jobs/scraperCron');
+    res.json({ metros: NATIONAL_METROS });
+  } catch {
+    // Fallback if import fails — return empty so UI still works
+    res.json({ metros: [] });
+  }
+}

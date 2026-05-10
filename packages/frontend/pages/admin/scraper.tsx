@@ -35,7 +35,7 @@ interface ScrapedSale {
   title: string;
   sourceUrl: string;
   sourceName: string;
-  organizer: { name: string; isClaimed: boolean };
+  organizer: { businessName: string; isClaimed: boolean; isUnmanagedListing: boolean };
   claimEmails: Array<{ sentAt: string; claimed: boolean }>;
 }
 
@@ -51,6 +51,7 @@ export default function ScraperAdminPage() {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const [sources, setSources] = useState<Source[]>([]);
+  const [metros, setMetros] = useState<string[]>([]);
   const [runs, setRuns] = useState<ScrapeRun[]>([]);
   const [sales, setSales] = useState<ScrapedSale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,10 +75,11 @@ export default function ScraperAdminPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [sourcesRes, runsRes, salesRes] = await Promise.all([
+      const [sourcesRes, runsRes, salesRes, metrosRes] = await Promise.all([
         fetch('/api/admin/scraper/sources'),
         fetch('/api/admin/scraper/runs?limit=20'),
         fetch('/api/admin/scraper/sales?limit=20'),
+        fetch('/api/admin/scraper/metros'),
       ]);
 
       if (!sourcesRes.ok || !runsRes.ok || !salesRes.ok) throw new Error('Failed to load data');
@@ -85,10 +87,12 @@ export default function ScraperAdminPage() {
       const sourcesData = await sourcesRes.json();
       const runsData = await runsRes.json();
       const salesData = await salesRes.json();
+      const metrosData = metrosRes.ok ? await metrosRes.json() : { metros: [] };
 
       setSources(sourcesData.sources ?? []);
       setRuns(runsData.jobs ?? []);
       setSales(salesData.sales ?? []);
+      setMetros(metrosData.metros ?? []);
     } catch (error) {
       console.error('Failed to load scraper data:', error);
       showToast('Failed to load data', 'error');
@@ -216,9 +220,14 @@ export default function ScraperAdminPage() {
             type="text"
             value={selectedMetro}
             onChange={(e) => setSelectedMetro(e.target.value)}
+            list="metro-options"
             className="px-4 py-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white flex-1"
-            placeholder="Metro slug (e.g., grand-rapids-mi)"
-            aria-label="Metro slug (e.g., grand-rapids-mi)" />
+            placeholder="Type to search metros (e.g. grand-rapids-mi)"
+            aria-label="Select metro"
+          />
+          <datalist id="metro-options">
+            {metros.map((m) => <option key={m} value={m} />)}
+          </datalist>
           <button
             onClick={handleTriggerScrape}
             disabled={triggering}
@@ -294,7 +303,7 @@ export default function ScraperAdminPage() {
                 <td className="p-3 text-sm dark:text-white">{sale.sourceName}</td>
                 <td className="p-3">
                   <span className={sale.organizer.isClaimed ? 'text-green-600' : 'text-gray-500 dark:text-gray-400'}>
-                    {sale.organizer.name}
+                    {sale.organizer.businessName}
                   </span>
                 </td>
                 <td className="p-3">
