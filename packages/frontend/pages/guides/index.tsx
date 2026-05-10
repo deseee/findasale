@@ -62,7 +62,6 @@ interface GuideSection {
 }
 
 interface GuidesIndexProps {
-  sections: GuideSection[];
   totalGuides: number;
 }
 
@@ -747,7 +746,8 @@ function AudienceSection({ section }: { section: GuideSection }) {
 // Page
 // ---------------------------------------------------------------------------
 
-export default function GuidesIndex({ sections, totalGuides }: GuidesIndexProps) {
+export default function GuidesIndex({ totalGuides }: GuidesIndexProps) {
+  const sections = SECTIONS;
   const canonicalUrl = 'https://finda.sale/guides';
 
   return (
@@ -889,7 +889,6 @@ export async function getStaticProps(): Promise<GetStaticPropsResult<GuidesIndex
 
   return {
     props: {
-      sections: SECTIONS,
       totalGuides,
     },
     revalidate: 86400, // 24-hour ISR cache
