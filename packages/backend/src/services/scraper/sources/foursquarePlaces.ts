@@ -15,7 +15,7 @@
  */
 
 import { ScrapedItem } from '../index';
-import { PLACES_QUERIES, GOOGLE_PLACES_METROS } from './googlePlaces';
+import { PLACES_QUERIES, GOOGLE_PLACES_METROS, BUSINESS_NAME_BLOCKLIST } from './googlePlaces';
 
 const FOURSQUARE_API_BASE = 'https://places-api.foursquare.com/places/search';
 const FOURSQUARE_API_VERSION = '2025-06-17';
@@ -201,9 +201,12 @@ export async function scrapeFoursquareQuery(
     if (seenIds.has(place.fsq_place_id)) continue;
     seenIds.add(place.fsq_place_id);
 
-    // Apply blocklist
+    // Apply global business name blocklist (case-insensitive)
+    const nameLower = place.name.toLowerCase();
+    if (BUSINESS_NAME_BLOCKLIST.some((blocked) => nameLower.includes(blocked.toLowerCase()))) continue;
+
+    // Apply per-query blocklist
     if (queryConfig.blocklist) {
-      const nameLower = place.name.toLowerCase();
       if (queryConfig.blocklist.some((block: string) => nameLower.includes(block))) continue;
     }
 

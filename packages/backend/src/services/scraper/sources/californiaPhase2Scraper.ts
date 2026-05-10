@@ -1,224 +1,342 @@
 /**
- * California DOJ — Secondhand Dealer / Pawnbroker License Scraper (Phase 2)
+ * California — Secondary Sale Business Scraper (Phase 2)
  *
- * ADR-073: Directory Scraper Phase 2 — State pawnbroker/secondhand dealer licensing data
- * (no statewide auctioneer licensing law in CA; pawnbrokers regulated under CA Business &
- * Professions Code §21625–21647 and CA Penal Code §21625+)
+ * ADR-073: Directory Scraper Phase 2 — City/municipal business license data
  *
- * DATA SOURCE STATUS (verified 2026-05-09):
- *   - CA DOJ is the licensing authority for secondhand dealers and pawnbrokers.
- *   - The public-facing search portal (oag.ca.gov) does not expose a scrapable HTML
- *     table or REST API endpoint — the licensee database is only accessible via
- *     public records request or a downloadable dataset released periodically.
- *   - CA DCA (search.dca.ca.gov) covers BSIS (security guards, PI, alarms) — it does
- *     NOT include secondhand dealers or pawnbrokers, and is Cloudflare Turnstile-protected.
- *   - CA BOE (Board of Equalization) publishes seller permit data but not pawn licenses.
+ * DATA SOURCES (both live):
  *
- * UNBLOCKING OPTIONS (in priority order):
- *   1. CA DOJ Public Records Act request for the secondhand dealer licensee list (CSV/XLSX).
- *      File at: https://oag.ca.gov/contact/consumer-complaint-against-business-or-individual
- *      Once received, parse with a CSV loader and call upsertRecord() below.
- *   2. CA OpenData portal: https://data.ca.gov — search "secondhand dealer" or "pawnbroker".
- *      If a dataset exists, replace the stub fetch below with the Socrata/CKAN API call.
- *   3. CA BreEZe system (https://www.breeze.ca.gov/) may expose a bulk export — check with
- *      DOJ directly; BreEZe covers DCA boards but DOJ pawn licensing is a separate system.
+ * Source A — Los Angeles City Business Licenses (Socrata)
+ *   https://data.lacity.org/resource/6rrh-rzua.json
+ *   Dataset: ~619k active business licenses with NAICS codes.
+ *   Strategy: filter by NAICS codes for used merchandise (453310), antique dealers (453920),
+ *   jewelry/pawn wholesale (423940, 423930), then keyword-match business name for pawn/auction.
+ *   Note: CA DOJ secondhand dealer / pawnbroker licensing data has no public API
+ *   (DOJ portal requires Public Records Act request). LA municipal data is the best
+ *   available open source for this state.
  *
- * PAGINATION DESIGN: This scraper is pre-built for cursor/offset pagination with a 2000
- * record per-run cap. When a live endpoint is available, set LIVE_ENDPOINT_AVAILABLE = true
- * and implement fetchPage() below. The upsert logic and deduplication key are production-ready.
+ * Source B — San Francisco Business Registrations (Socrata)
+ *   https://data.sfgov.org/resource/g8m3-pdis.json
+ *   Dataset: ~90k active business registrations with NAICS and lic_code_description.
+ *   Strategy: lic_code_description = 'PAWNBROKER' (always include) plus NAICS 453310
+ *   (used merchandise) and keyword-match on business name.
+ *
+ * CA DOJ path (if a statewide dataset becomes available):
+ *   Public Records Act request to oag.ca.gov for secondhand dealer licensee list (CSV/XLSX).
+ *   CA BreEZe (breeze.ca.gov) covers DCA boards but NOT DOJ pawn licensing.
+ *
+ * Uses Socrata $limit/$offset pagination (PAGE_SIZE=5000 for LA, 1000 for SF).
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
+import { getOrCreateScrapedOrganizer } from '../index';
 
-// Flip to true once a scrapable CA endpoint or CSV download URL is confirmed.
-const LIVE_ENDPOINT_AVAILABLE = false;
+// ─── Los Angeles ────────────────────────────────────────────────────────────
+const LA_SOCRATA_URL = 'https://data.lacity.org/resource/6rrh-rzua.json';
+const LA_DOMAIN = 'data.lacity.org';
 
-const CA_DATA_URL =
-  'https://data.ca.gov/api/3/action/datastore_search'; // placeholder — confirm dataset ID
-const MAX_RECORDS_PER_RUN = 2000;
-const PAGE_SIZE = 100;
+// ─── San Francisco ───────────────────────────────────────────────────────────
+const SF_SOCRATA_URL = 'https://data.sfgov.org/resource/g8m3-pdis.json';
+const SF_DOMAIN = 'data.sfgov.org';
 
-interface CaLicenseRecord {
-  businessName: string;
-  licenseNumber: string;
-  city: string;
-  address?: string;
-  phone?: string;
+const PAGE_SIZE = 5000;
+
+// LA NAICS codes covering our target categories
+// 453310 = Used merchandise stores (thrift, resale, used goods)
+// 453920 = Art dealers (antiques, galleries — keyword filtered)
+// 423940 = Jewelry/watch/precious metals wholesale (pawn adjacent — keyword filtered)
+// 423930 = Recyclable materials merchant (some pawn shops classify here — keyword filtered)
+const LA_ALWAYS_INCLUDE_NAICS = new Set(['453310']);
+const LA_KEYWORD_NAICS = new Set(['453920', '423940', '423930']);
+
+// SF lic_code_description values that always indicate our target category
+const SF_ALWAYS_INCLUDE_LIC = new Set(['PAWNBROKER']);
+// SF NAICS for broader match requiring keyword filter
+const SF_KEYWORD_NAICS = new Set(['453310', '453920']);
+
+// Keywords that confirm a business is in-scope (case-insensitive substring match)
+const SALE_TYPE_KEYWORDS = [
+  'pawn',
+  'estate sale',
+  'consign',
+  'thrift',
+  'resale',
+  'antique',
+  'vintage',
+  'collectible',
+  'flea market',
+  'swap meet',
+  'liquidat',
+  'salvage',
+  'auction',
+  'secondhand',
+  'second hand',
+  'pre-owned',
+  'preowned',
+  'surplus',
+  'rummage',
+  'used goods',
+  'junk dealer',
+  'used merchandise',
+];
+
+// False-positive fragments — exclude row if business name contains any of these
+const EXCLUDE_FRAGMENTS = [
+  'real estate',
+  'realty',
+  'realtor',
+  'restaurant',
+  'petroleum',
+  'dental',
+  'medical',
+  'pharmacy',
+  'funeral',
+  'insurance',
+  'tax service',
+  'accounting',
+  'attorney',
+  'law office',
+  'landscaping',
+  'construction',
+  'plumbing',
+  'electrical',
+  'roofing',
+  'automotive repair',
+  'auto repair',
+  'car wash',
+  'dry clean',
+  'laundry',
+  'hair salon',
+  'nail salon',
+  'tattoo',
+  'massage',
+  'yoga',
+  'daycare',
+  'pawnee', // geographic name, not pawn shop
+];
+
+function nameMatchesKeyword(name: string): boolean {
+  const lower = name.toLowerCase();
+  return SALE_TYPE_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
-const extractText = (html: string): string =>
-  html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .trim();
-
-async function fetchPage(
-  offset: number,
-  rateLimiterDomain: string
-): Promise<CaLicenseRecord[]> {
-  /**
-   * TODO: Replace this stub with a real fetch once the CA endpoint is confirmed.
-   *
-   * Option A — Socrata/CKAN open data (preferred):
-   *   const url = `${CA_DATA_URL}?resource_id=<DATASET_ID>&limit=${PAGE_SIZE}&offset=${offset}`;
-   *   const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
-   *   const json = await res.json();
-   *   return json.result.records.map((r: any) => ({
-   *     businessName: r['Business Name'] ?? '',
-   *     licenseNumber: r['License Number'] ?? '',
-   *     city: r['City'] ?? '',
-   *     address: r['Address'] ?? '',
-   *     phone: r['Phone'] ?? '',
-   *   }));
-   *
-   * Option B — form-based HTML table:
-   *   POST to the search endpoint with offset/page params, parse <tr>/<td> rows.
-   *
-   * Option C — CSV from public records response:
-   *   Parse CSV rows with a streaming parser; no pagination needed.
-   */
-  return [];
+function nameIsExcluded(name: string): boolean {
+  const lower = name.toLowerCase();
+  return EXCLUDE_FRAGMENTS.some((frag) => lower.includes(frag));
 }
 
-async function upsertRecord(record: CaLicenseRecord): Promise<boolean> {
-  const { businessName, licenseNumber, city, address, phone } = record;
-  if (!businessName || !licenseNumber) return false;
-
-  const dedupeKey = `CA-PAWN-${licenseNumber}`;
-  const slug = businessName
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 30)
-    .replace(/-$/, '');
-  const citySlug = (city || 'ca')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-    .slice(0, 20);
-
-  const existing = await prisma.organizer.findFirst({
-    where: {
-      OR: [
-        { licenseNumber: dedupeKey },
-        {
-          businessName: { equals: businessName, mode: 'insensitive' },
-          licenseState: 'CA',
-        },
-      ],
-    },
-    select: { id: true },
-  });
-
-  if (existing) {
-    await prisma.organizer.update({
-      where: { id: existing.id },
-      data: {
-        licenseNumber: dedupeKey,
-        licenseState: 'CA',
-        isStateLicensed: true,
-        directoryMostRecentSource: 'CaliforniaPhase2',
-        directoryMostRecentAt: new Date(),
-        ...(city && { city }),
-        ...(phone && { phone }),
-      },
-    });
-    return false; // updated, not created
-  }
-
-  await prisma.organizer.create({
-    data: {
-      businessName,
-      phone: phone ?? null,
-      address: address ?? (city ? `${city}, CA` : 'California'),
-      city: city || null,
-      bio: `Licensed secondhand dealer/pawnbroker in ${city || 'California'}.`,
-      isClaimed: false,
-      isUnmanagedListing: true,
-      licenseNumber: dedupeKey,
-      licenseState: 'CA',
-      isStateLicensed: true,
-      businessCategory: 'PAWN_SHOP',
-      directoryMostRecentSource: 'CaliforniaPhase2',
-      directoryMostRecentAt: new Date(),
-      user: {
-        create: {
-          email: `scraper+${slug}-${citySlug}-ca-caphase2@system.finda.sale`,
-          name: businessName,
-          password: null,
-          role: 'ORGANIZER',
-          roles: ['ORGANIZER'],
-        },
-      },
-    },
-  });
-  return true; // created
+function mapCategory(naics: string, licCode?: string): string {
+  if (licCode && licCode.toUpperCase().includes('PAWN')) return 'PAWN_SHOP';
+  if (naics === '423940' || naics === '423930') return 'PAWN_SHOP';
+  if (naics === '453920') return 'ANTIQUE_MALL';
+  return 'RESALE_SHOP';
 }
 
-export async function runCaliforniaPhase2Scraper(): Promise<void> {
-  console.log('[CaliforniaPhase2] Starting secondhand dealer/pawnbroker license scraper');
+// ─── Los Angeles scraper ─────────────────────────────────────────────────────
 
-  if (!LIVE_ENDPOINT_AVAILABLE) {
-    console.warn(
-      '[CaliforniaPhase2] STUB MODE: No live CA endpoint configured. ' +
-        'See scraper header comments for unblocking options. ' +
-        'Set LIVE_ENDPOINT_AVAILABLE = true and implement fetchPage() once endpoint is confirmed.'
-    );
-    console.log('[CaliforniaPhase2] Scraper exited (stub mode) — 0 records processed');
-    return;
-  }
-
-  const domain = new URL(CA_DATA_URL).hostname;
-  let totalRecords = 0;
-  let createdOrganizers = 0;
+async function runLASection(): Promise<{ fetched: number; matched: number; upserted: number }> {
+  let totalFetched = 0;
+  let totalMatched = 0;
+  let totalUpserted = 0;
   let offset = 0;
+  let hasMore = true;
+  let columnsLogged = false;
 
-  try {
-    while (totalRecords < MAX_RECORDS_PER_RUN) {
-      await defaultRateLimiter.waitBeforeRequest(domain);
+  console.log('[CaliforniaPhase2/LA] Starting — source:', LA_SOCRATA_URL);
 
-      const records = await fetchPage(offset, domain);
-      if (records.length === 0) {
-        console.log('[CaliforniaPhase2] No more records — pagination complete');
-        break;
-      }
+  while (hasMore) {
+    await defaultRateLimiter.waitBeforeRequest(LA_DOMAIN);
 
-      for (const record of records) {
-        try {
-          const created = await upsertRecord(record);
-          if (created) createdOrganizers++;
-          totalRecords++;
+    const params = new URLSearchParams({
+      $limit: String(PAGE_SIZE),
+      $offset: String(offset),
+    });
+    const url = `${LA_SOCRATA_URL}?${params.toString()}`;
 
-          if (totalRecords % 100 === 0) {
-            console.log(
-              `[CaliforniaPhase2] Progress: ${totalRecords} processed, ${createdOrganizers} created`
-            );
-          }
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(60000),
+    });
 
-          if (totalRecords >= MAX_RECORDS_PER_RUN) {
-            console.log(
-              `[CaliforniaPhase2] Reached per-run cap of ${MAX_RECORDS_PER_RUN} — stopping. ` +
-                `Resume from offset ${offset + records.indexOf(record) + 1} next run.`
-            );
-            break;
-          }
-        } catch (err) {
-          console.error(`[CaliforniaPhase2] Error processing ${record.businessName}:`, err);
-        }
-      }
-
-      offset += records.length;
-
-      // 3s between page fetches — CA dataset is large
-      await new Promise((r) => setTimeout(r, 3000));
+    if (!response.ok) {
+      console.error(`[CaliforniaPhase2/LA] HTTP ${response.status} at offset ${offset}`);
+      break;
     }
 
+    const rows = (await response.json()) as Record<string, string>[];
+    if (!Array.isArray(rows) || rows.length === 0) {
+      console.log(`[CaliforniaPhase2/LA] No more records at offset ${offset}`);
+      break;
+    }
+
+    if (!columnsLogged) {
+      console.log('[CaliforniaPhase2/LA] Columns:', Object.keys(rows[0]).join(', '));
+      columnsLogged = true;
+    }
+
+    totalFetched += rows.length;
+
+    for (const row of rows) {
+      try {
+        const naics = (row['naics'] ?? '').trim();
+        const businessName = (row['business_name'] ?? '').trim();
+        if (!businessName) continue;
+
+        const alwaysInclude = LA_ALWAYS_INCLUDE_NAICS.has(naics);
+        const broaderMatch = LA_KEYWORD_NAICS.has(naics) && nameMatchesKeyword(businessName);
+
+        if (!alwaysInclude && !broaderMatch) continue;
+        if (nameIsExcluded(businessName)) continue;
+
+        totalMatched++;
+
+        const city = (row['city'] ?? 'Los Angeles').trim();
+        const address = (row['street_address'] ?? '').trim();
+        const locationAccount = (row['location_account'] ?? '').trim();
+
+        const slugifiedName = businessName
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '-')
+          .replace(/-+/g, '-')
+          .slice(0, 40);
+        const dedupeKey = `CA-SECONDARY-${locationAccount || slugifiedName}`;
+        const businessCategory = mapCategory(naics);
+
+        console.log(`[CaliforniaPhase2/LA] Matched: ${dedupeKey} — ${businessName} (NAICS ${naics})`);
+
+        const orgId = await getOrCreateScrapedOrganizer(
+          businessName,
+          'CaliforniaPhase2',
+          city,
+          'CA',
+          undefined, undefined, undefined, undefined,
+          businessCategory,
+          undefined, undefined, undefined
+        );
+
+        if (orgId) totalUpserted++;
+      } catch (rowErr) {
+        console.error('[CaliforniaPhase2/LA] Row error:', rowErr);
+      }
+    }
+
+    offset += rows.length;
+    if (rows.length < PAGE_SIZE) hasMore = false;
+  }
+
+  return { fetched: totalFetched, matched: totalMatched, upserted: totalUpserted };
+}
+
+// ─── San Francisco scraper ───────────────────────────────────────────────────
+
+async function runSFSection(): Promise<{ fetched: number; matched: number; upserted: number }> {
+  let totalFetched = 0;
+  let totalMatched = 0;
+  let totalUpserted = 0;
+  let offset = 0;
+  let hasMore = true;
+  let columnsLogged = false;
+
+  console.log('[CaliforniaPhase2/SF] Starting — source:', SF_SOCRATA_URL);
+
+  while (hasMore) {
+    await defaultRateLimiter.waitBeforeRequest(SF_DOMAIN);
+
+    const params = new URLSearchParams({
+      $limit: String(1000),
+      $offset: String(offset),
+    });
+    const url = `${SF_SOCRATA_URL}?${params.toString()}`;
+
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!response.ok) {
+      console.error(`[CaliforniaPhase2/SF] HTTP ${response.status} at offset ${offset}`);
+      break;
+    }
+
+    const rows = (await response.json()) as Record<string, string>[];
+    if (!Array.isArray(rows) || rows.length === 0) {
+      console.log(`[CaliforniaPhase2/SF] No more records at offset ${offset}`);
+      break;
+    }
+
+    if (!columnsLogged) {
+      console.log('[CaliforniaPhase2/SF] Columns:', Object.keys(rows[0]).join(', '));
+      columnsLogged = true;
+    }
+
+    totalFetched += rows.length;
+
+    for (const row of rows) {
+      try {
+        const licCode = (row['lic_code_description'] ?? '').trim().toUpperCase();
+        const naics = (row['naic_code'] ?? '').trim();
+        const dbaName = (row['dba_name'] ?? '').trim();
+        const ownerName = (row['ownership_name'] ?? '').trim();
+        const businessName = dbaName || ownerName;
+        if (!businessName) continue;
+
+        const alwaysInclude = SF_ALWAYS_INCLUDE_LIC.has(licCode);
+        const broaderMatch = SF_KEYWORD_NAICS.has(naics) && nameMatchesKeyword(businessName);
+
+        if (!alwaysInclude && !broaderMatch) continue;
+        if (nameIsExcluded(businessName)) continue;
+
+        totalMatched++;
+
+        const address = (row['full_business_address'] ?? '').trim();
+        const certNum = (row['certificate_number'] ?? '').trim();
+
+        const slugifiedName = businessName
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '-')
+          .replace(/-+/g, '-')
+          .slice(0, 40);
+        const dedupeKey = `CA-SECONDARY-SF-${certNum || slugifiedName}`;
+        const businessCategory = mapCategory(naics, licCode);
+
+        console.log(`[CaliforniaPhase2/SF] Matched: ${dedupeKey} — ${businessName} (${licCode || 'NAICS ' + naics})`);
+
+        const orgId = await getOrCreateScrapedOrganizer(
+          businessName,
+          'CaliforniaPhase2',
+          'San Francisco',
+          'CA',
+          undefined, undefined, undefined, undefined,
+          businessCategory,
+          undefined, undefined, undefined
+        );
+
+        if (orgId) totalUpserted++;
+      } catch (rowErr) {
+        console.error('[CaliforniaPhase2/SF] Row error:', rowErr);
+      }
+    }
+
+    offset += rows.length;
+    if (rows.length < 1000) hasMore = false;
+  }
+
+  return { fetched: totalFetched, matched: totalMatched, upserted: totalUpserted };
+}
+
+// ─── Main entry point ────────────────────────────────────────────────────────
+
+export async function runCaliforniaPhase2Scraper(): Promise<void> {
+  console.log('[CaliforniaPhase2] Starting — LA city licenses + SF business registrations');
+
+  try {
+    const la = await runLASection();
+    console.log(`[CaliforniaPhase2/LA] Done — fetched: ${la.fetched}, matched: ${la.matched}, upserted: ${la.upserted}`);
+
+    const sf = await runSFSection();
+    console.log(`[CaliforniaPhase2/SF] Done — fetched: ${sf.fetched}, matched: ${sf.matched}, upserted: ${sf.upserted}`);
+
     console.log(
-      `[CaliforniaPhase2] Scraper completed: ${totalRecords} records processed, ${createdOrganizers} organizers created`
+      `[CaliforniaPhase2] Complete — total fetched: ${la.fetched + sf.fetched}, matched: ${la.matched + sf.matched}, upserted: ${la.upserted + sf.upserted}`
     );
   } catch (error) {
     console.error('[CaliforniaPhase2] Scraper error:', error);

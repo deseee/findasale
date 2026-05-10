@@ -3,7 +3,6 @@ name: Scrape Foursquare Places
 on:
   schedule:
     - cron: '0 3 3 * *'   # 3rd of month
-    - cron: '0 3 4 * *'   # 4th of month
   # Sandbox plan: 9,450 free calls remaining, no card on file — cannot be billed.
   # Actual usage: ~550 calls/cycle (390 + 160 confirmed May 2026). Re-enabled S695.
   # Matrix strategy: 6 parallel jobs, each processing ~50 queue items per run.
@@ -54,6 +53,6 @@ jobs:
           SCRAPER_BATCH_COUNT: 6
           SCRAPER_QUEUE_LIMIT: 50
         run: |
-          sleep $(( ${{ matrix.batch_index }} * 5 ))
+          sleep $(( ${{ matrix.batch_index }} * 90 ))
           cd packages/backend
           ./node_modules/.bin/ts-node src/scripts/run-foursquare-places.ts

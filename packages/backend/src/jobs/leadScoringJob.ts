@@ -13,12 +13,23 @@ import { cronGuard } from '../utils/cronGuard';
 import { runLeadScoringBackfill } from '../services/leadScoringService';
 
 async function runLeadScoringJob(): Promise<void> {
-  console.log('[leadScoringJob] Starting weekly lead score recomputation...');
-  const stats = await runLeadScoringBackfill();
+  const startedAt = new Date().toISOString();
+  console.log(`[lead-scoring] Starting backfill run at ${startedAt}`);
+  let stats: Awaited<ReturnType<typeof runLeadScoringBackfill>>;
+  try {
+    stats = await runLeadScoringBackfill();
+  } catch (err) {
+    console.error('[lead-scoring] FATAL:', err);
+    throw err;
+  }
+  const elapsed = stats.durationMs;
+  console.log(`[lead-scoring] Backfill complete. Scored: ${stats.scored} organizers in ${elapsed}ms`);
   console.log(
-    `[leadScoringJob] Complete — ${stats.scored} organizers scored in ${stats.durationMs}ms. ` +
-    `Distribution: COLD=${stats.cold} WARM=${stats.warm} HOT=${stats.hot} ENTERPRISE=${stats.enterprise}`
+    `[lead-scoring] Distribution: COLD=${stats.cold} WARM=${stats.warm} HOT=${stats.hot} ENTERPRISE=${stats.enterprise}`
   );
+  if (stats.scored === 0) {
+    console.error('[lead-scoring] WARNING: 0 organizers scored — job may have failed silently or data is missing');
+  }
 }
 
 /**
