@@ -67,7 +67,7 @@ export async function scrapeGarageSaleFinder(
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // Extract sale detail links — GarageSaleFinder uses /s/[alphanumeric]/ paths
+    // Extract sale detail links — GarageSaleFinder uses /garage-sales/[id] paths
     const saleLinks: string[] = [];
     const seen = new Set<string>();
 
