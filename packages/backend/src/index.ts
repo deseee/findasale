@@ -193,6 +193,8 @@ import { initCouponRateLimiter } from './middleware/couponRateLimiter'; // #94: 
 import './jobs/auctionJob';
 import './jobs/notificationJob';
 import './jobs/emailReminderJob';
+import './jobs/saleOfTheDayJob'; // Feature #401: Sale of the Day nightly selection
+import './jobs/presaleSneakPeekJob'; // Feature #409: Pre-sale sneak peek email — daily 09:00 UTC
 import './jobs/reputationJob'; // Phase 22: Creator Tier Program — weekly tier recalculation
 import './jobs/reservationExpiryJob'; // Phase 21: Expire stale holds every 30 min
 import './jobs/curatorEmailJob'; // Phase 30: Weekly curator email digest — Mondays 8 AM
@@ -239,6 +241,7 @@ import { scheduleLeadScoringCron } from './jobs/leadScoringJob'; // ADR-076 Phas
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
+import saleOfTheDayRoutes from './routes/saleOfTheDay'; // Feature #401: Sale of the Day
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -546,6 +549,7 @@ app.use('/api/trending', trendingRoutes);                              // Trendi
 app.use('/api/cities', citiesRoutes);                                  // ADR-074: Metro Sync city pages
 app.use('/api/categories', categoriesRoutes);                          // ADR-074 Phase 2: Category trending items
 app.use('/api/internal', internalRoutes);                              // ADR-076: Internal scraper endpoint
+app.use('/api/public', saleOfTheDayRoutes);                            // Feature #401: Sale of the Day (public, no auth)
 app.use('/api/outreach', outreachRoutes);                             // Phase 1: Cold outreach email pipeline
 app.use('/api/unsubscribe', unsubscribeRoutes);                        // Unsubscribe / Preferences
 app.use('/api/earnings', earningsPdfRoutes);                           // Payout PDF Export (/api/earnings/pdf)

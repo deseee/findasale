@@ -8,6 +8,10 @@ import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 // GET /api/admin/stats — platform overview
 export const getStats = async (req: AuthRequest, res: Response) => {
   try {
+    // #370 Canada Admin Analytics — optional country filter
+    const countryFilter = (req.query.country as string) || null;
+    const isCanadaFilter = countryFilter === 'CA';
+
     const totalUsers = await prisma.user.count({
       where: { email: { not: { endsWith: '@system.finda.sale' } } },
     });
@@ -280,6 +284,39 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       sparklines,
       ebayRateLimit: getEbayRateLimitStatus(),
     };
+
+    // #370 Canada Admin Analytics — compute canadaStats when country=CA
+    if (isCanadaFilter) {
+      const caOrganizerWhere = { isUnmanagedListing: false, country: 'CA' };
+
+      const [caOrganizers, caSalesRaw, caRevenueRaw, caProvinceRaw] = await Promise.all([
+        prisma.organizer.count({ where: caOrganizerWhere }),
+        prisma.sale.count({
+          where: { organizer: { country: 'CA', isUnmanagedListing: false } },
+        }),
+        prisma.purchase.findMany({
+          where: { status: 'PAID', item: { sale: { organizer: { country: 'CA', isUnmanagedListing: false } } } },
+          select: { amount: true },
+          take: 10000,
+        }),
+        prisma.organizer.groupBy({
+          by: ['province'],
+          _count: true,
+          where: { ...caOrganizerWhere, province: { not: null } },
+          orderBy: { _count: { province: 'desc' } },
+          take: 5,
+        }),
+      ]);
+
+      const caRevenueCents = caRevenueRaw.reduce((sum: number, p: any) => sum + Math.round(p.amount * 100), 0);
+
+      (stats as any).canadaStats = {
+        totalOrganizers: caOrganizers,
+        totalSales: caSalesRaw,
+        totalRevenue: caRevenueCents,
+        topProvinces: caProvinceRaw.map((r: any) => ({ province: r.province ?? 'Unknown', count: r._count })),
+      };
+    }
 
     res.json(stats);
   } catch (error) {
@@ -1194,17 +1231,4 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
     res.json(stats);
   } catch (error: any) {
     console.error('Error fetching scrape pool stats:', error);
-    res.status(500).json({ message: 'Failed to fetch scrape pool stats', error: error.message });
-  }
-};
-
-// GET /api/admin/scraper/metros — return the full NATIONAL_METROS list for the admin picker
-export async function getScrapeMetros(req: Request, res: Response): Promise<void> {
-  try {
-    const { NATIONAL_METROS } = await import('../jobs/scraperCron');
-    res.json({ metros: NATIONAL_METROS });
-  } catch {
-    // Fallback if import fails — return empty so UI still works
-    res.json({ metros: [] });
-  }
-}
+    res.status(500).json({ message: 'Failed to f

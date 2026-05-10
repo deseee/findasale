@@ -1,5 +1,5 @@
 /**
- * ItemOGMeta — Feature #33 Share Card Factory
+ * ItemOGMeta — Feature #33 Share Card Factory / Feature #400 Loot Link
  *
  * Renders OG and Twitter Card meta tags for item detail pages.
  * Uses Cloudinary-generated preview images.
@@ -21,6 +21,7 @@ interface Item {
   auctionStartPrice?: number;
   currentBid?: number;
   condition?: string;
+  category?: string;
   photos?: ItemPhoto[];
 }
 
@@ -30,7 +31,7 @@ interface ItemOGMetaProps {
   saleId: string;
   /**
    * Optional override for canonical URL.
-   * Defaults to `https://finda.sale/sales/{saleId}/items/{itemId}`
+   * Defaults to `https://finda.sale/items/{itemId}`
    */
   canonicalUrl?: string;
   /**
@@ -116,38 +117,48 @@ export default function ItemOGMeta({
   }
   // If no photo at all: og:image tags are omitted and FB falls back to page content
 
-  // Default description
+  // Build rich description: "$X · Category · Available at Sale Name"
+  const priceStr = displayPrice ? `$${displayPrice.toFixed(2)}` : null;
+  const categoryStr = item.category ? item.category.replace(/_/g, ' ') : null;
+  const richDescription = [priceStr, categoryStr, `Available at ${saleName}`]
+    .filter(Boolean)
+    .join(' · ');
+
   const metaDescription =
     description ||
+    richDescription ||
     item.description ||
-    `${item.title} from ${saleName}${displayPrice ? ` - $${displayPrice.toFixed(2)}` : ''}`.trim();
+    `${item.title} from ${saleName}`.trim();
 
-  // Canonical URL - adjust to match actual routing
+  // og:title: "[Item Title] — [Sale Name] on FindA.Sale"
+  const ogTitle = `${item.title} — ${saleName} on FindA.Sale`;
+
+  // Canonical URL — use /items/{id} deep-link format (Loot Link)
   const url =
     canonicalUrl ||
     (typeof window !== 'undefined'
-      ? `${window.location.origin}/sales/${saleId}/items/${item.id}`
-      : `https://finda.sale/sales/${saleId}/items/${item.id}`);
+      ? `${window.location.origin}/items/${item.id}`
+      : `https://finda.sale/items/${item.id}`);
 
   return (
     <Head>
       {/* Standard meta tags */}
-      <title>{item.title} – FindA.Sale</title>
+      <title>{item.title} – {saleName} | FindA.Sale</title>
       <meta name="description" content={metaDescription} />
 
       {/* Open Graph (Facebook, LinkedIn, etc.) */}
-      <meta property="og:title" content={`${item.title} — FindA.Sale`} />
+      <meta property="og:title" content={ogTitle} />
       <meta property="og:description" content={metaDescription} />
       {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
       {ogImageUrl && isCloudinaryImage && <meta property="og:image:width" content="1200" />}
       {ogImageUrl && isCloudinaryImage && <meta property="og:image:height" content="630" />}
       <meta property="og:url" content={url} />
-      <meta property="og:type" content="website" />
+      <meta property="og:type" content="product" />
       <meta property="og:site_name" content="FindA.Sale" />
 
       {/* Twitter Card */}
       <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={`${item.title} — FindA.Sale`} />
+      <meta name="twitter:title" content={ogTitle} />
       <meta name="twitter:description" content={metaDescription} />
       {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
 

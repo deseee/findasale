@@ -20,6 +20,7 @@ import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feat
 import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
 import { awardXp, XP_AWARDS, applyHuntPassMultiplier, RANK_EARLY_ACCESS_HOURS } from '../services/xpService'; // Explorer's Guild XP awards
 import { referralTrancheService } from '../services/referralTrancheService'; // Feature #XXX: Referral tranche system
+import { awardOrgReferralFirstSale } from '../services/referralService'; // Feature #398: Org referral loop
 import { checkCrewVisitBonus } from '../services/crewService'; // Crew visit XP multiplier
 import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurrent Sales Gate
 import { isSaleLocked, getEffectivePublishTime, getMinutesUntilUnlock } from '../services/rankService'; // Rank-based early access gate
@@ -864,6 +865,11 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
                     }).catch(err => console.error('[XP] Failed to check REFERRAL_ORG_FIRST_SALE eligibility:', err));
                   }
                 }).catch(err => console.error('[XP] Failed to find referral reward:', err));
+
+                // Feature #398: Org referral loop — award discount to the organizer who referred this organizer
+                awardOrgReferralFirstSale(org.userId).catch(err =>
+                  console.error('[referral] org first sale reward error:', err)
+                );
               }
             }).catch(err => console.error('[XP] Failed to count published sales:', err));
           } catch (err) {
@@ -1776,48 +1782,4 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ message: 'Failed to award XP' });
     }
 
-    // Attempt to join the virtual queue if one exists for this sale
-    let queuePosition: number | null = null;
-    try {
-      const existingEntry = await prisma.lineEntry.findUnique({
-        where: { saleId_userId: { saleId, userId } },
-      });
-      if (!existingEntry || existingEntry.status === 'CANCELLED') {
-        const lastEntry = await prisma.lineEntry.findFirst({
-          where: { saleId },
-          orderBy: { position: 'desc' },
-        });
-        const position = (lastEntry?.position ?? 0) + 1;
-        if (existingEntry) {
-          await prisma.lineEntry.update({
-            where: { id: existingEntry.id },
-            data: { position, status: 'WAITING' },
-          });
-        } else {
-          await prisma.lineEntry.create({
-            data: { saleId, userId, position, status: 'WAITING' },
-          });
-        }
-        queuePosition = position;
-      } else {
-        queuePosition = existingEntry.position;
-      }
-    } catch {
-      // Queue join is best-effort — don't fail the check-in if no line exists
-    }
-
-    res.json({
-      success: true,
-      xpEarned: finalXp,
-      alreadyCheckedIn: false,
-      saleTitle: sale.title,
-      guildXp: awardResult.newXp,
-      explorerRank: awardResult.newRank,
-      rankIncreased: awardResult.rankIncreased,
-      queuePosition,
-    });
-  } catch (error) {
-    console.error('Check-in error:', error);
-    res.status(500).json({ message: 'Server error during check-in' });
-  }
-};
+    // Attempt to join the virtual queue if one exists for this sal

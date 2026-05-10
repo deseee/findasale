@@ -464,6 +464,14 @@ model Organizer {
   emailDiscoveryMethod      String?   // 'website_scrape' | 'smtp_probe' | 'pattern_match'
   emailDiscoveryConfidence  Float?    // 0.0–1.0
   emailDiscoveredAt         DateTime?
+  // S696: permanent badge for first 500 organizers
+  foundingOrgBadge          Boolean  @default(false)
+  // S696: Cash-to-Digital Bridge POS nudge handles
+  venmoHandle               String?
+  zelleHandle               String?
+  // S696: Canada launch — null = US assumed
+  country                   String?
+  province                  String?
 
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
@@ -860,6 +868,14 @@ model Sale {
   claimEmails                 ClaimEmail[]
   // Feature: Sale Share Links — referral share links for this sale
   shareLinks                  SaleShareLink[]
+  // S696: organizer absorbs the 10% platform fee
+  coversFee                   Boolean                  @default(false)
+  // S696: optional safety/parking/entry notes shown on sale detail
+  safetyNotes                 String?
+  // S696: suppresses AI person-name extraction, disables "estate sale" copy
+  estatePrivacyMode           Boolean                  @default(false)
+  // S696: Item bundles for this sale
+  bundles                     ItemBundle[]
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -1077,6 +1093,13 @@ model Item {
   sourceItemId               String?                // Source platform's item ID for dedup
   // Content Moderation: NSFW detection status
   moderationStatus           String                 @default("APPROVED") // APPROVED | REJECTED
+  // S696: what organizer paid for this item (for Flip Tracker ROI)
+  costBasis                  Float?
+  // S696: room label for floor map routing (e.g., "Living Room", "Garage")
+  roomTag                    String?
+  // S696: ItemBundle relation
+  bundleId                   String?
+  bundle                     ItemBundle?            @relation("BundleItems", fields: [bundleId], references: [id])
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -1123,6 +1146,21 @@ model Photo {
   @@index([itemId])
   @@index([photoRole])
 }
+
+// S696: ItemBundle — grouped items sold together at a fixed bundle price
+model ItemBundle {
+  id          String   @id @default(cuid())
+  saleId      String
+  title       String
+  description String?
+  bundlePrice Float
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  items       Item[]   @relation("BundleItems")
+}
+
 
 model Favorite {
   id        String   @id @default(cuid())

@@ -11,6 +11,7 @@ import SaleCard from '../components/SaleCard';
 import Skeleton from '../components/Skeleton';
 import TreasureHuntBanner from '../components/TreasureHuntBanner';
 import CityHeatBanner from '../components/CityHeatBanner';
+import SaleOfTheDayCard from '../components/SaleOfTheDayCard'; // Feature #401
 import EmptyState from '../components/EmptyState';
 import { useToast } from '../components/ToastContext';
 
@@ -385,6 +386,9 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
 
           {/* CD2 Phase 2: Treasure Hunt Banner — conditionally render only when data available */}
           <TreasureHuntBanner />
+
+          {/* Feature #401: Sale of the Day — renders nothing when no qualifying sale */}
+          <SaleOfTheDayCard />
 
           {/* Sales Near You Card */}
           <section className="mb-12">
