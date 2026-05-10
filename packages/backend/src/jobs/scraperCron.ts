@@ -12,6 +12,7 @@
 import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
 import { runScrapeRun } from '../services/scraper';
+import { SOURCE_REGISTRY } from '../services/scraper/sourceRegistry';
 
 /**
  * ~300 US metros by estate/yard sale activity — all cities 50k+ population.
@@ -479,34 +480,39 @@ export function initScraperCron(): void {
 
   console.log('[scraperCron] Scraper cron initialized');
 
-  // ADR-076: EstateSalesNet: daily at 00:00 UTC (gated by USE_GH_ACTIONS_ESTATESALESNET)
-  // If GitHub Actions handles EstateSalesNet, skip the Railway cron
-  if (process.env.USE_GH_ACTIONS_ESTATESALESNET !== 'true') {
-    cron.schedule('0 0 * * *', cronGuard({ jobName: 'scraperCron' }, async () => {
-      console.log('[scraperCron] EstateSalesNet daily run starting');
-      await runSourceAcrossMetros('EstateSalesNet').catch((err) =>
-        console.error('[scraperCron] EstateSalesNet run error:', err)
-      );
-    });
-  } else {
-    console.log('[scraperCron] EstateSalesNet skipped — GitHub Actions handles it (USE_GH_ACTIONS_ESTATESALESNET=true)');
+  // ADR-073: Build cron schedules dynamically from SOURCE_REGISTRY.
+  // Only sources with enabled=true and a cronSchedule are registered.
+  // EstateSalesNet is skipped if USE_GH_ACTIONS_ESTATESALESNET=true (GitHub Actions handles it).
+  const scheduledSources: string[] = [];
+
+  for (const sourceDef of SOURCE_REGISTRY) {
+    if (!sourceDef.enabled || !sourceDef.cronSchedule || sourceDef.prohibited) continue;
+
+    // EstateSalesNet gate: GitHub Actions may handle it instead
+    if (sourceDef.id === 'EstateSalesNet' && process.env.USE_GH_ACTIONS_ESTATESALESNET === 'true') {
+      console.log('[scraperCron] EstateSalesNet skipped — GitHub Actions handles it (USE_GH_ACTIONS_ESTATESALESNET=true)');
+      continue;
+    }
+
+    const { id, cronSchedule, runMode } = sourceDef;
+
+    cron.schedule(cronSchedule, cronGuard({ jobName: `scraperCron:${id}` }, async () => {
+      console.log(`[scraperCron] ${id} scheduled run starting`);
+      if (runMode === 'national-once') {
+        // national-once: run once with a placeholder metro (ignored by the source)
+        await runScrapeRun(id, 'national').catch((err) =>
+          console.error(`[scraperCron] ${id} run error:`, err)
+        );
+      } else {
+        // metro-loop: iterate all metros sequentially
+        await runSourceAcrossMetros(id).catch((err) =>
+          console.error(`[scraperCron] ${id} run error:`, err)
+        );
+      }
+    }));
+
+    scheduledSources.push(`${id} @ ${cronSchedule}`);
   }
 
-  // GarageSaleFinder: daily at 06:00 UTC (offset to avoid simultaneous runs)
-  cron.schedule('0 6 * * *', cronGuard({ jobName: 'scraperCron' }, async () => {
-    console.log('[scraperCron] GarageSaleFinder daily run starting');
-    await runSourceAcrossMetros('GarageSaleFinder').catch((err) =>
-      console.error('[scraperCron] GarageSaleFinder run error:', err)
-    );
-  });
-
-  // FacebookMarketplace: daily at 12:00 UTC (offset to avoid simultaneous runs)
-  cron.schedule('0 12 * * *', cronGuard({ jobName: 'scraperCron' }, async () => {
-    console.log('[scraperCron] FacebookMarketplace daily run starting');
-    await runSourceAcrossMetros('FacebookMarketplace').catch((err) =>
-      console.error('[scraperCron] FacebookMarketplace run error:', err)
-    );
-  });
-
-  console.log(`[scraperCron] Scheduled: EstateSalesNet @ 00:00 UTC, GarageSaleFinder @ 06:00 UTC, FacebookMarketplace @ 12:00 UTC (${NATIONAL_METROS.length} metros)`);
+  console.log(`[scraperCron] Scheduled ${scheduledSources.length} sources: ${scheduledSources.join(', ')} (${NATIONAL_METROS.length} metros for metro-loop sources)`);
 }
