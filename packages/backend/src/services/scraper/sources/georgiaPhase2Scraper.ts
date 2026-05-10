@@ -1,46 +1,49 @@
 /**
- * Georgia Secretary of State — Corporate Entities Secondary Sale Scraper (Phase 2)
- * Source: GA SOS Corporations Division business name search (ecorp.sos.ga.gov)
- *   https://ecorp.sos.ga.gov/BusinessSearch
- * Searches registered business names for secondary-sale keywords (auction, pawn, consign, etc.)
- * Parses HTML results — no authenticated API required.
+ * Georgia — Secondary Sale License Scraper (Phase 2)
  *
- * NOTE: The GA SOS professional license portal (verify.sos.ga.gov) is Cloudflare-protected
- * and inaccessible without a browser. The corporate entity search (ecorp.sos.ga.gov) returns
- * standard HTML and is accessible programmatically.
+ * Previous source (ecorp.sos.ga.gov) returns HTTP 403 on all keyword searches
+ * from GitHub Actions runners. Replaced with two sources that are accessible
+ * from standard server/CI environments:
+ *
+ *   1. NMLS Consumer Access API — Georgia pawnbroker licenses.
+ *      Public JSON API, no authentication required. Same endpoint pattern
+ *      confirmed working in Kentucky Phase 2 scraper.
+ *      https://api.nmlsconsumeraccess.org/FieldSearch/RetailSearch
+ *
+ *   2. GA SOS Auctioneers Commission public roster page.
+ *      https://sos.ga.gov/page/auctioneers-and-auction-firms
+ *      Plain CMS HTML page — separate from the blocked verify.sos.ga.gov
+ *      Cloudflare-protected portal. Falls back gracefully if blocked.
+ *
+ * Phase 1 (georgiaLicensingScraper.ts) targets verify.sos.ga.gov for
+ * individual auctioneer licenses. This Phase 2 adds pawnbrokers (NMLS) and
+ * any additional auction firm data from the SOS board roster page.
  *
  * ADR-073: Directory Scraper Phase 2 — State business licensing data
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
+import { getRandomUserAgent } from '../userAgents';
 
-const ECORP_SEARCH_URL = 'https://ecorp.sos.ga.gov/BusinessSearch';
-const ECORP_DOMAIN = 'ecorp.sos.ga.gov';
+// ---------------------------------------------------------------------------
+// Source 1: NMLS Consumer Access — GA pawnbrokers
+// ---------------------------------------------------------------------------
 
-// Keywords to search one at a time — each produces a paginated result set
-const SALE_TYPE_KEYWORDS = [
-  'auction',
-  'pawn',
-  'estate sale',
-  'consignment',
-  'thrift',
-  'resale',
-  'antique',
-  'vintage',
-  'collectible',
-  'flea market',
-  'liquidat',
-  'salvage',
-  'secondhand',
-  'second hand',
-  'surplus',
-  'rummage',
-  'used goods',
-  'pre-owned',
-];
+const NMLS_API_BASE = 'https://api.nmlsconsumeraccess.org/FieldSearch/RetailSearch';
+const NMLS_DOMAIN = 'api.nmlsconsumeraccess.org';
 
-// False-positive name fragments — exclude if business name contains any of these
+// ---------------------------------------------------------------------------
+// Source 2: GA SOS Auctioneers Commission public board page
+// ---------------------------------------------------------------------------
+
+const GA_SOS_AUCTIONEERS_URL = 'https://sos.ga.gov/page/auctioneers-and-auction-firms';
+const GA_SOS_DOMAIN = 'sos.ga.gov';
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
 const EXCLUDE_FRAGMENTS = [
   'real estate',
   'realty',
@@ -73,33 +76,22 @@ const EXCLUDE_FRAGMENTS = [
   'daycare',
 ];
 
-/**
- * Return true if the business name contains a false-positive fragment.
- */
 function nameIsExcluded(name: string): boolean {
   const lower = name.toLowerCase();
   return EXCLUDE_FRAGMENTS.some((frag) => lower.includes(frag));
 }
 
-/**
- * Map a business name to a valid scraper category.
- */
-function mapCategory(businessName: string): string {
+function mapCategory(businessName: string, licenseType?: string): string {
   const lower = businessName.toLowerCase();
-  if (lower.includes('auction')) return 'AUCTION_HOUSE';
+  const licLower = (licenseType || '').toLowerCase();
+  if (licLower.includes('pawn') || lower.includes('pawn')) return 'PAWN_SHOP';
+  if (lower.includes('estate')) return 'ESTATE_SALE_CO';
+  if (lower.includes('consign')) return 'CONSIGNMENT';
+  if (lower.includes('antique')) return 'ANTIQUE_DEALER';
+  if (lower.includes('auction') || licLower.includes('auction')) return 'AUCTION_HOUSE';
   return 'RESALE_SHOP';
 }
 
-interface ParsedBusiness {
-  name: string;
-  entityNumber: string;
-  city: string;
-  status: string;
-}
-
-/**
- * Extract text content from an HTML tag, stripping all inner tags.
- */
 function extractText(html: string): string {
   return html
     .replace(/<[^>]*>/g, '')
@@ -107,123 +99,305 @@ function extractText(html: string): string {
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .trim();
 }
 
-/**
- * Parse business rows from the GA eCorp search results HTML.
- * The results table has columns: Entity Name, Control Number, Status, State, Date.
- */
-function parseSearchResults(html: string): ParsedBusiness[] {
-  const results: ParsedBusiness[] = [];
+// ---------------------------------------------------------------------------
+// Source 1 implementation: NMLS pawnbrokers
+// ---------------------------------------------------------------------------
 
-  // Match table rows in the results table
-  const tableMatch = html.match(/<table[^>]*class="[^"]*businessNameSearch[^"]*"[^>]*>([\s\S]*?)<\/table>/i)
-    || html.match(/<table[^>]*id="[^"]*searchResults[^"]*"[^>]*>([\s\S]*?)<\/table>/i)
-    || html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+interface NmlsCompany {
+  EntityName?: string;
+  City?: string;
+  NMLSId?: number | string;
+  LicenseNumber?: string;
+}
 
-  const tableBody = tableMatch ? tableMatch[1] : html;
+async function scrapeNmlsGeorgiaPawnbrokers(
+  seenKeys: Set<string>
+): Promise<{ fetched: number; matched: number; upserted: number }> {
+  let fetched = 0;
+  let matched = 0;
+  let upserted = 0;
+  const pageSize = 100;
+  let pageIndex = 0;
+  let hasMore = true;
 
-  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let rowMatch: RegExpExecArray | null;
+  console.log('[GeorgiaPhase2] Source 1: NMLS Consumer Access — Georgia pawnbrokers');
 
-  while ((rowMatch = rowRegex.exec(tableBody)) !== null) {
-    const row = rowMatch[1];
-    const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-    const cells: string[] = [];
-    let cellMatch: RegExpExecArray | null;
+  while (hasMore) {
+    await defaultRateLimiter.waitBeforeRequest(NMLS_DOMAIN);
 
-    while ((cellMatch = cellRegex.exec(row)) !== null) {
-      cells.push(extractText(cellMatch[1]));
+    const url = `${NMLS_API_BASE}?StateRegulator=GA&LicenseType=Pawnbroker&PageIndex=${pageIndex}&PageSize=${pageSize}`;
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': getRandomUserAgent(),
+          Accept: 'application/json, text/plain, */*',
+          Origin: 'https://www.nmlsconsumeraccess.org',
+          Referer: 'https://www.nmlsconsumeraccess.org/',
+        },
+        signal: AbortSignal.timeout(30000),
+      });
+    } catch (err) {
+      console.warn('[GeorgiaPhase2] NMLS fetch error:', err);
+      break;
     }
 
-    if (cells.length < 2) continue;
+    if (!response.ok) {
+      console.warn(`[GeorgiaPhase2] NMLS returned HTTP ${response.status} — stopping pawnbroker fetch`);
+      break;
+    }
 
-    const name = cells[0];
-    const entityNumber = cells[1] || '';
-    // Status is typically column 2 or 3; City may be in column 3 or 4
-    const status = cells[2] || '';
-    const city = cells[3] || '';
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.warn('[GeorgiaPhase2] NMLS did not return JSON — portal may require browser session');
+      break;
+    }
 
-    if (!name || name.toLowerCase() === 'entity name') continue; // Skip header row
+    let data: { Companies?: NmlsCompany[]; TotalRecordCount?: number };
+    try {
+      data = await response.json() as typeof data;
+    } catch (parseErr) {
+      console.warn('[GeorgiaPhase2] NMLS JSON parse error:', parseErr);
+      break;
+    }
 
-    results.push({ name, entityNumber, city, status });
+    const companies = data.Companies || [];
+    console.log(`[GeorgiaPhase2] NMLS page ${pageIndex}: ${companies.length} results`);
+    fetched += companies.length;
+
+    for (const company of companies) {
+      const businessName = company.EntityName?.trim();
+      const city = company.City?.trim() || 'Georgia';
+      const licenseNumber =
+        company.LicenseNumber?.toString().trim() ||
+        company.NMLSId?.toString().trim() ||
+        '';
+
+      if (!businessName || !licenseNumber) continue;
+
+      const dedupKey = `NMLS-${licenseNumber}`;
+      if (seenKeys.has(dedupKey)) continue;
+      if (nameIsExcluded(businessName)) continue;
+
+      seenKeys.add(dedupKey);
+      matched++;
+
+      console.log(`[GeorgiaPhase2] NMLS Matched [Pawnbroker]: ${licenseNumber} — ${businessName} (${city})`);
+
+      try {
+        const orgId = await getOrCreateScrapedOrganizer(
+          businessName,
+          'GeorgiaPhase2',
+          city,
+          'GA',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          'PAWN_SHOP',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          true,
+          'GA',
+          licenseNumber,
+          'Pawnbroker'
+        );
+        if (orgId) upserted++;
+      } catch (upsertErr) {
+        console.error(`[GeorgiaPhase2] Upsert error for "${businessName}":`, upsertErr);
+      }
+    }
+
+    const totalCount = data.TotalRecordCount || 0;
+    pageIndex++;
+    hasMore = companies.length === pageSize && pageIndex * pageSize < totalCount;
+  }
+
+  return { fetched, matched, upserted };
+}
+
+// ---------------------------------------------------------------------------
+// Source 2 implementation: GA SOS Auctioneers Commission board page
+// ---------------------------------------------------------------------------
+
+interface ParsedAuctioneer {
+  name: string;
+  licenseNumber: string;
+  city: string;
+  licenseType: string;
+}
+
+/**
+ * Parse auctioneer/firm names from the GA SOS board page HTML.
+ * The page may contain a table or an unordered list of licensees.
+ * Tries both patterns and returns whatever is found.
+ */
+function parseGaSosAuctioneers(html: string): ParsedAuctioneer[] {
+  const results: ParsedAuctioneer[] = [];
+
+  // Pattern 1: HTML table rows
+  const tbodyMatch = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+  if (tbodyMatch) {
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch: RegExpExecArray | null;
+    while ((rowMatch = rowRegex.exec(tbodyMatch[1])) !== null) {
+      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      const cells: string[] = [];
+      let cellMatch: RegExpExecArray | null;
+      while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
+        cells.push(extractText(cellMatch[1]));
+      }
+      if (cells.length < 2) continue;
+      const name = cells[0];
+      const licenseNumber = cells[1] || '';
+      const city = cells[2] || 'Georgia';
+      const licenseType = cells[3] || 'Auctioneer';
+      if (!name || name.toLowerCase().includes('name')) continue; // skip header row
+      results.push({ name, licenseNumber, city, licenseType });
+    }
+  }
+
+  // Pattern 2: List items (some GA SOS pages list licensees in <li> tags)
+  if (results.length === 0) {
+    const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+    let liMatch: RegExpExecArray | null;
+    while ((liMatch = liRegex.exec(html)) !== null) {
+      const text = extractText(liMatch[1]);
+      if (!text || text.length < 3) continue;
+      // Attempt to split "Name — LicNum" or "Name (LicNum)"
+      const dashMatch = text.match(/^(.+?)\s*[—–-]\s*([A-Z0-9-]+)\s*$/);
+      const parenMatch = text.match(/^(.+?)\s*\(([A-Z0-9-]+)\)\s*$/);
+      if (dashMatch) {
+        results.push({
+          name: dashMatch[1].trim(),
+          licenseNumber: dashMatch[2].trim(),
+          city: 'Georgia',
+          licenseType: 'Auctioneer',
+        });
+      } else if (parenMatch) {
+        results.push({
+          name: parenMatch[1].trim(),
+          licenseNumber: parenMatch[2].trim(),
+          city: 'Georgia',
+          licenseType: 'Auctioneer',
+        });
+      }
+      // Name-only list items without a parseable license number are skipped
+    }
   }
 
   return results;
 }
 
-/**
- * Fetch one page of GA eCorp search results for a given keyword.
- * Returns parsed businesses and a flag indicating whether more pages exist.
- */
-async function fetchSearchPage(
-  keyword: string,
-  page: number
-): Promise<{ businesses: ParsedBusiness[]; hasMore: boolean } | null> {
+async function scrapeGaSosAuctioneers(
+  seenKeys: Set<string>
+): Promise<{ fetched: number; matched: number; upserted: number }> {
+  let fetched = 0;
+  let matched = 0;
+  let upserted = 0;
+
+  console.log(`[GeorgiaPhase2] Source 2: GA SOS Auctioneers Commission — ${GA_SOS_AUCTIONEERS_URL}`);
+
+  await defaultRateLimiter.waitBeforeRequest(GA_SOS_DOMAIN);
+
+  let response: Response;
   try {
-    await defaultRateLimiter.waitBeforeRequest(ECORP_DOMAIN);
-
-    // GA eCorp uses a POST form search
-    const formData = new URLSearchParams({
-      businessName: keyword,
-      businessType: '',
-      businessStatus: 'Active',
-      filingStatus: '',
-      county: '',
-      agent: '',
-      pageNumber: String(page),
-      pageSize: '100',
-      sortBy: 'businessName',
-      sortDirection: 'asc',
-    });
-
-    const response = await fetch(`${ECORP_SEARCH_URL}/BusinessInformation`, {
-      method: 'POST',
+    response = await fetch(GA_SOS_AUCTIONEERS_URL, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': getRandomUserAgent(),
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'User-Agent':
-          'Mozilla/5.0 (compatible; FindASaleBot/1.0; +https://finda.sale)',
-        Referer: ECORP_SEARCH_URL,
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        Connection: 'keep-alive',
       },
-      body: formData.toString(),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(30000),
     });
-
-    if (!response.ok) {
-      console.warn(
-        `[Georgia Phase2] HTTP ${response.status} for keyword "${keyword}" page ${page}`
-      );
-      return null;
-    }
-
-    const html = await response.text();
-
-    // Check if Cloudflare challenge was returned
-    if (html.includes('cf-browser-verification') || html.includes('cf_chl_opt')) {
-      console.warn(
-        `[Georgia Phase2] Cloudflare challenge detected for keyword "${keyword}" — skipping`
-      );
-      return null;
-    }
-
-    const businesses = parseSearchResults(html);
-
-    // Detect pagination — look for "next page" link or total count
-    const hasMore =
-      html.toLowerCase().includes('next page') ||
-      html.toLowerCase().includes('nextpage') ||
-      (businesses.length === 100);
-
-    return { businesses, hasMore };
   } catch (err) {
-    console.warn(
-      `[Georgia Phase2] Fetch failed for keyword "${keyword}" page ${page}:`,
-      err
-    );
-    return null;
+    console.warn('[GeorgiaPhase2] GA SOS auctioneers fetch error:', err);
+    return { fetched, matched, upserted };
   }
+
+  if (!response.ok) {
+    console.warn(
+      `[GeorgiaPhase2] GA SOS auctioneers page returned HTTP ${response.status} — skipping`
+    );
+    return { fetched, matched, upserted };
+  }
+
+  const html = await response.text();
+
+  // Check for Cloudflare / JS challenge
+  if (
+    html.includes('cf-browser-verification') ||
+    html.includes('cf_chl_opt') ||
+    html.includes('Just a moment') ||
+    html.trim().length < 500
+  ) {
+    console.warn('[GeorgiaPhase2] GA SOS auctioneers page is Cloudflare-protected — skipping');
+    return { fetched, matched, upserted };
+  }
+
+  const auctioneers = parseGaSosAuctioneers(html);
+  fetched += auctioneers.length;
+  console.log(`[GeorgiaPhase2] GA SOS board page yielded ${auctioneers.length} parseable records`);
+
+  for (const auc of auctioneers) {
+    const name = auc.name.trim();
+    if (!name) continue;
+    if (nameIsExcluded(name)) continue;
+
+    const dedupKey = auc.licenseNumber
+      ? `GA-AUC-${auc.licenseNumber}`
+      : `GA-AUC-NAME-${name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 40)}`;
+
+    if (seenKeys.has(dedupKey)) continue;
+    seenKeys.add(dedupKey);
+    matched++;
+
+    const category = mapCategory(name, auc.licenseType);
+    const city = auc.city.trim() || 'Georgia';
+
+    console.log(`[GeorgiaPhase2] GA SOS Matched [${auc.licenseType}]: ${auc.licenseNumber} — ${name} (${city})`);
+
+    try {
+      const orgId = await getOrCreateScrapedOrganizer(
+        name,
+        'GeorgiaPhase2',
+        city,
+        'GA',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        category,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        true,
+        'GA',
+        auc.licenseNumber || undefined,
+        auc.licenseType || 'Auctioneer'
+      );
+      if (orgId) upserted++;
+    } catch (upsertErr) {
+      console.error(`[GeorgiaPhase2] Upsert error for "${name}":`, upsertErr);
+    }
+  }
+
+  return { fetched, matched, upserted };
 }
 
 // ---------------------------------------------------------------------------
@@ -231,130 +405,53 @@ async function fetchSearchPage(
 // ---------------------------------------------------------------------------
 
 /**
- * Georgia SOS Corporate Entities secondary sale scraper.
- * Iterates SALE_TYPE_KEYWORDS, querying GA eCorp business name search for each.
- * Parses HTML result tables, deduplicates by entity number, upserts via
- * getOrCreateScrapedOrganizer.
+ * Georgia secondary sale license scraper — Phase 2.
+ *
+ * Previous source (ecorp.sos.ga.gov) returned HTTP 403 from GitHub Actions.
+ * Replaced with two accessible sources:
+ *
+ *   1. NMLS Consumer Access API — Georgia pawnbroker company licenses.
+ *      Public JSON API, no auth required.
+ *
+ *   2. GA SOS Auctioneers Commission board page (sos.ga.gov/page/auctioneers-and-auction-firms).
+ *      Plain CMS page separate from the Cloudflare-blocked verify.sos.ga.gov portal.
+ *      Falls back gracefully on 403/challenge without failing the run.
+ *
+ * Cross-deduplicates by license number across both sources.
  */
 export async function runGeorgiaPhase2Scraper(): Promise<void> {
-  console.log('[Georgia Phase2] Starting secondary sale scraper — GA SOS eCorp');
-  console.log(`[Georgia Phase2] Source: ${ECORP_SEARCH_URL}`);
+  console.log('[GeorgiaPhase2] Starting secondary sale scraper — NMLS + GA SOS Auctioneers');
 
   let totalFetched = 0;
   let totalMatched = 0;
   let totalUpserted = 0;
 
-  // Track seen entity numbers to deduplicate across keyword searches
-  const seenEntityNumbers = new Set<string>();
+  const seenKeys = new Set<string>();
 
   try {
-    for (const keyword of SALE_TYPE_KEYWORDS) {
-      console.log(`[Georgia Phase2] Searching keyword: "${keyword}"`);
-      let page = 1;
-      let hasMore = true;
+    // Source 1: NMLS pawnbrokers
+    const nmls = await scrapeNmlsGeorgiaPawnbrokers(seenKeys);
+    totalFetched += nmls.fetched;
+    totalMatched += nmls.matched;
+    totalUpserted += nmls.upserted;
+    console.log(
+      `[GeorgiaPhase2] NMLS complete — fetched: ${nmls.fetched}, matched: ${nmls.matched}, upserted: ${nmls.upserted}`
+    );
 
-      while (hasMore) {
-        const result = await fetchSearchPage(keyword, page);
-
-        if (!result) {
-          // Null means fetch/parse failed — stop pagination for this keyword
-          break;
-        }
-
-        if (result.businesses.length === 0) {
-          console.log(
-            `[Georgia Phase2] No results for "${keyword}" page ${page}`
-          );
-          break;
-        }
-
-        totalFetched += result.businesses.length;
-
-        for (const biz of result.businesses) {
-          const name = biz.name.trim();
-          if (!name) continue;
-
-          // Skip inactive entities
-          if (
-            biz.status &&
-            !biz.status.toLowerCase().includes('active') &&
-            biz.status.toLowerCase() !== ''
-          ) {
-            continue;
-          }
-
-          // Client-side exclude-fragment filter
-          if (nameIsExcluded(name)) continue;
-
-          // Deduplicate across keyword searches by entity number
-          const dedupKey = biz.entityNumber
-            ? `EN-${biz.entityNumber}`
-            : `NAME-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-
-          if (seenEntityNumbers.has(dedupKey)) continue;
-          seenEntityNumbers.add(dedupKey);
-
-          totalMatched++;
-
-          const city = biz.city.trim() || 'Georgia';
-          const category = mapCategory(name);
-
-          const slugifiedName = name
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, '-')
-            .replace(/-+/g, '-')
-            .slice(0, 40);
-          const scraperDedupeKey = `GA-SECONDARY-${biz.entityNumber || slugifiedName}`;
-
-          console.log(`[Georgia Phase2] Matched: ${scraperDedupeKey} — ${name}`);
-
-          try {
-            const orgId = await getOrCreateScrapedOrganizer(
-              name,                           // businessName
-              'GeorgiaPhase2',                // sourceName
-              city,                           // city
-              'GA',                           // state
-              undefined,                      // esnOrgId
-              undefined,                      // googlePlaceId
-              undefined,                      // foursquareVenueId
-              undefined,                      // hereBusinessId
-              category,                       // businessCategory
-              undefined,                      // contactEmail
-              undefined,                      // phone
-              undefined,                      // website
-              undefined,                      // lat
-              undefined,                      // lng
-              true,                           // isStateLicensed
-              'GA',                           // licenseState
-              biz.entityNumber || undefined   // licenseNumber
-            );
-            if (orgId) totalUpserted++;
-          } catch (upsertErr) {
-            console.error(
-              `[Georgia Phase2] Upsert error for "${name}":`,
-              upsertErr
-            );
-          }
-        }
-
-        hasMore = result.hasMore;
-        page++;
-
-        // Safety cap — max 10 pages per keyword (1000 results)
-        if (page > 10) {
-          console.warn(
-            `[Georgia Phase2] Page cap reached for keyword "${keyword}" — moving on`
-          );
-          break;
-        }
-      }
-    }
+    // Source 2: GA SOS Auctioneers board page
+    const sos = await scrapeGaSosAuctioneers(seenKeys);
+    totalFetched += sos.fetched;
+    totalMatched += sos.matched;
+    totalUpserted += sos.upserted;
+    console.log(
+      `[GeorgiaPhase2] GA SOS complete — fetched: ${sos.fetched}, matched: ${sos.matched}, upserted: ${sos.upserted}`
+    );
 
     console.log(
-      `[Georgia Phase2] Complete — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`
+      `[GeorgiaPhase2] Complete — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`
     );
   } catch (err) {
-    console.error('[Georgia Phase2] Fatal error:', err);
+    console.error('[GeorgiaPhase2] Fatal error:', err);
     throw err;
   }
 }

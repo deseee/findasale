@@ -3,14 +3,25 @@
  *
  * Dual-source approach:
  *
- * Source 1 — NCALB (ncalb.gov): NC Auctioneer Licensing Board public licensee list.
- *   Fetches the same HTML directory as Phase 1 but filters via SALE_TYPE_KEYWORDS
- *   rather than ingesting all auctioneers. isStateLicensed: true.
+ * Source 1 — NCALB (ncalb.org): NC Auctioneer Licensing Board public licensee list.
+ *   URL updated: www.ncalb.gov (NXDOMAIN as of 2025) → www.ncalb.org
+ *   New path: /licensee-information/license-search
+ *   The new site may be JS-rendered. If minimal HTML is detected, scraper logs a
+ *   TODO with unblocking options and skips gracefully.
+ *   isStateLicensed: true.
  *
- * Source 2 — NC SoS Socrata (data.nc.gov): NC Secretary of State business registry.
- *   Endpoint: https://data.nc.gov/resource/aqbk-hcxb.json (Business Registration dataset)
- *   SoQL LIKE filter on BusinessName. Paginated at 1000 records.
- *   isStateLicensed: false (business registration ≠ trade license).
+ * Source 2 — NC SoS Socrata (data.nc.gov): DEAD as of 2025 (NXDOMAIN).
+ *   data.nc.gov no longer resolves. The NC SoS bulk data is a paid subscription
+ *   service (sosnc.gov/online_services/data_subscriptions) — no free API exists.
+ *   Automated access to sosnc.gov search is explicitly prohibited by NC SoS.
+ *   This source is stubbed with unblocking documentation.
+ *
+ * UNBLOCKING — Source 2 options (in priority order):
+ *   1. NC SoS Data Subscription: https://www.sosnc.gov/online_services/data_subscriptions
+ *      Contact: [email protected] — weekly CSV of all registered entities.
+ *   2. NC OSBM open data portal: https://linc.osbm.nc.gov/pages/home/
+ *      Check for a business license dataset with keyword-filterable business names.
+ *   3. NC Commerce Business Information: https://www.commerce.nc.gov/data-tools-reports/business-information-reports
  *
  * ADR-073: Directory Scraper Phase 2 — State licensing + SoS business data
  *
@@ -26,16 +37,16 @@ import { getRandomUserAgent } from '../userAgents';
 // Constants
 // ---------------------------------------------------------------------------
 
-const NCALB_SEARCH_URL = 'https://www.ncalb.gov/licensee-search';
-const NCALB_DOMAIN = 'www.ncalb.gov';
+// Updated: www.ncalb.gov (NXDOMAIN) → www.ncalb.org (verified 2025)
+const NCALB_SEARCH_URL = 'https://www.ncalb.org/licensee-information/license-search';
+const NCALB_DOMAIN = 'www.ncalb.org';
 
-const NC_SOS_API_URL = 'https://data.nc.gov/resource/aqbk-hcxb.json';
+// data.nc.gov is NXDOMAIN as of 2025 — stub only, no live endpoint
 const NC_SOS_DOMAIN = 'data.nc.gov';
 
 const PAGE_SIZE = 1000;
 
-// Case-insensitive keywords — used for both server-side SoQL LIKE (SoS) and
-// client-side name matching (NCALB).
+// Case-insensitive keywords — used for client-side name matching (NCALB)
 const SALE_TYPE_KEYWORDS = [
   'pawn',
   'estate sale',
@@ -130,8 +141,27 @@ function extractText(html: string): string {
     .trim();
 }
 
+/**
+ * Detect if a page response is JS-rendered (minimal HTML, no real table content).
+ * Returns true when the page requires a browser to render meaningful content.
+ */
+function isJsRendered(html: string): boolean {
+  const tdCount = (html.match(/<td/gi) || []).length;
+  const hasTable = html.includes('<table');
+  const hasAppRoot =
+    html.includes('<div id="app"') ||
+    html.includes('<div id="root"') ||
+    html.includes('ng-app') ||
+    html.includes('data-react-root') ||
+    html.includes('__NEXT_DATA__');
+
+  if (!hasTable || tdCount < 5) return true;
+  if (hasAppRoot && tdCount < 20) return true;
+  return false;
+}
+
 // ---------------------------------------------------------------------------
-// Source 1: NCALB — NC Auctioneer Licensing Board
+// Source 1: NCALB — NC Auctioneer Licensing Board (www.ncalb.org)
 // ---------------------------------------------------------------------------
 
 interface NcalbRecord {
@@ -141,11 +171,12 @@ interface NcalbRecord {
 }
 
 async function fetchNcalbRecords(): Promise<NcalbRecord[]> {
-  console.log('[NC Phase2] NCALB: fetching licensee search page');
+  console.log('[NC Phase2] NCALB: fetching licensee search page at ncalb.org');
 
   await defaultRateLimiter.waitBeforeRequest(NCALB_DOMAIN);
 
   let html: string;
+
   try {
     const response = await fetch(NCALB_SEARCH_URL, {
       method: 'GET',
@@ -168,6 +199,17 @@ async function fetchNcalbRecords(): Promise<NcalbRecord[]> {
     return [];
   }
 
+  // Detect JS-rendered shell — the new ncalb.org site may require a browser
+  if (isJsRendered(html)) {
+    console.warn(
+      '[NC Phase2] NCALB: page appears JS-rendered — no server-side licensee table detected. ' +
+      'TODO: implement Playwright headless scrape of https://www.ncalb.org/licensee-information/license-search — ' +
+      'set SHOW=ALL in the filter, then parse the resulting HTML table. ' +
+      'Alternatively request a licensee roster CSV from the board: https://www.ncalb.org/agency-information/board-information'
+    );
+    return [];
+  }
+
   const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
   const rows = html.match(rowRegex) || [];
   console.log(`[NC Phase2] NCALB: found ${rows.length} table rows`);
@@ -187,7 +229,6 @@ async function fetchNcalbRecords(): Promise<NcalbRecord[]> {
     if (!name || !licenseNumber) continue;
     if (statusRaw && statusRaw.toLowerCase() !== 'active') continue;
 
-    // Client-side keyword filter — only ingest secondary sale relevant businesses
     if (!nameMatchesKeyword(name)) continue;
     if (nameIsExcluded(name)) continue;
 
@@ -199,59 +240,24 @@ async function fetchNcalbRecords(): Promise<NcalbRecord[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Source 2: NC SoS Socrata (data.nc.gov)
+// Source 2: NC SoS — STUB (data.nc.gov is NXDOMAIN as of 2025)
 // ---------------------------------------------------------------------------
 
-interface NcSosRecord {
-  BusinessName?: string;
-  Status?: string;
-  City?: string;
-  Zip?: string;
-  [key: string]: string | undefined;
-}
-
 /**
- * Build the SoQL $where clause with LIKE conditions for all SALE_TYPE_KEYWORDS.
- * NC SoS Socrata uses uppercase column names — match what the dataset exposes.
+ * NC SoS Socrata source is no longer available.
+ * data.nc.gov resolved NXDOMAIN as of 2025. The NC SoS bulk business registry
+ * requires a paid data subscription — no free public API exists.
+ *
+ * Logs unblocking options and returns immediately.
  */
-function buildSoqlWhere(): string {
-  return SALE_TYPE_KEYWORDS.map(
-    (kw) => `upper(BusinessName) LIKE upper('%${kw}%')`
-  ).join(' OR ');
-}
-
-async function fetchNcSosPage(offset: number): Promise<NcSosRecord[]> {
-  const params = new URLSearchParams({
-    $where: buildSoqlWhere(),
-    $select: 'BusinessName,Status,City,Zip',
-    $limit: String(PAGE_SIZE),
-    $offset: String(offset),
-  });
-
-  const url = `${NC_SOS_API_URL}?${params.toString()}`;
-
-  try {
-    await defaultRateLimiter.waitBeforeRequest(NC_SOS_DOMAIN);
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'X-App-Token': '', // public endpoint — no token required
-      },
-      signal: AbortSignal.timeout(60000),
-    });
-
-    if (!response.ok) {
-      console.warn(`[NC Phase2] SoS API HTTP ${response.status} at offset ${offset}`);
-      return [];
-    }
-
-    const json = (await response.json()) as NcSosRecord[];
-    return Array.isArray(json) ? json : [];
-  } catch (err) {
-    console.warn(`[NC Phase2] SoS API fetch failed at offset ${offset}:`, err);
-    return [];
-  }
+async function fetchNcSosRecords(): Promise<void> {
+  console.warn(
+    '[NC Phase2] SoS: data.nc.gov is NXDOMAIN — source unavailable. ' +
+    'Unblocking options: ' +
+    '(1) NC SoS paid data subscription: https://www.sosnc.gov/online_services/data_subscriptions — contact [email protected]; ' +
+    '(2) NC OSBM open data portal: https://linc.osbm.nc.gov/pages/home/ — check for business license dataset; ' +
+    '(3) NC Commerce business reports: https://www.commerce.nc.gov/data-tools-reports/business-information-reports'
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -260,8 +266,14 @@ async function fetchNcSosPage(offset: number): Promise<NcSosRecord[]> {
 
 /**
  * North Carolina Phase 2 secondary sale scraper.
- * Runs NCALB (state auctioneer licenses) and NC SoS Socrata (business registry)
- * in sequence. Dedup is handled by getOrCreateScrapedOrganizer.
+ *
+ * Source 1: NCALB (ncalb.org) — state auctioneer licenses.
+ *   URL updated from www.ncalb.gov (NXDOMAIN) to www.ncalb.org.
+ *   Detects JS-rendered pages and degrades gracefully with TODO instructions.
+ *
+ * Source 2: data.nc.gov Socrata — DEAD (NXDOMAIN). Stubbed with unblocking docs.
+ *
+ * Dedup is handled by getOrCreateScrapedOrganizer.
  */
 export async function runNorthCarolinaPhase2Scraper(): Promise<void> {
   console.log('[NC Phase2] Starting North Carolina secondary sale scraper (Phase 2)');
@@ -269,9 +281,9 @@ export async function runNorthCarolinaPhase2Scraper(): Promise<void> {
   let totalUpserted = 0;
 
   // -------------------------------------------------------------------
-  // Source 1: NCALB
+  // Source 1: NCALB (www.ncalb.org)
   // -------------------------------------------------------------------
-  console.log('[NC Phase2] === Source 1: NCALB Auctioneer Licensing Board ===');
+  console.log('[NC Phase2] === Source 1: NCALB Auctioneer Licensing Board (ncalb.org) ===');
 
   const ncalbRecords = await fetchNcalbRecords();
 
@@ -312,69 +324,11 @@ export async function runNorthCarolinaPhase2Scraper(): Promise<void> {
   console.log(`[NC Phase2] NCALB source complete — ${ncalbRecords.length} matched, ${totalUpserted} upserted so far`);
 
   // -------------------------------------------------------------------
-  // Source 2: NC SoS Socrata
+  // Source 2: NC SoS Socrata — STUB (data.nc.gov dead)
   // -------------------------------------------------------------------
-  console.log('[NC Phase2] === Source 2: NC Secretary of State Business Registry ===');
+  console.log('[NC Phase2] === Source 2: NC SoS Socrata (STUB — data.nc.gov NXDOMAIN) ===');
 
-  let sosOffset = 0;
-  let sosTotalFetched = 0;
-  let sosUpserted = 0;
+  await fetchNcSosRecords();
 
-  while (true) {
-    const page = await fetchNcSosPage(sosOffset);
-
-    if (page.length === 0) {
-      console.log(`[NC Phase2] SoS: no more records at offset ${sosOffset}`);
-      break;
-    }
-
-    sosTotalFetched += page.length;
-
-    for (const record of page) {
-      const name = (record.BusinessName || '').trim();
-      if (!name) continue;
-      if (nameIsExcluded(name)) continue;
-
-      const city = (record.City || '').trim();
-      const dedupeKey = `NC-SOS-${slugify(name)}`;
-      const category = mapCategory(name);
-
-      console.log(`[NC Phase2] SoS upsert: ${dedupeKey} — ${name}`);
-
-      try {
-        const orgId = await getOrCreateScrapedOrganizer(
-          name,                     // businessName
-          'NorthCarolinaPhase2',    // sourceName
-          city || 'North Carolina', // city
-          'NC',                     // state
-          undefined,                // esnOrgId
-          undefined,                // googlePlaceId
-          undefined,                // foursquareVenueId
-          undefined,                // hereBusinessId
-          category,                 // businessCategory
-          undefined,                // contactEmail
-          undefined,                // phone
-          undefined,                // website
-          undefined,                // lat
-          undefined,                // lng
-          false,                    // isStateLicensed (SoS registration ≠ trade license)
-          'NC',                     // licenseState
-          undefined,                // licenseNumber
-          'NC-SoS'                  // sourceLabel
-        );
-        if (orgId) {
-          sosUpserted++;
-          totalUpserted++;
-        }
-      } catch (err) {
-        console.error(`[NC Phase2] SoS upsert error for "${name}":`, err);
-      }
-    }
-
-    if (page.length < PAGE_SIZE) break;
-    sosOffset += page.length;
-  }
-
-  console.log(`[NC Phase2] SoS source complete — ${sosTotalFetched} fetched, ${sosUpserted} upserted`);
   console.log(`[NC Phase2] North Carolina Phase 2 scraper complete — total upserted: ${totalUpserted}`);
 }

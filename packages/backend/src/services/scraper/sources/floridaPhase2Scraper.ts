@@ -2,14 +2,39 @@
  * Florida DBPR Board 48 Auctioneer License — Secondary Sale Business Scraper (Phase 2)
  * Primary source: Florida DBPR Board 48 license extract CSV
  *   https://www2.myfloridalicense.com/sto/file_download/extracts/lic48auc.csv
- * Fields: LicenseType, LicenseNumber, Rank, LicenseeDetails, MainAddress,
- *         CityStateZip, CountyCode, LicenseExpDate, LicenseStatusDate,
- *         LicenseInd, PrimaryStatusType, SecondaryStatusType
+ *
+ * CSV format: NO HEADER ROW — purely positional (22 columns, 0-indexed):
+ *   col 0  — board_id (always "48")
+ *   col 1  — license_type_code: AB=Auction Business, AU=Individual Auctioneer,
+ *                               AE=Apprentice Auctioneer, OR=Out-of-state Registrant
+ *   col 2  — licensee_name (business name for AB; "LAST, FIRST" for individuals)
+ *   col 3  — (blank)
+ *   col 4  — (blank)
+ *   col 5  — address line 1
+ *   col 6  — address line 2
+ *   col 7  — (blank)
+ *   col 8  — city
+ *   col 9  — state (FL or out-of-state for OR)
+ *   col 10 — zip
+ *   col 11 — county_code
+ *   col 12 — license_seq_number
+ *   col 13 — status_code: C=Current/Active, S=Suspended
+ *   col 14 — sub_status: A=Active, I=Inactive, blank for OR
+ *   col 15 — original_issue_date
+ *   col 16 — status_date
+ *   col 17 — expiration_date
+ *   col 18 — (blank)
+ *   col 19 — (blank)
+ *   col 20 — formatted license number (e.g. AB1389, AU920)
+ *   col 21 — (blank)
  *
  * License types included:
- *   AB — Auction Business (always included)
+ *   AB — Auction Business (firm — always included when active, non-excluded)
  *   AU — Individual Auctioneer (keyword filter applied)
  *   AE — Apprentice Auctioneer (keyword filter applied)
+ *   OR — Out-of-state registrants (skipped — non-FL businesses)
+ *
+ * Active status: col 13 = "C" (Current) AND col 14 = "A"
  *
  * ADR-073: Directory Scraper Phase 2 — State business licensing data
  */
@@ -19,6 +44,17 @@ import { getOrCreateScrapedOrganizer } from '../index';
 
 const CSV_URL = 'https://www2.myfloridalicense.com/sto/file_download/extracts/lic48auc.csv';
 const CSV_DOMAIN = 'www2.myfloridalicense.com';
+
+// Positional column indices (CSV has no header row)
+const COL = {
+  LICENSE_TYPE: 1,
+  LICENSEE_NAME: 2,
+  CITY: 8,
+  STATE: 9,
+  STATUS_CODE: 13,   // "C" = Current/Active
+  SUB_STATUS: 14,    // "A" = Active
+  LICENSE_NUMBER: 20,
+} as const;
 
 // Keywords that indicate a secondary-sale business
 const SALE_TYPE_KEYWORDS = [
@@ -136,58 +172,6 @@ function parseCsvLine(line: string): string[] {
   return fields;
 }
 
-interface FlRecord {
-  licenseType: string;
-  licenseNumber: string;
-  rank: string;
-  licenseeName: string;
-  mainAddress: string;
-  cityStateZip: string;
-  countyCode: string;
-  licenseExpDate: string;
-  licenseStatusDate: string;
-  licenseInd: string;
-  primaryStatusType: string;
-  secondaryStatusType: string;
-}
-
-/**
- * Map CSV header names to field indices.
- */
-function buildHeaderMap(headers: string[]): Record<string, number> {
-  const map: Record<string, number> = {};
-  headers.forEach((h, i) => {
-    map[h.trim().toLowerCase()] = i;
-  });
-  return map;
-}
-
-function extractRecord(fields: string[], idx: Record<string, number>): FlRecord {
-  const get = (key: string) => (fields[idx[key]] ?? '').trim();
-  return {
-    licenseType: get('licensetype'),
-    licenseNumber: get('licensenumber'),
-    rank: get('rank'),
-    licenseeName: get('licenseedetails'),
-    mainAddress: get('mainaddress'),
-    cityStateZip: get('citystatezid') !== undefined ? get('citystatezid') : get('citystatezidp') !== undefined ? get('citystatezidp') : (fields[idx['citystatezid'] ?? idx['citystatezidp'] ?? 5] ?? '').trim(),
-    countyCode: get('countycode'),
-    licenseExpDate: get('licenseexpdate'),
-    licenseStatusDate: get('licensestatusdate'),
-    licenseInd: get('licenseind'),
-    primaryStatusType: get('primarystatustype'),
-    secondaryStatusType: get('secondarystatustype'),
-  };
-}
-
-/**
- * Parse city from "City, ST  ZIP" format.
- */
-function parseCity(cityStateZip: string): string {
-  const match = cityStateZip.match(/^([^,]+)/);
-  return match ? match[1].trim() : '';
-}
-
 // ---------------------------------------------------------------------------
 // CSV download
 // ---------------------------------------------------------------------------
@@ -219,8 +203,14 @@ async function fetchCsv(): Promise<string | null> {
 
 /**
  * Florida DBPR Board 48 Auctioneer license secondary sale scraper.
- * Downloads the state CSV extract, filters to active licenses, and upserts
- * matching organizers into the FindA.Sale directory.
+ * Downloads the state CSV extract (no header row — positional columns),
+ * filters to active licenses (status_code="C", sub_status="A"),
+ * and upserts matching organizers into the FindA.Sale directory.
+ *
+ * AB (Auction Business / firm) records are always included when active and
+ * not excluded by false-positive fragments.
+ * AU/AE (individual licensees) require a keyword match in the name.
+ * OR (out-of-state registrants) are skipped.
  */
 export async function runFloridaPhase2Scraper(): Promise<void> {
   console.log('[Florida Phase2] Starting secondary sale scraper — Florida DBPR Board 48');
@@ -232,43 +222,45 @@ export async function runFloridaPhase2Scraper(): Promise<void> {
     return;
   }
 
+  // CSV has NO header row — every line is a data record
   const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length < 2) {
-    console.error('[Florida Phase2] CSV has no data rows — aborting');
+  if (lines.length === 0) {
+    console.error('[Florida Phase2] CSV is empty — aborting');
     return;
   }
 
-  const headers = parseCsvLine(lines[0]);
-  const idx = buildHeaderMap(headers);
-
-  console.log(`[Florida Phase2] CSV headers: ${headers.join(', ')}`);
-  console.log(`[Florida Phase2] Total rows: ${lines.length - 1}`);
+  console.log(`[Florida Phase2] Total rows: ${lines.length}`);
 
   let totalProcessed = 0;
   let totalActive = 0;
   let totalMatched = 0;
   let totalUpserted = 0;
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = 0; i < lines.length; i++) {
     const fields = parseCsvLine(lines[i]);
-    if (fields.length < 6) continue;
+    if (fields.length < 15) continue;
 
     totalProcessed++;
 
-    const rec = extractRecord(fields, idx);
+    const licenseType  = (fields[COL.LICENSE_TYPE]   ?? '').trim().toUpperCase();
+    const statusCode   = (fields[COL.STATUS_CODE]     ?? '').trim().toUpperCase();
+    const subStatus    = (fields[COL.SUB_STATUS]      ?? '').trim().toUpperCase();
+    const name         = (fields[COL.LICENSEE_NAME]   ?? '').trim();
+    const city         = (fields[COL.CITY]            ?? '').trim() || 'Florida';
+    const licenseNumber = (fields[COL.LICENSE_NUMBER] ?? '').trim();
 
-    // Filter: active licenses only
-    const status = rec.primaryStatusType.toLowerCase();
-    if (!status.includes('active')) continue;
+    // Skip out-of-state registrants
+    if (licenseType === 'OR') continue;
+
+    // Active = status_code "C" (Current) AND sub_status "A" (Active)
+    // Note: some OR records have blank sub_status — already excluded above
+    if (statusCode !== 'C' || subStatus !== 'A') continue;
     totalActive++;
-
-    const licenseType = rec.licenseType.toUpperCase();
-    const name = rec.licenseeName;
 
     if (!name) continue;
 
-    // AB (Auction Business) — always include if active and not excluded
-    // AU/AE — require keyword match
+    // AB (Auction Business / firm) — always include if active and not excluded
+    // AU/AE (individual licensees) — require keyword match in name
     if (licenseType === 'AB') {
       if (nameIsExcluded(name)) continue;
     } else if (licenseType === 'AU' || licenseType === 'AE') {
@@ -280,16 +272,6 @@ export async function runFloridaPhase2Scraper(): Promise<void> {
 
     totalMatched++;
 
-    // Determine city from CityStateZip field
-    // Try both possible header spellings
-    let cityStateZip = '';
-    const cszKey = Object.keys(idx).find((k) => k.startsWith('citystatez'));
-    if (cszKey !== undefined) {
-      cityStateZip = (fields[idx[cszKey]] ?? '').trim();
-    }
-    const city = parseCity(cityStateZip) || 'Florida';
-
-    const licenseNumber = rec.licenseNumber;
     const slugifiedName = name
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '-')
