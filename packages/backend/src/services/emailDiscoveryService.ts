@@ -26,7 +26,151 @@ interface SMTPVerifyResult {
   reason?: string;
 }
 
+// Strict format validation — must match before any storage
+const EMAIL_FORMAT_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+
+// Legacy extraction regex (permissive, for scraping raw text)
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
+// Minimum confidence required to write to the DB
+const MIN_CONFIDENCE_TO_STORE = 0.60;
+
+/**
+ * Placeholder/junk domains — template addresses, sentry bots, test domains
+ */
+const BLOCKLISTED_DOMAINS = new Set([
+  'wixpress.com',
+  'sentry-next.wixpress.com',
+  'sentry.wixpress.com',
+  'example.com',
+  'test.com',
+  'placeholder.com',
+  'godaddy.com',
+  'domain.com',
+  // Major retailers — not organizer businesses
+  'jcrew.com',
+  'gap.com',
+  'goodwill.org',
+  'goodwill.com',
+  'salvation-army.org',
+  'salvationarmy.org',
+  'amazon.com',
+  'ebay.com',
+  'etsy.com',
+  'walmart.com',
+  'target.com',
+  'costco.com',
+]);
+
+// Exact email addresses that are always junk
+const BLOCKLISTED_EXACT_EMAILS = new Set([
+  'user@domain.com',
+  'test@test.com',
+  'admin@example.com',
+  'filler@godaddy.com',
+]);
+
+// Local parts that are generic placeholders when not attached to a real business domain
+const BLOCKLISTED_LOCAL_PARTS = new Set([
+  'filler',
+  'noreply',
+  'no-reply',
+  'donotreply',
+  'user',
+]);
+
+/**
+ * Validate an email address before storage.
+ * Returns true if the email should be REJECTED (blocked/invalid).
+ */
+function isJunkEmail(email: string): boolean {
+  const lower = email.toLowerCase().trim();
+
+  // 1. Format sanity check
+  if (!EMAIL_FORMAT_REGEX.test(lower)) {
+    console.debug(`[emailDiscoveryService] Rejected (format): ${email}`);
+    return true;
+  }
+
+  // 2. Exact blocklist
+  if (BLOCKLISTED_EXACT_EMAILS.has(lower)) {
+    console.debug(`[emailDiscoveryService] Rejected (exact blocklist): ${email}`);
+    return true;
+  }
+
+  const atIdx = lower.indexOf('@');
+  const localPart = lower.substring(0, atIdx);
+  const domain = lower.substring(atIdx + 1);
+
+  // 3. Blocked domains (also catches subdomains of blocked domains)
+  const domainParts = domain.split('.');
+  for (let i = 0; i < domainParts.length - 1; i++) {
+    const candidate = domainParts.slice(i).join('.');
+    if (BLOCKLISTED_DOMAINS.has(candidate)) {
+      console.debug(`[emailDiscoveryService] Rejected (domain blocklist): ${email}`);
+      return true;
+    }
+  }
+
+  // 4. .gov domains — not organizer businesses
+  if (domain.endsWith('.gov')) {
+    console.debug(`[emailDiscoveryService] Rejected (.gov domain): ${email}`);
+    return true;
+  }
+
+  // 5. Hex local part > 20 chars (Wix sentry pattern e.g. 605a7baede844d278b89dc95ae0a9123@...)
+  if (/^[a-f0-9]{20,}$/.test(localPart)) {
+    console.debug(`[emailDiscoveryService] Rejected (hex local part): ${email}`);
+    return true;
+  }
+
+  // 6. Blocked local parts (generic placeholders)
+  if (BLOCKLISTED_LOCAL_PARTS.has(localPart)) {
+    console.debug(`[emailDiscoveryService] Rejected (generic local part): ${email}`);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Apply confidence penalties based on discovery context.
+ * organizerDomain: the domain extracted from organizer.website (null if unknown)
+ * emailDomain: the domain of the discovered email
+ * source: how the email was found
+ * organizerAddress: the raw address string (used to detect residential patterns)
+ */
+function calibrateConfidence(
+  baseConfidence: number,
+  source: 'website_scrape' | 'smtp_pattern' | 'whois',
+  emailDomain: string,
+  organizerDomain: string | null,
+  organizerAddress: string | null
+): number {
+  let score = baseConfidence;
+
+  // Pattern permutation only (not scraped from the actual site) — cap at 0.70
+  if (source === 'smtp_pattern') {
+    score = Math.min(score, 0.70);
+  }
+
+  // Email domain doesn't match the organizer's known website domain
+  if (organizerDomain && emailDomain !== organizerDomain) {
+    score -= 0.10;
+  }
+
+  // Residential address pattern (no suite/unit — just a plain street address)
+  if (organizerAddress) {
+    const hasSuite = /\b(suite|ste|unit|apt|#|floor|fl)\b/i.test(organizerAddress);
+    if (!hasSuite) {
+      score -= 0.05;
+    }
+  }
+
+  // Floor at 0.10
+  return Math.max(score, 0.10);
+}
+
 const GENERIC_PATTERNS = [
   'noreply@',
   'notification@',
@@ -97,10 +241,11 @@ async function scrapeWebsiteEmails(domain: string): Promise<string[]> {
     }
   }
 
-  // Deduplicate and filter out generic addresses
+  // Deduplicate, filter generic patterns, and filter junk/blocklisted addresses
   const filtered = [...new Set(emails)].filter(
     (email) =>
-      !GENERIC_PATTERNS.some((pattern) => email.toLowerCase().includes(pattern))
+      !GENERIC_PATTERNS.some((pattern) => email.toLowerCase().includes(pattern)) &&
+      !isJunkEmail(email)
   );
 
   return filtered;
@@ -240,24 +385,46 @@ export async function discoverEmail(organizerId: string): Promise<string | null>
     const scrapedEmails = await scrapeWebsiteEmails(domain);
     if (scrapedEmails.length > 0) {
       const bestEmail = scrapedEmails[0];
-      await updateOrganizerEmail(organizerId, bestEmail, 'website_scrape', 0.95);
+      const emailDomain = bestEmail.substring(bestEmail.indexOf('@') + 1).toLowerCase();
+      const confidence = calibrateConfidence(
+        0.95,
+        'website_scrape',
+        emailDomain,
+        domain,
+        organizer.address ?? null
+      );
+      if (confidence < MIN_CONFIDENCE_TO_STORE) {
+        console.debug(`[emailDiscoveryService] Discarding ${bestEmail} — confidence ${confidence.toFixed(2)} below threshold`);
+        return null;
+      }
+      await updateOrganizerEmail(organizerId, bestEmail, 'website_scrape', confidence);
       return bestEmail;
     }
 
     // Stage 2 & 3: Pattern generation + SMTP verification
     const patterns = generateEmailPatterns(organizer.businessName, domain);
     for (const email of patterns) {
+      // Reject junk patterns before even attempting SMTP
+      if (isJunkEmail(email)) continue;
+
       // Rate limit: 500ms between attempts
       await new Promise((r) => setTimeout(r, 500));
 
       const result = await verifyEmailSMTP(email, domain);
       if (result.valid) {
-        await updateOrganizerEmail(
-          organizerId,
-          email,
+        const emailDomain = email.substring(email.indexOf('@') + 1).toLowerCase();
+        const confidence = calibrateConfidence(
+          0.75,
           'smtp_pattern',
-          0.75
+          emailDomain,
+          domain,
+          organizer.address ?? null
         );
+        if (confidence < MIN_CONFIDENCE_TO_STORE) {
+          console.debug(`[emailDiscoveryService] Discarding ${email} — confidence ${confidence.toFixed(2)} below threshold`);
+          continue;
+        }
+        await updateOrganizerEmail(organizerId, email, 'smtp_pattern', confidence);
         return email;
       }
     }
@@ -285,6 +452,7 @@ function toDiscoveryMethod(
 
 /**
  * Update organizer with discovered email
+ * Final gate: re-validates email format/blocklist and confidence threshold before writing.
  */
 async function updateOrganizerEmail(
   organizerId: string,
@@ -292,6 +460,15 @@ async function updateOrganizerEmail(
   source: 'website_scrape' | 'smtp_pattern' | 'whois',
   confidence: number
 ): Promise<void> {
+  // Final safety gate — reject junk even if it somehow slipped through earlier
+  if (isJunkEmail(email)) {
+    console.debug(`[emailDiscoveryService] Final gate rejected ${email} for organizer ${organizerId}`);
+    return;
+  }
+  if (confidence < MIN_CONFIDENCE_TO_STORE) {
+    console.debug(`[emailDiscoveryService] Final gate discarded ${email} — confidence ${confidence.toFixed(2)} below ${MIN_CONFIDENCE_TO_STORE}`);
+    return;
+  }
   try {
     await prisma.organizer.update({
       where: { id: organizerId },
