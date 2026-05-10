@@ -88,30 +88,29 @@ export function parseGarageSalesFinderListing(html: string): Partial<ParsedListi
   try {
     const $ = cheerio.load(html);
 
-    const title = $('.sale-title, h1').first().text().trim();
-    const addressText = $('.address, [data-address]').text().trim();
-    const dateText = $('.dates, [data-dates]').text().trim();
+    const title = $('h2[itemprop="name"]').text().trim();
+    const addressText = $('[itemprop="address"]').text().trim().replace(/\s+/g, ' ');
+    const startDateStr = $('meta[itemprop="startDate"]').attr('content') ?? '';
+    const endDateStr = $('meta[itemprop="endDate"]').attr('content') ?? '';
 
     if (!title || !addressText) return null;
 
     const addressMatch = addressText.match(
-      /^(.+?),\s*(.+?),\s*([A-Z]{2})\s*(\d{5})/
+      /^(.+?),\s*(.+?),\s*([A-Z]{2})\s+(\d{5})/
     );
     if (!addressMatch) return null;
 
     const [, street, city, state, zip] = addressMatch;
 
-    const startDate = new Date();
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 1);
+    if (!startDateStr || !endDateStr) return null;
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
 
-    const photoUrls: string[] = [];
-    $('img').each((_, el) => {
-      const src = $(el).attr('src');
-      if (src && (src.includes('sale') || src.includes('garage'))) {
-        photoUrls.push(src);
-      }
-    });
+    const photoUrls: string[] = $('img[itemprop="image"]')
+      .map((_, el) => $(el).attr('src'))
+      .get()
+      .filter((src): src is string => !!src);
 
     return {
       title,
@@ -121,7 +120,7 @@ export function parseGarageSalesFinderListing(html: string): Partial<ParsedListi
       zip,
       startDate,
       endDate,
-      description: $('.description').text().trim() || undefined,
+      description: $('[itemprop="description"].description').text().trim() || undefined,
       photoUrls: photoUrls.length > 0 ? photoUrls.slice(0, 5) : undefined,
       saleType: 'YARD',
     };
