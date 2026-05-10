@@ -296,7 +296,7 @@ export default function ScraperAdminPage() {
                   )}
                 </td>
                 <td className="p-3">
-                  {sale.claimEmails[0] ? (
+                  {sale.claimEmails?.[0] ? (
                     <span className={sale.claimEmails[0].claimed ? 'text-green-600' : 'text-yellow-600'}>
                       {sale.claimEmails[0].claimed ? 'Claimed' : 'Sent'}
                     </span>
