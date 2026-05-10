@@ -1782,6 +1782,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <li><Link href="/contact" className="text-warm-400 hover:text-white">Contact</Link></li>
                 <li><Link href="/support" className="text-warm-400 hover:text-white">Support</Link></li>
                 <li><Link href="/faq" className="text-warm-400 hover:text-white">FAQ</Link></li>
+                <li><Link href="/guides" className="text-warm-400 hover:text-white">Guides</Link></li>
                 {isClient && user?.roles?.includes('ORGANIZER') && (
                   <>
                     <li><Link href="/organizer/dashboard" className="text-warm-400 hover:text-white">Dashboard</Link></li>
