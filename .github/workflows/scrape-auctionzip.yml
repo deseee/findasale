@@ -58,7 +58,7 @@ jobs:
         if: steps.date_check.outputs.skip != 'true'
         working-directory: packages/backend
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
           LETTERS="${{ github.event.inputs.letters }}"
