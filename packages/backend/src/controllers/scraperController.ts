@@ -156,6 +156,11 @@ export const getScrapedSales = async (req: AuthRequest, res: Response): Promise<
               isUnmanagedListing: true,
             },
           },
+          claimEmails: {
+            select: { sentAt: true, claimed: true },
+            orderBy: { sentAt: 'desc' },
+            take: 1,
+          },
         },
       }),
       prisma.sale.count({ where }),

@@ -18,7 +18,7 @@ import { SOURCE_REGISTRY } from '../services/scraper/sourceRegistry';
  * ~300 US metros by estate/yard sale activity — all cities 50k+ population.
  * Format: [city-slug]-[state-abbrev]
  */
-const NATIONAL_METROS = [
+export const NATIONAL_METROS = [
   // Northeast — New York
   'new-york-ny',
   'buffalo-ny',
