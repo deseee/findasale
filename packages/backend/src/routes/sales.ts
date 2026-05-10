@@ -92,6 +92,98 @@ router.patch('/:id/coordinates', authenticate, requireOrganizer, async (req: Aut
   }
 });
 
+// #403: Family Bundle Pricing — public bundle list for a sale
+router.get('/:id/bundles', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bundles = await prisma.itemBundle.findMany({
+      where: { saleId: id, isActive: true },
+      include: {
+        items: {
+          select: { id: true, title: true, photoUrls: true, status: true }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+    res.json(bundles);
+  } catch (err) {
+    console.error('bundles fetch error:', err);
+    res.status(500).json({ message: 'Failed to fetch bundles' });
+  }
+});
+
+// #403: Bundle CRUD — organizer-only create/update/delete
+router.post('/:saleId/bundles', authenticate, requireOrganizer, async (req: AuthRequest, res) => {
+  try {
+    const { saleId } = req.params;
+    const { title, description, bundlePrice, itemIds } = req.body;
+    if (!title || typeof bundlePrice !== 'number' || !Array.isArray(itemIds)) {
+      return res.status(400).json({ message: 'title, bundlePrice (number), and itemIds (array) are required' });
+    }
+    const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user!.id } });
+    if (!organizerProfile) return res.status(403).json({ message: 'Organizer profile not found' });
+    const sale = await prisma.sale.findFirst({ where: { id: saleId, organizerId: organizerProfile.id } });
+    if (!sale) return res.status(404).json({ message: 'Sale not found or access denied' });
+    const bundle = await prisma.itemBundle.create({
+      data: {
+        saleId,
+        title,
+        description: description ?? null,
+        bundlePrice,
+        isActive: true,
+        items: { connect: itemIds.map((id: string) => ({ id })) },
+      },
+      include: { items: { select: { id: true, title: true, price: true, photoUrls: true } } },
+    });
+    return res.status(201).json(bundle);
+  } catch (err) {
+    console.error('bundle create error:', err);
+    return res.status(500).json({ message: 'Failed to create bundle' });
+  }
+});
+
+router.put('/:saleId/bundles/:bundleId', authenticate, requireOrganizer, async (req: AuthRequest, res) => {
+  try {
+    const { saleId, bundleId } = req.params;
+    const { title, description, bundlePrice, itemIds } = req.body;
+    const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user!.id } });
+    if (!organizerProfile) return res.status(403).json({ message: 'Organizer profile not found' });
+    const sale = await prisma.sale.findFirst({ where: { id: saleId, organizerId: organizerProfile.id } });
+    if (!sale) return res.status(404).json({ message: 'Sale not found or access denied' });
+    const updateData: any = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (bundlePrice !== undefined) updateData.bundlePrice = bundlePrice;
+    if (Array.isArray(itemIds)) {
+      updateData.items = { set: itemIds.map((id: string) => ({ id })) };
+    }
+    const bundle = await prisma.itemBundle.update({
+      where: { id: bundleId },
+      data: updateData,
+      include: { items: { select: { id: true, title: true, price: true, photoUrls: true } } },
+    });
+    return res.json(bundle);
+  } catch (err) {
+    console.error('bundle update error:', err);
+    return res.status(500).json({ message: 'Failed to update bundle' });
+  }
+});
+
+router.delete('/:saleId/bundles/:bundleId', authenticate, requireOrganizer, async (req: AuthRequest, res) => {
+  try {
+    const { saleId, bundleId } = req.params;
+    const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user!.id } });
+    if (!organizerProfile) return res.status(403).json({ message: 'Organizer profile not found' });
+    const sale = await prisma.sale.findFirst({ where: { id: saleId, organizerId: organizerProfile.id } });
+    if (!sale) return res.status(404).json({ message: 'Sale not found or access denied' });
+    await prisma.itemBundle.update({ where: { id: bundleId }, data: { isActive: false } });
+    return res.json({ message: 'Bundle deactivated' });
+  } catch (err) {
+    console.error('bundle delete error:', err);
+    return res.status(500).json({ message: 'Failed to deactivate bundle' });
+  }
+});
+
 // Generic /:id routes (last so they don't intercept specific subroutes)
 router.get('/:id', getSale);
 router.put('/:id', authenticate, updateSale);

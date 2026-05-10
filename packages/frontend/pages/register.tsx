@@ -22,6 +22,8 @@ const RegisterPage = () => {
     referralCode: '',
     affiliateReferralCode: '',
     inviteCode: '',
+    country: 'US',
+    province: '',
   });
   const [ageError, setAgeError] = useState('');
   const [organizerEmailConsent, setOrganizerEmailConsent] = useState(false);
@@ -133,12 +135,21 @@ const RegisterPage = () => {
       // Generate device fingerprint
       const deviceFingerprint = await generateDeviceFingerprint();
 
+      const isQuebecBlocked = formData.country === 'CA' && formData.province === 'QC';
+      if (isQuebecBlocked) {
+        setError("Quebec support is coming soon — we're actively working on provincial compliance.");
+        setLoading(false);
+        return;
+      }
+
       const payload: any = {
         email: formData.email,
         password: formData.password,
         name: formData.name,
         dateOfBirth: formData.dateOfBirth, // P0-L1: COPPA compliance
         role: formData.role,
+        country: formData.country || 'US',
+        province: formData.province || undefined,
         referralCode: formData.referralCode || undefined,
         affiliateReferralCode: formData.affiliateReferralCode || undefined,
         inviteCode: formData.inviteCode || undefined,
@@ -313,13 +324,69 @@ const RegisterPage = () => {
                 name="role"
                 value={formData.role}
                 onChange={handleChange}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 rounded-b-md focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
               >
                 <option value="USER">Shopper</option>
                 <option value="ORGANIZER">Sale Organizer</option>
               </select>
             </div>
+            <div>
+              <label htmlFor="country" className="sr-only">Country</label>
+              <select
+                id="country"
+                name="country"
+                value={formData.country}
+                onChange={handleChange}
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
+                aria-label="Country"
+              >
+                <option value="US">United States</option>
+                <option value="CA">Canada</option>
+              </select>
+            </div>
+            {formData.country === 'CA' && (
+              <div>
+                <label htmlFor="province" className="sr-only">Province</label>
+                <select
+                  id="province"
+                  name="province"
+                  value={formData.province}
+                  onChange={handleChange}
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 rounded-b-md focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
+                  aria-label="Province"
+                >
+                  <option value="">Select province...</option>
+                  <option value="AB">Alberta</option>
+                  <option value="BC">British Columbia</option>
+                  <option value="MB">Manitoba</option>
+                  <option value="NB">New Brunswick</option>
+                  <option value="NL">Newfoundland and Labrador</option>
+                  <option value="NS">Nova Scotia</option>
+                  <option value="NT">Northwest Territories</option>
+                  <option value="NU">Nunavut</option>
+                  <option value="ON">Ontario</option>
+                  <option value="PE">Prince Edward Island</option>
+                  <option value="QC">Quebec</option>
+                  <option value="SK">Saskatchewan</option>
+                  <option value="YT">Yukon</option>
+                </select>
+              </div>
+            )}
+            {formData.country === 'US' && (
+              <div className="h-0 rounded-b-md border-b border-x border-warm-300 dark:border-gray-600" />
+            )}
           </div>
+          {/* #369: Quebec Block — friendly notice when QC selected */}
+          {formData.country === 'CA' && formData.province === 'QC' && (
+            <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
+              <p className="text-sm text-amber-700 dark:text-amber-200 font-medium">Quebec support is coming soon</p>
+              <p className="text-sm text-amber-600 dark:text-amber-300 mt-1">
+                We&apos;re actively working on provincial compliance.{' '}
+                <a href="https://finda.sale/waitlist" className="underline hover:text-amber-800 dark:hover:text-amber-100">Join the waitlist</a>{''}
+                {''} to be notified when Quebec launches.
+              </p>
+            </div>
+          )}
 
           {formData.inviteCode && (
             <div className="rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3 flex items-center gap-2">
@@ -462,7 +529,7 @@ const RegisterPage = () => {
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (formData.country === 'CA' && formData.province === 'QC')}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50"
             >
               {loading ? 'Creating account...' : 'Register'}

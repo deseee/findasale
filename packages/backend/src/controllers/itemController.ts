@@ -716,7 +716,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -878,6 +878,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (ebaySubtitle !== undefined) updateData.ebaySubtitle = ebaySubtitle ? String(ebaySubtitle).substring(0, 55) : null;
     // Feature #363: Auction Lot Number
     if (lotNumber !== undefined) updateData.lotNumber = lotNumber ? String(lotNumber).trim() : null;
+    // Feature #407: Flip Tracker ROI — cost basis for profit/ROI calculation
+    if (costBasis !== undefined) updateData.costBasis = costBasis !== null && costBasis !== '' ? parseFloat(costBasis) : null;
+    // Feature #411: Dorm Dash — room/area tag for college move-out sales
+    if (roomTag !== undefined) updateData.roomTag = roomTag ? String(roomTag).trim() : null;
 
     // D-006: Update userEditedFields array to track which fields organizer has explicitly set
     // This prevents AI results from overwriting organizer-set values during rapid processing
@@ -1403,7 +1407,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
 
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { include: { organizer: { select: { userId: true, id: true, subscriptionTier: true } } } } }
+      include: { sale: { select: { isUnmanagedListing: true, estatePrivacyMode: true, organizer: { select: { userId: true, id: true, subscriptionTier: true } } } } }
     });
 
     if (!item) {
@@ -1441,6 +1445,12 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
         limit: quotaStatus.limit,
         remaining: quotaStatus.remaining,
       });
+    }
+
+    // #414: Grief Firewall — suppress AI for estate privacy mode
+    if (item.sale?.estatePrivacyMode === true) {
+      console.log(`[GriefFirewall] AI suppressed for sale ${item.saleId} (estatePrivacyMode)`);
+      return res.json({ suggestedTags: [] });
     }
 
     let suggestedTags: string[] = [];
@@ -2628,3 +2638,12 @@ export const getSimilarItems = async (req: Request, res: Response) => {
       photoUrl: item.photoUrls[0] ?? null,
       condition: item.condition,
       saleId: item.saleId!,
+      sale: item.sale ? { title: item.sale.title, city: item.sale.city } : null,
+    }));
+
+    res.json({ items });
+  } catch (error) {
+    console.error('[getSimilarItems] Error:', error);
+    res.status(500).json({ message: 'Server error fetching similar items' });
+  }
+};

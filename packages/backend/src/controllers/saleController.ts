@@ -43,6 +43,7 @@ enum SaleType {
   LIQUIDATION = 'LIQUIDATION',
   ONLINE = 'ONLINE',
   BOOTH = 'BOOTH',
+  DORM_DASH = 'DORM_DASH',
 }
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone,
@@ -94,8 +95,8 @@ const saleCreateSchema = z.object({
   isAuctionSale: z.boolean().optional().default(false), // Deprecated: use saleType instead
   // B1: Sale type — Feature #5: Strict validation for enum consistency
   // Allow all sale type options from frontend
-  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', 'CONSIGNMENT', 'CHARITY', 'BUSINESS_CORPORATE', 'RETAIL', 'GARAGE', 'MOVING', 'DOWNSIZING', 'SWAP_MEET', 'POPUP', 'LIQUIDATION', 'ONLINE', 'BOOTH'], {
-    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET, CONSIGNMENT, CHARITY, BUSINESS_CORPORATE, RETAIL, GARAGE, MOVING, DOWNSIZING, SWAP_MEET, POPUP, LIQUIDATION, ONLINE, BOOTH' })
+  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', 'CONSIGNMENT', 'CHARITY', 'BUSINESS_CORPORATE', 'RETAIL', 'GARAGE', 'MOVING', 'DOWNSIZING', 'SWAP_MEET', 'POPUP', 'LIQUIDATION', 'ONLINE', 'BOOTH', 'DORM_DASH'], {
+    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET, CONSIGNMENT, CHARITY, BUSINESS_CORPORATE, RETAIL, GARAGE, MOVING, DOWNSIZING, SWAP_MEET, POPUP, LIQUIDATION, ONLINE, BOOTH, DORM_DASH' })
   }).optional().default(SaleType.ESTATE),
   neighborhood: z.string().optional(), // U2
   // Feature 35: Front Door Locator
@@ -389,7 +390,8 @@ export const getSale = async (req: Request, res: Response) => {
             auctionEndTime: true, auctionClosed: true, listingType: true,
             status: true, photoUrls: true, category: true, condition: true,
             organizerDiscountAmount: true, organizerDiscountXp: true,
-            priceBeforeMarkdown: true, markdownApplied: true
+            priceBeforeMarkdown: true, markdownApplied: true,
+            roomTag: true // #416: Floor map room routing
           }
         }
       }

@@ -516,6 +516,9 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       subscriptionTier: organizer.subscriptionTier ?? 'SIMPLE',
       graceEndAt: (organizer as any).graceEndAt ? (organizer as any).graceEndAt.toISOString() : null,
       graceTierBefore: (organizer as any).graceTierBefore || null,
+      venmoHandle: (organizer as any).venmoHandle || null,
+      zelleHandle: (organizer as any).zelleHandle || null,
+      foundingOrgBadge: (organizer as any).foundingOrgBadge ?? false,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);

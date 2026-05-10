@@ -6,6 +6,9 @@ export interface TopPerformer {
   title: string;
   finalPrice: number;
   category: string | null;
+  costBasis: number | null;
+  profit: number | null;
+  roi: number | null;
 }
 
 export interface CategoryBreakdown {
@@ -34,6 +37,10 @@ export interface FlipReport {
   saleEndDate: string;
   sellThroughRate: number;
   totalRevenue: number;
+  totalCostBasis: number;
+  totalProfit: number;
+  avgRoi: number | null;
+  itemsWithCostBasis: number;
   itemsSold: number;
   itemsUnsold: number;
   topPerformers: TopPerformer[];

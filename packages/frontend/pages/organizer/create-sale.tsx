@@ -67,7 +67,7 @@ const LIGHT = {
 // TYPE DEFINITIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-type SaleTypeKey = 'ESTATE' | 'YARD' | 'AUCTION' | 'FLEA_MARKET' | 'RETAIL';
+type SaleTypeKey = 'ESTATE' | 'YARD' | 'AUCTION' | 'FLEA_MARKET' | 'RETAIL' | 'DORM_DASH';
 
 interface DayHours {
   date: string; // ISO date
@@ -170,6 +170,14 @@ const SALE_TYPE_TILES = [
       { value: 'flea', label: 'Flea Market' },
       { value: 'popup', label: 'Pop-Up Event' },
     ],
+    hasCharityToggle: false,
+  },
+  {
+    key: 'DORM_DASH' as SaleTypeKey,
+    label: 'Dorm Dash',
+    desc: 'College move-out sale — organize by room or area.',
+    icon: '🎓',
+    subs: [],
     hasCharityToggle: false,
   },
 ];
@@ -512,6 +520,7 @@ function Step1({ c, form, setForm }: Step1Props) {
     AUCTION: ['Walden Estate Auction', 'Antiques & Collectibles Auction', 'Live Auction Event'],
     FLEA_MARKET: ['Riverside Flea Market', 'Monthly Pop-Up Market', 'Vintage Vendor Market'],
     RETAIL: ['Antique & Vintage Shop', 'Estate Finds Store', 'Consignment Boutique'],
+    DORM_DASH: ['Room 204 Move-Out Sale', 'End-of-Semester Dorm Dash', 'College Move-Out — Everything Must Go'],
   };
 
   return (
@@ -1360,6 +1369,7 @@ interface Step4Props {
 function Step4({ c, form, setForm }: Step4Props) {
   const isAuction = form.saleType === 'AUCTION';
   const isFlea = form.saleType === 'FLEA_MARKET';
+  const isDormDash = form.saleType === 'DORM_DASH';
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [customTag, setCustomTag] = useState('');
 
@@ -1389,10 +1399,12 @@ function Step4({ c, form, setForm }: Step4Props) {
   return (
     <div style={{ padding: '0 0 24px' }}>
       <WizardHeader
-        eyebrow={isAuction ? 'Step 4 of 5 · auction details' : isFlea ? 'Step 4 of 5 · market details' : 'Step 4 of 5'}
+        eyebrow={isAuction ? 'Step 4 of 5 · auction details' : isFlea ? 'Step 4 of 5 · market details' : isDormDash ? 'Step 4 of 5 · dorm dash' : 'Step 4 of 5'}
         title={isAuction ? 'Bidding, lots, and previews.' : 'What will shoppers find?'}
         sub={isAuction
           ? 'Auction-specific settings. These appear on the public listing and shape how items get added next.'
+          : isDormDash
+          ? 'Tags help shoppers filter by what they need. Tip: add room tags to your items (e.g. "Room 204", "Study") so shoppers can find what they're looking for.'
           : 'Tags help shoppers filter; notes go directly on the public listing. Both are optional but help conversion.'}
         c={c}
       />

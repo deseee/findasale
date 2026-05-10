@@ -366,6 +366,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
             startDate: true,
             endDate: true,
             organizerId: true,
+            coversFee: true, // #402: organizer absorbs platform fee
             organizer: {
               select: { stripeConnectId: true, userId: true, referralDiscountExpiry: true, subscriptionTier: true }
             }
@@ -470,9 +471,13 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       }
       couponId = coupon.id;
     }
+    // #402: Cover the Fee — when organizer absorbs fee, buyer pays item price only
+    const saleCoversFee = !isAuctionItem ? false : (item.sale as any)?.coversFee === true;
     const finalPriceCents = isAuctionItem
-      ? totalWithBuyerPremium + platformFeeAmount - discountAmount  // Auction: item + premium - discount, all charged to buyer
-      : totalWithBuyerPremium - discountAmount;                     // Regular: item + shipping - discount only (platform fee from organizer payout)
+      ? saleCoversFee
+        ? priceCents - discountAmount                                // Auction + coversFee: buyer pays bid only; organizer absorbs buyer premium
+        : totalWithBuyerPremium + platformFeeAmount - discountAmount // Auction normal: item + premium - discount
+      : totalWithBuyerPremium - discountAmount;                      // Regular: item + shipping - discount only (platform fee from organizer payout)
 
     const couponSuffix = couponId ? `-c${couponId.slice(-6)}` : '';
     const idempotencyKey = `pi-${itemId}-${req.user.id}${couponSuffix}`;
@@ -891,6 +896,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               title: true,
               startDate: true,
               endDate: true,
+              zip: true, // #399: Local Legend badge — zip-based purchase count
               organizer: { select: { stripeConnectId: true, userId: true, businessName: true } },
             },
           },
@@ -1317,6 +1323,113 @@ export const webhookHandler = async (req: Request, res: Response) => {
             // Note: For full itemization, the frontend should include this in metadata
             // or we could implement a payment_intent.amount_capturable event hook
           });
+        }
+
+        // #404: First 100 Buyers Badge — award to all 100 distinct purchasers when sale hits 100
+        if (purchase.saleId && purchase.userId) {
+          (async () => {
+            try {
+              const saleId = purchase.saleId!;
+              const distinctBuyerCount = await (prisma as any).$queryRaw`
+                SELECT COUNT(DISTINCT "userId") as cnt
+                FROM "Purchase"
+                WHERE "saleId" = ${saleId}
+                AND status = 'PAID'
+                AND "userId" IS NOT NULL
+              ` as Array<{ cnt: bigint }>;
+              const buyerCount = Number(distinctBuyerCount[0]?.cnt ?? 0);
+
+              if (buyerCount === 100) {
+                // Find or create the First 100 Buyers badge (idempotent upsert)
+                const badgeName = 'First 100 Buyers';
+                let badge = await prisma.badge.findUnique({ where: { name: badgeName } });
+                if (!badge) {
+                  badge = await prisma.badge.create({
+                    data: {
+                      name: badgeName,
+                      description: 'Awarded to the first 100 shoppers to complete a purchase at this sale.',
+                      criteria: { type: 'first_100_buyers', saleId },
+                    },
+                  });
+                }
+
+                // Fetch all 100 distinct purchaser userIds for this sale
+                const purchasers = await (prisma as any).$queryRaw`
+                  SELECT DISTINCT "userId"
+                  FROM "Purchase"
+                  WHERE "saleId" = ${saleId}
+                  AND status = 'PAID'
+                  AND "userId" IS NOT NULL
+                  LIMIT 100
+                ` as Array<{ userId: string }>;
+
+                for (const { userId } of purchasers) {
+                  // Idempotency: skip if already has this badge
+                  const existing = await prisma.userBadge.findUnique({
+                    where: { userId_badgeId: { userId, badgeId: badge.id } },
+                  });
+                  if (!existing) {
+                    await prisma.userBadge.create({ data: { userId, badgeId: badge.id } });
+                    awardXp(userId, 'BADGE_EARNED', 50, {
+                      saleId,
+                      description: 'First 100 Buyers badge',
+                    }).catch((err: any) => console.error('[XP] First 100 Buyers XP failed:', err));
+                  }
+                }
+                console.log(`[badge] First 100 Buyers awarded for sale ${saleId}`);
+              }
+            } catch (err) {
+              console.error('[badge] First 100 Buyers check failed:', err);
+            }
+          })();
+        }
+
+        // #399: Local Legend Badge — 3rd purchase at sales in the same ZIP code
+        if (purchase.userId && purchase.saleId && (purchase.sale as any)?.zip) {
+          (async () => {
+            try {
+              const userId = purchase.userId!;
+              const saleZip = (purchase.sale as any).zip as string;
+              const badgeName = 'Local Legend';
+
+              const zipPurchaseCount = await prisma.purchase.count({
+                where: {
+                  userId,
+                  status: 'PAID',
+                  item: { sale: { zip: saleZip } },
+                },
+              });
+
+              if (zipPurchaseCount === 3) {
+                // Find or create the Local Legend badge
+                let badge = await prisma.badge.findUnique({ where: { name: badgeName } });
+                if (!badge) {
+                  badge = await prisma.badge.create({
+                    data: {
+                      name: badgeName,
+                      description: 'Awarded for completing 3 purchases at sales in the same ZIP code.',
+                      criteria: { type: 'local_legend', minPurchases: 3 },
+                    },
+                  });
+                }
+
+                // Idempotency: skip if already has badge
+                const existing = await prisma.userBadge.findUnique({
+                  where: { userId_badgeId: { userId, badgeId: badge.id } },
+                });
+                if (!existing) {
+                  await prisma.userBadge.create({ data: { userId, badgeId: badge.id } });
+                  awardXp(userId, 'BADGE_EARNED', 75, {
+                    saleId: purchase.saleId ?? undefined,
+                    description: 'Local Legend badge',
+                  }).catch((err: any) => console.error('[XP] Local Legend XP failed:', err));
+                  console.log(`[badge] Local Legend awarded to user ${userId} (zip: ${saleZip})`);
+                }
+              }
+            } catch (err) {
+              console.error('[badge] Local Legend check failed:', err);
+            }
+          })();
         }
 
         const orgUserId = (purchase.sale as any)?.organizer?.userId;

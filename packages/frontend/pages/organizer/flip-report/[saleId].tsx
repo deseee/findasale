@@ -132,6 +132,36 @@ export default function FlipReportPage() {
             </div>
           </div>
 
+          {/* ROI Summary Cards — Feature #407: only show when at least one item has costBasis */}
+          {flipReport.itemsWithCostBasis > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 print:border print:border-gray-300 dark:border-gray-600 print:shadow-none">
+                <h3 className="text-gray-600 dark:text-gray-400 text-sm font-semibold mb-2">Total Invested</h3>
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">{formatCurrency(flipReport.totalCostBasis)}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">cost basis for {flipReport.itemsWithCostBasis} sold items</p>
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 print:border print:border-gray-300 dark:border-gray-600 print:shadow-none">
+                <h3 className="text-gray-600 dark:text-gray-400 text-sm font-semibold mb-2">Total Revenue</h3>
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">{formatCurrency(flipReport.totalRevenue)}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">from all sales</p>
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 print:border print:border-gray-300 dark:border-gray-600 print:shadow-none">
+                <h3 className="text-gray-600 dark:text-gray-400 text-sm font-semibold mb-2">Net Profit</h3>
+                <p className={`text-3xl font-bold mb-1 ${flipReport.totalProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {flipReport.totalProfit >= 0 ? '+' : ''}{formatCurrency(flipReport.totalProfit)}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">revenue minus cost basis</p>
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 print:border print:border-gray-300 dark:border-gray-600 print:shadow-none">
+                <h3 className="text-gray-600 dark:text-gray-400 text-sm font-semibold mb-2">Avg ROI</h3>
+                <p className={`text-3xl font-bold mb-1 ${flipReport.avgRoi !== null && flipReport.avgRoi >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {flipReport.avgRoi !== null ? `${flipReport.avgRoi >= 0 ? '+' : ''}${flipReport.avgRoi.toFixed(1)}%` : '—'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">per item with cost basis</p>
+              </div>
+            </div>
+          )}
+
           {/* Category Breakdown */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8 print:border print:border-gray-300 dark:border-gray-600 print:shadow-none">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Category Breakdown</h2>
@@ -169,23 +199,50 @@ export default function FlipReportPage() {
           {flipReport.topPerformers.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8 print:border print:border-gray-300 dark:border-gray-600 print:shadow-none">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Top Performers</h2>
-              <div className="space-y-4">
-                {flipReport.topPerformers.map((item, idx) => (
-                  <div key={item.id} className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700 last:border-0 print:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100">
-                    <div className="flex-1">
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-2xl font-bold text-gray-400">#{idx + 1}</span>
-                        <div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-900 print:bg-gray-100">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">#</th>
+                      <th className="px-4 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Item</th>
+                      <th className="px-4 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Sale Price</th>
+                      <th className="px-4 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Cost</th>
+                      <th className="px-4 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Profit</th>
+                      <th className="px-4 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">ROI</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {flipReport.topPerformers.map((item, idx) => (
+                      <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td className="px-4 py-3 text-2xl font-bold text-gray-400">#{idx + 1}</td>
+                        <td className="px-4 py-3">
                           <p className="font-semibold text-gray-900 dark:text-gray-100">{item.title}</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{item.category || 'Uncategorized'}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-2xl font-bold" style={{ color: '#8FB897' }}>
-                      {formatCurrency(item.finalPrice)}
-                    </p>
-                  </div>
-                ))}
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{item.category || 'Uncategorized'}</p>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold" style={{ color: '#8FB897' }}>
+                          {formatCurrency(item.finalPrice)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400">
+                          {item.costBasis !== null ? formatCurrency(item.costBasis) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {item.profit !== null ? (
+                            <span className={item.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                              {item.profit >= 0 ? '+' : ''}{formatCurrency(item.profit)}
+                            </span>
+                          ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {item.roi !== null ? (
+                            <span className={item.roi >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                              {item.roi >= 0 ? '+' : ''}{item.roi.toFixed(1)}%
+                            </span>
+                          ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

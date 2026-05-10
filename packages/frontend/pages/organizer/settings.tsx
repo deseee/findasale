@@ -51,6 +51,9 @@ const OrganizerSettingsPage = () => {
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [pinterestUrl, setPinterestUrl] = useState('');
   const [pickupWindows, setPickupWindows] = useState('');
+  const [venmoHandle, setVenmoHandle] = useState('');
+  const [zelleHandle, setZelleHandle] = useState('');
+  const [isSavingPaymentHandles, setIsSavingPaymentHandles] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [timezone, setTimezone] = useState('');
   const [byAppointment, setByAppointment] = useState(false);
@@ -59,6 +62,7 @@ const OrganizerSettingsPage = () => {
   const [isSavingHours, setIsSavingHours] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
+  const [foundingOrgBadge, setFoundingOrgBadge] = useState(false);
   const [isConnectingEbay, setIsConnectingEbay] = useState(false);
   const [syncingEbayPolicies, setSyncingEbayPolicies] = useState(false);
   const [fontSize, setFontSize] = useState(16);
@@ -358,7 +362,10 @@ const OrganizerSettingsPage = () => {
           setYoutubeUrl(response.data.youtubeUrl || '');
           setPinterestUrl(response.data.pinterestUrl || '');
           setPickupWindows(response.data.pickupWindows || '');
+          setVenmoHandle(response.data.venmoHandle || '');
+          setZelleHandle(response.data.zelleHandle || '');
           setStripeConnected(response.data.stripeConnected || false);
+          setFoundingOrgBadge(response.data.foundingOrgBadge || false);
           setOrganizerTier(response.data.subscriptionTier || null);
           setTimezone(response.data.timezone || '');
           setByAppointment(response.data.byAppointment || false);
@@ -514,6 +521,21 @@ const OrganizerSettingsPage = () => {
     return null;
   }
 
+  const handleSavePaymentHandles = async () => {
+    setIsSavingPaymentHandles(true);
+    try {
+      await api.patch('/organizers/me', {
+        venmoHandle: venmoHandle.trim() || null,
+        zelleHandle: zelleHandle.trim() || null,
+      });
+      showToast('Payment handles saved', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to save payment handles', 'error');
+    } finally {
+      setIsSavingPaymentHandles(false);
+    }
+  };
+
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
@@ -619,39 +641,126 @@ const OrganizerSettingsPage = () => {
 
           {/* Payments Tab */}
           {activeTab === 'payments' && (
-            <div className="card p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Payment Settings</h2>
-                <Tooltip content="Connect Stripe to receive payouts. Your tier determines the platform fee: SIMPLE 10%, PRO/TEAMS 8%. Payouts are deposited on a weekly schedule." position="right" />
-              </div>
-              <p className="text-warm-600 dark:text-gray-400 mb-6">
-                Connect your Stripe account to receive payouts from your sales. You'll need a valid bank account in the US.
-              </p>
-              {stripeConnected ? (
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Stripe Connected
+            <div className="space-y-6">
+              {/* Stripe Connect */}
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Payment Settings</h2>
+                  <Tooltip content="Connect Stripe to receive payouts. Your tier determines the platform fee: SIMPLE 10%, PRO/TEAMS 8%. Payouts are deposited on a weekly schedule." position="right" />
+                </div>
+                <p className="text-warm-600 dark:text-gray-400 mb-6">
+                  Connect your Stripe account to receive payouts from your sales. You'll need a valid bank account in the US.
+                </p>
+                {stripeConnected ? (
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Stripe Connected
+                    </div>
+                    <button
+                      onClick={handleStripeConnect}
+                      disabled={isConnectingStripe}
+                      className="bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-gray-100 font-semibold py-2 px-4 rounded-lg disabled:opacity-50 text-sm"
+                    >
+                      {isConnectingStripe ? 'Opening Stripe...' : 'Manage Payouts'}
+                    </button>
                   </div>
+                ) : (
                   <button
                     onClick={handleStripeConnect}
                     disabled={isConnectingStripe}
-                    className="bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-gray-100 font-semibold py-2 px-4 rounded-lg disabled:opacity-50 text-sm"
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50"
                   >
-                    {isConnectingStripe ? 'Opening Stripe...' : 'Manage Payouts'}
+                    {isConnectingStripe ? 'Redirecting to Stripe...' : 'Setup Stripe Connect'}
                   </button>
+                )}
+              </div>
+
+              {/* #412 — Cash-to-Digital Bridge: Venmo & Zelle handles */}
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Digital Payment Handles</h2>
+                  <Tooltip content="Buyers at your in-person sales can pay digitally using Venmo or Zelle when you don't have a card reader handy." position="right" />
                 </div>
-              ) : (
+                <p className="text-sm text-warm-600 dark:text-gray-400 mb-5">
+                  Add your Venmo or Zelle info so buyers can pay you on the spot — no card reader required. These will appear on your sale pages.
+                </p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-warm-800 dark:text-gray-200 mb-1">Venmo Handle</label>
+                    <input
+                      type="text"
+                      value={venmoHandle}
+                      onChange={(e) => setVenmoHandle(e.target.value)}
+                      placeholder="@username"
+                      className="w-full max-w-sm border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-warm-800 dark:text-gray-200 mb-1">Zelle Handle</label>
+                    <input
+                      type="text"
+                      value={zelleHandle}
+                      onChange={(e) => setZelleHandle(e.target.value)}
+                      placeholder="email or phone number"
+                      className="w-full max-w-sm border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
                 <button
-                  onClick={handleStripeConnect}
-                  disabled={isConnectingStripe}
-                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50"
+                  onClick={handleSavePaymentHandles}
+                  disabled={isSavingPaymentHandles}
+                  className="mt-5 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-5 rounded-lg disabled:opacity-50 text-sm"
                 >
-                  {isConnectingStripe ? 'Redirecting to Stripe...' : 'Setup Stripe Connect'}
+                  {isSavingPaymentHandles ? 'Saving...' : 'Save Payment Handles'}
                 </button>
-              )}
+              </div>
+
+              {/* #402 — Cover the Fee (info card — this is a per-sale setting) */}
+              <div className="card p-6">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-1">Cover Buyer Fees</h2>
+                <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
+                  You can absorb the platform fee on any individual sale so buyers pay the listed price — no added fee at checkout. When enabled, the fee comes out of your payout instead.
+                </p>
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-warm-50 dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
+                  <svg className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-warm-700 dark:text-gray-300">
+                    This setting is configured per sale. When creating or editing a sale, look for <strong>Cover Buyer Fees</strong> in the sale settings.
+                  </p>
+                </div>
+                <Link
+                  href="/organizer/sales"
+                  className="mt-4 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 underline"
+                >
+                  Go to My Sales →
+                </Link>
+              </div>
+
+              {/* #414 — Grief Firewall (info card — this is a per-sale setting) */}
+              <div className="card p-6">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-1">Grief Firewall</h2>
+                <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
+                  When you're working with a bereaved family, you can turn off automated price and category suggestions for that sale. It keeps the experience quiet and respectful — nothing gets auto-filled without your input.
+                </p>
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-warm-50 dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
+                  <svg className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                  <p className="text-sm text-warm-700 dark:text-gray-300">
+                    The Grief Firewall is enabled per sale. When creating or editing a sale, look for <strong>Grief Firewall</strong> in the sale settings.
+                  </p>
+                </div>
+                <Link
+                  href="/organizer/sales"
+                  className="mt-4 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 underline"
+                >
+                  Go to My Sales →
+                </Link>
+              </div>
             </div>
           )}
 
@@ -1126,6 +1235,17 @@ const OrganizerSettingsPage = () => {
           {/* Profile Tab */}
           {activeTab === 'profile' && (
             <div className="space-y-6">
+              {/* #405: Founding Organizer Badge */}
+              {foundingOrgBadge && (
+                <div className="card p-5 border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 flex items-center gap-4">
+                  <span className="text-3xl" aria-hidden="true">🏆</span>
+                  <div>
+                    <p className="text-base font-bold text-amber-800 dark:text-amber-200">Founding Organizer</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">You're one of the first 500 organizers on FindA.Sale. This badge appears on your storefront.</p>
+                  </div>
+                </div>
+              )}
+
               {/* Business Hours Section */}
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-4">
@@ -1783,145 +1903,64 @@ const OrganizerSettingsPage = () => {
                       className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50"
                     >
                       {isConnectingEbay ? 'Redirecting to eBay...' : 'Connect eBay Account'}
+       
                     </button>
                   </div>
                 )}
               </div>
             </div>
-          )}
-
-          {/* Help & Support Tab */}
-          {activeTab === 'help' && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-6">Help & Support</h2>
-
-              <div className="space-y-4">
-                <div className="border border-warm-200 dark:border-gray-700 rounded p-4">
-                  <h3 className="font-medium text-warm-900 dark:text-gray-100 mb-2">Send Feedback</h3>
-                  <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
-                    Help us improve FindA.Sale by sharing your feedback. Your thoughts directly shape our roadmap.
-                  </p>
-                  <button
-                    onClick={() => setIsFeedbackMenuOpen(true)}
-                    className="bg-sage-600 hover:bg-sage-700 text-white px-4 py-2 rounded font-medium transition"
-                  >
-                    Open Feedback Form
-                  </button>
-                </div>
-
-                {/* Data & Privacy */}
-                <div className="border border-amber-200 dark:border-amber-700 rounded-lg p-6 bg-amber-50 dark:bg-amber-900/20">
-                  <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100 mb-2">Your Data</h3>
-                  <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
-                    Download a copy of your account data (GDPR Article 20). Limited to once per 24 hours.
-                  </p>
-                  <button
-                    onClick={async () => {
-                      try {
-                        const response = await api.get('/users/me/export', {
-                          responseType: 'blob',
-                        });
-                        const url = window.URL.createObjectURL(new Blob([response.data]));
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.setAttribute('download', `findasale-data-export-${new Date().toISOString().split('T')[0]}.json`);
-                        document.body.appendChild(link);
-                        link.click();
-                        link.parentNode?.removeChild(link);
-                        showToast('Data export downloaded successfully', 'success');
-                      } catch (error: any) {
-                        const msg = error.response?.data?.error || 'Failed to download data export';
-                        showToast(msg, 'error');
-                      }
-                    }}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-sm transition"
-                  >
-                    Download My Data
-                  </button>
-                </div>
-
-                {/* Danger Zone */}
-                <div className="border border-red-200 dark:border-red-800 rounded-lg p-6 bg-red-50 dark:bg-red-900/20">
-                  <h3 className="text-lg font-semibold text-red-900 dark:text-red-100 mb-2">Danger Zone</h3>
-                  <p className="text-sm text-red-700 dark:text-red-300 mb-4">
-                    Permanently delete your account. Your personal information will be anonymized. Transaction records are retained for legal and tax purposes.
-                  </p>
-                  <button
-                    onClick={() => setIsDeleteModalOpen(true)}
-                    disabled={deleteAccountMutation.isPending}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed transition"
-                  >
-                    {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete My Account'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
 
-      {/* Feedback Menu Modal */}
-      <FeedbackMenu isOpen={isFeedbackMenuOpen} onClose={() => setIsFeedbackMenuOpen(false)} />
-
-      {/* Delete Account Modal */}
-      <AccessibleModal
-        isOpen={isDeleteModalOpen}
-        onClose={() => {
-          setIsDeleteModalOpen(false);
-          setDeletePassword('');
-        }}
-        modalId="delete-account-modal"
-        ariaLabelledBy="delete-modal-title"
-      >
-        <h2 id="delete-modal-title" className="text-2xl font-bold text-red-900 dark:text-red-100 mb-4">
-          Delete Account
-        </h2>
-        <p className="text-red-700 dark:text-red-300 mb-6">
-          This action cannot be undone. Your personal information will be anonymized, but transaction records will be retained for legal and tax purposes.
-        </p>
-        <div className="mb-6">
-          <label htmlFor="delete-password-input" className="block text-sm font-medium text-warm-900 dark:text-gray-100 mb-2">
-            Enter your password to confirm:
-          </label>
-          <input
-            id="delete-password-input"
-            type="password"
-            value={deletePassword}
-            onChange={(e) => setDeletePassword(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && deletePassword.trim()) {
+        {/* Delete Account Modal */}
+        <AccessibleModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => {
+            setIsDeleteModalOpen(false);
+            setDeletePassword('');
+          }}
+          title="Delete My Account"
+        >
+          <p className="text-warm-700 dark:text-gray-300 mb-4">
+            This action is permanent and cannot be undone. All your sales, items, and account data will be deleted.
+          </p>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-warm-900 dark:text-gray-100 mb-1">
+              Confirm your password
+            </label>
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={e => setDeletePassword(e.target.value)}
+              className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+              placeholder="Enter your password"
+              autoFocus
+            />
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
                 deleteAccountMutation.mutate(deletePassword);
-              }
-            }}
-            placeholder="Enter password"
-            className="w-full px-4 py-2 border border-red-300 dark:border-red-700 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500"
-            autoFocus
-          />
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => {
-              deleteAccountMutation.mutate(deletePassword);
-            }}
-            disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
-            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete My Account'}
-          </button>
-          <button
-            onClick={() => {
-              setIsDeleteModalOpen(false);
-              setDeletePassword('');
-            }}
-            disabled={deleteAccountMutation.isPending}
-            className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-gray-100 font-medium hover:bg-warm-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
-          >
-            Cancel
-          </button>
-        </div>
-      </AccessibleModal>
-    </>
-  );
-};
+              }}
+              disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
+              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete My Account'}
+            </button>
+            <button
+              onClick={() => {
+                setIsDeleteModalOpen(false);
+                setDeletePassword('');
+              }}
+              disabled={deleteAccountMutation.isPending}
+              className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-gray-100 font-medium hover:bg-warm-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </AccessibleModal>
+      </>
+    );
+  };
 
 export default OrganizerSettingsPage;

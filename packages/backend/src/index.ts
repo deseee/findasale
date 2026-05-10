@@ -224,6 +224,7 @@ import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
 import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
 import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJob'; // D-XP-004 Phase 4: Referral reward age gate cron
+import { scheduleFoundingOrgBadgeCron } from './jobs/foundingOrgBadgeJob'; // Feature #405: Founding Organizer Badge — nightly award
 import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature #XXX: Retail Mode auto-renewal
 import { scheduleConsignorExpiryNoticeCron } from './jobs/consignorExpiryNoticeJob'; // Feature #309: Consignor expiry notices
 import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feature #XXX: Referral reputation score recomputation
@@ -684,6 +685,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // D-XP-004 Phase 4: Register referral reward age gate cron (daily at 2 AM UTC)
   scheduleReferralRewardAgeGateCron();
 
+  // Feature #405: Founding Organizer Badge — award first 500 real organizers (nightly 2 AM UTC)
+  scheduleFoundingOrgBadgeCron();
+
   // Features #58-59: Initialize achievements from code
   syncAchievements();
 
@@ -710,3 +714,4 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-075: Initialize outreach email send cron (gated by OUTREACH_ENABLED env var)
   initOutreachEmailsCron();
+});

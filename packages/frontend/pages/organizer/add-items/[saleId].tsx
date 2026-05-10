@@ -336,6 +336,14 @@ const AddItemsDetailPage = () => {
   // Bounty match modal state
   const [bountyMatchOpen, setBountyMatchOpen] = useState(false);
   const [bountyMatches, setBountyMatches] = useState<any[]>([]);
+  // #403: Bundle wizard state
+  const [bundlePanelOpen, setBundlePanelOpen] = useState(false);
+  const [bundleTitle, setBundleTitle] = useState('');
+  const [bundlePrice, setBundlePrice] = useState('');
+  const [bundleDescription, setBundleDescription] = useState('');
+  const [bundleItemIds, setBundleItemIds] = useState<Set<string>>(new Set());
+  const [bundleSaving, setBundleSaving] = useState(false);
+  const [editingBundleId, setEditingBundleId] = useState<string | null>(null);
   const [matchingItemId, setMatchingItemId] = useState<string | null>(null);
   const [matchingItemTitle, setMatchingItemTitle] = useState<string>('');
 
@@ -449,6 +457,17 @@ const AddItemsDetailPage = () => {
       return response.data || [];
     },
     enabled: !!saleId && !inMutationFlight.current,
+  });
+
+  // #403: Fetch existing bundles for this sale
+  const { data: bundles = [], refetch: refetchBundles } = useQuery({
+    queryKey: ['bundles', saleId],
+    queryFn: async () => {
+      if (!saleId) return [];
+      const res = await api.get(`/sales/${saleId}/bundles`);
+      return res.data || [];
+    },
+    enabled: !!saleId,
   });
 
   // P1-A: Validate saleId on route ready
@@ -2320,6 +2339,170 @@ const AddItemsDetailPage = () => {
               </button>
             </div>
           )}
+        </div>
+
+        {/* #403: Bundle Creation Wizard */}
+        <div className="max-w-6xl mx-auto px-4 pb-8 mt-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700">
+            <button
+              onClick={() => setBundlePanelOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-warm-50 dark:hover:bg-gray-750 transition-colors rounded-lg"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🛍️</span>
+                <span className="font-semibold text-warm-900 dark:text-gray-100">Bundle Pricing</span>
+                {bundles.length > 0 && (
+                  <span className="ml-2 text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-medium">
+                    {bundles.length} bundle{bundles.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <span className="text-warm-400 dark:text-gray-500 text-sm">{bundlePanelOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {bundlePanelOpen && (
+              <div className="px-6 pb-6 border-t border-warm-100 dark:border-gray-700 pt-4 space-y-6">
+                <p className="text-sm text-warm-600 dark:text-warm-400">Group items together and set a fixed bundle price. Shoppers can reserve the whole bundle at once.</p>
+
+                {/* Existing bundles list */}
+                {bundles.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300">Active Bundles</h3>
+                    {bundles.map((bundle: any) => (
+                      <div key={bundle.id} className="flex items-start justify-between p-3 bg-warm-50 dark:bg-gray-750 rounded-lg border border-warm-200 dark:border-gray-700">
+                        <div>
+                          <p className="font-medium text-warm-900 dark:text-gray-100 text-sm">{bundle.title}</p>
+                          <p className="text-xs text-warm-500 dark:text-gray-400 mt-0.5">
+                            {bundle.items?.length ?? 0} item{bundle.items?.length !== 1 ? 's' : ''} &middot; ${Number(bundle.bundlePrice).toFixed(2)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Remove bundle "${bundle.title}"?`)) return;
+                            try {
+                              await api.delete(`/sales/${saleId}/bundles/${bundle.id}`);
+                              refetchBundles();
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                          className="text-xs text-red-500 hover:text-red-700 ml-4 flex-shrink-0"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Bundle creation form */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300">Create New Bundle</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-warm-700 dark:text-gray-300 mb-1">Bundle Name <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={bundleTitle}
+                        onChange={(e) => setBundleTitle(e.target.value)}
+                        placeholder="e.g. Kitchen Set, Bedroom Furniture"
+                        className="w-full px-3 py-2 text-sm border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-warm-700 dark:text-gray-300 mb-1">
+                        Bundle Price <span className="text-red-500">*</span>
+                        {bundleItemIds.size > 0 && (() => {
+                          const selectedItems = (items as any[]).filter((i: any) => bundleItemIds.has(i.id));
+                          const total = selectedItems.reduce((sum: number, i: any) => sum + (Number(i.price) || 0), 0);
+                          return total > 0 ? <span className="ml-2 text-xs text-warm-400 dark:text-gray-500 font-normal">Individual total: ${total.toFixed(2)}</span> : null;
+                        })()}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={bundlePrice}
+                        onChange={(e) => setBundlePrice(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full px-3 py-2 text-sm border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-warm-700 dark:text-gray-300 mb-1">Description (optional)</label>
+                    <input
+                      type="text"
+                      value={bundleDescription}
+                      onChange={(e) => setBundleDescription(e.target.value)}
+                      placeholder="Brief description of what's included"
+                      className="w-full px-3 py-2 text-sm border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-warm-700 dark:text-gray-300 mb-2">
+                      Select Items for Bundle
+                      {bundleItemIds.size > 0 && <span className="ml-2 text-amber-600 dark:text-amber-400 font-medium">({bundleItemIds.size} selected)</span>}
+                    </label>
+                    {(items as any[]).length === 0 ? (
+                      <p className="text-xs text-warm-400 dark:text-gray-500">Add items to your sale first.</p>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto border border-warm-200 dark:border-gray-700 rounded-lg divide-y divide-warm-100 dark:divide-gray-700">
+                        {(items as any[]).map((item: any) => (
+                          <label key={item.id} className="flex items-center gap-3 px-3 py-2 hover:bg-warm-50 dark:hover:bg-gray-750 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={bundleItemIds.has(item.id)}
+                              onChange={(e) => {
+                                setBundleItemIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(item.id);
+                                  else next.delete(item.id);
+                                  return next;
+                                });
+                              }}
+                              className="rounded"
+                            />
+                            <span className="text-sm text-warm-800 dark:text-gray-200 flex-1 truncate">{item.title || 'Untitled'}</span>
+                            {item.price != null && (
+                              <span className="text-xs text-warm-500 dark:text-gray-400 flex-shrink-0">${Number(item.price).toFixed(2)}</span>
+                            )}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    disabled={bundleSaving || !bundleTitle.trim() || !bundlePrice}
+                    onClick={async () => {
+                      if (!bundleTitle.trim() || !bundlePrice) return;
+                      setBundleSaving(true);
+                      try {
+                        await api.post(`/sales/${saleId}/bundles`, {
+                          title: bundleTitle.trim(),
+                          description: bundleDescription.trim() || null,
+                          bundlePrice: parseFloat(bundlePrice),
+                          itemIds: Array.from(bundleItemIds),
+                        });
+                        setBundleTitle('');
+                        setBundlePrice('');
+                        setBundleDescription('');
+                        setBundleItemIds(new Set());
+                        refetchBundles();
+                      } catch {
+                        // toast handled by global interceptor
+                      } finally {
+                        setBundleSaving(false);
+                      }
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-semibold py-2 px-6 rounded-lg text-sm transition-colors"
+                  >
+                    {bundleSaving ? 'Saving...' : 'Add Bundle'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
