@@ -449,6 +449,7 @@ function WizardFooter({ c, onBack, onNext, onSaveDraft, nextLabel = 'Continue', 
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       background: c.bg, gap: 12,
       flexWrap: 'wrap',
+      position: 'sticky', bottom: 0,
     }}>
       <button
         type="button"
