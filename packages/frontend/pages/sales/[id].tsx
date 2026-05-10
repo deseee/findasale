@@ -136,6 +136,9 @@ interface Sale {
   }>;
   // RETAIL scraper metadata (hours_display, website, phone, etc.)
   scrapedMetadata?: Record<string, unknown> | null;
+  // Feature #24: Configurable hold duration per sale
+  holdDurationHours?: number;
+  returnWindowHours?: number | null;
 }
 
 interface Bid {
