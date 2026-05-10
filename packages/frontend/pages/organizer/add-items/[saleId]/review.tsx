@@ -1327,9 +1327,10 @@ const ReviewPage = () => {
                             {/* PriceSuggestion shows the Smart reference price (read-only) */}
                             <div className="mb-1.5">
                               <PriceSuggestion
-                                itemId={item.id}
-                                currentPrice={null}
-                                compact
+                                title={getEditState(item).title}
+                                category={getEditState(item).category}
+                                condition={getEditState(item).condition}
+                                onApplyPrice={(price) => setPriceInput(item.id, String(price))}
                               />
                             </div>
                             {/* Price input — starts empty, organizer must type */}
