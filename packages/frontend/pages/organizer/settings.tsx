@@ -1909,58 +1909,140 @@ const OrganizerSettingsPage = () => {
                 )}
               </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Delete Account Modal */}
-        <AccessibleModal
-          isOpen={isDeleteModalOpen}
-          onClose={() => {
-            setIsDeleteModalOpen(false);
-            setDeletePassword('');
-          }}
-          title="Delete My Account"
-        >
-          <p className="text-warm-700 dark:text-gray-300 mb-4">
-            This action is permanent and cannot be undone. All your sales, items, and account data will be deleted.
-          </p>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-warm-900 dark:text-gray-100 mb-1">
-              Confirm your password
-            </label>
-            <input
-              type="password"
-              value={deletePassword}
-              onChange={e => setDeletePassword(e.target.value)}
-              className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="Enter your password"
-              autoFocus
-            />
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
+          {/* Help & Support Tab */}
+          {activeTab === 'help' && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-6">Help & Support</h2>
+
+              <div className="space-y-4">
+                <div className="border border-warm-200 dark:border-gray-700 rounded p-4">
+                  <h3 className="font-medium text-warm-900 dark:text-gray-100 mb-2">Send Feedback</h3>
+                  <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
+                    Help us improve FindA.Sale by sharing your feedback. Your thoughts directly shape our roadmap.
+                  </p>
+                  <button
+                    onClick={() => setIsFeedbackMenuOpen(true)}
+                    className="bg-sage-600 hover:bg-sage-700 text-white px-4 py-2 rounded font-medium transition"
+                  >
+                    Open Feedback Form
+                  </button>
+                </div>
+
+                {/* Data & Privacy */}
+                <div className="border border-amber-200 dark:border-amber-700 rounded-lg p-6 bg-amber-50 dark:bg-amber-900/20">
+                  <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100 mb-2">Your Data</h3>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
+                    Download a copy of your account data (GDPR Article 20). Limited to once per 24 hours.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const response = await api.get('/users/me/export', {
+                          responseType: 'blob',
+                        });
+                        const url = window.URL.createObjectURL(new Blob([response.data]));
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', `findasale-data-export-${new Date().toISOString().split('T')[0]}.json`);
+                        document.body.appendChild(link);
+                        link.click();
+                        link.parentNode?.removeChild(link);
+                        showToast('Data export downloaded successfully', 'success');
+                      } catch (error: any) {
+                        const msg = error.response?.data?.error || 'Failed to download data export';
+                        showToast(msg, 'error');
+                      }
+                    }}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-sm transition"
+                  >
+                    Download My Data
+                  </button>
+                </div>
+
+                {/* Danger Zone */}
+                <div className="border border-red-200 dark:border-red-800 rounded-lg p-6 bg-red-50 dark:bg-red-900/20">
+                  <h3 className="text-lg font-semibold text-red-900 dark:text-red-100 mb-2">Danger Zone</h3>
+                  <p className="text-sm text-red-700 dark:text-red-300 mb-4">
+                    Permanently delete your account. Your personal information will be anonymized. Transaction records are retained for legal and tax purposes.
+                  </p>
+                  <button
+                    onClick={() => setIsDeleteModalOpen(true)}
+                    disabled={deleteAccountMutation.isPending}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete My Account'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Feedback Menu Modal */}
+      <FeedbackMenu isOpen={isFeedbackMenuOpen} onClose={() => setIsFeedbackMenuOpen(false)} />
+
+      {/* Delete Account Modal */}
+      <AccessibleModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeletePassword('');
+        }}
+        modalId="delete-account-modal"
+        ariaLabelledBy="delete-modal-title"
+      >
+        <h2 id="delete-modal-title" className="text-2xl font-bold text-red-900 dark:text-red-100 mb-4">
+          Delete Account
+        </h2>
+        <p className="text-red-700 dark:text-red-300 mb-6">
+          This action cannot be undone. Your personal information will be anonymized, but transaction records will be retained for legal and tax purposes.
+        </p>
+        <div className="mb-6">
+          <label htmlFor="delete-password-input" className="block text-sm font-medium text-warm-900 dark:text-gray-100 mb-2">
+            Enter your password to confirm:
+          </label>
+          <input
+            id="delete-password-input"
+            type="password"
+            value={deletePassword}
+            onChange={(e) => setDeletePassword(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && deletePassword.trim()) {
                 deleteAccountMutation.mutate(deletePassword);
-              }}
-              disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
-              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete My Account'}
-            </button>
-            <button
-              onClick={() => {
-                setIsDeleteModalOpen(false);
-                setDeletePassword('');
-              }}
-              disabled={deleteAccountMutation.isPending}
-              className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-gray-100 font-medium hover:bg-warm-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
-            >
-              Cancel
-            </button>
-          </div>
-        </AccessibleModal>
-      </>
-    );
-  };
+              }
+            }}
+            placeholder="Enter password"
+            className="w-full px-4 py-2 border border-red-300 dark:border-red-700 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500"
+            autoFocus
+          />
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              deleteAccountMutation.mutate(deletePassword);
+            }}
+            disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
+            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete My Account'}
+          </button>
+          <button
+            onClick={() => {
+              setIsDeleteModalOpen(false);
+              setDeletePassword('');
+            }}
+            disabled={deleteAccountMutation.isPending}
+            className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-gray-100 font-medium hover:bg-warm-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </AccessibleModal>
+    </>
+  );
+};
 
 export default OrganizerSettingsPage;
