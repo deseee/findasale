@@ -69,6 +69,7 @@ import { runTexasLicensingScraper } from '../services/scraper/sources/texasLicen
 import { runUtahLicensingScraper } from '../services/scraper/sources/utahLicensingScraper';
 import { runOsmScraper } from '../services/scraper/osmScraper';
 import { scrapeTheSaleSeker, DEFAULT_METROS } from '../services/scraper/sources/saleSeeker';
+import { scrapeGarageSaleFinder } from '../services/scraper/sources/garagesalefinder';
 import { runAuctionZipScraper } from '../services/scraper/sources/auctionZipScraper';
 import { runAlaskaPhase2Scraper } from '../services/scraper/sources/alaskaPhase2Scraper';
 import { runArizonaPhase2Scraper } from '../services/scraper/sources/arizonaPhase2Scraper';
@@ -707,6 +708,36 @@ router.post('/scraper/run-sale-seeker', requireSecret, async (req: express.Reque
     res.json({ success: true, message: 'SaleSeker scraper completed', stats });
   } catch (error: any) {
     console.error('[SaleSeker] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-garagesalefinder — run GarageSaleFinder.com yard/garage sale scraper
+router.post('/scraper/run-garagesalefinder', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const { getOrCreateSystemOrganizer, defaultRateLimiter } = await import('../services/scraper/index');
+    const organizerId = await getOrCreateSystemOrganizer();
+
+    const metros: string[] = req.body?.metros || DEFAULT_METROS;
+
+    const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
+
+    for (const metro of metros) {
+      try {
+        const result = await scrapeGarageSaleFinder(metro, organizerId, defaultRateLimiter);
+        stats.created += result.created;
+        stats.updated += result.updated;
+        stats.skipped += result.skipped;
+        stats.failed += result.failed;
+      } catch (err) {
+        console.error(`[GarageSaleFinder] Metro ${metro} failed:`, err);
+        stats.failed++;
+      }
+    }
+
+    res.json({ success: true, message: 'GarageSaleFinder scraper completed', stats });
+  } catch (error: any) {
+    console.error('[GarageSaleFinder] Route error:', error);
     res.status(500).json({ error: error.message });
   }
 });

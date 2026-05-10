@@ -1,0 +1,45 @@
+name: Scrape GarageSaleFinder
+
+on:
+  schedule:
+    # Every Wednesday at 5:00 AM UTC
+    - cron: '0 5 * * 3'
+  workflow_dispatch:
+    inputs:
+      metro:
+        description: 'Metro area (e.g., grand-rapids-mi, detroit-mi, chicago-il)'
+        required: false
+        default: ''
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run GarageSaleFinder Scraper
+        run: |
+          if [ -z "${{ github.event.inputs.metro }}" ]; then
+            echo "Scraping GarageSaleFinder for all national metros (DEFAULT_METROS)"
+            curl -X POST \
+              -H "Content-Type: application/json" \
+              -H "x-internal-secret: ${{ secrets.OUTREACH_SECRET }}" \
+              -d '{}' \
+              ${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/scraper/run-garagesalefinder
+          else
+            echo "Scraping GarageSaleFinder for: ${{ github.event.inputs.metro }}"
+            curl -X POST \
+              -H "Content-Type: application/json" \
+              -H "x-internal-secret: ${{ secrets.OUTREACH_SECRET }}" \
+              -d "{\"metros\":[\"${{ github.event.inputs.metro }}\"]}" \
+              ${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/scraper/run-garagesalefinder
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.error('GarageSaleFinder scraper workflow failed');

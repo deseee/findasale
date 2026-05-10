@@ -180,7 +180,8 @@ export async function getOrCreateScrapedOrganizer(
   lng?: number,
   isStateLicensed?: boolean,
   licenseState?: string,
-  licenseNumber?: string
+  licenseNumber?: string,
+  sourceLabel?: string
 ): Promise<string | null> {
   // ADR-075: Validate businessCategory against allowlist
   const VALID_CATEGORIES = new Set([
@@ -210,6 +211,10 @@ export async function getOrCreateScrapedOrganizer(
     );
     return null;
   }
+
+  // Resolve effective source label: explicit param wins; fall back to 'StateLicensing' when isStateLicensed
+  const effectiveSourceLabel = sourceLabel ?? (isStateLicensed ? 'StateLicensing' : undefined);
+
   // ADR-077 Phase 2: Multi-source dedup + corroboration merge
   // Check by googlePlaceId first — strongest dedup signal.
   if (googlePlaceId) {
@@ -233,6 +238,10 @@ export async function getOrCreateScrapedOrganizer(
       if (isStateLicensed && !byPlaceId.isStateLicensed) updates.isStateLicensed = isStateLicensed;
       if (licenseState && !byPlaceId.licenseState) updates.licenseState = licenseState;
       if (licenseNumber && !byPlaceId.licenseNumber) updates.licenseNumber = licenseNumber;
+      if (effectiveSourceLabel) {
+        updates.directoryMostRecentSource = effectiveSourceLabel;
+        updates.directoryMostRecentAt = new Date();
+      }
 
       // Corroboration merge: only increment if this sourceName is genuinely new
       const currentSources = (byPlaceId.sourcesJson as any[]) || [];
@@ -274,6 +283,10 @@ export async function getOrCreateScrapedOrganizer(
       if (isStateLicensed && !byFoursquare.isStateLicensed) updates.isStateLicensed = isStateLicensed;
       if (licenseState && !byFoursquare.licenseState) updates.licenseState = licenseState;
       if (licenseNumber && !byFoursquare.licenseNumber) updates.licenseNumber = licenseNumber;
+      if (effectiveSourceLabel) {
+        updates.directoryMostRecentSource = effectiveSourceLabel;
+        updates.directoryMostRecentAt = new Date();
+      }
 
       // Corroboration merge: only increment if this sourceName is genuinely new
       const currentSources = (byFoursquare.sourcesJson as any[]) || [];
@@ -315,6 +328,10 @@ export async function getOrCreateScrapedOrganizer(
       if (isStateLicensed && !byHere.isStateLicensed) updates.isStateLicensed = isStateLicensed;
       if (licenseState && !byHere.licenseState) updates.licenseState = licenseState;
       if (licenseNumber && !byHere.licenseNumber) updates.licenseNumber = licenseNumber;
+      if (effectiveSourceLabel) {
+        updates.directoryMostRecentSource = effectiveSourceLabel;
+        updates.directoryMostRecentAt = new Date();
+      }
 
       // Corroboration merge: only increment if this sourceName is genuinely new
       const currentSources = (byHere.sourcesJson as any[]) || [];
@@ -358,6 +375,10 @@ export async function getOrCreateScrapedOrganizer(
     if (isStateLicensed && !byDedupeKey.isStateLicensed) updates.isStateLicensed = isStateLicensed;
     if (licenseState && !byDedupeKey.licenseState) updates.licenseState = licenseState;
     if (licenseNumber && !byDedupeKey.licenseNumber) updates.licenseNumber = licenseNumber;
+    if (effectiveSourceLabel) {
+      updates.directoryMostRecentSource = effectiveSourceLabel;
+      updates.directoryMostRecentAt = new Date();
+    }
 
     // Corroboration merge: only increment if this sourceName is genuinely new
     const currentSources = (byDedupeKey.sourcesJson as any[]) || [];
@@ -407,6 +428,10 @@ export async function getOrCreateScrapedOrganizer(
     if (isStateLicensed && !existing.isStateLicensed) updates.isStateLicensed = isStateLicensed;
     if (licenseState && !existing.licenseState) updates.licenseState = licenseState;
     if (licenseNumber && !existing.licenseNumber) updates.licenseNumber = licenseNumber;
+    if (effectiveSourceLabel) {
+      updates.directoryMostRecentSource = effectiveSourceLabel;
+      updates.directoryMostRecentAt = new Date();
+    }
 
     // Corroboration merge: only increment if this sourceName is genuinely new
     const currentSources = (existing.sourcesJson as any[]) || [];
@@ -476,6 +501,8 @@ export async function getOrCreateScrapedOrganizer(
             isStateLicensed: isStateLicensed ?? null,
             licenseState: licenseState ?? null,
             licenseNumber: licenseNumber ?? null,
+            directoryMostRecentSource: effectiveSourceLabel ?? null,
+            directoryMostRecentAt: effectiveSourceLabel ? new Date() : null,
           },
         },
       },
@@ -517,6 +544,8 @@ export async function getOrCreateScrapedOrganizer(
               isStateLicensed: isStateLicensed ?? null,
               licenseState: licenseState ?? null,
               licenseNumber: licenseNumber ?? null,
+              directoryMostRecentSource: effectiveSourceLabel ?? null,
+              directoryMostRecentAt: effectiveSourceLabel ? new Date() : null,
             },
           },
         },
