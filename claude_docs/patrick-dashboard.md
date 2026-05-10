@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S709
+# Patrick's Dashboard — S710
 
 ---
 
@@ -10,16 +10,33 @@
 | Railway backend | ✅ GREEN |
 | OUTREACH_ENABLED | ✅ TRUE — 197 high-confidence cohort live |
 | Pool (post-backfill) | COLD=32,530 / WARM=5,663 / HOT=215 / SUPPRESSED=3,498 |
-| Connection pool fix | ✅ SHIPPED — all 41 Phase 2 ymls capped at 3 connections |
-| WI Phase 2 | ✅ 11 DSPS auctioneers upserted (NMLS removed — blocked from GH Actions) |
-| IA Phase 2 | ✅ Running clean |
-| LA Phase 2 | ⚠️ Running (793+ NOLA rows in flight at wrap — connection fix held, expect clean finish) |
-| AR Phase 2 | ❌ Dead source — AR SOS blocks GH Actions IPs (exits 0, no records) |
-| MS Phase 2 | ❌ Dead source — MS SOS API returns 404 (exits 0, no records) |
-| Canada411 | ❌ Dead source — URL format returns 404 everywhere |
-| MT licensing (Phase 1) | ❌ 401 — INTERNAL_API_TOKEN secret mismatch (Patrick fix needed) |
-| #251 SaleCard Sale badge | ✅ SHIPPED S708 |
-| #174 auctionIsOver | ✅ SHIPPED S708 |
+| Wave 2 features | ✅ 12 features shipped — Pending Chrome QA |
+| settings.tsx build fix | ✅ eBay tab JSX + Help tab restored |
+| [id].tsx build fix | ✅ Stray brace removed |
+| create-sale.tsx fix | ✅ Apostrophe escaped (prior session) |
+| AR Phase 2 | ❌ Dead source — AR SOS blocks GH Actions IPs |
+| MS Phase 2 | ❌ Dead source — MS SOS API returns 404 |
+| Canada411 | ❌ Dead source — URL format 404 everywhere |
+| MT licensing | ❌ 401 — INTERNAL_API_TOKEN secret mismatch (Patrick fix needed) |
+
+---
+
+## Wave 2 Features — Pending Chrome QA
+
+| # | Feature | QA Priority |
+|---|---------|-------------|
+| 412 | Cash-to-Digital Bridge (Venmo/Zelle in settings) | HIGH |
+| 402 | Cover the Fee toggle (sale creation) | HIGH |
+| 411 | Dorm Dash sale type | HIGH |
+| 416 | Sale Floor Map (room navigation) | HIGH |
+| 405 | Founding Organizer Badge (profile) | MED |
+| 407 | Flip Tracker ROI Dashboard | MED |
+| 403 | Family Bundle Pricing | MED |
+| 406 | Split-the-Bill POS | MED |
+| 413 | Physical Safety & Liability Disclosures | MED |
+| 414 | Grief Firewall (estate sensitivity mode) | MED |
+| 415 | Junk Drawer Donation Kit | LOW |
+| 369 | Quebec Bill 96 block at signup | LOW |
 
 ---
 
@@ -37,6 +54,7 @@
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S709 wrap — outreach live, connection pool fix, Phase 2 smoke tests"
+git add claude_docs/strategy/roadmap.md
+git commit -m "docs: S710 wrap — Wave 2 Vercel fixes, roadmap updated (12 items shipped)"
 .\push.ps1
 ```
