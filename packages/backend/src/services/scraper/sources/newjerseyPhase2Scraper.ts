@@ -228,7 +228,12 @@ async function parseBulkCsv(csvText: string): Promise<number> {
         businessCategory,
         undefined,
         undefined,
-        undefined
+        undefined,
+        undefined,
+        undefined,
+        true,
+        'NJ',
+        licenseNumber || undefined
       );
 
       if (orgId) upserted++;

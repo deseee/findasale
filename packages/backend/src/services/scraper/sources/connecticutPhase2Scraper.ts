@@ -231,7 +231,9 @@ export async function runConnecticutPhase2Scraper(): Promise<void> {
             "CT",
             undefined, undefined, undefined, undefined,
             businessCategory,
-            undefined, undefined, undefined
+            undefined, undefined, undefined,
+            undefined, undefined,
+            true, "CT", licenseNumber || undefined
           );
 
           if (orgId) totalUpserted++;

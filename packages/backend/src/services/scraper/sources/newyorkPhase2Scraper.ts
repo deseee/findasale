@@ -254,7 +254,12 @@ async function ingestNycDataset(
           category,          // businessCategory
           undefined,         // contactEmail
           undefined,         // phone
-          undefined          // website
+          undefined,         // website
+          undefined,         // lat
+          undefined,         // lng
+          true,              // isStateLicensed
+          'NY',              // licenseState
+          licenseNumber || undefined // licenseNumber
         );
 
         if (orgId) {

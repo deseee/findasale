@@ -246,7 +246,12 @@ export async function runAlaskaPhase2Scraper(): Promise<void> {
             category,                 // businessCategory
             undefined,                // contactEmail
             undefined,                // phone
-            undefined                 // website
+            undefined,                // website
+            undefined,                // lat
+            undefined,                // lng
+            true,                     // isStateLicensed
+            'AK',                     // licenseState
+            licenseNumber || undefined // licenseNumber
           );
           if (orgId) totalUpserted++;
         } catch (upsertErr) {

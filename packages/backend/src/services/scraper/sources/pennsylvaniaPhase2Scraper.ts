@@ -216,7 +216,12 @@ export async function runPennsylvaniaPhase2Scraper(): Promise<void> {
             businessCategory,         // businessCategory
             undefined,                // contactEmail
             undefined,                // phone
-            undefined                 // website
+            undefined,                // website
+            undefined,                // lat
+            undefined,                // lng
+            true,                     // isStateLicensed
+            'PA',                     // licenseState
+            licenseNumber || undefined // licenseNumber
           );
 
           if (orgId) totalUpserted++;

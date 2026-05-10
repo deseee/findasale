@@ -39,6 +39,14 @@ interface ScrapedSale {
   claimEmails: Array<{ sentAt: string; claimed: boolean }>;
 }
 
+function getCsrfToken(): string {
+  return document.cookie
+    .split(';')
+    .map(c => c.trim())
+    .find(c => c.startsWith('csrf-token='))
+    ?.split('=')[1] ?? '';
+}
+
 export default function ScraperAdminPage() {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
@@ -94,7 +102,7 @@ export default function ScraperAdminPage() {
       setTriggering(true);
       const res = await fetch('/api/admin/scraper/runs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCsrfToken() },
         body: JSON.stringify({ source: selectedSource, metro: selectedMetro }),
       });
 
@@ -120,7 +128,7 @@ export default function ScraperAdminPage() {
     try {
       const res = await fetch('/api/admin/scraper/takedown', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCsrfToken() },
         body: JSON.stringify({ source }),
       });
 

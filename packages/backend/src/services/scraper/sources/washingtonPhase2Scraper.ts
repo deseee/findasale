@@ -293,7 +293,12 @@ export async function runWashingtonPhase2Scraper(): Promise<void> {
           businessCategory,           // businessCategory
           undefined,                  // contactEmail
           undefined,                  // phone
-          undefined                   // website
+          undefined,                  // website
+          undefined,                  // lat
+          undefined,                  // lng
+          true,                       // isStateLicensed
+          'WA',                       // licenseState
+          licenseNumber || undefined  // licenseNumber
         );
 
         if (orgId) totalUpserted++;

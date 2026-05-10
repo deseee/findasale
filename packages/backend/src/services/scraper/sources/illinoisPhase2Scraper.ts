@@ -278,7 +278,12 @@ async function processIdfprCsv(lines: string[]): Promise<{ matched: number; upse
         businessCategory,     // businessCategory
         undefined,            // contactEmail
         undefined,            // phone
-        undefined             // website
+        undefined,            // website
+        undefined,            // lat
+        undefined,            // lng
+        true,                 // isStateLicensed
+        state || 'IL',        // licenseState
+        licenseNumber || undefined // licenseNumber
       );
 
       if (orgId) upserted++;
@@ -365,7 +370,12 @@ async function processChicagoCsv(lines: string[]): Promise<{ matched: number; up
         businessCategory,              // businessCategory
         undefined,                     // contactEmail
         undefined,                     // phone
-        undefined                      // website
+        undefined,                     // website
+        undefined,                     // lat
+        undefined,                     // lng
+        true,                          // isStateLicensed
+        state || 'IL',                 // licenseState
+        licenseNumber || undefined     // licenseNumber
       );
 
       if (orgId) upserted++;
