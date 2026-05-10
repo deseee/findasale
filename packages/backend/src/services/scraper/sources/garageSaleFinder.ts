@@ -20,14 +20,10 @@ const GARAGE_SALES_BASE_URL = 'https://www.garagesalefinder.com';
 
 /**
  * Convert metro slug to GarageSaleFinder URL.
- * Metro format: "grand-rapids-mi" → /garage-sales/US/MI/Grand+Rapids
+ * Metro format: "grand-rapids-mi" → /yard-sales/grand-rapids-mi/
  */
 function metroToUrl(metro: string): string {
-  const parts = metro.split('-');
-  const state = parts[parts.length - 1].toUpperCase();
-  const cityWords = parts.slice(0, -1).map((p) => p.charAt(0).toUpperCase() + p.slice(1));
-  const cityEncoded = cityWords.join('+');
-  return `${GARAGE_SALES_BASE_URL}/garage-sales/US/${state}/${cityEncoded}`;
+  return `${GARAGE_SALES_BASE_URL}/yard-sales/${metro}/`;
 }
 
 /**
@@ -78,9 +74,10 @@ export async function scrapeGarageSaleFinder(
     $('a[href]').each((_, el) => {
       const href = $(el).attr('href') ?? '';
       let fullUrl = href.startsWith('http') ? href : `${GARAGE_SALES_BASE_URL}${href}`;
-      // Match detail pages: /garage-sales/12345 or similar numeric paths
+      // Match detail pages: /s/[alphanumeric]/ — exclude /gallery paths
       if (
-        /\/garage-sales\/\d+/.test(fullUrl) &&
+        /\/s\/[A-Za-z0-9]+\//.test(fullUrl) &&
+        !fullUrl.includes('/gallery') &&
         !seen.has(fullUrl)
       ) {
         seen.add(fullUrl);
@@ -151,7 +148,7 @@ export async function parseGarageSalesFinderSale(
     }
 
     const emails = extractEmails(html);
-    const idMatch = saleUrl.match(/\/garage-sales\/(\d+)/);
+    const idMatch = saleUrl.match(/\/s\/([A-Za-z0-9]+)\//);
     const sourceItemId = idMatch ? idMatch[1] : saleUrl.split('/').pop() ?? '';
 
     rateLimiter.clearBackoff(domain);
