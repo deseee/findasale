@@ -8,11 +8,9 @@ import { prisma } from '../../lib/prisma';
 import { ParsedListing } from './htmlParser';
 import { checkDuplicate } from './dedupe';
 import { RateLimiter, defaultRateLimiter } from './rateLimiter';
-import { scrapeEstateSalesNet } from './sources/estatesalesnet';
-import { scrapeGarageSaleFinder } from './sources/garageSaleFinder';
-import { scrapeFacebookMarketplace } from './sources/facebook-marketplace';
 import { scrapeTheSaleSeker } from './sources/saleSeeker';
 import { enrichOrganizer } from './enrichment';
+import { getSourceById } from './sourceRegistry';
 
 export interface ScrapeJob {
   source: string;
@@ -509,7 +507,8 @@ export async function getOrCreateScrapedOrganizer(
 
 /**
  * Main scraping entry point.
- * Supports: EstateSalesNet | GarageSaleFinder
+ * Dispatches to the registered source handler via SOURCE_REGISTRY.
+ * Legacy 'SaleSeker' source is handled directly (not yet in registry).
  */
 export async function runScrapeRun(source: string, metro: string): Promise<void> {
   const jobId = await createScrapeJob(source, metro);
@@ -520,29 +519,45 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
 
     const systemOrganizerId = await getOrCreateSystemOrganizer();
 
-    let stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
-
-    if (source === 'EstateSalesNet') {
-      stats = await scrapeEstateSalesNet(metro, systemOrganizerId, rateLimiter);
-    } else if (source === 'GarageSaleFinder') {
-      stats = await scrapeGarageSaleFinder(metro, systemOrganizerId, rateLimiter);
-    } else if (source === 'FacebookMarketplace') {
-      stats = await scrapeFacebookMarketplace(metro, systemOrganizerId, rateLimiter);
-    } else if (source === 'SaleSeker') {
-      stats = await scrapeTheSaleSeker(metro, systemOrganizerId, rateLimiter);
-    } else {
-      console.warn(`[scraper] Unknown source: ${source} — skipping`);
+    // Legacy SaleSeker not yet in registry — handle directly
+    if (source === 'SaleSeker') {
+      const legacy = await scrapeTheSaleSeker(metro, systemOrganizerId, rateLimiter);
+      const itemsFound = legacy.created + legacy.updated + legacy.skipped + legacy.failed;
+      await finishScrapeJob(jobId, 'SUCCESS', {
+        itemsFound,
+        itemsCreated: legacy.created,
+        itemsUpdated: legacy.updated,
+        itemsSkipped: legacy.skipped,
+        itemsFailed: legacy.failed,
+      });
+      return;
     }
 
-    const itemsFound = stats.created + stats.skipped + stats.failed;
-    console.log(`[scraper] Job ${jobId} complete — found ${itemsFound}, created ${stats.created}, skipped ${stats.skipped}, failed ${stats.failed}`);
+    const sourceDef = getSourceById(source);
+    if (!sourceDef) {
+      console.warn(`[scraper] Unknown source: ${source} — skipping`);
+      await finishScrapeJob(jobId, 'SUCCESS', {});
+      return;
+    }
+
+    if (sourceDef.prohibited) {
+      console.warn(`[scraper] Source ${source} is legally prohibited — skipping`);
+      await finishScrapeJob(jobId, 'SUCCESS', {});
+      return;
+    }
+
+    const stats = await sourceDef.run(metro, systemOrganizerId, rateLimiter);
+
+    console.log(
+      `[scraper] Job ${jobId} complete — found ${stats.itemsFound}, created ${stats.itemsCreated}, updated ${stats.itemsUpdated}, skipped ${stats.itemsSkipped}, failed ${stats.itemsFailed}`
+    );
 
     await finishScrapeJob(jobId, 'SUCCESS', {
-      itemsFound,
-      itemsCreated: stats.created,
-      itemsUpdated: stats.updated,
-      itemsSkipped: stats.skipped,
-      itemsFailed: stats.failed,
+      itemsFound: stats.itemsFound,
+      itemsCreated: stats.itemsCreated,
+      itemsUpdated: stats.itemsUpdated,
+      itemsSkipped: stats.itemsSkipped,
+      itemsFailed: stats.itemsFailed,
     });
   } catch (error) {
     console.error(`[scraper] Job ${jobId} failed:`, error);

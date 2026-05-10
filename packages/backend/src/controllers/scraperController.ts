@@ -7,8 +7,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { runScrapeRun } from '../services/scraper';
-
-const VALID_SOURCES = ['EstateSalesNet', 'GarageSaleFinder', 'FacebookMarketplace'];
+import { SOURCE_REGISTRY, VALID_SOURCE_IDS } from '../services/scraper/sourceRegistry';
 
 /**
  * GET /admin/scraper/sources
@@ -18,19 +17,30 @@ export const getScrapeSourcesStatus = async (_req: AuthRequest, res: Response): 
   try {
     const recentJobs = await prisma.scrapedSalesJob.findMany({
       orderBy: { id: 'desc' },
-      take: 100,
+      take: 200,
     });
 
-    const summary = VALID_SOURCES.map((source) => {
-      const sourceJobs = recentJobs.filter((j) => j.source === source);
+    const scraperGloballyEnabled = process.env.SCRAPER_ENABLED === 'true';
+
+    const summary = SOURCE_REGISTRY.map((sourceDef) => {
+      const sourceJobs = recentJobs.filter((j) => j.source === sourceDef.id);
       const lastJob = sourceJobs[0] ?? null;
       return {
-        source,
-        enabled: process.env.SCRAPER_ENABLED === 'true',
+        source: sourceDef.id,
+        displayName: sourceDef.displayName,
+        type: sourceDef.type,
+        runMode: sourceDef.runMode,
+        qualityTier: sourceDef.qualityTier,
+        enabled: scraperGloballyEnabled && sourceDef.enabled && !sourceDef.prohibited,
+        sourceEnabled: sourceDef.enabled,
+        prohibited: sourceDef.prohibited ?? false,
+        legalNote: sourceDef.legalNote ?? null,
+        cronSchedule: sourceDef.cronSchedule ?? null,
         lastRunAt: lastJob?.completedAt ?? null,
         lastRunStatus: lastJob?.status ?? null,
         recentJobCount: sourceJobs.length,
         recentItemsCreated: sourceJobs.reduce((sum, j) => sum + (j.itemsCreated ?? 0), 0),
+        recentItemsFound: sourceJobs.reduce((sum, j) => sum + (j.itemsFound ?? 0), 0),
       };
     });
 
@@ -50,9 +60,9 @@ export const triggerScrapeRun = async (req: AuthRequest, res: Response): Promise
   try {
     const { source, metro } = req.body as { source?: string; metro?: string };
 
-    if (!source || !VALID_SOURCES.includes(source)) {
+    if (!source || !VALID_SOURCE_IDS.includes(source)) {
       return res.status(400).json({
-        error: `Invalid source. Must be one of: ${VALID_SOURCES.join(', ')}`,
+        error: `Invalid source. Must be one of: ${VALID_SOURCE_IDS.join(', ')}`,
       });
     }
     if (!metro) {
