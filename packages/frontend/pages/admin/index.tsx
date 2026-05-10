@@ -338,6 +338,16 @@ const AdminDashboard = () => {
             <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Creator Program</h3>
             <p className="text-warm-600 dark:text-warm-400 text-sm">View creator/affiliate dashboard and analytics</p>
           </Link>
+
+          <Link href="/admin/scraper" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-green-50 dark:bg-green-900/20 border border-green-100 transition">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Scraper Management</h3>
+            <p className="text-warm-600 dark:text-warm-400 text-sm">Trigger scrape runs, view sources, monitor results</p>
+          </Link>
+
+          <Link href="/admin/scrape-pool" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-teal-50 dark:bg-teal-900/20 border border-teal-100 transition">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Scrape Pool</h3>
+            <p className="text-warm-600 dark:text-warm-400 text-sm">Outreach pipeline, lead scores, email coverage</p>
+          </Link>
         </div>
 
         {/* Recent Activity */}
