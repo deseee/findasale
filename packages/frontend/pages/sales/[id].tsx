@@ -141,6 +141,8 @@ interface Sale {
   returnWindowHours?: number | null;
   // Feature #84: Day-of approach notes
   notes?: string | null;
+  // Sale-level category/item tags
+  tags?: string[] | null;
 }
 
 interface Bid {
