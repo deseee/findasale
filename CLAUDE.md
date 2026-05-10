@@ -116,16 +116,15 @@ No exceptions.
 
 ## 5. Push Rules
 
-**Pushblock-first strategy (new default):** Always provide Patrick a copy-paste pushblock as the default push method. MCP push is only used when: (a) Patrick explicitly says "push it now" and time-to-deploy matters, or (b) a single trivial edit under 50 lines to a file already in context. Rationale: MCP push costs ~12k tokens per file (mandatory read + full file content as parameter + verification). A pushblock costs ~300–500 tokens. Use the cheaper method first.
+**Pushblock-only strategy (hard default):** Always provide Patrick a copy-paste pushblock. Never use MCP push (`mcp__github__push_files`) for code changes. No exceptions for "push it now" requests — respond with the pushblock. Rationale: MCP push costs ~12k tokens per file and bypasses Patrick's local git state, creating desync between his repo and GitHub. Pushblocks are ~300–500 tokens, keep git state clean, and are safer. The MCP crash in S705 (garagesalefinder.ts pushed via MCP without being in Patrick's local git, causing Railway crash on next push.ps1 run) is the documented reason this rule is now absolute.
 
-**After successful MCP push:** Do NOT also generate a pushblock — the files are already on GitHub. One or the other, never both.
+**MCP push — emergency only (production down, no other path):** The sole exception is when the backend is actively crashing in production AND a single missing file must reach GitHub immediately to restore service. Even then: (1) notify Patrick it's happening, (2) push only the minimum file(s) to restore service, (3) include those files in the next pushblock so Patrick's local git catches up.
 
-**MCP GitHub limits (when MCP is used):** Max 3 files per `push_files` call. Total file content ≤25,000 tokens combined per call. Read each file before pushing and estimate token count. If the batch would exceed ~25k tokens, split or hand off to Patrick.
+**After any emergency MCP push:** Immediately provide Patrick a `git fetch && git pull` instruction so local git state re-syncs with GitHub before the next `.\push.ps1` run.
 
-**GitHub MCP (`mcp__github__*`) — backup only:**
-Use `mcp__github__push_files` only when pushblock is inappropriate, with two hard limits:
-1. **≤3 files per push** (hard limit — stricter than any earlier 5-file guidance)
-2. **Total file content ≤ 25,000 tokens combined** — read each file before pushing and estimate token count. If the batch would exceed ~25k tokens, split or hand off to Patrick.
+**GitHub MCP (`mcp__github__*`) — emergency only, hard limits:**
+1. **≤3 files per push** (hard limit)
+2. **Total file content ≤ 25,000 tokens combined** — read each file before pushing and estimate token count. If batch would exceed ~25k tokens, hand off to Patrick.
 
 **Large file guidance:** If a single file exceeds ~500 lines and a pushblock is used, include it solo. If it exceeds ~800 lines, hand off to Patrick with PS1 block. Never batch a large file with other files in a pushblock.
 
