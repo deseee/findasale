@@ -88,6 +88,9 @@ async function main() {
         contactEmail: { not: null },
         // Must not be CLAIMED or OPTED_OUT
         claimStatus: { notIn: ['CLAIMED', 'OPTED_OUT'] },
+        // Skip emails marked as junk by emailDiscoveryService (confidence=0.0)
+        // NULL confidence = scraper-set email (trusted); 0.0 = known junk (blocked)
+        NOT: { emailDiscoveryConfidence: 0.0 },
       },
       select: {
         id: true,
