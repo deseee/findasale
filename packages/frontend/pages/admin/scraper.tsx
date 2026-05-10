@@ -55,7 +55,7 @@ export default function ScraperAdminPage() {
   const [sales, setSales] = useState<ScrapedSale[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSource, setSelectedSource] = useState('EstateSalesNet');
-  const [selectedMetro, setSelectedMetro] = useState('Grand Rapids, MI');
+  const [selectedMetro, setSelectedMetro] = useState('grand-rapids-mi');
   const [triggering, setTriggering] = useState(false);
 
   // Check admin status — wait for auth to resolve before redirecting
@@ -217,8 +217,8 @@ export default function ScraperAdminPage() {
             value={selectedMetro}
             onChange={(e) => setSelectedMetro(e.target.value)}
             className="px-4 py-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white flex-1"
-            placeholder="Metro (e.g., Grand Rapids, MI)"
-           aria-label="Metro (e.g., Grand Rapids, MI)" />
+            placeholder="Metro slug (e.g., grand-rapids-mi)"
+            aria-label="Metro slug (e.g., grand-rapids-mi)" />
           <button
             onClick={handleTriggerScrape}
             disabled={triggering}
@@ -227,6 +227,7 @@ export default function ScraperAdminPage() {
             {triggering ? 'Triggering...' : 'Trigger'}
           </button>
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400">Metro format: kebab-slug-state (e.g. grand-rapids-mi, chicago-il, new-york-ny)</p>
       </div>
 
       {/* Recent Runs Section */}
