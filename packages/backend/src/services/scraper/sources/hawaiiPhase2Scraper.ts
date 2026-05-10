@@ -272,7 +272,12 @@ export async function runHawaiiPhase2Scraper(): Promise<void> {
             businessCategory,
             undefined,
             undefined,
-            undefined
+            undefined,
+            undefined,
+            undefined,
+            true,
+            'HI',
+            licenseNumber || undefined
           );
 
           if (orgId) {

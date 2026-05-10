@@ -169,7 +169,10 @@ export async function getOrCreateScrapedOrganizer(
   phone?: string,
   website?: string,
   lat?: number,
-  lng?: number
+  lng?: number,
+  isStateLicensed?: boolean,
+  licenseState?: string,
+  licenseNumber?: string
 ): Promise<string | null> {
   // ADR-075: Validate businessCategory against allowlist
   const VALID_CATEGORIES = new Set([
@@ -204,7 +207,7 @@ export async function getOrCreateScrapedOrganizer(
   if (googlePlaceId) {
     const byPlaceId = await prisma.organizer.findFirst({
       where: { googlePlaceId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
     });
     if (byPlaceId) {
       // Backfill missing source IDs and email, merge corroboration data
@@ -219,6 +222,9 @@ export async function getOrCreateScrapedOrganizer(
       if (website && !byPlaceId.website) updates.website = website;
       if (lat !== undefined && lat !== null && !byPlaceId.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byPlaceId.lng) updates.lng = lng;
+      if (isStateLicensed && !byPlaceId.isStateLicensed) updates.isStateLicensed = isStateLicensed;
+      if (licenseState && !byPlaceId.licenseState) updates.licenseState = licenseState;
+      if (licenseNumber && !byPlaceId.licenseNumber) updates.licenseNumber = licenseNumber;
 
       // Corroboration merge: only increment if this sourceName is genuinely new
       const currentSources = (byPlaceId.sourcesJson as any[]) || [];
@@ -243,7 +249,7 @@ export async function getOrCreateScrapedOrganizer(
   if (foursquareVenueId) {
     const byFoursquare = await prisma.organizer.findFirst({
       where: { foursquareVenueId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
     });
     if (byFoursquare) {
       const updates: Record<string, unknown> = {};
@@ -257,6 +263,9 @@ export async function getOrCreateScrapedOrganizer(
       if (website && !byFoursquare.website) updates.website = website;
       if (lat !== undefined && lat !== null && !byFoursquare.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byFoursquare.lng) updates.lng = lng;
+      if (isStateLicensed && !byFoursquare.isStateLicensed) updates.isStateLicensed = isStateLicensed;
+      if (licenseState && !byFoursquare.licenseState) updates.licenseState = licenseState;
+      if (licenseNumber && !byFoursquare.licenseNumber) updates.licenseNumber = licenseNumber;
 
       // Corroboration merge: only increment if this sourceName is genuinely new
       const currentSources = (byFoursquare.sourcesJson as any[]) || [];
@@ -281,7 +290,7 @@ export async function getOrCreateScrapedOrganizer(
   if (hereBusinessId) {
     const byHere = await prisma.organizer.findFirst({
       where: { hereBusinessId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
     });
     if (byHere) {
       const updates: Record<string, unknown> = {};
@@ -295,6 +304,9 @@ export async function getOrCreateScrapedOrganizer(
       if (website && !byHere.website) updates.website = website;
       if (lat !== undefined && lat !== null && !byHere.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byHere.lng) updates.lng = lng;
+      if (isStateLicensed && !byHere.isStateLicensed) updates.isStateLicensed = isStateLicensed;
+      if (licenseState && !byHere.licenseState) updates.licenseState = licenseState;
+      if (licenseNumber && !byHere.licenseNumber) updates.licenseNumber = licenseNumber;
 
       // Corroboration merge: only increment if this sourceName is genuinely new
       const currentSources = (byHere.sourcesJson as any[]) || [];
@@ -319,7 +331,7 @@ export async function getOrCreateScrapedOrganizer(
   const dedupeKey = generateDedupeKey(businessName, city);
   const byDedupeKey = await prisma.organizer.findFirst({
     where: { dedupeKey },
-    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
   });
 
   if (byDedupeKey) {
@@ -335,6 +347,9 @@ export async function getOrCreateScrapedOrganizer(
     if (website && !byDedupeKey.website) updates.website = website;
     if (lat !== undefined && lat !== null && !byDedupeKey.lat) updates.lat = lat;
     if (lng !== undefined && lng !== null && !byDedupeKey.lng) updates.lng = lng;
+    if (isStateLicensed && !byDedupeKey.isStateLicensed) updates.isStateLicensed = isStateLicensed;
+    if (licenseState && !byDedupeKey.licenseState) updates.licenseState = licenseState;
+    if (licenseNumber && !byDedupeKey.licenseNumber) updates.licenseNumber = licenseNumber;
 
     // Corroboration merge: only increment if this sourceName is genuinely new
     const currentSources = (byDedupeKey.sourcesJson as any[]) || [];
@@ -361,7 +376,7 @@ export async function getOrCreateScrapedOrganizer(
       isUnmanagedListing: true,
       address: { contains: city },
     },
-    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, dedupeKey: true, sourceCount: true, sourcesJson: true, lat: true, lng: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, dedupeKey: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
   });
 
   const normalizedName = normalizeName(businessName);
@@ -381,6 +396,9 @@ export async function getOrCreateScrapedOrganizer(
     if (website && !existing.website) updates.website = website;
     if (lat !== undefined && lat !== null && !existing.lat) updates.lat = lat;
     if (lng !== undefined && lng !== null && !existing.lng) updates.lng = lng;
+    if (isStateLicensed && !existing.isStateLicensed) updates.isStateLicensed = isStateLicensed;
+    if (licenseState && !existing.licenseState) updates.licenseState = licenseState;
+    if (licenseNumber && !existing.licenseNumber) updates.licenseNumber = licenseNumber;
 
     // Corroboration merge: only increment if this sourceName is genuinely new
     const currentSources = (existing.sourcesJson as any[]) || [];
@@ -447,6 +465,9 @@ export async function getOrCreateScrapedOrganizer(
             sourceCount: 1,
             sourcesJson: [{ sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() }],
             corroborationScore: 0.5,
+            isStateLicensed: isStateLicensed ?? null,
+            licenseState: licenseState ?? null,
+            licenseNumber: licenseNumber ?? null,
           },
         },
       },
@@ -485,6 +506,9 @@ export async function getOrCreateScrapedOrganizer(
               sourceCount: 1,
               sourcesJson: [{ sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() }],
               corroborationScore: 0.5,
+              isStateLicensed: isStateLicensed ?? null,
+              licenseState: licenseState ?? null,
+              licenseNumber: licenseNumber ?? null,
             },
           },
         },

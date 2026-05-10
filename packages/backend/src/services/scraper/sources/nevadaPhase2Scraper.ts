@@ -225,7 +225,12 @@ export async function runNevadaPhase2Scraper(): Promise<void> {
             businessCategory,
             undefined,
             undefined,
-            undefined
+            undefined,
+            undefined,
+            undefined,
+            true,
+            'NV',
+            licenseNumber || undefined
           );
 
           if (orgId) {

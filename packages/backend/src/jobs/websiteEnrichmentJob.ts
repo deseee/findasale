@@ -24,21 +24,22 @@ async function lookupWebsiteViaHere(
   businessName: string,
   city: string,
   state: string
-): Promise<string | null> {
+): Promise<{ website: string | null; phone: string | null }> {
   const apiKey = process.env.HERE_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) return { website: null, phone: null };
 
   try {
     const q = encodeURIComponent(`${businessName} ${city} ${state}`);
     const url = `https://discover.search.hereapi.com/v1/discover?q=${q}&in=countryCode:USA&limit=1&apiKey=${apiKey}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) return null;
-    const data = await res.json() as { items?: Array<{ contacts?: Array<{ www?: Array<{ value?: string }> }> }> };
+    if (!res.ok) return { website: null, phone: null };
+    const data = await res.json() as { items?: Array<{ contacts?: Array<{ www?: Array<{ value?: string }>; phone?: Array<{ value?: string }> }> }> };
     const item = data?.items?.[0];
     const website = item?.contacts?.[0]?.www?.[0]?.value ?? null;
-    return website || null;
+    const phone = item?.contacts?.[0]?.phone?.[0]?.value ?? null;
+    return { website: website || null, phone: phone || null };
   } catch {
-    return null;
+    return { website: null, phone: null };
   }
 }
 
@@ -48,23 +49,24 @@ async function lookupWebsiteViaFoursquare(
   businessName: string,
   city: string,
   state: string
-): Promise<string | null> {
+): Promise<{ website: string | null; phone: string | null }> {
   const apiKey = process.env.FOURSQUARE_API_KEY?.trim();
-  if (!apiKey) return null;
+  if (!apiKey) return { website: null, phone: null };
 
   try {
     const q = encodeURIComponent(businessName);
     const near = encodeURIComponent(`${city}, ${state}`);
-    const url = `https://places-api.foursquare.com/places/search?query=${q}&near=${near}&limit=1&fields=website`;
+    const url = `https://places-api.foursquare.com/places/search?query=${q}&near=${near}&limit=1&fields=website,tel`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return null;
-    const data = await res.json() as { results?: Array<{ website?: string }> };
-    return data?.results?.[0]?.website ?? null;
+    if (!res.ok) return { website: null, phone: null };
+    const data = await res.json() as { results?: Array<{ website?: string; tel?: string }> };
+    const result = data?.results?.[0];
+    return { website: result?.website ?? null, phone: result?.tel ?? null };
   } catch {
-    return null;
+    return { website: null, phone: null };
   }
 }
 
@@ -93,6 +95,7 @@ async function enrichBatch(skip: number): Promise<number> {
       businessName: true,
       address: true,
       licenseState: true,
+      phone: true,
     },
     skip,
     take: BATCH_SIZE,
@@ -108,19 +111,26 @@ async function enrichBatch(skip: number): Promise<number> {
     const { city, state } = location;
 
     // Try HERE first (free up to 250K/month)
-    let website = await lookupWebsiteViaHere(org.businessName, city, state);
+    let { website, phone } = await lookupWebsiteViaHere(org.businessName, city, state);
 
     // Fall back to Foursquare (Sandbox — use sparingly)
     if (!website) {
-      website = await lookupWebsiteViaFoursquare(org.businessName, city, state);
+      const foursquare = await lookupWebsiteViaFoursquare(org.businessName, city, state);
+      website = foursquare.website;
+      if (!phone) phone = foursquare.phone;
     }
 
-    if (website) {
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+    if (website) updateData.website = website;
+    if (phone && !org.phone) updateData.phone = phone;
+
+    if (Object.keys(updateData).length > 1) {
       await prisma.organizer.update({
         where: { id: org.id },
-        data: { website, updatedAt: new Date() },
+        data: updateData,
       });
-      console.log(`[WebsiteEnrichment] Found website for "${org.businessName}": ${website}`);
+      if (website) console.log(`[WebsiteEnrichment] Found website for "${org.businessName}": ${website}`);
+      if (phone && !org.phone) console.log(`[WebsiteEnrichment] Found phone for "${org.businessName}": ${phone}`);
       enriched++;
     }
 
