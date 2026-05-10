@@ -38,6 +38,10 @@ export default function DonationModal({
   const [notes, setNotes] = useState('');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
+  // #415: Junk Drawer Donation Kit — per-item thrift-store estimated values (price * 0.3)
+  const [estimatedValues, setEstimatedValues] = useState<Record<string, number>>(
+    () => Object.fromEntries(availableItems.map((item) => [item.id, parseFloat(((item.price || 0) * 0.3).toFixed(2))]))
+  );
 
   const isProOrTeams = user?.organizerTier === 'PRO' || user?.organizerTier === 'TEAMS';
 
@@ -50,6 +54,8 @@ export default function DonationModal({
         charityAddress,
         notes,
         itemIds: selectedItems,
+        // #415: Send per-item estimated values so receipt reflects thrift-store amounts
+        itemValues: Object.fromEntries(selectedItems.map((id) => [id, estimatedValues[id] ?? 0])),
       }),
     onSuccess: (response) => {
       const donationId = response.data.donation.id;
@@ -89,9 +95,9 @@ export default function DonationModal({
     );
   };
 
+  // #415: Use organizer-adjusted estimated values (default: price * 0.3)
   const totalEstimatedValue = selectedItems.reduce((sum, itemId) => {
-    const item = availableItems.find((i) => i.id === itemId);
-    return sum + (item?.price || 0);
+    return sum + (estimatedValues[itemId] || 0);
   }, 0);
 
   const handleDownloadReceipt = () => {
@@ -284,9 +290,23 @@ export default function DonationModal({
                             {item.title}
                           </p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {item.condition || 'Unknown'} · ${(item.price || 0).toFixed(2)}
+                            {item.condition || 'Unknown'} · Listed: ${(item.price || 0).toFixed(2)}
                           </p>
                         </div>
+                        {selectedItems.includes(item.id) && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Est.$</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={estimatedValues[item.id] ?? ''}
+                              onChange={(e) => setEstimatedValues((prev) => ({ ...prev, [item.id]: parseFloat(e.target.value) || 0 }))}
+                              className="w-16 text-xs px-1 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              aria-label={`Estimated donation value for ${item.title}`}
+                            />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

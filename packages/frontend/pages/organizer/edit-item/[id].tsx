@@ -61,6 +61,10 @@ const EditItemPage = () => {
     tagColor: '',
     // Feature #311: Multi-Location Inventory View
     locationId: null as string | null,
+    // Feature #407: Flip Tracker ROI — cost basis
+    costBasis: '',
+    // Feature #411: Dorm Dash — room/area tag
+    roomTag: '',
   });
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -287,6 +291,9 @@ const EditItemPage = () => {
         tagColor: item.tagColor || '',
         // Feature #311: Multi-Location Inventory View
         locationId: item.locationId || null,
+        // Feature #407/#411
+        costBasis: item.costBasis ? item.costBasis.toString() : '',
+        roomTag: item.roomTag || '',
       });
     }
   }, [item]);
@@ -746,6 +753,38 @@ const EditItemPage = () => {
 
               {/* Pricing Signals: Sleeper patterns & brand premiums */}
               {id && <PricingSignalBanners itemId={id as string} currentPrice={formData.price ? parseFloat(formData.price) : undefined} />}
+            </div>
+
+            {/* Feature #407: Flip Tracker ROI — Cost Basis */}
+            <div>
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                Cost Basis <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={formData.costBasis}
+                onChange={(e) => setFormData({ ...formData, costBasis: e.target.value })}
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+              />
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">What did you pay for this? Used to calculate ROI in Flip Report.</p>
+            </div>
+
+            {/* Feature #411: Dorm Dash — Room / Area Tag */}
+            <div>
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                Room / Area Tag <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Bedroom, Garage, Study, Room 204"
+                value={formData.roomTag}
+                onChange={(e) => setFormData({ ...formData, roomTag: e.target.value })}
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+              />
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Helps shoppers find items by location at Dorm Dash or multi-room sales.</p>
             </div>
 
             <div>

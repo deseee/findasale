@@ -220,6 +220,18 @@ export default function POSPage() {
   // Sound toggle state (persisted in localStorage)
   const [soundEnabled, setSoundEnabled] = useState(true);
 
+  // Split-bill state (#406)
+  const [splitBillOpen, setSplitBillOpen] = useState(false);
+  const [splitCount, setSplitCount] = useState(2);
+  const [splitCollected, setSplitCollected] = useState<boolean[]>([]);
+  const [splitMode, setSplitMode] = useState<'even' | 'custom'>('even');
+  const [splitCustomAmounts, setSplitCustomAmounts] = useState<string[]>([]);
+
+  // Organizer profile (venmo/zelle for cash nudge #412)
+  const [organizerVenmo, setOrganizerVenmo] = useState<string | null>(null);
+  const [organizerZelle, setOrganizerZelle] = useState<string | null>(null);
+  const [cashNudgeDismissed, setCashNudgeDismissed] = useState(false);
+
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
   const sdkLoadedRef = useRef(false);
@@ -237,6 +249,17 @@ export default function POSPage() {
     enabled: !!user && user.roles?.includes('ORGANIZER'),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  // Fetch organizer profile for venmo/zelle handles (#412)
+  useEffect(() => {
+    if (!user?.roles?.includes('ORGANIZER')) return;
+    api.get<{ venmoHandle?: string | null; zelleHandle?: string | null }>('/organizers/me')
+      .then(r => {
+        setOrganizerVenmo(r.data.venmoHandle || null);
+        setOrganizerZelle(r.data.zelleHandle || null);
+      })
+      .catch(() => {}); // non-critical, silent fail
+  }, [user]);
 
   // Pending Payments polling
   const { data: activePendingPayments = [] } = useQuery<PendingPayment[]>({
@@ -949,6 +972,13 @@ export default function POSPage() {
     setLastCashFee(null);
     setCashNumpadValue('');
     clearCart();
+    // Reset split-bill state (#406)
+    setSplitBillOpen(false);
+    setSplitCount(2);
+    setSplitCollected([]);
+    setSplitCustomAmounts([]);
+    setSplitMode('even');
+    setCashNudgeDismissed(false);
   };
 
   // ─── QR Code Scanning ─────────────────────────────────────────────────────────────────────
@@ -1665,6 +1695,126 @@ export default function POSPage() {
               <span>Total:</span>
               <span>${cartTotal.toFixed(2)}</span>
             </div>
+
+            {/* Split Bill button (#406) */}
+            {cart.length > 0 && (
+              <button
+                onClick={() => {
+                  setSplitBillOpen(o => !o);
+                  setSplitCollected([]);
+                  setSplitCustomAmounts(Array(splitCount).fill(''));
+                }}
+                className="mt-1 text-xs text-sage-700 dark:text-sage-400 hover:underline"
+              >
+                {splitBillOpen ? '✕ Close Split' : '⚖️ Split Bill'}
+              </button>
+            )}
+
+            {/* Split Bill Panel (#406) */}
+            {splitBillOpen && cart.length > 0 && (
+              <div className="mt-3 p-3 rounded-xl bg-warm-50 dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
+                <p className="text-xs font-semibold text-warm-700 dark:text-warm-300 mb-2">Split Bill</p>
+
+                {/* Mode toggle */}
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => { setSplitMode('even'); setSplitCollected([]); }}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${splitMode === 'even' ? 'bg-sage-700 text-white' : 'bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-warm-300'}`}
+                  >
+                    Split Evenly
+                  </button>
+                  <button
+                    onClick={() => { setSplitMode('custom'); setSplitCollected([]); setSplitCustomAmounts(Array(splitCount).fill('')); }}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${splitMode === 'custom' ? 'bg-sage-700 text-white' : 'bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-warm-300'}`}
+                  >
+                    Custom Amounts
+                  </button>
+                </div>
+
+                {/* Shopper count */}
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-xs text-warm-600 dark:text-warm-400">Shoppers:</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { const n = Math.max(2, splitCount - 1); setSplitCount(n); setSplitCollected([]); setSplitCustomAmounts(Array(n).fill('')); }}
+                      className="w-7 h-7 rounded-full bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-warm-300 font-bold text-sm flex items-center justify-center hover:bg-warm-300 dark:hover:bg-gray-600"
+                    >−</button>
+                    <span className="text-sm font-bold text-warm-900 dark:text-warm-100 w-4 text-center">{splitCount}</span>
+                    <button
+                      onClick={() => { const n = Math.min(10, splitCount + 1); setSplitCount(n); setSplitCollected([]); setSplitCustomAmounts(Array(n).fill('')); }}
+                      className="w-7 h-7 rounded-full bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-warm-300 font-bold text-sm flex items-center justify-center hover:bg-warm-300 dark:hover:bg-gray-600"
+                    >+</button>
+                  </div>
+                </div>
+
+                {/* Split slots */}
+                <div className="space-y-2">
+                  {Array.from({ length: splitCount }).map((_, i) => {
+                    const evenAmount = Math.ceil((cartTotal * 100) / splitCount) / 100;
+                    const displayAmount = splitMode === 'even'
+                      ? evenAmount
+                      : (parseFloat(splitCustomAmounts[i] || '0') || 0);
+                    const collected = splitCollected[i] ?? false;
+
+                    return (
+                      <div key={i} className={`flex items-center gap-2 p-2 rounded-lg border transition ${collected ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-white dark:bg-gray-700 border-warm-200 dark:border-gray-600'}`}>
+                        <span className="text-xs text-warm-500 dark:text-warm-400 w-14 shrink-0">Person {i + 1}</span>
+                        {splitMode === 'custom' ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={splitCustomAmounts[i] ?? ''}
+                            onChange={e => {
+                              const arr = [...splitCustomAmounts];
+                              arr[i] = e.target.value;
+                              setSplitCustomAmounts(arr);
+                            }}
+                            placeholder="0.00"
+                            className="flex-1 border border-warm-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-1 focus:ring-sage-500"
+                          />
+                        ) : (
+                          <span className="flex-1 text-sm font-bold text-warm-900 dark:text-warm-100">${evenAmount.toFixed(2)}</span>
+                        )}
+                        <button
+                          disabled={collected}
+                          onClick={() => {
+                            const arr = [...splitCollected];
+                            arr[i] = true;
+                            setSplitCollected(arr);
+                          }}
+                          className={`text-xs px-2 py-1 rounded-lg font-semibold transition ${collected ? 'bg-emerald-600 text-white cursor-default' : 'bg-sage-700 text-white hover:bg-sage-800'}`}
+                        >
+                          {collected ? '✓ Paid' : 'Collect'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Running tally */}
+                <div className="mt-3 pt-2 border-t border-warm-200 dark:border-gray-700">
+                  {(() => {
+                    const collectedCount = splitCollected.filter(Boolean).length;
+                    const evenAmount = Math.ceil((cartTotal * 100) / splitCount) / 100;
+                    const collectedTotal = splitMode === 'even'
+                      ? collectedCount * evenAmount
+                      : splitCollected.reduce((sum, c, i) => sum + (c ? (parseFloat(splitCustomAmounts[i] || '0') || 0) : 0), 0);
+                    const allDone = collectedCount === splitCount;
+
+                    return allDone ? (
+                      <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 text-center">
+                        ✓ Split complete — all {splitCount} paid
+                      </p>
+                    ) : (
+                      <p className="text-xs text-warm-500 dark:text-warm-400 text-center">
+                        {collectedCount} of {splitCount} collected · ${collectedTotal.toFixed(2)} of ${cartTotal.toFixed(2)}
+                      </p>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Today's summary bar */}
@@ -2224,6 +2374,43 @@ export default function POSPage() {
           {/* Cash payment numpad and button */}
           {paymentMode === 'cash' && (
             <>
+              {/* Cash-to-Digital Nudge (#412) — shown when organizer has venmo/zelle set */}
+              {!cashNudgeDismissed && (organizerVenmo || organizerZelle) && (
+                <div className="mb-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start gap-2">
+                  <span className="text-base shrink-0">💡</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Going digital is faster!</p>
+                    <div className="flex flex-wrap gap-2">
+                      {organizerVenmo && (
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(organizerVenmo); }}
+                          title="Tap to copy"
+                          className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/60 transition font-medium"
+                        >
+                          Venmo: @{organizerVenmo} 📋
+                        </button>
+                      )}
+                      {organizerZelle && (
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(organizerZelle); }}
+                          title="Tap to copy"
+                          className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/60 transition font-medium"
+                        >
+                          Zelle: {organizerZelle} 📋
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setCashNudgeDismissed(true)}
+                    aria-label="Dismiss"
+                    className="text-amber-400 dark:text-amber-600 hover:text-amber-600 dark:hover:text-amber-400 text-sm shrink-0 mt-0.5"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               {/* Inline cash received numpad */}
               <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 shadow-sm">
                 <div className="flex items-center justify-between mb-3">

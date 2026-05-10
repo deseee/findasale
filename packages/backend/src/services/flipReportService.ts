@@ -5,6 +5,9 @@ export interface TopPerformer {
   title: string;
   finalPrice: number;
   category: string | null;
+  costBasis: number | null;
+  profit: number | null;
+  roi: number | null;
 }
 
 export interface CategoryBreakdown {
@@ -25,6 +28,13 @@ export interface Recommendation {
   type: 'positive' | 'warning' | 'neutral';
 }
 
+export interface RoiStats {
+  totalCostBasis: number;
+  totalProfit: number;
+  avgRoi: number | null; // null if no items have costBasis
+  itemsWithCostBasis: number;
+}
+
 export interface FlipReport {
   saleId: string;
   saleTitle: string;
@@ -33,6 +43,10 @@ export interface FlipReport {
   saleEndDate: Date;
   sellThroughRate: number; // percentage 0-100
   totalRevenue: number;
+  totalCostBasis: number;
+  totalProfit: number;
+  avgRoi: number | null;
+  itemsWithCostBasis: number;
   itemsSold: number;
   itemsUnsold: number;
   topPerformers: TopPerformer[];
@@ -100,17 +114,40 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
   const topPerformersRaw = soldItems
     .map((item) => {
       const purchase = item.purchases[0]; // item has one PAID purchase if status is SOLD
+      const finalPrice = purchase?.amount ?? (item.price ? Number(item.price) : 0);
+      const costBasis = item.costBasis ? Number(item.costBasis) : null;
+      const profit = costBasis !== null ? Math.round((finalPrice - costBasis) * 100) / 100 : null;
+      const roi = costBasis !== null && costBasis > 0 ? Math.round(((finalPrice - costBasis) / costBasis) * 10000) / 100 : null;
       return {
         id: item.id,
         title: item.title,
-        finalPrice: purchase?.amount ?? item.price ?? 0,
+        finalPrice,
         category: item.category,
+        costBasis,
+        profit,
+        roi,
       };
     })
     .sort((a, b) => b.finalPrice - a.finalPrice)
     .slice(0, 5);
 
   const topPerformers: TopPerformer[] = topPerformersRaw;
+
+  // Feature #407: ROI aggregate stats — only for sold items with costBasis set
+  const soldItemsWithCostBasis = soldItems.filter((item) => item.costBasis !== null && item.costBasis !== undefined);
+  const totalCostBasis = Math.round(soldItemsWithCostBasis.reduce((sum, item) => sum + Number(item.costBasis), 0) * 100) / 100;
+  const totalProfit = Math.round((totalRevenue - totalCostBasis) * 100) / 100;
+  const itemsWithCostBasis = soldItemsWithCostBasis.length;
+  const roiValues = soldItemsWithCostBasis
+    .filter((item) => Number(item.costBasis) > 0)
+    .map((item) => {
+      const purchase = item.purchases[0];
+      const finalPrice = purchase?.amount ?? (item.price ? Number(item.price) : 0);
+      return ((finalPrice - Number(item.costBasis)) / Number(item.costBasis)) * 100;
+    });
+  const avgRoi = roiValues.length > 0
+    ? Math.round((roiValues.reduce((a, b) => a + b, 0) / roiValues.length) * 100) / 100
+    : null;
 
   // Unsold items: items without PAID purchases
   const unsoldItemsRaw = saleItems
@@ -262,6 +299,10 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
     saleEndDate: sale.endDate,
     sellThroughRate: Math.round(sellThroughRate * 100) / 100,
     totalRevenue: Math.round(totalRevenue * 100) / 100,
+    totalCostBasis,
+    totalProfit,
+    avgRoi,
+    itemsWithCostBasis,
     itemsSold,
     itemsUnsold,
     topPerformers,

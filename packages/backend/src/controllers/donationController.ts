@@ -12,7 +12,8 @@ export const createDonation = async (req: AuthRequest, res: Response) => {
     }
 
     const { saleId } = req.params;
-    const { charityName, charityEin, charityAddress, notes, itemIds } = req.body;
+    const { charityName, charityEin, charityAddress, notes, itemIds, itemValues } = req.body;
+    // #415: itemValues is an optional Record<itemId, number> for organizer-adjusted thrift estimates
 
     if (!charityName || typeof charityName !== 'string') {
       return res.status(400).json({ message: 'charityName is required' });
@@ -65,9 +66,11 @@ export const createDonation = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Calculate total estimated value
+    // Calculate total estimated value — use organizer-provided itemValues if present (#415)
     const totalEstimatedValue = items.reduce((sum, item) => {
-      const itemValue = item.price || 0;
+      const itemValue = (itemValues && typeof itemValues[item.id] === 'number')
+        ? itemValues[item.id]
+        : (item.price ? Number(item.price) : 0);
       return sum + itemValue;
     }, 0);
 
@@ -95,7 +98,9 @@ export const createDonation = async (req: AuthRequest, res: Response) => {
             data: {
               donationId: donation.id,
               itemId: item.id,
-              estimatedValue: new Prisma.Decimal(item.price || 0),
+              estimatedValue: new Prisma.Decimal(
+                (itemValues && typeof itemValues[item.id] === 'number') ? itemValues[item.id] : (item.price ? Number(item.price) : 0)
+              ),
             },
           }),
           prisma.item.update({

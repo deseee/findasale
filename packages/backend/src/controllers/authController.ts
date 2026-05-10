@@ -34,7 +34,7 @@ const isValidRedirectUri = (uri: string | null | undefined): boolean => {
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint, dateOfBirth } = req.body;
+    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint, dateOfBirth, country, province } = req.body;
 
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
     const email = rawEmail?.trim().toLowerCase();
@@ -92,6 +92,15 @@ export const register = async (req: Request, res: Response) => {
       }
     } catch (error) {
       return res.status(400).json({ message: 'Invalid date of birth format.' });
+    }
+
+    // #369: Quebec Block — Bill 96 provincial language law compliance
+    // Quebec-based organizers cannot yet register; show friendly waitlist message
+    if (country === 'CA' && province === 'QC') {
+      return res.status(400).json({
+        code: 'QUEBEC_NOT_SUPPORTED',
+        message: "Quebec support is coming soon. We're actively working on provincial compliance. Join the waitlist at finda.sale/waitlist.",
+      });
     }
 
     // Hash password
@@ -155,6 +164,8 @@ export const register = async (req: Request, res: Response) => {
             businessName: businessName || name,
             phone: phone || '',
             address: businessAddress || '',
+            country: country || 'US',
+            province: province || null,
           }
         });
       }

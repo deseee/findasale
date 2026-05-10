@@ -58,6 +58,7 @@ import { useSaleSocialProof } from '../../hooks/useSocialProof';
 import ColorKeyLegend from '../../components/ColorKeyLegend'; // Feature #310: Color-tagged discount rules
 import useXpProfile from '../../hooks/useXpProfile'; // Rank-Based Early Access: fresh rank (explorerRank no longer on AuthContext User)
 import ClaimListingModal from '../../components/ClaimListingModal'; // Feature #361: Claim-This-Listing
+import SaleFloorMap from '../../components/SaleFloorMap'; // #416: Floor Map
 
 
 interface Sale {
@@ -117,6 +118,7 @@ interface Sale {
     organizerDiscountXp?: number; // D-XP-003: XP cost of discount
     priceBeforeMarkdown?: number | null; // Feature #91: Auto-Markdown original price
     markdownApplied?: boolean; // Feature #91: Whether auto-markdown has been applied
+    roomTag?: string | null; // #416: Floor map room routing
   }[];
   isAuctionSale: boolean;
   // Feature 35: Front Door Locator
@@ -145,6 +147,8 @@ interface Sale {
   notes?: string | null;
   // Sale-level category/item tags
   tags?: string[] | null;
+  // #413: Physical Safety Disclosures
+  safetyNotes?: string | null;
 }
 
 interface Bid {
@@ -217,6 +221,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState<number>(24);
+  const [selectedRoom, setSelectedRoom] = useState<string | null>(null); // #416: floor map filter
   const [currentItemPage, setCurrentItemPage] = useState(1);
   const [messageModalOpen, setMessageModalOpen] = useState(false);
   const { openCart } = useCart();
@@ -354,6 +359,23 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
 
   // Feature #67: Fetch social proof metrics for this sale
   const { data: saleSocialProof, isLoading: socialProofLoading } = useSaleSocialProof(id as string, saleExists);
+
+  // #403: Family Bundle Pricing — fetch active bundles for this sale
+  const { data: saleBundles } = useQuery<Array<{
+    id: string;
+    title: string;
+    description?: string | null;
+    bundlePrice: number;
+    items: Array<{ id: string; title: string; photoUrls: string[]; status: string }>;
+  }>>({
+    queryKey: ['bundles', id],
+    queryFn: async () => {
+      const res = await api.get(`/sales/${id}/bundles`);
+      return res.data;
+    },
+    enabled: !!id,
+    staleTime: 60_000,
+  });
 
   const handleBuyNow = (itemId: string, itemTitle: string) => {
     setCheckoutItem({ id: itemId, title: itemTitle });
@@ -1030,6 +1052,21 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               </div>
             )}
 
+            {/* #413: Physical Safety Disclosures */}
+            {sale.safetyNotes && sale.safetyNotes.trim() && (
+              <div className="rounded-lg p-4 flex gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700">
+                <div className="shrink-0 mt-0.5 w-5 h-5 text-amber-600 dark:text-amber-400">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="text-xs uppercase tracking-wider font-semibold mb-1 text-amber-700 dark:text-amber-400" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.06em' }}>Safety Notice</div>
+                  <p className="text-sm leading-relaxed text-amber-900 dark:text-amber-200">{sale.safetyNotes}</p>
+                </div>
+              </div>
+            )}
+
             {/* D-XP-003: Organizer Special Discount Callout */}
             {sale.items.some((item) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0) && (
               <div className="rounded-xl p-4 border-l-4 border-sage-600 dark:border-sage-500 bg-sage-50 dark:bg-sage-950/30 flex items-start gap-3">
@@ -1195,6 +1232,72 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               </section>
             )}
 
+            {/* #416: Sale Floor Map */}
+            <SaleFloorMap
+              items={sale.items.map((item) => ({
+                id: item.id,
+                title: item.title,
+                roomTag: item.roomTag ?? null,
+                price: item.price ?? null,
+              }))}
+              onRoomClick={(room) => {
+                setSelectedRoom((prev) => (prev === room ? null : room));
+                document.getElementById('items')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            />
+
+            {/* #403: Family Bundle Pricing */}
+            {saleBundles && saleBundles.length > 0 && (
+              <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
+                <div className="text-xs uppercase tracking-widest mb-1" style={{ fontFamily: 'ui-monospace, monospace', color: '#2D7A4F', letterSpacing: '0.1em' }}>
+                  Bundles
+                </div>
+                <h2 style={{ fontFamily: '"Inter Tight", "Inter", sans-serif', fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', margin: '0 0 14px', color: 'inherit' }}>
+                  Bundle deals
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {saleBundles.map((bundle) => (
+                    <div key={bundle.id} className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 p-4 flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="font-semibold text-sm text-green-900 dark:text-green-100" style={{ fontFamily: '"Inter Tight", "Inter", sans-serif' }}>
+                            {bundle.title}
+                          </div>
+                          {bundle.description && (
+                            <p className="text-xs mt-1 text-green-700 dark:text-green-300 leading-relaxed">{bundle.description}</p>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-lg font-bold text-green-800 dark:text-green-200" style={{ fontFamily: '"Inter Tight", "Inter", sans-serif' }}>
+                          ${bundle.bundlePrice.toFixed(2)}
+                        </div>
+                      </div>
+                      {bundle.items.length > 0 && (
+                        <div className="flex flex-col gap-1">
+                          <div className="text-xs uppercase tracking-wider text-green-600 dark:text-green-400 mb-0.5" style={{ fontFamily: 'ui-monospace, monospace' }}>Includes</div>
+                          {bundle.items.slice(0, 5).map((item) => (
+                            <div key={item.id} className="text-xs text-green-800 dark:text-green-200 flex items-center gap-1.5">
+                              <span className="w-1 h-1 rounded-full bg-green-500 shrink-0" />
+                              {item.title}
+                              {item.status === 'SOLD' && <span className="text-green-500 dark:text-green-600 italic">(sold)</span>}
+                            </div>
+                          ))}
+                          {bundle.items.length > 5 && (
+                            <div className="text-xs text-green-600 dark:text-green-400 pl-3">+{bundle.items.length - 5} more</div>
+                          )}
+                        </div>
+                      )}
+                      <a
+                        href={`mailto:?subject=Bundle inquiry: ${encodeURIComponent(bundle.title)}&body=Hi, I'm interested in the bundle "${encodeURIComponent(bundle.title)}" listed on FindA.Sale.`}
+                        className="mt-auto text-center text-xs font-semibold py-2 px-3 rounded-lg bg-green-700 hover:bg-green-800 text-white transition-colors"
+                      >
+                        Contact Organizer
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* ── ITEMS GRID ── */}
             <section id="items" className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
               {/* Section header */}
@@ -1239,7 +1342,18 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 </div>
               )}
 
-              {/* Category filter + per-page (if no tags) */}
+              {/* #416: Active room filter indicator */}
+              {selectedRoom && (
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs" style={{ color: 'rgba(26,24,20,0.5)' }}>Showing:</span>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}>
+                    {selectedRoom}
+                    <button onClick={() => setSelectedRoom(null)} className="ml-0.5 hover:opacity-70 transition-opacity" aria-label="Clear room filter">×</button>
+                  </span>
+                </div>
+              )}
+
+              {/* Category filter + per-page (if no tags) */}}
               {(!sale.tags || sale.tags.length === 0) && sale.items.some((item) => item.category) && (
                 <div className="flex items-center gap-3 mb-4 relative">
                   <button onClick={() => setCategoryDropdownOpen(o => !o)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-warm-700 dark:text-gray-200 hover:bg-warm-50 transition-colors">
@@ -1312,6 +1426,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               ) : (() => {
                 const filteredSorted = sale.items
                   .filter((item) => selectedCategory === null || item.category?.toLowerCase() === selectedCategory)
+                  .filter((item) => selectedRoom === null || item.roomTag === selectedRoom) // #416: floor map filter
                   .sort((a, b) => {
                     if (a.status === 'SOLD' && b.status !== 'SOLD') return 1;
                     if (a.status !== 'SOLD' && b.status === 'SOLD') return -1;
