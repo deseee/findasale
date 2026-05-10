@@ -546,7 +546,7 @@ function Step1({ c, form, setForm }: Step1Props) {
               onClick={() => setForm(f => ({
                 ...f,
                 saleType: tile.key,
-                saleSubtype: tile.subs[0].value,
+                saleSubtype: tile.subs[0]?.value ?? '',
                 title: '',
               }))}
               style={{

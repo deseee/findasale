@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S710
+# Patrick's Dashboard — S711
 
 ---
 
@@ -10,33 +10,33 @@
 | Railway backend | ✅ GREEN |
 | OUTREACH_ENABLED | ✅ TRUE — 197 high-confidence cohort live |
 | Pool (post-backfill) | COLD=32,530 / WARM=5,663 / HOT=215 / SUPPRESSED=3,498 |
-| Wave 2 features | ✅ 12 features shipped — Pending Chrome QA |
-| settings.tsx build fix | ✅ eBay tab JSX + Help tab restored |
-| [id].tsx build fix | ✅ Stray brace removed |
-| create-sale.tsx fix | ✅ Apostrophe escaped (prior session) |
-| AR Phase 2 | ❌ Dead source — AR SOS blocks GH Actions IPs |
-| MS Phase 2 | ❌ Dead source — MS SOS API returns 404 |
-| Canada411 | ❌ Dead source — URL format 404 everywhere |
+| Wave 2 Chrome QA | 🔴 IN PROGRESS — see table below |
+| Sale wizard (Dorm Dash) | 🔴 P0 CRASH — DORM_DASH type crashes wizard |
+| Wave 2 edit-sale fields | 🔴 MISSING — 6 features not in edit-sale |
+| Leaderboard | 🟡 P2 — "Failed to load leaderboard data" |
+| AR Phase 2 | ❌ Dead source |
+| MS Phase 2 | ❌ Dead source |
+| Canada411 | ❌ Dead source |
 | MT licensing | ❌ 401 — INTERNAL_API_TOKEN secret mismatch (Patrick fix needed) |
 
 ---
 
-## Wave 2 Features — Pending Chrome QA
+## Wave 2 QA Results (S711)
 
-| # | Feature | QA Priority |
-|---|---------|-------------|
-| 412 | Cash-to-Digital Bridge (Venmo/Zelle in settings) | HIGH |
-| 402 | Cover the Fee toggle (sale creation) | HIGH |
-| 411 | Dorm Dash sale type | HIGH |
-| 416 | Sale Floor Map (room navigation) | HIGH |
-| 405 | Founding Organizer Badge (profile) | MED |
-| 407 | Flip Tracker ROI Dashboard | MED |
-| 403 | Family Bundle Pricing | MED |
-| 406 | Split-the-Bill POS | MED |
-| 413 | Physical Safety & Liability Disclosures | MED |
-| 414 | Grief Firewall (estate sensitivity mode) | MED |
-| 415 | Junk Drawer Donation Kit | LOW |
-| 369 | Quebec Bill 96 block at signup | LOW |
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 406 | Split-the-Bill POS | ✅ VERIFIED | Both persons paid, counter correct |
+| 407 | Flip Tracker ROI | ⚠️ PARTIAL | Cost Basis input works; ROI needs sold items to display |
+| 412 | Cash Bridge (Venmo/Zelle) | 🔄 DECISION MADE | Rebuild: POS buttons + Stripe fee. Remove from Settings. |
+| 402 | Cover the Fee | 🔄 DECISION MADE | Restrict to Auction sale type only |
+| 411 | Dorm Dash | 🔴 BLOCKED | P0 wizard crash on DORM_DASH selection |
+| 416 | Sale Floor Map | 🔴 BLOCKED | Not in /organizer/edit-sale |
+| 413 | Safety Notes | 🔴 BLOCKED | Not in /organizer/edit-sale |
+| 414 | Grief Firewall | 🔴 BLOCKED | Not in /organizer/edit-sale |
+| 415 | Donation Kit | 🔴 BLOCKED | Not in /organizer/edit-sale |
+| 403 | Bundle Pricing | 🔴 BLOCKED | Not in /organizer/edit-sale |
+| 405 | Founding Badge | ⬜ UNVERIFIED | No display surface found (profile/storefront/leaderboard) |
+| 369 | Quebec block | ⬜ UNVERIFIED | Needs Quebec test user |
 
 ---
 
@@ -54,7 +54,6 @@
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "docs: S710 wrap — Wave 2 Vercel fixes, roadmap updated (12 items shipped)"
+git commit -m "docs: S711 wrap — Wave 2 Chrome QA results, P0 Dorm Dash crash, product decisions"
 .\push.ps1
 ```

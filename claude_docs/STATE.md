@@ -8,18 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S710 — Wave 2 Vercel Build Fix + Roadmap Update (COMPLETE — pushed)**
+**Latest: S711 — Wave 2 Chrome QA Sprint (COMPLETE — wrap)**
 
-Three Vercel build errors fixed from Wave 2 (S696) agent truncation: (1) create-sale.tsx apostrophe escape in DORM_DASH tip string; (2) settings.tsx JSX structure — eBay tab `)}` replaced with `</div>`, Help & Support tab missing entirely, FeedbackMenu modal dropped; (3) sales/[id].tsx stray `}}` on comment line. All Wave 2 features confirmed live on Vercel: #369 Quebec block, #402 Cover the Fee, #403 Bundle Pricing, #405 Founding Badge, #406 Split-Bill POS, #407 Flip Tracker ROI, #411 Dorm Dash, #412 Cash Bridge, #413 Safety Notes, #414 Grief Firewall, #415 Donation Kit, #416 Sale Floor Map. Roadmap updated: 12 items marked SHIPPED — Pending Chrome QA.
+Ran Chrome QA on 12 Wave 2 features as main session (no subagent overhead). Results: 1 ✅ #406 Split Bill (both persons marked paid, counter correct); 1 ⚠️ #407 Flip Tracker (Cost Basis field works, Flip Report renders, but ROI calculation section requires sold items — test account has none); 2 UNVERIFIED (#405 Founding Badge — no display surface found on profile/storefront/leaderboard; #369 Quebec block — needs Quebec user account). Critical findings: P0 sale wizard crash (all sale types crash on selection — no organizer can create a new sale); 6 Wave 2 per-sale features absent from /organizer/edit-sale (Safety Notes, Grief Firewall, Sale Floor Map, Bundle Pricing, Cover the Fee, Donation Kit); Leaderboard "Failed to load leaderboard data" P2 error. Product decisions: #412 Cash Bridge → remove Venmo/Zelle handles from Settings, add as POS payment method buttons with Stripe fee capture; #402 Cover the Fee → restrict to Auction sale type only. Dev dispatches needed: see §Next Session.
+
+**S710 (prior):**
+Three Vercel build errors fixed (create-sale.tsx, settings.tsx, sales/[id].tsx). 12 Wave 2 features confirmed live — marked Pending Chrome QA on roadmap.
 
 **S709 (prior):**
-Railway crash fixed (alabamaPhase2Scraper, kentuckyPhase2Scraper, mainePhase2Scraper MODULE_NOT_FOUND — stubs pushed). FL Phase 2 smoke test: DBPR 102 auctioneers matched ✅, FDACS pawnshop blocked from GH Actions IPs (ConnectTimeout, graceful skip). 9 new Phase 2 scrapers shipped: AR, IA, WI, LA, MS, SC (functional) + AL, KY, ME (documented stubs). SaleCard badge + auctionIsOver fixes. COLD noise 51-term blocklist backfill complete (38,408 orgs).
-
-**S706 (prior):**
-Backfill triggered and completed (37,531 orgs scored). Pool quality audit run. Outreach cohort decision: Option A (197 high-confidence emails). FL/OH/NC/GA Phase 2 scrapers built. Canadian directory research complete. WA+WY Phase 2 internal.ts truncation fixed.
-
-**S705 (prior session — COMPLETE, all pushed):**
-S705 fixed the Railway crash from S704 (garagesalefinder.ts missing), hardened email discovery quality gates (22-domain blocklist, confidence calibration, 0.60 floor), excluded Canada (1,208 orgs) and GarageSaleFinder orgs from outreach, cleaned 499 junk email records from DB, and expanded Foursquare Canada from 7→17 metros. All files pushed. OUTREACH_ENABLED remains false pending outreach strategy decision.
+OUTREACH_ENABLED=true. 197 high-confidence cohort live. Phase 2 scrapers: 9 new states. COLD noise backfill complete (38,408 orgs scored).
 
 ---
 
@@ -60,6 +57,9 @@ Run: 2026-05-10. Railway DB queried directly via psycopg2.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
+| #405 Founding Badge | No display surface found (profile, storefront, leaderboard all checked — badge not rendering anywhere) | Code review to find where badge should render; verify organizer with badge can see it | S711 |
+| #369 Quebec block | Needs Quebec user account to test | Create test user with Quebec address; verify they are blocked at checkout | S711 |
+| #407 Flip Tracker ROI | Cost Basis input works; Flip Report renders but ROI section requires sold items | Mark an item sold in test account then re-verify ROI calculations in Flip Report | S711 |
 | #174 Auction bid form UX | auctionIsOver fix shipped S708 — push pending Patrick confirmation | Re-verify in Chrome after push lands | S707 |
 | #251 SaleCard markdown badge | hasMarkdownItems + Sale badge shipped S708 — push pending Patrick confirmation | Re-verify SaleCard shows Sale badge on markdown items after push lands | S707 |
 | AI listing enrichment | Fire-and-forget | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` | S651 |
@@ -69,6 +69,10 @@ Run: 2026-05-10. Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S711 — Wave 2 Chrome QA Sprint (COMPLETE — wrap)
+
+Chrome QA on 12 Wave 2 features (main session, no subagent). ✅ #406 Split Bill (both persons paid, counter correct). ⚠️ #407 Flip Tracker (Cost Basis input works, Flip Report renders, ROI needs sold items — queued). UNVERIFIED: #405 Founding Badge (no display surface found anywhere), #369 Quebec block (needs test user). P0 found: DORM_DASH sale type crashes wizard on selection (other sale types unaffected per Patrick). 6 Wave 2 per-sale features absent from /organizer/edit-sale: Safety Notes, Grief Firewall, Sale Floor Map, Bundle Pricing, Cover the Fee, Donation Kit — organizers can't access them. P2: Leaderboard "Failed to load leaderboard data." Product decisions: #412 Cash Bridge → Venmo/Zelle as POS buttons with Stripe fee, remove from Settings standalone; #402 Cover the Fee → Auction sale type only. P0 Dorm Dash wizard crash dispatched to findasale-dev (S711 post-wrap).
 
 ### S710 — Wave 2 Vercel Build Fix (COMPLETE — pushed)
 
@@ -92,24 +96,6 @@ GarageSaleFinder site redesign broke all URL structure + HTML selectors (0/0/0/0
 
 ---
 
-### S703 — Geocoding Dropout Fix + Design Overhaul: All 7 UI Surfaces (COMPLETE — pushed)
-
-Geocoding root cause: `getOrCreateScrapedOrganizer()` called with 12 args instead of 14 — lat/lng never passed. All 5 dedup paths now select lat/lng and backfill when null. ERR_HTTP_HEADERS_SENT guard added. Design overhaul shipped: sale detail page (full-bleed hero, sticky mobile strip), sale creation wizard (5-step, 591 lines), email design system (token system, 5 module builders, 4 new email builders), onboarding email series (Day 0/2/7), smart review queue (price enforcement, sticky bulk actions), SaleTypeBadge, BroadcastComposer (985 lines, 3 templates), storefront v0.2 (280px hero, stats strip, follow/hours/contact rail).
-
----
-
-### S702 — Phase 2 Scraper Fixes + internal.ts Wiring + VA General Scraper (COMPLETE — pushed)
-
-CT (column names + substring matching), PA (Socrata JSON pagination replaces OOM bulk CSV), VA DPOR (correct numbered file URLs), NJ (mangled quote syntax) all fixed. WA still broken (dataset locked). **Critical fix:** all 28 Phase 2 scrapers now have Express routes in `internal.ts` — they had zero routes before this session. Virginia general scraper added (Norfolk Socrata). Dashboard at session end: 32,110 orgs, Geocoded=0%, ~24k unscored.
-
----
-
-### S701 — 50-State Scraper Audit + Tier 1 Phase 2 Rewrites (COMPLETE — pushed)
-
-Full 50-state data source audit. Roadmap #395–#397 added. All Phase 2 scrapers rewritten from pawnbroker-only stubs to broad Socrata/ArcGIS sources covering all 14 secondhand sale types. AK/CT/IL/NV/NY/OR/NJ rewrites pushed. DE/HI rewrites + PA/TX/VA/WA Phase 2 created. All 48 Phase 1 licensing YMLs included. Subagent Write tool silent failure discovered — bash python3 heredoc required for tracked file edits in VM.
-
----
-
 ### S709 — Phase 2 Smoke Tests + Connection Pool Fix + Outreach Live (COMPLETE — pushed)
 
 S708 push confirmed landed (Railway deployed `042909c78b50f049dddb61e46fb8383b311223bb` ✅). OUTREACH_ENABLED flipped to true — 197 high-confidence cohort now live. Backfill confirmed complete: 38,408 scored (COLD=32,530 / WARM=5,663 / HOT=215 / SUPPRESSED=3,498). Phase 2 smoke tests: IA ✅, WI ✅ (11 DSPS auctioneers after NMLS removal), LA running (793+ NOLA rows processing — connection limit fix held), AR/MS/Canada411 identified as dead sources (SOS IP-blocked / 404). Connection pool fix applied: `?connection_limit=3&pool_timeout=20` added to all 41 Phase 2 scraper ymls. Wisconsin NMLS removed (api.nmlsconsumeraccess.org DNS-blocked from GH Actions). Push: 41 ymls + wisconsinPhase2Scraper.ts. MT 401 pending: INTERNAL_API_TOKEN GH secret doesn't match Railway INTERNAL_API_KEY (Patrick ops action).
@@ -130,27 +116,33 @@ Researched Jake Van Clief's Interpreted Context Methodology. Dispatched workflow
 
 ---
 
-## Next Session — S711
+## Next Session — S712
 
-### Priority 1 — Chrome QA: Wave 2 features
+### Priority 1 — Dev dispatches from S711 QA (parallel)
 
-12 features shipped in S696/S710 are all Pending Chrome QA. Dispatch findasale-qa for each feature as organizer + shopper roles. Start with highest user-visibility: #412 Cash Bridge (settings Venmo/Zelle fields), #402 Cover the Fee (sale creation toggle), #411 Dorm Dash (DORM_DASH sale type), #416 Sale Floor Map. One QA agent per feature, sequential (Chrome concurrency rule).
+**P0 — Dorm Dash wizard crash:** DORM_DASH sale type crashes on wizard step selection. Other sale types unaffected. Dispatch findasale-dev.
 
-### Priority 2 — Monitor outreach cron run
+**P1 — Add Wave 2 features to edit-sale:** Safety Notes, Grief Firewall, Sale Floor Map, Bundle Pricing, Cover the Fee (Auction-only), Donation Kit are all absent from /organizer/edit-sale/[id]. Organizers can't configure these features on existing sales.
 
-OUTREACH_ENABLED=true as of S709. Check Railway logs for send confirmations and pixel tracking (200 responses). First run: 197 high-confidence cohort.
+**P1 — Cash Bridge rebuild:** Remove venmoHandle, zelleHandle, Save Payment Handles button from /organizer/settings Payments tab. Add Venmo/Zelle as POS payment method buttons (alongside Cash/Card/Stripe QR/Invoice), with FindA.Sale fee captured via Stripe.
 
-### Priority 3 — MT secret fix (Patrick ops action)
+**P1 — Cover the Fee scope fix:** Restrict toggle to Auction sale type only. Remove from all other sale type flows and remove the general info card from settings.
 
-Railway dashboard → backend Variables → copy exact `INTERNAL_API_KEY` value → GitHub repo Settings → Secrets → update `INTERNAL_API_TOKEN` to match. Re-trigger Montana licensing workflow.
+**P2 — Leaderboard fix:** "Failed to load leaderboard data" error on /leaderboard page.
 
-### Priority 4 — Dead source research (AR, MS, Canada411)
+**P3 — Split Bill UX:** "Charge $X" button stays greyed after all cash splits collected. No clear next step for organizer.
 
-AR SOS blocks GH Actions IPs. MS SOS API 404. Canada411 URL format 404. Research or park as stubs.
+### Priority 2 — Verify blocked queue items
+
+#405 Founding Badge display location (code review needed — where should it render?), #407 Flip Tracker ROI (mark an item sold, re-QA), #369 Quebec block (create Quebec test user).
+
+### Priority 3 — Outreach monitoring
+
+Check Railway logs for outreach cron results (OUTREACH_ENABLED=true since S709, 197 high-confidence cohort).
 
 ### Patrick actions needed
 
-**MT secret fix:**
+**MT secret fix (carry-forward):**
 1. Railway dashboard → backend service → Variables → find `INTERNAL_API_KEY` → copy value
 2. GitHub → repo Settings → Secrets and variables → Actions → `INTERNAL_API_TOKEN` → update to match
 3. Re-run "Scrape Montana Auctioneer Licenses" workflow to confirm 200
