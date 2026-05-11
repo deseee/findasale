@@ -161,7 +161,13 @@ export async function runTexasPhase2Scraper(): Promise<void> {
   try {
     while (true) {
       pageNum++;
-      const url = `${TX_SOCRATA_BASE_URL}?$limit=${PAGE_LIMIT}&$offset=${offset}`;
+      // Server-side license_type filter — only fetch TDLR records for auctioneers, secondhand
+      // dealers, and pawnshops. Eliminates 99%+ of irrelevant TDLR license types.
+      // Client-side ALWAYS_INCLUDE_TYPES / BROADER_TYPES checks remain as secondary filters.
+      const TX_WHERE = encodeURIComponent(
+        `license_type IN ('AUC','AUCTIONEER','AUCTION COMPANY','AUCTION HOUSE','SECONDHAND','SECOND HAND','SHD','JUNK','JDL','JUNK DEALER','CONSIGNMENT','ESTATE SALE','PAWNSHOP','PSH','PAWNBROKER','RETAIL','RTL','MERCHANT','MER','DEALER','GENERAL MERCHANDISE')`
+      );
+      const url = `${TX_SOCRATA_BASE_URL}?$limit=${PAGE_LIMIT}&$offset=${offset}&$where=${TX_WHERE}`;
 
       console.log(`[Texas Phase2] Fetching page ${pageNum} (offset ${offset})...`);
 

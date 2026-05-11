@@ -161,7 +161,10 @@ async function fetchSocrataAllPages(baseUrl: string, domain: string): Promise<st
   console.log(`[IllinoisPhase2] Fetching paginated CSV from ${domain}`);
 
   while (true) {
-    const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}`;
+    // Server-side full-text filter — reduces egress vs. fetching all license types.
+    // Client-side ALWAYS_INCLUDE_SUBSTRINGS / BROADER_LICENSE_TYPES checks remain as secondary filters.
+    const ilQ = encodeURIComponent('auctioneer pawnbroker secondhand consignment junk dealer vintage antique thrift');
+    const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}&$q=${ilQ}`;
     await defaultRateLimiter.waitBeforeRequest(domain);
 
     const response = await fetch(url, {

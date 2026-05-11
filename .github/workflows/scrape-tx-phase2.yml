@@ -10,6 +10,7 @@ jobs:
   scrape:
     name: Texas Phase 2 TDLR Scraper
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout code

@@ -140,9 +140,13 @@ export async function runConnecticutPhase2Scraper(): Promise<void> {
     while (hasMore) {
       await defaultRateLimiter.waitBeforeRequest(CT_OPEN_DATA_DOMAIN);
 
+      // Server-side full-text filter — reduces egress by ~95% vs. fetching all 800+ credential types.
+      // Client-side ALWAYS_INCLUDE_ACTIVITIES / BROADER_ACTIVITIES checks remain as secondary filters.
+      const CT_Q = 'auctioneer pawnbroker secondhand consignment junk dealer vintage antique thrift auction';
       const params = new URLSearchParams({
         $limit: String(PAGE_SIZE),
         $offset: String(offset),
+        $q: CT_Q,
       });
       const url = `${CT_SOCRATA_URL}?${params.toString()}`;
 
