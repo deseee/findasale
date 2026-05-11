@@ -1,9 +1,7 @@
+# DISABLED: Canada411 /search/si/ route permanently removed. Replace with yellowpages.ca scraper when Canadian organizers are in scope.
 name: Scrape Canada411 Secondary Sale Directory
 
 on:
-  schedule:
-    # Monday 4:30 PM UTC — avoids overlap with US scrapers
-    - cron: '30 16 * * 1'
   workflow_dispatch:
 
 jobs:
