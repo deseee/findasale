@@ -6,10 +6,15 @@
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
 
+import https from 'https';
+import axios from 'axios';
 import { RateLimiter, defaultRateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
+
+// Missouri DPS cert chain is missing intermediate — rejectUnauthorized: false required
+const moHttpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const MO_SEARCH_URL = 'https://pr.mo.gov/';
 
@@ -23,19 +28,20 @@ export async function runMissouriLicensingScraper(): Promise<void> {
     console.log('[MissouriLicensing] Starting auctioneer license scraper');
     await rateLimiter.waitBeforeRequest(domain);
 
-    const searchResponse = await fetch(MO_SEARCH_URL, {
-      method: 'GET',
+    const searchResponse = await axios.get<string>(MO_SEARCH_URL, {
+      httpsAgent: moHttpsAgent,
       headers: {
         'User-Agent': getRandomUserAgent(),
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Encoding': 'gzip, deflate',
         Connection: 'keep-alive',
       },
-      signal: AbortSignal.timeout(30000),
+      timeout: 30000,
+      responseType: 'text',
     });
 
-    if (!searchResponse.ok) throw new Error(`Failed: ${searchResponse.status}`);
-    const html = await searchResponse.text();
+    if (searchResponse.status !== 200) throw new Error(`Failed: ${searchResponse.status}`);
+    const html = searchResponse.data;
 
     const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
     const rows = html.match(rowRegex) || [];
