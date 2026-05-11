@@ -122,3 +122,62 @@ export async function syncCityData(req: Request, res: Response) {
     });
   }
 }
+
+/**
+ * GET /api/cities/:slug/directory
+ * Returns scraped/unmanaged organizer listings for a city page directory section.
+ * Slug format: "grand-rapids-mi" — last segment is state code, remainder is city name.
+ * Queries isUnmanagedListing=true organizers whose address contains the city name.
+ */
+export async function getCityDirectory(req: Request, res: Response) {
+  try {
+    const { slug } = req.params;
+    const limit = Math.min(parseInt((req.query.limit as string) || '8', 10), 24);
+
+    // Parse city name from slug: "grand-rapids-mi" → city="Grand Rapids", state="MI"
+    const parts = slug.toLowerCase().split('-');
+    const stateCode = parts[parts.length - 1];
+    if (!stateCode || stateCode.length !== 2) {
+      return res.status(400).json({ error: 'Invalid city slug format' });
+    }
+    const cityName = parts
+      .slice(0, -1)
+      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+
+    // Query organizers: unmanaged, active, address contains the city name
+    // Scraped organizers store address as "City, ST" or "Street, City, ST"
+    const organizers = await prisma.organizer.findMany({
+      where: {
+        isUnmanagedListing: true,
+        directoryStatus: 'ACTIVE',
+        address: { contains: cityName, mode: 'insensitive' },
+      },
+      select: {
+        id: true,
+        businessName: true,
+        address: true,
+        website: true,
+        googleRating: true,
+        googleRatingCount: true,
+        businessCategory: true,
+        claimStatus: true,
+      },
+      orderBy: [
+        { googleRating: 'desc' },
+        { businessName: 'asc' },
+      ],
+      take: limit,
+    });
+
+    return res.json({
+      cityName,
+      stateCode: stateCode.toUpperCase(),
+      organizers,
+      count: organizers.length,
+    });
+  } catch (err) {
+    console.error('[citiesController] getCityDirectory error:', err);
+    return res.status(500).json({ error: 'Failed to fetch city directory' });
+  }
+}
