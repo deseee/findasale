@@ -23,7 +23,6 @@ export const getPricingSignals = [
           brand: true,
           category: true,
           price: true,
-          visionTags: true,
         },
       });
 
@@ -40,8 +39,8 @@ export const getPricingSignals = [
 
         for (const pattern of sleeperPatterns) {
           const indicatorTokens = pattern.indicatorTokens || [];
-          const searchText =
-            (item.title + ' ' + (item.visionTags || []).join(' ')).toLowerCase();
+          // visionTags removed from schema — match on title only
+          const searchText = (item.title).toLowerCase();
 
           const matched = indicatorTokens.some((token) =>
             searchText.includes(token.toLowerCase())
