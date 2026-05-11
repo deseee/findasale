@@ -145,7 +145,7 @@ router.post('/scraper/ingest', ingestFromGitHubActions);
 // POST /api/internal/scraper/enrich-backfill — backfill Google Places data on unmanaged listings
 router.post('/scraper/enrich-backfill', requireSecret, runEnrichmentBackfill);
 
-// POST /api/internal/scraper/run-indiana-licensing — run Indiana auctioneer license scraper
+// POST /api/internal/scraper/run-indiana-licensing
 router.post('/scraper/run-indiana-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runIndianaLicensingScraper();
@@ -156,7 +156,7 @@ router.post('/scraper/run-indiana-licensing', requireSecret, async (req: express
   }
 });
 
-// POST /api/internal/scraper/run-illinois-licensing — run Illinois auctioneer license scraper
+// POST /api/internal/scraper/run-illinois-licensing
 router.post('/scraper/run-illinois-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runIllinoisLicensingScraper();
@@ -167,7 +167,7 @@ router.post('/scraper/run-illinois-licensing', requireSecret, async (req: expres
   }
 });
 
-// POST /api/internal/scraper/run-louisiana-licensing — run Louisiana auctioneer license scraper
+// POST /api/internal/scraper/run-louisiana-licensing
 router.post('/scraper/run-louisiana-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runLouisianaLicensingScraper();
@@ -178,7 +178,7 @@ router.post('/scraper/run-louisiana-licensing', requireSecret, async (req: expre
   }
 });
 
-// POST /api/internal/scraper/run-north-carolina-licensing — run North Carolina auctioneer license scraper
+// POST /api/internal/scraper/run-north-carolina-licensing
 router.post('/scraper/run-north-carolina-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runNorthCarolinaLicensingScraper();
@@ -189,7 +189,7 @@ router.post('/scraper/run-north-carolina-licensing', requireSecret, async (req: 
   }
 });
 
-// POST /api/internal/scraper/run-virginia-licensing — run Virginia auctioneer license scraper
+// POST /api/internal/scraper/run-virginia-licensing
 router.post('/scraper/run-virginia-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runVirginiaLicensingScraper();
@@ -200,7 +200,7 @@ router.post('/scraper/run-virginia-licensing', requireSecret, async (req: expres
   }
 });
 
-// POST /api/internal/scraper/run-missouri-licensing — run Missouri auctioneer license scraper
+// POST /api/internal/scraper/run-missouri-licensing
 router.post('/scraper/run-missouri-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runMissouriLicensingScraper();
@@ -211,7 +211,7 @@ router.post('/scraper/run-missouri-licensing', requireSecret, async (req: expres
   }
 });
 
-// POST /api/internal/scraper/run-ohio-licensing — run Ohio auctioneer license scraper
+// POST /api/internal/scraper/run-ohio-licensing
 router.post('/scraper/run-ohio-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runOhioLicensingScraper();
@@ -222,7 +222,7 @@ router.post('/scraper/run-ohio-licensing', requireSecret, async (req: express.Re
   }
 });
 
-// POST /api/internal/scraper/run-tennessee-licensing — run Tennessee auctioneer license scraper
+// POST /api/internal/scraper/run-tennessee-licensing
 router.post('/scraper/run-tennessee-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runTennesseeLicensingScraper();
@@ -233,7 +233,7 @@ router.post('/scraper/run-tennessee-licensing', requireSecret, async (req: expre
   }
 });
 
-// POST /api/internal/scraper/run-vermont-licensing — run Vermont auctioneer license scraper
+// POST /api/internal/scraper/run-vermont-licensing
 router.post('/scraper/run-vermont-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runVermontLicensingScraper();
@@ -244,7 +244,7 @@ router.post('/scraper/run-vermont-licensing', requireSecret, async (req: express
   }
 });
 
-// POST /api/internal/scraper/run-washington-licensing — run Washington auctioneer license scraper
+// POST /api/internal/scraper/run-washington-licensing
 router.post('/scraper/run-washington-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runWashingtonLicensingScraper();
@@ -255,7 +255,7 @@ router.post('/scraper/run-washington-licensing', requireSecret, async (req: expr
   }
 });
 
-// POST /api/internal/scraper/run-wisconsin-licensing — run Wisconsin auctioneer license scraper
+// POST /api/internal/scraper/run-wisconsin-licensing
 router.post('/scraper/run-wisconsin-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runWisconsinLicensingScraper();
@@ -266,7 +266,7 @@ router.post('/scraper/run-wisconsin-licensing', requireSecret, async (req: expre
   }
 });
 
-// POST /api/internal/scraper/run-west-virginia-licensing — run West Virginia auctioneer license scraper
+// POST /api/internal/scraper/run-west-virginia-licensing
 router.post('/scraper/run-west-virginia-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runWestVirginiaLicensingScraper();
@@ -277,7 +277,7 @@ router.post('/scraper/run-west-virginia-licensing', requireSecret, async (req: e
   }
 });
 
-// POST /api/internal/scraper/run-wyoming-licensing — run Wyoming auctioneer license scraper
+// POST /api/internal/scraper/run-wyoming-licensing
 router.post('/scraper/run-wyoming-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runWyomingLicensingScraper();
@@ -288,7 +288,7 @@ router.post('/scraper/run-wyoming-licensing', requireSecret, async (req: express
   }
 });
 
-// POST /api/internal/scraper/run-alaska-licensing — run Alaska auctioneer license scraper
+// POST /api/internal/scraper/run-alaska-licensing
 router.post('/scraper/run-alaska-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runAlaskaLicensingScraper();
@@ -695,7 +695,7 @@ router.post('/scraper/run-utah-licensing', requireSecret, async (req: express.Re
   }
 });
 
-// POST /api/internal/scraper/run-osm — run OpenStreetMap Overpass API scraper
+// POST /api/internal/scraper/run-osm
 router.post('/scraper/run-osm', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runOsmScraper();
@@ -706,18 +706,13 @@ router.post('/scraper/run-osm', requireSecret, async (req: express.Request, res:
   }
 });
 
-// POST /api/internal/scraper/run-sale-seeker — run TheSaleSeker.com scraper
+// POST /api/internal/scraper/run-sale-seeker
 router.post('/scraper/run-sale-seeker', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
-    // Get system organizer for unmanaged listings
     const { getOrCreateSystemOrganizer } = await import('../services/scraper/index');
     const organizerId = await getOrCreateSystemOrganizer();
-
-    // Scrape all major metros (extract from query or use national default list)
     const metros = req.body?.metros || DEFAULT_METROS;
-
     const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
-
     for (const metro of metros) {
       try {
         const { defaultRateLimiter } = await import('../services/scraper/index');
@@ -731,7 +726,6 @@ router.post('/scraper/run-sale-seeker', requireSecret, async (req: express.Reque
         stats.failed++;
       }
     }
-
     res.json({ success: true, message: 'SaleSeker scraper completed', stats });
   } catch (error: any) {
     console.error('[SaleSeker] Route error:', error);
@@ -739,16 +733,13 @@ router.post('/scraper/run-sale-seeker', requireSecret, async (req: express.Reque
   }
 });
 
-// POST /api/internal/scraper/run-garagesalefinder — run GarageSaleFinder.com yard/garage sale scraper
+// POST /api/internal/scraper/run-garagesalefinder
 router.post('/scraper/run-garagesalefinder', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     const { getOrCreateSystemOrganizer, defaultRateLimiter } = await import('../services/scraper/index');
     const organizerId = await getOrCreateSystemOrganizer();
-
     const metros: string[] = req.body?.metros || DEFAULT_METROS;
-
     const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
-
     for (const metro of metros) {
       try {
         const result = await scrapeGarageSaleFinder(metro, organizerId, defaultRateLimiter);
@@ -761,7 +752,6 @@ router.post('/scraper/run-garagesalefinder', requireSecret, async (req: express.
         stats.failed++;
       }
     }
-
     res.json({ success: true, message: 'GarageSaleFinder scraper completed', stats });
   } catch (error: any) {
     console.error('[GarageSaleFinder] Route error:', error);
@@ -769,8 +759,7 @@ router.post('/scraper/run-garagesalefinder', requireSecret, async (req: express.
   }
 });
 
-// POST /api/internal/scraper/run-auctionzip — run AuctionZip auctioneer directory scraper (manual only)
-// Body (optional): { "letters": ["A","B","C"] } to run a subset of letters
+// POST /api/internal/scraper/run-auctionzip
 router.post('/scraper/run-auctionzip', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     const letters = Array.isArray(req.body?.letters) ? req.body.letters : undefined;
@@ -782,9 +771,29 @@ router.post('/scraper/run-auctionzip', requireSecret, async (req: express.Reques
   }
 });
 
-// POST /api/internal/outreach/send — manually trigger one outreach email window (bypasses cron schedule)
-// Requires OUTREACH_ENABLED=true + OUTREACH_SECRET + OUTREACH_WORKSPACE_EMAIL env vars.
-// Used for: warmup testing, manual sends, Railway one-off triggers.
+// POST /api/internal/scraper/run-auction-ninja
+router.post('/scraper/run-auction-ninja', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await scrapeAuctionNinja();
+    res.json({ success: true, message: 'AuctionNinja scraper completed' });
+  } catch (error: any) {
+    console.error('[AuctionNinja] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-naa
+router.post('/scraper/run-naa', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await scrapeNAADirectory();
+    res.json({ success: true, message: 'NAA scraper completed' });
+  } catch (error: any) {
+    console.error('[NAA] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/outreach/send
 router.post('/outreach/send', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await sendOutreachEmails();
@@ -795,38 +804,17 @@ router.post('/outreach/send', requireSecret, async (req: express.Request, res: e
   }
 });
 
-// GET /api/internal/outreach/status — pipeline observability snapshot (no SQL required)
+// GET /api/internal/outreach/status
 router.get('/outreach/status', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     const now = new Date();
     const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
     const warmupStart = process.env.OUTREACH_WARMUP_START_DATE
       ? new Date(process.env.OUTREACH_WARMUP_START_DATE)
       : new Date('2026-05-06');
     const warmupDay = Math.floor((now.getTime() - warmupStart.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-
-    const [
-      total,
-      statusPending,
-      statusSent,
-      statusBounced,
-      statusOptedOut,
-      statusClaimed,
-      touch1Sent,
-      touch2Sent,
-      touch3Sent,
-      touch4Sent,
-      completed,
-      last24hCount,
-      last7dCount,
-      suppressed,
-      hotCount,
-      warmCount,
-      coldCount,
-      tieredCount,
-    ] = await Promise.all([
+    const [total, statusPending, statusSent, statusBounced, statusOptedOut, statusClaimed, touch1Sent, touch2Sent, touch3Sent, touch4Sent, completed, last24hCount, last7dCount, suppressed, hotCount, warmCount, coldCount, tieredCount] = await Promise.all([
       prisma.directoryClaimEmail.count(),
       prisma.directoryClaimEmail.count({ where: { status: 'PENDING' } }),
       prisma.directoryClaimEmail.count({ where: { status: 'SENT' } }),
@@ -846,60 +834,22 @@ router.get('/outreach/status', requireSecret, async (req: express.Request, res: 
       prisma.organizer.count({ where: { leadTier: 'COLD' } }),
       prisma.organizer.count({ where: { leadTier: { not: null } } }),
     ]);
-
     const totalOrganizers = await prisma.organizer.count();
     const untieredCount = totalOrganizers - tieredCount;
-
-    res.json({
-      pipeline: {
-        total,
-        byStatus: {
-          PENDING: statusPending,
-          SENT: statusSent,
-          BOUNCED: statusBounced,
-          OPTED_OUT: statusOptedOut,
-          CLAIMED: statusClaimed,
-        },
-        byTier: {
-          HOT: hotCount,
-          WARM: warmCount,
-          COLD: coldCount,
-          untiered: untieredCount,
-        },
-        touchProgress: {
-          touch1Sent,
-          touch2Sent,
-          touch3Sent,
-          touch4Sent,
-          completed,
-        },
-      },
-      recentSends: {
-        last24h: last24hCount,
-        last7d: last7dCount,
-      },
-      suppressed,
-      warmupDay,
-    });
+    res.json({ pipeline: { total, byStatus: { PENDING: statusPending, SENT: statusSent, BOUNCED: statusBounced, OPTED_OUT: statusOptedOut, CLAIMED: statusClaimed }, byTier: { HOT: hotCount, WARM: warmCount, COLD: coldCount, untiered: untieredCount }, touchProgress: { touch1Sent, touch2Sent, touch3Sent, touch4Sent, completed } }, recentSends: { last24h: last24hCount, last7d: last7dCount }, suppressed, warmupDay });
   } catch (err: any) {
     console.error('[OutreachStatus] Route error:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// POST /api/internal/enrich-sale-details — trigger ESN sale detail enrichment (description + photos)
+// POST /api/internal/enrich-sale-details
 router.post('/enrich-sale-details', triggerSaleDetailEnrichment);
-
-// GET /api/internal/enrich-sale-details/status — check unenriched sales count
 router.get('/enrich-sale-details/status', getSaleDetailEnrichmentStatus);
-
-// GET /api/internal/enrich-sale-details/batch — get batch of unenriched sales (called by enrich-sale-details.yml workflow)
 router.get('/enrich-sale-details/batch', getBatchOfUnenrichedSales);
-
-// POST /api/internal/enrich-sale-details/bulk — bulk upsert enriched sale details (called by enrich-sale-details.yml workflow)
 router.post('/enrich-sale-details/bulk', bulkUpsertEnrichedSales);
 
-// POST /api/internal/category-sync/trigger — manually trigger eBay category sync (public eBay data, no auth required)
+// POST /api/internal/category-sync/trigger
 router.post('/category-sync/trigger', async (req: express.Request, res: express.Response) => {
   try {
     runCategorySync().catch(err => console.error('[CategorySync] Trigger error:', err));
@@ -909,8 +859,7 @@ router.post('/category-sync/trigger', async (req: express.Request, res: express.
   }
 });
 
-// POST /api/internal/scoring/run-backfill — score all organizers (protected)
-// Note: long-running (~30s for 8k orgs). Guard headersSent in case client times out.
+// POST /api/internal/scoring/run-backfill
 router.post('/scoring/run-backfill', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     const stats = await runLeadScoringBackfill();
@@ -921,10 +870,9 @@ router.post('/scoring/run-backfill', requireSecret, async (req: express.Request,
   }
 });
 
-// POST /api/internal/enrichment/run-website-backfill — enrich licensed organizers with no website (protected)
+// POST /api/internal/enrichment/run-website-backfill
 router.post('/enrichment/run-website-backfill', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
-    // Respond immediately — backfill is long-running
     res.status(202).json({ ok: true, message: 'Website enrichment backfill started' });
     runWebsiteEnrichmentBackfill().catch(err => console.error('[WebsiteEnrichment] Backfill route error:', err));
   } catch (err: any) {
@@ -932,509 +880,59 @@ router.post('/enrichment/run-website-backfill', requireSecret, async (req: expre
   }
 });
 
-// POST /api/internal/scraper/run-alaska-phase2 — Alaska Phase 2 business registry scraper
-router.post('/scraper/run-alaska-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runAlaskaPhase2Scraper();
-    res.json({ success: true, message: 'Alaska Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[AlaskaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+// Phase 2 scrapers
+router.post('/scraper/run-alaska-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runAlaskaPhase2Scraper(); res.json({ success: true, message: 'Alaska Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-arizona-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runArizonaPhase2Scraper(); res.json({ success: true, message: 'Arizona Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-california-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runCaliforniaPhase2Scraper(); res.json({ success: true, message: 'California Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-colorado-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runColoradoPhase2Scraper(); res.json({ success: true, message: 'Colorado Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-connecticut-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runConnecticutPhase2Scraper(); res.json({ success: true, message: 'Connecticut Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-delaware-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runDelawarePhase2Scraper(); res.json({ success: true, message: 'Delaware Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-hawaii-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runHawaiiPhase2Scraper(); res.json({ success: true, message: 'Hawaii Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-idaho-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runIdahoPhase2Scraper(); res.json({ success: true, message: 'Idaho Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-illinois-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runIllinoisPhase2Scraper(); res.json({ success: true, message: 'Illinois Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-kansas-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runKansasPhase2Scraper(); res.json({ success: true, message: 'Kansas Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-michigan-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runMichiganPhase2Scraper(); res.json({ success: true, message: 'Michigan Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-minnesota-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runMinnesotaPhase2Scraper(); res.json({ success: true, message: 'Minnesota Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-missouri-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runMissouriPhase2Scraper(); res.json({ success: true, message: 'Missouri Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-montana-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runMontanaPhase2Scraper(); res.json({ success: true, message: 'Montana Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-nebraska-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runNebraskaPhase2Scraper(); res.json({ success: true, message: 'Nebraska Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-nevada-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runNevadaPhase2Scraper(); res.json({ success: true, message: 'Nevada Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-new-jersey-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runNewJerseyPhase2Scraper(); res.json({ success: true, message: 'New Jersey Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-new-mexico-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runNewMexicoPhase2Scraper(); res.json({ success: true, message: 'New Mexico Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-new-york-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runNewYorkPhase2Scraper(); res.json({ success: true, message: 'New York Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-oklahoma-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runOklahomaphase2Scraper(); res.json({ success: true, message: 'Oklahoma Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-oregon-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runOregonPhase2Scraper(); res.json({ success: true, message: 'Oregon Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-pennsylvania-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runPennsylvaniaPhase2Scraper(); res.json({ success: true, message: 'Pennsylvania Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-rhode-island-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runRhodeIslandPhase2Scraper(); res.json({ success: true, message: 'Rhode Island Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-texas-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runTexasPhase2Scraper(); res.json({ success: true, message: 'Texas Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-utah-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runUtahPhase2Scraper(); res.json({ success: true, message: 'Utah Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-virginia-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runVirginiaPhase2Scraper(); res.json({ success: true, message: 'Virginia Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-washington-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runWashingtonPhase2Scraper(); res.json({ success: true, message: 'Washington Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-wyoming-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runWyomingPhase2Scraper(); res.json({ success: true, message: 'Wyoming Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-florida-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runFloridaPhase2Scraper(); res.json({ success: true, message: 'Florida Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-georgia-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runGeorgiaPhase2Scraper(); res.json({ success: true, message: 'Georgia Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-north-carolina-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runNorthCarolinaPhase2Scraper(); res.json({ success: true, message: 'North Carolina Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-ohio-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runOhioPhase2Scraper(); res.json({ success: true, message: 'Ohio Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-canada411', requireSecret, async (req: express.Request, res: express.Response) => { try { await runCanada411Scraper(); res.json({ success: true, message: 'Canada411 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-yellowpages-ca', requireSecret, async (req: express.Request, res: express.Response) => { try { await runYellowPagesCaScraper(); res.json({ success: true, message: 'YellowPages.ca scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-alabama-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runAlabamaPhase2Scraper(); res.json({ success: true, message: 'Alabama Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-kentucky-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runKentuckyPhase2Scraper(); res.json({ success: true, message: 'Kentucky Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-maine-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runMainePhase2Scraper(); res.json({ success: true, message: 'Maine Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-iowa-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runIowaPhase2Scraper(); res.json({ success: true, message: 'Iowa Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-wisconsin-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runWisconsinPhase2Scraper(); res.json({ success: true, message: 'Wisconsin Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-louisiana-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runLouisianaPhase2Scraper(); res.json({ success: true, message: 'Louisiana Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-arkansas-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runArkansasPhase2Scraper(); res.json({ success: true, message: 'Arkansas Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-mississippi-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runMississippiPhase2Scraper(); res.json({ success: true, message: 'Mississippi Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-south-carolina-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runSouthCarolinaPhase2Scraper(); res.json({ success: true, message: 'South Carolina Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-indiana-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runIndianaPhase2Scraper(); res.json({ success: true, message: 'Indiana Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-maryland-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runMarylandPhase2Scraper(); res.json({ success: true, message: 'Maryland Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-massachusetts-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runMassachusettsPhase2Scraper(); res.json({ success: true, message: 'Massachusetts Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-new-hampshire-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runNewHampshirePhase2Scraper(); res.json({ success: true, message: 'New Hampshire Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-north-dakota-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runNorthDakotaPhase2Scraper(); res.json({ success: true, message: 'North Dakota Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-south-dakota-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runSouthDakotaPhase2Scraper(); res.json({ success: true, message: 'South Dakota Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-tennessee-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runTennesseePhase2Scraper(); res.json({ success: true, message: 'Tennessee Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-vermont-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runVermontPhase2Scraper(); res.json({ success: true, message: 'Vermont Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-west-virginia-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runWestVirginiaPhase2Scraper(); res.json({ success: true, message: 'West Virginia Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+router.post('/scraper/run-virginia-general-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runVirginiaGeneralPhase2Scraper(); res.json({ success: true, message: 'Virginia General Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
 
-// POST /api/internal/scraper/run-arizona-phase2 — Arizona Phase 2 business registry scraper
-router.post('/scraper/run-arizona-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runArizonaPhase2Scraper();
-    res.json({ success: true, message: 'Arizona Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[ArizonaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-california-phase2 — California Phase 2 business registry scraper
-router.post('/scraper/run-california-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runCaliforniaPhase2Scraper();
-    res.json({ success: true, message: 'California Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[CaliforniaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-colorado-phase2 — Colorado Phase 2 business registry scraper
-router.post('/scraper/run-colorado-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runColoradoPhase2Scraper();
-    res.json({ success: true, message: 'Colorado Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[ColoradoPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-connecticut-phase2 — Connecticut Phase 2 business registry scraper
-router.post('/scraper/run-connecticut-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runConnecticutPhase2Scraper();
-    res.json({ success: true, message: 'Connecticut Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[ConnecticutPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-delaware-phase2 — Delaware Phase 2 business registry scraper
-router.post('/scraper/run-delaware-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runDelawarePhase2Scraper();
-    res.json({ success: true, message: 'Delaware Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[DelawarePhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-hawaii-phase2 — Hawaii Phase 2 business registry scraper
-router.post('/scraper/run-hawaii-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runHawaiiPhase2Scraper();
-    res.json({ success: true, message: 'Hawaii Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[HawaiiPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-idaho-phase2 — Idaho Phase 2 business registry scraper
-router.post('/scraper/run-idaho-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runIdahoPhase2Scraper();
-    res.json({ success: true, message: 'Idaho Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[IdahoPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-illinois-phase2 — Illinois Phase 2 business registry scraper
-router.post('/scraper/run-illinois-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runIllinoisPhase2Scraper();
-    res.json({ success: true, message: 'Illinois Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[IllinoisPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-kansas-phase2 — Kansas Phase 2 business registry scraper
-router.post('/scraper/run-kansas-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runKansasPhase2Scraper();
-    res.json({ success: true, message: 'Kansas Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[KansasPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-michigan-phase2 — Michigan Phase 2 business registry scraper
-router.post('/scraper/run-michigan-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runMichiganPhase2Scraper();
-    res.json({ success: true, message: 'Michigan Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[MichiganPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-minnesota-phase2 — Minnesota Phase 2 business registry scraper
-router.post('/scraper/run-minnesota-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runMinnesotaPhase2Scraper();
-    res.json({ success: true, message: 'Minnesota Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[MinnesotaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-missouri-phase2 — Missouri Phase 2 business registry scraper
-router.post('/scraper/run-missouri-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runMissouriPhase2Scraper();
-    res.json({ success: true, message: 'Missouri Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[MissouriPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-montana-phase2 — Montana Phase 2 business registry scraper
-router.post('/scraper/run-montana-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runMontanaPhase2Scraper();
-    res.json({ success: true, message: 'Montana Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[MontanaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-nebraska-phase2 — Nebraska Phase 2 business registry scraper
-router.post('/scraper/run-nebraska-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runNebraskaPhase2Scraper();
-    res.json({ success: true, message: 'Nebraska Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[NebraskaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-nevada-phase2 — Nevada Phase 2 business registry scraper
-router.post('/scraper/run-nevada-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runNevadaPhase2Scraper();
-    res.json({ success: true, message: 'Nevada Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[NevadaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-new-jersey-phase2 — New Jersey Phase 2 business registry scraper
-router.post('/scraper/run-new-jersey-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runNewJerseyPhase2Scraper();
-    res.json({ success: true, message: 'New Jersey Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[NewJerseyPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-new-mexico-phase2 — New Mexico Phase 2 business registry scraper
-router.post('/scraper/run-new-mexico-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runNewMexicoPhase2Scraper();
-    res.json({ success: true, message: 'New Mexico Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[NewMexicoPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-new-york-phase2 — New York Phase 2 business registry scraper
-router.post('/scraper/run-new-york-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runNewYorkPhase2Scraper();
-    res.json({ success: true, message: 'New York Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[NewYorkPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-oklahoma-phase2 — Oklahoma Phase 2 business registry scraper
-router.post('/scraper/run-oklahoma-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runOklahomaphase2Scraper();
-    res.json({ success: true, message: 'Oklahoma Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[OklahomaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-oregon-phase2 — Oregon Phase 2 business registry scraper
-router.post('/scraper/run-oregon-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runOregonPhase2Scraper();
-    res.json({ success: true, message: 'Oregon Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[OregonPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-pennsylvania-phase2 — Pennsylvania Phase 2 business registry scraper
-router.post('/scraper/run-pennsylvania-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runPennsylvaniaPhase2Scraper();
-    res.json({ success: true, message: 'Pennsylvania Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[PennsylvaniaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-rhode-island-phase2 — Rhode Island Phase 2 business registry scraper
-router.post('/scraper/run-rhode-island-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runRhodeIslandPhase2Scraper();
-    res.json({ success: true, message: 'Rhode Island Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[RhodeIslandPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-texas-phase2 — Texas Phase 2 business registry scraper
-router.post('/scraper/run-texas-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runTexasPhase2Scraper();
-    res.json({ success: true, message: 'Texas Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[TexasPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-utah-phase2 — Utah Phase 2 business registry scraper
-router.post('/scraper/run-utah-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runUtahPhase2Scraper();
-    res.json({ success: true, message: 'Utah Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[UtahPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-virginia-phase2 — Virginia Phase 2 business registry scraper
-router.post('/scraper/run-virginia-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runVirginiaPhase2Scraper();
-    res.json({ success: true, message: 'Virginia Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[VirginiaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-washington-phase2 — Washington Phase 2 business registry scraper
-router.post('/scraper/run-washington-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runWashingtonPhase2Scraper();
-    res.json({ success: true, message: 'Washington Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[WashingtonPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-wyoming-phase2 — Wyoming Phase 2 business registry scraper
-router.post('/scraper/run-wyoming-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runWyomingPhase2Scraper();
-    res.json({ success: true, message: 'Wyoming Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[WyomingPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-florida-phase2 — run Florida secondary sale Phase 2 scraper
-router.post('/scraper/run-florida-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runFloridaPhase2Scraper();
-    res.json({ success: true, message: 'Florida Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[FloridaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-georgia-phase2 — run Georgia secondary sale Phase 2 scraper
-router.post('/scraper/run-georgia-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runGeorgiaPhase2Scraper();
-    res.json({ success: true, message: 'Georgia Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[GeorgiaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-north-carolina-phase2 — run North Carolina secondary sale Phase 2 scraper
-router.post('/scraper/run-north-carolina-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runNorthCarolinaPhase2Scraper();
-    res.json({ success: true, message: 'North Carolina Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[NorthCarolinaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-ohio-phase2 — run Ohio secondary sale license scraper (Phase 2)
-router.post('/scraper/run-ohio-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runOhioPhase2Scraper();
-    res.json({ success: true, message: 'Ohio Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[OhioPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-canada411 — Canada411.ca directory scraper (LEGACY — replaced by yellowpages-ca)
-router.post('/scraper/run-canada411', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runCanada411Scraper();
-    res.json({ success: true, message: 'Canada411 scraper completed' });
-  } catch (error: any) {
-    console.error('[Canada411] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-yellowpages-ca — YellowPages.ca directory scraper (Canada411 replacement)
-router.post('/scraper/run-yellowpages-ca', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runYellowPagesCaScraper();
-    res.json({ success: true, message: 'YellowPages.ca scraper completed' });
-  } catch (error: any) {
-    console.error('[YellowPagesCA] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-alabama-phase2 — run Alabama secondary sale license scraper (Phase 2)
-router.post('/scraper/run-alabama-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runAlabamaPhase2Scraper();
-    res.json({ success: true, message: 'Alabama Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[AlabamaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-kentucky-phase2 — run Kentucky secondary sale license scraper (Phase 2)
-router.post('/scraper/run-kentucky-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runKentuckyPhase2Scraper();
-    res.json({ success: true, message: 'Kentucky Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[KentuckyPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-maine-phase2 — run Maine secondary sale license scraper (Phase 2)
-router.post('/scraper/run-maine-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runMainePhase2Scraper();
-    res.json({ success: true, message: 'Maine Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[MainePhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-iowa-phase2 — run Iowa secondary sale Phase 2 scraper
-router.post('/scraper/run-iowa-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runIowaPhase2Scraper();
-    res.json({ success: true, message: 'Iowa Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[IowaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-wisconsin-phase2 — run Wisconsin secondary sale Phase 2 scraper
-router.post('/scraper/run-wisconsin-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runWisconsinPhase2Scraper();
-    res.json({ success: true, message: 'Wisconsin Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[WisconsinPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-louisiana-phase2 — run Louisiana secondary sale Phase 2 scraper
-router.post('/scraper/run-louisiana-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runLouisianaPhase2Scraper();
-    res.json({ success: true, message: 'Louisiana Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[LouisianaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-arkansas-phase2 — Arkansas Phase 2 SOS business registry scraper
-router.post('/scraper/run-arkansas-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runArkansasPhase2Scraper();
-    res.json({ success: true, message: 'Arkansas Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[ArkansasPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-mississippi-phase2 — Mississippi Phase 2 SOS business registry scraper
-router.post('/scraper/run-mississippi-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runMississippiPhase2Scraper();
-    res.json({ success: true, message: 'Mississippi Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[MississippiPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-south-carolina-phase2 — SC LLR Phase 2 pawnbroker & secondhand dealer scraper
-router.post('/scraper/run-south-carolina-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runSouthCarolinaPhase2Scraper();
-    res.json({ success: true, message: 'South Carolina Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[SouthCarolinaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-indiana-phase2 — Indiana Phase 2 secondary sale scraper (stub)
-router.post('/scraper/run-indiana-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runIndianaPhase2Scraper();
-    res.json({ success: true, message: 'Indiana Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[IndianaPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-maryland-phase2 — Maryland Phase 2 secondary sale license scraper
-router.post('/scraper/run-maryland-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runMarylandPhase2Scraper();
-    res.json({ success: true, message: 'Maryland Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[MarylandPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/internal/scraper/run-massachusetts-phase2 — Massachusetts Phase 2 secondary sale scraper (stub)
-router.post('/scraper/run-massachusetts-phase2', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await runMassachusettsPhase2Scraper();
-    res.json({ success: true, message: 'Massachusetts Phase 2 scraper completed' });
-  } catch (error: any) {
-    console.error('[MassachusettsPhase2] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
-})
 export default router;
