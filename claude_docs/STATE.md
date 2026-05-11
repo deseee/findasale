@@ -8,15 +8,12 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S712 — Dorm Dash / Wave 2 / Outreach Pipeline / GitHub Actions (COMPLETE — wrap)**
+**Latest: S714 — SEO Content Foundation (COMPLETE — wrap)**
 
-Shipped: Dorm Dash P0 crash fix (saleController.ts — startDate/endDate/address fields made optional with defaults for online-only sales). Wave 2 edit-sale features added (DORM_DASH dropdown, Safety Notes textarea, Grief Firewall checkbox, Cover the Fee auction-only, Floor Map / Bundle Pricing / Donation Kit nav sections). Settings cleanup (Digital Payment Handles card and Cover Buyer Fees info card removed — consolidated into POS). Cash Bridge POS rebuild (Venmo/Zelle buttons with handle display and fee capture in pos.tsx — file was truncated mid-write and reconstructed from 2557→2667 lines). Leaderboard crash fix (Promise.all → Promise.allSettled; leaderboardController scouts catch returns empty valid response). Outreach pipeline: 7 gaps closed (auto-seed cron, status filters, schedule race fix, DCE upsert on discovery, queueForOutreach at all write sites, scoring scoped to unmanaged, /api/internal/outreach/status endpoint). 183 high-confidence organizers seeded into DirectoryClaimEmail live via psycopg2. GitHub Actions: 6 broken state scrapers fixed (PA/RI/SC/SD/TX/UT), 7 new Phase 2 state workflows created (AL/IN/KY/ME/MD/MA/NH), 17 schedule collisions fixed, enrich-backfill.yml auth fixed, 3 new scrapers (AuctionNinja, NAA, Facebook Marketplace).
+384 SEO pages generated and merged into `packages/frontend/data/seo-pages/index.json`. Batch breakdown: 34 Haiku-written pricing guides (batch1-fixed.json — after post-processing via fix-seo-batch.js to handle markdown fence wrapping, two-array corruption, field renaming, score stripping) + 350 template pages (25 cities × 10 categories = 250 city×category + 10 categories × 10 months = 100 trend reports). All pages served at `/guide/[slug]` — ISR 24hr revalidate, auto-populates server-sitemap.xml. Two new scripts: `scripts/fix-seo-batch.js` (post-processing fixer + merge tool) and `scripts/generate-template-pages.mjs` (template generator). System prompt updated in `seo-pages-haiku-generator.md` (field names fixed, seoScore removed, 15-item batch limit noted). After-reset dispatch ready at `claude_docs/strategy/seo-agent-dispatch.md` to generate remaining 116 Haiku-written pages (batch1b + batches 2+3). Haiku limit confirmed: ~15 items max per session before truncation — agent dispatch avoids this.
 
-**S711 (prior):**
-Chrome QA on 12 Wave 2 features. ✅ #406 Split Bill. ⚠️ #407 Flip Tracker (ROI needs sold items). UNVERIFIED: #405 Founding Badge, #369 Quebec block. P0 found: DORM_DASH wizard crash. 6 Wave 2 edit-sale features absent. P2: Leaderboard error. Decisions: Cash Bridge → POS buttons; Cover the Fee → Auction-only.
-
-**S710 (prior):**
-Three Vercel build errors fixed (create-sale.tsx, settings.tsx, sales/[id].tsx). 12 Wave 2 features confirmed live — marked Pending Chrome QA on roadmap.
+**S713 (prior):**
+Two backend crash loops fixed. OSM 406, GarageSaleFinder hidden-address, Missouri TLS, digest FK, Canada flag, YellowPages.ca scraper, AuctionZip/Canada411 disabled, MO pawnbroker disabled, OK pawnbroker PDF scraper, LA auctioneer POST scraper.
 
 ---
 
@@ -61,7 +58,8 @@ Run: 2026-05-10. Railway DB queried directly via psycopg2.
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
-| Zero-output scraper diagnostics | OSM, GarageSaleFinder, AuctionZip, Canada411, SaleSeeker, Newspaper RSS returning 0 | Run diagnostic scripts to identify root cause | S712 |
+| MN/MI/TN licensing scrapers | Bot-blocked (Radware/DIFS 403) — graceful no-ops, no failure emails | Needs headless browser + residential proxy (#SCRAPER-HEADLESS-PROXY in Deferred) | S713 |
+| Wyoming pawnbroker scraper | wyomingbankingdivision.wyo.gov — not yet investigated this session | Run diagnostic to confirm if still returning data | S713 |
 | #405 Founding Badge | No display surface found (profile, storefront, leaderboard all checked — badge not rendering anywhere) | Code review to find where badge should render; verify organizer with badge can see it | S711 |
 | #369 Quebec block | Needs Quebec user account to test | Create test user with Quebec address; verify they are blocked at checkout | S711 |
 | #407 Flip Tracker ROI | Cost Basis input works; Flip Report renders but ROI section requires sold items | Mark an item sold in test account then re-verify ROI calculations in Flip Report | S711 |
@@ -74,6 +72,14 @@ Run: 2026-05-10. Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S714 — SEO Content Foundation (COMPLETE — wrap)
+
+384 SEO guide pages generated and live in index.json: 34 Haiku pricing guides (antiques, furniture, jewelry, glass, tools, art — post-processed via fix-seo-batch.js: markdown fence strip, two-array corruption repair, field rename title→heading/content→body, flat→nested content structure, seoScore stripped, saleType normalized to "general") + 350 template pages (city×category + trend reports) from generate-template-pages.mjs. Scripts built: fix-seo-batch.js (fixer + --merge mode) and generate-template-pages.mjs. System prompt in seo-pages-haiku-generator.md updated: correct field names in example JSON, seoScore removed, 15-item batch limit documented. After-reset dispatch at claude_docs/strategy/seo-agent-dispatch.md for 116 remaining pages (batch1b items 35-50 + batch2 50 + batch3 50). Pages served at /guide/[slug], ISR 24hr revalidate, sitemap auto-populates.
+
+### S713 — Scraper Repair Batch (COMPLETE — wrap)
+
+Two emergency MCP pushes to fix backend crash loops (missing yellowPagesCaScraper.ts from subagent write failure; missing export default router from parallel agent conflict on internal.ts). Scraper fixes shipped: OSM 406 (form-encoded POST), GarageSaleFinder hidden-address parse recovery (~50% listing improvement), Missouri auctioneer TLS (axios rejectUnauthorized:false), weekly digest FK crash (Organizer ID → User ID), Canada outreach → OUTREACH_CANADA_ENABLED flag, YellowPages.ca scraper (10 provinces, 6 keywords, JSON-LD), AuctionZip + Canada411 workflows disabled, Missouri pawnbroker schedule disabled. Oklahoma pawnbroker: real PDF scraper (pdf-parse, ODCC monthly roster, 215+ licensees). Louisiana auctioneer: real POST scraper (lalb.org/all_auctioneer-bus.php, cheerio, 76 businesses). pdf-parse added to backend package.json. Roadmap: #SCRAPER-HEADLESS-PROXY added to Deferred (MN/MI/TN need residential proxy). Railway confirmed green after pushes. Patrick: run git fetch && git pull + pnpm install before next push.ps1.
 
 ### S712 — Dorm Dash / Wave 2 / Outreach Pipeline / GitHub Actions (COMPLETE — wrap)
 
@@ -97,17 +103,30 @@ NSFW detection deferred (roadmap #394 closed). Chrome QA: #174 bid protection �
 
 ---
 
-## Next Session — S713
+## Next Session — S715
 
-### Priority 1 — Chrome QA (4 features shipped S712)
+### Priority 1 — Patrick push action
 
-**Sequential Chrome QA (one at a time — no parallel):**
-1. Dorm Dash: create a new sale, select DORM_DASH, complete wizard, verify no crash, confirm sale saves
-2. Wave 2 edit-sale: open /organizer/edit-sale/[id], verify Safety Notes / Grief Firewall / Cover the Fee (Auction) / Floor Map / Bundle Pricing / Donation Kit all appear and save
-3. Cash Bridge POS: open POS on a sale, verify Venmo/Zelle buttons appear with handle display
-4. Leaderboard: navigate to /leaderboard, verify page loads without error
+Push all S714 SEO content:
+```powershell
+git add scripts/fix-seo-batch.js
+git add scripts/generate-template-pages.mjs
+git add packages/frontend/data/seo-pages/index.json
+git add seo-pages-haiku-generator.md
+git add claude_docs/strategy/seo-agent-dispatch.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat(seo): 384 guide pages — 34 Haiku pricing guides + 350 city/category/trend templates; fix-seo-batch.js + generate-template-pages.mjs"
+.\push.ps1
+```
 
-### Priority 2 — Patrick actions (carry-forward + new)
+Note: batch1-fixed.json and batch-templates.json are intermediate files in the project root — they can be committed or .gitignored, your call.
+
+### Priority 2 — After-reset agent dispatch
+
+Once pushed: start a fresh session and run the dispatch from `claude_docs/strategy/seo-agent-dispatch.md` to generate the remaining 116 Haiku pages. This adds the final pricing guide content to index.json.
+
+### Priority 3 — S713 Patrick actions (carry-forward)
 
 1. **ShopperOrganizerIntroduction migration (P0 for leaderboard scouts):**
    ```powershell
@@ -115,14 +134,17 @@ NSFW detection deferred (roadmap #394 closed). Chrome QA: #174 bid protection �
    $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
    npx prisma migrate deploy
    ```
-2. **Railway env check:** Confirm `OUTREACH_ENABLED=true` and `OUTREACH_WARMUP_START_DATE=2026-05-06` are set in Railway backend Variables tab
-3. **MT secret fix:** Railway dashboard → backend Variables → copy `INTERNAL_API_KEY` value → GitHub Secrets → `INTERNAL_API_TOKEN` → update to match → re-run MT workflow
+2. **Railway env check:** Confirm `OUTREACH_ENABLED=true` and `OUTREACH_WARMUP_START_DATE=2026-05-06` in Railway backend Variables tab
 
-### Priority 3 — Decisions needed
+### Priority 4 — Chrome QA (4 features still pending from S712)
 
-4. **AuctionNinja + NAA scrapers:** Enable? Set `enabled:true` in sourceRegistry to activate both.
-5. **Phase 1 + Phase 2 state scraper parameterization:** Currently 50 Phase 1 + 39 Phase 2 = 89 separate workflow files. Parameterize into 2 matrix workflows? (Low token cost, high maintenance win.)
+Sequential Chrome QA (one at a time — no parallel):
+1. Dorm Dash: create a new sale, select DORM_DASH, complete wizard, verify no crash
+2. Wave 2 edit-sale: open /organizer/edit-sale/[id], verify Safety Notes / Grief Firewall / Cover the Fee / Floor Map / Bundle Pricing / Donation Kit all appear and save
+3. Cash Bridge POS: open POS on a sale, verify Venmo/Zelle buttons appear with handle display
+4. Leaderboard: navigate to /leaderboard, verify page loads without error
 
-### Priority 4 — Zero-output scraper diagnostics
+### Priority 5 — Decisions needed
 
-OSM, GarageSaleFinder, AuctionZip, Canada411, SaleSeeker, Newspaper RSS all returning 0 records. Dispatch findasale-dev to run diagnostics and identify root cause per scraper.
+5. **AuctionNinja + NAA scrapers:** Enable? Set `enabled:true` in sourceRegistry to activate both.
+6. **MT secret fix:** Railway dashboard → backend Variables → copy `INTERNAL_API_KEY` → GitHub Secrets → `INTERNAL_API_TOKEN` → update to match → re-run MT workflow
