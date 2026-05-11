@@ -1,0 +1,158 @@
+/**
+ * autoSeedOutreachCron.ts
+ *
+ * Daily cron (06:00 UTC) that finds newly scraped unmanaged organizers with a
+ * contactEmail and creates DirectoryClaimEmail rows so they enter the outreach
+ * queue automatically — without requiring a manual seed script run.
+ *
+ * Runs AFTER email discovery (03:00 UTC) and lead scoring (02:00 UTC) so newly
+ * discovered emails and fresh scores are ready.
+ *
+ * Gated by OUTREACH_ENABLED=true env var (same gate as outreachEmailsCron).
+ * Cap: 500 new rows per run to avoid runaway inserts after large scraper batches.
+ * Idempotent: skips organizers that already have a DirectoryClaimEmail row.
+ */
+
+import cron from 'node-cron';
+import { v4 as uuid } from 'uuid';
+import crypto from 'crypto';
+import { prisma } from '../lib/prisma';
+
+const MAX_PER_RUN = 500;
+
+// Placeholder/template addresses that are syntactically valid but semantically junk.
+// Mirrors the same list in seedDirectoryClaimEmails.ts.
+const PLACEHOLDER_DOMAINS = new Set([
+  'domain.com', 'domain.org', 'domain.net',
+  'example.com', 'example.org', 'example.net',
+  'yourdomain.com', 'yourdomain.org', 'yourdomain.net',
+  'test.com', 'test.org',
+]);
+
+const PLACEHOLDER_FULL_ADDRESSES = new Set([
+  'name@email.com',
+  'user@email.com',
+  'noreply@gmail.com',
+  'no-reply@gmail.com',
+  'donotreply@gmail.com',
+]);
+
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+const isPlaceholderEmail = (email: string): boolean => {
+  const lower = email.toLowerCase().trim();
+  if (PLACEHOLDER_FULL_ADDRESSES.has(lower)) return true;
+  const domain = lower.split('@')[1];
+  if (domain && PLACEHOLDER_DOMAINS.has(domain)) return true;
+  if (domain && domain.endsWith('.wixpress.com')) return true;
+  return false;
+};
+
+export async function runAutoSeedOutreach(): Promise<void> {
+  console.log('[AutoSeedCron] Starting auto-seed outreach run...');
+  const t0 = Date.now();
+
+  try {
+    // Find unmanaged organizers with contactEmail who are eligible for outreach
+    const organizers = await prisma.organizer.findMany({
+      where: {
+        OR: [{ isClaimed: false }, { isUnmanagedListing: true }],
+        contactEmail: { not: null },
+        claimStatus: { notIn: ['CLAIMED', 'OPTED_OUT'] },
+        suppressOutreach: false,
+        NOT: { emailDiscoveryConfidence: 0.0 },
+      },
+      select: {
+        id: true,
+        contactEmail: true,
+      },
+    });
+
+    console.log(`[AutoSeedCron] Found ${organizers.length} eligible unmanaged organizers`);
+
+    // Load suppressed emails
+    const suppressions = await prisma.emailSuppression.findMany({
+      select: { emailAddress: true },
+    });
+    const suppressedEmails = new Set(suppressions.map(s => s.emailAddress.toLowerCase()));
+
+    // Load existing DirectoryClaimEmail organizerIds to avoid duplicates
+    const existingClaims = await prisma.directoryClaimEmail.findMany({
+      select: { organizerId: true },
+    });
+    const existingOrgIds = new Set(existingClaims.map(c => c.organizerId));
+
+    console.log(`[AutoSeedCron] ${existingOrgIds.size} organizers already in outreach queue`);
+
+    // Build insert list
+    const toInsert: Array<{
+      organizerId: string;
+      emailAddress: string;
+      status: string;
+      attemptCount: number;
+      nextAttemptAt: Date;
+      createdAt: Date;
+      trackingPixelId: string;
+      trackingToken: string;
+    }> = [];
+
+    for (const org of organizers) {
+      if (toInsert.length >= MAX_PER_RUN) break;
+
+      if (existingOrgIds.has(org.id)) continue;
+
+      const email = org.contactEmail;
+      if (!email) continue;
+      if (!isValidEmail(email)) continue;
+      if (isPlaceholderEmail(email)) continue;
+      if (suppressedEmails.has(email.toLowerCase())) continue;
+
+      toInsert.push({
+        organizerId: org.id,
+        emailAddress: email,
+        status: 'PENDING',
+        attemptCount: 0,
+        nextAttemptAt: new Date(),
+        createdAt: new Date(),
+        trackingPixelId: uuid(),
+        trackingToken: crypto.randomBytes(32).toString('hex'),
+      });
+    }
+
+    if (toInsert.length === 0) {
+      console.log('[AutoSeedCron] No new organizers to seed. Run complete.');
+      return;
+    }
+
+    const result = await prisma.directoryClaimEmail.createMany({
+      data: toInsert,
+      skipDuplicates: true,
+    });
+
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+    console.log(`[AutoSeedCron] Created ${result.count} new DirectoryClaimEmail rows in ${elapsed}s`);
+
+    if (toInsert.length >= MAX_PER_RUN) {
+      console.log(`[AutoSeedCron] Hit cap of ${MAX_PER_RUN} — remaining organizers will be picked up on the next run`);
+    }
+  } catch (err) {
+    console.error('[AutoSeedCron] Error:', err instanceof Error ? err.message : String(err));
+  }
+}
+
+export function initAutoSeedOutreachCron(): void {
+  if (process.env.OUTREACH_ENABLED !== 'true') {
+    console.log('[AutoSeedCron] OUTREACH_ENABLED is not set to true — skipping cron registration');
+    return;
+  }
+
+  // Run daily at 06:00 UTC — after email discovery (03:00) and lead scoring (02:00)
+  cron.schedule('0 6 * * *', async () => {
+    await runAutoSeedOutreach();
+  });
+
+  console.log('[AutoSeedCron] Registered — daily at 06:00 UTC');
+}

@@ -250,9 +250,17 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
     durationMs: 0,
   };
 
-  // Count total organizers upfront for logging
-  stats.total = await prisma.organizer.count();
-  console.log(`[leadScoring] Starting backfill for ${stats.total} organizers (batch size: ${BATCH_SIZE})`);
+  // Scope to unmanaged/unclaimed listings only — paying organizers are not outreach targets
+  const unmanagedWhere = {
+    OR: [
+      { isClaimed: false },
+      { isUnmanagedListing: true },
+    ],
+  } as const;
+
+  // Count unmanaged organizers upfront for logging
+  stats.total = await prisma.organizer.count({ where: unmanagedWhere });
+  console.log(`[leadScoring] Starting backfill for ${stats.total} unmanaged organizers (batch size: ${BATCH_SIZE})`);
 
   let cursor: string | undefined = undefined;
   let batchNum = 0;
@@ -263,6 +271,7 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
     const batch = await prisma.organizer.findMany({
       take: BATCH_SIZE,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      where: unmanagedWhere,
       orderBy: { id: 'asc' },
       select: {
         id: true,

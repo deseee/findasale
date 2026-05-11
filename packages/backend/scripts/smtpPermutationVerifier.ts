@@ -24,11 +24,44 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import * as net from 'net';
 import * as dns from 'dns';
 import { promisify } from 'util';
 
 const prisma = new PrismaClient();
+
+/**
+ * Auto-queue a newly discovered email into the outreach pipeline.
+ * No-op if OUTREACH_ENABLED is not 'true', email is suppressed, or a row already exists.
+ */
+async function queueForOutreach(organizerId: string, email: string): Promise<void> {
+  if (process.env.OUTREACH_ENABLED !== 'true') return;
+  try {
+    const isSuppressed = await prisma.emailSuppression.findFirst({
+      where: { emailAddress: email },
+    });
+    if (isSuppressed) return;
+    const existing = await prisma.directoryClaimEmail.findFirst({
+      where: { organizerId },
+    });
+    if (!existing) {
+      await prisma.directoryClaimEmail.create({
+        data: {
+          organizerId,
+          emailAddress: email,
+          status: 'PENDING',
+          attemptCount: 0,
+          trackingPixelId: randomUUID(),
+          trackingToken: randomUUID(),
+        },
+      });
+      console.log(`[SMTP] Queued ${email} for outreach (organizer ${organizerId})`);
+    }
+  } catch (err) {
+    console.error(`[SMTP] queueForOutreach error for organizer ${organizerId}:`, err);
+  }
+}
 const resolveMx = promisify(dns.resolveMx);
 
 // ---- Config ----------------------------------------------------------------
@@ -393,6 +426,7 @@ async function main() {
         where: { id: org.id },
         data: { contactEmail: email },
       });
+      await queueForOutreach(org.id, email);
       console.log(`${prefix}: best-guess → ${email}`);
       found++;
       return;
@@ -413,6 +447,7 @@ async function main() {
         where: { id: org.id },
         data: { contactEmail: email },
       });
+      await queueForOutreach(org.id, email);
       console.log(`${prefix}: ${mxHost} blocked from cloud runners → best-guess ${email}`);
       found++;
       return;
@@ -440,6 +475,7 @@ async function main() {
           where: { id: org.id },
           data: { contactEmail: catchAllEmail },
         });
+        await queueForOutreach(org.id, catchAllEmail);
         console.log(`${prefix}: catch-all domain → writing ${catchAllEmail} (unverified)`);
         catchAll++;
         verified = true;
@@ -451,6 +487,7 @@ async function main() {
           where: { id: org.id },
           data: { contactEmail: email },
         });
+        await queueForOutreach(org.id, email);
         console.log(`${prefix}: verified → ${email}`);
         found++;
         verified = true;
@@ -471,6 +508,7 @@ async function main() {
           where: { id: org.id },
           data: { contactEmail: email },
         });
+        await queueForOutreach(org.id, email);
         console.log(`${prefix}: SMTP unreachable (${mxHost}) → best-guess ${email}`);
         smtpFail++;
       } else {
@@ -481,6 +519,7 @@ async function main() {
           where: { id: org.id },
           data: { contactEmail: email },
         });
+        await queueForOutreach(org.id, email);
         console.log(`${prefix}: no pattern matched, server reachable → fallback ${email}`);
         noMatch++;
       }
