@@ -1,59 +1,67 @@
-# Patrick's Dashboard — S711
+# Patrick's Dashboard — Week of May 11, 2026
 
 ---
 
-## Current State
+## What Happened This Week
 
-| Area | Status |
-|------|--------|
-| Vercel build | ✅ GREEN |
-| Railway backend | ✅ GREEN |
-| OUTREACH_ENABLED | ✅ TRUE — 197 high-confidence cohort live |
-| Pool (post-backfill) | COLD=32,530 / WARM=5,663 / HOT=215 / SUPPRESSED=3,498 |
-| Wave 2 Chrome QA | 🔴 IN PROGRESS — see table below |
-| Sale wizard (Dorm Dash) | 🔴 P0 CRASH — DORM_DASH type crashes wizard |
-| Wave 2 edit-sale fields | 🔴 MISSING — 6 features not in edit-sale |
-| Leaderboard | 🟡 P2 — "Failed to load leaderboard data" |
-| AR Phase 2 | ❌ Dead source |
-| MS Phase 2 | ❌ Dead source |
-| Canada411 | ❌ Dead source |
-| MT licensing | ❌ 401 — INTERNAL_API_TOKEN secret mismatch (Patrick fix needed) |
+Four solid sessions this week. The Dorm Dash wizard crash was fixed, all six missing Wave 2 edit-sale fields (Safety Notes, Grief Firewall, Cover the Fee, Floor Map, Bundle Pricing, Donation Kit) were shipped, the leaderboard stopped crashing, and Cash Bridge got rebuilt as Venmo/Zelle buttons inside POS. On the outreach side, 183 high-confidence organizers were seeded directly into the email queue, 7 gaps in the outreach pipeline were closed, and 13 new GitHub Action scrapers were added or fixed (6 broken states repaired, 7 new Phase 2 states, 3 new scraper sources). The site is green on both Vercel and Railway.
 
 ---
 
-## Wave 2 QA Results (S711)
+## What Needs Your Attention Right Now
 
-| # | Feature | Status | Notes |
-|---|---------|--------|-------|
-| 406 | Split-the-Bill POS | ✅ VERIFIED | Both persons paid, counter correct |
-| 407 | Flip Tracker ROI | ⚠️ PARTIAL | Cost Basis input works; ROI needs sold items to display |
-| 412 | Cash Bridge (Venmo/Zelle) | 🔄 DECISION MADE | Rebuild: POS buttons + Stripe fee. Remove from Settings. |
-| 402 | Cover the Fee | 🔄 DECISION MADE | Restrict to Auction sale type only |
-| 411 | Dorm Dash | 🔴 BLOCKED | P0 wizard crash on DORM_DASH selection |
-| 416 | Sale Floor Map | 🔴 BLOCKED | Not in /organizer/edit-sale |
-| 413 | Safety Notes | 🔴 BLOCKED | Not in /organizer/edit-sale |
-| 414 | Grief Firewall | 🔴 BLOCKED | Not in /organizer/edit-sale |
-| 415 | Donation Kit | 🔴 BLOCKED | Not in /organizer/edit-sale |
-| 403 | Bundle Pricing | 🔴 BLOCKED | Not in /organizer/edit-sale |
-| 405 | Founding Badge | ⬜ UNVERIFIED | No display surface found (profile/storefront/leaderboard) |
-| 369 | Quebec block | ⬜ UNVERIFIED | Needs Quebec test user |
-
----
-
-## Patrick Actions Needed
-
-**MT secret fix (5 min):**
-1. Railway dashboard → backend service → Variables → find `INTERNAL_API_KEY` → copy value
-2. GitHub → repo Settings → Secrets and variables → Actions → `INTERNAL_API_TOKEN` → update to match
-3. Re-run "Scrape Montana Auctioneer Licenses" workflow → confirm 200
-
----
-
-## Wrap Push Block
-
+**P0 — Run this command or leaderboard scouts stay empty:**
 ```powershell
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S711 wrap — Wave 2 Chrome QA results, P0 Dorm Dash crash, product decisions"
-.\push.ps1
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
 ```
+
+**Railway env check — confirm both of these are set in Railway → backend → Variables:**
+- `OUTREACH_ENABLED` = `true`
+- `OUTREACH_WARMUP_START_DATE` = `2026-05-06`
+
+**MT scraper fix — one-time GitHub secret update:**
+1. Go to Railway → backend service → Variables → find `INTERNAL_API_KEY` → copy it
+2. Go to GitHub → repo → Settings → Secrets → Actions → `INTERNAL_API_TOKEN` → update to match
+3. Re-run the "Scrape Montana Auctioneer Licenses" workflow
+
+---
+
+## Decisions Needed From You
+
+- **AuctionNinja + NAA scrapers:** They're built and ready but switched off. Do you want to turn them on?
+- **89 scraper workflow files:** Would you like to collapse them into 2 streamlined files? Low effort, high maintenance win.
+
+---
+
+## What Beta Testers Will Notice
+
+The Dorm Dash sale type no longer crashes when selected — they can create online-only sales again. The per-sale edit page now shows all the Wave 2 fields that were missing (Safety Notes, Grief Firewall, etc.). POS now shows Venmo/Zelle payment buttons. The leaderboard loads without an error. None of these have been browser-tested yet — that's the first thing on the agenda this session.
+
+---
+
+## Outreach Pipeline Status
+
+183 organizers are queued and the warmup is ramping: 20 emails/day this week, climbing to 200/day by week 4. The WARM tier (5,663 organizers) is the next sendable cohort once the warmup ramp completes. 6 scrapers are still returning zero records and need a diagnostic pass.
+
+---
+
+## This Week's Priorities
+
+1. Chrome QA the 4 features shipped in S712 (Dorm Dash, Wave 2 edit-sale, Cash Bridge POS, Leaderboard)
+2. Run the Patrick actions above (migration, env check, MT secret)
+3. Diagnose the 6 zero-output scrapers
+
+---
+
+## Infrastructure Status
+
+| | |
+|---|---|
+| Vercel (frontend) | ✅ Green |
+| Railway (backend) | ✅ Green |
+| Outreach emails | ✅ Live — warmup active |
+| Leaderboard scouts | 🔴 Empty until migration deployed |
+| Montana scraper | ❌ 401 — secret mismatch (Patrick fix above) |
+| 6 scrapers (OSM, GarageSaleFinder, AuctionZip, Canada411, SaleSeeker, RSS) | 🟡 Returning 0 records — needs diagnosis |
