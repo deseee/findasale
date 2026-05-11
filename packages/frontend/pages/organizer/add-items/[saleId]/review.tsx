@@ -241,6 +241,17 @@ const ReviewPage = () => {
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
   const [addTagInputs, setAddTagInputs] = useState<Map<string, string>>(new Map());
 
+  // Dark mode detection for rarity colors (inline style can't use Tailwind dark: variants)
+  // MUST be here (before any early returns) to satisfy React hooks ordering rules
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const checkDark = () => setIsDark(document.documentElement.classList.contains('dark'));
+    checkDark();
+    const observer = new MutationObserver(checkDark);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   // Auto-enable buyer preview on mount if preview=true in query
   useEffect(() => {
     if (router.query.preview === 'true') {
@@ -884,16 +895,6 @@ const ReviewPage = () => {
   const publishedCount = items.filter(i => i.draftStatus === 'PUBLISHED').length + approvedIds.size;
   const totalCount = items.length;
   const queueEmpty = pendingItems.length === 0 && totalCount > 0;
-
-  // Dark mode detection for rarity colors (inline style can't use Tailwind dark: variants)
-  const [isDark, setIsDark] = useState(false);
-  useEffect(() => {
-    const checkDark = () => setIsDark(document.documentElement.classList.contains('dark'));
-    checkDark();
-    const observer = new MutationObserver(checkDark);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
 
   // ── Rarity badge colors (light + dark palette) ──────────────────────────────
   const rarityColors: Record<string, { bg: string; fg: string; darkBg: string; darkFg: string }> = {
