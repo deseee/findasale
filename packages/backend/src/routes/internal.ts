@@ -1437,3 +1437,4 @@ router.post('/scraper/run-massachusetts-phase2', requireSecret, async (req: expr
     res.status(500).json({ error: error.message });
   }
 })
+export default router;
