@@ -175,28 +175,33 @@ export const sendOutreachEmails = async (): Promise<void> => {
         },
         // Respect suppressOutreach flag
         suppressOutreach: false,
-        // Canada excluded: platform not yet available in CA (roadmap #367-#371)
+        // Canada outreach is paused by default (OUTREACH_CANADA_ENABLED != 'true').
+        // Canadian orgs are identified by province abbreviation or full name in the address field
+        // (no country column on Organizer — detection is address-string based).
+        // To enable Canada outreach: set OUTREACH_CANADA_ENABLED=true in Railway env vars.
         // Exclude consumer posts from GarageSaleFinder — homeowner yard sale listings,
         // not organizer businesses. Retained for shopper-side discovery; never outreach targets.
         NOT: [
           { directoryMostRecentSource: 'GarageSaleFinder' },
-          { address: { contains: ', ON', mode: 'insensitive' } },
-          { address: { contains: ', BC', mode: 'insensitive' } },
-          { address: { contains: ', AB', mode: 'insensitive' } },
-          { address: { contains: ', MB', mode: 'insensitive' } },
-          { address: { contains: ', SK', mode: 'insensitive' } },
-          { address: { contains: ', QC', mode: 'insensitive' } },
-          { address: { contains: ', NS', mode: 'insensitive' } },
-          { address: { contains: ', NB', mode: 'insensitive' } },
-          { address: { contains: ', NL', mode: 'insensitive' } },
-          { address: { contains: ', PE', mode: 'insensitive' } },
-          { address: { contains: ', YT', mode: 'insensitive' } },
-          { address: { contains: ', NT', mode: 'insensitive' } },
-          { address: { contains: ', NU', mode: 'insensitive' } },
-          { address: { contains: 'Ontario', mode: 'insensitive' } },
-          { address: { contains: 'British Columbia', mode: 'insensitive' } },
-          { address: { contains: 'Alberta', mode: 'insensitive' } },
-          { address: { contains: 'Canada', mode: 'insensitive' } },
+          ...(process.env.OUTREACH_CANADA_ENABLED === 'true' ? [] : [
+            { address: { contains: ', ON', mode: 'insensitive' } },
+            { address: { contains: ', BC', mode: 'insensitive' } },
+            { address: { contains: ', AB', mode: 'insensitive' } },
+            { address: { contains: ', MB', mode: 'insensitive' } },
+            { address: { contains: ', SK', mode: 'insensitive' } },
+            { address: { contains: ', QC', mode: 'insensitive' } },
+            { address: { contains: ', NS', mode: 'insensitive' } },
+            { address: { contains: ', NB', mode: 'insensitive' } },
+            { address: { contains: ', NL', mode: 'insensitive' } },
+            { address: { contains: ', PE', mode: 'insensitive' } },
+            { address: { contains: ', YT', mode: 'insensitive' } },
+            { address: { contains: ', NT', mode: 'insensitive' } },
+            { address: { contains: ', NU', mode: 'insensitive' } },
+            { address: { contains: 'Ontario', mode: 'insensitive' } },
+            { address: { contains: 'British Columbia', mode: 'insensitive' } },
+            { address: { contains: 'Alberta', mode: 'insensitive' } },
+            { address: { contains: 'Canada', mode: 'insensitive' } },
+          ] as const),
         ],
       },
     };

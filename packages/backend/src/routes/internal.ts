@@ -108,6 +108,7 @@ import { runGeorgiaPhase2Scraper } from '../services/scraper/sources/georgiaPhas
 import { runNorthCarolinaPhase2Scraper } from '../services/scraper/sources/northCarolinaPhase2Scraper';
 import { runOhioPhase2Scraper } from '../services/scraper/sources/ohioPhase2Scraper';
 import { runCanada411Scraper } from '../services/scraper/sources/canada411Scraper';
+import { runYellowPagesCaScraper } from '../services/scraper/sources/yellowPagesCaScraper';
 import { runAlabamaPhase2Scraper } from '../services/scraper/sources/alabamaPhase2Scraper';
 import { runKentuckyPhase2Scraper } from '../services/scraper/sources/kentuckyPhase2Scraper';
 import { runMainePhase2Scraper } from '../services/scraper/sources/mainePhase2Scraper';
@@ -1283,13 +1284,24 @@ router.post('/scraper/run-ohio-phase2', requireSecret, async (req: express.Reque
   }
 });
 
-// POST /api/internal/scraper/run-canada411 — Canada411.ca directory scraper
+// POST /api/internal/scraper/run-canada411 — Canada411.ca directory scraper (LEGACY — replaced by yellowpages-ca)
 router.post('/scraper/run-canada411', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     await runCanada411Scraper();
     res.json({ success: true, message: 'Canada411 scraper completed' });
   } catch (error: any) {
     console.error('[Canada411] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-yellowpages-ca — YellowPages.ca directory scraper (Canada411 replacement)
+router.post('/scraper/run-yellowpages-ca', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    await runYellowPagesCaScraper();
+    res.json({ success: true, message: 'YellowPages.ca scraper completed' });
+  } catch (error: any) {
+    console.error('[YellowPagesCA] Route error:', error);
     res.status(500).json({ error: error.message });
   }
 });
