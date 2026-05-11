@@ -2510,13 +2510,20 @@ export default function POSPage() {
                 <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
                   The buyer pays you directly via Venmo. You collect the full ${cartTotal.toFixed(2)} yourself. FindA.Sale will deduct its platform fee from your next Stripe payout.
                 </p>
-                {organizerVenmo && (
+                {organizerVenmo ? (
                   <button
                     onClick={() => { navigator.clipboard.writeText(organizerVenmo!); showToast('Venmo handle copied', 'success'); }}
                     className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/60 transition font-medium mb-3"
                   >
                     @{organizerVenmo} — tap to copy 📋
                   </button>
+                ) : (
+                  <a
+                    href="/organizer/settings#profile"
+                    className="inline-block text-xs text-blue-600 dark:text-blue-400 underline mb-3"
+                  >
+                    Add your Venmo handle in Settings →
+                  </a>
                 )}
               </div>
               <button
@@ -2539,13 +2546,20 @@ export default function POSPage() {
                 <p className="text-xs text-purple-700 dark:text-purple-300 mb-3">
                   The buyer pays you directly via Zelle. You collect the full ${cartTotal.toFixed(2)} yourself. FindA.Sale will deduct its platform fee from your next Stripe payout.
                 </p>
-                {organizerZelle && (
+                {organizerZelle ? (
                   <button
                     onClick={() => { navigator.clipboard.writeText(organizerZelle!); showToast('Zelle handle copied', 'success'); }}
                     className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 px-3 py-1.5 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/60 transition font-medium mb-3"
                   >
                     {organizerZelle} — tap to copy 📋
                   </button>
+                ) : (
+                  <a
+                    href="/organizer/settings#profile"
+                    className="inline-block text-xs text-purple-600 dark:text-purple-400 underline mb-3"
+                  >
+                    Add your Zelle handle in Settings →
+                  </a>
                 )}
               </div>
               <button

@@ -44,6 +44,8 @@ const organizerProfileSchema = z.object({
   tiktokUrl: z.string().optional(),
   youtubeUrl: z.string().optional(),
   pinterestUrl: z.string().optional(),
+  venmoHandle: z.string().optional().or(z.literal('')),
+  zelleHandle: z.string().optional().or(z.literal('')),
   pickupWindows: z.string().optional().or(z.literal('')),
   brandLogoUrl: z.string().url().optional().or(z.literal('')),
   brandPrimaryColor: z.string().optional(),
@@ -313,7 +315,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -340,6 +342,8 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(tiktokUrl !== undefined && { tiktokUrl }),
         ...(youtubeUrl !== undefined && { youtubeUrl }),
         ...(pinterestUrl !== undefined && { pinterestUrl }),
+        ...(venmoHandle !== undefined && { venmoHandle }),
+        ...(zelleHandle !== undefined && { zelleHandle }),
         ...(pickupWindows !== undefined && { pickupWindows }),
         ...(brandLogoUrl !== undefined && { brandLogoUrl }),
         ...(brandPrimaryColor !== undefined && { brandPrimaryColor }),

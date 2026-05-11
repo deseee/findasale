@@ -50,6 +50,8 @@ const OrganizerSettingsPage = () => {
   const [tiktokUrl, setTiktokUrl] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [pinterestUrl, setPinterestUrl] = useState('');
+  const [venmoHandle, setVenmoHandle] = useState('');
+  const [zelleHandle, setZelleHandle] = useState('');
   const [pickupWindows, setPickupWindows] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [timezone, setTimezone] = useState('');
@@ -358,6 +360,8 @@ const OrganizerSettingsPage = () => {
           setTiktokUrl(response.data.tiktokUrl || '');
           setYoutubeUrl(response.data.youtubeUrl || '');
           setPinterestUrl(response.data.pinterestUrl || '');
+          setVenmoHandle(response.data.venmoHandle || '');
+          setZelleHandle(response.data.zelleHandle || '');
           setPickupWindows(response.data.pickupWindows || '');
           setStripeConnected(response.data.stripeConnected || false);
           setFoundingOrgBadge(response.data.foundingOrgBadge || false);
@@ -533,6 +537,8 @@ const OrganizerSettingsPage = () => {
         tiktokUrl,
         youtubeUrl,
         pinterestUrl,
+        venmoHandle,
+        zelleHandle,
         pickupWindows,
         timezone,
         byAppointment,
@@ -553,6 +559,8 @@ const OrganizerSettingsPage = () => {
         setTiktokUrl(response.data.tiktokUrl || '');
         setYoutubeUrl(response.data.youtubeUrl || '');
         setPinterestUrl(response.data.pinterestUrl || '');
+        setVenmoHandle(response.data.venmoHandle || '');
+        setZelleHandle(response.data.zelleHandle || '');
         setPickupWindows(response.data.pickupWindows || '');
         setTimezone(response.data.timezone || '');
         setByAppointment(response.data.byAppointment || false);
@@ -1499,6 +1507,33 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setPinterestUrl(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://pinterest.com/yourprofile"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Venmo Handle</label>
+                  <p className="text-xs text-warm-500 dark:text-gray-400 mb-1">Shown to buyers in the POS when you select Venmo as the payment method.</p>
+                  <div className="flex items-center">
+                    <span className="px-3 py-2 bg-warm-100 dark:bg-gray-700 border border-r-0 border-warm-300 dark:border-gray-700 rounded-l-lg text-warm-500 dark:text-gray-400 text-sm">@</span>
+                    <input
+                      type="text"
+                      value={venmoHandle}
+                      onChange={(e) => setVenmoHandle(e.target.value.replace(/^@/, ''))}
+                      className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-r-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="yourvenmo"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Zelle Handle</label>
+                  <p className="text-xs text-warm-500 dark:text-gray-400 mb-1">Phone number or email shown to buyers in the POS when you select Zelle as the payment method.</p>
+                  <input
+                    type="text"
+                    value={zelleHandle}
+                    onChange={(e) => setZelleHandle(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="555-555-5555 or email@example.com"
                   />
                 </div>
 
