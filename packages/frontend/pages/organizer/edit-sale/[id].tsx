@@ -85,6 +85,10 @@ const EditSalePage = () => {
     // Sale times
     startTime: '09:00' as string,
     endTime: '15:00' as string,
+    // S696 Wave 2 features
+    safetyNotes: '' as string,
+    estatePrivacyMode: false,
+    coversFee: false,
   });
 
   // Helper: Compute distance between two lat/lng points (degrees, approx)
@@ -195,6 +199,10 @@ const EditSalePage = () => {
       treasureHuntEnabled: sale.treasureHuntEnabled ?? true,
       // Feature #121: Allow item holds for this sale
       holdsEnabled: sale.holdsEnabled ?? true,
+      // S696 Wave 2 features
+      safetyNotes: sale.safetyNotes ?? '',
+      estatePrivacyMode: sale.estatePrivacyMode ?? false,
+      coversFee: sale.coversFee ?? false,
     });
 
     // Auto-trigger geocoding if sale has no coordinates but has address fields
@@ -625,6 +633,7 @@ const EditSalePage = () => {
                 <option value="ONLINE">Online Sale</option>
                 <option value="BOOTH">Vendor Booth</option>
                 <option value="RETAIL">Retail Store</option>
+                <option value="DORM_DASH">Dorm Dash</option>
               </select>
             </div>
 
@@ -1046,7 +1055,112 @@ const EditSalePage = () => {
                     </span>
                   </label>
                 </div>
+
+                {/* S696 Wave 2: Grief Firewall */}
+                <div className="flex items-start space-x-3 pt-4">
+                  <input
+                    type="checkbox"
+                    id="estatePrivacyMode"
+                    name="estatePrivacyMode"
+                    checked={formData.estatePrivacyMode}
+                    onChange={(e) => setFormData({ ...formData, estatePrivacyMode: e.target.checked })}
+                    className="mt-1 w-4 h-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded cursor-pointer"
+                  />
+                  <label htmlFor="estatePrivacyMode" className="cursor-pointer flex flex-col">
+                    <span className="text-sm font-medium text-warm-700 dark:text-gray-300">
+                      Enable Privacy Protection
+                    </span>
+                    <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
+                      Suppresses family name extraction and removes estate-specific language from public listings. Recommended for sensitive sales.
+                    </span>
+                  </label>
+                </div>
+
+                {/* S696 Wave 2: Cover the Fee — AUCTION only */}
+                {formData.saleType === 'AUCTION' && (
+                  <div className="flex items-start space-x-3 pt-4">
+                    <input
+                      type="checkbox"
+                      id="coversFee"
+                      name="coversFee"
+                      checked={formData.coversFee}
+                      onChange={(e) => setFormData({ ...formData, coversFee: e.target.checked })}
+                      className="mt-1 w-4 h-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded cursor-pointer"
+                    />
+                    <label htmlFor="coversFee" className="cursor-pointer flex flex-col">
+                      <span className="text-sm font-medium text-warm-700 dark:text-gray-300">
+                        Cover the Platform Fee
+                      </span>
+                      <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
+                        You absorb the 10% platform fee so buyers pay no extra charges. Useful for charity auctions and premium buyer experiences.
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
+            </div>
+
+            {/* S696 Wave 2: Safety Notes */}
+            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
+              <label htmlFor="safetyNotes" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
+                Safety & Entry Notes <span className="text-warm-400 dark:text-gray-500 font-normal">(optional)</span>
+              </label>
+              <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
+                Share any safety, parking, or entry details shoppers should know — displayed prominently on your sale page.
+              </p>
+              <textarea
+                id="safetyNotes"
+                name="safetyNotes"
+                value={formData.safetyNotes}
+                onChange={(e) => setFormData(prev => ({ ...prev, safetyNotes: e.target.value }))}
+                placeholder="e.g., Please wear closed-toe shoes. No strollers on upper floor. Parking available on street."
+                rows={3}
+                maxLength={1000}
+                className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+              <p className="text-xs text-warm-400 dark:text-gray-500 mt-1 text-right">{formData.safetyNotes.length}/1000</p>
+            </div>
+
+            {/* S696 Wave 2: Sale Floor Map — managed via item room tags */}
+            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
+              <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Sale Floor Map</h3>
+              <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
+                A visual room-by-room guide is automatically generated for shoppers when your items have room labels (e.g., "Living Room", "Garage"). Add or edit room labels on individual items.
+              </p>
+              <Link
+                href={`/organizer/inventory?saleId=${id}`}
+                className="inline-block text-sm font-semibold text-amber-600 hover:text-amber-700 hover:underline"
+              >
+                Manage Item Room Labels →
+              </Link>
+            </div>
+
+            {/* S696 Wave 2: Bundle Pricing — managed in add-items */}
+            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
+              <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Bundle Pricing</h3>
+              <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
+                Group items together and offer them at a fixed bundle price. Bundles are created and managed from the Add Items page.
+              </p>
+              <Link
+                href={`/organizer/add-items/${id}`}
+                className="inline-block text-sm font-semibold text-amber-600 hover:text-amber-700 hover:underline"
+              >
+                Manage Bundles in Add Items →
+              </Link>
+            </div>
+
+            {/* S696 Wave 2: Donation Kit — managed via settlement */}
+            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
+              <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Donation Kit</h3>
+              <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
+                Donate unsold items to charity and generate a tax receipt PDF. Available after your sale ends from the settlement page.
+              </p>
+              <Link
+                href={`/organizer/settlement/${id}`}
+                className="inline-block text-sm font-semibold text-amber-600 hover:text-amber-700 hover:underline"
+              >
+                Go to Settlement &amp; Donation →
+              </Link>
             </div>
 
             {/* Feature #85: Treasure Hunt QR Manager */}

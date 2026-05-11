@@ -58,17 +58,40 @@ const Leaderboard = () => {
       setLoading(true);
       setError(null);
 
-      const [shoppersRes, organizersRes, scoutsRes] = await Promise.all([
+      const [shoppersResult, organizersResult, scoutsResult] = await Promise.allSettled([
         api.get('/leaderboard/shoppers'),
         api.get('/leaderboard/organizers'),
         api.get('/leaderboard/scouts'),
       ]);
 
-      setShoppers(shoppersRes.data);
-      setOrganizers(organizersRes.data);
-      setScouts(scoutsRes.data.entries);
-      setScoutSeason(scoutsRes.data.season);
-      setScoutResetDate(scoutsRes.data.resetDate);
+      if (shoppersResult.status === 'fulfilled') {
+        setShoppers(shoppersResult.value.data);
+      } else {
+        console.error('Error fetching shoppers leaderboard:', shoppersResult.reason);
+      }
+
+      if (organizersResult.status === 'fulfilled') {
+        setOrganizers(organizersResult.value.data);
+      } else {
+        console.error('Error fetching organizers leaderboard:', organizersResult.reason);
+      }
+
+      if (scoutsResult.status === 'fulfilled') {
+        setScouts(scoutsResult.value.data.entries);
+        setScoutSeason(scoutsResult.value.data.season);
+        setScoutResetDate(scoutsResult.value.data.resetDate);
+      } else {
+        console.error('Error fetching scouts leaderboard:', scoutsResult.reason);
+      }
+
+      // Only show error banner if ALL three failed
+      if (
+        shoppersResult.status === 'rejected' &&
+        organizersResult.status === 'rejected' &&
+        scoutsResult.status === 'rejected'
+      ) {
+        setError('Failed to load leaderboard data');
+      }
     } catch (err) {
       console.error('Error fetching leaderboards:', err);
       setError('Failed to load leaderboard data');
