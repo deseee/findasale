@@ -222,4 +222,13 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
                   </div>
                 </button>
               ))}
-            </
+            </div>
+          )}
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default EbayCategoryPicker;
