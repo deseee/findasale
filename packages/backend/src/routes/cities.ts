@@ -4,6 +4,7 @@ import {
   listCities,
   syncCityData,
   getTopFinds,
+  getCityDirectory,
 } from '../controllers/citiesController';
 
 const router = Router();
@@ -12,6 +13,7 @@ const router = Router();
  * Public endpoints for city pages
  */
 router.get('/:slug/top-finds', getTopFinds); // ADR-074: Metro Sync top finds
+router.get('/:slug/directory', getCityDirectory); // Scraped organizer directory listings
 router.get('/:slug/data', getCityPageData);
 router.get('/', listCities);
 

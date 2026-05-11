@@ -9,6 +9,18 @@ import { CityTopFinds } from '@/components/CityTopFinds';
 import { CityRecentSales } from '@/components/CityRecentSales';
 import { CityTipsBlock } from '@/components/CityTipsBlock';
 import { CityNearbyLinks } from '@/components/CityNearbyLinks';
+import { CityDirectorySection } from '@/components/CityDirectorySection';
+
+interface DirectoryOrganizer {
+  id: string;
+  businessName: string;
+  address: string;
+  website: string | null;
+  googleRating: number | null;
+  googleRatingCount: number | null;
+  businessCategory: string | null;
+  claimStatus: string;
+}
 
 interface RecentSale {
   id: string;
@@ -37,6 +49,7 @@ interface CityPageProps {
   activeSalesCount: number;
   totalItemsCount: number;
   lastUpdated: string;
+  directoryOrganizers: DirectoryOrganizer[];
 }
 
 export default function CityPage(props: CityPageProps) {
@@ -53,6 +66,7 @@ export default function CityPage(props: CityPageProps) {
     totalItemsCount,
     lastUpdated,
     slug,
+    directoryOrganizers,
   } = props;
 
   const title = `Sales & Auctions in ${cityName}, ${cityState} | FindA.Sale`;
@@ -169,6 +183,11 @@ export default function CityPage(props: CityPageProps) {
 
         <CityTopFinds citySlug={slug} items={topFinds} />
         <CityRecentSales citySlug={slug} sales={recentSales} />
+        <CityDirectorySection
+          cityName={cityName}
+          cityState={cityState}
+          organizers={directoryOrganizers}
+        />
         <CityTipsBlock
           tipContent={tipContent}
           cityName={cityName}
@@ -313,6 +332,23 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
     // Fall back to empty state — ISR will retry next revalidation
   }
 
+  // Fetch scraped organizer directory listings for this city
+  let directoryOrganizers: any[] = [];
+  try {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+    const dirResponse = await fetch(
+      `${apiBaseUrl}/cities/${encodeURIComponent(apiSlug)}/directory?limit=8`,
+      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+    );
+    if (dirResponse.ok) {
+      const dirData = await dirResponse.json();
+      directoryOrganizers = dirData.organizers || [];
+    }
+  } catch (error) {
+    console.error(`[city page] Error fetching directory for ${city.name}:`, error);
+    // Non-fatal — section simply won't render
+  }
+
   // Auto-generate tip using template
   const regionType = city.state === 'MI' ? 'midwest' : 'western'; // Simplified for MVP
   const tipMarkdown = generateCityTip({
@@ -344,6 +380,7 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
       activeSalesCount,
       totalItemsCount,
       lastUpdated: new Date().toISOString(),
+      directoryOrganizers,
     },
     revalidate: 86400, // Revalidate every 24 hours (ISR)
   };
