@@ -39,7 +39,9 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
   placeholder = 'Search and select an eBay category...',
   defaultSearch,
 }) => {
-  const [input, setInput] = useState(defaultSearch || '');
+  // defaultSearch is used as a hint label only — NOT auto-populated into the search input
+  // to avoid triggering noisy empty-result dropdowns on mount.
+  const [input, setInput] = useState('');
   const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -169,13 +171,20 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
       ) : (
         /* Search input — shown when no selection confirmed */
         <div className="relative">
+          {/* Current category hint — show AI-tagged category as a soft badge */}
+          {defaultSearch && !input && (
+            <div className="mb-1.5 flex items-center gap-1.5">
+              <span className="text-[10px] font-mono text-warm-500 dark:text-[#B8B8BA] uppercase tracking-wide">Current:</span>
+              <span className="text-[10px] font-mono text-warm-700 dark:text-[#D0D0CC] bg-warm-100 dark:bg-[#3A3A3C] px-1.5 py-0.5 rounded">{defaultSearch}</span>
+            </div>
+          )}
           <input
             id="ebay-category-search"
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onFocus={() => input.trim() && setIsOpen(true)}
-            placeholder={placeholder}
+            placeholder={defaultSearch ? `Refine: search eBay categories…` : placeholder}
             aria-invalid={!!error}
             aria-describedby={error ? "ebay-category-error" : undefined}
             className="w-full px-4 py-2 border border-warm-300 dark:border-[#3A3A3C] bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] placeholder-warm-400 dark:placeholder-[#B8B8BA] rounded-lg focus:ring-2 focus:ring-[#C8552B]/40 focus:outline-none"
