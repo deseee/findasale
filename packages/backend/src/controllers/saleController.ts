@@ -82,12 +82,12 @@ const saleQuerySchema = z.object({
 const saleCreateSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  startDate: iso8601StartDateSchema,
-  endDate: iso8601EndDateSchema,
-  address: z.string().min(1),
-  city: z.string().min(1),
-  state: z.string().min(2).max(2),
-  zip: z.string().min(5).max(10),
+  startDate: iso8601StartDateSchema.optional(),
+  endDate: iso8601EndDateSchema.optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip: z.string().optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
   photoUrls: z.array(z.string()).optional(),
@@ -113,6 +113,12 @@ const saleCreateSchema = z.object({
   retailAutoRenewDays: z.number().int().min(1).max(365).optional().default(30),
   // Feature #363: Auction Buyer's Premium
   buyersPremiumPct: z.number().min(0).max(50).optional(),
+  // S696 Wave 2: Safety Notes — parking/entry info shown on sale detail
+  safetyNotes: z.string().max(1000).optional().nullable(),
+  // S696 Wave 2: Grief Firewall — suppress person-name extraction and "estate sale" copy
+  estatePrivacyMode: z.boolean().optional(),
+  // S696 Wave 2: Cover the Fee — organizer absorbs platform fee (AUCTION sales only)
+  coversFee: z.boolean().optional(),
 });
 
 const saleUpdateSchema = saleCreateSchema.partial();
@@ -575,8 +581,21 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // DORM_DASH and isOnlineOnly sales may omit address/date fields — provide DB-required defaults
+    const now = new Date().toISOString();
+    const threeDaysOut = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
     const sale = await prisma.sale.create({
-      data: { ...saleData, organizerId, status: 'DRAFT' }
+      data: {
+        ...saleData,
+        startDate: saleData.startDate ?? now,
+        endDate: saleData.endDate ?? threeDaysOut,
+        address: saleData.address ?? '',
+        city: saleData.city ?? '',
+        state: saleData.state ?? '',
+        zip: saleData.zip ?? '',
+        organizerId,
+        status: 'DRAFT',
+      }
     });
 
     // Check achievements and award XP (first sale creation)

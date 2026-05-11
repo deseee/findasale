@@ -51,9 +51,6 @@ const OrganizerSettingsPage = () => {
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [pinterestUrl, setPinterestUrl] = useState('');
   const [pickupWindows, setPickupWindows] = useState('');
-  const [venmoHandle, setVenmoHandle] = useState('');
-  const [zelleHandle, setZelleHandle] = useState('');
-  const [isSavingPaymentHandles, setIsSavingPaymentHandles] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [timezone, setTimezone] = useState('');
   const [byAppointment, setByAppointment] = useState(false);
@@ -362,8 +359,6 @@ const OrganizerSettingsPage = () => {
           setYoutubeUrl(response.data.youtubeUrl || '');
           setPinterestUrl(response.data.pinterestUrl || '');
           setPickupWindows(response.data.pickupWindows || '');
-          setVenmoHandle(response.data.venmoHandle || '');
-          setZelleHandle(response.data.zelleHandle || '');
           setStripeConnected(response.data.stripeConnected || false);
           setFoundingOrgBadge(response.data.foundingOrgBadge || false);
           setOrganizerTier(response.data.subscriptionTier || null);
@@ -521,21 +516,6 @@ const OrganizerSettingsPage = () => {
     return null;
   }
 
-  const handleSavePaymentHandles = async () => {
-    setIsSavingPaymentHandles(true);
-    try {
-      await api.patch('/organizers/me', {
-        venmoHandle: venmoHandle.trim() || null,
-        zelleHandle: zelleHandle.trim() || null,
-      });
-      showToast('Payment handles saved', 'success');
-    } catch (error: any) {
-      showToast(error.response?.data?.message || 'Failed to save payment handles', 'error');
-    } finally {
-      setIsSavingPaymentHandles(false);
-    }
-  };
-
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
@@ -676,68 +656,6 @@ const OrganizerSettingsPage = () => {
                     {isConnectingStripe ? 'Redirecting to Stripe...' : 'Setup Stripe Connect'}
                   </button>
                 )}
-              </div>
-
-              {/* #412 — Cash-to-Digital Bridge: Venmo & Zelle handles */}
-              <div className="card p-6">
-                <div className="flex items-center gap-2 mb-1">
-                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Digital Payment Handles</h2>
-                  <Tooltip content="Buyers at your in-person sales can pay digitally using Venmo or Zelle when you don't have a card reader handy." position="right" />
-                </div>
-                <p className="text-sm text-warm-600 dark:text-gray-400 mb-5">
-                  Add your Venmo or Zelle info so buyers can pay you on the spot — no card reader required. These will appear on your sale pages.
-                </p>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-warm-800 dark:text-gray-200 mb-1">Venmo Handle</label>
-                    <input
-                      type="text"
-                      value={venmoHandle}
-                      onChange={(e) => setVenmoHandle(e.target.value)}
-                      placeholder="@username"
-                      className="w-full max-w-sm border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-warm-800 dark:text-gray-200 mb-1">Zelle Handle</label>
-                    <input
-                      type="text"
-                      value={zelleHandle}
-                      onChange={(e) => setZelleHandle(e.target.value)}
-                      placeholder="email or phone number"
-                      className="w-full max-w-sm border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={handleSavePaymentHandles}
-                  disabled={isSavingPaymentHandles}
-                  className="mt-5 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-5 rounded-lg disabled:opacity-50 text-sm"
-                >
-                  {isSavingPaymentHandles ? 'Saving...' : 'Save Payment Handles'}
-                </button>
-              </div>
-
-              {/* #402 — Cover the Fee (info card — this is a per-sale setting) */}
-              <div className="card p-6">
-                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-1">Cover Buyer Fees</h2>
-                <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
-                  You can absorb the platform fee on any individual sale so buyers pay the listed price — no added fee at checkout. When enabled, the fee comes out of your payout instead.
-                </p>
-                <div className="flex items-start gap-3 p-4 rounded-lg bg-warm-50 dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
-                  <svg className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-sm text-warm-700 dark:text-gray-300">
-                    This setting is configured per sale. When creating or editing a sale, look for <strong>Cover Buyer Fees</strong> in the sale settings.
-                  </p>
-                </div>
-                <Link
-                  href="/organizer/sales"
-                  className="mt-4 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 underline"
-                >
-                  Go to My Sales →
-                </Link>
               </div>
 
               {/* #414 — Grief Firewall (info card — this is a per-sale setting) */}

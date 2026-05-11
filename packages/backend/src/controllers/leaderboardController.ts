@@ -258,6 +258,14 @@ export const getScoutLeaderboard = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching scout leaderboard:', error);
-    res.status(500).json({ message: 'Server error while fetching leaderboard' });
+    // Return empty result rather than 500 — allows the page to load shoppers/organizers
+    // even when the ShopperOrganizerIntroduction table is missing (pending migration)
+    const currentYear = new Date().getUTCFullYear();
+    res.json({
+      season: currentYear.toString(),
+      resetDate: new Date(`${currentYear + 1}-01-01T00:00:00Z`).toISOString(),
+      entries: [],
+      currentUserRank: null,
+    });
   }
 };

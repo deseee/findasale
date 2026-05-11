@@ -60,7 +60,7 @@ interface CartItem {
 
 type ReaderStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 type PaymentStatus = 'idle' | 'creating' | 'waiting_for_card' | 'processing' | 'success' | 'error' | 'cancelled';
-type PaymentMode = 'card' | 'manual_card' | 'cash' | 'qr' | 'invoice' | 'phone';
+type PaymentMode = 'card' | 'manual_card' | 'cash' | 'qr' | 'invoice' | 'phone' | 'venmo' | 'zelle';
 type NumpadMode = 'price';
 
 interface CashPaymentResponse {
@@ -227,10 +227,9 @@ export default function POSPage() {
   const [splitMode, setSplitMode] = useState<'even' | 'custom'>('even');
   const [splitCustomAmounts, setSplitCustomAmounts] = useState<string[]>([]);
 
-  // Organizer profile (venmo/zelle for cash nudge #412)
+  // Organizer profile (venmo/zelle handles for POS payment modes)
   const [organizerVenmo, setOrganizerVenmo] = useState<string | null>(null);
   const [organizerZelle, setOrganizerZelle] = useState<string | null>(null);
-  const [cashNudgeDismissed, setCashNudgeDismissed] = useState(false);
 
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
@@ -941,6 +940,47 @@ export default function POSPage() {
       setPaymentStatus('error');
       const message =
         err?.response?.data?.message ?? err?.message ?? 'Cash sale failed. Please try again.';
+      setErrorMessage(message);
+    }
+  };
+
+  // Venmo / Zelle — organizer collects full amount peer-to-peer outside app.
+  // Platform fee is captured via Stripe deduction from organizer's payout.
+  const handlePeerToPeerPayment = async (method: 'venmo' | 'zelle') => {
+    if (!cart.length || !selectedSaleId) return;
+    setPaymentStatus('creating');
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const items = cart.map(c => ({
+        ...(c.itemId ? { itemId: c.itemId } : {}),
+        amount: c.amount,
+        label: c.title,
+      }));
+
+      const response = await api.post<CashPaymentResponse>('/stripe/terminal/cash-payment', {
+        items,
+        cashReceived: cartTotal, // organizer collects the full amount
+        saleId: selectedSaleId,
+        paymentMethod: method, // flag for backend reporting
+        ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
+      });
+
+      setLastCashFee(response.data);
+      setPaymentStatus('success');
+      const methodLabel = method === 'venmo' ? 'Venmo' : 'Zelle';
+      setSuccessMessage(
+        `✅ ${methodLabel} sale recorded for $${cartTotal.toFixed(2)}. Platform fee will be deducted from your next payout.`
+      );
+
+      showSurvey('OG-3');
+      clearCart();
+    } catch (err: any) {
+      console.error(`[pos] ${method} payment error:`, err);
+      setPaymentStatus('error');
+      const message =
+        err?.response?.data?.message ?? err?.message ?? 'Payment recording failed. Please try again.';
       setErrorMessage(message);
     }
   };
@@ -2030,6 +2070,30 @@ export default function POSPage() {
               <span className="text-xl">📧</span>
               <span className="text-xs">Invoice</span>
             </button>
+            {/* Venmo — peer-to-peer, organizer collects outside app, platform fee via Stripe */}
+            <button
+              onClick={() => setPaymentMode('venmo')}
+              className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
+                paymentMode === 'venmo'
+                  ? 'bg-[#3D95CE] text-white'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <span className="text-xl">💜</span>
+              <span className="text-xs">Venmo</span>
+            </button>
+            {/* Zelle — peer-to-peer, organizer collects outside app, platform fee via Stripe */}
+            <button
+              onClick={() => setPaymentMode('zelle')}
+              className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
+                paymentMode === 'zelle'
+                  ? 'bg-[#6D1ED4] text-white'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <span className="text-xl">⚡</span>
+              <span className="text-xs">Zelle</span>
+            </button>
             {/* Send to Phone — visible only when a shopper is linked via QR or cart pull */}
             {(linkedShopperId || linkedShopperData?.id) && (
               <button
@@ -2374,43 +2438,6 @@ export default function POSPage() {
           {/* Cash payment numpad and button */}
           {paymentMode === 'cash' && (
             <>
-              {/* Cash-to-Digital Nudge (#412) — shown when organizer has venmo/zelle set */}
-              {!cashNudgeDismissed && (organizerVenmo || organizerZelle) && (
-                <div className="mb-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start gap-2">
-                  <span className="text-base shrink-0">💡</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Going digital is faster!</p>
-                    <div className="flex flex-wrap gap-2">
-                      {organizerVenmo && (
-                        <button
-                          onClick={() => { navigator.clipboard.writeText(organizerVenmo); }}
-                          title="Tap to copy"
-                          className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/60 transition font-medium"
-                        >
-                          Venmo: @{organizerVenmo} 📋
-                        </button>
-                      )}
-                      {organizerZelle && (
-                        <button
-                          onClick={() => { navigator.clipboard.writeText(organizerZelle); }}
-                          title="Tap to copy"
-                          className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/60 transition font-medium"
-                        >
-                          Zelle: {organizerZelle} 📋
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setCashNudgeDismissed(true)}
-                    aria-label="Dismiss"
-                    className="text-amber-400 dark:text-amber-600 hover:text-amber-600 dark:hover:text-amber-400 text-sm shrink-0 mt-0.5"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
               {/* Inline cash received numpad */}
               <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
@@ -2472,6 +2499,64 @@ export default function POSPage() {
                 {paymentStatus === 'creating' && 'Recording…'}
                 {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
                   `Record Cash Sale $${cartTotal.toFixed(2)}`}
+              </button>
+            </>
+          )}
+
+          {/* Venmo payment section */}
+          {paymentMode === 'venmo' && (
+            <>
+              <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-1">Venmo — Collect Outside App</p>
+                <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+                  The buyer pays you directly via Venmo. You collect the full ${cartTotal.toFixed(2)} yourself. FindA.Sale will deduct its platform fee from your next Stripe payout.
+                </p>
+                {organizerVenmo && (
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(organizerVenmo!); showToast('Venmo handle copied', 'success'); }}
+                    className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/60 transition font-medium mb-3"
+                  >
+                    @{organizerVenmo} — tap to copy 📋
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => handlePeerToPeerPayment('venmo')}
+                disabled={['creating'].includes(paymentStatus)}
+                className="w-full py-4 rounded-xl font-bold text-lg transition disabled:opacity-40 disabled:cursor-not-allowed bg-[#3D95CE] text-white hover:bg-[#3285be] active:scale-95"
+              >
+                {paymentStatus === 'creating' && 'Recording…'}
+                {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
+                  `Record Venmo Sale $${cartTotal.toFixed(2)}`}
+              </button>
+            </>
+          )}
+
+          {/* Zelle payment section */}
+          {paymentMode === 'zelle' && (
+            <>
+              <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                <p className="text-sm font-semibold text-purple-900 dark:text-purple-200 mb-1">Zelle — Collect Outside App</p>
+                <p className="text-xs text-purple-700 dark:text-purple-300 mb-3">
+                  The buyer pays you directly via Zelle. You collect the full ${cartTotal.toFixed(2)} yourself. FindA.Sale will deduct its platform fee from your next Stripe payout.
+                </p>
+                {organizerZelle && (
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(organizerZelle!); showToast('Zelle handle copied', 'success'); }}
+                    className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 px-3 py-1.5 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/60 transition font-medium mb-3"
+                  >
+                    {organizerZelle} — tap to copy 📋
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => handlePeerToPeerPayment('zelle')}
+                disabled={['creating'].includes(paymentStatus)}
+                className="w-full py-4 rounded-xl font-bold text-lg transition disabled:opacity-40 disabled:cursor-not-allowed bg-[#6D1ED4] text-white hover:bg-[#5e1ab8] active:scale-95"
+              >
+                {paymentStatus === 'creating' && 'Recording…'}
+                {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
+                  `Record Zelle Sale $${cartTotal.toFixed(2)}`}
               </button>
             </>
           )}
