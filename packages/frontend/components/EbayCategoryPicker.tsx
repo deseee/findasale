@@ -28,6 +28,7 @@ interface EbayCategoryPickerProps {
   onChange: (payload: CategoryPickerPayload) => void;
   label?: string;
   placeholder?: string;
+  defaultSearch?: string; // Pre-populate search with this value on mount (used when no eBay category confirmed yet)
 }
 
 const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
@@ -36,8 +37,9 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
   onChange,
   label = 'eBay Category',
   placeholder = 'Search and select an eBay category...',
+  defaultSearch,
 }) => {
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(defaultSearch || '');
   const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,8 +87,13 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
         // Suppress abort/cancel errors from debounce — not real failures
         const isCancelled = err.name === 'AbortError' || err.name === 'CanceledError' || err.name === 'CancelledError';
         if (!isCancelled) {
-          console.error('Failed to fetch category suggestions:', err);
-          setError('Failed to fetch categories');
+          const status = err?.response?.status;
+          if (status === 503 || status === 401 || status === 403) {
+            setError('Category search temporarily unavailable');
+          } else {
+            console.error('Failed to fetch category suggestions:', err);
+            setError('Failed to fetch categories');
+          }
         }
       } finally {
         setIsLoading(false);
@@ -215,13 +222,4 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
                   </div>
                 </button>
               ))}
-            </div>
-          )}
-        </div>
-      )}
-
-    </div>
-  );
-};
-
-export default EbayCategoryPicker;
+            </

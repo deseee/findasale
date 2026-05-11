@@ -885,12 +885,22 @@ const ReviewPage = () => {
   const totalCount = items.length;
   const queueEmpty = pendingItems.length === 0 && totalCount > 0;
 
-  // ── Rarity badge colors (light palette) ────────────────────────────────────
-  const rarityColors: Record<string, { bg: string; fg: string }> = {
-    COMMON:    { bg: 'rgba(20,18,14,0.05)',    fg: 'rgba(26,24,20,0.62)' },
-    UNCOMMON:  { bg: 'rgba(63,122,75,0.10)',   fg: '#3F7A4B' },
-    RARE:      { bg: 'rgba(58,110,180,0.12)',  fg: '#3A6EB4' },
-    LEGENDARY: { bg: 'rgba(200,85,43,0.10)',   fg: '#C8552B' },
+  // Dark mode detection for rarity colors (inline style can't use Tailwind dark: variants)
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const checkDark = () => setIsDark(document.documentElement.classList.contains('dark'));
+    checkDark();
+    const observer = new MutationObserver(checkDark);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  // ── Rarity badge colors (light + dark palette) ──────────────────────────────
+  const rarityColors: Record<string, { bg: string; fg: string; darkBg: string; darkFg: string }> = {
+    COMMON:    { bg: 'rgba(20,18,14,0.05)',   fg: 'rgba(26,24,20,0.62)',  darkBg: 'rgba(245,245,240,0.08)', darkFg: '#D0D0CC' },
+    UNCOMMON:  { bg: 'rgba(63,122,75,0.10)',  fg: '#3F7A4B',              darkBg: 'rgba(63,122,75,0.20)',   darkFg: '#6BCF7F' },
+    RARE:      { bg: 'rgba(58,110,180,0.12)', fg: '#3A6EB4',              darkBg: 'rgba(58,110,180,0.22)',  darkFg: '#7EB0F0' },
+    LEGENDARY: { bg: 'rgba(200,85,43,0.10)',  fg: '#C8552B',              darkBg: 'rgba(200,85,43,0.18)',   darkFg: '#E8775A' },
   };
 
   const conditionOptions = [
@@ -998,13 +1008,13 @@ const ReviewPage = () => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-20 pt-8">
 
           {/* ── Page header ── */}
-          <div className="mb-6 flex items-start justify-between gap-4">
-            <div>
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
               <p className="text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA] mb-1">
                 Item Manager · Smart Review
               </p>
               <h1
-                className="text-3xl font-semibold tracking-tight text-[#1A1814] dark:text-[#F5F5F0]"
+                className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1A1814] dark:text-[#F5F5F0]"
                 style={{ fontFamily: 'Inter Tight, sans-serif', letterSpacing: '-0.02em' }}
               >
                 {itemsLoading
@@ -1014,7 +1024,7 @@ const ReviewPage = () => {
                   : `Review ${pendingItems.length} item${pendingItems.length !== 1 ? 's' : ''} before they go live`}
               </h1>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 sm:flex-shrink-0">
               {saleId && (
                 <Link
                   href={`/sales/${saleId}`}
@@ -1263,6 +1273,7 @@ const ReviewPage = () => {
                                 }}
                                 label=""
                                 placeholder="Select category…"
+                                defaultSearch={(!editState.ebayCategoryName && !item.ebayCategoryName) ? (editState.category || item.category || undefined) : undefined}
                               />
                             </div>
                             <div>
@@ -1347,8 +1358,8 @@ const ReviewPage = () => {
                                     onClick={() => updateItemMutation.mutate({ itemId: item.id, updates: { rarity: r } as any })}
                                     className={`flex-1 py-1.5 text-center rounded-lg text-[10px] font-mono tracking-wide transition-all border ${!sel ? 'text-[rgba(26,24,20,0.5)] dark:text-[#B8B8BA] border-black/10 dark:border-[#3A3A3C]' : ''}`}
                                     style={{
-                                      background: sel ? rc.bg : 'transparent',
-                                      color: sel ? rc.fg : undefined,
+                                      background: sel ? (isDark ? rc.darkBg : rc.bg) : 'transparent',
+                                      color: sel ? (isDark ? rc.darkFg : rc.fg) : undefined,
                                       borderColor: sel ? 'transparent' : undefined,
                                       fontWeight: sel ? 700 : 500,
                                     }}

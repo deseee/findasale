@@ -259,7 +259,8 @@ export async function suggestCategoriesHandler(req: AuthRequest, res: Response):
     // Taxonomy suggest only needs an app token (public catalog API — no user OAuth required)
     const token = await getEbayAccessToken();
     if (!token) {
-      res.status(503).json({ error: 'eBay app token unavailable' });
+      console.warn('[ebayTaxonomy] eBay app token unavailable — returning empty suggestions');
+      res.json({ suggestions: [] });
       return;
     }
 
