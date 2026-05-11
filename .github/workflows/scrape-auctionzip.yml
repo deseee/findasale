@@ -1,14 +1,7 @@
+# DISABLED: Cloudflare site-wide IP block — revisit if residential proxy infrastructure added
 name: Scrape AuctionZip Auctioneer Directory
 
 on:
-  schedule:
-    # First Monday of each month at 3:30am UTC
-    # Note: GitHub Actions cron does not support "nth weekday of month" natively.
-    # This runs every Monday at 3:30am; the scraper's 500-record cap provides
-    # natural throttling — only one full run per trigger is meaningful.
-    # To restrict to first Monday only, the workflow self-skips on subsequent Mondays
-    # by checking the date in the script.
-    - cron: '30 3 * * 1'
   workflow_dispatch:
     inputs:
       letters:
