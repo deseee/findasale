@@ -72,6 +72,8 @@ import { runOsmScraper } from '../services/scraper/osmScraper';
 import { scrapeTheSaleSeker, DEFAULT_METROS } from '../services/scraper/sources/saleSeeker';
 import { scrapeGarageSaleFinder } from '../services/scraper/sources/garagesalefinder';
 import { runAuctionZipScraper } from '../services/scraper/sources/auctionZipScraper';
+import { scrapeAuctionNinja } from '../services/scraper/sources/auctionNinjaScraper';
+import { scrapeNAADirectory } from '../services/scraper/sources/naaAuctioneerDirectory';
 import { runAlaskaPhase2Scraper } from '../services/scraper/sources/alaskaPhase2Scraper';
 import { runArizonaPhase2Scraper } from '../services/scraper/sources/arizonaPhase2Scraper';
 import { runCaliforniaPhase2Scraper } from '../services/scraper/sources/californiaPhase2Scraper';
@@ -1486,6 +1488,54 @@ router.post('/scraper/run-west-virginia-phase2', requireSecret, async (req: expr
     res.json({ success: true, message: 'West Virginia Phase 2 scraper completed' });
   } catch (error: any) {
     console.error('[WestVirginiaPhase2] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-auction-ninja — AuctionNinja.com estate sale company directory scraper
+// Body (optional): { "metros": ["grand-rapids-mi", ...] } to limit to specific metros
+router.post('/scraper/run-auction-ninja', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const { getOrCreateSystemOrganizer, defaultRateLimiter } = await import('../services/scraper/index');
+    const organizerId = await getOrCreateSystemOrganizer();
+
+    const metros: string[] = req.body?.metros || DEFAULT_METROS;
+
+    const stats = { itemsFound: 0, itemsCreated: 0, itemsUpdated: 0, itemsSkipped: 0, itemsFailed: 0 };
+
+    for (const metro of metros) {
+      try {
+        const result = await scrapeAuctionNinja(metro, organizerId, defaultRateLimiter);
+        stats.itemsFound += result.itemsFound;
+        stats.itemsCreated += result.itemsCreated;
+        stats.itemsUpdated += result.itemsUpdated;
+        stats.itemsSkipped += result.itemsSkipped;
+        stats.itemsFailed += result.itemsFailed;
+      } catch (err) {
+        console.error(`[AuctionNinja] Metro ${metro} failed:`, err);
+        stats.itemsFailed++;
+      }
+    }
+
+    res.json({ success: true, message: 'AuctionNinja scraper completed', stats });
+  } catch (error: any) {
+    console.error('[AuctionNinja] Route error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/internal/scraper/run-naa — NAA Find an Auctioneer national directory scraper
+// National-once mode: iterates all 50 US states internally; metro param is unused.
+router.post('/scraper/run-naa', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const { getOrCreateSystemOrganizer, defaultRateLimiter } = await import('../services/scraper/index');
+    const organizerId = await getOrCreateSystemOrganizer();
+
+    const stats = await scrapeNAADirectory('national', organizerId, defaultRateLimiter);
+
+    res.json({ success: true, message: 'NAA Find an Auctioneer scraper completed', stats });
+  } catch (error: any) {
+    console.error('[NAADirectory] Route error:', error);
     res.status(500).json({ error: error.message });
   }
 });
