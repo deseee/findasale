@@ -233,6 +233,7 @@ import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Ph
 import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Directory scraper national cron
 import { initMetroSyncCron } from './jobs/metroSyncCron'; // ADR-074: Metro Sync — eBay sold items nightly cron
 import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase 2: Category Sync — eBay category items nightly cron
+import { initAutoSeedOutreachCron } from './jobs/autoSeedOutreachCron'; // Gap 1 fix: Auto-seed new scraped organizers into outreach queue daily
 import { initOutreachEmailsCron } from './jobs/outreachEmailsCron'; // Phase 1: Cold outreach email pipeline
 import { initEmailDiscoveryCron } from './jobs/emailDiscoveryJob'; // ADR-073 Phase 2: Email discovery for unmanaged organizers
 import { initWebsiteEnrichmentCron } from './jobs/websiteEnrichmentJob'; // ADR-077 Phase 3: Website enrichment for licensed organizers with no website
@@ -711,6 +712,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-073 Phase 2: Initialize email discovery cron (gated by EMAIL_DISCOVERY_ENABLED env var)
   initEmailDiscoveryCron();
+
+  // Gap 1 fix: Auto-seed new scraped organizers into outreach queue (daily at 06:00 UTC, gated by OUTREACH_ENABLED)
+  initAutoSeedOutreachCron();
 
   // ADR-075: Initialize outreach email send cron (gated by OUTREACH_ENABLED env var)
   initOutreachEmailsCron();

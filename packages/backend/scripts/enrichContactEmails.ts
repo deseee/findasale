@@ -22,9 +22,42 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { extractEmails } from '../src/services/scraper/htmlParser';
 
 const prisma = new PrismaClient();
+
+/**
+ * Auto-queue a newly discovered email into the outreach pipeline.
+ * No-op if OUTREACH_ENABLED is not 'true', email is suppressed, or a row already exists.
+ */
+async function queueForOutreach(organizerId: string, email: string): Promise<void> {
+  if (process.env.OUTREACH_ENABLED !== 'true') return;
+  try {
+    const isSuppressed = await prisma.emailSuppression.findFirst({
+      where: { emailAddress: email },
+    });
+    if (isSuppressed) return;
+    const existing = await prisma.directoryClaimEmail.findFirst({
+      where: { organizerId },
+    });
+    if (!existing) {
+      await prisma.directoryClaimEmail.create({
+        data: {
+          organizerId,
+          emailAddress: email,
+          status: 'PENDING',
+          attemptCount: 0,
+          trackingPixelId: randomUUID(),
+          trackingToken: randomUUID(),
+        },
+      });
+      console.log(`[Enrich] Queued ${email} for outreach (organizer ${organizerId})`);
+    }
+  } catch (err) {
+    console.error(`[Enrich] queueForOutreach error for organizer ${organizerId}:`, err);
+  }
+}
 
 // Environment variables — optional
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY ?? '';
@@ -365,6 +398,7 @@ async function main() {
             where: { id: org.id },
             data: { contactEmail: email },
           });
+          await queueForOutreach(org.id, email);
           console.log(
             `[Enrich] (${processed}/${pass1Total}) ${org.businessName}: found ${email} (from ${source})`
           );
@@ -457,6 +491,7 @@ async function main() {
                 where: { id: org.id },
                 data: { contactEmail: email },
               });
+              await queueForOutreach(org.id, email);
               console.log(
                 `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: found ${email} (from ${source}→website scrape)`
               );
@@ -555,6 +590,7 @@ async function main() {
                   where: { id: org.id },
                   data: { contactEmail: email, website: altWebsite },
                 });
+                await queueForOutreach(org.id, email);
                 console.log(
                   `[Enrich] (${processed}/${pass3Total}) ${org.businessName}: found ${email} (from Places alt-website scrape)`
                 );

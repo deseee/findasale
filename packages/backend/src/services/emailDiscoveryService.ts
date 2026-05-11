@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import * as dns from 'dns';
 import * as net from 'net';
 import { prisma } from '../lib/prisma';
+import { randomUUID } from 'crypto';
 
 /**
  * Email Discovery Service — Free tier pipeline
@@ -480,6 +481,31 @@ async function updateOrganizerEmail(
         emailDiscoveredAt: new Date(),
       },
     });
+
+    // Auto-queue newly discovered email into outreach pipeline
+    if (process.env.OUTREACH_ENABLED === 'true') {
+      const isSuppressed = await prisma.emailSuppression.findFirst({
+        where: { emailAddress: email },
+      });
+      if (!isSuppressed) {
+        const existing = await prisma.directoryClaimEmail.findFirst({
+          where: { organizerId },
+        });
+        if (!existing) {
+          await prisma.directoryClaimEmail.create({
+            data: {
+              organizerId,
+              emailAddress: email,
+              status: 'PENDING',
+              attemptCount: 0,
+              trackingPixelId: randomUUID(),
+              trackingToken: randomUUID(),
+            },
+          });
+          console.debug(`[emailDiscoveryService] Queued ${email} for outreach (organizer ${organizerId})`);
+        }
+      }
+    }
   } catch (err) {
     console.error(
       `[emailDiscoveryService] Error updating organizer ${organizerId}:`,

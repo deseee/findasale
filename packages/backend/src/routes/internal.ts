@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { prisma } from '../lib/prisma';
 import { ingestFromGitHubActions } from '../controllers/internalScraperController';
 import { runEnrichmentBackfill } from '../controllers/internalEnrichmentController';
 import {
@@ -791,6 +792,98 @@ router.post('/outreach/send', requireSecret, async (req: express.Request, res: e
   }
 });
 
+// GET /api/internal/outreach/status — pipeline observability snapshot (no SQL required)
+router.get('/outreach/status', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const now = new Date();
+    const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const warmupStart = process.env.OUTREACH_WARMUP_START_DATE
+      ? new Date(process.env.OUTREACH_WARMUP_START_DATE)
+      : new Date('2026-05-06');
+    const warmupDay = Math.floor((now.getTime() - warmupStart.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+
+    const [
+      total,
+      statusPending,
+      statusSent,
+      statusBounced,
+      statusOptedOut,
+      statusClaimed,
+      touch1Sent,
+      touch2Sent,
+      touch3Sent,
+      touch4Sent,
+      completed,
+      last24hCount,
+      last7dCount,
+      suppressed,
+      hotCount,
+      warmCount,
+      coldCount,
+      tieredCount,
+    ] = await Promise.all([
+      prisma.directoryClaimEmail.count(),
+      prisma.directoryClaimEmail.count({ where: { status: 'PENDING' } }),
+      prisma.directoryClaimEmail.count({ where: { status: 'SENT' } }),
+      prisma.directoryClaimEmail.count({ where: { status: 'BOUNCED' } }),
+      prisma.directoryClaimEmail.count({ where: { status: 'OPTED_OUT' } }),
+      prisma.directoryClaimEmail.count({ where: { status: 'CLAIMED' } }),
+      prisma.directoryClaimEmail.count({ where: { touch1SentAt: { not: null } } }),
+      prisma.directoryClaimEmail.count({ where: { touch2SentAt: { not: null } } }),
+      prisma.directoryClaimEmail.count({ where: { touch3SentAt: { not: null } } }),
+      prisma.directoryClaimEmail.count({ where: { touch4SentAt: { not: null } } }),
+      prisma.directoryClaimEmail.count({ where: { touch4SentAt: { not: null } } }),
+      prisma.directoryClaimEmail.count({ where: { sentAt: { gte: last24h } } }),
+      prisma.directoryClaimEmail.count({ where: { sentAt: { gte: last7d } } }),
+      prisma.emailSuppression.count(),
+      prisma.organizer.count({ where: { leadTier: 'HOT' } }),
+      prisma.organizer.count({ where: { leadTier: 'WARM' } }),
+      prisma.organizer.count({ where: { leadTier: 'COLD' } }),
+      prisma.organizer.count({ where: { leadTier: { not: null } } }),
+    ]);
+
+    const totalOrganizers = await prisma.organizer.count();
+    const untieredCount = totalOrganizers - tieredCount;
+
+    res.json({
+      pipeline: {
+        total,
+        byStatus: {
+          PENDING: statusPending,
+          SENT: statusSent,
+          BOUNCED: statusBounced,
+          OPTED_OUT: statusOptedOut,
+          CLAIMED: statusClaimed,
+        },
+        byTier: {
+          HOT: hotCount,
+          WARM: warmCount,
+          COLD: coldCount,
+          untiered: untieredCount,
+        },
+        touchProgress: {
+          touch1Sent,
+          touch2Sent,
+          touch3Sent,
+          touch4Sent,
+          completed,
+        },
+      },
+      recentSends: {
+        last24h: last24hCount,
+        last7d: last7dCount,
+      },
+      suppressed,
+      warmupDay,
+    });
+  } catch (err: any) {
+    console.error('[OutreachStatus] Route error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // POST /api/internal/enrich-sale-details — trigger ESN sale detail enrichment (description + photos)
 router.post('/enrich-sale-details', triggerSaleDetailEnrichment);
 
@@ -808,16 +901,6 @@ router.post('/category-sync/trigger', async (req: express.Request, res: express.
   try {
     runCategorySync().catch(err => console.error('[CategorySync] Trigger error:', err));
     res.json({ ok: true, message: 'Category sync started' });
-  } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// POST /api/internal/outreach/trigger — manually trigger outreach email batch (protected)
-router.post('/outreach/trigger', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await sendOutreachEmails();
-    res.json({ ok: true, message: 'Outreach batch triggered' });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });
   }

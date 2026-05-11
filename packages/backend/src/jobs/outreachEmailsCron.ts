@@ -138,7 +138,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
       return;
     }
     const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
-    const WARMUP_START = new Date('2026-05-06');
+    const WARMUP_START = new Date(process.env.OUTREACH_WARMUP_START_DATE || '2026-05-06');
     const today = new Date();
     const daysSinceStart = Math.floor((today.getTime() - WARMUP_START.getTime()) / (1000 * 60 * 60 * 24));
     const dailyQuota = getDailyQuota(daysSinceStart);
@@ -147,6 +147,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
 
     // ADR-075: Base filter criteria (reused across all three leadTier passes)
     const baseWhere = {
+      status: { notIn: ['BOUNCED', 'OPTED_OUT', 'CLAIMED'] },
       organizer: {
         directoryStatus: { not: 'CLOSED' },
         // Only legitimate organizer types (estate sale, auction, antique, consignment, etc.)
@@ -362,7 +363,15 @@ export const sendOutreachEmails = async (): Promise<void> => {
           console.error('[OutreachAudit] Failed to log SENT event for org:', record.organizerId, '—', auditErr.message);
         }
 
-        const updateData: any = { [`touch${touchNum}SentAt`]: new Date(), trackingPixelId, trackingToken };
+        const updateData: any = {
+          [`touch${touchNum}SentAt`]: new Date(),
+          trackingPixelId,
+          trackingToken,
+          status: 'SENT',
+          lastAttemptAt: new Date(),
+          attemptCount: { increment: 1 },
+          ...(touchNum === 1 && !record.sentAt ? { sentAt: new Date() } : {}),
+        };
         await prisma.directoryClaimEmail.update({
           where: { id: record.id },
           data: updateData,
@@ -444,9 +453,9 @@ export function initOutreachEmailsCron(): void {
   }), { timezone: 'UTC' });
   console.log('[OutreachCron] Registered — runs every 4 hours UTC');
 
-  // Weekly Sunday 02:00 UTC — sync lead tiers to MailerLite groups
-  cron.schedule('0 2 * * 0', cronGuard({ jobName: 'sync-lead-tier-groups' }, async () => {
+  // Weekly Sunday 04:00 UTC — sync lead tiers to MailerLite groups (offset from scoring at 02:00 to avoid race)
+  cron.schedule('0 4 * * 0', cronGuard({ jobName: 'sync-lead-tier-groups' }, async () => {
     await syncLeadTierGroups();
   }), { timezone: 'UTC' });
-  console.log('[OutreachCron] syncLeadTierGroups registered — runs Sundays 02:00 UTC');
+  console.log('[OutreachCron] syncLeadTierGroups registered — runs Sundays 04:00 UTC');
 }
