@@ -1250,22 +1250,8 @@ const ReviewPage = () => {
                           {/* Category + Condition row */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              {/* Category — shows the category set during the camera/photo flow */}
-                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1">
+                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA] mb-1">
                                 Category
-                              </label>
-                              {(editState.category || item.category) ? (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono border bg-warm-200 text-warm-800 border-warm-300 dark:bg-[#3A3A3C] dark:text-[#F5F5F0] dark:border-[#3A3A3C] mb-2">
-                                  {editState.category || item.category}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono border bg-warm-100 text-[rgba(26,24,20,0.4)] border-warm-200 dark:bg-[#2C2C2E] dark:text-[#B8B8BA] dark:border-[#3A3A3C] mb-2">
-                                  Not set
-                                </span>
-                              )}
-                              {/* eBay Category — separate taxonomy picker */}
-                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1">
-                                eBay Category
                               </label>
                               <EbayCategoryPicker
                                 value={editState.category}

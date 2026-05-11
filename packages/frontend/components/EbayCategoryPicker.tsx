@@ -132,20 +132,20 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
   return (
     <div ref={containerRef} className="relative w-full">
       {label && (
-        <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+        <label className="block text-sm font-medium text-[#1A1814] dark:text-[#F5F5F0] mb-2">
           {label}
         </label>
       )}
 
       {/* Confirmed selection chip — shown when a leaf category has been selected */}
       {selectedLeaf ? (
-        <div className="flex items-center gap-2 px-3 py-2 bg-sage-50 dark:bg-gray-700 border border-sage-300 dark:border-sage-600 rounded-lg">
+        <div className="flex items-center gap-2 px-3 py-2 bg-warm-100 dark:bg-[#3A3A3C] border border-warm-300 dark:border-[#3A3A3C] rounded-lg">
           <div className="flex-1 min-w-0">
-            <span className="text-sm font-medium text-sage-800 dark:text-sage-200 truncate block">
+            <span className="text-sm font-medium text-[#1A1814] dark:text-[#F5F5F0] truncate block">
               {selectedLeaf.name}
             </span>
             {selectedLeaf.l1 && (
-              <span className="text-xs text-warm-500 dark:text-warm-400">
+              <span className="text-xs text-warm-700 dark:text-[#B8B8BA]">
                 {selectedLeaf.l1}
               </span>
             )}
@@ -153,7 +153,7 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
           <button
             type="button"
             onClick={handleClear}
-            className="flex-shrink-0 text-warm-400 hover:text-warm-600 dark:text-warm-500 dark:hover:text-warm-300 transition-colors text-lg leading-none"
+            className="flex-shrink-0 text-warm-500 hover:text-[#1A1814] dark:text-[#B8B8BA] dark:hover:text-[#F5F5F0] transition-colors text-lg leading-none"
             aria-label="Clear selected category"
           >
             ×
@@ -171,7 +171,7 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
             placeholder={placeholder}
             aria-invalid={!!error}
             aria-describedby={error ? "ebay-category-error" : undefined}
-            className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+            className="w-full px-4 py-2 border border-warm-300 dark:border-[#3A3A3C] bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] placeholder-warm-400 dark:placeholder-[#B8B8BA] rounded-lg focus:ring-2 focus:ring-[#C8552B]/40 focus:outline-none"
           />
 
           {/* Loading spinner */}
@@ -190,9 +190,9 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
 
       {/* Dropdown suggestions */}
       {isOpen && !isLoading && !selectedLeaf && (
-        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg shadow-lg">
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-[#2C2C2E] border border-warm-200 dark:border-[#3A3A3C] rounded-lg shadow-lg">
           {suggestions.length === 0 ? (
-            <div className="px-4 py-3 text-center text-warm-500 dark:text-warm-400 text-sm">
+            <div className="px-4 py-3 text-center text-warm-700 dark:text-[#B8B8BA] text-sm">
               {input.trim() ? 'No categories found' : 'Start typing to search'}
             </div>
           ) : (
@@ -202,15 +202,15 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
                   key={suggestion.categoryId}
                   type="button"
                   onClick={() => handleSelect(suggestion)}
-                  className="w-full text-left px-4 py-2.5 hover:bg-amber-50 dark:hover:bg-gray-600 transition-colors border-b border-warm-100 dark:border-gray-600 last:border-b-0"
+                  className="w-full text-left px-4 py-2.5 hover:bg-warm-100 dark:hover:bg-[#3A3A3C] transition-colors border-b border-warm-100 dark:border-[#3A3A3C] last:border-b-0"
                 >
-                  <div className="text-warm-900 dark:text-warm-100 font-medium">
+                  <div className="text-[#1A1814] dark:text-[#F5F5F0] font-medium">
                     {suggestion.categoryName}
                   </div>
-                  <div className="text-xs text-warm-500 dark:text-warm-400 mb-1">
+                  <div className="text-xs text-warm-700 dark:text-[#B8B8BA] mb-1">
                     {suggestion.l1CategoryName || 'Everything Else'}
                   </div>
-                  <div className="text-xs text-warm-600 dark:text-warm-400">
+                  <div className="text-xs text-warm-600 dark:text-[#B8B8BA]">
                     ID: {suggestion.categoryId}
                   </div>
                 </button>
