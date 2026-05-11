@@ -158,7 +158,8 @@ export async function getEbayAccessToken(): Promise<string | null> {
     );
 
     if (!proxyRes.ok) {
-      console.error(`[eBay] Token fetch via proxy failed: ${proxyRes.status}`);
+      const body = await proxyRes.text().catch(() => '(unreadable)');
+      console.error(`[eBay] Token fetch via proxy failed: ${proxyRes.status} — body: ${body.slice(0, 300)}`);
       return null;
     }
 
