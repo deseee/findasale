@@ -281,7 +281,8 @@ async function getEbayPriceComps(
     });
 
     if (!response.ok) {
-      console.error(`[eBay] Finding API failed: ${response.status}`);
+      const errBody = await response.text().catch(() => '(unreadable)');
+      console.error(`[eBay] Finding API failed: ${response.status} — body: ${errBody.slice(0, 500)}`);
       // Fallback to mock data on API error
       return {
         min: 25,
