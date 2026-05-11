@@ -867,7 +867,7 @@ const ReviewPage = () => {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#F4EFE7] dark:bg-gray-900 py-8">
+      <div className="min-h-screen bg-[#F4EFE7] dark:bg-[#1C1C1E] py-8">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <Skeleton className="h-10 w-48 mb-8" />
           <div className="space-y-4">
@@ -923,13 +923,13 @@ const ReviewPage = () => {
       {/* Approve-all confirmation modal */}
       {showApproveAllModal && (
         <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#FBF8F2] dark:bg-gray-800 rounded-2xl border border-black/10 dark:border-gray-700 shadow-2xl overflow-hidden">
+          <div className="w-full max-w-md bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-2xl border border-black/10 dark:border-[#3A3A3C] shadow-2xl overflow-hidden">
             <div className="p-7">
               <p className="text-[10px] font-mono tracking-widest uppercase text-[#C8552B] mb-2">Confirm publish</p>
-              <h2 className="text-xl font-semibold tracking-tight text-[#1A1814] dark:text-gray-100 mb-2">
+              <h2 className="text-xl font-semibold tracking-tight text-[#1A1814] dark:text-[#F5F5F0] mb-2">
                 Publish items to this sale?
               </h2>
-              <p className="text-sm text-[rgba(26,24,20,0.62)] dark:text-gray-400 leading-relaxed">
+              <p className="text-sm text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] leading-relaxed">
                 Each item will go live with the values currently shown — Smart's title,
                 category, condition, your price, and tags. You can edit any item later
                 from the manager.
@@ -965,13 +965,13 @@ const ReviewPage = () => {
       {/* Discard-all confirmation modal */}
       {showDiscardAllModal && (
         <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#FBF8F2] dark:bg-gray-800 rounded-2xl border border-black/10 dark:border-gray-700 shadow-2xl overflow-hidden">
+          <div className="w-full max-w-md bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-2xl border border-black/10 dark:border-[#3A3A3C] shadow-2xl overflow-hidden">
             <div className="p-7">
               <p className="text-[10px] font-mono tracking-widest uppercase text-red-600 mb-2">Destructive action</p>
-              <h2 className="text-xl font-semibold tracking-tight text-[#1A1814] dark:text-gray-100 mb-2">
+              <h2 className="text-xl font-semibold tracking-tight text-[#1A1814] dark:text-[#F5F5F0] mb-2">
                 Discard {pendingItems.length} item{pendingItems.length !== 1 ? 's' : ''}?
               </h2>
-              <p className="text-sm text-[rgba(26,24,20,0.62)] dark:text-gray-400 leading-relaxed">
+              <p className="text-sm text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] leading-relaxed">
                 This permanently removes these items and their photos. This cannot be undone.
               </p>
             </div>
@@ -994,17 +994,17 @@ const ReviewPage = () => {
         </div>
       )}
 
-      <main className="min-h-screen bg-[#F4EFE7] dark:bg-gray-900" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <main className="min-h-screen bg-[#F4EFE7] dark:bg-[#1C1C1E]" style={{ fontFamily: 'Inter, sans-serif' }}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-20 pt-8">
 
           {/* ── Page header ── */}
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] dark:text-gray-500 mb-1">
+              <p className="text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA] mb-1">
                 Item Manager · Smart Review
               </p>
               <h1
-                className="text-3xl font-semibold tracking-tight text-[#1A1814] dark:text-gray-100"
+                className="text-3xl font-semibold tracking-tight text-[#1A1814] dark:text-[#F5F5F0]"
                 style={{ fontFamily: 'Inter Tight, sans-serif', letterSpacing: '-0.02em' }}
               >
                 {itemsLoading
@@ -1038,7 +1038,7 @@ const ReviewPage = () => {
           {!itemsLoading && !queueEmpty && (
             <div className="sticky top-4 z-10 mb-5">
               <div
-                className="bg-[#FBF8F2] dark:bg-gray-800 rounded-xl border border-black/10 dark:border-gray-700 px-4 py-3 flex items-center justify-between gap-4 shadow-sm"
+                className="bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] px-4 py-3 flex items-center justify-between gap-4 shadow-sm"
               >
                 {/* Left: count + progress */}
                 <div className="flex items-center gap-4 min-w-0">
@@ -1051,8 +1051,8 @@ const ReviewPage = () => {
                     </svg>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#1A1814] dark:text-gray-100">{pendingItems.length} pending review</p>
-                    <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-gray-400">{publishedCount} of {totalCount} published</p>
+                    <p className="text-sm font-semibold text-[#1A1814] dark:text-[#F5F5F0]">{pendingItems.length} pending review</p>
+                    <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA]">{publishedCount} of {totalCount} published</p>
                   </div>
                   {/* Progress bar */}
                   <div className="hidden sm:block w-36">
@@ -1105,7 +1105,7 @@ const ReviewPage = () => {
           {/* ── Empty / success state ── */}
           {!itemsLoading && queueEmpty && (
             <div className="mt-8 flex justify-center">
-              <div className="w-full max-w-lg bg-[#FBF8F2] dark:bg-gray-800 rounded-2xl border border-black/10 dark:border-gray-700 p-12 text-center">
+              <div className="w-full max-w-lg bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-2xl border border-black/10 dark:border-[#3A3A3C] p-12 text-center">
                 <div
                   className="w-14 h-14 rounded-full inline-flex items-center justify-center mb-6"
                   style={{ background: 'rgba(63,122,75,0.12)', color: '#3F7A4B' }}
@@ -1116,12 +1116,12 @@ const ReviewPage = () => {
                 </div>
                 <p className="text-[10px] font-mono tracking-widest uppercase text-[#3F7A4B] mb-2">Queue clear</p>
                 <h2
-                  className="text-2xl font-semibold tracking-tight text-[#1A1814] dark:text-gray-100 mb-3"
+                  className="text-2xl font-semibold tracking-tight text-[#1A1814] dark:text-[#F5F5F0] mb-3"
                   style={{ fontFamily: 'Inter Tight, sans-serif', letterSpacing: '-0.02em' }}
                 >
                   All {totalCount} items are live
                 </h2>
-                <p className="text-sm text-[rgba(26,24,20,0.62)] dark:text-gray-400 mb-8 leading-relaxed">
+                <p className="text-sm text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-8 leading-relaxed">
                   Smart-tagged items appear in saved-search alerts within the hour.
                   You can edit any item from the manager.
                 </p>
@@ -1170,7 +1170,7 @@ const ReviewPage = () => {
                   <div
                     key={item.id}
                     ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
-                    className="relative bg-[#FBF8F2] dark:bg-gray-800 rounded-xl border border-black/10 dark:border-gray-700 overflow-hidden"
+                    className="relative bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] overflow-hidden"
                     style={{ boxShadow: '0 1px 3px rgba(20,18,14,0.06)' }}
                   >
                     {/* Review stripe — amber, persists until approved */}
@@ -1224,7 +1224,7 @@ const ReviewPage = () => {
                               <div className="w-full h-full flex items-center justify-center text-2xl text-[rgba(26,24,20,0.3)]">📷</div>
                             )}
                           </button>
-                          <p className="mt-1 text-center text-[10px] font-mono text-[rgba(26,24,20,0.4)] dark:text-gray-500">
+                          <p className="mt-1 text-center text-[10px] font-mono text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA]">
                             {item.photoUrls.length} photo{item.photoUrls.length !== 1 ? 's' : ''}
                           </p>
                           </div>{/* end mobile flex wrapper */}
@@ -1242,7 +1242,7 @@ const ReviewPage = () => {
                               type="text"
                               value={editState.title}
                               onChange={(e) => handleEditChange(item.id, 'title', e.target.value)}
-                              className="w-full px-3 py-2 rounded-lg border border-black/18 dark:border-gray-600 bg-white dark:bg-gray-700 text-[#1A1814] dark:text-gray-100 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
+                              className="w-full px-3 py-2 rounded-lg border border-black/18 dark:border-[#3A3A3C] bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
                               style={{ fontFamily: 'Inter Tight, sans-serif' }}
                             />
                           </div>
@@ -1250,8 +1250,22 @@ const ReviewPage = () => {
                           {/* Category + Condition row */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
+                              {/* Category — shows the category set during the camera/photo flow */}
                               <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1">
-                                Category <span className="text-[#C8552B]">· Smart</span>
+                                Category
+                              </label>
+                              {(editState.category || item.category) ? (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono border bg-warm-200 text-warm-800 border-warm-300 dark:bg-[#3A3A3C] dark:text-[#F5F5F0] dark:border-[#3A3A3C] mb-2">
+                                  {editState.category || item.category}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono border bg-warm-100 text-[rgba(26,24,20,0.4)] border-warm-200 dark:bg-[#2C2C2E] dark:text-[#B8B8BA] dark:border-[#3A3A3C] mb-2">
+                                  Not set
+                                </span>
+                              )}
+                              {/* eBay Category — separate taxonomy picker */}
+                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1">
+                                eBay Category
                               </label>
                               <EbayCategoryPicker
                                 value={editState.category}
@@ -1383,11 +1397,11 @@ const ReviewPage = () => {
                             </div>
                             {/* Price input — starts empty, organizer must type */}
                             <div
-                              className="flex items-center gap-1 px-3 py-2.5 rounded-lg border-2 bg-white dark:bg-gray-700 transition-colors"
+                              className="flex items-center gap-1 px-3 py-2.5 rounded-lg border-2 bg-white dark:bg-[#3A3A3C] transition-colors"
                               style={{ borderColor: hasError ? '#C04A2B' : 'rgba(20,18,14,0.18)' }}
                             >
                               <span
-                                className="text-xl font-medium dark:text-gray-400"
+                                className="text-xl font-medium dark:text-[#B8B8BA]"
                                 style={{ fontFamily: 'Inter Tight, sans-serif', color: 'rgba(26,24,20,0.4)' }}
                               >
                                 $
@@ -1400,7 +1414,7 @@ const ReviewPage = () => {
                                 onChange={(e) => setPriceInput(item.id, e.target.value)}
                                 placeholder="0.00"
                                 aria-label="Your price"
-                                className="flex-1 min-w-0 bg-transparent text-xl font-semibold text-[#1A1814] dark:text-gray-100 focus:outline-none placeholder-[rgba(26,24,20,0.25)] dark:placeholder-gray-500"
+                                className="flex-1 min-w-0 bg-transparent text-xl font-semibold text-[#1A1814] dark:text-[#F5F5F0] focus:outline-none placeholder-[rgba(26,24,20,0.25)] dark:placeholder-[#B8B8BA]"
                                 style={{ fontFamily: 'Inter Tight, sans-serif' }}
                               />
                             </div>
@@ -1413,7 +1427,7 @@ const ReviewPage = () => {
                               </p>
                             )}
                             {!priceStr && !hasError && (
-                              <p className="mt-1 text-[11px] text-[rgba(26,24,20,0.4)] dark:text-gray-500 italic">
+                              <p className="mt-1 text-[11px] text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA] italic">
                                 Suggestion above is a reference. Type your price.
                               </p>
                             )}
@@ -1509,7 +1523,7 @@ const ReviewPage = () => {
                                 rows={3}
                                 value={editState.description}
                                 onChange={(e) => handleEditChange(item.id, 'description', e.target.value)}
-                                className="w-full border border-black/18 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg px-3 py-2 text-sm text-[#1A1814] dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
+                                className="w-full border border-black/18 dark:border-[#3A3A3C] bg-white dark:bg-[#3A3A3C] rounded-lg px-3 py-2 text-sm text-[#1A1814] dark:text-[#F5F5F0] focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
                               />
                             </div>
 
@@ -1542,7 +1556,7 @@ const ReviewPage = () => {
                               <select
                                 value={editState.listingType}
                                 onChange={(e) => handleEditChange(item.id, 'listingType', e.target.value)}
-                                className="w-full px-3 py-2 border border-black/18 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg text-sm text-[#1A1814] dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
+                                className="w-full px-3 py-2 border border-black/18 dark:border-[#3A3A3C] bg-white dark:bg-[#3A3A3C] rounded-lg text-sm text-[#1A1814] dark:text-[#F5F5F0] focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
                               >
                                 <option value="FIXED">Fixed Price</option>
                                 <option value="AUCTION">Auction</option>
@@ -1558,7 +1572,7 @@ const ReviewPage = () => {
                                     value={(editState.reverseDailyDrop || 0) / 100}
                                     onChange={(e) => handleEditChange(item.id, 'reverseDailyDrop', Math.round(parseFloat(e.target.value || '0') * 100))}
                                     placeholder="0.00" aria-label="Daily drop"
-                                    className="w-full border border-black/18 dark:border-gray-600 bg-white dark:bg-gray-700 text-[#1A1814] dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40" />
+                                    className="w-full border border-black/18 dark:border-[#3A3A3C] bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40" />
                                 </div>
                                 <div>
                                   <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1 block">Floor price ($)</label>
@@ -1566,7 +1580,7 @@ const ReviewPage = () => {
                                     value={(editState.reverseFloorPrice || 0) / 100}
                                     onChange={(e) => handleEditChange(item.id, 'reverseFloorPrice', Math.round(parseFloat(e.target.value || '0') * 100))}
                                     placeholder="0.00" aria-label="Floor price"
-                                    className="w-full border border-black/18 dark:border-gray-600 bg-white dark:bg-gray-700 text-[#1A1814] dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40" />
+                                    className="w-full border border-black/18 dark:border-[#3A3A3C] bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40" />
                                 </div>
                               </div>
                             )}
@@ -1621,128 +1635,4 @@ const ReviewPage = () => {
                                         placeholder="e.g. 16"
                                         aria-label="Package weight in ounces"
                                         value={editState.packageWeightOz ?? ''}
-                                        onChange={(e) => handleEditChange(item.id, 'packageWeightOz', e.target.value ? Number(e.target.value) : undefined)}
-                                        className="w-full px-2 py-1.5 border border-blue-300 dark:border-blue-600 bg-white dark:bg-gray-700 text-[#1A1814] dark:text-gray-100 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">L × W × H (in)</label>
-                                      <div className="flex gap-1">
-                                        <input
-                                          type="number" min="0" step="0.5" placeholder="L"
-                                          aria-label="Package length in inches"
-                                          value={editState.packageLengthIn ?? ''}
-                                          onChange={(e) => handleEditChange(item.id, 'packageLengthIn', e.target.value ? Number(e.target.value) : undefined)}
-                                          className="w-0 flex-1 px-1.5 py-1.5 border border-blue-300 dark:border-blue-600 bg-white dark:bg-gray-700 text-[#1A1814] dark:text-gray-100 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                        />
-                                        <input
-                                          type="number" min="0" step="0.5" placeholder="W"
-                                          aria-label="Package width in inches"
-                                          value={editState.packageWidthIn ?? ''}
-                                          onChange={(e) => handleEditChange(item.id, 'packageWidthIn', e.target.value ? Number(e.target.value) : undefined)}
-                                          className="w-0 flex-1 px-1.5 py-1.5 border border-blue-300 dark:border-blue-600 bg-white dark:bg-gray-700 text-[#1A1814] dark:text-gray-100 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                        />
-                                        <input
-                                          type="number" min="0" step="0.5" placeholder="H"
-                                          aria-label="Package height in inches"
-                                          value={editState.packageHeightIn ?? ''}
-                                          onChange={(e) => handleEditChange(item.id, 'packageHeightIn', e.target.value ? Number(e.target.value) : undefined)}
-                                          className="w-0 flex-1 px-1.5 py-1.5 border border-blue-300 dark:border-blue-600 bg-white dark:bg-gray-700 text-[#1A1814] dark:text-gray-100 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <p className="mt-1.5 text-[10px] text-blue-500 dark:text-blue-400">
-                                    Weight determines which shipping policy eBay uses. Shipping rates come from your eBay seller account policies.
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Save changes button (for expanded details) */}
-                            <div className="flex justify-end pt-2 border-t border-black/8">
-                              <button
-                                onClick={() => handleSaveItem(item)}
-                                disabled={updateItemMutation.isPending}
-                                className="px-4 py-2 bg-[rgba(20,18,14,0.08)] hover:bg-[rgba(20,18,14,0.12)] text-[#1A1814] text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
-                              >
-                                {updateItemMutation.isPending ? 'Saving…' : 'Save details'}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ── Published items list (compact, below queue) ── */}
-          {!itemsLoading && items.filter(i => i.draftStatus === 'PUBLISHED' || approvedIds.has(i.id)).length > 0 && pendingItems.length > 0 && (
-            <div className="mt-8">
-              <p className="text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-3">
-                Already live ({publishedCount})
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {items
-                  .filter(i => i.draftStatus === 'PUBLISHED' || approvedIds.has(i.id))
-                  .map(item => (
-                    <div key={item.id} className="bg-[#FBF8F2] rounded-lg border border-black/8 overflow-hidden">
-                      <div className="aspect-square overflow-hidden bg-[rgba(20,18,14,0.04)]">
-                        {item.photoUrls[0] ? (
-                          <img src={item.photoUrls[0]} alt={item.title} className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer-when-downgrade"
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" fill="%23e5e7eb"/%3E%3C/svg%3E'; }} />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-xl text-[rgba(26,24,20,0.3)]">📷</div>
-                        )}
-                      </div>
-                      <div className="p-2">
-                        <p className="text-xs font-medium text-[#1A1814] truncate">{item.title}</p>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#3F7A4B]" />
-                          <span className="text-[10px] text-[#3F7A4B] font-medium">Live</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Inline camera */}
-        {inlineCameraOpen && inlineCaptureItemId ? (
-          <RapidCapture
-            rapidItems={inlineRapidItems}
-            addingToItemId={inlineCaptureItemId}
-            mode={inlineCaptureMode}
-            onModeChange={setInlineCaptureMode}
-            onPhotoCapture={inlineCaptureMode === 'rapidfire' ? handleInlineCameraCapture : undefined}
-            onAnalyze={inlineCaptureMode === 'regular' ? handleInlineCameraAnalyze : undefined}
-            onComplete={() => { setInlineCameraOpen(false); queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] }); }}
-            onCancel={() => { setInlineCameraOpen(false); queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] }); }}
-            onAddToItem={() => {}}
-            onThumbnailTap={() => {}}
-            onNavigateToReview={() => { setInlineCameraOpen(false); queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] }); }}
-            readyCount={0}
-            isAnalyzing={false}
-          />
-        ) : null}
-
-        <ConfirmDialog
-          isOpen={confirmState.open}
-          title={confirmState.title}
-          message={confirmState.message}
-          onConfirm={() => confirmState.onConfirm()}
-          onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
-          variant="danger"
-        />
-      </main>
-    </>
-  );
-};
-
-export default ReviewPage;
+                                        onChange={(e) => handleEditChange(item.id, 'packageWeightOz', e.target.value ? Number(e.target.value) : u
