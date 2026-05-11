@@ -1,12 +1,13 @@
-# DISABLED: Canada411 replaced by yellowpages-ca (Canada411 /search/si/ route permanently removed). Use scrape-yellowpages-ca.yml instead.
-name: Scrape Canada411 Secondary Sale Directory
+name: Scrape YellowPages.ca Secondary Sale Directory
 
 on:
+  schedule:
+    - cron: '0 5 * * 1'  # Monday 05:00 UTC (after Phase 2 scrapers, before scoring)
   workflow_dispatch:
 
 jobs:
   scrape:
-    name: Canada411 Directory Scraper (ON, BC, AB)
+    name: YellowPages.ca Directory Scraper (All Canadian Provinces)
     runs-on: ubuntu-latest
 
     steps:
@@ -31,19 +32,20 @@ jobs:
         run: npx prisma generate
         working-directory: packages/database
 
-      - name: Run Canada411 Scraper
+      - name: Run YellowPages.ca Scraper
         working-directory: packages/backend
         env:
           DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          OUTREACH_CANADA_ENABLED: ${{ secrets.OUTREACH_CANADA_ENABLED }}
         run: |
           npx tsx -e '
-            import { runCanada411Scraper } from "./src/services/scraper/sources/canada411Scraper";
+            import { runYellowPagesCaScraper } from "./src/services/scraper/sources/yellowPagesCaScraper";
             (async () => { try {
-              await runCanada411Scraper();
+              await runYellowPagesCaScraper();
               process.exit(0);
             } catch (err) {
-              console.error("Canada411 scraper failed:", err);
+              console.error("YellowPages.ca scraper failed:", err);
               process.exit(1);
             }
             })();

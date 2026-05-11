@@ -10,6 +10,7 @@ import { scrapeGarageSaleFinder } from './sources/garageSaleFinder';
 import { scrapeFacebookMarketplace } from './sources/facebook-marketplace';
 import { scrapeNAADirectory } from './sources/naaAuctioneerDirectory';
 import { scrapeAuctionNinja } from './sources/auctionNinjaScraper';
+import { runYellowPagesCaScraper } from './sources/yellowPagesCaScraper';
 
 export type SourceType = 'directory' | 'licensing' | 'crawl-queue' | 'places-api';
 export type SourceRunMode = 'metro-loop' | 'national-once';
@@ -104,6 +105,21 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     qualityTier: 'medium',
     legalNote: 'No explicit scraper ban — rate limit strictly, public fields only',
     run: scrapeAuctionNinja,
+  },
+  {
+    id: 'YellowPagesCA',
+    displayName: 'YellowPages.ca (Canada)',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    cronSchedule: '0 5 * * 1', // Monday 05:00 UTC
+    qualityTier: 'medium',
+    legalNote: 'Public business directory — same parent company as Canada411 (Thryv Canada). Public fields only, 1 req/sec rate limit.',
+    // national-once: no metro or organizerId context needed; wrap to match interface
+    run: async (_metro: string, _organizerId: string, _rateLimiter: RateLimiter): Promise<ScrapeStats> => {
+      await runYellowPagesCaScraper();
+      return { itemsFound: 0, itemsCreated: 0, itemsUpdated: 0, itemsSkipped: 0, itemsFailed: 0 };
+    },
   },
 ];
 

@@ -56,14 +56,36 @@ export async function runAutoSeedOutreach(): Promise<void> {
   const t0 = Date.now();
 
   try {
-    // Find unmanaged organizers with contactEmail who are eligible for outreach
+    // Find unmanaged organizers with contactEmail who are eligible for outreach.
+    // Canadian orgs are identified by province abbreviation or full name in the address field
+    // (no country column on Organizer — detection is address-string based).
+    // OUTREACH_CANADA_ENABLED=true → include Canadian orgs. Default: excluded (paused, not permanent).
+    const canadaExclusions = process.env.OUTREACH_CANADA_ENABLED === 'true' ? [] : [
+      { address: { contains: ', ON', mode: 'insensitive' as const } },
+      { address: { contains: ', BC', mode: 'insensitive' as const } },
+      { address: { contains: ', AB', mode: 'insensitive' as const } },
+      { address: { contains: ', MB', mode: 'insensitive' as const } },
+      { address: { contains: ', SK', mode: 'insensitive' as const } },
+      { address: { contains: ', QC', mode: 'insensitive' as const } },
+      { address: { contains: ', NS', mode: 'insensitive' as const } },
+      { address: { contains: ', NB', mode: 'insensitive' as const } },
+      { address: { contains: ', NL', mode: 'insensitive' as const } },
+      { address: { contains: ', PE', mode: 'insensitive' as const } },
+      { address: { contains: ', YT', mode: 'insensitive' as const } },
+      { address: { contains: ', NT', mode: 'insensitive' as const } },
+      { address: { contains: ', NU', mode: 'insensitive' as const } },
+      { address: { contains: 'Ontario', mode: 'insensitive' as const } },
+      { address: { contains: 'British Columbia', mode: 'insensitive' as const } },
+      { address: { contains: 'Alberta', mode: 'insensitive' as const } },
+      { address: { contains: 'Canada', mode: 'insensitive' as const } },
+    ];
     const organizers = await prisma.organizer.findMany({
       where: {
         OR: [{ isClaimed: false }, { isUnmanagedListing: true }],
         contactEmail: { not: null },
         claimStatus: { notIn: ['CLAIMED', 'OPTED_OUT'] },
         suppressOutreach: false,
-        NOT: { emailDiscoveryConfidence: 0.0 },
+        NOT: [{ emailDiscoveryConfidence: 0.0 }, ...canadaExclusions],
       },
       select: {
         id: true,
