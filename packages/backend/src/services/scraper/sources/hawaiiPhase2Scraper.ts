@@ -147,7 +147,10 @@ export async function runHawaiiPhase2Scraper(): Promise<void> {
 
   try {
     while (true) {
-      const url = `${HI_API_BASE}?$limit=${PAGE_LIMIT}&$offset=${offset}`;
+      // Server-side full-text filter — reduces egress vs. fetching all business registrations.
+      // Client-side ALWAYS_INCLUDE_TYPES / keyword checks remain as secondary filters.
+      const hiQ = encodeURIComponent('pawnbroker secondhand auctioneer consignment junk dealer vintage antique thrift auction');
+      const url = `${HI_API_BASE}?$limit=${PAGE_LIMIT}&$offset=${offset}&$q=${hiQ}`;
       await defaultRateLimiter.waitBeforeRequest(HI_DOMAIN);
 
       const response = await fetch(url, {

@@ -10,6 +10,7 @@ jobs:
   scrape:
     name: Florida Phase 2 Auctioneer Scraper
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout code

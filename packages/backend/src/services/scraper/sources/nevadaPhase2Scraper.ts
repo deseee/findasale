@@ -127,7 +127,10 @@ export async function runNevadaPhase2Scraper(): Promise<void> {
 
   try {
     while (true) {
-      const url = `${NV_API_BASE}?$limit=${PAGE_LIMIT}&$offset=${offset}`;
+      // Server-side full-text filter — reduces egress vs. fetching all ~70k Las Vegas licenses.
+      // Client-side ALWAYS_INCLUDE_TYPES / keyword checks remain as secondary filters.
+      const nvQ = encodeURIComponent('pawnbroker secondhand auctioneer consignment junk dealer vintage antique thrift auction');
+      const url = `${NV_API_BASE}?$limit=${PAGE_LIMIT}&$offset=${offset}&$q=${nvQ}`;
       await defaultRateLimiter.waitBeforeRequest(NV_DOMAIN);
 
       const response = await fetch(url, {

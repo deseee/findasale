@@ -510,48 +510,21 @@ export async function getOrCreateScrapedOrganizer(
     });
     newOrgId = created.organizer!.id;
   } catch (err: any) {
-    // P2002 = unique constraint on email — either a race condition or a same-name/same-city
-    // business from a different source. Retry with a timestamp suffix to get a unique email.
+    // P2002 = unique constraint on email — the record already exists (race condition
+    // or this business was previously ingested from the same source). Look up the
+    // existing User by the canonical system email and return its organizer ID.
+    // Never create a duplicate with a timestamp suffix.
     if (err?.code === 'P2002' && err?.meta?.target?.includes('email')) {
-      const validEmail = isValidExternalEmail(contactEmail);
-      const fallbackEmail = `scraper+${slug}-${citySlug}-${stateSlug}-${sourceSlug}-${Date.now()}@system.finda.sale`;
-      const created2 = await prisma.user.create({
-        data: {
-          email: fallbackEmail,
-          name: businessName,
-          password: null,
-          role: 'ORGANIZER',
-          roles: ['ORGANIZER'],
-          organizer: {
-            create: {
-              businessName,
-              phone: phone ?? null,
-              address: `${city}, ${state}`,
-              bio: `Sale organizer based in ${city}, ${state}.`,
-              isClaimed: false,
-              isUnmanagedListing: true,
-              esnOrgId,
-              googlePlaceId,
-              businessCategory,
-              contactEmail: validEmail || null,
-              website: website ?? null,
-              lat: lat ?? null,
-              lng: lng ?? null,
-              dedupeKey: generateDedupeKey(businessName, city),
-              sourceCount: 1,
-              sourcesJson: [{ sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() }],
-              corroborationScore: 0.5,
-              isStateLicensed: isStateLicensed ?? null,
-              licenseState: licenseState ?? null,
-              licenseNumber: licenseNumber ?? null,
-              directoryMostRecentSource: effectiveSourceLabel ?? null,
-              directoryMostRecentAt: effectiveSourceLabel ? new Date() : null,
-            },
-          },
-        },
+      const existingUser = await prisma.user.findUnique({
+        where: { email: systemEmail },
         include: { organizer: { select: { id: true } } },
       });
-      newOrgId = created2.organizer!.id;
+      if (existingUser?.organizer?.id) {
+        console.log(`[scraper] P2002 — reusing existing organizer for ${systemEmail}: ${existingUser.organizer.id}`);
+        return existingUser.organizer.id;
+      }
+      // If lookup also fails (extremely rare), surface the original error
+      throw err;
     } else {
       throw err;
     }

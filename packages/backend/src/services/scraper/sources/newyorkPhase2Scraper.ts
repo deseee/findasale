@@ -149,7 +149,11 @@ async function fetchPage(
   baseUrl: string,
   offset: number
 ): Promise<Record<string, string>[]> {
-  const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}`;
+  // Server-side active-status filter — eliminates expired/revoked/inactive records before transfer.
+  // Both NYC datasets are already type-specific (secondhand dealers / pawnbrokers); client-side
+  // INACTIVE_STATUSES filtering remains as a secondary safety net for any edge-case values.
+  const NYC_WHERE = encodeURIComponent(`status NOT IN ('EXPIRED','INACTIVE','REVOKED','CANCELLED','SUSPENDED')`);
+  const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}&$where=${NYC_WHERE}`;
   await defaultRateLimiter.waitBeforeRequest(NYC_DOMAIN);
 
   const response = await fetch(url, {

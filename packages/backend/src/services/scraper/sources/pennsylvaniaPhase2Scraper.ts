@@ -130,9 +130,13 @@ export async function runPennsylvaniaPhase2Scraper(): Promise<void> {
     while (hasMore) {
       await defaultRateLimiter.waitBeforeRequest(PA_OPEN_DATA_DOMAIN);
 
+      // Server-side full-text filter — reduces egress vs. fetching the full PA business registry.
+      // Client-side ALWAYS_INCLUDE_ACTIVITIES / keyword checks remain as secondary filters.
+      const PA_Q = 'auctioneer pawnbroker secondhand consignment junk dealer vintage antique thrift auction';
       const params = new URLSearchParams({
         $limit: String(PAGE_SIZE),
         $offset: String(offset),
+        $q: PA_Q,
       });
       const url = `${PA_SOCRATA_URL}?${params.toString()}`;
 

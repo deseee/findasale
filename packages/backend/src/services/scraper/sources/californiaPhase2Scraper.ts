@@ -146,9 +146,13 @@ async function runLASection(): Promise<{ fetched: number; matched: number; upser
   while (hasMore) {
     await defaultRateLimiter.waitBeforeRequest(LA_DOMAIN);
 
+    // Server-side NAICS filter: only fetch used merchandise, antiques, pawn-adjacent categories.
+    // Client-side keyword filtering remains as a secondary safety net.
+    const LA_NAICS_WHERE = `naics IN ('453310','453920','423940','423930')`;
     const params = new URLSearchParams({
       $limit: String(PAGE_SIZE),
       $offset: String(offset),
+      $where: LA_NAICS_WHERE,
     });
     const url = `${LA_SOCRATA_URL}?${params.toString()}`;
 
@@ -241,9 +245,13 @@ async function runSFSection(): Promise<{ fetched: number; matched: number; upser
   while (hasMore) {
     await defaultRateLimiter.waitBeforeRequest(SF_DOMAIN);
 
+    // Server-side filter: only fetch pawnbrokers (lic_code_description) and used-merchandise NAICS.
+    // Client-side keyword filtering remains as a secondary safety net.
+    const SF_WHERE = `lic_code_description='PAWNBROKER' OR naic_code IN ('453310','453920')`;
     const params = new URLSearchParams({
       $limit: String(1000),
       $offset: String(offset),
+      $where: SF_WHERE,
     });
     const url = `${SF_SOCRATA_URL}?${params.toString()}`;
 

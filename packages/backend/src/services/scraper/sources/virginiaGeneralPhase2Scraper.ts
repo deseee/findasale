@@ -155,9 +155,13 @@ export async function runVirginiaGeneralPhase2Scraper(): Promise<void> {
     while (hasMore) {
       await defaultRateLimiter.waitBeforeRequest(VA_NORFOLK_DOMAIN);
 
+      // Server-side full-text filter — ~9,800 Norfolk records, reduces egress vs. fetching all.
+      // Client-side ALWAYS_INCLUDE_ACTIVITIES / BROADER_ACTIVITIES checks remain as secondary filters.
+      const VA_Q = 'auctioneer pawnbroker pawnshop secondhand consignment junk dealer vintage antique thrift auction used merchandise';
       const params = new URLSearchParams({
         $limit: String(PAGE_SIZE),
         $offset: String(offset),
+        $q: VA_Q,
       });
       const url = `${VA_NORFOLK_SOCRATA_URL}?${params.toString()}`;
 
