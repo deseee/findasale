@@ -1635,4 +1635,98 @@ const ReviewPage = () => {
                                         placeholder="e.g. 16"
                                         aria-label="Package weight in ounces"
                                         value={editState.packageWeightOz ?? ''}
-                                        onChange={(e) => handleEditChange(item.id, 'packageWeightOz', e.target.value ? Number(e.target.value) : u
+                                        onChange={(e) => handleEditChange(item.id, 'packageWeightOz', e.target.value ? Number(e.target.value) : undefined)}
+                                        className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Length (in)</label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        placeholder="e.g. 12"
+                                        aria-label="Package length in inches"
+                                        value={editState.packageLengthIn ?? ''}
+                                        onChange={(e) => handleEditChange(item.id, 'packageLengthIn', e.target.value ? Number(e.target.value) : undefined)}
+                                        className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Width (in)</label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        placeholder="e.g. 8"
+                                        aria-label="Package width in inches"
+                                        value={editState.packageWidthIn ?? ''}
+                                        onChange={(e) => handleEditChange(item.id, 'packageWidthIn', e.target.value ? Number(e.target.value) : undefined)}
+                                        className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Height (in)</label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        placeholder="e.g. 4"
+                                        aria-label="Package height in inches"
+                                        value={editState.packageHeightIn ?? ''}
+                                        onChange={(e) => handleEditChange(item.id, 'packageHeightIn', e.target.value ? Number(e.target.value) : undefined)}
+                                        className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Inline camera overlay ── */}
+          {inlineCameraOpen && (
+            <RapidCapture
+              mode={inlineCaptureMode}
+              onModeChange={setInlineCaptureMode}
+              rapidItems={inlineRapidItems}
+              addingToItemId={inlineCaptureItemId}
+              onAddToItem={(itemId) => setInlineCaptureItemId(itemId)}
+              onThumbnailTap={(itemId) => setInlineCaptureItemId(itemId)}
+              onNavigateToReview={() => setInlineCameraOpen(false)}
+              readyCount={0}
+              onPhotoCapture={handleInlineCameraCapture}
+              onAnalyze={handleInlineCameraAnalyze}
+              onComplete={(photos) => {
+                photos.forEach((p) => handleInlineCameraCapture(p));
+                setInlineCameraOpen(false);
+              }}
+              onCancel={() => setInlineCameraOpen(false)}
+            />
+          )}
+
+        </div>
+      </main>
+
+      {/* ── Confirm dialog ── */}
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState((s) => ({ ...s, open: false }))}
+      />
+    </>
+  );
+};
+
+export default ReviewPage;
