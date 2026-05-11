@@ -947,7 +947,7 @@ const ReviewPage = () => {
             <div className="px-7 pb-7 flex gap-3 justify-end">
               <button
                 onClick={() => setShowApproveAllModal(false)}
-                className="px-4 py-2 rounded-lg border border-black/18 text-sm font-medium text-[#1A1814] hover:bg-black/5 transition-colors"
+                className="px-4 py-2 rounded-lg border border-black/18 dark:border-[#3A3A3C] text-sm font-medium text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C] transition-colors"
               >
                 Cancel
               </button>
@@ -978,7 +978,7 @@ const ReviewPage = () => {
             <div className="px-7 pb-7 flex gap-3 justify-end">
               <button
                 onClick={() => setShowDiscardAllModal(false)}
-                className="px-4 py-2 rounded-lg border border-black/18 text-sm font-medium text-[#1A1814] hover:bg-black/5 transition-colors"
+                className="px-4 py-2 rounded-lg border border-black/18 dark:border-[#3A3A3C] text-sm font-medium text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C] transition-colors"
               >
                 Cancel
               </button>
@@ -1027,7 +1027,7 @@ const ReviewPage = () => {
               )}
               <Link
                 href={`/organizer/add-items/${saleId}`}
-                className="px-3 py-2 rounded-lg border border-black/18 text-sm font-medium text-[rgba(26,24,20,0.62)] hover:bg-black/5 transition-colors"
+                className="px-3 py-2 rounded-lg border border-black/18 dark:border-[#3A3A3C] text-sm font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] hover:bg-black/5 dark:hover:bg-[#3A3A3C] transition-colors"
               >
                 ← Back
               </Link>
@@ -1062,7 +1062,7 @@ const ReviewPage = () => {
                         style={{ width: totalCount > 0 ? `${(publishedCount / totalCount) * 100}%` : '0%' }}
                       />
                     </div>
-                    <p className="mt-1 text-[10px] font-mono tracking-wide text-[rgba(26,24,20,0.4)]">
+                    <p className="mt-1 text-[10px] font-mono tracking-wide text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA]">
                       {totalCount > 0 ? Math.round((publishedCount / totalCount) * 100) : 0}% published
                     </p>
                   </div>
@@ -1072,13 +1072,13 @@ const ReviewPage = () => {
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     onClick={() => setShowDiscardAllModal(true)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-[rgba(26,24,20,0.62)] hover:bg-black/6 border border-transparent hover:border-black/10 transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] hover:bg-black/6 dark:hover:bg-[#3A3A3C] border border-transparent hover:border-black/10 dark:hover:border-[#3A3A3C] transition-colors"
                   >
                     Discard all
                   </button>
                   <Link
                     href={`/organizer/label-composer/${saleId}`}
-                    className="hidden sm:block px-3 py-1.5 rounded-lg text-xs font-medium text-[rgba(26,24,20,0.62)] hover:bg-black/6 border border-black/18 transition-colors"
+                    className="hidden sm:block px-3 py-1.5 rounded-lg text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] hover:bg-black/6 dark:hover:bg-[#3A3A3C] border border-black/18 dark:border-[#3A3A3C] transition-colors"
                   >
                     Print labels
                   </Link>
@@ -1134,7 +1134,7 @@ const ReviewPage = () => {
                   </Link>
                   <Link
                     href={`/organizer/add-items/${saleId}`}
-                    className="px-4 py-2 rounded-lg border border-black/18 text-sm font-medium text-[#1A1814] hover:bg-black/5 transition-colors"
+                    className="px-4 py-2 rounded-lg border border-black/18 dark:border-[#3A3A3C] text-sm font-medium text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C] transition-colors"
                   >
                     Open item manager
                   </Link>
@@ -1146,7 +1146,7 @@ const ReviewPage = () => {
           {/* ── No items at all ── */}
           {!itemsLoading && items.length === 0 && (
             <div className="mt-12 text-center">
-              <p className="text-[rgba(26,24,20,0.62)] mb-4">No items in this sale yet.</p>
+              <p className="text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-4">No items in this sale yet.</p>
               <Link
                 href={`/organizer/add-items/${saleId}`}
                 className="text-sm text-[#C8552B] font-medium hover:underline"
@@ -1192,7 +1192,7 @@ const ReviewPage = () => {
                           Smart
                         </span>
                         {item.isAiTagged && item.aiConfidence != null && (
-                          <span className="text-[10px] font-mono tracking-wide text-[rgba(26,24,20,0.4)]">
+                          <span className="text-[10px] font-mono tracking-wide text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA]">
                             {Math.round(item.aiConfidence * 100)}% confidence
                           </span>
                         )}
@@ -1207,7 +1207,7 @@ const ReviewPage = () => {
                           <button
                             type="button"
                             onClick={() => item.photoUrls[0] && setZoomedPhoto(item.photoUrls[0])}
-                            className="block w-24 sm:w-full aspect-square rounded-lg overflow-hidden border border-black/10 bg-[rgba(20,18,14,0.04)] focus:outline-none flex-shrink-0"
+                            className="block w-24 sm:w-full aspect-square rounded-lg overflow-hidden border border-black/10 dark:border-[#3A3A3C] bg-[rgba(20,18,14,0.04)] dark:bg-[#3A3A3C] focus:outline-none flex-shrink-0"
                             title="Tap to zoom"
                           >
                             {item.photoUrls[0] ? (
@@ -1235,7 +1235,7 @@ const ReviewPage = () => {
 
                           {/* Title */}
                           <div>
-                            <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1">
+                            <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
                               Title <span className="text-[#C8552B]">· Smart</span>
                             </label>
                             <input
@@ -1266,11 +1266,11 @@ const ReviewPage = () => {
                               />
                             </div>
                             <div>
-                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1">
+                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
                                 Condition <span className="text-[#C8552B]">· Smart</span>
                               </label>
                               {/* Segmented control */}
-                              <div className="inline-flex w-full bg-[rgba(20,18,14,0.05)] p-0.5 rounded-lg border border-black/10">
+                              <div className="inline-flex w-full bg-[rgba(20,18,14,0.05)] dark:bg-[#1C1C1E] p-0.5 rounded-lg border border-black/10 dark:border-[#3A3A3C]">
                                 {conditionOptions.map(opt => (
                                   <button
                                     key={opt.value}
@@ -1278,8 +1278,8 @@ const ReviewPage = () => {
                                     onClick={() => handleEditChange(item.id, 'condition', opt.value)}
                                     className={`flex-1 py-1.5 text-xs font-mono rounded-md transition-all ${
                                       editState.condition === opt.value
-                                        ? 'bg-white text-[#1A1814] font-semibold shadow-sm'
-                                        : 'text-[rgba(26,24,20,0.62)] hover:text-[#1A1814]'
+                                        ? 'bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] font-semibold shadow-sm'
+                                        : 'text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] hover:text-[#1A1814] dark:hover:text-[#F5F5F0]'
                                     }`}
                                   >
                                     {opt.label}
@@ -1291,7 +1291,7 @@ const ReviewPage = () => {
 
                           {/* Tags row */}
                           <div>
-                            <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1.5">
+                            <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1.5">
                               Search tags <span className="text-[#C8552B]">· Smart</span>
                             </label>
                             <div className="flex flex-wrap gap-1.5">
@@ -1325,7 +1325,7 @@ const ReviewPage = () => {
                                   }
                                 }}
                                 placeholder="+ tag"
-                                className="inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-[rgba(20,18,14,0.05)] text-[rgba(26,24,20,0.62)] border border-transparent focus:outline-none focus:border-[rgba(26,24,20,0.2)] placeholder-[rgba(26,24,20,0.4)]"
+                                className="inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-[rgba(20,18,14,0.05)] dark:bg-[#3A3A3C] text-[rgba(26,24,20,0.62)] dark:text-[#F5F5F0] border border-transparent focus:outline-none focus:border-[rgba(26,24,20,0.2)] dark:focus:border-[#B8B8BA] placeholder-[rgba(26,24,20,0.4)] dark:placeholder-[#B8B8BA]"
                                 style={{ width: '5rem' }}
                               />
                             </div>
@@ -1333,7 +1333,7 @@ const ReviewPage = () => {
 
                           {/* Rarity picker */}
                           <div>
-                            <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] mb-1.5">
+                            <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1.5">
                               Rarity <span className="text-[#C8552B]">· Smart</span>
                             </label>
                             <div className="flex gap-1.5">
@@ -1345,11 +1345,11 @@ const ReviewPage = () => {
                                     key={r}
                                     type="button"
                                     onClick={() => updateItemMutation.mutate({ itemId: item.id, updates: { rarity: r } as any })}
-                                    className="flex-1 py-1.5 text-center rounded-lg text-[10px] font-mono tracking-wide transition-all border"
+                                    className={`flex-1 py-1.5 text-center rounded-lg text-[10px] font-mono tracking-wide transition-all border ${!sel ? 'text-[rgba(26,24,20,0.5)] dark:text-[#B8B8BA] border-black/10 dark:border-[#3A3A3C]' : ''}`}
                                     style={{
                                       background: sel ? rc.bg : 'transparent',
-                                      color: sel ? rc.fg : 'rgba(26,24,20,0.4)',
-                                      borderColor: sel ? 'transparent' : 'rgba(20,18,14,0.10)',
+                                      color: sel ? rc.fg : undefined,
+                                      borderColor: sel ? 'transparent' : undefined,
                                       fontWeight: sel ? 700 : 500,
                                     }}
                                   >
@@ -1367,7 +1367,7 @@ const ReviewPage = () => {
                           {/* ── PRICE FIELD — Critical rule: never pre-fill aiSuggestedPrice ── */}
                           <div>
                             <div className="flex items-center justify-between mb-1.5">
-                              <label className={`text-[10px] font-mono tracking-widest uppercase ${hasError ? 'text-[#C04A2B]' : 'text-[rgba(26,24,20,0.4)]'}`}>
+                              <label className={`text-[10px] font-mono tracking-widest uppercase ${hasError ? 'text-[#C04A2B]' : 'text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA]'}`}>
                                 Your price{hasError ? ' · Required' : ''}
                               </label>
                               {/* aiSuggestedPrice reference — display only from PriceSuggestion */}
@@ -1387,8 +1387,8 @@ const ReviewPage = () => {
                               style={{ borderColor: hasError ? '#C04A2B' : 'rgba(20,18,14,0.18)' }}
                             >
                               <span
-                                className="text-xl font-medium dark:text-[#B8B8BA]"
-                                style={{ fontFamily: 'Inter Tight, sans-serif', color: 'rgba(26,24,20,0.4)' }}
+                                className="text-xl font-medium text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA]"
+                                style={{ fontFamily: 'Inter Tight, sans-serif' }}
                               >
                                 $
                               </span>
@@ -1434,7 +1434,7 @@ const ReviewPage = () => {
                             </button>
                             <Link
                               href={`/organizer/edit-item/${item.id}`}
-                              className="w-full py-2 rounded-lg border border-black/18 text-sm font-medium text-[rgba(26,24,20,0.62)] hover:bg-black/5 transition-colors text-center"
+                              className="w-full py-2 rounded-lg border border-black/18 dark:border-[#3A3A3C] text-sm font-medium text-[rgba(26,24,20,0.62)] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C] transition-colors text-center"
                             >
                               Edit more
                             </Link>
@@ -1465,7 +1465,7 @@ const ReviewPage = () => {
                         <button
                           type="button"
                           onClick={() => handleToggleExpand(item.id)}
-                          className="text-xs font-medium text-[rgba(26,24,20,0.5)] hover:text-[#1A1814] transition-colors flex items-center gap-1"
+                          className="text-xs font-medium text-[rgba(26,24,20,0.5)] dark:text-[#B8B8BA] hover:text-[#1A1814] dark:hover:text-[#F5F5F0] transition-colors flex items-center gap-1"
                         >
                           {expandedItemId === item.id ? '▲ Less details' : '▼ More details (description, condition grade, listing type)'}
                         </button>
@@ -1504,7 +1504,7 @@ const ReviewPage = () => {
 
                             {/* Description */}
                             <div>
-                              <label className="block text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1">Description</label>
+                              <label className="block text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1">Description</label>
                               <textarea
                                 rows={3}
                                 value={editState.description}
@@ -1515,7 +1515,7 @@ const ReviewPage = () => {
 
                             {/* Condition grade */}
                             <div>
-                              <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1 block">
+                              <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1 block">
                                 Condition Grade
                                 {item.suggestedConditionGrade && (
                                   <span className="ml-2 text-[#C8552B] font-normal">Auto-suggests: {item.suggestedConditionGrade}</span>
@@ -1527,7 +1527,7 @@ const ReviewPage = () => {
                                   const current = editState.conditionGrade ?? item.conditionGrade;
                                   return (
                                     <button key={grade} onClick={() => handleConditionGradeChange(item, grade)}
-                                      className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${current === grade ? 'bg-[#C8552B] text-white border-[#C8552B]' : 'bg-white text-[rgba(26,24,20,0.62)] border-black/18 hover:border-[#C8552B]'}`}
+                                      className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${current === grade ? 'bg-[#C8552B] text-white border-[#C8552B]' : 'bg-white dark:bg-[#3A3A3C] text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] border-black/18 dark:border-[#3A3A3C] hover:border-[#C8552B]'}`}
                                       title={gradeLabels[grade]}>
                                       {grade}
                                     </button>
@@ -1538,7 +1538,7 @@ const ReviewPage = () => {
 
                             {/* Listing type */}
                             <div>
-                              <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1 block">Listing Type</label>
+                              <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1 block">Listing Type</label>
                               <select
                                 value={editState.listingType}
                                 onChange={(e) => handleEditChange(item.id, 'listingType', e.target.value)}
@@ -1553,7 +1553,7 @@ const ReviewPage = () => {
                             {editState.listingType === 'REVERSE_AUCTION' && (
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                  <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1 block">Daily drop ($)</label>
+                                  <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1 block">Daily drop ($)</label>
                                   <input type="number" min="0" step="0.01"
                                     value={(editState.reverseDailyDrop || 0) / 100}
                                     onChange={(e) => handleEditChange(item.id, 'reverseDailyDrop', Math.round(parseFloat(e.target.value || '0') * 100))}
@@ -1561,7 +1561,7 @@ const ReviewPage = () => {
                                     className="w-full border border-black/18 dark:border-[#3A3A3C] bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40" />
                                 </div>
                                 <div>
-                                  <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] mb-1 block">Floor price ($)</label>
+                                  <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1 block">Floor price ($)</label>
                                   <input type="number" min="0" step="0.01"
                                     value={(editState.reverseFloorPrice || 0) / 100}
                                     onChange={(e) => handleEditChange(item.id, 'reverseFloorPrice', Math.round(parseFloat(e.target.value || '0') * 100))}
@@ -1716,3 +1716,4 @@ const ReviewPage = () => {
 };
 
 export default ReviewPage;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
