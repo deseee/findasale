@@ -3,7 +3,7 @@ name: Scrape Pennsylvania Business Registry (Phase 2)
 on:
   schedule:
     # Tuesday 8:00 AM UTC
-    - cron: '0 8 * * 2'
+    - cron: '5 8 * * 2'
   workflow_dispatch:
 
 jobs:

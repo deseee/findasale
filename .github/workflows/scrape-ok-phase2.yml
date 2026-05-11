@@ -3,7 +3,7 @@ name: Scrape Oklahoma Pawnbroker Licenses (Phase 2)
 on:
   schedule:
     # Monday 6:00 AM UTC (5:45 + 15min stagger)
-    - cron: '0 6 * * 1'
+    - cron: '5 6 * * 1'
   workflow_dispatch:
 
 jobs:

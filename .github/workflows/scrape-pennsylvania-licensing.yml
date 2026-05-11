@@ -19,9 +19,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Trigger Pennsylvania licensing scraper
+        env:
+          OUTREACH_SECRET: ${{ secrets.INTERNAL_API_TOKEN }}
+          RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
         run: |
           curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.OUTREACH_SECRET }}" \
-            -H "Content-Type: application/json" \
-            "${{ secrets.RAILWAY_BACKEND_URL }}/run-pennsylvania-licensing" \
-            -d '{}'
+            -H "x-internal-secret: ${OUTREACH_SECRET}" \
+            "${RAILWAY_BACKEND_URL}/api/internal/scraper/run-pennsylvania-licensing" \
+            --fail-with-body \
+            --connect-timeout 10 \
+            --max-time 3600

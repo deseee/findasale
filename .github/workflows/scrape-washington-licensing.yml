@@ -2,7 +2,7 @@ name: Scrape Washington Auctioneer Licenses
 
 on:
   schedule:
-    - cron: '30 4 * * 1'   # Monday 4:30 UTC
+    - cron: '35 4 * * 1'   # Monday 4:30 UTC
   workflow_dispatch:
 
 concurrency:

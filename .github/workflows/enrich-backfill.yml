@@ -18,6 +18,6 @@ jobs:
             URL="${URL}?all=true"
           fi
           curl -X POST \
-            -H "x-scraper-key: ${{ secrets.INTERNAL_SCRAPER_KEY }}" \
+            -H "x-internal-secret: ${{ secrets.INTERNAL_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             "$URL"

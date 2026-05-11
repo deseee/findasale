@@ -1,14 +1,14 @@
-name: Scrape Washington Business Lookup (Phase 2)
+name: Scrape Maine Secondary Sale Licenses (Phase 2)
 
 on:
   schedule:
-    # Tuesday 9:00 AM UTC
-    - cron: '5 9 * * 2'
+    # Monday 3:45 AM UTC
+    - cron: '45 3 * * 1'
   workflow_dispatch:
 
 jobs:
   scrape:
-    name: Washington Phase 2 Business Lookup Scraper
+    name: Maine Phase 2 Secondary Sale Scraper
     runs-on: ubuntu-latest
 
     steps:
@@ -30,26 +30,23 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
-        working-directory: packages/database
-        env:
-          DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: npx prisma generate
+        working-directory: packages/database
 
-      - name: Run Washington Phase 2 Scraper
+      - name: Run Maine Phase 2 Scraper
         working-directory: packages/backend
         env:
           DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
           npx tsx -e '
-            import { runWashingtonPhase2Scraper } from "./src/services/scraper/sources/washingtonPhase2Scraper";
+            import { runMainePhase2Scraper } from "./src/services/scraper/sources/mainePhase2Scraper";
             (async () => { try {
-              await runWashingtonPhase2Scraper();
-              console.log("Washington Phase 2 scraper completed successfully");
+              await runMainePhase2Scraper();
+              console.log("Maine Phase 2 scraper completed successfully");
               process.exit(0);
             } catch (err) {
-              console.error("Washington Phase 2 scraper failed:", err);
+              console.error("Maine Phase 2 scraper failed:", err);
               process.exit(1);
             }
             })();

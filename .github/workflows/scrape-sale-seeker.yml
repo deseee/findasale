@@ -3,7 +3,7 @@ name: Scrape Sale Seeker
 on:
   schedule:
     # Every Monday at 5:00 AM UTC
-    - cron: '0 5 * * 1'
+    - cron: '15 5 * * 1'
   workflow_dispatch:
     inputs:
       metro:

@@ -3,7 +3,7 @@ name: Scrape Ohio Secondary Sale Licenses (Phase 2)
 on:
   schedule:
     # Monday 6:30 AM UTC
-    - cron: '30 6 * * 1'
+    - cron: '35 6 * * 1'
   workflow_dispatch:
 
 jobs:
