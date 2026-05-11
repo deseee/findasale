@@ -83,24 +83,43 @@ export function parseEstateSalesNetListing(html: string): Partial<ParsedListing>
 
 /**
  * Parse GarageSaleFinder.com listing HTML
+ *
+ * Handles two address formats:
+ *  1. Full:    "921 Covell Ave NW, Grand Rapids, MI 49504"
+ *  2. Hidden:  "Pasadena, CA 91107 *Address hidden until May 13, 2026..."
+ *              (GarageSaleFinder hides street until sale day for some listings)
  */
 export function parseGarageSalesFinderListing(html: string): Partial<ParsedListing> | null {
   try {
     const $ = cheerio.load(html);
 
     const title = $('h2[itemprop="name"]').text().trim();
-    const addressText = $('[itemprop="address"]').text().trim().replace(/\s+/g, ' ');
+    // Strip HTML tags from address block before text extraction (hidden-address notice uses <br><small>)
+    const addressRaw = $('[itemprop="address"]').text().trim().replace(/\s+/g, ' ');
+    // Strip "* Address hidden..." notice so it doesn't pollute parsing
+    const addressText = addressRaw.replace(/\*?\s*Address hidden[^.]*.\s*/i, '').trim();
     const startDateStr = $('meta[itemprop="startDate"]').attr('content') ?? '';
     const endDateStr = $('meta[itemprop="endDate"]').attr('content') ?? '';
 
     if (!title || !addressText) return null;
 
-    const addressMatch = addressText.match(
-      /^(.+?),\s*(.+?),\s*([A-Z]{2})\s+(\d{5})/
-    );
-    if (!addressMatch) return null;
+    let street: string = '';
+    let city: string;
+    let state: string;
+    let zip: string | undefined;
 
-    const [, street, city, state, zip] = addressMatch;
+    // Try full address first: "Street, City, ST 12345"
+    const fullMatch = addressText.match(/^(.+?),\s*(.+?),\s*([A-Z]{2})\s+(\d{5})/);
+    if (fullMatch) {
+      [, street, city, state, zip] = fullMatch;
+    } else {
+      // Fallback: hidden/partial address "City, ST 12345" (no street)
+      const partialMatch = addressText.match(/^(.+?),\s*([A-Z]{2})\s+(\d{5})/);
+      if (!partialMatch) return null;
+      [, city, state, zip] = partialMatch;
+      // city value may still have trailing noise — trim it
+      city = city.trim();
+    }
 
     if (!startDateStr || !endDateStr) return null;
     const startDate = new Date(startDateStr);
@@ -114,7 +133,7 @@ export function parseGarageSalesFinderListing(html: string): Partial<ParsedListi
 
     return {
       title,
-      address: street,
+      address: street,   // empty string for hidden-address listings — allowed by ingestScrapedListing
       city,
       state,
       zip,
