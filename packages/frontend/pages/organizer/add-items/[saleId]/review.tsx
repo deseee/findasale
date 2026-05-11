@@ -1048,24 +1048,24 @@ const ReviewPage = () => {
           {!itemsLoading && !queueEmpty && (
             <div className="sticky top-4 z-10 mb-5">
               <div
-                className="bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] px-4 py-3 flex items-center justify-between gap-4 shadow-sm"
+                className="bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-sm"
               >
                 {/* Left: count + progress */}
-                <div className="flex items-center gap-4 min-w-0">
+                <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
                     </svg>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#1A1814] dark:text-[#F5F5F0]">{pendingItems.length} pending review</p>
-                    <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA]">{publishedCount} of {totalCount} published</p>
+                    <p className="text-sm font-semibold text-[#1A1814] dark:text-[#F5F5F0] whitespace-nowrap">{pendingItems.length} pending review</p>
+                    <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] whitespace-nowrap">{publishedCount} of {totalCount} published</p>
                   </div>
-                  {/* Progress bar */}
-                  <div className="hidden sm:block w-36">
+                  {/* Progress bar — hidden on very small screens */}
+                  <div className="hidden sm:block w-28">
                     <div className="h-1.5 rounded-full bg-black/6 overflow-hidden">
                       <div
                         className="h-full rounded-full bg-[#3F7A4B] transition-all"
@@ -1078,7 +1078,7 @@ const ReviewPage = () => {
                   </div>
                 </div>
 
-                {/* Right: actions */}
+                {/* Right: actions — flex-shrink-0 keeps them together */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     onClick={() => setShowDiscardAllModal(true)}
