@@ -4,7 +4,9 @@
 
 ## What Happened This Week
 
-S714: SEO content foundation built. 384 guide pages are in `packages/frontend/data/seo-pages/index.json` and ready to push. Includes 34 real Haiku-written pricing guides (antiques, furniture, jewelry, glass, art, tools — e.g. Tiffany lamp price guide, vintage Rolex guide, McCoy pottery guide) plus 350 template pages covering 25 major cities × 10 categories and 10 categories × 10 months of trend reports. All pages served at `/guide/[slug]`. Sitemap auto-populates once pushed. Also built two new scripts (`fix-seo-batch.js` post-processor and `generate-template-pages.mjs` template generator) and an after-reset dispatch doc to generate the remaining 116 pages via agent.
+S715: Diagnosed 117GB Railway Postgres egress — caused by the NY Phase 2 GitHub Actions workflow running ~9 hours today, bulk-downloading 29,728 NYC resale license records. Fixed the root cause across all 45 Phase 2 scrapers (server-side API filtering so only relevant records download), removed the duplicate-organizer creation bug, added timeouts to 40 workflows. DB cleaned up: 356 legit NY antique/thrift/auction businesses promoted to outreach queue. Future scraper runs will be orders of magnitude smaller.
+
+S714: SEO content foundation built. 384 guide pages live at `/guide/[slug]`. 116 more to generate next session.
 
 S713: Two Railway crash loops fixed, scraper suite repaired.
 
