@@ -216,7 +216,12 @@ async function queryOverpassApi(metro: string, bbox: [number, number, number, nu
   try {
     const response = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
-      body: query,
+      body: `data=${encodeURIComponent(query)}`,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': '*/*',
+        'User-Agent': 'Mozilla/5.0 (compatible; FindASale/1.0)',
+      },
       signal: AbortSignal.timeout(65000),
     });
 

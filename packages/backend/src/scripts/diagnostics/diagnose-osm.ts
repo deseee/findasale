@@ -70,8 +70,12 @@ async function main() {
     const start = Date.now();
     const response = await fetch(OVERPASS_URL, {
       method: 'POST',
-      body: query,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': '*/*',
+        'User-Agent': 'Mozilla/5.0 (compatible; FindASale/1.0)',
+      },
       signal: AbortSignal.timeout(65000),
     });
     const elapsed = Date.now() - start;
