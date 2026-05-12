@@ -287,7 +287,7 @@ async function getEbayPriceComps(
       `https://api.ebay.com/buy/browse/v1/item_summary/search?` +
       `q=${query}&` +
       `filter=buyingOptions%3A%7BFIXED_PRICE%7D&` +
-      `sort=price&` +
+      `sort=bestMatch&` +
       `limit=${Math.min(limit, 50)}`;
 
     const response = await fetch(browseUrl, {
