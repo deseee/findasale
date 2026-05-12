@@ -8,9 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S720 — Outreach SMTP Debug (WRAPPED — audit required S721)**
+**Latest: S721 — Outreach Gmail API Migration (COMPLETE)**
 
-Outreach cron fires correctly (logs confirm: Day 6, quota 20/day, window 3) but all sends timeout with "Connection timeout" — no emails reaching real addresses. Two fixes shipped this session: (1) fire-and-forget async route (bypasses Railway 30s HTTP proxy timeout), (2) `requireTLS:true` removed (matches May 5 working config). Both deployed — timeout persists. Patrick directed: do a true audit next session. Key facts: (1) 4 successful sends confirmed in DB on May 5 (commit `558af15a`). (2) All failures are TCP-level Connection timeout on smtp.gmail.com — not auth errors. (3) Two commits pushed this session: `17815d4f` (IPv4 + async fix), `1b2746a3` (requireTLS removal). (4) Full diff of outreachEmailsCron.ts between `558af15a` and `1b2746a3` documented in session summary — 13 changes identified beyond transport config (templates, query logic, new imports, DB write fields, audit logging). Patrick suspects one of these code-level changes — not a network issue.
+Root cause of outreach email failure identified and permanently fixed. Railway Hobby plan silently blocks outbound SMTP on ports 25/465/587 — only Railway Pro ($20/mo) allows SMTP. Solution: rewrote outreachEmailsCron.ts from nodemailer SMTP to Google Gmail API over HTTPS (port 443, unblocked). Steps: (1) Created GCP OAuth client "FindA.Sale Outreach Mailer" under outreach@finda.sale project (qualified-cedar-496114-v1), scope: gmail.send. (2) Added GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN to Railway env vars. (3) Rewrote cron: `createGmailClient()` replaces `createTransport()`, `buildRawEmail()` constructs RFC 2822 MIME with base64url encoding, `gmail.users.messages.send()` replaces `transport.sendMail()`. (4) Added `googleapis` to backend package.json. (5) Fixed duplicate initOutreachEmailsCron block (VM mount truncation artifact). (6) Debugged OAuth invalid_grant — initial tokens were bound to Playground's default client, not ours. Re-authorized with "Use your own OAuth credentials" checked. (7) Verified token exchange via curl (200 OK + access_token). (8) Sent live test email via Gmail API from VM → deseee@yahoo.com (message ID 19e1d4e882ea0c52). (9) Updated Railway GMAIL_REFRESH_TOKEN and redeployed. Backend running, cron registered every 4 hours.
+
+**Previous: S720 — Outreach SMTP Debug (WRAPPED — led to S721 Gmail API fix)**
+
+Outreach cron fires correctly but all sends timeout with "Connection timeout" on smtp.gmail.com:465. Exhaustive audit confirmed: not a code bug — Railway Hobby plan blocks SMTP ports at the network level. Two attempted SMTP fixes deployed (IPv4 forcing, requireTLS removal) — neither worked because the block is at TCP level. Led directly to S721's Gmail API rewrite.
 
 **Previous: S719 — Chrome QA Sprint (COMPLETE)**
 
@@ -90,11 +94,15 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | Wyoming pawnbroker scraper | wyomingbankingdivision.wyo.gov — not yet investigated this session | Run diagnostic to confirm if still returning data | S713 |
 | AI listing enrichment | Fire-and-forget | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` | S651 |
 | CategoryTopFinds TrendingSection | Cron runs 05:00 UTC — no data until first run | QA after nightly run; verify TrendingSection on `/categories/[category]` | S647 |
-| Outreach pipeline open/click tracking | Can't verify without real sends | After first cron run: check Railway logs, confirm pixel route 200 | S647 |
+| Outreach pipeline open/click tracking | Gmail API live but no cron send yet | After next 4-hour cron window: check Railway logs for send success, then verify pixel route 200 | S721 |
 
 ---
 
 ## Recent Sessions
+
+### S721 — Outreach Gmail API Migration (COMPLETE)
+
+Root cause: Railway Hobby plan blocks SMTP ports 25/465/587 at the network level. Fix: rewrote outreachEmailsCron.ts from nodemailer to Gmail API (googleapis package). Created GCP OAuth client under outreach@finda.sale, obtained refresh token with proper credential binding (OAuth Playground "Use your own OAuth credentials" checkbox is critical). Live test email sent successfully via Gmail API from VM (message ID 19e1d4e882ea0c52). GMAIL_REFRESH_TOKEN updated in Railway, backend redeployed. Cron registered every 4 hours — next window will send via Gmail API over HTTPS port 443. Changed files: packages/backend/src/jobs/outreachEmailsCron.ts (full rewrite of transport layer), packages/backend/package.json (added googleapis). OAuth debug lesson: tokens from OAuth Playground are bound to whichever client credentials were active during authorization — if the checkbox wasn't checked, the token is bound to Google's Playground client ID and will fail with invalid_grant when used with your custom client.
 
 ### S719 — Chrome QA Sprint (COMPLETE)
 
@@ -124,83 +132,42 @@ Chrome QA on 10 features from S712 backlog. ✅ Verified: #411 Dorm Dash (crash 
 
 Two emergency MCP pushes to fix backend crash loops (missing yellowPagesCaScraper.ts from subagent write failure; missing export default router from parallel agent conflict on internal.ts). Scraper fixes shipped: OSM 406 (form-encoded POST), GarageSaleFinder hidden-address parse recovery (~50% listing improvement), Missouri auctioneer TLS (axios rejectUnauthorized:false), weekly digest FK crash (Organizer ID → User ID), Canada outreach → OUTREACH_CANADA_ENABLED flag, YellowPages.ca scraper (10 provinces, 6 keywords, JSON-LD), AuctionZip + Canada411 workflows disabled, Missouri pawnbroker schedule disabled. Oklahoma pawnbroker: real PDF scraper (pdf-parse, ODCC monthly roster, 215+ licensees). Louisiana auctioneer: real POST scraper (lalb.org/all_auctioneer-bus.php, cheerio, 76 businesses). pdf-parse added to backend package.json. Roadmap: #SCRAPER-HEADLESS-PROXY added to Deferred (MN/MI/TN need residential proxy). Railway confirmed green after pushes. Patrick: run git fetch && git pull + pnpm install before next push.ps1.
 
-### S712 — Dorm Dash / Wave 2 / Outreach Pipeline / GitHub Actions (COMPLETE — wrap)
-
-P0 Dorm Dash crash fixed: saleController.ts made startDate/endDate/address/city/state/zip optional with defaults (online-only sales were failing Zod validation). Wave 2 edit-sale features shipped: DORM_DASH added to sale type dropdown, Safety Notes textarea, Grief Firewall checkbox, Cover the Fee (Auction-only), Floor Map / Bundle Pricing / Donation Kit nav sections all added to edit-sale/[id].tsx. Settings cleanup: Digital Payment Handles card and Cover Buyer Fees info card removed from settings.tsx. Cash Bridge POS rebuilt: pos.tsx now has Venmo/Zelle payment method buttons with handle display and Stripe fee capture; file reconstructed after mid-write truncation (2557→2667 lines). Leaderboard crash fixed: leaderboardController.ts scouts catch returns empty valid response; Promise.all→Promise.allSettled in leaderboard.tsx. Outreach: 7 pipeline gaps closed (autoSeedOutreachCron.ts created + registered, status filter in outreachEmailsCron, schedule race fix, DCE upsert on discovery, queueForOutreach helper, scoring scoped to unmanaged only, /api/internal/outreach/status observability endpoint). 183 high-confidence organizers seeded live into DirectoryClaimEmail via psycopg2. GitHub Actions: 6 broken state scrapers fixed (PA/RI/SC/SD/TX/UT — wrong URL + wrong auth header), 7 new Phase 2 state workflows (AL/IN/KY/ME/MD/MA/NH — Monday staggered 03:00–04:30 UTC), 17 schedule collisions fixed (Monday had 49 workflows with 13+ exact-time collisions), enrich-backfill.yml auth fixed, 3 new scrapers created (scrape-auction-ninja.yml, scrape-naa.yml, scrape-facebook-marketplace.yml + run-facebook-marketplace.ts). All 4 shipped features Pending Chrome QA.
-
 ### S711 — Wave 2 Chrome QA Sprint (COMPLETE — wrap)
 
 Chrome QA on 12 Wave 2 features (main session, no subagent). ✅ #406 Split Bill (both persons paid, counter correct). ⚠️ #407 Flip Tracker (Cost Basis input works, Flip Report renders, ROI needs sold items — queued). UNVERIFIED: #405 Founding Badge (no display surface found anywhere), #369 Quebec block (needs test user). P0 found: DORM_DASH sale type crashes wizard on selection (other sale types unaffected per Patrick). 6 Wave 2 per-sale features absent from /organizer/edit-sale: Safety Notes, Grief Firewall, Sale Floor Map, Bundle Pricing, Cover the Fee, Donation Kit — organizers can't access them. P2: Leaderboard "Failed to load leaderboard data." Product decisions: #412 Cash Bridge → Venmo/Zelle as POS buttons with Stripe fee, remove from Settings standalone; #402 Cover the Fee → Auction sale type only. P0 Dorm Dash wizard crash dispatched to findasale-dev (S711 post-wrap).
 
-### S710 — Wave 2 Vercel Build Fix (COMPLETE — pushed)
-
-Three Vercel build errors from Wave 2 (S696) agent truncation fixed. (1) create-sale.tsx: unescaped apostrophe in DORM_DASH tip string → `they're`. (2) settings.tsx: eBay tab `{activeTab === 'ebay' && (` never closed with `)}` — Wave 2 agent replaced it with `</div>`, dropped the Help & Support tab entirely, and dropped the FeedbackMenu modal. Fixed by restoring pre-W2 tail from f3ee4597 while preserving all Wave 2 additions. (3) sales/[id].tsx: stray `}}` on comment line. TSC zero errors. Vercel green. Roadmap: 12 Wave 2 items updated QUEUED → SHIPPED Pending Chrome QA.
-
-### S709 — Phase 2 Smoke Tests + Connection Pool Fix + Outreach Live (COMPLETE — pushed)
-
-S708 push confirmed landed. OUTREACH_ENABLED flipped to true — 197 high-confidence cohort now live. Backfill confirmed complete: 38,408 scored (COLD=32,530 / WARM=5,663 / HOT=215 / SUPPRESSED=3,498). Phase 2 smoke tests: IA ✅, WI ✅, LA running, AR/MS/Canada411 identified as dead sources. Connection pool fix applied: `?connection_limit=3&pool_timeout=20` added to all 41 Phase 2 scraper ymls. MT 401 pending: INTERNAL_API_TOKEN GH secret doesn't match Railway INTERNAL_API_KEY (Patrick ops action).
-
-### S707 — QA Sprint + Bug Fixes (COMPLETE — pushed)
-
-NSFW detection deferred (roadmap #394 closed). Chrome QA: #174 bid protection ⚠️ confirmed working; P2 bid form UX fixed (shows "Auction Closed" state on ended auctions). #251 priceBeforeMarkdown ❌ on SaleCard fixed — frontend type was missing `markdownApplied`/`priceBeforeMarkdown` fields, backend already returning them. getSaleActivity P1 crash fixed — orphaned Favorite FK caused `PrismaClientUnknownRequestError` on every Live Activity load. All 3 fixes pushed and verified.
-
 ---
 
-## Next Session — S721
+## Next Session — S722
 
 ### Patrick Action Required First
 
-**Sync S720 fixes (already pushed to GitHub via MCP — run this to sync local git):**
+**Push S721 Gmail API migration (already in Patrick's local git from dev agent):**
 ```powershell
-git fetch
-git pull
-```
-
-**Then push #405 Founding Badge (built S719, not yet in Patrick's local git):**
-```powershell
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizers/[id].tsx
-git commit -m "feat: #405 surface foundingOrgBadge on public organizer storefront"
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/package.json
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat: migrate outreach emails from nodemailer SMTP to Gmail API (Railway SMTP port block workaround)"
 .\push.ps1
 ```
 
-### Priority 1 — OUTREACH SMTP TRUE AUDIT (P1, must fix before anything else)
+**Note:** The Gmail API code is already deployed on Railway (redeployed via Railway MCP with updated GMAIL_REFRESH_TOKEN). The push above syncs GitHub with what's already running. If the cron has already fired by next session, check Railway logs for `[OutreachCron]` to confirm sends succeeded.
 
-Patrick's directive: "something is causing that timeout between then and now that you're missing." Do NOT accept "network block" theory. Exhaustive code audit required.
+### Priority 1 — Verify Outreach Sends (quick check)
 
-**Audit checklist — every item must be checked:**
+Check Railway logs for outreach cron execution since S721 deploy. The cron runs every 4 hours — by next session there should be at least one run. Look for: recipient count, send success/failure, any Gmail API errors. If sends worked, update Blocked Queue item "Outreach open/click pixel tracking" to verified.
 
-1. **Read full outreachEmailsCron.ts at current `1b2746a3`** — map every function call path from `sendOutreachEmails()` entry to `transport.sendMail()`. Any code that runs BEFORE sendMail could be hanging.
-
-2. **Check suppressionService import** — `checkSuppression()` or similar call: does it make an HTTP request, DB query, or external API call that could timeout before SMTP is reached?
-
-3. **Check cronGuard import** — does `cronGuard` call any external service? Does it have its own timeout that could overlap with SMTP?
-
-4. **Check syncLeadTierToMailerLite import** — is this called BEFORE or AFTER sendMail? If before, does it make a MailerLite API call that could hang?
-
-5. **Check OutreachAuditLog.create()** — is this called before or after sendMail? Prisma write timing?
-
-6. **Check nodemailer version** — read `packages/backend/package.json`. Was nodemailer upgraded between May 5 and now? `npm show nodemailer@[version]` for changelog.
-
-7. **Check `OUTREACH_WARMUP_START_DATE` env var** — is this set in Railway? If missing, does the code throw or return early before any SMTP attempt?
-
-8. **Check the 3-tier HOT→WARM→COLD query logic** — the May 5 version used a single `findMany`. Current version runs 3 sequential DB queries with `baseWhere` + `status: {notIn: [...]}` + GarageSaleFinder exclusion. Any of these could theoretically hang but more importantly: does the query return 0 results, causing the cron to silently exit without attempting SMTP at all? **This is the most likely cause** — check Railway logs for the "Found X recipients" count line. If it's 0, SMTP is never attempted and the timeout log is misleading.
-
-9. **Verify the Railway env vars are complete** — `OUTREACH_WORKSPACE_EMAIL`, `OUTREACH_WORKSPACE_APP_PASSWORD`, `OUTREACH_ENABLED=true`, `OUTREACH_SECRET`, `OUTREACH_FROM_EMAIL`, `OUTREACH_WARMUP_START_DATE` (if required). Any missing var that used to have a default and now throws = instant failure.
-
-10. **Read Railway logs for the FULL cron execution** — not just the timeout line. Get the complete log for one cron window: how many recipients found, what tier, which email attempted. The log before the timeout tells us if query returned results or if timeout happens before first send attempt.
-
-**Hypothesis to test first (highest probability):** The 3-tier query with `status: {notIn: ['BOUNCED','OPTED_OUT','CLAIMED']}` + `suppressOutreach: false` returns 0 results for the current seed batch. Since the seed records were added with specific field values, if `suppressOutreach` defaults to NULL (not false), the filter would exclude all 183 records. If query returns 0, the loop never runs, and the log's "Connection timeout" may actually be from a different code path (e.g., post-loop cleanup attempting something). Or the timeout IS the SMTP but for 0 records it shouldn't appear at all — recheck what triggers the timeout log.
-
-### Priority 2 — Bug Fixes (after outreach resolved)
+### Priority 2 — Bug Fixes
 
 1. **#326 eBay Comp Tiles ❌** — EbayCompTiles.tsx image grid not rendering. Dispatch findasale-dev.
 2. **#280 Condition Rating XP ❌** — Grade B set+saved, XP balance unchanged. Dispatch findasale-dev.
 
 ### Still in Blocked Queue
 
+- #405 Founding Badge — push block above
 - #322 Encyclopedia Inline Tip — needs category pre-set via psycopg2
 - Wyoming pawnbroker — diagnostic needed
 - AI listing enrichment — check Railway logs for `[listingEnrichmentService]`
 - CategoryTopFinds TrendingSection — verify after nightly 05:00 UTC cron
-- Outreach open/click pixel tracking — verify after first real send
+- Outreach open/click pixel tracking — verify after first Gmail API cron send

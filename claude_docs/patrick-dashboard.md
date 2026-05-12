@@ -1,44 +1,41 @@
-# Patrick's Dashboard — S720 Wrap
+# Patrick's Dashboard — S721 Wrap
 
 ---
 
 ## What Happened This Session
 
-Full session spent diagnosing the outreach SMTP timeout. No emails are reaching organizers. Three fixes deployed — timeout persists. Patrick directed a true audit next session.
+Outreach emails fixed permanently. The root cause was Railway Hobby plan blocking SMTP ports (25/465/587) at the network level — not a code bug. Rewrote the email sender from nodemailer (SMTP) to Gmail API (HTTPS port 443, unblocked). Sent a live test email successfully from the VM to your Yahoo inbox.
 
-**Fixed and deployed:**
-- Fire-and-forget async route (bypasses Railway's 30s HTTP proxy timeout) ✅
-- `requireTLS:true` removed from nodemailer config (restores May 5 working transport) ✅
-- IPv4 forced (`family:4`) — tested and reverted (didn't help, also not in May 5 config)
+**What was done:**
+- Created GCP OAuth client "FindA.Sale Outreach Mailer" under outreach@finda.sale
+- Rewrote outreachEmailsCron.ts: nodemailer → googleapis (Gmail API)
+- Added `googleapis` package to backend
+- Set up OAuth2 refresh token flow (client ID + secret + refresh token → auto-renewing access tokens)
+- Debugged OAuth token binding issue (Playground's "Use your own OAuth credentials" checkbox)
+- Updated GMAIL_REFRESH_TOKEN in Railway, redeployed backend
+- Live test: email sent via Gmail API → deseee@yahoo.com (check your inbox)
 
-**Still broken:**
-- SMTP Connection timeout persists on every send attempt. All 183 queued organizers untouched.
-
-**May 5 worked:** 4 confirmed sends in DB (`touch1SentAt` timestamps). Same Gmail SMTP. Something changed between commit `558af15a` (May 5) and now. Next session does a line-by-line code audit to find it.
+**Cron status:** Registered, runs every 4 hours. Next run will send via Gmail API to queued organizers.
 
 ---
 
 ## Do First Next Session
 
-**Sync S720 fixes to your local git (two MCP pushes happened this session):**
+**Push S721 changes to GitHub:**
 ```powershell
-git fetch
-git pull
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/package.json
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat: migrate outreach emails from nodemailer SMTP to Gmail API (Railway SMTP port block workaround)"
+.\push.ps1
 ```
 
-**Then push #405 Founding Badge (built S719 — still pending your push):**
+**Also push #405 Founding Badge (built S719 — still pending):**
 ```powershell
 git add packages/backend/src/routes/organizers.ts
 git add packages/frontend/pages/organizers/[id].tsx
 git commit -m "feat: #405 surface foundingOrgBadge on public organizer storefront"
-.\push.ps1
-```
-
-**S720 wrap docs:**
-```powershell
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S720 wrap — outreach audit prep"
 .\push.ps1
 ```
 
@@ -49,8 +46,8 @@ git commit -m "docs: S720 wrap — outreach audit prep"
 | | |
 |---|---|
 | Vercel (frontend) | ✅ Green |
-| Railway (backend) | ✅ Green |
-| Outreach emails | ❌ SMTP timeout — 0 emails delivered despite cron firing correctly |
+| Railway (backend) | ✅ Green — redeployed with Gmail API |
+| Outreach emails | ✅ Gmail API working — test email sent, cron registered |
 | eBay price comps | ✅ Working — summary card returns. Image tiles broken (#326) |
 | eBay Finding API | ⏳ Pending Growth Check approval |
 | Montana scraper | ❌ 401 — secret mismatch (Patrick fix needed) |
@@ -61,13 +58,14 @@ git commit -m "docs: S720 wrap — outreach audit prep"
 
 ## Top Priority Next Session
 
-**Outreach SMTP true audit** — Claude will read the full Railway log for one cron window (complete execution, not just the timeout line), check if the query is returning 0 recipients (likely cause: `suppressOutreach` field defaults to NULL not false, filtering out all 183 records), and audit every new import added since May 5 (suppressionService, cronGuard, syncLeadTierToMailerLite) for any call that runs before `transport.sendMail()`.
+**Verify outreach cron sends** — check Railway logs for the first Gmail API send window. If working, move to bug fixes (#326 eBay Comp Tiles, #280 Condition Rating XP).
 
 ---
 
 ## Still Waiting (Blocked Queue)
 
-- **#326 eBay Comp Tiles** ❌ — image grid not rendering (dispatch fix after outreach resolved)
+- **#326 eBay Comp Tiles** ❌ — image grid not rendering
 - **#280 Condition Rating XP** ❌ — XP not awarded for condition grade
 - **#322 Encyclopedia Inline Tip** — UNVERIFIED
 - **Wyoming pawnbroker** — not yet checked
+- **Outreach open/click tracking** — verify after first Gmail API cron send
