@@ -432,7 +432,7 @@ export const register = async (req: Request, res: Response) => {
         // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: '15m' }
     );
 
     // P0 Security Fix: Set httpOnly cookies for secure token storage
@@ -630,7 +630,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: '15m' }
     );
 
     // P0 Security Fix: Set httpOnly cookies for secure token storage
@@ -838,7 +838,7 @@ export const login = async (req: Request, res: Response) => {
         // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: '15m' }
     );
 
     // P0 Security Fix: Set httpOnly cookies for secure token storage
@@ -1006,7 +1006,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
         // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: '15m' }
     );
 
     // P0 Security Fix: Set httpOnly cookies for secure token storage

@@ -1,8 +1,56 @@
 {
   "_schema": "Archive Index v1 — Records-only write access. All agents may read to check existence. To retrieve a file, dispatch findasale-records.",
-  "_lastUpdated": "2026-03-22",
-  "_archivedBy": "findasale-records session 157",
+  "_lastUpdated": "2026-05-12",
+  "_archivedBy": "findasale-records (Records subagent, doc-cleanup task)",
   "entries": [
+    {
+      "file": "CORE-deprecated.md",
+      "topic": "CORE.md — Behavioral Operating System v4.4 (legacy)",
+      "archivedFrom": "claude_docs/CORE.md",
+      "originSession": "112 (created) — 265 (last updated)",
+      "dateArchived": "2026-05-12",
+      "summary": "Legacy behavioral rules file (v4.4). Content fully merged into CLAUDE.md v5.0 at S226. Deprecated and archived. Root replaced with tombstone redirect."
+    },
+    {
+      "file": "next-session-brief-deprecated.md",
+      "topic": "Next Session Brief — S199 planning doc",
+      "archivedFrom": "claude_docs/next-session-brief.md",
+      "originSession": "198 (created)",
+      "dateArchived": "2026-05-12",
+      "summary": "Legacy next-session planning format. Format superseded by STATE.md §Next Session section (S264). S199 priorities: Records audit, #51 Sale Ripples, #42 Voice-to-Tag, Passkey QA. Root replaced with tombstone redirect."
+    },
+    {
+      "file": "COMPLETED_PHASES-archived.md",
+      "topic": "Completed Phases Archive — S428–S449 session archive blocks",
+      "archivedFrom": "claude_docs/COMPLETED_PHASES.md",
+      "originSession": "465 (last updated)",
+      "dateArchived": "2026-05-12",
+      "summary": "Historical session archive blocks from S428–S449, stored outside STATE.md during compaction. No active planning content. Root violation — moved to archive."
+    },
+    {
+      "file": "monthly-digest-2026-04.md",
+      "topic": "Monthly Digest April 2026 (S321–S366)",
+      "archivedFrom": "claude_docs/monthly-digest-2026-04.md",
+      "originSession": "366 (generated)",
+      "dateArchived": "2026-05-12",
+      "summary": "Auto-generated monthly digest covering S321–S366. High-velocity sprint period. Root violation — moved to archive."
+    },
+    {
+      "file": "monthly-digest-2026-04-archive.md",
+      "topic": "Monthly Digest Archive — April 2026 (S617–S630)",
+      "archivedFrom": "claude_docs/monthly-digest-2026-04-archive.md",
+      "originSession": "630 (generated)",
+      "dateArchived": "2026-05-12",
+      "summary": "Archived session summaries from S617–S630. Moved from STATE.md during compaction. Root violation — moved to archive."
+    },
+    {
+      "file": "session696_roadmap_ideas.xls",
+      "topic": "Session 696 roadmap ideas — Excel spreadsheet",
+      "archivedFrom": "claude_docs/session696_roadmap_ideas.xls",
+      "originSession": "696",
+      "dateArchived": "2026-05-12",
+      "summary": "Excel file with roadmap brainstorm from S696. Root violation (binary file, wrong format for claude_docs root) — moved to archive."
+    },
     {
       "file": "pricing-strategy-STALE-archived-2026-03-15.md",
       "topic": "Pricing Strategy — outdated fee structure",

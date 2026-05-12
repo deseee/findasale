@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S721 — Outreach Gmail API Migration (COMPLETE)**
+**Latest: S722 — Monthly Retro + Auth Security Hardening (COMPLETE)**
+
+Monthly retrospective run. Rate limit fix shipped (loginLimiter 5→15 + skipSuccessfulRequests). Auth security audit completed — hacker agent found 3 P0s, 4 P1s, 5 P2s, 4 P3s. 10 fixes dispatched and applied: JWT access token expiry 7d→15m, /auth/oauth rate limiter added, tokenVersion absent bypass fixed, organizerTokenVersion multi-role miss fixed, resend-verification regenerates token, logout clearCookie attributes fixed, jwt.verify algorithms constraint added, /verify-email rate limiter added, X-Forwarded-For logging fixed, OAuthBridge CSRF skip documented. OSM scraper URL fixed (overpass-api.de → overpass.kumi.systems). Indiana licensing scraper fixed (3 root causes: session cookie forwarding, __VIEWSTATEGENERATOR field, Recaptcha1 field). Doc cleanup: 22 root violations resolved, 2 deprecated files archived. One P0 (email verification token expiry) needs schema migration. One P1 (OAuth auto-link account takeover) needs Patrick decision. See Next Session.
+
+**Previous: S721 — Outreach Gmail API Migration (COMPLETE)**
 
 Root cause of outreach email failure identified and permanently fixed. Railway Hobby plan silently blocks outbound SMTP on ports 25/465/587 — only Railway Pro ($20/mo) allows SMTP. Solution: rewrote outreachEmailsCron.ts from nodemailer SMTP to Google Gmail API over HTTPS (port 443, unblocked). Steps: (1) Created GCP OAuth client "FindA.Sale Outreach Mailer" under outreach@finda.sale project (qualified-cedar-496114-v1), scope: gmail.send. (2) Added GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN to Railway env vars. (3) Rewrote cron: `createGmailClient()` replaces `createTransport()`, `buildRawEmail()` constructs RFC 2822 MIME with base64url encoding, `gmail.users.messages.send()` replaces `transport.sendMail()`. (4) Added `googleapis` to backend package.json. (5) Fixed duplicate initOutreachEmailsCron block (VM mount truncation artifact). (6) Debugged OAuth invalid_grant — initial tokens were bound to Playground's default client, not ours. Re-authorized with "Use your own OAuth credentials" checked. (7) Verified token exchange via curl (200 OK + access_token). (8) Sent live test email via Gmail API from VM → deseee@yahoo.com (message ID 19e1d4e882ea0c52). (9) Updated Railway GMAIL_REFRESH_TOKEN and redeployed. Backend running, cron registered every 4 hours.
 
@@ -87,6 +91,8 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | #405 Founding Badge | Built S719: backend GET /:id returns field, frontend renders amber pill in trust-signal cluster. Push block ready. | Push packages/backend/src/routes/organizers.ts + packages/frontend/pages/organizers/[id].tsx | S719 |
 | #326 eBay Comp Tiles | eBay search returns summary card (10 listings, Median $260) but EbayCompTiles.tsx image grid NOT rendering. ebayImageUrl from ItemCompLookup not displaying | Dispatch findasale-dev: check EbayCompTiles render condition, verify ebayImageUrl is returned from /api/items/comps/ebay endpoint | S719 |
 | #280 Condition Rating XP | Set grade B, saved on Victorian Silver Pocket Watch, XP balance unchanged at 15 XP. XP not awarded for condition rating action | Dispatch findasale-dev: trace xpService call in item save handler — confirm conditionGrade XP award is wired up | S719 |
+| P0-3: Email verification token expiry | Schema migration required — add emailVerificationTokenExpiry field to User model | Run migration, update authController verifyEmail check + resend-verification generation | S722 |
+| P1-1: OAuth auto-link account takeover | Design decision needed — current flow auto-links Google to any matching email with no re-auth | Choose: A) email confirmation before link, B) require logged-in session, C) rate limit only. Patrick deciding. | S722 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
@@ -99,6 +105,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S722 — Monthly Retro + Auth Security Hardening (COMPLETE)
+
+Monthly retro (automated task, 8th of month). 5/9 April recommendations were still open — all dispatched and fixed. Rate limiter fix: loginLimiter raised from 5→15 attempts per 15min + `skipSuccessfulRequests: true` (rate limit was blocking Patrick on two devices at home because Redis persisted failed OAuth attempts from S671-S674 debugging storm). Auth hacker audit: 16 findings (3 P0, 4 P1, 5 P2, 4 P3). 10 fixes applied: access JWT expiry 7d→15m (was valid after cookie expired); /auth/oauth got registerLimiter (was open to account takeover at scale); tokenVersion absent-JWT bypass fixed; organizerTokenVersion check extended to roles[] array; logout clearCookie attributes matched set-cookie; resend-verification regenerates token; jwt.verify locked to HS256; /verify-email got rate limiter; req.ip used for password reset logging; OAuthBridge CSRF skip documented. Two scrapers fixed: OSM changed to overpass.kumi.systems (overpass-api.de was 406 for all 137 metros); Indiana licensing: 3 root causes found (session cookie not forwarded between GET/POST, missing __VIEWSTATEGENERATOR field, missing Recaptcha1 field). Doc cleanup: 22 root violations in claude_docs/ root resolved, 2 deprecated files archived. CLAUDE.md updated: QA ceiling rule (≥8 Blocked Queue → mandatory QA session), dev agent prompt items 5+6 (auth grep, bulk-edit batching), file placement pre-check. SH-020/021/022 added to self_healing_skills.md. Two items deferred: P0-3 (email verification token expiry — needs schema migration) and P1-1 (OAuth auto-link — Patrick decision needed). **Push block in Next Session.**
 
 ### S721 — Outreach Gmail API Migration (COMPLETE)
 
@@ -138,34 +148,120 @@ Chrome QA on 12 Wave 2 features (main session, no subagent). ✅ #406 Split Bill
 
 ---
 
-## Next Session — S722
+## Next Session — S723
 
-### Patrick Action Required First
+### Patrick Decision Required Before Session Start
 
-**Push S721 Gmail API migration (already in Patrick's local git from dev agent):**
+**OAuth auto-link (P1 security issue):**
+Current `/auth/oauth` flow will silently link a Google identity to any existing account that matches by email — with no re-auth, no confirmation email, no notification. Options:
+- **A** — Send email confirmation before linking (safest)
+- **B** — Require user to be logged in before linking is allowed
+- **C** — Rate limit only (minimal, doesn't fix root cause)
+
+Reply with A, B, or C and dev will implement it this session.
+
+### Patrick Action Required First — Big Push Block
+
+This session changed a lot of files. Run these in order:
+
 ```powershell
+# S721 Gmail API migration (still pending from last session)
 git add packages/backend/src/jobs/outreachEmailsCron.ts
 git add packages/backend/package.json
+
+# S722 Auth security hardening
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/routes/auth.ts
+git add packages/backend/src/middleware/auth.ts
+git add packages/frontend/pages/_app.tsx
+
+# S722 Scraper fixes
+git add packages/backend/src/services/scraper/osmScraper.ts
+git add packages/backend/src/scripts/diagnostics/diagnose-osm.ts
+git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
+
+# S722 Doc cleanup — new destinations
+git add claude_docs/workflow-retrospectives/monthly-retro-2026-05-08.md
+git add claude_docs/archive/CORE-deprecated.md
+git add claude_docs/archive/next-session-brief-deprecated.md
+git add claude_docs/archive/COMPLETED_PHASES-archived.md
+git add claude_docs/archive/monthly-digest-2026-04.md
+git add claude_docs/archive/monthly-digest-2026-04-archive.md
+git add "claude_docs/archive/session696_roadmap_ideas.xls"
+git add claude_docs/archive/archive-index.json
+git add claude_docs/operations/API_RESPONSE_FORMAT.md
+git add claude_docs/operations/legal-hold-to-pay-risk-review.md
+git add claude_docs/audits/ARCHITECT_ASSESSMENT_FEEDBACK_SCHEMA.md
+git add claude_docs/audits/ARCHITECT_PATRICK_SUMMARY.md
+git add claude_docs/audits/S248-walkthrough-findings.md
+git add claude_docs/audits/human-QA-walkthrough-findings.md
+git add claude_docs/audits/patrick-walkthrough-S248.md
+git add claude_docs/feature-specs/FEEDBACK_DEV_QUICKSTART.md
+git add claude_docs/feature-specs/FEEDBACK_SURVEY_MAPPING.md
+git add claude_docs/feature-specs/FEEDBACK_SYSTEM_SPEC.md
+git add claude_docs/feature-specs/PRICING_PAGE_UX_SPEC_S392.md
+git add claude_docs/feature-specs/UX_MODERNIZATION_SPEC.md
+git add claude_docs/handoffs/FEEDBACK_SYSTEM_HANDOFF.md
+git add claude_docs/guides/payment-testing-content-package.md
+git add claude_docs/guides/pre-sale-payment-testing-guide.md
+git add claude_docs/research/pricing-data-sources-research.md
+git add "claude_docs/improvement-memos/innovation-shopper-engagement-ideas.md"
+git add claude_docs/ux-spotchecks/ux-shopper-engagement-ecosystem.md
+
+# S722 Doc cleanup — tombstoned originals
+git add claude_docs/CORE.md
+git add claude_docs/next-session-brief.md
+git add claude_docs/API_RESPONSE_FORMAT.md
+git add claude_docs/ARCHITECT_ASSESSMENT_FEEDBACK_SCHEMA.md
+git add claude_docs/ARCHITECT_PATRICK_SUMMARY.md
+git add claude_docs/COMPLETED_PHASES.md
+git add claude_docs/FEEDBACK_DEV_QUICKSTART.md
+git add claude_docs/FEEDBACK_SURVEY_MAPPING.md
+git add claude_docs/FEEDBACK_SYSTEM_HANDOFF.md
+git add claude_docs/FEEDBACK_SYSTEM_SPEC.md
+git add claude_docs/PRICING_PAGE_UX_SPEC_S392.md
+git add claude_docs/UX_MODERNIZATION_SPEC.md
+git add claude_docs/S248-walkthrough-findings.md
+git add claude_docs/human-QA-walkthrough-findings.md
+git add claude_docs/patrick-walkthrough-S248.md
+git add claude_docs/innovation-shopper-engagement-ideas.md
+git add claude_docs/legal-hold-to-pay-risk-review.md
+git add claude_docs/monthly-digest-2026-04-archive.md
+git add claude_docs/monthly-digest-2026-04.md
+git add claude_docs/payment-testing-content-package.md
+git add claude_docs/pre-sale-payment-testing-guide.md
+git add claude_docs/pricing-data-sources-research.md
+git add claude_docs/ux-shopper-engagement-ecosystem.md
+
+# Remove junk files
+git rm claude_docs/test-write-check
+
+# S722 updated docs
+git add CLAUDE.md
+git add claude_docs/self-healing/self_healing_skills.md
+git add claude_docs/decisions-log.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: migrate outreach emails from nodemailer SMTP to Gmail API (Railway SMTP port block workaround)"
+
+git commit -m "fix: auth security hardening (10 fixes P0-P3), scraper URL fixes, doc cleanup (22 root violations resolved)"
 .\push.ps1
 ```
 
-**Note:** The Gmail API code is already deployed on Railway (redeployed via Railway MCP with updated GMAIL_REFRESH_TOKEN). The push above syncs GitHub with what's already running. If the cron has already fired by next session, check Railway logs for `[OutreachCron]` to confirm sends succeeded.
+### Priority 1 — Schema Migration (P0-3: Email Verification Token Expiry)
 
-### Priority 1 — Verify Outreach Sends (quick check)
+Email verification tokens currently never expire. Need to add `emailVerificationTokenExpiry DateTime?` to schema.prisma and update the verify + resend flows. Dispatch findasale-dev after push lands.
 
-Check Railway logs for outreach cron execution since S721 deploy. The cron runs every 4 hours — by next session there should be at least one run. Look for: recipient count, send success/failure, any Gmail API errors. If sends worked, update Blocked Queue item "Outreach open/click pixel tracking" to verified.
+### Priority 2 — QA Session (MANDATORY — 12 items in Blocked Queue)
 
-### Priority 2 — Bug Fixes
+QA ceiling rule: ≥8 Blocked Queue items → next session must be QA. Currently at 12. Dispatch QA agents for the top bugs: #326 eBay Comp Tiles, #280 Condition Rating XP.
 
-1. **#326 eBay Comp Tiles ❌** — EbayCompTiles.tsx image grid not rendering. Dispatch findasale-dev.
-2. **#280 Condition Rating XP ❌** — Grade B set+saved, XP balance unchanged. Dispatch findasale-dev.
+### Priority 3 — Verify Outreach Sends
 
-### Still in Blocked Queue
+Check Railway logs for outreach cron execution since S721 deploy. Look for `[OutreachCron]` success lines.
 
-- #405 Founding Badge — push block above
+### Other Blocked Queue Items
+
+- #405 Founding Badge — included in push block above (built S719)
 - #322 Encyclopedia Inline Tip — needs category pre-set via psycopg2
 - Wyoming pawnbroker — diagnostic needed
 - AI listing enrichment — check Railway logs for `[listingEnrichmentService]`
