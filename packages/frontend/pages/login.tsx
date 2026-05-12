@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -14,8 +14,18 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Roadmap #422 (Option B): When OAuth login is rejected because the email is
+  // already registered, OAuthBridge redirects here with ?message=... — surface it.
+  useEffect(() => {
+    const msg = router.query.message;
+    if (typeof msg === 'string' && msg.length > 0) {
+      setInfo(msg);
+    }
+  }, [router.query.message]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +129,13 @@ const LoginPage = () => {
           </h2>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {info && (
+            <div role="status" className="rounded-md bg-amber-50 dark:bg-amber-900/20 p-4 border border-amber-200 dark:border-amber-800">
+              <div className="text-sm text-amber-800 dark:text-amber-200">
+                {info}
+              </div>
+            </div>
+          )}
           {error && (
             <div id="form-error" role="alert" className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
               <div className="text-sm text-red-700 dark:text-red-300">

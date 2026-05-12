@@ -204,6 +204,7 @@ const nextConfig = {
         { source: '/api/auth/refresh',             destination: `${railwayApi}/auth/refresh` },
         { source: '/api/auth/me',                  destination: `${railwayApi}/auth/me` },
         { source: '/api/auth/oauth',               destination: `${railwayApi}/auth/oauth` },
+        { source: '/api/auth/oauth/link',          destination: `${railwayApi}/auth/oauth/link` }, // Roadmap #422: authenticated OAuth linking
         { source: '/api/auth/oauth-verify-age',    destination: `${railwayApi}/auth/oauth-verify-age` },
         { source: '/api/auth/forgot-password',     destination: `${railwayApi}/auth/forgot-password` },
         { source: '/api/auth/reset-password',      destination: `${railwayApi}/auth/reset-password` },
