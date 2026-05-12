@@ -1147,6 +1147,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
       isFollowing,
       isClaimed: organizer.isClaimed,
       isUnmanagedListing: organizer.isUnmanagedListing,
+      foundingOrgBadge: organizer.foundingOrgBadge,
     };
 
     // Include contact details only if authenticated
