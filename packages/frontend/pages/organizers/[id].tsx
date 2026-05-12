@@ -65,6 +65,7 @@ interface OrganizerProfile {
   isFollowing: boolean;
   isClaimed: boolean;
   isUnmanagedListing: boolean;
+  foundingOrgBadge?: boolean;
 }
 
 interface OrganizerPageProps {
@@ -184,6 +185,12 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                   <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 text-xs font-semibold rounded-full">
                     Unclaimed
                   </span>
+                </div>
+              )}
+              {organizer.foundingOrgBadge && (
+                <div className="mb-3 inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-full">
+                  <span aria-hidden="true">🏆</span>
+                  <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">Founding Organizer</span>
                 </div>
               )}
               {organizer.badges && organizer.badges.length > 0 && (
