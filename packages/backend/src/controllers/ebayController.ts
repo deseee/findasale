@@ -1658,7 +1658,11 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
 export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
-    const { itemIds, photoMode } = req.body as { itemIds: string[]; photoMode?: string };
+    const { itemIds, photoMode, publishMode: requestedPublishMode } = req.body as {
+      itemIds: string[];
+      photoMode?: string;
+      publishMode?: 'DRAFT' | 'LIVE';
+    };
     const userId = req.user?.id;
 
     if (!userId) {
@@ -1819,6 +1823,45 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     }
     const merchantLocationKey = locationResult.merchantLocationKey;
 
+    // Resolve effective publish mode: request body wins, else Organizer default, else DRAFT.
+    // Drives whether the Inventory API offer is published live or left as a Draft.
+    const effectivePublishMode: 'DRAFT' | 'LIVE' =
+      requestedPublishMode ?? organizer.ebayDefaultPublishMode ?? 'DRAFT';
+    const publishModeReason: 'override' | 'settings' | 'default-draft' =
+      requestedPublishMode !== undefined
+        ? 'override'
+        : organizer.ebayDefaultPublishMode
+          ? 'settings'
+          : 'default-draft';
+    console.log(
+      `[eBay PublishMode] saleId=${saleId} mode=${effectivePublishMode} reason=${publishModeReason}`
+    );
+
+    // Fetch the organizer's eBay fulfillment policies once for shipping smart-pick.
+    // Used when organizer.ebayDefaultShippingPolicyId is null and no EbayPolicyMapping rule fires.
+    // Stored on the closure so resolvePoliciesForItem doesn't refetch per item.
+    let ebayFulfillmentPolicies: any[] | null = null;
+    const getFulfillmentPoliciesOnce = async (): Promise<any[]> => {
+      if (ebayFulfillmentPolicies !== null) return ebayFulfillmentPolicies;
+      try {
+        const res = await fetch(
+          ebayProxyUrl('/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US&limit=100'),
+          { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } }
+        );
+        if (res.ok) {
+          trackEbayCall();
+          const data = (await res.json()) as any;
+          ebayFulfillmentPolicies = data.fulfillmentPolicies || [];
+        } else {
+          ebayFulfillmentPolicies = [];
+        }
+      } catch (err) {
+        console.warn('[eBay ShippingPick] failed to fetch fulfillment policies:', err);
+        ebayFulfillmentPolicies = [];
+      }
+      return ebayFulfillmentPolicies;
+    };
+
     // Push each item to eBay
     const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
     const proxySecret = process.env.EBAY_PROXY_SECRET;
@@ -1829,13 +1872,17 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         const sku = `FAS-${item.id}`;
 
         // Resolve policies for this item based on organizer's routing configuration
-        const routing = await resolvePoliciesForItem(organizer.id, {
-          id: item.id,
-          packageWeightOz: item.packageWeightOz,
-          ebayShippingClassification: item.ebayShippingClassification,
-          ebayCategoryId: item.ebayCategoryId,
-          category: item.category,
-        });
+        const routing = await resolvePoliciesForItem(
+          organizer.id,
+          {
+            id: item.id,
+            packageWeightOz: item.packageWeightOz,
+            ebayShippingClassification: item.ebayShippingClassification,
+            ebayCategoryId: item.ebayCategoryId,
+            category: item.category,
+          },
+          { fetchFulfillmentPolicies: getFulfillmentPoliciesOnce }
+        );
 
         if ('error' in routing) {
           // Record per-item error, skip this item, continue with next
@@ -2165,11 +2212,14 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           data: { ebayOfferId: offerId },
         });
 
-        // Step 3: Publish offer (or skip if pushAsDraft is true)
+        // Step 3: Publish offer (or skip if effective publish mode is DRAFT)
+        // Resolution order: explicit publishMode in request body → Organizer.ebayDefaultPublishMode → legacy mapping.pushAsDraft → LIVE
         const publishPath = encodeURIComponent(`/sell/inventory/v1/offer/${offerId}/publish`);
         const publishUrl = `${frontendUrl}/api/proxy/ebay?path=${publishPath}`;
 
-        if (routing.pushAsDraft) {
+        const shouldStayAsDraft = effectivePublishMode === 'DRAFT' || (requestedPublishMode === undefined && routing.pushAsDraft);
+
+        if (shouldStayAsDraft) {
           // Draft mode — skip publish, offer stays unpublished in seller's account
           console.log(`[eBay] Item ${item.id} pushed as DRAFT (offerId=${offerId}) — finalize in eBay Seller Hub`);
           results.push({
@@ -2177,7 +2227,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             sku,
             ebayOfferId: offerId,
             ebayListingId: null,
-            status: 'draft',
+            status: 'DRAFT_CREATED',
+            listingUrl: null,
             message: 'Pushed as draft — finalize in eBay Seller Hub',
           });
           continue;
@@ -2589,6 +2640,58 @@ function buildAspects(tags: string[]): Record<string, string[]> | undefined {
 }
 
 /**
+ * Smart-pick a fulfillment policy from the organizer's eBay policies when no explicit override matches.
+ * Priority:
+ *   1. policy with shippingOptions[].costType === 'CALCULATED' (weight-based — accurate per shopper ZIP)
+ *   2. policy with shippingOptions[].costType === 'FLAT_RATE' (predictable, organizer-controlled)
+ *   3. free shipping (FLAT_RATE with cost 0, or name contains "free") as last resort
+ * Returns null if no policies are available.
+ * Logs the choice + reason for diagnostics.
+ */
+async function pickFulfillmentPolicySmart(
+  fetchPolicies?: () => Promise<any[]>
+): Promise<{ policyId: string; reason: 'weight-based' | 'flat-rate' | 'free-fallback' } | null> {
+  if (!fetchPolicies) return null;
+  const policies = await fetchPolicies();
+  if (!policies || policies.length === 0) return null;
+
+  const hasCostType = (p: any, type: 'CALCULATED' | 'FLAT_RATE'): boolean =>
+    Array.isArray(p.shippingOptions) &&
+    p.shippingOptions.some((opt: any) => opt && opt.costType === type);
+
+  // 1. Calculated (weight-based)
+  const calc = policies.find((p) => hasCostType(p, 'CALCULATED'));
+  if (calc) {
+    console.log(`[eBay ShippingPick] policy="${calc.name}" reason="weight-based"`);
+    return { policyId: calc.fulfillmentPolicyId, reason: 'weight-based' };
+  }
+
+  // 2. Flat-rate (non-zero cost). Use shippingServices[0].shippingCost.value if present to distinguish "free".
+  const flat = policies.find((p) => {
+    if (!hasCostType(p, 'FLAT_RATE')) return false;
+    const opt = (p.shippingOptions as any[]).find((o) => o.costType === 'FLAT_RATE');
+    const svc = opt?.shippingServices?.[0];
+    const cost = Number(svc?.shippingCost?.value ?? svc?.additionalShippingCost?.value ?? 0);
+    return cost > 0;
+  });
+  if (flat) {
+    console.log(`[eBay ShippingPick] policy="${flat.name}" reason="flat-rate"`);
+    return { policyId: flat.fulfillmentPolicyId, reason: 'flat-rate' };
+  }
+
+  // 3. Free shipping fallback (any remaining policy, prefer those with FLAT_RATE costType or name containing "free")
+  const free = policies.find((p) =>
+    hasCostType(p, 'FLAT_RATE') || /free/i.test(p.name || '')
+  ) || policies[0];
+  if (free) {
+    console.log(`[eBay ShippingPick] policy="${free.name}" reason="free-fallback"`);
+    return { policyId: free.fulfillmentPolicyId, reason: 'free-fallback' };
+  }
+
+  return null;
+}
+
+/**
  * Resolve policies for a single item based on organizer's policy mapping.
  * Priority: category override → shipping classification → weight tier → default.
  * Falls back to EbayConnection defaults if no mapping exists.
@@ -2613,6 +2716,9 @@ async function resolvePoliciesForItem(
     ebayShippingClassification?: string | null;
     ebayCategoryId?: string | null;
     category?: string | null;
+  },
+  smartPickContext?: {
+    fetchFulfillmentPolicies?: () => Promise<any[]>;
   }
 ): Promise<PolicyRoutingResult | { error: string; code: string; message: string }> {
   const organizer = await prisma.organizer.findUnique({
@@ -2631,9 +2737,43 @@ async function resolvePoliciesForItem(
   const mapping = organizer.ebayPolicyMapping;
   const conn = organizer.ebayConnection;
 
-  // If mapping doesn't exist, fall back to EbayConnection default policies
+  // Organizer-level explicit override beats every other rule.
+  // When ebayDefaultShippingPolicyId is set, smart-pick and weight/category mappings are skipped.
+  if (organizer.ebayDefaultShippingPolicyId) {
+    const returnPolicyId = mapping?.defaultReturnPolicyId || conn.returnPolicyId;
+    const paymentPolicyId = mapping?.defaultPaymentPolicyId || conn.paymentPolicyId;
+    if (!returnPolicyId || !paymentPolicyId) {
+      return {
+        error: 'POLICIES_NOT_CONFIGURED',
+        code: 'POLICIES_NOT_CONFIGURED',
+        message: 'Please set default return and payment policies in eBay Settings.',
+      };
+    }
+    console.log(`[eBay ShippingPick] policy="${organizer.ebayDefaultShippingPolicyId}" reason="organizer-default-shipping-policy"`);
+    return {
+      fulfillmentPolicyId: organizer.ebayDefaultShippingPolicyId,
+      returnPolicyId,
+      paymentPolicyId,
+      descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
+      pushAsDraft: mapping?.pushAsDraft ?? false,
+      merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+      routingReason: 'organizer-default-shipping-policy',
+    };
+  }
+
+  // If mapping doesn't exist, fall back to EbayConnection default policies (or smart-pick)
   if (!mapping) {
-    if (!conn.fulfillmentPolicyId || !conn.returnPolicyId || !conn.paymentPolicyId) {
+    if (!conn.returnPolicyId || !conn.paymentPolicyId) {
+      return {
+        error: 'POLICIES_NOT_CONFIGURED',
+        code: 'POLICIES_NOT_CONFIGURED',
+        message: 'Please complete eBay setup in Settings — pick your default policies before pushing.',
+      };
+    }
+    // Prefer smart-pick over the stale connection-default fulfillment policy when we have policies to choose from.
+    const smartPicked = await pickFulfillmentPolicySmart(smartPickContext?.fetchFulfillmentPolicies);
+    const chosenFulfillmentId = smartPicked?.policyId || conn.fulfillmentPolicyId;
+    if (!chosenFulfillmentId) {
       return {
         error: 'POLICIES_NOT_CONFIGURED',
         code: 'POLICIES_NOT_CONFIGURED',
@@ -2641,13 +2781,13 @@ async function resolvePoliciesForItem(
       };
     }
     return {
-      fulfillmentPolicyId: conn.fulfillmentPolicyId,
+      fulfillmentPolicyId: chosenFulfillmentId,
       returnPolicyId: conn.returnPolicyId,
       paymentPolicyId: conn.paymentPolicyId,
       descriptionHtml: null,
       pushAsDraft: false,
       merchantLocationSource: conn.merchantLocationSource || 'SALE_ADDRESS',
-      routingReason: 'fallback-to-connection-defaults',
+      routingReason: smartPicked ? `smart-pick:${smartPicked.reason}` : 'fallback-to-connection-defaults',
     };
   }
 
@@ -2706,10 +2846,17 @@ async function resolvePoliciesForItem(
     routingReason = 'default-fulfillment';
   }
 
-  // 6. Fall back to the eBay connection-level fulfillment policy (covers items with no weight/classification set)
-  if (!fulfillmentPolicyId && conn.fulfillmentPolicyId) {
-    fulfillmentPolicyId = conn.fulfillmentPolicyId;
-    routingReason = 'connection-default-fulfillment';
+  // 6. Smart-pick from organizer's eBay policies (calculated > flat-rate > free fallback)
+  //    Replaces the prior "connection-default-fulfillment" fallback. Falls back to conn.fulfillmentPolicyId if smart-pick fetches nothing.
+  if (!fulfillmentPolicyId) {
+    const smartPicked = await pickFulfillmentPolicySmart(smartPickContext?.fetchFulfillmentPolicies);
+    if (smartPicked) {
+      fulfillmentPolicyId = smartPicked.policyId;
+      routingReason = `smart-pick:${smartPicked.reason}`;
+    } else if (conn.fulfillmentPolicyId) {
+      fulfillmentPolicyId = conn.fulfillmentPolicyId;
+      routingReason = 'connection-default-fulfillment';
+    }
   }
 
   if (!fulfillmentPolicyId) {
