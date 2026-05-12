@@ -1,68 +1,67 @@
-# Patrick's Dashboard — Week of May 11, 2026
+# Patrick's Dashboard — S716 Wrap
 
 ---
 
-## What Happened This Week
+## What Happened This Session
 
-S715: Diagnosed 117GB Railway Postgres egress — caused by the NY Phase 2 GitHub Actions workflow running ~9 hours today, bulk-downloading 29,728 NYC resale license records. Fixed the root cause across all 45 Phase 2 scrapers (server-side API filtering so only relevant records download), removed the duplicate-organizer creation bug, added timeouts to 40 workflows. DB cleaned up: 356 legit NY antique/thrift/auction businesses promoted to outreach queue. Future scraper runs will be orders of magnitude smaller.
+QA sprint through the S712 backlog — 10 features tested, 4 bugs fixed same session.
 
-S714: SEO content foundation built. 384 guide pages live at `/guide/[slug]`. 116 more to generate next session.
+**Passed:** Dorm Dash ✅, Wave 2 edit-sale ✅, Leaderboard ✅, Early Access Cache ✅, Featured Boost ✅, Color Discount Rules ✅
 
-S713: Two Railway crash loops fixed, scraper suite repaired.
+**Fixed this session:**
+- Venmo/Zelle handle fields now in Settings → Profile tab (enter your handles there, they show in POS)
+- Brand Kit PDFs — all 4 PDF downloads were broken (empty auth token) — fixed
+- Settlement Receipt — Download Receipt was returning 401 — fixed
+- Charity Close — "Cannot donate items not AVAILABLE" error — fixed
+
+All 3 fixes are in the push block below — push then re-verify in browser.
 
 ---
 
-## Push This Now (S714)
+## Push Now
 
 ```powershell
-git add scripts/fix-seo-batch.js
-git add scripts/generate-template-pages.mjs
-git add packages/frontend/data/seo-pages/index.json
-git add seo-pages-haiku-generator.md
-git add claude_docs/strategy/seo-agent-dispatch.md
+git add packages/frontend/pages/organizer/brand-kit.tsx
+git add packages/frontend/components/SettlementWizard.tsx
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/pages/organizer/settings.tsx
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/pages/organizer/pos.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat(seo): 384 guide pages — 34 Haiku pricing guides + 350 city/category/trend templates; fix-seo-batch.js + generate-template-pages.mjs"
+git commit -m "fix(#241,#228,#235,#412): PDF auth via axios cookies; charity close AVAILABLE filter; Venmo/Zelle handle fields"
 .\push.ps1
 ```
 
 ---
 
-## After Push — Fresh Session Dispatch
+## After Push — Re-verify These 3
 
-Start a new session and read `claude_docs/strategy/seo-agent-dispatch.md` — it has the complete prompt to generate the remaining 116 pricing guide pages via agent and write them directly into index.json.
+1. **Brand Kit PDFs** — /organizer/brand-kit → click any of the 4 PDF download buttons → should download (no more "Organizer access required" error)
+2. **Settlement Receipt** — /organizer/settlement/qa-settlement-001 → work through wizard → click Download Receipt → should get a PDF
+3. **Charity Close** — find an ENDED sale with items → Settlement → Receipt tab → Donate Items → should now complete without error
 
 ---
 
-## Carry-Forward Patrick Actions (from S713)
+## Carry-Forward Patrick Actions
 
-**P0 — Leaderboard scouts stay empty until you run this:**
+**P0 — Leaderboard scouts empty until you run this migration:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 ```
 
-**Railway env check — confirm both set in Railway → backend → Variables:**
+**Railway env — confirm both set:**
 - `OUTREACH_ENABLED` = `true`
 - `OUTREACH_WARMUP_START_DATE` = `2026-05-06`
 
 ---
 
-## Decisions Needed From You
+## Decisions Needed
 
-- **AuctionNinja + NAA scrapers:** Built and ready, switched off. Turn them on?
-- **MT scraper fix:** Railway → backend → Variables → copy `INTERNAL_API_KEY` → GitHub Secrets → `INTERNAL_API_TOKEN` → update → re-run Montana workflow
-
----
-
-## Chrome QA Queue (4 features, pending since S712)
-
-Sequential only — one at a time:
-1. Dorm Dash — create sale, pick DORM_DASH, finish wizard, verify no crash
-2. Wave 2 edit-sale — open /organizer/edit-sale/[id], check all 6 new fields appear and save
-3. Cash Bridge POS — open POS, verify Venmo/Zelle buttons with handle display
-4. Leaderboard — navigate to /leaderboard, verify no "Failed to load" error
+- **AuctionNinja + NAA scrapers** — built and off. Turn them on? (set `enabled:true` in sourceRegistry)
+- **MT scraper 401** — Railway → backend Variables → copy `INTERNAL_API_KEY` value → GitHub Secrets → `INTERNAL_API_TOKEN` → update → re-run Montana workflow
 
 ---
 
@@ -72,11 +71,8 @@ Sequential only — one at a time:
 |---|---|
 | Vercel (frontend) | ✅ Green |
 | Railway (backend) | ✅ Green |
-| SEO guide pages | 🟡 384 entries ready — push pending |
 | Outreach emails | ✅ Live — warmup active |
 | Leaderboard scouts | 🔴 Empty until migration deployed |
 | Montana scraper | ❌ 401 — secret mismatch (Patrick fix above) |
-| MN/MI/TN scrapers | 🟡 Bot-blocked — needs headless proxy infra |
-| AuctionZip / Canada411 | ⛔ Disabled — confirmed dead sources |
-| MO pawnbroker | ⛔ Disabled — no state registry |
-| YellowPages.ca | ✅ New scraper replacing Canada411 |
+| MN/MI/TN scrapers | 🟡 Bot-blocked — needs headless proxy |
+| AuctionZip / Canada411 | ⛔ Disabled — dead sources |

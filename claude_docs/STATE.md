@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S715 — Scraper Egress Investigation & Fix (COMPLETE — wrap)**
+**Latest: S716 — QA Sprint + Bug Fixes (COMPLETE — wrap)**
+
+Chrome QA on 10 features from S712 backlog. Verified passing: #411 Dorm Dash ✅, Wave 2 edit-sale ✅ (all 6 fields present), #412 Cash Bridge POS ✅ (Venmo/Zelle handle fields added mid-session), Leaderboard ✅, #304 Early Access Cache ✅, #288 Featured Boost ✅, #310 Color Discount Rules ✅. Three P1 bugs found and fixed same session: (1) Brand Kit PDFs + Settlement Receipt both had `?token=` empty on download links — root cause auth migrated to httpOnly cookies but these two still read localStorage; fixed to use axios instance with `withCredentials: true`. (2) Charity Close #235 — `getUnsoldItems` query too broad, returned non-AVAILABLE items that `donationController` rejected; fixed to filter `status: 'AVAILABLE'` only. Also fixed mid-session: Venmo/Zelle handle fields missing from Settings and POS — `venmoHandle`/`zelleHandle` already in schema, wired to Settings Profile tab + PATCH endpoint. Push block in Next Session.
+
+**S715 (prior):**
 
 Railway Postgres showing 117GB egress traced to runaway NY Phase 2 GitHub Actions workflow (ran 10am–7pm, bulk-downloading 29,728 NYC resale license records). Root causes fixed: server-side Socrata `$where`/`$q` filtering added to 9 Phase 2 scrapers (CA, CT, HI, IL, NV, NY, PA, TX, VA), timestamp-suffix duplicate creation removed from `index.ts` P2002 handler, `timeout-minutes: 60` added to 40 Phase 2 workflows missing it. DB cleanup: 23 junk timestamp-suffix organizers deleted, 356 legit NY businesses promoted to WARM `leadTier`. Pool state confirmed: 55,230 total unmanaged orgs, COLD 32,513 / WARM 5,663+356 / HOT 215 / NULL 16,839 (NY noise). 626 timestamp-dupe organizers with Sales attached remain — inert, can't delete without orphaning Sale records. egress fix is code-only, no schema changes.
 
@@ -58,10 +62,9 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #411 Dorm Dash | Shipped — Pending Chrome QA | Navigate to sale creation wizard, select DORM_DASH, verify no crash, confirm sale saves | S712 |
-| Wave 2 edit-sale (Safety Notes, Grief Firewall, Cover the Fee, Floor Map, Bundle Pricing, Donation Kit) | Shipped — Pending Chrome QA | Open /organizer/edit-sale/[id] for an existing sale; verify all 6 fields/sections appear and save correctly | S712 |
-| #412 Cash Bridge POS (Venmo/Zelle buttons) | Shipped — Pending Chrome QA | Open POS for a sale; verify Venmo/Zelle payment method buttons appear with handle display | S712 |
-| Leaderboard | Shipped — Pending Chrome QA | Navigate to /leaderboard; verify page loads without "Failed to load" error | S712 |
+| #228 Settlement Receipt | Download Receipt returns 401 — fixed S716 (axios+cookies), pending re-verify after push | Chrome QA: click Download Receipt on /organizer/settlement/qa-settlement-001 | S716 |
+| #241 Brand Kit PDFs | `?token=` empty on all 4 download buttons — fixed S716 (axios+cookies), pending re-verify after push | Chrome QA: /organizer/brand-kit as PRO user, click all 4 PDF downloads | S716 |
+| #235 Charity Close | `getUnsoldItems` returned non-AVAILABLE items — fixed S716, pending re-verify after push | Chrome QA: full DonationModal flow on sale with AVAILABLE items | S716 |
 | ShopperOrganizerIntroduction migration | Migration SQL exists but never deployed to Railway — leaderboard scouts section returns empty | Patrick: run `npx prisma migrate deploy` from packages/database with Railway DATABASE_URL | S712 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
@@ -80,6 +83,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S716 — QA Sprint + 4 Bug Fixes (COMPLETE — wrap)
+
+Chrome QA on 10 features from S712 backlog. ✅ Verified: #411 Dorm Dash (crash fixed), Wave 2 edit-sale (all 6 fields), #412 Cash Bridge POS (handle fields added), Leaderboard, #304 Early Access Cache, #288 Featured Boost, #310 Color Discount Rules. Three P1 bugs found and fixed: #241 Brand Kit PDFs + #228 Settlement Receipt shared root cause (download links used localStorage for auth, empty after cookie migration — replaced with axios+withCredentials). #235 Charity Close — `getUnsoldItems` used `notIn:['SOLD','RESERVED']` but donationController required `status==='AVAILABLE'` — fixed to `status:'AVAILABLE'`. Mid-session fix: #412 Venmo/Zelle handle fields added to Settings Profile tab + PATCH endpoint + POS display. #174 Auction Mechanics human-verified by Patrick. All 3 P1 fixes pending re-verify after push.
 
 ### S715 — Scraper Egress Investigation & Fix (COMPLETE — wrap)
 
@@ -115,40 +122,30 @@ NSFW detection deferred (roadmap #394 closed). Chrome QA: #174 bid protection �
 
 ---
 
-## Next Session
+## Next Session — S717
 
-**Patrick actions before next session:**
-- Push the S715 scraper fixes (push block below)
-- Monitor Railway egress graph — should plateau after today's NY run stopped
+### Priority 1 — Patrick push (S716 fixes)
 
-**Recommended next session:** Resume S714 SEO content — 116 remaining Haiku pages to generate (dispatch doc at `claude_docs/strategy/seo-agent-dispatch.md`). Or tackle Blocked Queue Chrome QA backlog (8 items pending verification).
-
----
-
-## Previous Next Session — S715
-
-### Priority 1 — Patrick push action
-
-Push all S714 SEO content:
 ```powershell
-git add scripts/fix-seo-batch.js
-git add scripts/generate-template-pages.mjs
-git add packages/frontend/data/seo-pages/index.json
-git add seo-pages-haiku-generator.md
-git add claude_docs/strategy/seo-agent-dispatch.md
+git add packages/frontend/pages/organizer/brand-kit.tsx
+git add packages/frontend/components/SettlementWizard.tsx
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/pages/organizer/settings.tsx
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/pages/organizer/pos.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat(seo): 384 guide pages — 34 Haiku pricing guides + 350 city/category/trend templates; fix-seo-batch.js + generate-template-pages.mjs"
+git commit -m "fix(#241,#228,#235,#412): PDF auth via axios cookies; charity close AVAILABLE filter; Venmo/Zelle handle fields"
 .\push.ps1
 ```
 
-Note: batch1-fixed.json and batch-templates.json are intermediate files in the project root — they can be committed or .gitignored, your call.
+### Priority 2 — Re-verify 3 fixes after push (Chrome QA)
 
-### Priority 2 — After-reset agent dispatch
+1. Brand Kit PDFs — /organizer/brand-kit as PRO user2, click all 4 download buttons, verify PDFs arrive
+2. Settlement Receipt — /organizer/settlement/qa-settlement-001, click Download Receipt, verify no 401
+3. Charity Close — DonationModal flow on an ENDED sale (need AVAILABLE-status items — may need DB seed)
 
-Once pushed: start a fresh session and run the dispatch from `claude_docs/strategy/seo-agent-dispatch.md` to generate the remaining 116 Haiku pages. This adds the final pricing guide content to index.json.
-
-### Priority 3 — S713 Patrick actions (carry-forward)
+### Priority 3 — Carry-forward Patrick actions
 
 1. **ShopperOrganizerIntroduction migration (P0 for leaderboard scouts):**
    ```powershell
@@ -156,17 +153,9 @@ Once pushed: start a fresh session and run the dispatch from `claude_docs/strate
    $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
    npx prisma migrate deploy
    ```
-2. **Railway env check:** Confirm `OUTREACH_ENABLED=true` and `OUTREACH_WARMUP_START_DATE=2026-05-06` in Railway backend Variables tab
+2. **Railway env:** Confirm `OUTREACH_ENABLED=true` and `OUTREACH_WARMUP_START_DATE=2026-05-06`
 
-### Priority 4 — Chrome QA (4 features still pending from S712)
+### Priority 4 — Decisions needed
 
-Sequential Chrome QA (one at a time — no parallel):
-1. Dorm Dash: create a new sale, select DORM_DASH, complete wizard, verify no crash
-2. Wave 2 edit-sale: open /organizer/edit-sale/[id], verify Safety Notes / Grief Firewall / Cover the Fee / Floor Map / Bundle Pricing / Donation Kit all appear and save
-3. Cash Bridge POS: open POS on a sale, verify Venmo/Zelle buttons appear with handle display
-4. Leaderboard: navigate to /leaderboard, verify page loads without error
-
-### Priority 5 — Decisions needed
-
-5. **AuctionNinja + NAA scrapers:** Enable? Set `enabled:true` in sourceRegistry to activate both.
-6. **MT secret fix:** Railway dashboard → backend Variables → copy `INTERNAL_API_KEY` → GitHub Secrets → `INTERNAL_API_TOKEN` → update to match → re-run MT workflow
+- **AuctionNinja + NAA scrapers:** Enable? Set `enabled:true` in sourceRegistry.
+- **MT scraper fix:** Railway → backend → Variables → copy `INTERNAL_API_KEY` → GitHub Secrets → `INTERNAL_API_TOKEN` → re-run MT workflow.
