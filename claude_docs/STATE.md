@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S718 — QA Sprint + Outreach Enabled (COMPLETE)**
+**Latest: S719 — Chrome QA Sprint (COMPLETE)**
+
+Chrome QA on Blocked Queue items. Verified: #251 Markdown badge ✅ (sale card ~~$75.00~~ $56.25), #271 TEAMS copy ✅ (Webhooks line visible on /pricing), #330 Appraisals ✅ (button + /organizer/appraisals page). Bugs found: #326 eBay Comp Tiles ❌ — eBay search returns summary card (10 listings, Median $260) but EbayCompTiles image grid not rendering at all. #280 Condition Rating XP ❌ — set grade B, saved, XP balance unchanged at 15 XP (no XP awarded). #322 Encyclopedia Inline Tip: UNVERIFIED — category picker doesn't resolve free-text to eBay taxonomy. #405 Founding Badge: Patrick said "Build" — dev agent shipped: backend GET /:id now returns foundingOrgBadge field, frontend organizers/[id].tsx renders amber pill badge in trust-signal cluster. PUSH BLOCK PENDING (see Next Session). Outreach cron: registered in index.ts, OUTREACH_ENABLED=true, but Railway log window too short to confirm historical sends.
+
+**Previous: S718 — QA Sprint + Outreach Enabled (COMPLETE)**
 
 Chrome QA completed S718: #228 Settlement Receipt ✅, #241 Brand Kit PDFs ✅, #235 Charity Close ✅, #369 Quebec block ✅ (Canada → Quebec → amber warning + disabled Register button), #407 Flip Tracker ROI ✅ (Signed First Edition Novel: $500 revenue - $300 cost = +$200 profit, +66.7% ROI displayed in flip-report). Outreach confirmed live — `OUTREACH_ENABLED=true` set by Patrick, cron registered every 4 hours, 183 seeded organizers in queue. #405 Founding Badge: render surface found — organizer/settings.tsx Profile tab (🏆 card renders when foundingOrgBadge=true). Storefront copy says "badge appears on your storefront" but storefront page has no foundingOrgBadge rendering — this is a gap. #251 markdown badge: item changed from AUCTION to STANDARD type (psycopg2), re-QA blocked by rate limit (610s). Code path confirmed present in sales/[id].tsx line 1535 — only fires for non-auction items.
 
@@ -72,8 +76,9 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #405 Founding Badge | Settings Profile tab badge renders ✅ (S718 code-confirmed). Gap: storefront page copy says badge "appears on your storefront" but storefront has no foundingOrgBadge rendering | DECISION: add storefront rendering, or update settings copy to remove that claim? | S711 |
-| #251 SaleCard markdown badge | Item changed to STANDARD type S718 (was AUCTION — markdown only fires for non-auction path in sales/[id].tsx:1535). Rate limit blocked Chrome verify | Re-navigate to /sales/c5hykxxecanngwcrkvq92n1va as any user, find Victorian Silver Pocket Watch, verify crossed-out $75 shows with $56.25 | S718 |
+| #405 Founding Badge | Built S719: backend GET /:id returns field, frontend renders amber pill in trust-signal cluster. Push block ready. | Push packages/backend/src/routes/organizers.ts + packages/frontend/pages/organizers/[id].tsx | S719 |
+| #326 eBay Comp Tiles | eBay search returns summary card (10 listings, Median $260) but EbayCompTiles.tsx image grid NOT rendering. ebayImageUrl from ItemCompLookup not displaying | Dispatch findasale-dev: check EbayCompTiles render condition, verify ebayImageUrl is returned from /api/items/comps/ebay endpoint | S719 |
+| #280 Condition Rating XP | Set grade B, saved on Victorian Silver Pocket Watch, XP balance unchanged at 15 XP. XP not awarded for condition rating action | Dispatch findasale-dev: trace xpService call in item save handler — confirm conditionGrade XP award is wired up | S719 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
@@ -86,6 +91,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S719 — Chrome QA Sprint (COMPLETE)
+
+Chrome QA on Blocked Queue items. #251 Markdown badge ✅ (verified: ~~$75.00~~ $56.25 on Victorian Silver Pocket Watch sale card). #271 TEAMS copy ✅ (Webhooks line on /pricing TEAMS column). #330 Appraisals ✅ (edit-item button + /organizer/appraisals page both work). Bugs found: #326 eBay Comp Tiles ❌ (summary card renders but EbayCompTiles image grid not shown — dispatch needed to check render condition). #280 Condition Rating XP ❌ (grade B set+saved, XP balance stuck at 15 — XP not awarded). #322 Encyclopedia Inline Tip UNVERIFIED (category picker doesn't resolve free-text inputs). #405 Founding Badge shipped: backend now returns foundingOrgBadge in GET /organizers/:id, frontend renders amber pill badge in trust-signal cluster on storefront — push block pending. Outreach cron code confirmed deployed but Railway log window too short for historical confirm.
 
 ### S718 — QA Sprint + Outreach Live (COMPLETE)
 
@@ -133,23 +142,37 @@ NSFW detection deferred (roadmap #394 closed). Chrome QA: #174 bid protection �
 
 ---
 
-## Next Session — S719
+## Next Session — S720
 
-### Priority 1 — Chrome QA (quick, no data setup needed)
+### Patrick Action Required First
 
-1. **#251 Markdown badge** — Navigate to `https://finda.sale/sales/c5hykxxecanngwcrkvq92n1va` as any logged-in user. Find "Victorian Silver Pocket Watch" in item grid. Verify crossed-out $75.00 with current price $56.25 in green. (Item already updated to STANDARD type via psycopg2 S718.)
-2. **#405 Founding Badge storefront** — DECISION NEEDED: settings copy says "badge appears on your storefront" but storefront page (`/organizers/[id]`) has no foundingOrgBadge rendering. Options: (a) add storefront badge rendering, (b) remove that claim from settings copy. Patrick to decide.
+**Push #405 Founding Badge:**
+```powershell
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/pages/organizers/[id].tsx
+git commit -m "feat: #405 surface foundingOrgBadge on public organizer storefront"
+.\push.ps1
+```
+
+### Priority 1 — Bug Fixes (dispatch findasale-dev)
+
+1. **#326 eBay Comp Tiles ❌** — EbayCompTiles.tsx image grid not rendering after eBay search. Check render condition and whether ebayImageUrl is returned from /api/items/comps/ebay endpoint.
+2. **#280 Condition Rating XP ❌** — Grade B set+saved, XP balance unchanged. Trace xpService call in item save handler — confirm conditionGrade XP award is wired up correctly.
 
 ### Priority 2 — Outreach monitoring
 
-First outreach cron window passed after OUTREACH_ENABLED=true (S718). Check Railway logs for `[OutreachCron]` sent lines and delivery confirmations. If no sends, check warmup state.
+Check Railway logs for `[OutreachCron]` and `[autoSeedOutreachCron]` entries. If no sends visible, query DirectoryClaimEmail table for sentAt values via psycopg2. Cron fires every 4 hours — check window times.
 
-### Priority 3 — Roadmap work
-
-Blocked queue is nearly cleared. Next roadmap items per roadmap.md priority order.
-
-### Priority 4 — Decisions
+### Priority 3 — Decisions
 
 - **AuctionNinja + NAA scrapers:** Enable? Set `enabled:true` in sourceRegistry.
 - **MT scraper fix:** Railway → backend → Variables → copy `INTERNAL_API_KEY` → GitHub Secrets → `INTERNAL_API_TOKEN` → re-run MT workflow.
 - **eBay Growth Check reply:** Reply to Incident 260428-000018 from artifactmi@gmail.com — correct App ID to `PatrickD-FindAVal-PRD-064c158e4-8fa09c76` + add Finding API request.
+
+### Still in Blocked Queue
+
+- #322 Encyclopedia Inline Tip — needs category pre-set via psycopg2 to trigger tooltip hook
+- Wyoming pawnbroker — not yet investigated
+- AI listing enrichment — check Railway logs for `[listingEnrichmentService]`
+- CategoryTopFinds TrendingSection — verify after nightly 05:00 UTC cron
+- Outreach open/click pixel tracking — verify after first real send
