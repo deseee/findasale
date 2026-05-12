@@ -1254,6 +1254,7 @@ export const getSaleActivity = async (req: Request, res: Response) => {
           item: {
             saleId: id,
           },
+          user: { isNot: null },
         },
         include: {
           user: { select: { name: true } },
