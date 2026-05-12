@@ -2400,14 +2400,24 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           publishedAt: new Date(),
         });
       } catch (itemError) {
-        console.error(`[eBay] Error processing item ${item.id}:`, itemError);
+        // Structured per-item error log — captures saleId/itemId/category/reason
+        // so push failures are diagnosable without sifting stack traces. The
+        // loop continues so one bad item never kills the whole push job.
+        const errMsg = itemError instanceof Error ? itemError.message : String(itemError);
+        const errStack = itemError instanceof Error ? itemError.stack : undefined;
+        console.error(
+          `[eBay Push Failed] saleId=${saleId} itemId=${item.id} title="${(item.title || '').slice(0, 60)}" category=${item.ebayCategoryId || 'none'} reason=${errMsg}`
+        );
+        if (errStack) {
+          console.error(`[eBay Push Failed] stack: ${errStack.split('\n').slice(0, 4).join(' | ')}`);
+        }
         results.push({
           itemId: item.id,
           sku: `FAS-${item.id}`,
           ebayListingId: null,
           status: 'error',
           error: 'INTERNAL_ERROR',
-          message: 'Internal server error processing item',
+          message: `Internal server error processing item: ${errMsg.slice(0, 200)}`,
         });
       }
     }
@@ -2419,22 +2429,38 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       failed: results.filter((r: any) => r.status === 'error').length,
     };
 
-    // Increment eBay push counter for successful pushes (includes drafts)
+    // Increment eBay push counter for successful pushes (includes drafts).
+    // Wrapped defensively — if the quota update throws, we still want to
+    // return the per-item results so the organizer sees what shipped.
     const successCount = results.filter((r: any) => r.status === 'success' || r.status === 'draft').length;
     if (successCount > 0) {
-      await prisma.organizer.update({
-        where: { id: organizer.id },
-        data: {
-          ebayPushesThisMonth: { increment: successCount },
-          ebayPushesResetAt: organizer.ebayPushesResetAt || new Date(), // Initialize if not set
-        },
-      });
+      try {
+        await prisma.organizer.update({
+          where: { id: organizer.id },
+          data: {
+            ebayPushesThisMonth: { increment: successCount },
+            ebayPushesResetAt: organizer.ebayPushesResetAt || new Date(), // Initialize if not set
+          },
+        });
+      } catch (quotaErr) {
+        const msg = quotaErr instanceof Error ? quotaErr.message : String(quotaErr);
+        console.error(
+          `[eBay Push Failed] quota update failed (results still returned) organizerId=${organizer.id} successCount=${successCount} reason=${msg}`
+        );
+      }
     }
 
     res.json({ results, summary });
   } catch (error) {
-    console.error('[eBay] Push error:', error);
-    res.status(500).json({ message: 'Failed to push items to eBay' });
+    const msg = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error(`[eBay Push Failed] saleId=${req.params.saleId} fatal=${msg}`);
+    if (stack) {
+      console.error(`[eBay Push Failed] stack: ${stack.split('\n').slice(0, 6).join(' | ')}`);
+    }
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Failed to push items to eBay', error: msg.slice(0, 200) });
+    }
   }
 };
 
@@ -3047,10 +3073,22 @@ async function fillRequiredAspects(
             break;
           }
         }
-        // Enum fallback
+        // Prefer "Does Not Apply" / "Unbranded" / "Not Specified" over arbitrary enum[0]
         if (!picked) {
-          picked = aspect.enumValues[0];
-          source = 'enum-first';
+          const safeDefault = aspect.enumValues.find((v) =>
+            /^(does\s*not\s*apply|unbranded|not\s*specified|n\/?a|unspecified)$/i.test(v)
+          );
+          if (safeDefault) {
+            picked = safeDefault;
+            source = 'identifier-default';
+          }
+        }
+        // Skip rather than fabricate an MPN/Model
+        if (!picked) {
+          console.warn(
+            `[eBay AspectFill] category ${categoryId}: SKIPPED ${aspect.name} (no item.mpn, no safe enum default) — listing may fail with missing-aspect`
+          );
+          continue;
         }
       } else {
         // Free-text aspect
@@ -3084,10 +3122,54 @@ async function fillRequiredAspects(
           }
         }
       }
-      // Enum fallback
+      // Neutral-value preference: instead of picking enumValues[0] (which has
+      // fabricated wrong listings — see "For Instrument"="Accordion" for a
+      // MIDI cable, S-eBay-Crash), prefer values that mean "not category-
+      // specific": Universal, Other, Not Specified, Multiple, N/A,
+      // Unspecified, Various, Any. These are safe defaults for required
+      // aspects that don't actually describe the item.
       if (!picked) {
-        picked = aspect.enumValues[0];
-        source = 'enum-first';
+        const neutralPatterns = [
+          /^universal$/i,
+          /^other$/i,
+          /^not\s*specified$/i,
+          /^unspecified$/i,
+          /^n\/?a$/i,
+          /^multiple$/i,
+          /^various$/i,
+          /^any$/i,
+          /^does\s*not\s*apply$/i,
+          /universal/i,
+          /not\s*specified/i,
+        ];
+        for (const pattern of neutralPatterns) {
+          const match = aspect.enumValues.find((v) => pattern.test(v));
+          if (match) {
+            picked = match;
+            source = 'neutral-default';
+            break;
+          }
+        }
+      }
+      // Last resort: SKIP the required aspect rather than fabricate.
+      // Picking enumValues[0] for a SELECTION_ONLY enum produces wrong
+      // listings (e.g. "Accordion" for a MIDI cable). Better to let eBay
+      // reject with a clear "missing required aspect" error than to ship
+      // a mislabeled listing the organizer would have to refund.
+      // For FREE_TEXT aspects, "Unspecified" is acceptable since it's
+      // descriptive, not a category claim.
+      if (!picked) {
+        if (aspect.mode === 'FREE_TEXT') {
+          picked = 'Unspecified';
+          source = 'freetext-default';
+        } else {
+          // SELECTION_ONLY with no safe match — skip + log so the push
+          // fails with a diagnosable reason rather than a fabricated value.
+          console.warn(
+            `[eBay AspectFill] category ${categoryId}: SKIPPED ${aspect.name} (SELECTION_ONLY, no neutral value, ${aspect.enumValues.length} enums: ${aspect.enumValues.slice(0, 5).join('|')}${aspect.enumValues.length > 5 ? '...' : ''}) — listing will likely fail with missing-aspect, organizer must set manually`
+          );
+          continue;
+        }
       }
     } else {
       // Free-text aspect
