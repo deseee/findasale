@@ -282,7 +282,31 @@ async function getEbayPriceComps(
     // Browse API: search active fixed-price listings as a proxy for market value.
     // The Finding API (findCompletedItems) requires special eBay approval for production;
     // the Browse API is the modern OAuth-based replacement available to all production apps.
-    const query = encodeURIComponent(title);
+
+    // Clean the title down to brand + model for a tighter search.
+    // Full item titles ("Zoom B3 Multi-Effects Processor, Rec, Model B3") return
+    // accessories and unrelated items; trimming to the core identifier fixes this.
+    const cleanTitle = (raw: string): string => {
+      // Strip anything after common separator patterns
+      let cleaned = raw
+        .replace(/,.*$/, '')           // remove everything after first comma
+        .replace(/\s+[-–]\s+.*$/, '')  // remove everything after standalone dash (not hyphenated words)
+        .replace(/\s*\(.*\)/, '')      // remove parentheticals
+        .replace(/(vintage|used|new|model|item|lot|set|piece|rare|original|authentic|antique|collectible|condition|excellent|good|fair|poor|grade|circa)/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+
+      // If the result is too short, fall back to first 4 words of original
+      const words = cleaned.split(/\s+/);
+      if (words.length < 2) {
+        return raw.split(/\s+/).slice(0, 4).join(' ');
+      }
+      // Cap at 5 words to avoid over-specificity
+      return words.slice(0, 5).join(' ');
+    };
+
+    const query = encodeURIComponent(cleanTitle(title));
+    console.log(`[eBay] Price comps query: "${cleanTitle(title)}" (from: "${title.slice(0, 60)}")`);
     const browseUrl =
       `https://api.ebay.com/buy/browse/v1/item_summary/search?` +
       `q=${query}&` +
