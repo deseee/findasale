@@ -134,9 +134,27 @@ function OAuthBridge() {
         body: JSON.stringify(oauthProfile),
         credentials: 'include', // Include cookies in request AND store response cookies
       })
-        .then(res => res.json())
-        .then(data => {
-          if (data.token) {
+        .then(async res => {
+          const data = await res.json().catch(() => ({}));
+          return { ok: res.ok, status: res.status, data };
+        })
+        .then(({ ok, status, data }) => {
+          // Roadmap #422 (Option B): Backend now refuses to silently link a Google
+          // identity to an existing email account. Redirect to login with a clear
+          // message so the user can sign in with their password, then link from
+          // account settings.
+          if (status === 409 && data?.code === 'OAUTH_LINK_REQUIRED') {
+            signOut({ redirect: false }).finally(() => {
+              router.replace(
+                `/login?message=${encodeURIComponent(
+                  data.message ||
+                    'This email is already registered. Please log in first, then link Google from your account settings.'
+                )}`
+              );
+            });
+            return;
+          }
+          if (ok && data?.token) {
             login(data.token);
             // Redirect to role-based dashboard after OAuth login
             try {

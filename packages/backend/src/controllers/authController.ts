@@ -492,16 +492,23 @@ export const oauthLogin = async (req: Request, res: Response) => {
       where: { oauthProvider: provider, oauthId: providerId },
     });
 
-    // 2. Auto-link: if no OAuth match found, look up by email and link the Google account.
-    // Rationale: if you own the Gmail address, you own the account. Blocking this just
-    // confuses users who registered with email and later try Google login.
+    // 2. SECURITY FIX (Roadmap #422 / S722 P1-1 — Option B):
+    // If an existing account matches by email but does NOT already have this OAuth
+    // identity linked, REFUSE to silently link. The previous behavior was an
+    // unauthenticated account-takeover vector — an attacker who created a Google
+    // account with a victim's email could hit /auth/oauth and inherit the victim's
+    // FindA.Sale account. Industry standard (Google, GitHub, Stripe) is to require
+    // the user to be logged in before linking a new OAuth provider.
+    //
+    // The legitimate user is told to sign in with their existing credentials and
+    // link Google from account settings.
     if (!user && email) {
       const emailUser = await prisma.user.findUnique({ where: { email } });
       if (emailUser) {
-        // Link the OAuth identity to the existing account and continue
-        user = await prisma.user.update({
-          where: { id: emailUser.id },
-          data: { oauthProvider: provider, oauthId: providerId },
+        return res.status(409).json({
+          code: 'OAUTH_LINK_REQUIRED',
+          message:
+            "This email is already registered. Please log in with your password first, then link Google from your account settings.",
         });
       }
     }
@@ -1148,5 +1155,69 @@ export const oauthVerifyAge = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('OAuth age verification error:', error);
     res.status(500).json({ message: 'Server error during age verification' });
+  }
+};
+
+// Roadmap #422 / S722 P1-1 (Option B): Authenticated OAuth provider linking.
+// Called from account settings when a logged-in user wants to attach a Google
+// (or other) identity to their existing FindA.Sale account. Replaces the
+// silent auto-link that previously happened inside oauthLogin.
+//
+// Expected body: { provider: string, providerId: string, email?: string }
+// Caller MUST be authenticated (route uses `authenticate` middleware).
+export const linkOAuthProvider = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    const { provider, providerId } = req.body;
+    if (!provider || !providerId) {
+      return res.status(400).json({ message: 'provider and providerId are required' });
+    }
+
+    // Reject if this OAuth identity is already attached to a DIFFERENT account.
+    const existingLink = await prisma.user.findFirst({
+      where: { oauthProvider: provider, oauthId: providerId },
+    });
+    if (existingLink && existingLink.id !== userId) {
+      return res.status(409).json({
+        code: 'OAUTH_ALREADY_LINKED',
+        message: 'This Google account is already linked to a different FindA.Sale account.',
+      });
+    }
+
+    // Reject if the current user already has a different OAuth provider linked.
+    // Prevents accidental overwrite — user must explicitly unlink first.
+    const currentUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!currentUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    if (
+      currentUser.oauthProvider &&
+      currentUser.oauthId &&
+      (currentUser.oauthProvider !== provider || currentUser.oauthId !== providerId)
+    ) {
+      return res.status(409).json({
+        code: 'PROVIDER_ALREADY_LINKED',
+        message: 'Your account already has a linked social login. Unlink it first to switch providers.',
+      });
+    }
+
+    // Already linked to this same provider+id — no-op success.
+    if (currentUser.oauthProvider === provider && currentUser.oauthId === providerId) {
+      return res.json({ success: true, message: 'Provider already linked.' });
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { oauthProvider: provider, oauthId: providerId },
+    });
+
+    res.json({ success: true, message: `${provider} account linked successfully.` });
+  } catch (error) {
+    console.error('OAuth link error:', error);
+    res.status(500).json({ message: 'Server error linking provider' });
   }
 };
