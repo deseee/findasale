@@ -99,6 +99,15 @@ const EbayPolicySetupPage = () => {
   const [setupData, setSetupData] = useState<SetupData | null>(null);
   const [mapping, setMapping] = useState<PolicyMapping | null>(null);
   const [originalMapping, setOriginalMapping] = useState<PolicyMapping | null>(null);
+  // eBay Push — publish-mode cascade + shipping smart-pick (organizer-level defaults)
+  const [organizerDefaults, setOrganizerDefaults] = useState<{
+    ebayDefaultPublishMode: 'DRAFT' | 'LIVE';
+    ebayDefaultShippingPolicyId: string | null;
+  }>({ ebayDefaultPublishMode: 'DRAFT', ebayDefaultShippingPolicyId: null });
+  const [originalOrganizerDefaults, setOriginalOrganizerDefaults] = useState<{
+    ebayDefaultPublishMode: 'DRAFT' | 'LIVE';
+    ebayDefaultShippingPolicyId: string | null;
+  }>({ ebayDefaultPublishMode: 'DRAFT', ebayDefaultShippingPolicyId: null });
 
   // Fetch setup data on mount
   useEffect(() => {
@@ -110,11 +119,14 @@ const EbayPolicySetupPage = () => {
     const fetchSetupData = async () => {
       try {
         setLoading(true);
-        const res = await api.get('/ebay/setup-data');
-        setSetupData(res.data);
+        const [setupRes, organizerRes] = await Promise.all([
+          api.get('/ebay/setup-data'),
+          api.get('/organizers/me').catch(() => null), // tolerate failure — organizer defaults are optional
+        ]);
+        setSetupData(setupRes.data);
         setEbayConnected(true);
 
-        const currentMapping = res.data.currentMapping || {
+        const currentMapping = setupRes.data.currentMapping || {
           defaultFulfillmentPolicyId: null,
           defaultReturnPolicyId: null,
           defaultPaymentPolicyId: null,
@@ -130,6 +142,13 @@ const EbayPolicySetupPage = () => {
 
         setMapping(currentMapping);
         setOriginalMapping(JSON.parse(JSON.stringify(currentMapping)));
+
+        const defaults = {
+          ebayDefaultPublishMode: (organizerRes?.data?.ebayDefaultPublishMode ?? 'DRAFT') as 'DRAFT' | 'LIVE',
+          ebayDefaultShippingPolicyId: organizerRes?.data?.ebayDefaultShippingPolicyId ?? null,
+        };
+        setOrganizerDefaults(defaults);
+        setOriginalOrganizerDefaults(JSON.parse(JSON.stringify(defaults)));
       } catch (error: any) {
         if (error.response?.status === 401) {
           setEbayConnected(false);
@@ -149,21 +168,32 @@ const EbayPolicySetupPage = () => {
     }
   }, [user, authLoading, router, showToast]);
 
-  const hasChanges = JSON.stringify(mapping) !== JSON.stringify(originalMapping);
+  const hasChanges =
+    JSON.stringify(mapping) !== JSON.stringify(originalMapping) ||
+    JSON.stringify(organizerDefaults) !== JSON.stringify(originalOrganizerDefaults);
 
   const handleSaveMapping = async () => {
     if (!mapping) return;
 
     try {
       setSaving(true);
+      // Save the policy mapping (existing path)
       await api.post('/ebay/policy-mapping', mapping);
-      showToast('Policy mapping saved successfully', 'success');
+      // Save organizer-level eBay defaults (publish mode + default shipping policy)
+      if (JSON.stringify(organizerDefaults) !== JSON.stringify(originalOrganizerDefaults)) {
+        await api.patch('/organizers/me', {
+          ebayDefaultPublishMode: organizerDefaults.ebayDefaultPublishMode,
+          ebayDefaultShippingPolicyId: organizerDefaults.ebayDefaultShippingPolicyId,
+        });
+      }
+      showToast('eBay settings saved', 'success');
       setOriginalMapping(JSON.parse(JSON.stringify(mapping)));
+      setOriginalOrganizerDefaults(JSON.parse(JSON.stringify(organizerDefaults)));
       // Refetch to ensure sync with backend
       const res = await api.get('/ebay/setup-data');
       setSetupData(res.data);
     } catch (error: any) {
-      const msg = error.response?.data?.message || 'Failed to save policy mapping';
+      const msg = error.response?.data?.message || 'Failed to save eBay settings';
       showToast(msg, 'error');
     } finally {
       setSaving(false);
@@ -172,6 +202,7 @@ const EbayPolicySetupPage = () => {
 
   const handleDiscardChanges = () => {
     setMapping(JSON.parse(JSON.stringify(originalMapping)));
+    setOrganizerDefaults(JSON.parse(JSON.stringify(originalOrganizerDefaults)));
   };
 
   const useSuggestedDefaults = () => {
@@ -357,6 +388,64 @@ const EbayPolicySetupPage = () => {
                       </select>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                         Used when no weight tier, category override, or shipping class override matches.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section B2: Push defaults — publish mode + default shipping policy */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Push Defaults</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Defaults applied to every Push to eBay action. The per-push dropdown on each item can override the publish mode.
+                  </p>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Default publish mode
+                      </label>
+                      <select
+                        value={organizerDefaults.ebayDefaultPublishMode}
+                        onChange={(e) =>
+                          setOrganizerDefaults({
+                            ...organizerDefaults,
+                            ebayDefaultPublishMode: e.target.value as 'DRAFT' | 'LIVE',
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
+                      >
+                        <option value="DRAFT">Draft (recommended) — review in eBay Seller Hub before publishing</option>
+                        <option value="LIVE">Publish live immediately</option>
+                      </select>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        Draft mode creates the offer in your eBay account without listing it publicly. Useful for reviewing photos and pricing before the item goes live.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Default shipping policy
+                      </label>
+                      <select
+                        value={organizerDefaults.ebayDefaultShippingPolicyId || ''}
+                        onChange={(e) =>
+                          setOrganizerDefaults({
+                            ...organizerDefaults,
+                            ebayDefaultShippingPolicyId: e.target.value || null,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
+                      >
+                        <option value="">Smart-pick (calculated → flat-rate → free)</option>
+                        {setupData.fulfillmentPolicies.map((policy) => (
+                          <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
+                            {policy.name} · {policy.classification}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        Smart-pick chooses the most accurate option from your eBay policies: weight-based calculated shipping first, then flat-rate, then free as a last resort. Pick a specific policy to override.
                       </p>
                     </div>
                   </div>

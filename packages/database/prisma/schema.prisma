@@ -370,6 +370,9 @@ model Organizer {
   // Feature #75: eBay Push Quota Tracking — monthly limit enforcement
   ebayPushesThisMonth     Int                    @default(0) // Count of eBay pushes this calendar month
   ebayPushesResetAt       DateTime? // When the monthly eBay push counter was last reset
+  // eBay Push — publish-mode cascade + shipping smart-pick (organizer-level defaults)
+  ebayDefaultPublishMode       EbayPublishMode @default(DRAFT) // DRAFT (recommended) or LIVE — applied when the push request doesn't specify a mode
+  ebayDefaultShippingPolicyId  String? // When set, used as the fulfillment policy on every push (overrides smart-pick). Null = use smart-pick.
   // Feature: Graceful Tier Degradation — grace period fields
   graceEndAt              DateTime? // When grace period expires (7 days from downgrade)
   graceTierBefore         String? // Tier before downgrade (PRO or TEAMS)
@@ -2428,6 +2431,12 @@ enum SubscriptionTier {
   SIMPLE
   PRO
   TEAMS
+}
+
+// eBay Push — publish-mode cascade (Organizer.ebayDefaultPublishMode)
+enum EbayPublishMode {
+  DRAFT // Create unpublished Offer in eBay (organizer finalizes in Seller Hub)
+  LIVE  // Publish immediately
 }
 
 // Feature #55: Seasonal Discovery Challenges — time-limited gamification for shoppers
