@@ -39,6 +39,11 @@ interface CachedToken {
 
 let ebayTokenCache: CachedToken | null = null;
 
+// In-memory cache for Finding API comps results (1-hour TTL)
+// Prevents rate-limit errors (errorId 10001) when the same title is looked up repeatedly
+const findingApiCache = new Map<string, { result: any; expiresAt: number }>();
+const FINDING_API_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
 // Decode common HTML entities (eBay Description arrives entity-encoded inside XML)
 function decodeHtmlEntities(str: string): string {
   return str
@@ -257,6 +262,13 @@ async function getEbayPriceComps(
       };
     }
 
+    // Check in-memory cache first to avoid rate-limit errors (errorId 10001)
+    const cacheKey = `${title.toLowerCase().trim()}:${conditionGrade ?? ''}:${limit}`;
+    const cached = findingApiCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.result;
+    }
+
     const query = encodeURIComponent(title);
 
     // Use Finding API's findCompletedItems endpoint to get SOLD items (not active listings)
@@ -318,7 +330,7 @@ async function getEbayPriceComps(
 
     if (!items || items.length === 0) {
       // No results found, return empty (not mock data, real result)
-      return {
+      const emptyResult = {
         min: 25,
         max: 75,
         median: 45,
@@ -328,6 +340,8 @@ async function getEbayPriceComps(
         listings: [],
         isMockData: false,
       };
+      findingApiCache.set(cacheKey, { result: emptyResult, expiresAt: Date.now() + FINDING_API_CACHE_TTL_MS });
+      return emptyResult;
     }
 
     // Extract sold prices from completed items
@@ -368,7 +382,7 @@ async function getEbayPriceComps(
 
     console.log(`[eBay] Found ${prices.length} sold comps for "${title}" (min=$${min.toFixed(2)}, median=$${median.toFixed(2)}, max=$${max.toFixed(2)})`);
 
-    return {
+    const result = {
       min,
       max,
       median,
@@ -377,6 +391,8 @@ async function getEbayPriceComps(
       compsRunAt: new Date().toISOString(),
       listings,
     };
+    findingApiCache.set(cacheKey, { result, expiresAt: Date.now() + FINDING_API_CACHE_TTL_MS });
+    return result;
   } catch (error) {
     console.error('[eBay] Price comps error:', error);
     // Fallback to mock data on any error
