@@ -8,7 +8,7 @@
  * Run: npx tsx src/scripts/diagnostics/diagnose-osm.ts
  */
 
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_URL = 'https://overpass.kumi.systems/api/interpreter';
 
 // Same bbox as osmScraper for Grand Rapids, MI
 const TEST_METRO = 'Grand Rapids, MI';

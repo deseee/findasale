@@ -62,15 +62,25 @@ export async function runIndianaLicensingScraper(): Promise<void> {
       throw new Error(`Failed to fetch search form: ${formPageResponse.status}`);
     }
 
+    // Capture ASP.NET session cookie — required on POST for ViewState validation
+    const setCookieHeader = formPageResponse.headers.get('set-cookie') ?? '';
+    const sessionCookieMatch = setCookieHeader.match(/ASP\.NET_SessionId=([^;]+)/);
+    const sessionCookie = sessionCookieMatch ? `ASP.NET_SessionId=${sessionCookieMatch[1]}` : '';
+    if (!sessionCookie) {
+      console.warn('[IndianaLicensing] No ASP.NET_SessionId found — POST may fail ViewState validation');
+    }
+
     const formHtml = await formPageResponse.text();
 
     // Extract ASP.NET ViewState and EventValidation from hidden fields
     // These are typically required for ASP.NET form submission
     const viewStateMatch = formHtml.match(/name="__VIEWSTATE"\s+value="([^"]+)"/);
     const eventValidationMatch = formHtml.match(/name="__EVENTVALIDATION"\s+value="([^"]+)"/);
+    const viewStateGeneratorMatch = formHtml.match(/name="__VIEWSTATEGENERATOR"\s+value="([^"]+)"/);
 
     const viewState = viewStateMatch ? viewStateMatch[1] : '';
     const eventValidation = eventValidationMatch ? eventValidationMatch[1] : '';
+    const viewStateGenerator = viewStateGeneratorMatch ? viewStateGeneratorMatch[1] : '';
 
     console.log('[IndianaLicensing] Extracted ASP.NET form state');
 
@@ -78,6 +88,8 @@ export async function runIndianaLicensingScraper(): Promise<void> {
     const formData = new URLSearchParams();
     formData.append('__VIEWSTATE', viewState);
     formData.append('__EVENTVALIDATION', eventValidation);
+    formData.append('__VIEWSTATEGENERATOR', viewStateGenerator);
+    formData.append('Recaptcha1', '');
     formData.append('ctl00$ContentPlaceHolder1$ddlProfession', 'Auctioneer Commission');
     formData.append('ctl00$ContentPlaceHolder1$ddlLicenseType', 'All');
     formData.append('ctl00$ContentPlaceHolder1$ddlAttributeType', 'All');
@@ -97,6 +109,7 @@ export async function runIndianaLicensingScraper(): Promise<void> {
         'Accept-Encoding': 'gzip, deflate',
         Connection: 'keep-alive',
         Referer: INDIANA_PLA_BASE_URL + '/EVerification/Search.aspx',
+        ...(sessionCookie ? { Cookie: sessionCookie } : {}),
       },
       body: formData.toString(),
       signal: AbortSignal.timeout(30000),

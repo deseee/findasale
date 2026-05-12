@@ -125,6 +125,9 @@ function OAuthBridge() {
       setExchanging(true);
       // POST directly from browser → Next.js proxy (beforeFiles) → Railway
       // This ensures Railway's Set-Cookie headers reach the BROWSER, not Vercel
+      // Note: Raw fetch intentionally used here (not api axios instance).
+      // The CSRF middleware skips /auth/oauth — see packages/backend/src/middleware/csrf.ts.
+      // If the CSRF skip list is ever changed, this call must be updated to include x-csrf-token.
       fetch('/api/auth/oauth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

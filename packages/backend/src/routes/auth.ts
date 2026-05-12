@@ -85,9 +85,9 @@ const router = Router();
 
 router.post('/register', registerLimiter, register);
 router.post('/login', loginLimiter, login);
-router.post('/oauth', oauthLogin); // Phase 31: social login token exchange
+router.post('/oauth', registerLimiter, oauthLogin); // Phase 31: social login token exchange
 router.post('/redeem-invite', authenticate, redeemInvite); // Redeem beta invite for OAuth users
-router.post('/verify-email', verifyEmail); // Security: Email verification gate (P0)
+router.post('/verify-email', verifyEmailLimiter, verifyEmail); // Security: Email verification gate (P0)
 router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res: Response) => {
   // P0 Security Fix Item 5: Email verification resend endpoint with enumeration prevention
   try {
@@ -114,7 +114,13 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
 
     // Send verification email
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const verifyUrl = `${frontendUrl}/verify-email?token=${user.emailVerificationToken}`;
+    // Regenerate token to invalidate previous links
+    const newToken = crypto.randomBytes(32).toString('hex');
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerificationToken: newToken }
+    });
+    const verifyUrl = `${frontendUrl}/verify-email?token=${newToken}`;
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
     const resend = getResend();
 
@@ -203,7 +209,7 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
     });
 
     // P0 Security Fix Item 6: Include IP and User-Agent context in password reset email
-    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+    const clientIp = req.ip || (req.headers['x-forwarded-for'] as string)?.split(',')[0] || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -277,8 +283,8 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
 
 // P0 Security Fix: POST /auth/logout — clears both accessToken and refreshToken cookies
 router.post('/logout', (req: AuthRequest, res: Response) => {
-  res.clearCookie('accessToken', { path: '/' });
-  res.clearCookie('refreshToken', { path: '/' }); // P0 FIX: match new path '/'
+  res.clearCookie('accessToken', { httpOnly: true, secure: true, sameSite: 'lax', path: '/' });
+  res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'lax', path: '/' }); // P0 FIX: match new path '/'
   res.json({ message: 'Logged out' });
 });
 
@@ -347,10 +353,4 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     user: {
       ...req.user,
       organizerTier: organizer?.subscriptionTier ?? 'SIMPLE',
-      subscriptionStatus: organizer?.subscriptionStatus ?? null,
-      subscriptionLapsed: req.user.subscriptionLapsed ?? false,
-    },
-  });
-});
-
-export default router;
+      subscriptio
