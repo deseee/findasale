@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S717 — eBay Price Comps + Backend Crash Fix (COMPLETE — wrap)**
+**Latest: S718 — QA Sprint + Outreach Enabled (COMPLETE)**
+
+Chrome QA completed S718: #228 Settlement Receipt ✅, #241 Brand Kit PDFs ✅, #235 Charity Close ✅, #369 Quebec block ✅ (Canada → Quebec → amber warning + disabled Register button), #407 Flip Tracker ROI ✅ (Signed First Edition Novel: $500 revenue - $300 cost = +$200 profit, +66.7% ROI displayed in flip-report). Outreach confirmed live — `OUTREACH_ENABLED=true` set by Patrick, cron registered every 4 hours, 183 seeded organizers in queue. #405 Founding Badge: render surface found — organizer/settings.tsx Profile tab (🏆 card renders when foundingOrgBadge=true). Storefront copy says "badge appears on your storefront" but storefront page has no foundingOrgBadge rendering — this is a gap. #251 markdown badge: item changed from AUCTION to STANDARD type (psycopg2), re-QA blocked by rate limit (610s). Code path confirmed present in sales/[id].tsx line 1535 — only fires for non-auction items.
+
+**Previous: S717 — eBay Price Comps + Backend Crash Fix (COMPLETE — wrap)**
 
 eBay price research panel on review page fully debugged and fixed. Root causes resolved: (1) Backend crash loop — `ebayController.ts` was truncated mid-template-literal at line 4246 (`console.log(\`[eBay EndedSync] Batch of \${bat`) — restored missing 15 lines from git history. (2) Browse API `sort=price` returning cheap accessories (AC adapters at $11) instead of actual items — switched to `sort=bestMatch`. (3) bestMatch returning too many unrelated models — added `cleanTitle()` function that strips everything after first comma/standalone dash, removes generic descriptors, caps at 5 words (e.g. "Zoom B3 Multi-Effects Processor, Rec, Model B3" → "Zoom B3 Multi-Effects Processor"). Also: eBay developer account audit — Growth Check ticket (Incident 260428-000018) was filed April 28 from wrong account (artifactmi@gmail.com, Patrick's personal eBay seller account) — production keys are on deseee@yahoo.com / deseee1 account. No application ever reached the correct account. Draft reply prepared to correct App ID and add Finding API request. No Finding API access yet — Browse API is what's running.
 
@@ -68,20 +72,13 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #228 Settlement Receipt | Download Receipt returns 401 — fixed S716 (axios+cookies), pending re-verify after push | Chrome QA: click Download Receipt on /organizer/settlement/qa-settlement-001 | S716 |
-| #241 Brand Kit PDFs | `?token=` empty on all 4 download buttons — fixed S716 (axios+cookies), pending re-verify after push | Chrome QA: /organizer/brand-kit as PRO user, click all 4 PDF downloads | S716 |
-| #235 Charity Close | `getUnsoldItems` returned non-AVAILABLE items — fixed S716, pending re-verify after push | Chrome QA: full DonationModal flow on sale with AVAILABLE items | S716 |
-| ShopperOrganizerIntroduction migration | Migration SQL exists but never deployed to Railway — leaderboard scouts section returns empty | Patrick: run `npx prisma migrate deploy` from packages/database with Railway DATABASE_URL | S712 |
+| #405 Founding Badge | Settings Profile tab badge renders ✅ (S718 code-confirmed). Gap: storefront page copy says badge "appears on your storefront" but storefront has no foundingOrgBadge rendering | DECISION: add storefront rendering, or update settings copy to remove that claim? | S711 |
+| #251 SaleCard markdown badge | Item changed to STANDARD type S718 (was AUCTION — markdown only fires for non-auction path in sales/[id].tsx:1535). Rate limit blocked Chrome verify | Re-navigate to /sales/c5hykxxecanngwcrkvq92n1va as any user, find Victorian Silver Pocket Watch, verify crossed-out $75 shows with $56.25 | S718 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
 | MN/MI/TN licensing scrapers | Bot-blocked (Radware/DIFS 403) — graceful no-ops, no failure emails | Needs headless browser + residential proxy (#SCRAPER-HEADLESS-PROXY in Deferred) | S713 |
 | Wyoming pawnbroker scraper | wyomingbankingdivision.wyo.gov — not yet investigated this session | Run diagnostic to confirm if still returning data | S713 |
-| #405 Founding Badge | No display surface found (profile, storefront, leaderboard all checked — badge not rendering anywhere) | Code review to find where badge should render; verify organizer with badge can see it | S711 |
-| #369 Quebec block | Needs Quebec user account to test | Create test user with Quebec address; verify they are blocked at checkout | S711 |
-| #407 Flip Tracker ROI | Cost Basis input works; Flip Report renders but ROI section requires sold items | Mark an item sold in test account then re-verify ROI calculations in Flip Report | S711 |
-| #174 Auction bid form UX | auctionIsOver fix shipped S708 — push pending Patrick confirmation | Re-verify in Chrome after push lands | S707 |
-| #251 SaleCard markdown badge | hasMarkdownItems + Sale badge shipped S708 — push pending Patrick confirmation | Re-verify SaleCard shows Sale badge on markdown items after push lands | S707 |
 | AI listing enrichment | Fire-and-forget | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` | S651 |
 | CategoryTopFinds TrendingSection | Cron runs 05:00 UTC — no data until first run | QA after nightly run; verify TrendingSection on `/categories/[category]` | S647 |
 | Outreach pipeline open/click tracking | Can't verify without real sends | After first cron run: check Railway logs, confirm pixel route 200 | S647 |
@@ -89,6 +86,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S718 — QA Sprint + Outreach Live (COMPLETE)
+
+Chrome QA: #228 Settlement Receipt ✅, #241 Brand Kit PDFs ✅, #235 Charity Close ✅, #369 Quebec Block ✅ (Canada→Quebec→amber warning + disabled Register), #407 Flip Tracker ROI ✅ (Signed First Edition Novel: $500 revenue - $300 costBasis = +$200 net profit, +66.7% ROI shown in flip-report). Outreach live: OUTREACH_ENABLED=true, cron every 4h, 183 organizers queued. #405 Founding Badge: settings Profile tab renders 🏆 badge when foundingOrgBadge=true — but storefront copy claim "badge appears on your storefront" has no storefront implementation (gap, DECISION needed). #251 Markdown badge: item changed AUCTION→STANDARD (psycopg2); rate limit blocked Chrome verify this session. Purchase record created for Flip Tracker ROI (psycopg2). Data seeded: costBasis, PAID purchase, markdownApplied, priceBeforeMarkdown.
 
 ### S717 — eBay Price Comps + Backend Crash Fix (COMPLETE — wrap)
 
@@ -132,46 +133,23 @@ NSFW detection deferred (roadmap #394 closed). Chrome QA: #174 bid protection �
 
 ---
 
-## Next Session — S718
+## Next Session — S719
 
-### Priority 1 — Patrick push (S717 fixes)
+### Priority 1 — Chrome QA (quick, no data setup needed)
 
-```powershell
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/frontend/pages/organizer/brand-kit.tsx
-git add packages/frontend/components/SettlementWizard.tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizer/pos.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "fix: eBay price comps — truncation crash, bestMatch sort, cleanTitle query trimming"
-.\push.ps1
-```
+1. **#251 Markdown badge** — Navigate to `https://finda.sale/sales/c5hykxxecanngwcrkvq92n1va` as any logged-in user. Find "Victorian Silver Pocket Watch" in item grid. Verify crossed-out $75.00 with current price $56.25 in green. (Item already updated to STANDARD type via psycopg2 S718.)
+2. **#405 Founding Badge storefront** — DECISION NEEDED: settings copy says "badge appears on your storefront" but storefront page (`/organizers/[id]`) has no foundingOrgBadge rendering. Options: (a) add storefront badge rendering, (b) remove that claim from settings copy. Patrick to decide.
 
-### Priority 2 — eBay Growth Check reply (Patrick action)
+### Priority 2 — Outreach monitoring
 
-Reply to Incident 260428-000018 from artifactmi@gmail.com. Draft from S717:
-- Correct App ID to `PatrickD-FindAVal-PRD-064c158e4-8fa09c76` (deseee1 account)
-- Add Finding API (`findCompletedItems`) access request for sold-price data
+First outreach cron window passed after OUTREACH_ENABLED=true (S718). Check Railway logs for `[OutreachCron]` sent lines and delivery confirmations. If no sends, check warmup state.
 
-### Priority 3 — Re-verify S716 fixes after push (Chrome QA)
+### Priority 3 — Roadmap work
 
-1. Brand Kit PDFs — /organizer/brand-kit as PRO user, click all 4 PDF downloads
-2. Settlement Receipt — /organizer/settlement/qa-settlement-001, click Download Receipt
-3. Charity Close — DonationModal flow on a sale with AVAILABLE items
+Blocked queue is nearly cleared. Next roadmap items per roadmap.md priority order.
 
-### Priority 4 — Carry-forward Patrick actions
-
-1. **ShopperOrganizerIntroduction migration (P0 for leaderboard scouts):**
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-   $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-   npx prisma migrate deploy
-   ```
-2. **Railway env:** Confirm `OUTREACH_ENABLED=true` and `OUTREACH_WARMUP_START_DATE=2026-05-06`
-
-### Priority 5 — Decisions needed
+### Priority 4 — Decisions
 
 - **AuctionNinja + NAA scrapers:** Enable? Set `enabled:true` in sourceRegistry.
 - **MT scraper fix:** Railway → backend → Variables → copy `INTERNAL_API_KEY` → GitHub Secrets → `INTERNAL_API_TOKEN` → re-run MT workflow.
+- **eBay Growth Check reply:** Reply to Incident 260428-000018 from artifactmi@gmail.com — correct App ID to `PatrickD-FindAVal-PRD-064c158e4-8fa09c76` + add Finding API request.

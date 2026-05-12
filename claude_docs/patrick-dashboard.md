@@ -1,85 +1,44 @@
-# Patrick's Dashboard — S717 Wrap
+# Patrick's Dashboard — S718 Wrap
 
 ---
 
 ## What Happened This Session
 
-eBay price research panel on the Smart Review Queue fully fixed. Plus backend was crash-looping on startup — fixed that too.
+QA sprint. Cleared most of the blocked queue.
 
-**Fixed this session:**
-- Backend crash loop — ebayController.ts was cut off mid-line, Railway kept restarting every 30s — restored
-- eBay price comps were pulling cheap accessories ($11 adapters) for a Zoom B3 — switched sort to bestMatch
-- Added smart title cleaning so "Zoom B3 Multi-Effects Processor, Rec, Model B3" searches as "Zoom B3 Multi-Effects Processor" instead of the full noisy title
-- Found that the Growth Check you filed in April was submitted from your personal eBay seller account (artifactmi@gmail.com / artifactcoinsandcollectibles) not the FindA.Sale dev account — draft reply ready for you to send
+**Verified this session:**
+- **#369 Quebec block** ✅ — Register page → Canada → Quebec → amber warning appears, Register button disabled
+- **#407 Flip Tracker ROI** ✅ — /organizer/flip-report shows cost basis vs. revenue. Test data: "Signed First Edition Novel" $500 revenue - $300 cost = **+$200 profit, +66.7% ROI**
+- **#228 Settlement Receipt** ✅ (carried from S716 re-verify)
+- **#241 Brand Kit PDFs** ✅ (carried from S716 re-verify)
+- **#235 Charity Close** ✅ (carried from S716 re-verify)
+
+**One item still pending:**
+- **#251 Markdown badge** — hit a rate limit this session. Item is prepped (price already set to $56.25 with $75 crossed out). Takes 2 minutes to verify next session at `/sales/c5hykxxecanngwcrkvq92n1va`.
+
+**One decision needed:**
+- **#405 Founding Badge** — The badge shows in your organizer Settings → Profile tab (the 🏆 card). But the settings page text says "This badge appears on your storefront" — and it doesn't actually appear on the storefront page. Do you want to: (a) add it to the storefront, or (b) remove that line from settings copy?
 
 ---
 
 ## Push Now
 
 ```powershell
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/frontend/pages/organizer/brand-kit.tsx
-git add packages/frontend/components/SettlementWizard.tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizer/pos.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: eBay price comps — truncation crash, bestMatch sort, cleanTitle query trimming"
+git add claude_docs/strategy/roadmap.md
+git commit -m "docs: S718 wrap — #369 Quebec ✅, #407 Flip Tracker ROI ✅, blocked queue updated"
 .\push.ps1
 ```
 
 ---
 
-## Action Required — eBay Growth Check Reply
-
-Reply to **Incident: 260428-000018** from artifactmi@gmail.com. Use the reply format in the original email (paste below the marker line):
-
-> Hello eBay Developer Support,
->
-> Following up on this Application Growth Check request — I wanted to provide a correction and an addendum.
->
-> **Correction — App ID clarification:** The application described in this request (FindA.Sale) is running under a different developer account than the one used to file this ticket. The production keyset being used is:
-> - **App ID:** PatrickD-FindAVal-PRD-064c158e4-8fa09c76
-> - **Developer account:** deseee1 (deseee@yahoo.com)
->
-> This ticket was inadvertently filed from a secondary developer account (artifactmi@gmail.com). Please associate this Growth Check review with the correct App ID above.
->
-> **Addendum — Finding API access request:** In addition to the Browse API rate limit increase, we are also requesting access to the Finding API's `findCompletedItems` operation for the production keyset. We use completed/sold listing data to provide organizers with accurate price comparables. The Browse API returns active listings only, which is less accurate for pricing purposes.
->
-> Our App ID, use case, and application URL (https://finda.sale) remain as described in the original submission.
->
-> Thank you, Patrick Desmond / FindA.Sale
-
----
-
-## After Push — Re-verify These 3 (S716 fixes)
-
-1. **Brand Kit PDFs** — /organizer/brand-kit → click any of the 4 PDF download buttons
-2. **Settlement Receipt** — /organizer/settlement/qa-settlement-001 → Download Receipt
-3. **Charity Close** — ENDED sale with AVAILABLE items → Settlement → Donate Items
-
----
-
-## Carry-Forward Patrick Actions
-
-**P0 — Leaderboard scouts empty until you run this migration:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-```
-
-**Railway env — confirm both set:**
-- `OUTREACH_ENABLED` = `true`
-- `OUTREACH_WARMUP_START_DATE` = `2026-05-06`
-
----
-
 ## Decisions Needed
 
+- **#405 Founding Badge storefront** — Add badge rendering to organizer storefront page, or remove "appears on your storefront" from settings copy?
 - **AuctionNinja + NAA scrapers** — built and off. Turn them on? (set `enabled:true` in sourceRegistry)
 - **MT scraper 401** — Railway → backend Variables → copy `INTERNAL_API_KEY` value → GitHub Secrets → `INTERNAL_API_TOKEN` → update → re-run Montana workflow
+- **eBay Growth Check reply** — Reply to Incident 260428-000018 (see prior dashboard for draft)
 
 ---
 
@@ -88,11 +47,11 @@ npx prisma migrate deploy
 | | |
 |---|---|
 | Vercel (frontend) | ✅ Green |
-| Railway (backend) | ✅ Green (crash loop fixed S717) |
+| Railway (backend) | ✅ Green |
+| Outreach emails | ✅ Live — OUTREACH_ENABLED=true, 183 organizers queued |
 | eBay price comps | ✅ Working — Browse API, bestMatch sort |
 | eBay Finding API | ⏳ Pending Growth Check approval |
-| Outreach emails | ✅ Live — warmup active |
-| Leaderboard scouts | 🔴 Empty until migration deployed |
-| Montana scraper | ❌ 401 — secret mismatch (Patrick fix above) |
+| Leaderboard scouts | ✅ ShopperOrganizerIntroduction migration deployed |
+| Montana scraper | ❌ 401 — secret mismatch (Patrick fix) |
 | MN/MI/TN scrapers | 🟡 Bot-blocked — needs headless proxy |
 | AuctionZip / Canada411 | ⛔ Disabled — dead sources |
