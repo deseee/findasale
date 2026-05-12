@@ -966,33 +966,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
           <span style={{ color: '#1A1814' }} className="dark:text-[#F2F0EA]">{sale.organizer.businessName}</span>
         </div>
 
-        {/* ── STICKY ACTION STRIP (mobile bottom-pinned, desktop inline below hero) ── */}
-        {/* Mobile: fixed bottom bar */}
-        <div className="lg:hidden fixed bottom-16 left-0 right-0 z-40 px-4 py-3 border-t border-black/10 dark:border-white/8" style={{ background: saleHasEnded ? undefined : 'rgba(251,248,242,0.95)', backdropFilter: 'blur(12px)' }}>
-          <div className="dark:bg-[rgba(11,15,23,0.92)] dark:backdrop-blur-md rounded-none" style={saleHasEnded ? { background: 'rgba(251,248,242,0.95)', backdropFilter: 'blur(12px)' } : {}}>
-            {saleHasEnded ? (
-              <div className="flex items-center gap-3">
-                <div className="flex-1 text-sm text-[#1A1814] dark:text-[#F2F0EA]">This sale has ended. Follow for next time.</div>
-                <FollowOrganizerButton organizerId={sale.organizer.id} organizerName={sale.organizer.businessName} />
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <FavoriteButton itemId={undefined as any} saleId={sale.id} variant="icon" size="md" />
-                <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={saleHasEnded} />
-                <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
-                {sale.items.length > 0 && (
-                  <a href="#items" className="ml-auto flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white" style={{ background: '#C8552B' }}>
-                    View {sale.items.length} items
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* ── TWO-COLUMN BODY ── */}
-        <div className="max-w-7xl mx-auto px-4 lg:px-6 pt-6 pb-24 lg:pb-12 lg:grid lg:grid-cols-[1fr_360px] lg:gap-7">
+        <div className="max-w-7xl mx-auto px-4 lg:px-6 pt-6 pb-8 lg:pb-12 lg:grid lg:grid-cols-[1fr_360px] lg:gap-7">
 
           {/* ── MAIN COLUMN ── */}
           <div className="flex flex-col gap-6 min-w-0">
@@ -1135,10 +1111,15 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                           );
                         })}
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <AddToCalendarButton saleId={sale.id} title={sale.title} startDate={sale.startDate} endDate={sale.endDate} address={sale.address} city={sale.city} state={sale.state} description={sale.description} />
-                        {user && <SaleRSVPButton saleId={sale.id} />}
-                        <RSVPBadge saleId={sale.id} saleTitle={sale.title} />
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <FavoriteButton itemId={undefined as any} saleId={sale.id} variant="icon" size="md" />
+                        <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={saleHasEnded} />
+                        <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
+                        {!saleHasEnded && (
+                          <AddToCalendarButton saleId={sale.id} title={sale.title} startDate={sale.startDate} endDate={sale.endDate} address={sale.address} city={sale.city} state={sale.state} description={sale.description} />
+                        )}
+                        {user && !saleHasEnded && <SaleRSVPButton saleId={sale.id} />}
+                        {!saleHasEnded && <RSVPBadge saleId={sale.id} saleTitle={sale.title} />}
                       </div>
                     </>
                   )}
@@ -1696,32 +1677,6 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
           {/* ── SIDE RAIL (desktop only, sticky) ── */}
           <aside className="hidden lg:flex flex-col gap-4 self-start sticky top-6">
 
-            {/* Save / Remind / Share rail card */}
-            {!saleHasEnded ? (
-              <div className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-4">
-                <div className="text-xs uppercase tracking-widest mb-3" style={{ fontFamily: 'ui-monospace, monospace', color: 'rgba(26,24,20,0.4)', letterSpacing: '0.1em' }}>Don't lose it</div>
-                <div className="flex flex-col gap-2">
-                  <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={false} />
-                  <FavoriteButton itemId={undefined as any} saleId={sale.id} variant="button" size="md" />
-                  <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
-                </div>
-                <div className="mt-3 pt-3 border-t border-black/8 dark:border-white/8 text-xs leading-relaxed" style={{ color: 'rgba(26,24,20,0.4)' }}>
-                  No account needed for reminders — drop a phone or email and we'll text the day before.
-                </div>
-                {user && (
-                  <div className="mt-3 flex flex-col gap-2">
-                    <SaleRSVPButton saleId={sale.id} />
-                    {sale.items.length > 0 && <SaleWaitlistButton saleId={sale.id} />}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-4">
-                <p className="text-sm font-medium mb-3">This sale has ended.</p>
-                <p className="text-xs mb-3" style={{ color: 'rgba(26,24,20,0.62)' }}>Follow {sale.organizer.businessName} so you don't miss the next one.</p>
-                <FollowOrganizerButton organizerId={sale.organizer.id} organizerName={sale.organizer.businessName} />
-              </div>
-            )}
 
             {/* Map rail block */}
             <div className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] overflow-hidden">
