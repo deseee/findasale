@@ -4243,4 +4243,20 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
         }
       }
 
-      console.log(`[eBay EndedSync] Batch of ${bat
+      console.log(`[eBay EndedSync] Batch of ${batch.length} items processed, ${batchResults.filter(r => r.status).length} API calls succeeded`);
+
+      // Small delay between batches to respect rate limits and give eBay some breathing room
+      if (i + batchSize < activeListings.length) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms between batches
+      }
+    }
+
+    console.log(
+      `[eBay EndedSync] Organizer ${organizerId}: checked ${result.checked} listings, found ${result.ended} ended`
+    );
+  } catch (error) {
+    console.error(`[eBay EndedSync ERROR] organizerId ${organizerId}:`, error);
+  }
+
+  return result;
+}
