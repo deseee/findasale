@@ -318,7 +318,19 @@ const EditItemPage = () => {
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      return await api.put(`/items/${id}`, formData);
+      // Coerce numeric shipping fields from string → number|null (backend zod requires Int)
+      const toIntOrNull = (v: string) => {
+        const n = parseInt(String(v).trim(), 10);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      };
+      const payload = {
+        ...formData,
+        packageWeightOz: toIntOrNull(formData.packageWeightOz),
+        packageLengthIn: toIntOrNull(formData.packageLengthIn),
+        packageWidthIn: toIntOrNull(formData.packageWidthIn),
+        packageHeightIn: toIntOrNull(formData.packageHeightIn),
+      };
+      return await api.put(`/items/${id}`, payload);
     },
     onSuccess: () => {
       showToast('Item updated', 'success');
