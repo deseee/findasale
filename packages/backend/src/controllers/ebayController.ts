@@ -1987,7 +1987,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           },
           ...(item.packageWeightOz ? {
             packageWeightAndSize: {
-              weight: { unit: 'OUNCE', value: item.packageWeightOz },
+              weight: { unit: 'OUNCE', value: Number(item.packageWeightOz) },
               ...(item.packageLengthIn && item.packageWidthIn && item.packageHeightIn ? {
                 dimensions: {
                   unit: 'INCH',
@@ -2000,6 +2000,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             },
           } : {}),
         };
+
+        console.log(`[eBay InventoryPayload] sku=${sku} weightOz=${item.packageWeightOz ?? 'null'} dims=${item.packageLengthIn ?? '?'}x${item.packageWidthIn ?? '?'}x${item.packageHeightIn ?? '?'} hasPackageWeightAndSize=${Boolean((inventoryPayload as any).packageWeightAndSize)}`);
 
         const inventoryResponse = await fetch(inventoryUrl, {
           method: 'PUT',
@@ -2649,7 +2651,8 @@ function buildAspects(tags: string[]): Record<string, string[]> | undefined {
  * Logs the choice + reason for diagnostics.
  */
 async function pickFulfillmentPolicySmart(
-  fetchPolicies?: () => Promise<any[]>
+  fetchPolicies?: () => Promise<any[]>,
+  itemHasWeight: boolean = false
 ): Promise<{ policyId: string; reason: 'weight-based' | 'flat-rate' | 'free-fallback' } | null> {
   if (!fetchPolicies) return null;
   const policies = await fetchPolicies();
@@ -2659,11 +2662,14 @@ async function pickFulfillmentPolicySmart(
     Array.isArray(p.shippingOptions) &&
     p.shippingOptions.some((opt: any) => opt && opt.costType === type);
 
-  // 1. Calculated (weight-based)
+  // 1. Calculated (weight-based) — only if item has a valid weight, else eBay rejects publish with error 25020
   const calc = policies.find((p) => hasCostType(p, 'CALCULATED'));
-  if (calc) {
+  if (calc && itemHasWeight) {
     console.log(`[eBay ShippingPick] policy="${calc.name}" reason="weight-based"`);
     return { policyId: calc.fulfillmentPolicyId, reason: 'weight-based' };
+  }
+  if (calc && !itemHasWeight) {
+    console.warn(`[eBay ShippingPick] WARN skipping CALCULATED policy "${calc.name}" — item has no packageWeightOz (would cause eBay error 25020). Falling back to flat-rate/free.`);
   }
 
   // 2. Flat-rate (non-zero cost). Use shippingServices[0].shippingCost.value if present to distinguish "free".
@@ -2771,7 +2777,10 @@ async function resolvePoliciesForItem(
       };
     }
     // Prefer smart-pick over the stale connection-default fulfillment policy when we have policies to choose from.
-    const smartPicked = await pickFulfillmentPolicySmart(smartPickContext?.fetchFulfillmentPolicies);
+    const smartPicked = await pickFulfillmentPolicySmart(
+      smartPickContext?.fetchFulfillmentPolicies,
+      Boolean(item.packageWeightOz && item.packageWeightOz > 0)
+    );
     const chosenFulfillmentId = smartPicked?.policyId || conn.fulfillmentPolicyId;
     if (!chosenFulfillmentId) {
       return {
@@ -2849,7 +2858,10 @@ async function resolvePoliciesForItem(
   // 6. Smart-pick from organizer's eBay policies (calculated > flat-rate > free fallback)
   //    Replaces the prior "connection-default-fulfillment" fallback. Falls back to conn.fulfillmentPolicyId if smart-pick fetches nothing.
   if (!fulfillmentPolicyId) {
-    const smartPicked = await pickFulfillmentPolicySmart(smartPickContext?.fetchFulfillmentPolicies);
+    const smartPicked = await pickFulfillmentPolicySmart(
+      smartPickContext?.fetchFulfillmentPolicies,
+      Boolean(item.packageWeightOz && item.packageWeightOz > 0)
+    );
     if (smartPicked) {
       fulfillmentPolicyId = smartPicked.policyId;
       routingReason = `smart-pick:${smartPicked.reason}`;
