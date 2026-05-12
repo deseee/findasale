@@ -386,6 +386,7 @@ export async function suggestCategories(
     );
 
     const suggestions = response.data.categorySuggestions ?? [];
+    console.log(`[ebayTaxonomy] suggestCategories q="${q}" status=${response.status} count=${suggestions.length}`);
 
     // Extract top 5 results
     const results: CategorySuggestion[] = suggestions.slice(0, 5).map((s: any) => ({
@@ -400,7 +401,11 @@ export async function suggestCategories(
 
     return results;
   } catch (error: any) {
-    console.error(`[ebayTaxonomy] suggestCategories error for "${query}":`, error.message || error);
+    const status = error?.response?.status;
+    const bodySnippet = JSON.stringify(error?.response?.data ?? {}).slice(0, 300);
+    console.error(
+      `[ebayTaxonomy] suggestCategories FAILED q="${query}" status=${status ?? 'n/a'} msg="${error.message}" body=${bodySnippet}`
+    );
     return [];
   }
 }
