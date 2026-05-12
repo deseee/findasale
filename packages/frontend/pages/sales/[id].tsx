@@ -968,7 +968,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
 
         {/* ── STICKY ACTION STRIP (mobile bottom-pinned, desktop inline below hero) ── */}
         {/* Mobile: fixed bottom bar */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 px-4 py-3 border-t border-black/10 dark:border-white/8" style={{ background: saleHasEnded ? undefined : 'rgba(251,248,242,0.95)', backdropFilter: 'blur(12px)' }}>
+        <div className="lg:hidden fixed bottom-16 left-0 right-0 z-40 px-4 py-3 border-t border-black/10 dark:border-white/8" style={{ background: saleHasEnded ? undefined : 'rgba(251,248,242,0.95)', backdropFilter: 'blur(12px)' }}>
           <div className="dark:bg-[rgba(11,15,23,0.92)] dark:backdrop-blur-md rounded-none" style={saleHasEnded ? { background: 'rgba(251,248,242,0.95)', backdropFilter: 'blur(12px)' } : {}}>
             {saleHasEnded ? (
               <div className="flex items-center gap-3">
@@ -1016,9 +1016,6 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                   </>
                 ) : (
                   <>
-                    <FavoriteButton itemId={undefined as any} saleId={sale.id} variant="icon" size="md" />
-                    <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={saleHasEnded} />
-                    <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
                     <div className="flex-1" />
                     {user && <SaleRSVPButton saleId={sale.id} />}
                     {user && sale.items.length > 0 && <SaleWaitlistButton saleId={sale.id} />}
@@ -1990,4 +1987,4 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
   } catch {
     return { props: { ogData: null, initialData: null } };
   }
-}
+}                                                                                                                                                                                                                                                                                                                                                                                                         
