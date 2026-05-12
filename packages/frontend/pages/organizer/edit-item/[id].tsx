@@ -65,6 +65,12 @@ const EditItemPage = () => {
     costBasis: '',
     // Feature #411: Dorm Dash — room/area tag
     roomTag: '',
+    // Shipping dimensions
+    packageWeightOz: '',
+    packageLengthIn: '',
+    packageWidthIn: '',
+    packageHeightIn: '',
+    packageType: '',
   });
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -118,8 +124,10 @@ const EditItemPage = () => {
       } else {
         const errorMsg = result?.code?.includes('NOT_CONNECTED')
           ? 'eBay not connected'
-          : (result?.code?.includes('POLICIES') || result?.code?.includes('POLICY'))
-          ? 'eBay policies not configured'
+          : result?.code === 'NO_FULFILLMENT_POLICY_MATCH'
+          ? 'No shipping policy matched — add package weight or set a default fulfillment policy in eBay Settings'
+          : result?.code === 'POLICIES_NOT_CONFIGURED'
+          ? 'eBay policies not configured — complete eBay setup in Settings'
           : result?.message || 'Failed to push item';
         showToast(errorMsg, 'error');
       }
@@ -294,6 +302,12 @@ const EditItemPage = () => {
         // Feature #407/#411
         costBasis: item.costBasis ? item.costBasis.toString() : '',
         roomTag: item.roomTag || '',
+        // Shipping dimensions
+        packageWeightOz: item.packageWeightOz !== undefined && item.packageWeightOz !== null ? String(item.packageWeightOz) : '',
+        packageLengthIn: item.packageLengthIn !== undefined && item.packageLengthIn !== null ? String(item.packageLengthIn) : '',
+        packageWidthIn: item.packageWidthIn !== undefined && item.packageWidthIn !== null ? String(item.packageWidthIn) : '',
+        packageHeightIn: item.packageHeightIn !== undefined && item.packageHeightIn !== null ? String(item.packageHeightIn) : '',
+        packageType: item.packageType || '',
       });
     }
   }, [item]);
@@ -1064,6 +1078,89 @@ const EditItemPage = () => {
                     : 'Publish'}
               </button>
             </div>
+
+            {/* Shipping Dimensions — shown for PRO/TEAMS (eBay shipping requires dimensions) */}
+            {tier !== 'SIMPLE' && (
+              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping Dimensions</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                      Package Type
+                    </label>
+                    <select
+                      value={formData.packageType}
+                      onChange={(e) => setFormData({ ...formData, packageType: e.target.value })}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="">Select package type</option>
+                      <option value="BOX">Box</option>
+                      <option value="LETTER">Letter</option>
+                      <option value="MAILING_TUBE">Mailing Tube</option>
+                      <option value="PACKAGE_THICK_ENVELOPE">Thick Envelope</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                      Weight (oz)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="e.g. 16"
+                      value={formData.packageWeightOz}
+                      onChange={(e) => setFormData({ ...formData, packageWeightOz: e.target.value })}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                        Length (in)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="0.0"
+                        value={formData.packageLengthIn}
+                        onChange={(e) => setFormData({ ...formData, packageLengthIn: e.target.value })}
+                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                        Width (in)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="0.0"
+                        value={formData.packageWidthIn}
+                        onChange={(e) => setFormData({ ...formData, packageWidthIn: e.target.value })}
+                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                        Height (in)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="0.0"
+                        value={formData.packageHeightIn}
+                        onChange={(e) => setFormData({ ...formData, packageHeightIn: e.target.value })}
+                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* eBay Push Section */}
             {tier !== 'SIMPLE' && (

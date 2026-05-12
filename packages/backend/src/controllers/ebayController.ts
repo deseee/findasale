@@ -2672,10 +2672,16 @@ async function resolvePoliciesForItem(
     routingReason = 'classification:UNKNOWN';
   }
 
-  // 5. Default
+  // 5. Default mapping fulfillment policy
   if (!fulfillmentPolicyId && mapping.defaultFulfillmentPolicyId) {
     fulfillmentPolicyId = mapping.defaultFulfillmentPolicyId;
     routingReason = 'default-fulfillment';
+  }
+
+  // 6. Fall back to the eBay connection-level fulfillment policy (covers items with no weight/classification set)
+  if (!fulfillmentPolicyId && conn.fulfillmentPolicyId) {
+    fulfillmentPolicyId = conn.fulfillmentPolicyId;
+    routingReason = 'connection-default-fulfillment';
   }
 
   if (!fulfillmentPolicyId) {
