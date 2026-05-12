@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import nodemailer from 'nodemailer';
+import { google } from 'googleapis';
 import { cronGuard } from '../utils/cronGuard';
 import { v4 as uuid } from 'uuid';
 import jwt from 'jsonwebtoken';
@@ -74,21 +74,51 @@ const getDailyQuota = (daysSinceStart: number): number => {
   return 200;
 };
 
-const createTransport = () => {
-  if (!process.env.OUTREACH_WORKSPACE_EMAIL || !process.env.OUTREACH_WORKSPACE_APP_PASSWORD) {
-    throw new Error('Missing OUTREACH_WORKSPACE_EMAIL or OUTREACH_WORKSPACE_APP_PASSWORD');
+const createGmailClient = () => {
+  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !process.env.GMAIL_REFRESH_TOKEN) {
+    throw new Error('Missing GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, or GMAIL_REFRESH_TOKEN');
   }
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    // requireTLS removed — opportunistic STARTTLS matches the May 5 config that worked.
-    // requireTLS:true alters the handshake and breaks on Railway's network path to Gmail.
-    auth: {
-      user: process.env.OUTREACH_WORKSPACE_EMAIL,
-      pass: process.env.OUTREACH_WORKSPACE_APP_PASSWORD,
-    },
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET
+  );
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GMAIL_REFRESH_TOKEN,
   });
+  return google.gmail({ version: 'v1', auth: oauth2Client });
+};
+
+/**
+ * Build an RFC 2822 raw email message string with proper MIME headers.
+ * Returns base64url-encoded string ready for Gmail API.
+ */
+const buildRawEmail = (opts: {
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+  listUnsubscribe: string;
+}): string => {
+  const boundary = `boundary_${uuid().replace(/-/g, '')}`;
+  const rawLines = [
+    `From: ${opts.from}`,
+    `To: ${opts.to}`,
+    `Subject: ${opts.subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    `List-Unsubscribe: ${opts.listUnsubscribe}`,
+    `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
+    '',
+    `--${boundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    `Content-Transfer-Encoding: 7bit`,
+    '',
+    opts.html,
+    '',
+    `--${boundary}--`,
+  ];
+  const rawEmail = rawLines.join('\r\n');
+  return Buffer.from(rawEmail).toString('base64url');
 };
 
 const escapeHtml = (str: string): string => {
@@ -272,7 +302,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
       recordsToSend.push(...untieredRecords);
     }
 
-    const transport = createTransport();
+    const gmail = createGmailClient();
     let sent = 0;
     let failed = 0;
 
@@ -338,22 +368,25 @@ export const sendOutreachEmails = async (): Promise<void> => {
         // Append tracking pixel — templates don't include <body> tags, so just concat
         const htmlWithPixel = `${html}<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />`;
 
-        // FROM uses OUTREACH_FROM_EMAIL if set, else falls back to auth username.
-        // Required when authenticating as a Workspace primary mailbox (e.g. outreach@finda.sale)
+        // FROM uses OUTREACH_FROM_EMAIL if set, else falls back to outreach@finda.sale.
+        // Required when authenticating via OAuth2 as the Workspace user (outreach@finda.sale)
         // but sending FROM a brand-aligned alias on the subdomain whose SPF/DKIM is configured
         // (e.g. find@outreach.finda.sale).
-        const fromEmail = process.env.OUTREACH_FROM_EMAIL || process.env.OUTREACH_WORKSPACE_EMAIL;
-        await transport.sendMail({
+        const fromEmail = process.env.OUTREACH_FROM_EMAIL || 'outreach@finda.sale';
+        const toEmail = process.env.OUTREACH_TEST_EMAIL || record.emailAddress;
+        const listUnsubscribeHeader = `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${unsubscribeLink}>`;
+
+        const rawMessage = buildRawEmail({
           from: `The FindA.Sale Team <${fromEmail}>`,
-          to: process.env.OUTREACH_TEST_EMAIL || record.emailAddress,
+          to: toEmail,
           subject,
           html: htmlWithPixel,
-          headers: {
-            // RFC 2369 + RFC 8058: enables Gmail/Yahoo one-click unsubscribe button.
-            // Both mailto and https are required by Gmail's bulk-sender policy.
-            'List-Unsubscribe': `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${unsubscribeLink}>`,
-            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-          },
+          listUnsubscribe: listUnsubscribeHeader,
+        });
+
+        await gmail.users.messages.send({
+          userId: 'me',
+          requestBody: { raw: rawMessage },
         });
 
         // Log SENT event for CAN-SPAM audit trail
@@ -444,6 +477,27 @@ export async function syncLeadTierGroups(): Promise<void> {
  *
  * sendOutreachEmails: runs every 4 hours (6 windows/day) to distribute the daily quota.
  * syncLeadTierGroups: runs weekly on Sundays at 02:00 UTC.
+ *
+ * Both gates on OUTREACH_ENABLED=true.
+ */
+export function initOutreachEmailsCron(): void {
+  if (process.env.OUTREACH_ENABLED !== 'true') {
+    console.log('[OutreachCron] Disabled — set OUTREACH_ENABLED=true to activate');
+    return;
+  }
+
+  // Every 4 hours — spreads daily quota across 6 windows
+  cron.schedule('0 */4 * * *', cronGuard({ jobName: 'outreach-emails' }, async () => {
+    await sendOutreachEmails();
+  }), { timezone: 'UTC' });
+  console.log('[OutreachCron] Registered — runs every 4 hours UTC');
+
+  // Weekly Sunday 04:00 UTC — sync lead tiers to MailerLite groups (offset from scoring at 02:00 to avoid race)
+  cron.schedule('0 4 * * 0', cronGuard({ jobName: 'sync-lead-tier-groups' }, async () => {
+    await syncLeadTierGroups();
+  }), { timezone: 'UTC' });
+  console.log('[OutreachCron] syncLeadTierGroups registered — runs Sundays 04:00 UTC');
+}
  *
  * Both gates on OUTREACH_ENABLED=true.
  */
