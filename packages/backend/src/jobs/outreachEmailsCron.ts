@@ -82,8 +82,8 @@ const createTransport = () => {
     host: 'smtp.gmail.com',
     port: 587,
     secure: false,
-    requireTLS: true,
-    family: 4, // Force IPv4 — Railway IPv6 egress causes STARTTLS hangs on smtp.gmail.com
+    // requireTLS removed — opportunistic STARTTLS matches the May 5 config that worked.
+    // requireTLS:true alters the handshake and breaks on Railway's network path to Gmail.
     auth: {
       user: process.env.OUTREACH_WORKSPACE_EMAIL,
       pass: process.env.OUTREACH_WORKSPACE_APP_PASSWORD,
