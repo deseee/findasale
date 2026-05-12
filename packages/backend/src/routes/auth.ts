@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { register, login, oauthLogin, redeemInvite, verifyEmail, oauthVerifyAge } from '../controllers/authController';
+import { register, login, oauthLogin, redeemInvite, verifyEmail, oauthVerifyAge, linkOAuthProvider } from '../controllers/authController';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import bcrypt from 'bcryptjs';
@@ -152,6 +152,7 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
   }
 });
 router.post('/oauth-verify-age', authenticate, oauthVerifyAge); // P0-L1: COPPA compliance — OAuth age verification
+router.post('/oauth/link', authenticate, linkOAuthProvider); // Roadmap #422: authenticated OAuth provider linking (replaces silent auto-link in /oauth)
 
 // Change password — requires current password for verification
 router.post('/change-password', authenticate, async (req: AuthRequest, res: Response) => {
@@ -353,4 +354,10 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     user: {
       ...req.user,
       organizerTier: organizer?.subscriptionTier ?? 'SIMPLE',
-      subscriptio
+      subscriptionStatus: organizer?.subscriptionStatus ?? null,
+      subscriptionLapsed: req.user.subscriptionLapsed ?? false,
+    },
+  });
+});
+
+export default router;

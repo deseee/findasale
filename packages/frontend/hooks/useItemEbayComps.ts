@@ -6,7 +6,9 @@ export interface EbayComp {
   ebayListingId?: string;
   ebayPrice?: number;
   ebayCondition?: string;
-  ebayImageUrl?: string;
+  ebayImageUrl?: string | null;
+  ebayListingUrl?: string;
+  ebayTitle?: string;
   fetchedAt?: string;
 }
 
