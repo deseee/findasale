@@ -55,13 +55,6 @@ const BrandKitPage = () => {
   });
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [authToken, setAuthToken] = useState<string>('');
-
-  // Read JWT from localStorage after mount (localStorage not available during SSR)
-  useEffect(() => {
-    const t = localStorage.getItem('token') || localStorage.getItem('authToken') || '';
-    setAuthToken(t);
-  }, []);
 
   // Redirect if not authenticated or not an organizer
   if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -503,34 +496,38 @@ const BrandKitPage = () => {
                 ) : (
                   /* Download buttons grid */
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/business-card?token=${authToken}`}
-                      className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
-                    >
-                      <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Business Cards</h3>
-                      <p className="text-xs text-warm-600 dark:text-warm-400">10 cards per page (3.5" &times; 2")</p>
-                    </a>
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/letterhead?token=${authToken}`}
-                      className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
-                    >
-                      <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Letterhead Template</h3>
-                      <p className="text-xs text-warm-600 dark:text-warm-400">Blank page ready for printing</p>
-                    </a>
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/social-headers?token=${authToken}`}
-                      className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
-                    >
-                      <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Social Headers</h3>
-                      <p className="text-xs text-warm-600 dark:text-warm-400">Facebook, Instagram, Twitter templates</p>
-                    </a>
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/yard-sign?token=${authToken}`}
-                      className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
-                    >
-                      <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Branded Yard Sign</h3>
-                      <p className="text-xs text-warm-600 dark:text-warm-400">Print-ready sign for your sale</p>
-                    </a>
+                    {([
+                      { path: 'business-card', label: 'Download Business Cards', sub: '10 cards per page (3.5\" × 2\")', filename: 'business-cards.pdf' },
+                      { path: 'letterhead', label: 'Download Letterhead Template', sub: 'Blank page ready for printing', filename: 'letterhead.pdf' },
+                      { path: 'social-headers', label: 'Download Social Headers', sub: 'Facebook, Instagram, Twitter templates', filename: 'social-headers.pdf' },
+                      { path: 'yard-sign', label: 'Download Branded Yard Sign', sub: 'Print-ready sign for your sale', filename: 'yard-sign.pdf' },
+                    ] as { path: string; label: string; sub: string; filename: string }[]).map(({ path, label, sub, filename }) => (
+                      <button
+                        key={path}
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const response = await api.get(`/brand-kit/organizer/${path}`, { responseType: 'blob' });
+                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                            const downloadUrl = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = downloadUrl;
+                            link.download = filename;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(downloadUrl);
+                          } catch (err: any) {
+                            console.error('Download failed:', err);
+                            showToast(err?.response?.data?.message || 'Download failed', 'error');
+                          }
+                        }}
+                        className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer w-full"
+                      >
+                        <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">{label}</h3>
+                        <p className="text-xs text-warm-600 dark:text-warm-400">{sub}</p>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>

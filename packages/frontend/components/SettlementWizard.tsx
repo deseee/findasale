@@ -305,16 +305,10 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
                 onClick={async () => {
                   setIsDownloading(true);
                   try {
-                    const url = `${process.env.NEXT_PUBLIC_API_URL || '/api'}/sales/${saleId}/settlement/receipt`;
-                    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-                    const response = await fetch(url, {
-                      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                    const response = await api.get(`/sales/${saleId}/settlement/receipt`, {
+                      responseType: 'blob',
                     });
-                    if (!response.ok) {
-                      const errorText = await response.text();
-                      throw new Error(`HTTP ${response.status}: ${errorText}`);
-                    }
-                    const blob = await response.blob();
+                    const blob = new Blob([response.data], { type: 'application/pdf' });
                     const downloadUrl = window.URL.createObjectURL(blob);
                     const link = document.createElement('a');
                     link.href = downloadUrl;
