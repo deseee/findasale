@@ -8,7 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S716 — QA Sprint + Bug Fixes (COMPLETE — wrap)**
+**Latest: S717 — eBay Price Comps + Backend Crash Fix (COMPLETE — wrap)**
+
+eBay price research panel on review page fully debugged and fixed. Root causes resolved: (1) Backend crash loop — `ebayController.ts` was truncated mid-template-literal at line 4246 (`console.log(\`[eBay EndedSync] Batch of \${bat`) — restored missing 15 lines from git history. (2) Browse API `sort=price` returning cheap accessories (AC adapters at $11) instead of actual items — switched to `sort=bestMatch`. (3) bestMatch returning too many unrelated models — added `cleanTitle()` function that strips everything after first comma/standalone dash, removes generic descriptors, caps at 5 words (e.g. "Zoom B3 Multi-Effects Processor, Rec, Model B3" → "Zoom B3 Multi-Effects Processor"). Also: eBay developer account audit — Growth Check ticket (Incident 260428-000018) was filed April 28 from wrong account (artifactmi@gmail.com, Patrick's personal eBay seller account) — production keys are on deseee@yahoo.com / deseee1 account. No application ever reached the correct account. Draft reply prepared to correct App ID and add Finding API request. No Finding API access yet — Browse API is what's running.
+
+**S716 (prior):**
+
+Chrome QA on 10 features from S712 backlog. Verified passing: #411 Dorm Dash ✅, Wave 2 edit-sale ✅ (all 6 fields present), #412 Cash Bridge POS ✅ (Venmo/Zelle handle fields added mid-session), Leaderboard ✅, #304 Early Access Cache ✅, #288 Featured Boost ✅, #310 Color Discount Rules ✅. Three P1 bugs found and fixed same session: (1) Brand Kit PDFs + Settlement Receipt both had `?token=` empty on download links — root cause auth migrated to httpOnly cookies but these two still read localStorage; fixed to use axios instance with `withCredentials: true`. (2) Charity Close #235 — `getUnsoldItems` query too broad, returned non-AVAILABLE items that `donationController` rejected; fixed to filter `status: 'AVAILABLE'` only. Also fixed mid-session: Venmo/Zelle handle fields missing from Settings and POS — `venmoHandle`/`zelleHandle` already in schema, wired to Settings Profile tab + PATCH endpoint + POS display. Push block in Next Session.
 
 Chrome QA on 10 features from S712 backlog. Verified passing: #411 Dorm Dash ✅, Wave 2 edit-sale ✅ (all 6 fields present), #412 Cash Bridge POS ✅ (Venmo/Zelle handle fields added mid-session), Leaderboard ✅, #304 Early Access Cache ✅, #288 Featured Boost ✅, #310 Color Discount Rules ✅. Three P1 bugs found and fixed same session: (1) Brand Kit PDFs + Settlement Receipt both had `?token=` empty on download links — root cause auth migrated to httpOnly cookies but these two still read localStorage; fixed to use axios instance with `withCredentials: true`. (2) Charity Close #235 — `getUnsoldItems` query too broad, returned non-AVAILABLE items that `donationController` rejected; fixed to filter `status: 'AVAILABLE'` only. Also fixed mid-session: Venmo/Zelle handle fields missing from Settings and POS — `venmoHandle`/`zelleHandle` already in schema, wired to Settings Profile tab + PATCH endpoint. Push block in Next Session.
 
@@ -84,6 +90,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 ## Recent Sessions
 
+### S717 — eBay Price Comps + Backend Crash Fix (COMPLETE — wrap)
+
+Backend crash loop fixed (ebayController.ts truncated mid-template-literal — 15 lines missing, restored from git). Browse API price comps fixed: `sort=price` → `sort=bestMatch`; added `cleanTitle()` to strip post-comma content, generic words, cap at 5 words — "Zoom B3 Multi-Effects Processor, Rec, Model B3" now searches "Zoom B3 Multi-Effects Processor". eBay developer account audit: Growth Check (Incident 260428-000018, filed 2026-04-28) was filed under artifactmi@gmail.com (Patrick's personal eBay seller account, username artifactcoinsandcollectibles) — production keys on deseee1/deseee@yahoo.com. Draft reply prepared to correct App ID + add Finding API request. No Finding API approval yet. Vercel proxy `EBAY_CLIENT_SECRET` was file secret (not plain text) — fixed in Vercel dashboard. React hooks order crash (#310) — `isDark` useState/useEffect were after early return — moved above all early returns.
+
 ### S716 — QA Sprint + 4 Bug Fixes (COMPLETE — wrap)
 
 Chrome QA on 10 features from S712 backlog. ✅ Verified: #411 Dorm Dash (crash fixed), Wave 2 edit-sale (all 6 fields), #412 Cash Bridge POS (handle fields added), Leaderboard, #304 Early Access Cache, #288 Featured Boost, #310 Color Discount Rules. Three P1 bugs found and fixed: #241 Brand Kit PDFs + #228 Settlement Receipt shared root cause (download links used localStorage for auth, empty after cookie migration — replaced with axios+withCredentials). #235 Charity Close — `getUnsoldItems` used `notIn:['SOLD','RESERVED']` but donationController required `status==='AVAILABLE'` — fixed to `status:'AVAILABLE'`. Mid-session fix: #412 Venmo/Zelle handle fields added to Settings Profile tab + PATCH endpoint + POS display. #174 Auction Mechanics human-verified by Patrick. All 3 P1 fixes pending re-verify after push.
@@ -122,30 +132,36 @@ NSFW detection deferred (roadmap #394 closed). Chrome QA: #174 bid protection �
 
 ---
 
-## Next Session — S717
+## Next Session — S718
 
-### Priority 1 — Patrick push (S716 fixes)
+### Priority 1 — Patrick push (S717 fixes)
 
 ```powershell
+git add packages/backend/src/controllers/ebayController.ts
 git add packages/frontend/pages/organizer/brand-kit.tsx
 git add packages/frontend/components/SettlementWizard.tsx
-git add packages/backend/src/controllers/ebayController.ts
 git add packages/frontend/pages/organizer/settings.tsx
 git add packages/backend/src/routes/organizers.ts
 git add packages/frontend/pages/organizer/pos.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix(#241,#228,#235,#412): PDF auth via axios cookies; charity close AVAILABLE filter; Venmo/Zelle handle fields"
+git commit -m "fix: eBay price comps — truncation crash, bestMatch sort, cleanTitle query trimming"
 .\push.ps1
 ```
 
-### Priority 2 — Re-verify 3 fixes after push (Chrome QA)
+### Priority 2 — eBay Growth Check reply (Patrick action)
 
-1. Brand Kit PDFs — /organizer/brand-kit as PRO user2, click all 4 download buttons, verify PDFs arrive
-2. Settlement Receipt — /organizer/settlement/qa-settlement-001, click Download Receipt, verify no 401
-3. Charity Close — DonationModal flow on an ENDED sale (need AVAILABLE-status items — may need DB seed)
+Reply to Incident 260428-000018 from artifactmi@gmail.com. Draft from S717:
+- Correct App ID to `PatrickD-FindAVal-PRD-064c158e4-8fa09c76` (deseee1 account)
+- Add Finding API (`findCompletedItems`) access request for sold-price data
 
-### Priority 3 — Carry-forward Patrick actions
+### Priority 3 — Re-verify S716 fixes after push (Chrome QA)
+
+1. Brand Kit PDFs — /organizer/brand-kit as PRO user, click all 4 PDF downloads
+2. Settlement Receipt — /organizer/settlement/qa-settlement-001, click Download Receipt
+3. Charity Close — DonationModal flow on a sale with AVAILABLE items
+
+### Priority 4 — Carry-forward Patrick actions
 
 1. **ShopperOrganizerIntroduction migration (P0 for leaderboard scouts):**
    ```powershell
@@ -155,7 +171,7 @@ git commit -m "fix(#241,#228,#235,#412): PDF auth via axios cookies; charity clo
    ```
 2. **Railway env:** Confirm `OUTREACH_ENABLED=true` and `OUTREACH_WARMUP_START_DATE=2026-05-06`
 
-### Priority 4 — Decisions needed
+### Priority 5 — Decisions needed
 
 - **AuctionNinja + NAA scrapers:** Enable? Set `enabled:true` in sourceRegistry.
 - **MT scraper fix:** Railway → backend → Variables → copy `INTERNAL_API_KEY` → GitHub Secrets → `INTERNAL_API_TOKEN` → re-run MT workflow.

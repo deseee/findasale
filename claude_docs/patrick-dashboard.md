@@ -1,45 +1,63 @@
-# Patrick's Dashboard — S716 Wrap
+# Patrick's Dashboard — S717 Wrap
 
 ---
 
 ## What Happened This Session
 
-QA sprint through the S712 backlog — 10 features tested, 4 bugs fixed same session.
-
-**Passed:** Dorm Dash ✅, Wave 2 edit-sale ✅, Leaderboard ✅, Early Access Cache ✅, Featured Boost ✅, Color Discount Rules ✅
+eBay price research panel on the Smart Review Queue fully fixed. Plus backend was crash-looping on startup — fixed that too.
 
 **Fixed this session:**
-- Venmo/Zelle handle fields now in Settings → Profile tab (enter your handles there, they show in POS)
-- Brand Kit PDFs — all 4 PDF downloads were broken (empty auth token) — fixed
-- Settlement Receipt — Download Receipt was returning 401 — fixed
-- Charity Close — "Cannot donate items not AVAILABLE" error — fixed
-
-All 3 fixes are in the push block below — push then re-verify in browser.
+- Backend crash loop — ebayController.ts was cut off mid-line, Railway kept restarting every 30s — restored
+- eBay price comps were pulling cheap accessories ($11 adapters) for a Zoom B3 — switched sort to bestMatch
+- Added smart title cleaning so "Zoom B3 Multi-Effects Processor, Rec, Model B3" searches as "Zoom B3 Multi-Effects Processor" instead of the full noisy title
+- Found that the Growth Check you filed in April was submitted from your personal eBay seller account (artifactmi@gmail.com / artifactcoinsandcollectibles) not the FindA.Sale dev account — draft reply ready for you to send
 
 ---
 
 ## Push Now
 
 ```powershell
+git add packages/backend/src/controllers/ebayController.ts
 git add packages/frontend/pages/organizer/brand-kit.tsx
 git add packages/frontend/components/SettlementWizard.tsx
-git add packages/backend/src/controllers/ebayController.ts
 git add packages/frontend/pages/organizer/settings.tsx
 git add packages/backend/src/routes/organizers.ts
 git add packages/frontend/pages/organizer/pos.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix(#241,#228,#235,#412): PDF auth via axios cookies; charity close AVAILABLE filter; Venmo/Zelle handle fields"
+git commit -m "fix: eBay price comps — truncation crash, bestMatch sort, cleanTitle query trimming"
 .\push.ps1
 ```
 
 ---
 
-## After Push — Re-verify These 3
+## Action Required — eBay Growth Check Reply
 
-1. **Brand Kit PDFs** — /organizer/brand-kit → click any of the 4 PDF download buttons → should download (no more "Organizer access required" error)
-2. **Settlement Receipt** — /organizer/settlement/qa-settlement-001 → work through wizard → click Download Receipt → should get a PDF
-3. **Charity Close** — find an ENDED sale with items → Settlement → Receipt tab → Donate Items → should now complete without error
+Reply to **Incident: 260428-000018** from artifactmi@gmail.com. Use the reply format in the original email (paste below the marker line):
+
+> Hello eBay Developer Support,
+>
+> Following up on this Application Growth Check request — I wanted to provide a correction and an addendum.
+>
+> **Correction — App ID clarification:** The application described in this request (FindA.Sale) is running under a different developer account than the one used to file this ticket. The production keyset being used is:
+> - **App ID:** PatrickD-FindAVal-PRD-064c158e4-8fa09c76
+> - **Developer account:** deseee1 (deseee@yahoo.com)
+>
+> This ticket was inadvertently filed from a secondary developer account (artifactmi@gmail.com). Please associate this Growth Check review with the correct App ID above.
+>
+> **Addendum — Finding API access request:** In addition to the Browse API rate limit increase, we are also requesting access to the Finding API's `findCompletedItems` operation for the production keyset. We use completed/sold listing data to provide organizers with accurate price comparables. The Browse API returns active listings only, which is less accurate for pricing purposes.
+>
+> Our App ID, use case, and application URL (https://finda.sale) remain as described in the original submission.
+>
+> Thank you, Patrick Desmond / FindA.Sale
+
+---
+
+## After Push — Re-verify These 3 (S716 fixes)
+
+1. **Brand Kit PDFs** — /organizer/brand-kit → click any of the 4 PDF download buttons
+2. **Settlement Receipt** — /organizer/settlement/qa-settlement-001 → Download Receipt
+3. **Charity Close** — ENDED sale with AVAILABLE items → Settlement → Donate Items
 
 ---
 
@@ -70,7 +88,9 @@ npx prisma migrate deploy
 | | |
 |---|---|
 | Vercel (frontend) | ✅ Green |
-| Railway (backend) | ✅ Green |
+| Railway (backend) | ✅ Green (crash loop fixed S717) |
+| eBay price comps | ✅ Working — Browse API, bestMatch sort |
+| eBay Finding API | ⏳ Pending Growth Check approval |
 | Outreach emails | ✅ Live — warmup active |
 | Leaderboard scouts | 🔴 Empty until migration deployed |
 | Montana scraper | ❌ 401 — secret mismatch (Patrick fix above) |
