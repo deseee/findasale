@@ -1090,9 +1090,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 What's inside
               </h2>
               {sale.description ? (
-                <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'rgba(26,24,20,0.85)' }}>{sale.description}</p>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap text-[rgba(26,24,20,0.85)] dark:text-[rgba(242,240,234,0.85)]">{sale.description}</p>
               ) : (
-                <p className="text-sm italic" style={{ color: 'rgba(26,24,20,0.4)' }}>Description coming soon.</p>
+                <p className="text-sm italic text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]">Description coming soon.</p>
               )}
               <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8 text-xs" style={{ color: 'rgba(26,24,20,0.5)', fontFamily: 'ui-monospace, monospace' }}>
                 <span className="dark:text-[rgba(242,240,234,0.5)]">
@@ -1106,12 +1106,12 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* When */}
                 <div>
-                  <div className="text-xs uppercase tracking-widest mb-2.5" style={{ fontFamily: 'ui-monospace, monospace', color: 'rgba(26,24,20,0.4)', letterSpacing: '0.1em' }}>When</div>
+                  <div className="text-xs uppercase tracking-widest mb-2.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>When</div>
                   {sale.saleType === 'RETAIL' ? (
                     <>
                       <div className="font-medium text-base" style={{ fontFamily: '"Inter Tight", "Inter", sans-serif' }}>Permanent Storefront</div>
                       {(sale.scrapedMetadata as any)?.hours_display && (
-                        <p className="text-sm mt-1" style={{ color: 'rgba(26,24,20,0.62)' }}>🕐 {(sale.scrapedMetadata as any).hours_display}</p>
+                        <p className="text-sm mt-1 text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">🕐 {(sale.scrapedMetadata as any).hours_display}</p>
                       )}
                     </>
                   ) : (
@@ -1149,7 +1149,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
 
                 {/* Where */}
                 <div>
-                  <div className="text-xs uppercase tracking-widest mb-2.5" style={{ fontFamily: 'ui-monospace, monospace', color: 'rgba(26,24,20,0.4)', letterSpacing: '0.1em' }}>Where</div>
+                  <div className="text-xs uppercase tracking-widest mb-2.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>Where</div>
                   <div className="flex gap-3">
                     {/* Map thumbnail */}
                     {sale.lat && sale.lng ? (
@@ -1171,7 +1171,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                     )}
                     <div className="flex-1 text-sm leading-relaxed">
                       {sale.address && <div className="font-medium">{sale.address}</div>}
-                      <div style={{ color: 'rgba(26,24,20,0.62)' }}>{sale.city}, {sale.state} {sale.zip}</div>
+                      <div className="text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">{sale.city}, {sale.state} {sale.zip}</div>
                       <button
                         className="mt-2 text-xs font-medium flex items-center gap-1 hover:underline"
                         style={{ color: '#C8552B' }}
@@ -1204,7 +1204,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               {/* Day-of notes */}
               {sale.notes && (
                 <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8">
-                  <div className="text-xs uppercase tracking-widest mb-2" style={{ fontFamily: 'ui-monospace, monospace', color: 'rgba(26,24,20,0.4)', letterSpacing: '0.1em' }}>House rules</div>
+                  <div className="text-xs uppercase tracking-widest mb-2 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>House rules</div>
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">{sale.notes}</p>
                 </div>
               )}
@@ -1212,25 +1212,13 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               {/* Feature #84: Approach Notes */}
               {approachNotes && approachNotes.notes && (
                 <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8">
-                  <div className="text-xs uppercase tracking-widest mb-2 flex items-center gap-1.5" style={{ fontFamily: 'ui-monospace, monospace', color: 'rgba(26,24,20,0.4)', letterSpacing: '0.1em' }}>
+                  <div className="text-xs uppercase tracking-widest mb-2 flex items-center gap-1.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>
                     📍 Your approach notes
                   </div>
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">{approachNotes.notes}</p>
                 </div>
               )}
             </section>
-
-            {/* ── FULL MAP (large) ── */}
-            {sale.lat && sale.lng && (
-              <section className="rounded-xl overflow-hidden border border-black/10 dark:border-white/8">
-                <SaleMap
-                  singlePin={{ lat: sale.lat, lng: sale.lng, label: `${sale.title} — ${sale.address ? `${sale.address}, ` : ''}${sale.city}, ${sale.state}` }}
-                  entrancePin={sale.entranceLat && sale.entranceLng ? { lat: sale.entranceLat, lng: sale.entranceLng, note: sale.entranceNote } : undefined}
-                  photoOpStations={photoOpStations}
-                  height="320px"
-                />
-              </section>
-            )}
 
             {/* #416: Sale Floor Map */}
             <SaleFloorMap
@@ -1634,7 +1622,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
             )}
 
             {/* ── ORGANIZER CARD (bottom of main, inline layout) ── */}
-            <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
+            <section className="lg:hidden rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
               <div className="flex items-center gap-4">
                 {/* Logo / initials */}
                 <div className="w-14 h-14 rounded-xl flex-shrink-0 flex items-center justify-center border border-black/10 dark:border-white/8 bg-[#FFFFFF] dark:bg-[#19202F]" style={{ fontFamily: '"Inter Tight","Inter",sans-serif', fontWeight: 700, fontSize: 20, color: '#C8552B', letterSpacing: '-0.02em' }}>
@@ -1791,9 +1779,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
             </div>
 
             {/* Holds & shipping info */}
-            <div className="rounded-xl p-4 text-xs leading-relaxed" style={{ background: 'rgba(20,18,14,0.05)', color: 'rgba(26,24,20,0.5)' }}>
-              <div className="font-medium mb-1.5 uppercase tracking-wider text-[10px]" style={{ fontFamily: 'ui-monospace, monospace', color: 'rgba(26,24,20,0.62)', letterSpacing: '0.08em' }}>Holds & shipping</div>
-              Holds last <strong style={{ color: '#1A1814' }}>{sale.holdDurationHours || 48} hours</strong> after a yellow tag. Items marked "ships" are paid via Stripe and sent within 3 business days.
+            <div className="rounded-xl p-4 text-xs leading-relaxed text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)] bg-black/5 dark:bg-white/5">
+              <div className="font-medium mb-1.5 uppercase tracking-wider text-[10px] text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.08em' }}>Holds & shipping</div>
+              Holds last <strong className="text-[#1A1814] dark:text-[#F2F0EA]">{sale.holdDurationHours || 48} hours</strong> after a yellow tag. Items marked "ships" are paid via Stripe and sent within 3 business days.
               {sale.returnWindowHours && <div className="mt-1">Returns accepted within {sale.returnWindowHours}h of pickup.</div>}
             </div>
 
