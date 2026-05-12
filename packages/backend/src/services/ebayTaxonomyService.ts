@@ -369,12 +369,13 @@ export async function suggestCategories(
     // Fetch from eBay Taxonomy API
     const treeId = '0'; // EBAY_US
     const q = query.slice(0, 100);
+    // q must be embedded in the path query string — Vercel proxy forwards `path` only and drops other params
+    const taxonomyPath = `/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions?q=${encodeURIComponent(q)}`;
     const response = await axios.get(
       `${process.env.FRONTEND_URL ?? 'https://finda.sale'}/api/proxy/ebay`,
       {
         params: {
-          path: `/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions`,
-          q,
+          path: taxonomyPath,
         },
         headers: {
           Authorization: `Bearer ${accessToken}`,
