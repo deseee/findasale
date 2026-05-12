@@ -55,19 +55,21 @@ const verifyEmailLimiter = rateLimit({
   message: { error: 'Too many verification requests. Please try again in an hour.' },
 });
 
-// L1: Login rate limiter — 5 attempts per 15 minutes per IP (P0-S2: COPPA compliance)
+// L1: Login rate limiter — 15 failed attempts per 15 minutes per IP (P0-S2: COPPA compliance)
+// skipSuccessfulRequests: only failed logins count — legitimate multi-device users are never blocked.
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
+  max: 15,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  message: { error: 'Too many failed login attempts. Please try again in 15 minutes.' },
 });
 
-// L2: Register rate limiter — 3 attempts per hour per IP (P0-S2: COPPA compliance)
+// L2: Register rate limiter — 5 attempts per hour per IP (P0-S2: COPPA compliance)
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many registration attempts.' },
