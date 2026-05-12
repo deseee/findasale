@@ -28,6 +28,7 @@ import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highVa
 import { awardXp, XP_AWARDS, spendXp, getSpendableXp, checkMonthlyXpCap } from '../services/xpService'; // Phase 2a: XP awards
 import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
 import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase 2: Async eBay comps
+import { fetchEbayPriceComps } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -929,9 +930,13 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Feature #145: Award XP for condition rating (once per item, when first set)
-    if (conditionGrade !== undefined && conditionGrade && !item.conditionGrade) {
-      // Only award if conditionGrade was previously null/undefined and is now set to a non-null value
+    // Feature #145: Award XP for condition rating (once per item, when organizer submits a grade)
+    // Bug #280 (S720): Previously gated on `!item.conditionGrade`, which blocked the award
+    // whenever AI auto-populated conditionGrade (via processRapidDraft) before the
+    // organizer's first manual save. The pointsTransaction lookup below is the
+    // authoritative "once per item" guard, so the in-memory check is unnecessary
+    // and was suppressing the legitimate award.
+    if (conditionGrade !== undefined && conditionGrade) {
       try {
         // Check if this item has already earned CONDITION_RATING XP
         const existingConditionXp = await prisma.pointsTransaction.findFirst({
@@ -1142,29 +1147,57 @@ export const getBids = async (req: AuthRequest, res: Response) => {
 /**
  * ADR-069 Phase 2: Get top 3 eBay comparable sales for an item.
  * GET /api/items/:id/ebay-comps
- * Returns the ItemCompLookup for this item (single record, @unique constraint on itemId).
+ *
+ * Bug #326 fix: Previously returned the singleton ItemCompLookup row (1 record max,
+ * with at most ONE ebayImageUrl), so EbayCompTiles couldn't render an image grid.
+ * Now returns the top 3 live eBay listings (each with its own image, price, condition)
+ * sourced from the same fetchEbayPriceComps pipeline that powers the comp summary
+ * card — reusing the in-memory findingApiCache to avoid duplicate API calls.
  */
 export const getItemEbayComps = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // Fetch the single eBay comp lookup for this item
-    const comp = await prisma.itemCompLookup.findUnique({
-      where: { itemId: id },
+    // Look up the item to get title + condition for the eBay search
+    const item = await prisma.item.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        conditionGrade: true,
+      },
     });
 
-    // If no comp found, return empty array (compatible with frontend expecting array)
-    if (!comp) {
+    if (!item || !item.title) {
       return res.json({ comps: [] });
     }
 
-    // Serialize BigInt estimatedPrice to string for JSON compatibility
-    const serialized = {
-      ...comp,
-      estimatedPrice: comp.estimatedPrice ? comp.estimatedPrice.toString() : null,
-    };
+    // Fetch live top listings (cache-backed via findingApiCache in ebayController)
+    const result = await fetchEbayPriceComps({
+      title: item.title,
+      condition: item.conditionGrade || undefined,
+      maxResults: 10,
+    });
 
-    res.json({ comps: [serialized] });
+    // If no real listings (e.g. mock-data fallback or empty), return empty so the
+    // component renders nothing rather than placeholder tiles.
+    if (!result.listings || result.listings.length === 0 || result.isMockData) {
+      return res.json({ comps: [] });
+    }
+
+    // Map up to 3 listings to the EbayComp shape the frontend hook expects.
+    // Each listing becomes its own tile with its own image/price/condition.
+    const comps = result.listings.slice(0, 3).map((listing, idx) => ({
+      id: `${id}-ebay-${idx}`,
+      ebayPrice: listing.price,
+      ebayCondition: listing.condition,
+      ebayImageUrl: listing.imageUrl || null,
+      ebayListingUrl: listing.url,
+      ebayTitle: listing.title,
+      fetchedAt: result.compsRunAt,
+    }));
+
+    res.json({ comps });
   } catch (error) {
     console.error('Error fetching eBay comps:', error);
     res.status(500).json({ message: 'Server error', comps: [] });
