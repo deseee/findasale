@@ -1820,6 +1820,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     const merchantLocationKey = locationResult.merchantLocationKey;
 
     // Push each item to eBay
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
     const results: any[] = [];
 
     for (const item of sale.items) {
