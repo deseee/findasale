@@ -269,123 +269,88 @@ async function getEbayPriceComps(
       return cached.result;
     }
 
+    // Get OAuth token (reuses cached token from getEbayAccessToken)
+    const token = await getEbayAccessToken();
+    if (!token) {
+      return {
+        min: 25, max: 75, median: 45, count: 0, suggestedPrice: 45,
+        compsRunAt: new Date().toISOString(), listings: [], isMockData: true,
+        message: 'eBay token unavailable — showing sample data',
+      };
+    }
+
+    // Browse API: search active fixed-price listings as a proxy for market value.
+    // The Finding API (findCompletedItems) requires special eBay approval for production;
+    // the Browse API is the modern OAuth-based replacement available to all production apps.
     const query = encodeURIComponent(title);
+    const browseUrl =
+      `https://api.ebay.com/buy/browse/v1/item_summary/search?` +
+      `q=${query}&` +
+      `filter=buyingOptions%3A%7BFIXED_PRICE%7D&` +
+      `sort=price&` +
+      `limit=${Math.min(limit, 50)}`;
 
-    // Use Finding API's findCompletedItems endpoint to get SOLD items (not active listings)
-    // The Finding API returns completed items that were actually sold
-    const url =
-      `https://svcs.ebay.com/services/search/FindingService/v1?` +
-      `OPERATION-NAME=findCompletedItems&` +
-      `SERVICE-VERSION=1.0.0&` +
-      `SECURITY-APPNAME=${clientId}&` +
-      `RESPONSE-DATA-FORMAT=JSON&` +
-      `keywords=${query}&` +
-      `itemFilter(0).name=SoldItemsOnly&` +
-      `itemFilter(0).value=true&` +
-      `sortOrder=EndTimeSoonest&` +
-      `paginationInput.entriesPerPage=${Math.min(limit, 100)}`;
-
-    const response = await fetch(url, {
+    const response = await fetch(browseUrl, {
       method: 'GET',
       headers: {
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
+        'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
       },
     });
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => '(unreadable)');
-      console.error(`[eBay] Finding API failed: ${response.status} — body: ${errBody.slice(0, 500)}`);
-      // Fallback to mock data on API error
+      console.error(`[eBay] Browse API failed: ${response.status} — body: ${errBody.slice(0, 500)}`);
       return {
-        min: 25,
-        max: 75,
-        median: 45,
-        count: 0,
-        suggestedPrice: 45,
-        compsRunAt: new Date().toISOString(),
-        listings: [],
-        isMockData: true,
+        min: 25, max: 75, median: 45, count: 0, suggestedPrice: 45,
+        compsRunAt: new Date().toISOString(), listings: [], isMockData: true,
         message: 'eBay API error — showing sample data',
       };
     }
 
     const data = (await response.json()) as any;
+    const items = data.itemSummaries || [];
 
-    // Check for eBay API errors in response
-    if (data.ack !== 'Success') {
-      console.warn(`[eBay] Finding API returned non-success ack: ${data.ack}`);
-      return {
-        min: 25,
-        max: 75,
-        median: 45,
-        count: 0,
-        suggestedPrice: 45,
-        compsRunAt: new Date().toISOString(),
-        listings: [],
-        isMockData: false,
-      };
-    }
-
-    const items = data.searchResult?.item || [];
-
-    if (!items || items.length === 0) {
-      // No results found, return empty (not mock data, real result)
+    if (!items.length) {
       const emptyResult = {
-        min: 25,
-        max: 75,
-        median: 45,
-        count: 0,
-        suggestedPrice: 45,
-        compsRunAt: new Date().toISOString(),
-        listings: [],
-        isMockData: false,
+        min: 25, max: 75, median: 45, count: 0, suggestedPrice: 45,
+        compsRunAt: new Date().toISOString(), listings: [], isMockData: false,
       };
       findingApiCache.set(cacheKey, { result: emptyResult, expiresAt: Date.now() + FINDING_API_CACHE_TTL_MS });
       return emptyResult;
     }
 
-    // Extract sold prices from completed items
     const prices = items
-      .map((item: any) => {
-        // For completed items, sellingStatus.currentPrice holds the final sold price
-        const price = item.sellingStatus?.currentPrice?.[0]?.value || 0;
-        return parseFloat(price);
-      })
+      .map((item: any) => parseFloat(item.price?.value || '0'))
       .filter((p: number) => p > 0)
       .sort((a: number, b: number) => a - b);
 
     if (prices.length === 0) {
-      return {
-        min: 25,
-        max: 75,
-        median: 45,
-        count: 0,
-        suggestedPrice: 45,
-        compsRunAt: new Date().toISOString(),
-        listings: [],
-        isMockData: false,
+      const emptyResult = {
+        min: 25, max: 75, median: 45, count: 0, suggestedPrice: 45,
+        compsRunAt: new Date().toISOString(), listings: [], isMockData: false,
       };
+      findingApiCache.set(cacheKey, { result: emptyResult, expiresAt: Date.now() + FINDING_API_CACHE_TTL_MS });
+      return emptyResult;
     }
 
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     const median = prices[Math.floor(prices.length / 2)];
 
-    // Build listings array from found items (completed sales)
     const listings = items.slice(0, 10).map((item: any) => ({
       title: item.title || 'Unknown',
-      price: parseFloat(item.sellingStatus?.currentPrice?.[0]?.value || 0),
+      price: parseFloat(item.price?.value || '0'),
       condition: item.condition || 'Unknown',
-      url: item.viewItemURL || '',
-      imageUrl: item.galleryURL || undefined,
+      url: item.itemWebUrl || '',
+      imageUrl: item.image?.imageUrl || undefined,
     }));
 
-    console.log(`[eBay] Found ${prices.length} sold comps for "${title}" (min=$${min.toFixed(2)}, median=$${median.toFixed(2)}, max=$${max.toFixed(2)})`);
+    console.log(`[eBay] Browse API: ${prices.length} listings for "${title}" (min=$${min.toFixed(2)}, median=$${median.toFixed(2)}, max=$${max.toFixed(2)})`);
 
     const result = {
-      min,
-      max,
-      median,
+      min, max, median,
       count: prices.length,
       suggestedPrice: median,
       compsRunAt: new Date().toISOString(),
