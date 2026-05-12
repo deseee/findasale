@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S719 — Chrome QA Sprint (COMPLETE)**
+**Latest: S720 — Outreach SMTP Debug (WRAPPED — audit required S721)**
+
+Outreach cron fires correctly (logs confirm: Day 6, quota 20/day, window 3) but all sends timeout with "Connection timeout" — no emails reaching real addresses. Two fixes shipped this session: (1) fire-and-forget async route (bypasses Railway 30s HTTP proxy timeout), (2) `requireTLS:true` removed (matches May 5 working config). Both deployed — timeout persists. Patrick directed: do a true audit next session. Key facts: (1) 4 successful sends confirmed in DB on May 5 (commit `558af15a`). (2) All failures are TCP-level Connection timeout on smtp.gmail.com — not auth errors. (3) Two commits pushed this session: `17815d4f` (IPv4 + async fix), `1b2746a3` (requireTLS removal). (4) Full diff of outreachEmailsCron.ts between `558af15a` and `1b2746a3` documented in session summary — 13 changes identified beyond transport config (templates, query logic, new imports, DB write fields, audit logging). Patrick suspects one of these code-level changes — not a network issue.
+
+**Previous: S719 — Chrome QA Sprint (COMPLETE)**
 
 Chrome QA on Blocked Queue items. Verified: #251 Markdown badge ✅ (sale card ~~$75.00~~ $56.25), #271 TEAMS copy ✅ (Webhooks line visible on /pricing), #330 Appraisals ✅ (button + /organizer/appraisals page). Bugs found: #326 eBay Comp Tiles ❌ — eBay search returns summary card (10 listings, Median $260) but EbayCompTiles image grid not rendering at all. #280 Condition Rating XP ❌ — set grade B, saved, XP balance unchanged at 15 XP (no XP awarded). #322 Encyclopedia Inline Tip: UNVERIFIED — category picker doesn't resolve free-text to eBay taxonomy. #405 Founding Badge: Patrick said "Build" — dev agent shipped: backend GET /:id now returns foundingOrgBadge field, frontend organizers/[id].tsx renders amber pill badge in trust-signal cluster. PUSH BLOCK PENDING (see Next Session). Outreach cron: registered in index.ts, OUTREACH_ENABLED=true, but Railway log window too short to confirm historical sends.
 
@@ -142,11 +146,17 @@ NSFW detection deferred (roadmap #394 closed). Chrome QA: #174 bid protection �
 
 ---
 
-## Next Session — S720
+## Next Session — S721
 
 ### Patrick Action Required First
 
-**Push #405 Founding Badge:**
+**Sync S720 fixes (already pushed to GitHub via MCP — run this to sync local git):**
+```powershell
+git fetch
+git pull
+```
+
+**Then push #405 Founding Badge (built S719, not yet in Patrick's local git):**
 ```powershell
 git add packages/backend/src/routes/organizers.ts
 git add packages/frontend/pages/organizers/[id].tsx
@@ -154,25 +164,43 @@ git commit -m "feat: #405 surface foundingOrgBadge on public organizer storefron
 .\push.ps1
 ```
 
-### Priority 1 — Bug Fixes (dispatch findasale-dev)
+### Priority 1 — OUTREACH SMTP TRUE AUDIT (P1, must fix before anything else)
 
-1. **#326 eBay Comp Tiles ❌** — EbayCompTiles.tsx image grid not rendering after eBay search. Check render condition and whether ebayImageUrl is returned from /api/items/comps/ebay endpoint.
-2. **#280 Condition Rating XP ❌** — Grade B set+saved, XP balance unchanged. Trace xpService call in item save handler — confirm conditionGrade XP award is wired up correctly.
+Patrick's directive: "something is causing that timeout between then and now that you're missing." Do NOT accept "network block" theory. Exhaustive code audit required.
 
-### Priority 2 — Outreach monitoring
+**Audit checklist — every item must be checked:**
 
-Check Railway logs for `[OutreachCron]` and `[autoSeedOutreachCron]` entries. If no sends visible, query DirectoryClaimEmail table for sentAt values via psycopg2. Cron fires every 4 hours — check window times.
+1. **Read full outreachEmailsCron.ts at current `1b2746a3`** — map every function call path from `sendOutreachEmails()` entry to `transport.sendMail()`. Any code that runs BEFORE sendMail could be hanging.
 
-### Priority 3 — Decisions
+2. **Check suppressionService import** — `checkSuppression()` or similar call: does it make an HTTP request, DB query, or external API call that could timeout before SMTP is reached?
 
-- **AuctionNinja + NAA scrapers:** Enable? Set `enabled:true` in sourceRegistry.
-- **MT scraper fix:** Railway → backend → Variables → copy `INTERNAL_API_KEY` → GitHub Secrets → `INTERNAL_API_TOKEN` → re-run MT workflow.
-- **eBay Growth Check reply:** Reply to Incident 260428-000018 from artifactmi@gmail.com — correct App ID to `PatrickD-FindAVal-PRD-064c158e4-8fa09c76` + add Finding API request.
+3. **Check cronGuard import** — does `cronGuard` call any external service? Does it have its own timeout that could overlap with SMTP?
+
+4. **Check syncLeadTierToMailerLite import** — is this called BEFORE or AFTER sendMail? If before, does it make a MailerLite API call that could hang?
+
+5. **Check OutreachAuditLog.create()** — is this called before or after sendMail? Prisma write timing?
+
+6. **Check nodemailer version** — read `packages/backend/package.json`. Was nodemailer upgraded between May 5 and now? `npm show nodemailer@[version]` for changelog.
+
+7. **Check `OUTREACH_WARMUP_START_DATE` env var** — is this set in Railway? If missing, does the code throw or return early before any SMTP attempt?
+
+8. **Check the 3-tier HOT→WARM→COLD query logic** — the May 5 version used a single `findMany`. Current version runs 3 sequential DB queries with `baseWhere` + `status: {notIn: [...]}` + GarageSaleFinder exclusion. Any of these could theoretically hang but more importantly: does the query return 0 results, causing the cron to silently exit without attempting SMTP at all? **This is the most likely cause** — check Railway logs for the "Found X recipients" count line. If it's 0, SMTP is never attempted and the timeout log is misleading.
+
+9. **Verify the Railway env vars are complete** — `OUTREACH_WORKSPACE_EMAIL`, `OUTREACH_WORKSPACE_APP_PASSWORD`, `OUTREACH_ENABLED=true`, `OUTREACH_SECRET`, `OUTREACH_FROM_EMAIL`, `OUTREACH_WARMUP_START_DATE` (if required). Any missing var that used to have a default and now throws = instant failure.
+
+10. **Read Railway logs for the FULL cron execution** — not just the timeout line. Get the complete log for one cron window: how many recipients found, what tier, which email attempted. The log before the timeout tells us if query returned results or if timeout happens before first send attempt.
+
+**Hypothesis to test first (highest probability):** The 3-tier query with `status: {notIn: ['BOUNCED','OPTED_OUT','CLAIMED']}` + `suppressOutreach: false` returns 0 results for the current seed batch. Since the seed records were added with specific field values, if `suppressOutreach` defaults to NULL (not false), the filter would exclude all 183 records. If query returns 0, the loop never runs, and the log's "Connection timeout" may actually be from a different code path (e.g., post-loop cleanup attempting something). Or the timeout IS the SMTP but for 0 records it shouldn't appear at all — recheck what triggers the timeout log.
+
+### Priority 2 — Bug Fixes (after outreach resolved)
+
+1. **#326 eBay Comp Tiles ❌** — EbayCompTiles.tsx image grid not rendering. Dispatch findasale-dev.
+2. **#280 Condition Rating XP ❌** — Grade B set+saved, XP balance unchanged. Dispatch findasale-dev.
 
 ### Still in Blocked Queue
 
-- #322 Encyclopedia Inline Tip — needs category pre-set via psycopg2 to trigger tooltip hook
-- Wyoming pawnbroker — not yet investigated
+- #322 Encyclopedia Inline Tip — needs category pre-set via psycopg2
+- Wyoming pawnbroker — diagnostic needed
 - AI listing enrichment — check Railway logs for `[listingEnrichmentService]`
 - CategoryTopFinds TrendingSection — verify after nightly 05:00 UTC cron
 - Outreach open/click pixel tracking — verify after first real send

@@ -1,43 +1,46 @@
-# Patrick's Dashboard — S719 Wrap
+# Patrick's Dashboard — S720 Wrap
 
 ---
 
 ## What Happened This Session
 
-Chrome QA sprint on the Blocked Queue. Three items cleared, two bugs found, one feature shipped.
+Full session spent diagnosing the outreach SMTP timeout. No emails are reaching organizers. Three fixes deployed — timeout persists. Patrick directed a true audit next session.
 
-**Verified ✅:**
-- **#251 Markdown badge** — Victorian Silver Pocket Watch sale card shows ~~$75.00~~ $56.25
-- **#271 TEAMS copy** — "Webhooks - Connect your systems" is on the /pricing TEAMS column
-- **#330 Appraisals** — "Request Appraisal for This Item" button works, /organizer/appraisals page loads
+**Fixed and deployed:**
+- Fire-and-forget async route (bypasses Railway's 30s HTTP proxy timeout) ✅
+- `requireTLS:true` removed from nodemailer config (restores May 5 working transport) ✅
+- IPv4 forced (`family:4`) — tested and reverted (didn't help, also not in May 5 config)
 
-**Bugs found ❌:**
-- **#326 eBay Comp Tiles** — eBay price search works (returns "10 listings found, Median: $260.00") but the sold listing image tiles are NOT showing. Dispatch fix next session.
-- **#280 Condition Rating XP** — Set grade B on an item, saved. XP balance didn't change. XP is not being awarded for condition ratings.
+**Still broken:**
+- SMTP Connection timeout persists on every send attempt. All 183 queued organizers untouched.
 
-**Feature shipped — #405 Founding Badge:**
-You said "Build." Dev agent wired up the storefront: the public organizer page (`/organizers/[id]`) now renders an amber "⭐ Founding Organizer" pill badge in the trust-signal cluster when `foundingOrgBadge=true`. **Push block below.**
+**May 5 worked:** 4 confirmed sends in DB (`touch1SentAt` timestamps). Same Gmail SMTP. Something changed between commit `558af15a` (May 5) and now. Next session does a line-by-line code audit to find it.
 
 ---
 
-## Push Now
+## Do First Next Session
 
+**Sync S720 fixes to your local git (two MCP pushes happened this session):**
+```powershell
+git fetch
+git pull
+```
+
+**Then push #405 Founding Badge (built S719 — still pending your push):**
 ```powershell
 git add packages/backend/src/routes/organizers.ts
 git add packages/frontend/pages/organizers/[id].tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "feat: #405 founding badge on organizer storefront + S719 wrap"
+git commit -m "feat: #405 surface foundingOrgBadge on public organizer storefront"
 .\push.ps1
 ```
 
----
-
-## Decisions Needed
-
-- **AuctionNinja + NAA scrapers** — built and off. Turn them on? (set `enabled:true` in sourceRegistry)
-- **MT scraper 401** — Railway → backend Variables → copy `INTERNAL_API_KEY` value → GitHub Secrets → `INTERNAL_API_TOKEN` → update → re-run Montana workflow
-- **eBay Growth Check reply** — Reply to Incident 260428-000018 (use deseee@yahoo.com, correct App ID to `PatrickD-FindAVal-PRD-064c158e4-8fa09c76`, add Finding API request)
+**S720 wrap docs:**
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "docs: S720 wrap — outreach audit prep"
+.\push.ps1
+```
 
 ---
 
@@ -47,9 +50,24 @@ git commit -m "feat: #405 founding badge on organizer storefront + S719 wrap"
 |---|---|
 | Vercel (frontend) | ✅ Green |
 | Railway (backend) | ✅ Green |
-| Outreach emails | ✅ Live — OUTREACH_ENABLED=true, 183 organizers queued |
+| Outreach emails | ❌ SMTP timeout — 0 emails delivered despite cron firing correctly |
 | eBay price comps | ✅ Working — summary card returns. Image tiles broken (#326) |
 | eBay Finding API | ⏳ Pending Growth Check approval |
-| Montana scraper | ❌ 401 — secret mismatch (Patrick fix) |
+| Montana scraper | ❌ 401 — secret mismatch (Patrick fix needed) |
 | MN/MI/TN scrapers | 🟡 Bot-blocked — needs headless proxy |
 | AuctionZip / Canada411 | ⛔ Disabled — dead sources |
+
+---
+
+## Top Priority Next Session
+
+**Outreach SMTP true audit** — Claude will read the full Railway log for one cron window (complete execution, not just the timeout line), check if the query is returning 0 recipients (likely cause: `suppressOutreach` field defaults to NULL not false, filtering out all 183 records), and audit every new import added since May 5 (suppressionService, cronGuard, syncLeadTierToMailerLite) for any call that runs before `transport.sendMail()`.
+
+---
+
+## Still Waiting (Blocked Queue)
+
+- **#326 eBay Comp Tiles** ❌ — image grid not rendering (dispatch fix after outreach resolved)
+- **#280 Condition Rating XP** ❌ — XP not awarded for condition grade
+- **#322 Encyclopedia Inline Tip** — UNVERIFIED
+- **Wyoming pawnbroker** — not yet checked
