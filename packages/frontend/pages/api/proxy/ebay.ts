@@ -198,6 +198,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const allowedHeaders = [
     'authorization',
     'content-type',
+    'content-language',
+    'accept-language',
     'x-ebay-c-marketplace-id',
     'accept',
     'x-ebay-api-call-name',
