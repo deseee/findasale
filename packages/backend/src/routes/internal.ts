@@ -794,14 +794,12 @@ router.post('/scraper/run-naa', requireSecret, async (req: express.Request, res:
 });
 
 // POST /api/internal/outreach/send
-router.post('/outreach/send', requireSecret, async (req: express.Request, res: express.Response) => {
-  try {
-    await sendOutreachEmails();
-    res.json({ success: true, message: 'Outreach email window completed' });
-  } catch (error: any) {
+// Responds immediately and runs batch in background to avoid Railway's 30s HTTP proxy timeout.
+router.post('/outreach/send', requireSecret, (req: express.Request, res: express.Response) => {
+  res.json({ success: true, message: 'Outreach email batch started in background' });
+  sendOutreachEmails().catch((error: any) => {
     console.error('[OutreachManual] Route error:', error);
-    res.status(500).json({ error: error.message });
-  }
+  });
 });
 
 // GET /api/internal/outreach/status
