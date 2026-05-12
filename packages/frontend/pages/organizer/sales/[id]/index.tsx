@@ -85,9 +85,10 @@ const SaleDetailPage = () => {
 
   // eBay push mutation
   const ebayPushMutation = useMutation({
-    mutationFn: async (itemIds: string[]) => {
+    mutationFn: async ({ itemIds, publishMode }: { itemIds: string[]; publishMode?: 'DRAFT' | 'LIVE' }) => {
       return api.post(`/ebay/organizer/sales/${id}/ebay-push`, {
         itemIds,
+        ...(publishMode ? { publishMode } : {}),
       });
     },
     onSuccess: (response) => {
@@ -96,6 +97,9 @@ const SaleDetailPage = () => {
         if (result.status === 'success') {
           setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'listed' }));
           showToast(`Item listed on eBay`, 'success');
+        } else if (result.status === 'DRAFT_CREATED' || result.status === 'draft') {
+          setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'listed' }));
+          showToast('Draft created — finalize in eBay Seller Hub', 'success');
         } else if (result.status === 'category_review_needed') {
           setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'category_review_needed' }));
           showToast('eBay category needs review — open item editor to set manually', 'error');
@@ -111,17 +115,17 @@ const SaleDetailPage = () => {
       });
       refetchItems();
     },
-    onError: (error: any, variables: string[]) => {
+    onError: (error: any, variables: { itemIds: string[]; publishMode?: 'DRAFT' | 'LIVE' }) => {
       const msg = error.response?.data?.message || 'Failed to push item to eBay';
       showToast(msg, 'error');
-      variables.forEach((id) => {
+      variables.itemIds.forEach((id) => {
         setEbayPushStatus((prev) => ({ ...prev, [id]: 'error' }));
       });
     },
   });
 
   const handlePushToEbay = useCallback(
-    (itemId: string) => {
+    (itemId: string, publishMode?: 'DRAFT' | 'LIVE') => {
       if (!ebayConnected) {
         showToast('Connect eBay in Settings first', 'error');
         return;
@@ -131,7 +135,7 @@ const SaleDetailPage = () => {
         return;
       }
       setEbayPushStatus((prev) => ({ ...prev, [itemId]: 'pushing' }));
-      ebayPushMutation.mutate([itemId]);
+      ebayPushMutation.mutate({ itemIds: [itemId], publishMode });
     },
     [ebayConnected, tier, ebayPushMutation, showToast]
   );
@@ -292,29 +296,47 @@ const SaleDetailPage = () => {
                         Edit
                       </Link>
 
-                      {/* Push to eBay Button */}
+                      {/* Push to eBay — split: draft vs live */}
                       {!item.ebayListingId &&
                         tier !== 'SIMPLE' &&
-                        ebayConnected && (
-                        <button
-                          onClick={() => handlePushToEbay(item.id)}
-                          disabled={ebayPushStatus[item.id] === 'pushing'}
-                          title={ebayPushStatus[item.id] === 'category_review_needed' || item.ebayNeedsReview ? 'Set eBay category in item editor first' : ''}
-                          className={`flex-1 text-sm font-semibold py-2 px-2 rounded transition-colors text-white ${
-                            ebayPushStatus[item.id] === 'pushing'
-                              ? 'bg-gray-400 cursor-not-allowed'
-                              : ebayPushStatus[item.id] === 'category_review_needed' || item.ebayNeedsReview
-                              ? 'bg-amber-500 hover:bg-amber-600'
-                              : 'bg-blue-600 hover:bg-blue-700'
-                          }`}
-                        >
-                          {ebayPushStatus[item.id] === 'pushing'
-                            ? 'Pushing...'
-                            : ebayPushStatus[item.id] === 'category_review_needed' || item.ebayNeedsReview
-                            ? 'Set Category'
-                            : 'Push to eBay'}
-                        </button>
-                      )}
+                        ebayConnected &&
+                        (ebayPushStatus[item.id] === 'category_review_needed' || item.ebayNeedsReview ? (
+                          <button
+                            onClick={() => handlePushToEbay(item.id)}
+                            disabled={ebayPushStatus[item.id] === 'pushing'}
+                            title="Set eBay category in item editor first"
+                            className="flex-1 text-sm font-semibold py-2 px-2 rounded transition-colors text-white bg-amber-500 hover:bg-amber-600"
+                          >
+                            Set Category
+                          </button>
+                        ) : (
+                          <div className="flex-1 flex gap-1">
+                            <button
+                              onClick={() => handlePushToEbay(item.id, 'DRAFT')}
+                              disabled={ebayPushStatus[item.id] === 'pushing'}
+                              title="Create unpublished offer — finalize in eBay Seller Hub"
+                              className={`flex-1 text-xs font-semibold py-2 px-1 rounded transition-colors ${
+                                ebayPushStatus[item.id] === 'pushing'
+                                  ? 'bg-gray-400 text-white cursor-not-allowed'
+                                  : 'bg-warm-200 hover:bg-warm-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100'
+                              }`}
+                            >
+                              {ebayPushStatus[item.id] === 'pushing' ? 'Pushing...' : 'Push draft'}
+                            </button>
+                            <button
+                              onClick={() => handlePushToEbay(item.id, 'LIVE')}
+                              disabled={ebayPushStatus[item.id] === 'pushing'}
+                              title="Publish live to eBay immediately"
+                              className={`flex-1 text-xs font-semibold py-2 px-1 rounded transition-colors text-white ${
+                                ebayPushStatus[item.id] === 'pushing'
+                                  ? 'bg-gray-400 cursor-not-allowed'
+                                  : 'bg-blue-600 hover:bg-blue-700'
+                              }`}
+                            >
+                              {ebayPushStatus[item.id] === 'pushing' ? 'Pushing...' : 'Push live'}
+                            </button>
+                          </div>
+                        ))}
 
                       {/* View on eBay Link */}
                       {item.ebayListingId && (

@@ -478,9 +478,10 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
 
   // Mutation for pushing items to eBay
   const pushToEbayMutation = useMutation({
-    mutationFn: async (itemIds: string[]) => {
+    mutationFn: async ({ itemIds, publishMode }: { itemIds: string[]; publishMode?: 'DRAFT' | 'LIVE' }) => {
       return api.post(`/organizer/sales/${saleId}/ebay-push`, {
         itemIds,
+        ...(publishMode ? { publishMode } : {}),
         localPickupIds: itemIds.filter(
           (id) => itemOverrides[id] === 'LOCAL_PICKUP_ONLY' || getEffectiveShipping(id) === 'LOCAL_PICKUP_ONLY'
         ),
@@ -489,10 +490,14 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
     onSuccess: (response) => {
       const results = response.data.results || [];
       const successCount = results.filter((r: any) => r.status === 'success').length;
+      const draftCount = results.filter((r: any) => r.status === 'DRAFT_CREATED' || r.status === 'draft').length;
       const failureCount = results.filter((r: any) => r.status === 'error').length;
 
       if (successCount > 0) {
-        showToast(`${successCount} item(s) pushed to eBay`, 'success');
+        showToast(`${successCount} item(s) published to eBay`, 'success');
+      }
+      if (draftCount > 0) {
+        showToast(`${draftCount} draft(s) created on eBay — finalize in eBay Seller Hub`, 'success');
       }
       if (failureCount > 0) {
         showToast(`Failed to push ${failureCount} item(s)`, 'error');
@@ -544,7 +549,7 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
     });
   };
 
-  const handlePush = () => {
+  const handlePush = (publishMode?: 'DRAFT' | 'LIVE') => {
     if (selectedItems.size === 0) {
       showToast('Select at least one item', 'info');
       return;
@@ -555,7 +560,7 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
       return;
     }
 
-    pushToEbayMutation.mutate(Array.from(selectedItems));
+    pushToEbayMutation.mutate({ itemIds: Array.from(selectedItems), publishMode });
   };
 
   if (isLoading) {
@@ -714,20 +719,37 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
             })}
           </div>
 
-          {/* Push Button */}
-          <button
-            onClick={handlePush}
-            disabled={selectedItems.size === 0 || pushToEbayMutation.isPending}
-            className={`w-full py-3 px-4 rounded-lg font-semibold transition-colors ${
-              selectedItems.size === 0 || pushToEbayMutation.isPending
-                ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                : 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600 text-white'
-            }`}
-          >
-            {pushToEbayMutation.isPending
-              ? 'Pushing to eBay...'
-              : `Push ${selectedItems.size} Selected to eBay`}
-          </button>
+          {/* Push buttons — draft vs live */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => handlePush('DRAFT')}
+              disabled={selectedItems.size === 0 || pushToEbayMutation.isPending}
+              title="Create unpublished offers — finalize in eBay Seller Hub"
+              className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-colors ${
+                selectedItems.size === 0 || pushToEbayMutation.isPending
+                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                  : 'bg-warm-200 hover:bg-warm-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100'
+              }`}
+            >
+              {pushToEbayMutation.isPending
+                ? 'Pushing...'
+                : `Push ${selectedItems.size} as draft`}
+            </button>
+            <button
+              onClick={() => handlePush('LIVE')}
+              disabled={selectedItems.size === 0 || pushToEbayMutation.isPending}
+              title="Publish listings live to eBay immediately"
+              className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-colors ${
+                selectedItems.size === 0 || pushToEbayMutation.isPending
+                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                  : 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600 text-white'
+              }`}
+            >
+              {pushToEbayMutation.isPending
+                ? 'Pushing...'
+                : `Push ${selectedItems.size} live`}
+            </button>
+          </div>
         </>
       ) : (
         <p className="text-warm-600 dark:text-warm-400 text-center py-6">
