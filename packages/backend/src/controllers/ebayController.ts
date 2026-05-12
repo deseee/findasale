@@ -3910,7 +3910,7 @@ export const handleEbayNotification = async (req: express.Request, res: Response
 /**
  * GET /api/organizer/sales/:saleId/unsold-items
  * Feature #244 Phase 3: Post-sale eBay push — fetch unsold items with shipping classification
- * Returns items that haven't sold (status NOT IN SOLD, RESERVED)
+ * Returns items with status AVAILABLE (ready for donation or eBay listing)
  */
 export const getUnsoldItems = async (req: AuthRequest, res: Response) => {
   try {
@@ -3929,9 +3929,7 @@ export const getUnsoldItems = async (req: AuthRequest, res: Response) => {
         organizerId: true,
         items: {
           where: {
-            status: {
-              notIn: ['SOLD', 'RESERVED'],
-            },
+            status: 'AVAILABLE',
           },
           select: {
             id: true,
@@ -4245,20 +4243,4 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
         }
       }
 
-      console.log(`[eBay EndedSync] Batch of ${batch.length} items processed, ${batchResults.filter(r => r.status).length} API calls succeeded`);
-
-      // Small delay between batches to respect rate limits and give eBay some breathing room
-      if (i + batchSize < activeListings.length) {
-        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms between batches
-      }
-    }
-
-    console.log(
-      `[eBay EndedSync] Organizer ${organizerId}: checked ${result.checked} listings, found ${result.ended} ended`
-    );
-  } catch (error) {
-    console.error(`[eBay EndedSync ERROR] organizerId ${organizerId}:`, error);
-  }
-
-  return result;
-}
+      console.log(`[eBay EndedSync] Batch of ${bat
