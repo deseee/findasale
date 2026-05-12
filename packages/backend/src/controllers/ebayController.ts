@@ -1821,6 +1821,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
     // Push each item to eBay
     const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const results: any[] = [];
 
     for (const item of sale.items) {
