@@ -83,6 +83,7 @@ const createTransport = () => {
     port: 587,
     secure: false,
     requireTLS: true,
+    family: 4, // Force IPv4 — Railway IPv6 egress causes STARTTLS hangs on smtp.gmail.com
     auth: {
       user: process.env.OUTREACH_WORKSPACE_EMAIL,
       pass: process.env.OUTREACH_WORKSPACE_APP_PASSWORD,
