@@ -831,7 +831,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                   background: 'repeating-linear-gradient(135deg, #E8E2D6 0 14px, #EFEAE0 14px 28px)',
                 }}
               >
-                <span className="text-sm uppercase tracking-widest" style={{ color: 'rgba(26,24,20,0.4)', fontFamily: 'ui-monospace, monospace' }}>
+                <span className="text-sm uppercase tracking-widest text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace' }}>
                   Photos coming soon
                 </span>
               </div>
@@ -958,7 +958,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
         </div>
 
         {/* ── BREADCRUMB ── */}
-        <div className="px-6 py-2.5 text-xs border-b border-black/8 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.02em', color: 'rgba(26,24,20,0.5)' }}>
+        <div className="px-6 py-2.5 text-xs border-b border-black/8 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.02em' }}>
           <Link href="/" className="hover:underline">Home</Link>
           <span className="mx-2">/</span>
           <span>{sale.city}, {sale.state}</span>
@@ -973,48 +973,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
           {/* ── MAIN COLUMN ── */}
           <div className="flex flex-col gap-6 min-w-0">
 
-            {/* Desktop action strip (inline, not sticky on mobile) */}
-            <div className="hidden lg:block">
-              <div className="rounded-xl p-4 border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] flex items-center gap-3">
-                {saleHasEnded ? (
-                  <>
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-black/5 dark:bg-white/6 text-[#1A1814] dark:text-[#F2F0EA]">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 16V11a6 6 0 0112 0v5l1.5 2H4.5L6 16z"/><path d="M10 20a2 2 0 004 0"/></svg>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-[#1A1814] dark:text-[#F2F0EA]">This sale has ended.</div>
-                        <div className="text-xs" style={{ color: 'rgba(26,24,20,0.62)' }}>Follow {sale.organizer.businessName} so you don't miss the next one.</div>
-                      </div>
-                    </div>
-                    <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
-                    <FollowOrganizerButton organizerId={sale.organizer.id} organizerName={sale.organizer.businessName} />
-                  </>
-                ) : (
-                  <>
-                    <div className="flex-1" />
-                    {user && <SaleRSVPButton saleId={sale.id} />}
-                    {user && sale.items.length > 0 && <SaleWaitlistButton saleId={sale.id} />}
-                    {sale.items.length > 0 && (
-                      <a href="#items" className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white" style={{ background: '#C8552B' }}>
-                        View {sale.items.length} items
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                      </a>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
             {/* Flash Deal Banner */}
             <FlashDealBanner saleId={sale.id} itemIds={sale.items.map((item) => item.id)} />
-
-            {/* Live activity */}
-            <div className="space-y-2">
-              <HypeMeter saleId={sale.id} />
-              <LiveFeedTicker saleId={sale.id} />
-              <RippleIndicator saleId={sale.id} size="md" />
-            </div>
 
             {/* Buyer's premium disclosure */}
             {sale.buyersPremiumPct && sale.buyersPremiumPct > 0 && (
@@ -1067,10 +1027,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               ) : (
                 <p className="text-sm italic text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]">Description coming soon.</p>
               )}
-              <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8 text-xs" style={{ color: 'rgba(26,24,20,0.5)', fontFamily: 'ui-monospace, monospace' }}>
-                <span className="dark:text-[rgba(242,240,234,0.5)]">
-                  Hold duration: {sale.holdDurationHours || 48}h after yellow tag
-                </span>
+              <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8 text-xs text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]" style={{ fontFamily: 'ui-monospace, monospace' }}>
+                Hold duration: {sale.holdDurationHours || 48}h after yellow tag
               </div>
             </section>
 
@@ -1104,20 +1062,24 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                                 {isToday && <span className="w-1.5 h-1.5 rounded-full bg-[#C8552B] inline-block" />}
                                 {day.label}
                               </span>
-                              <span className="text-xs" style={{ fontFamily: 'ui-monospace, monospace', color: isToday ? '#C8552B' : 'rgba(26,24,20,0.5)' }}>
+                              <span className={`text-xs ${isToday ? 'text-[#C8552B]' : 'text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]'}`} style={{ fontFamily: 'ui-monospace, monospace' }}>
                                 {format(parseISO(day.date), 'h:mm a')}
                               </span>
                             </div>
                           );
                         })}
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <FavoriteButton itemId={undefined as any} saleId={sale.id} variant="icon" size="md" />
-                        <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={saleHasEnded} />
-                        <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
-                        {!saleHasEnded && (
-                          <AddToCalendarButton saleId={sale.id} title={sale.title} startDate={sale.startDate} endDate={sale.endDate} address={sale.address} city={sale.city} state={sale.state} description={sale.description} />
-                        )}
+                      <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8 flex flex-col gap-2">
+                        {/* Compact action row — save, remind, share, calendar */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <FavoriteButton itemId={undefined as any} saleId={sale.id} variant="icon" size="md" />
+                          <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={saleHasEnded} />
+                          <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
+                          {!saleHasEnded && (
+                            <AddToCalendarButton saleId={sale.id} title={sale.title} startDate={sale.startDate} endDate={sale.endDate} address={sale.address} city={sale.city} state={sale.state} description={sale.description} />
+                          )}
+                        </div>
+                        {/* Primary CTA — Going */}
                         {user && !saleHasEnded && <SaleRSVPButton saleId={sale.id} />}
                         {!saleHasEnded && <RSVPBadge saleId={sale.id} saleTitle={sale.title} />}
                       </div>
@@ -1144,7 +1106,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                       </button>
                     ) : (
                       <div className="flex-shrink-0 w-24 h-24 rounded-lg bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/8 flex items-center justify-center">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(26,24,20,0.3)' }}><path d="M12 21s-7-7.5-7-12a7 7 0 0114 0c0 4.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-[rgba(26,24,20,0.3)] dark:text-[rgba(242,240,234,0.3)]"><path d="M12 21s-7-7.5-7-12a7 7 0 0114 0c0 4.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
                       </div>
                     )}
                     <div className="flex-1 text-sm leading-relaxed">
@@ -1197,6 +1159,13 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 </div>
               )}
             </section>
+
+            {/* Live activity */}
+            <div className="space-y-2">
+              <HypeMeter saleId={sale.id} />
+              <LiveFeedTicker saleId={sale.id} />
+              <RippleIndicator saleId={sale.id} size="md" />
+            </div>
 
             {/* #416: Sale Floor Map */}
             <SaleFloorMap
@@ -1274,7 +1243,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                   </div>
                   <h2 style={{ fontFamily: '"Inter Tight", "Inter", sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>
                     {sale.items.length > 0 ? `${sale.items.length} items` : 'Items for Sale'}
-                    {saleHasEnded && <span className="text-sm font-normal ml-2" style={{ color: 'rgba(26,24,20,0.5)' }}>Archive — most items claimed.</span>}
+                    {saleHasEnded && <span className="text-sm font-normal ml-2 text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">Archive — most items claimed.</span>}
                   </h2>
                 </div>
                 {isOrganizer && sale.items.length > 0 && (
@@ -1287,7 +1256,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               {/* Tags / category chip strip */}
               {sale.tags && sale.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4 items-center">
-                  <span className="text-xs uppercase tracking-widest mr-1" style={{ fontFamily: 'ui-monospace, monospace', color: 'rgba(26,24,20,0.4)' }}>What's there</span>
+                  <span className="text-xs uppercase tracking-widest mr-1 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace' }}>What's there</span>
                   <button
                     onClick={() => setSelectedCategory(null)}
                     className="px-3 py-1.5 rounded-full text-xs border transition-colors"
@@ -1311,7 +1280,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               {/* #416: Active room filter indicator */}
               {selectedRoom && (
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xs" style={{ color: 'rgba(26,24,20,0.5)' }}>Showing:</span>
+                  <span className="text-xs text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">Showing:</span>
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}>
                     {selectedRoom}
                     <button onClick={() => setSelectedRoom(null)} className="ml-0.5 hover:opacity-70 transition-opacity" aria-label="Clear room filter">×</button>
@@ -1375,11 +1344,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               {sale.items.length === 0 ? (
                 <div className="py-12 text-center flex flex-col items-center gap-4">
                   <div className="w-12 h-12 rounded-xl bg-black/5 dark:bg-white/5 flex items-center justify-center">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(26,24,20,0.3)' }}><path d="M5 8h14l-1 13H6L5 8z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-[rgba(26,24,20,0.3)] dark:text-[rgba(242,240,234,0.3)]"><path d="M5 8h14l-1 13H6L5 8z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Inventory being added — check back soon.</p>
-                    <p className="text-xs mt-1" style={{ color: 'rgba(26,24,20,0.5)' }}>Get a reminder when items are posted.</p>
+                    <p className="text-xs mt-1 text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">Get a reminder when items are posted.</p>
                   </div>
                   {isOrganizer ? (
                     <Link href={`/organizer/add-items/${sale.id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center text-sm transition-colors">
@@ -1404,7 +1373,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 return (
                   <>
                     {filteredSorted.length > 12 && (
-                      <p className="text-xs mb-4" style={{ color: 'rgba(26,24,20,0.5)' }}>
+                      <p className="text-xs mb-4 text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">
                         Showing {Math.min(currentItemPage * effectivePerPage, filteredSorted.length) - (currentItemPage - 1) * effectivePerPage} of {filteredSorted.length} items
                       </p>
                     )}
@@ -1419,7 +1388,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                                 <img src={getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0]} alt={item.title} className="w-full h-full object-cover hover:opacity-90 transition" loading="lazy" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center" style={{ background: 'repeating-linear-gradient(135deg, #E8E2D6 0 14px, #EFEAE0 14px 28px)' }}>
-                                  <span className="text-xs" style={{ color: 'rgba(26,24,20,0.3)', fontFamily: 'ui-monospace, monospace' }}>no photo</span>
+                                  <span className="text-xs text-[rgba(26,24,20,0.3)] dark:text-[rgba(242,240,234,0.3)]" style={{ fontFamily: 'ui-monospace, monospace' }}>no photo</span>
                                 </div>
                               )}
                             </Link>
@@ -1470,7 +1439,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                               <div>
                                 <div className="flex justify-between items-baseline mb-1">
                                   <div>
-                                    <div className="text-xs font-mono" style={{ color: 'rgba(26,24,20,0.4)', fontSize: 10 }}>BID</div>
+                                    <div className="text-xs font-mono text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontSize: 10 }}>BID</div>
                                     <div className="font-semibold text-amber-600 dark:text-amber-400">{formatPrice(item.currentBid || item.auctionStartPrice)}</div>
                                   </div>
                                   {item.auctionEndTime && (
@@ -1564,7 +1533,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
             {ugcPhotos.length > 0 && (
               <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
                 <h2 style={{ fontFamily: '"Inter Tight","Inter",sans-serif', fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em', margin: '0 0 16px' }}>
-                  Community Photos <span className="text-sm font-normal" style={{ color: 'rgba(26,24,20,0.5)' }}>({ugcPhotos.length})</span>
+                  Community Photos <span className="text-sm font-normal text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">({ugcPhotos.length})</span>
                 </h2>
                 <UGCPhotoGallery photos={ugcPhotos} loading={ugcLoading} />
               </section>
@@ -1585,7 +1554,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                       <div className="flex gap-0.5 mb-1" style={{ color: '#C8552B' }}>
                         {[1,2,3,4,5].map(i => <svg key={i} width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.6"><path d="M12 3l2.6 5.8 6.4.7-4.8 4.4 1.4 6.3L12 17l-5.6 3.2 1.4-6.3L3 9.5l6.4-.7L12 3z"/></svg>)}
                       </div>
-                      <div className="text-xs" style={{ color: 'rgba(26,24,20,0.62)' }}>
+                      <div className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">
                         {sale.organizer.reviewCount || 0} reviews
                       </div>
                     </div>
@@ -1608,7 +1577,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'rgba(26,24,20,0.4)', letterSpacing: '0.08em' }}>Organized by</span>
+                    <span className="text-xs font-mono uppercase tracking-wider text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ letterSpacing: '0.08em' }}>Organized by</span>
                     <VerifiedBadge status={sale.organizer.verificationStatus} size="sm" />
                     {sale.organizer.tier && (sale.organizer.tier === 'SILVER' || sale.organizer.tier === 'GOLD') && <OrganizerTierBadge tier={sale.organizer.tier} />}
                   </div>
@@ -1616,7 +1585,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                     {sale.organizer.businessName}
                   </div>
                   {(sale.organizer.avgRating ?? 0) > 0 && (
-                    <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: 'rgba(26,24,20,0.62)' }}>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">
                       <span className="flex items-center gap-1 font-medium" style={{ color: '#C8552B' }}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.6"><path d="M12 3l2.6 5.8 6.4.7-4.8 4.4 1.4 6.3L12 17l-5.6 3.2 1.4-6.3L3 9.5l6.4-.7L12 3z"/></svg>
                         {(sale.organizer.avgRating ?? 0).toFixed(1)}
@@ -1681,9 +1650,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
             {/* Map rail block */}
             <div className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] overflow-hidden">
               <div className="px-4 pt-4 pb-2">
-                <div className="text-xs uppercase tracking-widest mb-1.5" style={{ fontFamily: 'ui-monospace, monospace', color: 'rgba(26,24,20,0.4)', letterSpacing: '0.1em' }}>Where to go</div>
+                <div className="text-xs uppercase tracking-widest mb-1.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>Where to go</div>
                 {sale.address && <div className="text-sm font-medium">{sale.address}</div>}
-                <div className="text-xs mb-2" style={{ color: 'rgba(26,24,20,0.62)' }}>{sale.city}, {sale.state} {sale.zip}</div>
+                <div className="text-xs mb-2 text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">{sale.city}, {sale.state} {sale.zip}</div>
               </div>
               {sale.lat && sale.lng ? (
                 <SaleMap
@@ -1693,7 +1662,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 />
               ) : (
                 <div className="h-32 bg-black/5 dark:bg-white/5 flex items-center justify-center">
-                  <span className="text-xs" style={{ color: 'rgba(26,24,20,0.3)' }}>Location not available</span>
+                  <span className="text-xs text-[rgba(26,24,20,0.3)] dark:text-[rgba(242,240,234,0.3)]">Location not available</span>
                 </div>
               )}
               <div className="px-4 py-3 flex gap-2">
@@ -1711,13 +1680,13 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                   {sale.organizer.businessName.slice(0, 2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs mb-0.5 flex items-center gap-1" style={{ color: 'rgba(26,24,20,0.4)', fontFamily: 'ui-monospace, monospace', textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: 10 }}>
+                  <div className="text-xs mb-0.5 flex items-center gap-1 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: 10 }}>
                     Organized by
                     <VerifiedBadge status={sale.organizer.verificationStatus} size="sm" />
                   </div>
                   <div className="font-semibold text-sm leading-tight truncate" style={{ fontFamily: '"Inter Tight","Inter",sans-serif' }}>{sale.organizer.businessName}</div>
                   {(sale.organizer.avgRating ?? 0) > 0 && (
-                    <div className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'rgba(26,24,20,0.62)' }}>
+                    <div className="text-xs mt-0.5 flex items-center gap-1 text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.6" style={{ color: '#C8552B' }}><path d="M12 3l2.6 5.8 6.4.7-4.8 4.4 1.4 6.3L12 17l-5.6 3.2 1.4-6.3L3 9.5l6.4-.7L12 3z"/></svg>
                       {(sale.organizer.avgRating ?? 0).toFixed(1)} · {sale.organizer.reviewCount} reviews
                     </div>
@@ -1740,8 +1709,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
             {/* QR Code (organizer only) */}
             {isOrganizer && (
               <div className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-4">
-                <div className="text-xs font-medium mb-1" style={{ fontFamily: 'ui-monospace, monospace', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(26,24,20,0.4)' }}>QR Code</div>
-                <p className="text-xs mb-3" style={{ color: 'rgba(26,24,20,0.5)' }}>Print on signs or flyers to drive foot traffic.</p>
+                <div className="text-xs font-medium mb-1 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>QR Code</div>
+                <p className="text-xs mb-3 text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">Print on signs or flyers to drive foot traffic.</p>
                 <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={140} />
               </div>
             )}
