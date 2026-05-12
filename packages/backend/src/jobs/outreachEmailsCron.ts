@@ -80,9 +80,8 @@ const createTransport = () => {
   }
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    requireTLS: true,
+    port: 465,
+    secure: true,
     auth: {
       user: process.env.OUTREACH_WORKSPACE_EMAIL,
       pass: process.env.OUTREACH_WORKSPACE_APP_PASSWORD,
