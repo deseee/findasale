@@ -498,24 +498,4 @@ export function initOutreachEmailsCron(): void {
   }), { timezone: 'UTC' });
   console.log('[OutreachCron] syncLeadTierGroups registered — runs Sundays 04:00 UTC');
 }
- *
- * Both gates on OUTREACH_ENABLED=true.
- */
-export function initOutreachEmailsCron(): void {
-  if (process.env.OUTREACH_ENABLED !== 'true') {
-    console.log('[OutreachCron] Disabled — set OUTREACH_ENABLED=true to activate');
-    return;
-  }
 
-  // Every 4 hours — spreads daily quota across 6 windows
-  cron.schedule('0 */4 * * *', cronGuard({ jobName: 'outreach-emails' }, async () => {
-    await sendOutreachEmails();
-  }), { timezone: 'UTC' });
-  console.log('[OutreachCron] Registered — runs every 4 hours UTC');
-
-  // Weekly Sunday 04:00 UTC — sync lead tiers to MailerLite groups (offset from scoring at 02:00 to avoid race)
-  cron.schedule('0 4 * * 0', cronGuard({ jobName: 'sync-lead-tier-groups' }, async () => {
-    await syncLeadTierGroups();
-  }), { timezone: 'UTC' });
-  console.log('[OutreachCron] syncLeadTierGroups registered — runs Sundays 04:00 UTC');
-}
