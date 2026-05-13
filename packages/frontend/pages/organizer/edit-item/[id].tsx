@@ -582,6 +582,7 @@ const EditItemPage = () => {
             <VoiceDescriptionInput
               value={formData.description}
               onChange={(description) => setFormData({ ...formData, description })}
+              itemId={typeof router.query.id === 'string' ? router.query.id : undefined}
               onFieldUpdate={(fields) => {
                 const updates: any = { description: fields.description };
                 if (fields.title && !formData.title) updates.title = fields.title;

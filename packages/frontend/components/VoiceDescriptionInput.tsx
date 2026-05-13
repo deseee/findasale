@@ -41,6 +41,14 @@ interface VoiceDescriptionInputProps {
     price?: string;
   };
   disabled?: boolean;
+  /**
+   * Item ID for the append-description endpoint. When provided, voice transcripts
+   * are POSTed to /items/:id/description/append (server-side merge, organizer-first
+   * ordering, voice locks description against future AI overwrites). When omitted
+   * (new-item drafts not yet saved), the component falls back to a local concat
+   * that preserves any typed text in the textarea.
+   */
+  itemId?: string;
 }
 
 type RecordingState = 'idle' | 'listening' | 'processing';
@@ -57,9 +65,10 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
   onFieldUpdate,
   existingFields = {},
   disabled = false,
+  itemId,
 }) => {
   const { showToast } = useToast();
-  const { isSupported, isListening, transcript, startListening, stopListening } = useVoiceInput();
+  const { isSupported, isListening, transcript, startListening, stopListening, errorCode } = useVoiceInput();
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [isProcessing, setIsProcessing] = useState(false);
   const [fieldSuggestions, setFieldSuggestions] = useState<FieldSuggestion[]>([]);
@@ -79,36 +88,73 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
   };
 
   const handleStopRecording = async () => {
-    await stopListening();
+    // S724 closure fix + 2026-05-12 append contract:
+    // stopListening returns the final transcript, avoiding the stale-state race.
+    const finalTranscript = await stopListening();
     setRecordingState('processing');
     setIsProcessing(true);
 
     try {
-      if (!transcript.trim()) {
-        showToast('No speech detected. Please try again.', 'info');
+      // Surface permission/recognition errors that previously failed silently
+      if (errorCode === 'not-allowed' || errorCode === 'service-not-allowed') {
+        showToast('Microphone permission denied. Allow microphone access in browser settings.', 'error');
         setRecordingState('idle');
         setIsProcessing(false);
         return;
       }
 
-      // Send transcript to backend for extraction
+      if (!finalTranscript.trim()) {
+        if (errorCode && errorCode !== 'no-speech' && errorCode !== '') {
+          showToast(`Voice recognition error (${errorCode}). Please try again.`, 'error');
+        } else {
+          showToast('No speech detected. Please try again.', 'info');
+        }
+        setRecordingState('idle');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Append the transcript to item.description.
+      // If itemId is known, route through the server-side append endpoint so the
+      // organizer-first ordering and voice-locks-description rules apply.
+      // If no itemId (new draft not yet saved), concat locally to preserve typed text.
+      let newDescription: string;
+      if (itemId) {
+        try {
+          const appendRes = await api.post(`/items/${itemId}/description/append`, {
+            text: finalTranscript,
+            source: 'VOICE',
+          });
+          newDescription = appendRes.data?.description ?? finalTranscript;
+        } catch (appendErr: any) {
+          console.error('[VoiceDescriptionInput] append failed:', appendErr);
+          showToast(appendErr?.response?.data?.message || 'Could not save voice note.', 'error');
+          setRecordingState('idle');
+          setIsProcessing(false);
+          return;
+        }
+      } else {
+        // Local concat — preserves typed text instead of overwriting.
+        // Adds a sentence separator only when prior text doesn't already end in punctuation.
+        const prior = (value || '').trimEnd();
+        if (!prior) {
+          newDescription = finalTranscript;
+        } else {
+          newDescription = /[.!?]$/.test(prior)
+            ? prior + ' ' + finalTranscript
+            : prior + '. ' + finalTranscript;
+        }
+      }
+
+      onChange(newDescription);
+
+      // Extract structured fields (title/category/tags/price) from the transcript.
+      // Description is no longer pulled from /voice/extract — that came from the append result above.
       const response = await api.post('/voice/extract', {
-        transcript,
+        transcript: finalTranscript,
       });
 
       const result: VoiceExtractionResult = response.data;
-
-      // Validate response
-      if (!result.description && !transcript) {
-        showToast('Could not extract information from speech.', 'info');
-        setRecordingState('idle');
-        setIsProcessing(false);
-        return;
-      }
-
-      // Always save the full transcript/description
-      const newDescription = result.description || transcript;
-      onChange(newDescription);
 
       // Collect field suggestions for empty vs filled fields
       const suggestions: FieldSuggestion[] = [];

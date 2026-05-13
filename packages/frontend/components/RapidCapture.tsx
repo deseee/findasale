@@ -1,6 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import BrightnessIndicator from './camera/BrightnessIndicator';
 import { useVoiceInput } from '../hooks/useVoiceInput';
+import api from '../lib/api';
+import { useToast } from './ToastContext';
 
 /**
  * RapidCapture — Phase 14b camera overlay (refactored)
@@ -110,6 +112,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [cameraReady, setCameraReady] = useState(false);
+  const { showToast } = useToast();
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [flashEffect, setFlashEffect] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -364,35 +367,29 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     setSelectedIndex(null);
   }, []);
 
-  // Feature #331: Handle voice input for a specific item and PATCH description
+  // Feature #331: Handle voice input for a specific item.
+  // Routes through POST /items/:id/description/append (Item Description Authoring Contract, 2026-05-12)
+  // so voice transcripts append before any auto-generated content instead of overwriting it.
   const handleVoiceInput = useCallback(async (itemId: string, transcript: string) => {
     if (!transcript.trim()) {
       return;
     }
-    
+
     try {
-      // PATCH /api/items/:id with description from transcript
-      const response = await fetch(`/api/items/${itemId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') : ''}`,
-        },
-        body: JSON.stringify({ description: transcript }),
+      await api.post(`/items/${itemId}/description/append`, {
+        text: transcript,
+        source: 'VOICE',
       });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to update item: ${response.statusText}`);
-      }
-      
+
       // Show success indicator on thumbnail
       setVoiceIndicator({ itemId, showing: true });
       setTimeout(() => setVoiceIndicator({ itemId, showing: false }), 2000);
-      
-    } catch (error) {
+    } catch (error: any) {
       console.error('[RapidCapture] Voice input error:', error);
+      const message = error?.response?.data?.message || 'Could not save voice note. Try again.';
+      showToast(message, 'error');
     }
-  }, []);
+  }, [showToast]);
 
   // Feature #341: Handle multi-angle chip selection
   const handleSelectPhotoRole = useCallback((role: string | null) => {
@@ -1456,7 +1453,7 @@ const VoiceTagButtonThumbnail: React.FC<VoiceTagButtonThumbnailProps> = ({
   onVoiceInput,
   showIndicator,
 }) => {
-  const { isSupported, isListening, transcript, startListening, stopListening } = useVoiceInput();
+  const { isSupported, startListening, stopListening } = useVoiceInput();
   const [recordingState, setRecordingState] = useState<'idle' | 'listening' | 'processing'>('idle');
 
   const handleToggle = async () => {
@@ -1464,14 +1461,15 @@ const VoiceTagButtonThumbnail: React.FC<VoiceTagButtonThumbnailProps> = ({
       setRecordingState('listening');
       await startListening();
     } else if (recordingState === 'listening') {
-      await stopListening();
+      // S724 closure fix: read the final transcript from stopListening's return,
+      // not from the stale `transcript` state captured by this closure.
+      const finalTranscript = await stopListening();
       setRecordingState('processing');
-      
-      // Send the transcript
-      if (transcript.trim()) {
-        onVoiceInput(itemId, transcript);
+
+      if (finalTranscript.trim()) {
+        onVoiceInput(itemId, finalTranscript);
       }
-      
+
       setTimeout(() => {
         setRecordingState('idle');
       }, 500);

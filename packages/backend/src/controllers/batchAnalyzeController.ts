@@ -23,6 +23,7 @@ import {
 import { prisma } from '../lib/prisma';
 import axios from 'axios';
 import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
+import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -306,12 +307,22 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           };
 
           // Update Item record with AI analysis
+          // Description routed through composeDescription so voice content (if any) is preserved (2026-05-12)
           try {
+            const existing = await prisma.item.findUnique({
+              where: { id: itemId },
+              select: { description: true, userEditedFields: true },
+            });
+            const userEdited = existing?.userEditedFields ?? [];
+            const nextDescription = !userEdited.includes('description') && summary.suggestedDescription
+              ? composeDescription(existing?.description ?? null, summary.suggestedDescription, 'AUTO').description
+              : existing?.description ?? summary.suggestedDescription;
+
             await prisma.item.update({
               where: { id: itemId },
               data: {
                 title: summary.suggestedTitle,
-                description: summary.suggestedDescription,
+                description: nextDescription,
                 category: summary.suggestedCategory,
                 condition: summary.suggestedCondition,
                 price: summary.suggestedPrice ? summary.suggestedPrice * 100 : undefined,

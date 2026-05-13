@@ -29,6 +29,7 @@ import { awardXp, XP_AWARDS, spendXp, getSpendableXp, checkMonthlyXpCap } from '
 import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
 import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase 2: Async eBay comps
 import { fetchEbayPriceComps } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid
+import { composeDescription, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -1039,6 +1040,113 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error updating item:', error);
     res.status(500).json({ message: 'Server error while updating item' });
+  }
+};
+
+/**
+ * POST /api/items/:id/description/append
+ *
+ * Item Description Authoring Contract (architect-locked 2026-05-12).
+ * Appends voice transcripts or auto-generated text to item.description
+ * without overwriting prior content. Source enum is "VOICE" | "AUTO"
+ * (D-006: never expose "AI" in API surfaces).
+ *
+ * Voice writes always append AND lock 'description' in userEditedFields
+ * so later AI runs (processRapidDraft, batchAnalyze) defer to the organizer.
+ * Auto writes are deduped by composeDescription's novelty check.
+ */
+export const appendDescription = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { id } = req.params;
+    const { text, source } = req.body as { text?: unknown; source?: unknown };
+
+    if (typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ message: 'Field "text" is required and must be a non-empty string' });
+    }
+    if (source !== 'VOICE' && source !== 'AUTO') {
+      return res.status(400).json({ message: 'Field "source" must be "VOICE" or "AUTO"' });
+    }
+
+    const callerUserId = req.user.id;
+
+    // Atomic: load, compose, persist in one transaction
+    const result = await prisma.$transaction(async (tx) => {
+      const item = await tx.item.findUnique({
+        where: { id },
+        include: { sale: { include: { organizer: { select: { userId: true } } } } },
+      });
+
+      if (!item) return { status: 404 as const };
+
+      // Ownership check — match updateItem's pattern, plus inventory-item fallback
+      let ownerUserId: string | undefined;
+      if (item.sale) {
+        ownerUserId = item.sale.organizer.userId;
+      } else if (item.organizerId) {
+        const org = await tx.organizer.findUnique({
+          where: { id: item.organizerId },
+          select: { userId: true },
+        });
+        ownerUserId = org?.userId ?? undefined;
+      }
+      if (!ownerUserId || ownerUserId !== callerUserId) {
+        return { status: 403 as const };
+      }
+
+      const compose = composeDescription(item.description, text, source as DescriptionSource);
+
+      if (!compose.appended) {
+        return {
+          status: 200 as const,
+          payload: {
+            id: item.id,
+            description: item.description ?? '',
+            source,
+            appended: false,
+            reason: compose.reason,
+          },
+        };
+      }
+
+      // Voice writes lock the description field against future AI overwrites (D-006)
+      const userEdited = item.userEditedFields ?? [];
+      const nextUserEdited = source === 'VOICE' && !userEdited.includes('description')
+        ? [...userEdited, 'description']
+        : userEdited;
+
+      await tx.item.update({
+        where: { id: item.id },
+        data: {
+          description: compose.description,
+          userEditedFields: nextUserEdited,
+        },
+      });
+
+      return {
+        status: 200 as const,
+        payload: {
+          id: item.id,
+          description: compose.description,
+          source,
+          appended: true,
+        },
+      };
+    });
+
+    if (result.status === 404) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    if (result.status === 403) {
+      return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+    return res.status(200).json(result.payload);
+  } catch (error) {
+    console.error('[appendDescription] Error:', error);
+    return res.status(500).json({ message: 'Server error while appending description' });
   }
 };
 

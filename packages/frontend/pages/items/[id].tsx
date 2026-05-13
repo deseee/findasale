@@ -810,9 +810,10 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                 </div>
               )}
 
-              {/* Description */}
+              {/* Description — whitespace-pre-wrap so the "— Item details —" sentinel
+                  from server-side voice+auto merge renders as a section break (2026-05-12). */}
               <div className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">
-                <p>{item.description}</p>
+                <p className="whitespace-pre-wrap">{item.description}</p>
               </div>
 
               {/* Tags */}

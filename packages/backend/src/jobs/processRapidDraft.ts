@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { analyzeItemImage, analyzeItemImages, suggestPrice } from '../services/cloudAIService';
 import { checkAITagLimit } from '../lib/tierEnforcement';
+import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 
 /**
  * processRapidDraft — Background job for Rapidfire Mode Phase 2A
@@ -160,9 +161,15 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       const userEdited = item.userEditedFields || [];
       const snapshotUpdatedAt = item.updatedAt;
 
+      // Description: append-if-novel via composeDescription (architect contract 2026-05-12)
+      // userEditedFields gate still applies — voice/manual edits block AI append entirely
+      const composedDescription = !userEdited.includes('description') && aiResult.description
+        ? composeDescription(item.description, aiResult.description, 'AUTO').description
+        : item.description;
+
       const updateData = {
         title: !userEdited.includes('title') ? (aiResult.title || item.title) : item.title,
-        description: !userEdited.includes('description') ? (aiResult.description || item.description) : item.description,
+        description: composedDescription,
         category: !userEdited.includes('category') ? (aiResult.category || item.category) : item.category,
         condition: !userEdited.includes('condition') ? (aiResult.condition || item.condition) : item.condition,
         brand: !userEdited.includes('brand') ? (aiResult.brand || item.brand) : item.brand,
@@ -189,6 +196,17 @@ export async function processRapidDraft(itemId: string): Promise<void> {
           // Build merged update: only apply AI suggestions where organizer hasn't set a value
           const mergedData: Record<string, unknown> = {};
           for (const [key, aiValue] of Object.entries(updateData)) {
+            // Description uses composeDescription against the FRESH value so voice content
+            // added during the race window survives. Other fields: only write if absent.
+            if (key === 'description') {
+              if (!freshItem.userEditedFields?.includes('description') && aiResult.description) {
+                const composed = composeDescription(freshItem.description, aiResult.description, 'AUTO').description;
+                if (composed !== freshItem.description) {
+                  mergedData.description = composed;
+                }
+              }
+              continue;
+            }
             // Only use AI value if organizer's current value is null/empty/default
             const freshValue = freshItem[key as keyof typeof freshItem];
             // Skip if organizer has explicitly edited this field
