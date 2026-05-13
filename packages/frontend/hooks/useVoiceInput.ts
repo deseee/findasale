@@ -33,6 +33,11 @@ export function useVoiceInput(): UseVoiceInputReturn {
   const [errorCode, setErrorCode] = useState('');
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef<string>('');
+  // Last seen interim transcript. Web Speech API doesn't always promote the in-flight
+  // utterance to `isFinal: true` before recognition.stop() fires — especially on mobile
+  // or when the user taps stop while still speaking. We retain the latest interim so
+  // stopListening can resolve with SOMETHING rather than an empty string.
+  const latestInterimRef = useRef<string>('');
   const endResolverRef = useRef<((value: string) => void) | null>(null);
 
   // Initialize on mount (after hydration)
@@ -56,10 +61,12 @@ export function useVoiceInput(): UseVoiceInputReturn {
       setIsListening(true);
       setTranscript('');
       transcriptRef.current = '';
+      latestInterimRef.current = '';
       setErrorCode('');
     };
 
     recognition.onresult = (event: any) => {
+      let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const segment = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
@@ -68,16 +75,22 @@ export function useVoiceInput(): UseVoiceInputReturn {
             ? transcriptRef.current + ' ' + segment
             : segment;
           setTranscript(transcriptRef.current);
+        } else {
+          interim += segment;
         }
-        // Interim results aren't committed — UI watches transcript state
+      }
+      if (interim) {
+        latestInterimRef.current = interim;
       }
     };
 
     recognition.onend = () => {
       setIsListening(false);
-      // Resolve any pending stopListening promise with the final transcript
       if (endResolverRef.current) {
-        endResolverRef.current(transcriptRef.current);
+        // Prefer accumulated final results; fall back to the latest interim if the
+        // user stopped before the API promoted the current utterance to isFinal.
+        const result = transcriptRef.current || latestInterimRef.current;
+        endResolverRef.current(result);
         endResolverRef.current = null;
       }
     };
@@ -87,7 +100,9 @@ export function useVoiceInput(): UseVoiceInputReturn {
       setErrorCode(event.error || 'unknown');
       setIsListening(false);
       if (endResolverRef.current) {
-        endResolverRef.current(transcriptRef.current);
+        // Same interim fallback as onend
+        const result = transcriptRef.current || latestInterimRef.current;
+        endResolverRef.current(result);
         endResolverRef.current = null;
       }
     };
@@ -99,6 +114,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
     if (!recognitionRef.current || !isSupported) return;
     setTranscript('');
     transcriptRef.current = '';
+    latestInterimRef.current = '';
     setErrorCode('');
     try {
       recognitionRef.current.start();
