@@ -144,7 +144,7 @@ const EditItemPage = () => {
     },
   });
 
-  const handlePushToEbay = (publishMode?: 'DRAFT' | 'LIVE') => {
+  const handlePushToEbay = async (publishMode?: 'DRAFT' | 'LIVE') => {
     if (!ebayConnected) {
       showToast('Connect eBay in Settings first', 'error');
       return;
@@ -153,7 +153,31 @@ const EditItemPage = () => {
       showToast('eBay selling requires PRO or TEAMS tier', 'error');
       return;
     }
+    if (!formData.title.trim()) {
+      showToast('Title is required before pushing to eBay', 'error');
+      return;
+    }
     setEbayPushPending(true);
+    try {
+      // Auto-save current form state first so eBay push uses the latest values (not stale DB state).
+      // Inline PUT (not updateMutation) — updateMutation.onSuccess navigates to /dashboard which would abort the push.
+      const toIntOrNull = (v: string) => {
+        const n = parseInt(String(v).trim(), 10);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      };
+      const savePayload = {
+        ...formData,
+        packageWeightOz: toIntOrNull(formData.packageWeightOz),
+        packageLengthIn: toIntOrNull(formData.packageLengthIn),
+        packageWidthIn: toIntOrNull(formData.packageWidthIn),
+        packageHeightIn: toIntOrNull(formData.packageHeightIn),
+      };
+      await api.put(`/items/${id}`, savePayload);
+    } catch (err) {
+      setEbayPushPending(false);
+      showToast('Save failed — fix errors before pushing to eBay', 'error');
+      return;
+    }
     ebayPushMutation.mutate({ itemId: String(id), publishMode });
   };
 
