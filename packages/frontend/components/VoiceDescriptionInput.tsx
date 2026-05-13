@@ -95,6 +95,21 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
     await startListening();
   };
 
+  /** Try to coax Chrome to re-show the mic prompt (works when permission state
+   * is 'prompt' rather than fully 'denied'). Pure browser API — web pages cannot
+   * programmatically open chrome:// settings, so a hard 'denied' still requires
+   * the user to unblock manually via the lock icon. */
+  const attemptMicRecovery = async (): Promise<boolean> => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) return false;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleStopRecording = async () => {
     // S724 closure fix + 2026-05-12 append contract:
     // stopListening returns the final transcript, avoiding the stale-state race.
@@ -105,7 +120,15 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
     try {
       // Surface permission/recognition errors that previously failed silently
       if (errorCode === 'not-allowed' || errorCode === 'service-not-allowed') {
-        showToast('Microphone permission denied. Allow microphone access in browser settings.', 'error');
+        const recovered = await attemptMicRecovery();
+        if (recovered) {
+          showToast('Mic permission granted. Tap the mic again to record.', 'success');
+        } else {
+          showToast(
+            'Mic blocked. Click the 🔒 in your address bar → Site settings → Microphone → Allow, then reload.',
+            'error',
+          );
+        }
         setRecordingState('idle');
         setIsProcessing(false);
         return;
