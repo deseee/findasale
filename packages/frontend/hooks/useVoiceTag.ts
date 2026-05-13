@@ -50,19 +50,21 @@ export function useVoiceTag(): UseVoiceTagReturn {
   }, [isSupported, startListening]);
 
   const stopRecording = useCallback(async () => {
-    await stopListening();
+    // S724 closure fix: read the final transcript from stopListening's return,
+    // not the closure-stale `transcript` state variable.
+    const finalTranscript = await stopListening();
     setIsProcessing(true);
     setError(null);
 
     try {
-      if (!transcript.trim()) {
+      if (!finalTranscript.trim()) {
         setError('No speech detected');
         setIsProcessing(false);
         return;
       }
 
       const response = await api.post('/voice/extract', {
-        transcript,
+        transcript: finalTranscript,
       });
 
       const extractedResult: VoiceExtractionResult = response.data;
@@ -86,7 +88,7 @@ export function useVoiceTag(): UseVoiceTagReturn {
     } finally {
       setIsProcessing(false);
     }
-  }, [stopListening, transcript]);
+  }, [stopListening]);
 
   const clearResult = useCallback(() => {
     setResult(null);
