@@ -464,15 +464,9 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     }
   }, [zoomRange, zoomSupported]);
 
-  // Done — stop camera, return photos
-  const handleDone = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-    }
-    onComplete(
-      photos.map(({ blob, previewUrl }) => ({ blob, previewUrl }))
-    );
-  }, [photos, onComplete]);
+  // handleDone removed 2026-05-13 along with the Done button. onComplete prop kept on the
+  // interface for callsite stability — callers never need to receive a programmatic completion
+  // because both onComplete and onCancel were wired to identical cleanup paths in practice.
 
   // Cancel — stop camera, clean up
   const handleCancel = useCallback(() => {
@@ -543,19 +537,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             ))}
           </div>
 
-          {/* Right: Done (rapidfire only) + Settings buttons */}
+          {/* Right: Settings button. Done button removed 2026-05-13 — was crowding the
+              Settings gear in rapidfire mode. Both consumer pages treat onComplete and
+              onCancel the same way (close overlay + invalidate query), so the X button
+              on the left of the top bar handles the exit path. */}
           <div className="flex items-center gap-2">
-            {/* Done button — visible in rapidfire mode to exit batch session */}
-            {isRapidfire && (
-              <button
-                onClick={handleDone}
-                className="flex-shrink-0 text-xs sm:text-sm font-bold text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-full transition-colors"
-                aria-label="Done with batch"
-                title="Finish batch and return to dashboard"
-              >
-                Done
-              </button>
-            )}
             {/* Settings button */}
             <button
               onClick={() => setSettingsPanelOpen(!settingsPanelOpen)}
