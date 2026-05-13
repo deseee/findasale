@@ -2,6 +2,8 @@ import { prisma } from '../lib/prisma';
 import { analyzeItemImage, analyzeItemImages, suggestPrice } from '../services/cloudAIService';
 import { checkAITagLimit } from '../lib/tierEnforcement';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
+import { suggestCategories } from '../services/ebayTaxonomyService';
+import { getEbayAccessToken } from '../controllers/ebayController';
 
 /**
  * processRapidDraft — Background job for Rapidfire Mode Phase 2A
@@ -167,6 +169,25 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         ? composeDescription(item.description, aiResult.description, 'AUTO').description
         : item.description;
 
+      // eBay category auto-fill: non-blocking enrichment. Skip if organizer already set
+      // ebayCategoryId OR if eBay API fails. Uses the AI title as the query.
+      let ebayCategoryId: string | undefined;
+      let ebayCategoryName: string | undefined;
+      if (!userEdited.includes('ebayCategoryId') && !item.ebayCategoryId && aiResult.title) {
+        try {
+          const token = await getEbayAccessToken();
+          if (token) {
+            const suggestions = await suggestCategories(token, aiResult.title);
+            if (suggestions.length > 0) {
+              ebayCategoryId = suggestions[0].categoryId;
+              ebayCategoryName = suggestions[0].categoryName;
+            }
+          }
+        } catch (ebayErr) {
+          console.warn(`[rapidfire] eBay category suggestion failed for item ${itemId}:`, ebayErr);
+        }
+      }
+
       const updateData = {
         title: !userEdited.includes('title') ? (aiResult.title || item.title) : item.title,
         description: composedDescription,
@@ -179,6 +200,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         isAiTagged: true,
         aiConfidence: aiResult.confidence ?? 0.5,
         draftStatus: 'PENDING_REVIEW' as const,
+        ...(ebayCategoryId ? { ebayCategoryId, ebayCategoryName } : {}),
       };
 
       // Optimistic lock: include updatedAt in where clause to detect concurrent edits

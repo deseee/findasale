@@ -24,6 +24,8 @@ import { prisma } from '../lib/prisma';
 import axios from 'axios';
 import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
+import { suggestCategories } from '../services/ebayTaxonomyService';
+import { getEbayAccessToken } from './ebayController';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -311,12 +313,30 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           try {
             const existing = await prisma.item.findUnique({
               where: { id: itemId },
-              select: { description: true, userEditedFields: true },
+              select: { description: true, userEditedFields: true, ebayCategoryId: true },
             });
             const userEdited = existing?.userEditedFields ?? [];
             const nextDescription = !userEdited.includes('description') && summary.suggestedDescription
               ? composeDescription(existing?.description ?? null, summary.suggestedDescription, 'AUTO').description
               : existing?.description ?? summary.suggestedDescription;
+
+            // eBay category auto-fill: non-blocking enrichment
+            let ebayCategoryId: string | undefined;
+            let ebayCategoryName: string | undefined;
+            if (!userEdited.includes('ebayCategoryId') && !existing?.ebayCategoryId && summary.suggestedTitle) {
+              try {
+                const token = await getEbayAccessToken();
+                if (token) {
+                  const suggestions = await suggestCategories(token, summary.suggestedTitle);
+                  if (suggestions.length > 0) {
+                    ebayCategoryId = suggestions[0].categoryId;
+                    ebayCategoryName = suggestions[0].categoryName;
+                  }
+                }
+              } catch (ebayErr) {
+                console.warn(`[batchAnalyze] eBay category suggestion failed for item ${itemId}:`, ebayErr);
+              }
+            }
 
             await prisma.item.update({
               where: { id: itemId },
@@ -328,6 +348,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 price: summary.suggestedPrice ? summary.suggestedPrice * 100 : undefined,
                 tags: summary.suggestedTags,
                 aiConfidence: summary.aiConfidence,
+                ...(ebayCategoryId ? { ebayCategoryId, ebayCategoryName } : {}),
               },
             });
           } catch (err) {

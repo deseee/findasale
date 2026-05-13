@@ -22,6 +22,10 @@ interface VoiceExtractionResult {
   category: string;
   estimatedPrice?: number;
   description?: string;
+  weightOz?: number;
+  lengthIn?: number;
+  widthIn?: number;
+  heightIn?: number;
 }
 
 interface VoiceDescriptionInputProps {
@@ -32,6 +36,10 @@ interface VoiceDescriptionInputProps {
     category?: string;
     tags?: string[];
     price?: string;
+    packageWeightOz?: string;
+    packageLengthIn?: string;
+    packageWidthIn?: string;
+    packageHeightIn?: string;
     description: string;
   }) => void;
   existingFields?: {
@@ -39,6 +47,10 @@ interface VoiceDescriptionInputProps {
     category?: string;
     tags?: string[];
     price?: string;
+    packageWeightOz?: string;
+    packageLengthIn?: string;
+    packageWidthIn?: string;
+    packageHeightIn?: string;
   };
   disabled?: boolean;
   /**
@@ -253,6 +265,43 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
         });
       }
 
+      // Check weight
+      if (result.weightOz && !existingFields.packageWeightOz) {
+        const lbs = (result.weightOz / 16).toFixed(1);
+        suggestions.push({
+          field: 'packageWeightOz',
+          newValue: result.weightOz.toString(),
+          displayValue: `${result.weightOz} oz (~${lbs} lb)`,
+        });
+      }
+
+      // Check length
+      if (result.lengthIn && !existingFields.packageLengthIn) {
+        suggestions.push({
+          field: 'packageLengthIn',
+          newValue: result.lengthIn.toString(),
+          displayValue: `${result.lengthIn} in`,
+        });
+      }
+
+      // Check width
+      if (result.widthIn && !existingFields.packageWidthIn) {
+        suggestions.push({
+          field: 'packageWidthIn',
+          newValue: result.widthIn.toString(),
+          displayValue: `${result.widthIn} in`,
+        });
+      }
+
+      // Check height
+      if (result.heightIn && !existingFields.packageHeightIn) {
+        suggestions.push({
+          field: 'packageHeightIn',
+          newValue: result.heightIn.toString(),
+          displayValue: `${result.heightIn} in`,
+        });
+      }
+
       // Return to idle state
       setRecordingState('idle');
       setIsProcessing(false);
@@ -302,6 +351,10 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
       category?: string;
       tags?: string[];
       price?: string;
+      packageWeightOz?: string;
+      packageLengthIn?: string;
+      packageWidthIn?: string;
+      packageHeightIn?: string;
       description: string;
     } = {
       description: value,
@@ -315,6 +368,14 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
       fieldUpdate.tags = JSON.parse(suggestion.newValue);
     } else if (suggestion.field === 'price') {
       fieldUpdate.price = suggestion.newValue;
+    } else if (suggestion.field === 'packageWeightOz') {
+      fieldUpdate.packageWeightOz = suggestion.newValue;
+    } else if (suggestion.field === 'packageLengthIn') {
+      fieldUpdate.packageLengthIn = suggestion.newValue;
+    } else if (suggestion.field === 'packageWidthIn') {
+      fieldUpdate.packageWidthIn = suggestion.newValue;
+    } else if (suggestion.field === 'packageHeightIn') {
+      fieldUpdate.packageHeightIn = suggestion.newValue;
     }
 
     onFieldUpdate(fieldUpdate);

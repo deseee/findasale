@@ -214,6 +214,60 @@ function estimatePrice(transcript: string, category: string): number | undefined
   return Math.round(price * 100) / 100; // Round to 2 decimals
 }
 
+/** Round to nearest integer; return undefined if NaN or <= 0. */
+function safeRound(n: number): number | undefined {
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.round(n);
+}
+
+/**
+ * Extract weight from transcript. Returns ounces (Int) or undefined if not mentioned.
+ * Digit-only patterns to avoid prose false positives ("ten pounds" does NOT match).
+ * Conversions: lb -> 16 oz, kg -> 35.274 oz, g -> 0.03527 oz, oz pass-through.
+ */
+function extractWeightOz(transcript: string): number | undefined {
+  const lower = transcript.toLowerCase();
+  const patterns: Array<{ re: RegExp; mult: number }> = [
+    { re: /(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)\b/i, mult: 16 },
+    { re: /(\d+(?:\.\d+)?)\s*(?:kg|kilograms?)\b/i, mult: 35.274 },
+    { re: /(\d+(?:\.\d+)?)\s*(?:grams?|g)\b/i, mult: 0.03527 },
+    { re: /(\d+(?:\.\d+)?)\s*(?:oz|ounces?)\b/i, mult: 1 },
+  ];
+  for (const { re, mult } of patterns) {
+    const m = re.exec(lower);
+    if (m) {
+      return safeRound(parseFloat(m[1]) * mult);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Extract dimensions from transcript. Pattern "X by Y by Z" or "X x Y x Z" with optional unit.
+ * Default unit: inches. Conversions: cm->0.3937 in, ft->12 in, mm->0.03937 in.
+ */
+function extractDimensions(transcript: string): { lengthIn?: number; widthIn?: number; heightIn?: number } | undefined {
+  const lower = transcript.toLowerCase();
+  const m = /(\d+(?:\.\d+)?)\s*(?:by|x)\s*(\d+(?:\.\d+)?)\s*(?:by|x)\s*(\d+(?:\.\d+)?)\s*(inches?|in|cm|ft|feet|mm)?/i.exec(lower);
+  if (!m) return undefined;
+  let l = parseFloat(m[1]);
+  let w = parseFloat(m[2]);
+  let h = parseFloat(m[3]);
+  const unit = (m[4] || 'in').toLowerCase();
+  const mult = unit.startsWith('cm') ? 0.3937
+    : unit.startsWith('ft') || unit.startsWith('feet') ? 12
+    : unit.startsWith('mm') ? 0.03937
+    : 1;
+  l *= mult; w *= mult; h *= mult;
+  const lengthIn = safeRound(l);
+  const widthIn = safeRound(w);
+  const heightIn = safeRound(h);
+  if (lengthIn && widthIn && heightIn) {
+    return { lengthIn, widthIn, heightIn };
+  }
+  return undefined;
+}
+
 /**
  * POST /api/ai/voice-extract
  * Extract item data from voice transcript
@@ -230,6 +284,8 @@ export const voiceExtract = async (req: Request, res: Response) => {
     const category = detectCategory(transcript);
     const tags = extractTags(transcript);
     const estimatedPrice = estimatePrice(transcript, category) ?? 0;
+    const weightOz = extractWeightOz(transcript);
+    const dims = extractDimensions(transcript);
 
     if (!name) {
       return res.status(400).json({ message: 'Could not extract item name from transcript' });
@@ -240,6 +296,10 @@ export const voiceExtract = async (req: Request, res: Response) => {
       tags,
       category,
       estimatedPrice: estimatedPrice > 0 ? estimatedPrice : undefined,
+      ...(weightOz !== undefined ? { weightOz } : {}),
+      ...(dims?.lengthIn !== undefined ? { lengthIn: dims.lengthIn } : {}),
+      ...(dims?.widthIn !== undefined ? { widthIn: dims.widthIn } : {}),
+      ...(dims?.heightIn !== undefined ? { heightIn: dims.heightIn } : {}),
     });
   } catch (error) {
     console.error('[voiceController] Error extracting from transcript:', error);
