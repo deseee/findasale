@@ -26,7 +26,8 @@ interface Item {
   status: string;
   draftStatus?: string;
   photoUrls: string[];
-  ebayListingId?: string;
+  ebayListingId?: string | null;
+  ebayOfferId?: string | null; // S725: drives "Pending Publish" badge + Publish-now button
   ebayNeedsReview?: boolean;
   saleId: string;
 }
@@ -83,13 +84,10 @@ const SaleDetailPage = () => {
     enabled: !!id,
   });
 
-  // eBay push mutation
+  // eBay push mutation — S725 sends LIVE only (DRAFT mode killed).
   const ebayPushMutation = useMutation({
-    mutationFn: async ({ itemIds, publishMode }: { itemIds: string[]; publishMode?: 'DRAFT' | 'LIVE' }) => {
-      return api.post(`/ebay/organizer/sales/${id}/ebay-push`, {
-        itemIds,
-        ...(publishMode ? { publishMode } : {}),
-      });
+    mutationFn: async ({ itemIds }: { itemIds: string[] }) => {
+      return api.post(`/ebay/organizer/sales/${id}/ebay-push`, { itemIds });
     },
     onSuccess: (response) => {
       const results = response.data.results || [];
@@ -97,9 +95,6 @@ const SaleDetailPage = () => {
         if (result.status === 'success') {
           setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'listed' }));
           showToast(`Item listed on eBay`, 'success');
-        } else if (result.status === 'DRAFT_CREATED' || result.status === 'draft') {
-          setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'listed' }));
-          showToast('Draft created — finalize in eBay Seller Hub', 'success');
         } else if (result.status === 'category_review_needed') {
           setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'category_review_needed' }));
           showToast('eBay category needs review — open item editor to set manually', 'error');
@@ -109,13 +104,13 @@ const SaleDetailPage = () => {
             ? 'eBay not connected'
             : result.error?.includes('POLICIES')
             ? 'eBay policies not configured'
-            : result.error || 'Failed to push item';
+            : result.message || result.error || 'Failed to push item';
           showToast(errorMsg, 'error');
         }
       });
       refetchItems();
     },
-    onError: (error: any, variables: { itemIds: string[]; publishMode?: 'DRAFT' | 'LIVE' }) => {
+    onError: (error: any, variables: { itemIds: string[] }) => {
       const msg = error.response?.data?.message || 'Failed to push item to eBay';
       showToast(msg, 'error');
       variables.itemIds.forEach((id) => {
@@ -124,8 +119,32 @@ const SaleDetailPage = () => {
     },
   });
 
+  // S725: "Publish to eBay now" — publishes an existing unpublished Inventory API
+  // offer (ebayOfferId set, ebayListingId null) so it goes LIVE without a fresh push.
+  const ebayPublishMutation = useMutation({
+    mutationFn: async ({ itemId }: { itemId: string }) => {
+      return api.post(`/ebay/items/${itemId}/publish`);
+    },
+    onSuccess: (response, variables) => {
+      const data = response.data || {};
+      if (data.ebayListingId) {
+        setEbayPushStatus((prev) => ({ ...prev, [variables.itemId]: 'listed' }));
+        showToast('Published to eBay', 'success');
+        refetchItems();
+      } else {
+        setEbayPushStatus((prev) => ({ ...prev, [variables.itemId]: 'error' }));
+        showToast('Publish failed', 'error');
+      }
+    },
+    onError: (error: any, variables: { itemId: string }) => {
+      const msg = error.response?.data?.message || 'Failed to publish item to eBay';
+      showToast(msg, 'error');
+      setEbayPushStatus((prev) => ({ ...prev, [variables.itemId]: 'error' }));
+    },
+  });
+
   const handlePushToEbay = useCallback(
-    (itemId: string, publishMode?: 'DRAFT' | 'LIVE') => {
+    (itemId: string) => {
       if (!ebayConnected) {
         showToast('Connect eBay in Settings first', 'error');
         return;
@@ -135,9 +154,17 @@ const SaleDetailPage = () => {
         return;
       }
       setEbayPushStatus((prev) => ({ ...prev, [itemId]: 'pushing' }));
-      ebayPushMutation.mutate({ itemIds: [itemId], publishMode });
+      ebayPushMutation.mutate({ itemIds: [itemId] });
     },
     [ebayConnected, tier, ebayPushMutation, showToast]
+  );
+
+  const handlePublishNow = useCallback(
+    (itemId: string) => {
+      setEbayPushStatus((prev) => ({ ...prev, [itemId]: 'pushing' }));
+      ebayPublishMutation.mutate({ itemId });
+    },
+    [ebayPublishMutation]
   );
 
   // Show post-sale toast when sale is ENDED and has unsold items
@@ -275,15 +302,39 @@ const SaleDetailPage = () => {
                       </p>
                     )}
 
-                    {/* eBay Status Badge */}
+                    {/* eBay Status Badge — S725 three states: Live / Pending Publish / none */}
                     {item.ebayListingId && (
-                      <div className="mb-3 inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
-                        ✓ Listed on eBay
+                      <a
+                        href={`https://www.ebay.com/itm/${item.ebayListingId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mb-3 inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
+                      >
+                        Live on eBay
+                      </a>
+                    )}
+                    {!item.ebayListingId && item.ebayOfferId && (
+                      <div className="mb-3 inline-flex items-center gap-2">
+                        <span className="inline-block bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200 text-xs font-semibold px-2 py-1 rounded">
+                          Pending Publish
+                        </span>
+                        <button
+                          onClick={() => handlePublishNow(item.id)}
+                          disabled={ebayPushStatus[item.id] === 'pushing'}
+                          title="Publish this draft offer live on eBay now"
+                          className={`text-xs font-semibold py-1 px-2 rounded transition-colors text-white ${
+                            ebayPushStatus[item.id] === 'pushing'
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : 'bg-blue-600 hover:bg-blue-700'
+                          }`}
+                        >
+                          {ebayPushStatus[item.id] === 'pushing' ? 'Publishing...' : 'Publish now'}
+                        </button>
                       </div>
                     )}
-                    {!item.ebayListingId && (item.ebayNeedsReview || ebayPushStatus[item.id] === 'category_review_needed') && (
+                    {!item.ebayListingId && !item.ebayOfferId && (item.ebayNeedsReview || ebayPushStatus[item.id] === 'category_review_needed') && (
                       <div className="mb-3 inline-block bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200 text-xs font-semibold px-2 py-1 rounded">
-                        ⚠ eBay Category Needed
+                        eBay Category Needed
                       </div>
                     )}
 
@@ -296,8 +347,12 @@ const SaleDetailPage = () => {
                         Edit
                       </Link>
 
-                      {/* Push to eBay — split: draft vs live */}
+                      {/* Push to eBay — S725 single LIVE button (DRAFT mode killed).
+                          Hidden when an unpublished offer already exists; in that case
+                          the "Publish now" inline button (in the Pending Publish badge above)
+                          handles the publish step. */}
                       {!item.ebayListingId &&
+                        !item.ebayOfferId &&
                         tier !== 'SIMPLE' &&
                         ebayConnected &&
                         (ebayPushStatus[item.id] === 'category_review_needed' || item.ebayNeedsReview ? (
@@ -310,32 +365,18 @@ const SaleDetailPage = () => {
                             Set Category
                           </button>
                         ) : (
-                          <div className="flex-1 flex gap-1">
-                            <button
-                              onClick={() => handlePushToEbay(item.id, 'DRAFT')}
-                              disabled={ebayPushStatus[item.id] === 'pushing'}
-                              title="Create unpublished offer — finalize in eBay Seller Hub"
-                              className={`flex-1 text-xs font-semibold py-2 px-1 rounded transition-colors ${
-                                ebayPushStatus[item.id] === 'pushing'
-                                  ? 'bg-gray-400 text-white cursor-not-allowed'
-                                  : 'bg-warm-200 hover:bg-warm-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100'
-                              }`}
-                            >
-                              {ebayPushStatus[item.id] === 'pushing' ? 'Pushing...' : 'Push draft'}
-                            </button>
-                            <button
-                              onClick={() => handlePushToEbay(item.id, 'LIVE')}
-                              disabled={ebayPushStatus[item.id] === 'pushing'}
-                              title="Publish live to eBay immediately"
-                              className={`flex-1 text-xs font-semibold py-2 px-1 rounded transition-colors text-white ${
-                                ebayPushStatus[item.id] === 'pushing'
-                                  ? 'bg-gray-400 cursor-not-allowed'
-                                  : 'bg-blue-600 hover:bg-blue-700'
-                              }`}
-                            >
-                              {ebayPushStatus[item.id] === 'pushing' ? 'Pushing...' : 'Push live'}
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => handlePushToEbay(item.id)}
+                            disabled={ebayPushStatus[item.id] === 'pushing'}
+                            title="Publish live to eBay immediately"
+                            className={`flex-1 text-sm font-semibold py-2 px-2 rounded transition-colors text-white ${
+                              ebayPushStatus[item.id] === 'pushing'
+                                ? 'bg-gray-400 cursor-not-allowed'
+                                : 'bg-blue-600 hover:bg-blue-700'
+                            }`}
+                          >
+                            {ebayPushStatus[item.id] === 'pushing' ? 'Pushing...' : 'Push to eBay'}
+                          </button>
                         ))}
 
                       {/* View on eBay Link */}
@@ -351,7 +392,7 @@ const SaleDetailPage = () => {
                       )}
 
                       {/* Disabled state for SIMPLE tier */}
-                      {!item.ebayListingId && tier === 'SIMPLE' && (
+                      {!item.ebayListingId && !item.ebayOfferId && tier === 'SIMPLE' && (
                         <button
                           disabled
                           title="Upgrade to PRO to use eBay"
@@ -362,7 +403,7 @@ const SaleDetailPage = () => {
                       )}
 
                       {/* Disabled state for no eBay connection */}
-                      {!item.ebayListingId && !ebayConnected && (
+                      {!item.ebayListingId && !item.ebayOfferId && !ebayConnected && (
                         <button
                           disabled
                           title="Connect eBay in Settings"

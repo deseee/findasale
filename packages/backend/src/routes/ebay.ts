@@ -7,6 +7,7 @@ import {
   disconnectEbay,
   getEbayPreview,
   pushSaleToEbay,
+  publishItemOffer,
   importInventoryFromEbay,
   handleEbayAccountDeletionVerification,
   handleEbayAccountDeletion,
@@ -84,6 +85,11 @@ router.post('/sync-policies', authenticate, async (req: AuthRequest, res: Respon
 // Preview and push endpoints
 router.get('/organizer/items/:itemId/ebay-preview', authenticate, getEbayPreview);
 router.post('/organizer/sales/:saleId/ebay-push', authenticate, pushSaleToEbay);
+
+// S725: Publish an existing UNPUBLISHED Inventory API offer to LIVE on eBay.
+// Used by the in-app "Publish to eBay now" button for items whose ebayOfferId
+// exists but ebayListingId is null (stuck draft from S723 era).
+router.post('/items/:itemId/publish', authenticate, publishItemOffer);
 
 // Feature #244 Phase 3: Post-sale eBay push — unsold items + shipping overrides
 router.get('/organizer/sales/:saleId/unsold-items', authenticate, getUnsoldItems);

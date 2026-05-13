@@ -28,7 +28,7 @@ import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
  * eBay API integration for price comparison, CSV export, OAuth, and direct inventory push.
  */
 
-// EPN Campaign ID for affiliate tracking
+// EPN Campaign ID for affiliate tracking — S725: kept
 const EBAY_EPN_CAMPID = '5339148447';
 
 // Token cache for eBay OAuth (simple in-memory, will be replaced with Redis in production)
@@ -1658,10 +1658,13 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
 export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
-    const { itemIds, photoMode, publishMode: requestedPublishMode } = req.body as {
+    // S725: DRAFT mode removed (eBay Inventory API unpublished offers can't be
+    // viewed/published from Seller Hub UI — feature was broken-by-design).
+    // All pushes now go LIVE. Use the per-item "Publish to eBay now" button
+    // (publishItemOffer) for any item whose ebayOfferId is stale.
+    const { itemIds, photoMode } = req.body as {
       itemIds: string[];
       photoMode?: string;
-      publishMode?: 'DRAFT' | 'LIVE';
     };
     const userId = req.user?.id;
 
@@ -1823,19 +1826,11 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     }
     const merchantLocationKey = locationResult.merchantLocationKey;
 
-    // Resolve effective publish mode: request body wins, else Organizer default, else DRAFT.
-    // Drives whether the Inventory API offer is published live or left as a Draft.
-    const effectivePublishMode: 'DRAFT' | 'LIVE' =
-      requestedPublishMode ?? organizer.ebayDefaultPublishMode ?? 'DRAFT';
-    const publishModeReason: 'override' | 'settings' | 'default-draft' =
-      requestedPublishMode !== undefined
-        ? 'override'
-        : organizer.ebayDefaultPublishMode
-          ? 'settings'
-          : 'default-draft';
-    console.log(
-      `[eBay PublishMode] saleId=${saleId} mode=${effectivePublishMode} reason=${publishModeReason}`
-    );
+    // S725: All pushes go LIVE. DRAFT mode removed — eBay Inventory API
+    // unpublished offers can't be viewed/published from Seller Hub UI.
+    // The replacement for "Push as Draft" is the per-item "Publish to eBay now"
+    // button (publishItemOffer endpoint) for fixing stale offers in-app.
+    console.log(`[eBay Push] saleId=${saleId} mode=LIVE`);
 
     // Fetch the organizer's eBay fulfillment policies once for shipping smart-pick.
     // Used when organizer.ebayDefaultShippingPolicyId is null and no EbayPolicyMapping rule fires.
@@ -1877,6 +1872,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           {
             id: item.id,
             packageWeightOz: item.packageWeightOz,
+            packageType: item.packageType,
             ebayShippingClassification: item.ebayShippingClassification,
             ebayCategoryId: item.ebayCategoryId,
             category: item.category,
@@ -2231,27 +2227,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           data: { ebayOfferId: offerId },
         });
 
-        // Step 3: Publish offer (or skip if effective publish mode is DRAFT)
-        // Resolution order: explicit publishMode in request body → Organizer.ebayDefaultPublishMode → legacy mapping.pushAsDraft → LIVE
+        // Step 3: Publish offer LIVE (S725: DRAFT mode removed — broken-by-design)
         const publishPath = encodeURIComponent(`/sell/inventory/v1/offer/${offerId}/publish`);
         const publishUrl = `${frontendUrl}/api/proxy/ebay?path=${publishPath}`;
-
-        const shouldStayAsDraft = effectivePublishMode === 'DRAFT' || (requestedPublishMode === undefined && routing.pushAsDraft);
-
-        if (shouldStayAsDraft) {
-          // Draft mode — skip publish, offer stays unpublished in seller's account
-          console.log(`[eBay] Item ${item.id} pushed as DRAFT (offerId=${offerId}) — finalize in eBay Seller Hub`);
-          results.push({
-            itemId: item.id,
-            sku,
-            ebayOfferId: offerId,
-            ebayListingId: null,
-            status: 'DRAFT_CREATED',
-            listingUrl: null,
-            message: 'Pushed as draft — finalize in eBay Seller Hub',
-          });
-          continue;
-        }
 
         let publishResponse = await fetch(publishUrl, {
           method: 'POST',
@@ -2399,6 +2377,52 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           }
         }
 
+        // Pass 3: 25101 Invalid <ShippingPackage> retry — eBay rejected the
+        // item's packageType because the picked fulfillment policy's shipping
+        // services don't accept it (e.g. policy with USPS_FLAT_RATE_ENVELOPE
+        // services but item.packageType=MAILING_BOX or PARCEL_OR_PADDED_ENVELOPE).
+        // Defensive fix: strip packageType from the inventory payload and let
+        // eBay infer from weight/dims. Logs the event so the organizer-set
+        // packageType vs picked-policy mismatch is diagnosable.
+        if (!publishResponse.ok) {
+          const currentErrorText = await publishResponse.clone().text();
+          if (currentErrorText.includes('25101')) {
+            console.warn(`[eBay 25101 Retry] sku=${sku} pickedPolicy=${routing.fulfillmentPolicyId} itemPackageType="${item.packageType ?? 'null'}" — stripping packageType and retrying`);
+            const stripped = { ...inventoryPayload };
+            if ((stripped as any).packageWeightAndSize) {
+              const pkg = { ...((stripped as any).packageWeightAndSize as Record<string, unknown>) };
+              delete (pkg as any).packageType;
+              (stripped as any).packageWeightAndSize = pkg;
+            }
+            const retryInvRes = await fetch(inventoryUrl, {
+              method: 'PUT',
+              headers: {
+                ...ebayUserHeaders(accessToken),
+                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+              },
+              body: JSON.stringify(stripped),
+            });
+            if (retryInvRes.ok || retryInvRes.status === 204) {
+              publishResponse = await fetch(publishUrl, {
+                method: 'POST',
+                headers: {
+                  ...ebayUserHeaders(accessToken),
+                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+                },
+              });
+              if (publishResponse.ok) {
+                trackEbayCall();
+                console.log(`[eBay 25101 Retry] ${sku}: succeeded after stripping packageType`);
+              } else {
+                const stillErr = await publishResponse.clone().text();
+                console.warn(`[eBay 25101 Retry] ${sku}: still failing: ${stillErr.slice(0, 200)}`);
+              }
+            } else {
+              console.warn(`[eBay 25101 Retry] inventory PUT (strip packageType) failed: ${retryInvRes.status}`);
+            }
+          }
+        }
+
         if (publishResponse.ok) {
           trackEbayCall();
           const publishData = (await publishResponse.json()) as any;
@@ -2535,6 +2559,220 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     }
   }
 };
+
+/**
+ * POST /api/ebay/items/:itemId/publish
+ *
+ * S725: "Publish to eBay now" — publishes an existing UNPUBLISHED Inventory API
+ * offer that was created by an earlier push (e.g. when DRAFT mode was on, or
+ * when the publish step failed but the offer was created). Replaces the dead
+ * "Push as Draft" flow — DRAFT offers in eBay's Inventory API cannot be viewed
+ * or published from the Seller Hub UI, so we surface a publish button in-app.
+ *
+ * Behavior:
+ *   - Requires authentication + organizer ownership of the item
+ *   - Reads item.ebayOfferId — 400 if null
+ *   - Calls eBay POST /sell/inventory/v1/offer/{offerId}/publish
+ *   - On 25021 (condition rejected): walks accepted-conditions list
+ *   - On success: stores item.ebayListingId, returns { ebayListingId, ebayItemUrl }
+ */
+export const publishItemOffer = async (req: AuthRequest, res: Response) => {
+  try {
+    const { itemId } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Load the item + its sale's organizerId for ownership check
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        ebayOfferId: true,
+        ebayListingId: true,
+        ebayCategoryId: true,
+        title: true,
+        sale: { select: { organizerId: true } },
+      },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Inventory items without a sale can't be published this way.
+    if (!item.sale) {
+      return res.status(400).json({ message: 'Item is not attached to a sale' });
+    }
+
+    // Organizer ownership check
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+      include: { ebayConnection: true },
+    });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+    if (item.sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Not authorized to publish this item' });
+    }
+
+    // Already live? Idempotent — return current listing URL.
+    if (item.ebayListingId) {
+      return res.json({
+        ebayListingId: item.ebayListingId,
+        ebayItemUrl: `https://www.ebay.com/itm/${item.ebayListingId}`,
+        alreadyPublished: true,
+      });
+    }
+
+    if (!item.ebayOfferId) {
+      return res.status(400).json({
+        code: 'NO_OFFER',
+        message: 'Item has not been pushed to eBay yet',
+      });
+    }
+
+    if (!organizer.ebayConnection) {
+      return res.status(400).json({ message: 'eBay account not connected' });
+    }
+
+    const accessToken = await refreshEbayAccessToken(organizer.id);
+    if (!accessToken) {
+      return res.status(500).json({ message: 'Failed to refresh eBay access token' });
+    }
+
+    if (isEbayRateLimited()) {
+      return res.status(429).json({
+        code: 'EBAY_RATE_LIMITED',
+        message: 'Daily eBay API limit reached. Try again tomorrow.',
+      });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+    const proxySecret = process.env.EBAY_PROXY_SECRET;
+    const publishPath = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}/publish`);
+    const publishUrl = `${frontendUrl}/api/proxy/ebay?path=${publishPath}`;
+
+    let publishResponse = await fetch(publishUrl, {
+      method: 'POST',
+      headers: {
+        ...ebayUserHeaders(accessToken),
+        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+      },
+    });
+
+    let ebayListingId: string | null = null;
+
+    if (publishResponse.ok) {
+      trackEbayCall();
+      const publishData = (await publishResponse.json()) as any;
+      ebayListingId = publishData.listingId;
+    } else {
+      const publishError = await publishResponse.text();
+      console.warn(`[eBay PublishNow] offerId=${item.ebayOfferId} status=${publishResponse.status} body=${publishError.slice(0, 300)}`);
+
+      // 25021 retry path: walk accepted conditions and re-publish
+      if (publishError.includes('25021') && item.ebayCategoryId) {
+        const sku = `FAS-${item.id}`;
+        const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
+        const inventoryUrl = ebayProxyUrl(inventoryPath);
+        // Fetch the current inventory item so we have its payload shape
+        const invGet = await fetch(inventoryUrl, { headers: ebayUserHeaders(accessToken) });
+        if (invGet.ok) {
+          const invBody = (await invGet.json()) as any;
+          const accepted = await getAcceptedConditionsForCategory(item.ebayCategoryId);
+          const retryOrder = ['NEW_OTHER', 'USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE', 'NEW']
+            .filter((c) => c !== invBody.condition && (!accepted || accepted.has(c)));
+          for (const retryCondition of retryOrder) {
+            console.log(`[eBay PublishNow Retry25021] ${sku}: retrying with condition=${retryCondition}`);
+            const retryInvPayload = { ...invBody, condition: retryCondition };
+            const retryInvRes = await fetch(inventoryUrl, {
+              method: 'PUT',
+              headers: {
+                ...ebayUserHeaders(accessToken),
+                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+              },
+              body: JSON.stringify(retryInvPayload),
+            });
+            if (!retryInvRes.ok && retryInvRes.status !== 204) continue;
+            publishResponse = await fetch(publishUrl, {
+              method: 'POST',
+              headers: {
+                ...ebayUserHeaders(accessToken),
+                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+              },
+            });
+            if (publishResponse.ok) {
+              trackEbayCall();
+              const publishData = (await publishResponse.json()) as any;
+              ebayListingId = publishData.listingId;
+              break;
+            }
+          }
+        }
+      }
+
+      // If still no listingId, try fetching from the offer directly (in case it already published)
+      if (!ebayListingId) {
+        const offerDetailRes = await fetch(
+          `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`)}`,
+          { headers: { ...ebayUserHeaders(accessToken), ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}) } }
+        );
+        if (offerDetailRes.ok) {
+          const offerDetail = (await offerDetailRes.json()) as any;
+          ebayListingId = offerDetail.listing?.listingId || null;
+        }
+      }
+
+      if (!ebayListingId) {
+        return res.status(400).json({
+          code: 'PUBLISH_FAILED',
+          message: parseEbayErrorMessage(publishError) || `eBay rejected publish (status ${publishResponse.status})`,
+          ebayStatus: publishResponse.status,
+        });
+      }
+    }
+
+    // Success — persist listing ID
+    await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        ebayListingId,
+        listedOnEbayAt: new Date(),
+        ebayNeedsReview: false,
+      },
+    });
+
+    return res.json({
+      ebayListingId,
+      ebayItemUrl: `https://www.ebay.com/itm/${ebayListingId}`,
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`[eBay PublishNow Failed] itemId=${req.params.itemId} reason=${msg}`);
+    if (!res.headersSent) {
+      return res.status(500).json({ message: 'Failed to publish item', error: msg.slice(0, 200) });
+    }
+  }
+};
+
+/**
+ * Helper: extract the first user-friendly error message from an eBay error response body.
+ */
+function parseEbayErrorMessage(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed?.errors?.[0]?.message) return String(parsed.errors[0].message);
+    if (parsed?.errors?.[0]?.longMessage) return String(parsed.errors[0].longMessage);
+    if (parsed?.message) return String(parsed.message);
+  } catch {
+    // not JSON
+  }
+  return null;
+}
 
 /**
  * Helper: Build aspects object from tags
@@ -2736,6 +2974,7 @@ async function resolvePoliciesForItem(
   item: {
     id: string;
     packageWeightOz?: number | null;
+    packageType?: string | null;
     ebayShippingClassification?: string | null;
     ebayCategoryId?: string | null;
     category?: string | null;
@@ -2817,46 +3056,54 @@ async function resolvePoliciesForItem(
     };
   }
 
-  // Policy resolution priority:
-  //   1. Category override (exact ebayCategoryId match)
-  //   2. Shipping classification override (HEAVY_OVERSIZED, FRAGILE, UNKNOWN)
-  //   3. Weight-tier match
-  //   4. Default fulfillment policy
+  // Policy resolution priority (S725 — weight-tier promoted ahead of category
+  // per organizer-configured maxOz rules taking precedence over category routing):
+  //   1. Weight-tier match (organizer's EbayPolicyMapping.weightTierMappings)
+  //   2. Category override (exact ebayCategoryId match)
+  //   3. Shipping classification override (HEAVY_OVERSIZED, FRAGILE)
+  //   4. UNKNOWN classification fallback
+  //   5. Default mapping fulfillment policy
+  //   6. Smart-pick (calculated → flat-rate → free fallback)
 
   let fulfillmentPolicyId: string | null = null;
   let routingReason = '';
+  let cascadeStep = '';
 
-  // 1. Category override
-  const categoryOverrides = (mapping.categoryOverrides as any[]) || [];
-  if (item.ebayCategoryId) {
-    const match = categoryOverrides.find((c: any) => c.categoryId === item.ebayCategoryId);
-    if (match) {
-      fulfillmentPolicyId = match.policyId;
-      routingReason = `category-override:${item.ebayCategoryId}`;
+  // 1. Weight-tier match (highest priority after explicit organizer override)
+  const tiers = (mapping.weightTierMappings as unknown as WeightTierMapping[]) || [];
+  if (tiers.length > 0 && item.packageWeightOz != null) {
+    const weightOz = item.packageWeightOz;
+    const tier = matchWeightTier(weightOz, tiers);
+    if (tier) {
+      fulfillmentPolicyId = tier.policyId;
+      routingReason = `weight-tier:${tier.maxOz}oz`;
+      cascadeStep = 'weight-tier';
     }
   }
 
-  // 2. Shipping classification override
+  // 2. Category override
+  if (!fulfillmentPolicyId) {
+    const categoryOverrides = (mapping.categoryOverrides as any[]) || [];
+    if (item.ebayCategoryId) {
+      const match = categoryOverrides.find((c: any) => c.categoryId === item.ebayCategoryId);
+      if (match) {
+        fulfillmentPolicyId = match.policyId;
+        routingReason = `category-override:${item.ebayCategoryId}`;
+        cascadeStep = 'category';
+      }
+    }
+  }
+
+  // 3. Shipping classification override
   if (!fulfillmentPolicyId) {
     if (item.ebayShippingClassification === 'HEAVY_OVERSIZED' && mapping.heavyOversizedPolicyId) {
       fulfillmentPolicyId = mapping.heavyOversizedPolicyId;
       routingReason = 'classification:HEAVY_OVERSIZED';
+      cascadeStep = 'classification';
     } else if (item.ebayShippingClassification === 'FRAGILE' && mapping.fragilePolicyId) {
       fulfillmentPolicyId = mapping.fragilePolicyId;
       routingReason = 'classification:FRAGILE';
-    }
-  }
-
-  // 3. Weight-tier match
-  if (!fulfillmentPolicyId) {
-    const tiers = (mapping.weightTierMappings as unknown as WeightTierMapping[]) || [];
-    if (tiers.length > 0 && item.packageWeightOz != null) {
-      const weightOz = item.packageWeightOz;
-      const tier = matchWeightTier(weightOz, tiers);
-      if (tier) {
-        fulfillmentPolicyId = tier.policyId;
-        routingReason = `weight-tier:${tier.maxOz}oz`;
-      }
+      cascadeStep = 'classification';
     }
   }
 
@@ -2864,12 +3111,14 @@ async function resolvePoliciesForItem(
   if (!fulfillmentPolicyId && (item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) && mapping.unknownPolicyId) {
     fulfillmentPolicyId = mapping.unknownPolicyId;
     routingReason = 'classification:UNKNOWN';
+    cascadeStep = 'classification';
   }
 
   // 5. Default mapping fulfillment policy
   if (!fulfillmentPolicyId && mapping.defaultFulfillmentPolicyId) {
     fulfillmentPolicyId = mapping.defaultFulfillmentPolicyId;
     routingReason = 'default-fulfillment';
+    cascadeStep = 'default';
   }
 
   // 6. Smart-pick from organizer's eBay policies (calculated > flat-rate > free fallback)
@@ -2882,10 +3131,17 @@ async function resolvePoliciesForItem(
     if (smartPicked) {
       fulfillmentPolicyId = smartPicked.policyId;
       routingReason = `smart-pick:${smartPicked.reason}`;
+      cascadeStep = 'smart-pick';
     } else if (conn.fulfillmentPolicyId) {
       fulfillmentPolicyId = conn.fulfillmentPolicyId;
       routingReason = 'connection-default-fulfillment';
+      cascadeStep = 'default';
     }
+  }
+
+  // S725: structured cascade log so future shipping-pick bugs are diagnosable in one line.
+  if (fulfillmentPolicyId) {
+    console.log(`[eBay ShippingPick] cascade-step=${cascadeStep} reason=${routingReason} weightOz=${item.packageWeightOz ?? 'null'} packageType=${item.packageType ?? 'null'}`);
   }
 
   if (!fulfillmentPolicyId) {
