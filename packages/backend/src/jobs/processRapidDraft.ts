@@ -4,6 +4,8 @@ import { checkAITagLimit } from '../lib/tierEnforcement';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { suggestCategories } from '../services/ebayTaxonomyService';
 import { getEbayAccessToken } from '../controllers/ebayController';
+import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
+import { lookupByBarcode } from '../services/ebayCatalogLookup';
 
 /**
  * processRapidDraft — Background job for Rapidfire Mode Phase 2A
@@ -188,6 +190,26 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         }
       }
 
+      // Barcode auto-detection: scan all photo buffers for a visible barcode.
+      // Fires AFTER AI tagging. Non-blocking — any error or timeout = silent skip.
+      // Barcode enrichment overrides AI title-based eBay category (stronger signal).
+      let barcodeEnrichment: import('../services/ebayCatalogLookup').EbayCatalogResult | null = null;
+      for (const photoBuffer of photoBuffers) {
+        try {
+          const detected = await decodeBarcodeFromImage(photoBuffer);
+          if (detected) {
+            console.log(`[rapidfire] Barcode detected for item ${itemId}: ${detected.code} (${detected.codeType})`);
+            barcodeEnrichment = await lookupByBarcode(detected.code, detected.codeType);
+            if (barcodeEnrichment) {
+              console.log(`[rapidfire] Barcode enrichment found for item ${itemId}: "${barcodeEnrichment.title}"`);
+              break; // First hit wins
+            }
+          }
+        } catch {
+          // Non-blocking — barcode decode failure must never interrupt AI pipeline
+        }
+      }
+
       const updateData = {
         title: !userEdited.includes('title') ? (aiResult.title || item.title) : item.title,
         description: composedDescription,
@@ -201,6 +223,28 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         aiConfidence: aiResult.confidence ?? 0.5,
         draftStatus: 'PENDING_REVIEW' as const,
         ...(ebayCategoryId ? { ebayCategoryId, ebayCategoryName } : {}),
+        // Barcode enrichment: override AI suggestions for exact-product-match fields.
+        // Organizer-set values always win (userEdited gate). AI-set values lose to barcode.
+        ...(barcodeEnrichment ? {
+          ...(!userEdited.includes('brand') && !item.brand && barcodeEnrichment.brand
+            ? { brand: barcodeEnrichment.brand } : {}),
+          ...(!item.upc && barcodeEnrichment.upc
+            ? { upc: barcodeEnrichment.upc } : {}),
+          ...(!userEdited.includes('mpn') && !item.mpn && barcodeEnrichment.mpn
+            ? { mpn: barcodeEnrichment.mpn } : {}),
+          ...(!userEdited.includes('packageWeightOz') && !item.packageWeightOz && barcodeEnrichment.weightOz != null
+            ? { packageWeightOz: barcodeEnrichment.weightOz } : {}),
+          ...(!item.packageLengthIn && barcodeEnrichment.lengthIn != null
+            ? { packageLengthIn: barcodeEnrichment.lengthIn } : {}),
+          ...(!item.packageWidthIn && barcodeEnrichment.widthIn != null
+            ? { packageWidthIn: barcodeEnrichment.widthIn } : {}),
+          ...(!item.packageHeightIn && barcodeEnrichment.heightIn != null
+            ? { packageHeightIn: barcodeEnrichment.heightIn } : {}),
+          // Barcode eBay category overrides AI title-based guess (exact product match)
+          ...(!userEdited.includes('ebayCategoryId') && barcodeEnrichment.ebayCategoryId
+            ? { ebayCategoryId: barcodeEnrichment.ebayCategoryId, ebayCategoryName: barcodeEnrichment.ebayCategoryName ?? ebayCategoryName }
+            : {}),
+        } : {}),
       };
 
       // Optimistic lock: include updatedAt in where clause to detect concurrent edits
