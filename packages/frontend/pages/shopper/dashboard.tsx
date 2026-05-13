@@ -19,6 +19,7 @@ import { formatDistanceToNow, parseISO } from 'date-fns';
 import Link from 'next/link';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
 import Head from 'next/head';
 import ActivitySummary from '../../components/ActivitySummary';
 import SalesNearYou from '../../components/SalesNearYou';
@@ -47,6 +48,7 @@ import ExplorerGuildOnboardingCard from '../../components/ExplorerGuildOnboardin
 const ShopperDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'overview' | 'subscribed' | 'pickups' | 'brands'>('overview');
   const [isHuntPassDismissed, setIsHuntPassDismissed] = useState(false);
   const [isReferralDismissed, setIsReferralDismissed] = useState(false);
@@ -110,7 +112,7 @@ const ShopperDashboard = () => {
             setReferralLink(`${baseUrl}/register?ref=${response.data.code}`);
           }
         } catch (error) {
-          console.error('Failed to fetch referral code:', error);
+          if (process.env.NODE_ENV !== 'production') console.error('Failed to fetch referral code:', error);
         }
       };
       fetchReferralCode();
@@ -127,7 +129,7 @@ const ShopperDashboard = () => {
             setShopperQRCodeDataUrl(response.data.qrCodeDataUrl);
           }
         } catch (error) {
-          console.error('Failed to fetch QR code:', error);
+          if (process.env.NODE_ENV !== 'production') console.error('Failed to fetch QR code:', error);
         }
       };
       fetchQRCode();
@@ -147,7 +149,7 @@ const ShopperDashboard = () => {
   const handleCopyReferralLink = () => {
     if (referralLink) {
       navigator.clipboard.writeText(referralLink).then(() => {
-        alert('Referral link copied to clipboard!');
+        showToast('Referral link copied!', 'success');
       });
     }
   };

@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S723 — eBay Push End-to-End + Blocked Queue Burn-Down (COMPLETE)**
+**Latest: S724 — UX Spot-Check Backlog Burn-Down (COMPLETE)**
+
+Reviewed five most-recent UX spotchecks (2026-05-13, 2026-05-06, 2026-05-02, 2026-04-22, 2026-04-15), grep-verified each issue against current code, dispatched six parallel dev agents to fix everything still unfixed. Confirmed-already-fixed: dashboard salesError destructure + render, edit-sale isError + window.confirm removal, shopper Pickups tab render block (now uses local holds query), add-items useMutation hooks moved before early returns, add-items duplicate saleId useEffect collapsed, search input aria-label, sale type filter aria-label, approachNotes.startDate parseISO bug (file refactored, code path gone). Shipped this session: (1) **create-sale.tsx** — added `isOnlineOnly: form.isOnlineOnly` to `buildPayload()` + matching backend `saleCreateSchema` zod field so the toggle now actually persists (frontend was sending nothing, knock-on found backend strip), removed 3 stale TODO comments, added aria-labels to 3 photo manipulation buttons. (2) **add-items/[saleId].tsx** — feature-flagged "Enhance All" stub button behind `NEXT_PUBLIC_ENABLE_ENHANCE_ALL` (RapidCapture already gates on `&& onEnhanceAll`), wrapped 8 `console.error` calls in dev-only guards, hoisted `URL.createObjectURL(pendingFaceBlob)` into a `useMemo` + `useEffect` revoke cleanup, replaced native `confirm()` for bundle delete with inline confirm-state pattern, camera heading now reflects `rapidItems.length` too. (3) **line-queue/[id].tsx** — fixed Rules of Hooks violation (auth redirect now in useEffect after all hooks; render-guard runs identically every render), added initial-load error state with Retry, added `lastSyncedAt` staleness indicator ("Updated Xs ago" + amber "⚠ Not updating" after 30s), added aria-label to Mark Entered button. (4) **shopper/dashboard.tsx** — replaced `alert()` with `showToast` for referral copy, wrapped 2 `console.error` in dev guards. (5) **index.tsx** — added `isError` to search useQuery + error message, gated "Save This Search" behind `user` (guests get sign-in link), added `aria-pressed` to date filters, gated SaleMap on `hasMapPins` (no more 220px empty container). (6) **sales/[id].tsx** — fixed OG meta double-render (was rendering `<SaleOGMeta>` twice when SSR ogHead truthy), moved Buyer's Premium disclosure from left column to immediately above Auction Items section header. (7) **organizer/dashboard.tsx** — aria-label on welcome banner ✕, replaced `setTimeout(window.location.reload, 1000)` with `queryClient.invalidateQueries(['organizer-sales', user?.id])` at both reopen sites. (8) **edit-sale/[id].tsx** — added `id="edit-{field}"` + matching `htmlFor` to 12 label/input pairs (title, saleType, description, startDate, endDate, startTime, endTime, address, city, state, zip, notes). (9) **backend saleController.ts** — added `isOnlineOnly: z.boolean().optional()` to `saleCreateSchema` (S724 knock-on from frontend dispatch). All edits verified via Read tool against Windows source-of-truth files; VM-side TS check unreliable due to mount truncation, deferred to Vercel/Railway build for final signal.
+
+**Previous: S723 — eBay Push End-to-End + Blocked Queue Burn-Down (COMPLETE)**
 
 Massive eBay-flow debugging + multiple Blocked Queue clearances. Patrick pushed a live eBay listing for the first time end-to-end. Iterative tonight: every Railway error became the next fix. Final state: weight 49oz + dims 10x13x4 + valid packageType (MAILING_BOX/PADDED_BAGS) persists, smart-pick picks CALCULATED→FLAT→FREE in correct order with weight-gate, eBay aspect filler uses tag/keyword/neutral cascade instead of `enums[0]` ("Accordion" on MIDI cables fixed), publish mode cascade (settings → sale-level toggle → per-call override) verified working, stale-category offer recreation works. Auto-save-before-push wired so eBay reads current form state. Fixes shipped: #326 eBay Comp Tiles (live listings array vs singleton), #280 Condition Rating XP (null-guard blocked AI-prefilled grades), #422 OAuth Option B (logged-in required for linking, 409 redirect with amber banner), #322 Encyclopedia category picker (Vercel proxy dropped `q` param — embedded in path), eBay frontendUrl + proxySecret ReferenceErrors in pushSaleToEbay, packageType enum allowlist (drops invalid like "BOX" via warn log, dropdown rebuilt with 17 real eBay values), edit-item form save (string→Int coercion, getItemById SELECT was missing package fields → form re-loaded blank after save), Favorite query `user: { isNot: null }` removed (required relation, invalid syntax, broke getSaleActivity). Schema migration deployed for `Organizer.ebayDefaultPublishMode` + `ebayDefaultShippingPolicyId`. ~25 file changes across the session, all in parallel/serial-batched dev dispatches plus inline edits for <20-line fixes.
 
@@ -113,6 +117,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 ## Recent Sessions
 
+### S724 — UX Spot-Check Backlog Burn-Down (COMPLETE)
+
+Reviewed five recent UX spotchecks, grep-verified each issue against live code, then dispatched six parallel general-purpose agents (with embedded findasale-dev context per CLAUDE.md §7) to fix everything still unfixed. Files touched: `pages/organizer/create-sale.tsx`, `pages/organizer/add-items/[saleId].tsx`, `pages/organizer/line-queue/[id].tsx`, `pages/shopper/dashboard.tsx`, `pages/index.tsx`, `pages/sales/[id].tsx`, `pages/organizer/dashboard.tsx`, `pages/organizer/edit-sale/[id].tsx`, `packages/backend/src/controllers/saleController.ts`. Total ~25 distinct fixes shipped across 9 files. Knock-on found and chased: frontend `isOnlineOnly` payload addition was insufficient because backend `saleCreateSchema` (zod) stripped the field before Prisma; backend dispatch added the optional zod field, `saleUpdateSchema = saleCreateSchema.partial()` automatically picks it up. Removal Gate respected throughout — feature-flagged "Enhance All" button instead of deleting it, replaced (not removed) native `confirm()` and `alert()` calls. No subagent git operations. VM-side TS check unreliable (mount truncation); deferred to Vercel/Railway build pipeline for final signal.
+
 ### S723 — eBay Push End-to-End + Blocked Queue Burn-Down (COMPLETE)
 
 Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in production: every Railway error log became the next dispatch. Burns down 5 Blocked Queue items (#326, #280, #322, #405 from prior, #422 P1-1) and ships full eBay publish-mode + shipping-cascade infrastructure.
@@ -183,7 +191,25 @@ Chrome QA on 12 Wave 2 features (main session, no subagent). ✅ #406 Split Bill
 
 ---
 
-## Next Session — S724
+## Next Session — S725
+
+### First Action — Chrome QA Smoke Test on S723 + S724 Fixes
+
+S724 added a second wave of changes (UX spotcheck burn-down). The S724 verification checklist is separate from the S723 list — see "S724 Verification Checklist" below. Run the S723 checklist (below) first, then S724.
+
+### S724 Verification Checklist (Chrome QA)
+
+1. `/organizer/create-sale` Step 2 → toggle "Online Only" → publish → verify the new Sale row in DB has `isOnlineOnly=true` (psycopg2 query against Railway).
+2. `/organizer/create-sale` Step 3 → tab through photo thumbnails with keyboard → confirm screen reader announces "Move photo left/right/Remove photo" not Unicode glyphs.
+3. `/organizer/line-queue/[saleId]` as a non-organizer account → expect redirect to /login, NO React "Rendered fewer hooks than expected" error in DevTools console.
+4. `/organizer/line-queue/[saleId]` → kill backend → wait 30s → confirm "⚠ Not updating" amber indicator appears.
+5. `/shopper/dashboard` → click "Copy Referral Link" → expect a toast (no native browser alert).
+6. `/` (homepage) as guest → type a search → confirm "Sign in to save" link appears (not the broken Save button). Sign in → confirm Save button appears.
+7. `/sales/[id]` an auction sale → view source on `<head>` → confirm exactly ONE `<meta property="og:title">` element (was duplicating).
+8. `/sales/[id]` an auction sale with buyer's premium → scroll to items section → confirm the buyer's premium block sits immediately above "Auction Items" header (was hidden in left column).
+9. `/organizer/dashboard` → reopen an ended sale → expect no full-page flash (was reloading).
+10. `/organizer/edit-sale/[id]` → click any field label → confirm focus lands on the matching input (proves `htmlFor`/`id` pairing).
+11. `/organizer/add-items/[saleId]` → bundle row → click Remove → expect inline Confirm/Cancel (not native confirm dialog).
 
 ### First Action — Chrome QA Smoke Test on S723 Fixes
 

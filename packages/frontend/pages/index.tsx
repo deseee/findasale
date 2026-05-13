@@ -14,6 +14,7 @@ import CityHeatBanner from '../components/CityHeatBanner';
 import SaleOfTheDayCard from '../components/SaleOfTheDayCard'; // Feature #401
 import EmptyState from '../components/EmptyState';
 import { useToast } from '../components/ToastContext';
+import { useAuth } from '../components/AuthContext';
 
 interface Sale {
   id: string;
@@ -101,6 +102,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
 
   const router = useRouter();
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -138,8 +140,28 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
 
   const sales = feedData?.sales as Sale[] | undefined;
 
+  // Only render the map when at least one sale has valid coordinates.
+  const mapPins: SalePin[] = useMemo(() => {
+    if (!sales) return [];
+    return sales
+      .filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number')
+      .map((s) => ({
+        id: s.id,
+        title: s.title,
+        lat: s.lat,
+        lng: s.lng,
+        city: s.city,
+        state: s.state,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        organizerName: s.organizer.businessName,
+        status: 'active' as const,
+      }));
+  }, [sales]);
+  const hasMapPins = mapPins.length > 0;
+
   // Search API query — call backend FTS when searchQuery is >= 2 chars
-  const { data: searchResults, isLoading: isSearching } = useQuery({
+  const { data: searchResults, isLoading: isSearching, isError: isSearchError } = useQuery({
     queryKey: ['search', searchQuery, saleTypeFilter],
     queryFn: async () => {
       const params: any = { q: searchQuery, type: 'all', limit: 20 };
@@ -359,7 +381,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   aria-label="Search sales and items"
                 />
               </div>
-              {searchQuery && (
+              {searchQuery && user && (
                 <button
                   onClick={handleSaveSearch}
                   disabled={isSavingSearch}
@@ -367,6 +389,15 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                 >
                   💾 {isSavingSearch ? 'Saving...' : 'Save This Search'}
                 </button>
+              )}
+              {searchQuery && !user && (
+                <Link
+                  href={`/login?redirect=${encodeURIComponent(`/?q=${searchQuery}`)}`}
+                >
+                  <a className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-colors">
+                    Sign in to save
+                  </a>
+                </Link>
               )}
               {!searchQuery && (
                 <p className="mt-3 text-sm text-white/60">
@@ -394,24 +425,11 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
           <section className="mb-12">
             <div>
               <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col">
-                {/* Map Section */}
-                {!isLoading && sales && sales.length > 0 && (
+                {/* Map Section — only render when at least one sale has coords */}
+                {!isLoading && hasMapPins && (
                   <div className="w-full" style={{ height: '220px' }}>
                     <SaleMap
-                      pins={sales
-                        .filter((s) => s.lat != null && s.lng != null)
-                        .map((s) => ({
-                          id: s.id,
-                          title: s.title,
-                          lat: s.lat,
-                          lng: s.lng,
-                          city: s.city,
-                          state: s.state,
-                          startDate: s.startDate,
-                          endDate: s.endDate,
-                          organizerName: s.organizer.businessName,
-                          status: 'active' as const,
-                        }))}
+                      pins={mapPins}
                       center={[42.9634, -85.6681]}
                       zoom={11}
                       height="220px"
@@ -447,6 +465,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   key={f}
                   type="button"
                   onClick={() => setDateFilter(f)}
+                  aria-pressed={dateFilter === f}
                   className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 ${
                     dateFilter === f
                       ? 'bg-amber-600 text-white shadow-md'
@@ -483,6 +502,12 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                 {isSearching ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {[1, 2, 3, 4, 5, 6].map((i) => <SaleCardSkeleton key={i} />)}
+                  </div>
+                ) : isSearchError ? (
+                  <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-6 text-center">
+                    <p className="text-red-700 dark:text-red-300 font-medium">
+                      Search unavailable — try again.
+                    </p>
                   </div>
                 ) : (searchResults?.items?.length ?? 0) + (searchResults?.sales?.length ?? 0) > 0 ? (
                   <>

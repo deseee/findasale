@@ -600,8 +600,9 @@ const EditSalePage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Title</label>
+              <label htmlFor="edit-title" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Title</label>
               <input
+                id="edit-title"
                 type="text"
                 name="title"
                 value={formData.title}
@@ -611,8 +612,9 @@ const EditSalePage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Sale Type</label>
+              <label htmlFor="edit-saleType" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Sale Type</label>
               <select
+                id="edit-saleType"
                 name="saleType"
                 value={formData.saleType}
                 onChange={(e) => setFormData((prev) => ({ ...prev, saleType: e.target.value }))}
@@ -639,7 +641,7 @@ const EditSalePage = () => {
 
             <div>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">Description</label>
+                <label htmlFor="edit-description" className="block text-sm font-medium text-warm-700 dark:text-gray-300">Description</label>
                 <button
                   type="button"
                   onClick={handleGenerateDescription}
@@ -650,6 +652,7 @@ const EditSalePage = () => {
                 </button>
               </div>
               <textarea
+                id="edit-description"
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
@@ -662,8 +665,9 @@ const EditSalePage = () => {
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Date</label>
+                    <label htmlFor="edit-startDate" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Date</label>
                     <input
+                      id="edit-startDate"
                       type="date"
                       name="startDate"
                       value={formData.startDate}
@@ -672,8 +676,9 @@ const EditSalePage = () => {
                     aria-label="Startdate" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Date</label>
+                    <label htmlFor="edit-endDate" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Date</label>
                     <input
+                      id="edit-endDate"
                       type="date"
                       name="endDate"
                       value={formData.endDate}
@@ -685,8 +690,9 @@ const EditSalePage = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Time</label>
+                    <label htmlFor="edit-startTime" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Time</label>
                     <input
+                      id="edit-startTime"
                       type="time"
                       value={formData.startTime}
                       onChange={(e) => setFormData(prev => ({ ...prev, startTime: e.target.value }))}
@@ -694,8 +700,9 @@ const EditSalePage = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Time</label>
+                    <label htmlFor="edit-endTime" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Time</label>
                     <input
+                      id="edit-endTime"
                       type="time"
                       value={formData.endTime}
                       onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
@@ -715,8 +722,9 @@ const EditSalePage = () => {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Address</label>
+              <label htmlFor="edit-address" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Address</label>
               <input
+                id="edit-address"
                 type="text"
                 name="address"
                 value={formData.address}
@@ -727,8 +735,9 @@ const EditSalePage = () => {
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">City</label>
+                <label htmlFor="edit-city" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">City</label>
                 <input
+                  id="edit-city"
                   type="text"
                   name="city"
                   value={formData.city}
@@ -737,8 +746,9 @@ const EditSalePage = () => {
                 aria-label="City" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">State</label>
+                <label htmlFor="edit-state" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">State</label>
                 <input
+                  id="edit-state"
                   type="text"
                   name="state"
                   value={formData.state}
@@ -747,8 +757,9 @@ const EditSalePage = () => {
                 aria-label="State" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">ZIP</label>
+                <label htmlFor="edit-zip" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">ZIP</label>
                 <input
+                  id="edit-zip"
                   type="text"
                   name="zip"
                   value={formData.zip}
@@ -953,7 +964,7 @@ const EditSalePage = () => {
             {/* Feature #84: Approach Notes — day-of info for shoppers */}
             <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">
+                <label htmlFor="edit-notes" className="block text-sm font-medium text-warm-700 dark:text-gray-300">
                   Day-of Approach Notes <span className="text-warm-400 dark:text-gray-500 font-normal">(optional)</span>
                 </label>
                 {sale?.status === 'PUBLISHED' && (
@@ -971,6 +982,7 @@ const EditSalePage = () => {
                 Share parking info, entrance location, hours reminders, or other day-of details with shoppers who have saved your sale.
               </p>
               <textarea
+                id="edit-notes"
                 name="notes"
                 value={formData.notes}
                 onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}

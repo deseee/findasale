@@ -26,7 +26,7 @@
  * - maxPhotos=5 per camera session (one-item-at-a-time flow)
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import NextImage from 'next/image';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -58,6 +58,10 @@ import ValuationWidget from '../../../components/ValuationWidget';
 import { decodeHtmlEntities } from '../../../utils/textUtils';
 import VoiceTagButton from '../../../components/VoiceTagButton'; // Feature #42: Voice-to-Tag
 import BountyMatchModal from '../../../components/BountyMatchModal';
+
+// Feature flag — hides "Enhance All" button until backend endpoint exists.
+// Set NEXT_PUBLIC_ENABLE_ENHANCE_ALL=true to enable.
+const ENHANCE_ALL_ENABLED = process.env.NEXT_PUBLIC_ENABLE_ENHANCE_ALL === 'true';
 
 /**
  * Phase 3: On-Device Image Processing Utilities
@@ -335,6 +339,9 @@ const AddItemsDetailPage = () => {
   const [pendingFaceTempId, setPendingFaceTempId] = useState<string | null>(null);
   const [pendingFaceAppendId, setPendingFaceAppendId] = useState<string | null>(null);
 
+  // Bundle delete confirmation state — replaces native confirm() at row level
+  const [confirmingBundleId, setConfirmingBundleId] = useState<string | null>(null);
+
   // Bounty match modal state
   const [bountyMatchOpen, setBountyMatchOpen] = useState(false);
   const [bountyMatches, setBountyMatches] = useState<any[]>([]);
@@ -593,6 +600,18 @@ const AddItemsDetailPage = () => {
     return () => clearInterval(interval);
   }, [rapidItems, aiPaused]);
 
+  // Hoisted preview URL for pendingFaceBlob — prevents per-render leak of object URLs.
+  // Memoized so we only create one URL per blob, and revoked on unmount/blob change.
+  const pendingFacePreviewUrl = useMemo(
+    () => (pendingFaceBlob ? URL.createObjectURL(pendingFaceBlob) : null),
+    [pendingFaceBlob]
+  );
+  useEffect(() => {
+    return () => {
+      if (pendingFacePreviewUrl) URL.revokeObjectURL(pendingFacePreviewUrl);
+    };
+  }, [pendingFacePreviewUrl]);
+
   // HOOKS RULE: All mutations must be called unconditionally before any early returns
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -760,7 +779,7 @@ const AddItemsDetailPage = () => {
     },
     onError: (error: any) => {
       // Silently fail — matching is a bonus feature
-      console.error('Bounty matching error:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('Bounty matching error:', error);
     },
   });
 
@@ -1082,13 +1101,13 @@ const AddItemsDetailPage = () => {
                 await api.post(`/items/${itemId}/photos`, { url: urls[0] });
               }
             } catch (addErr) {
-              console.error('[regular] Additional photo upload failed:', addErr);
+              if (process.env.NODE_ENV !== 'production') console.error('[regular] Additional photo upload failed:', addErr);
             }
           }
         }
       }
     } catch (err: any) {
-      console.error('[rapidfire] Background upload failed:', err);
+      if (process.env.NODE_ENV !== 'production') console.error('[rapidfire] Background upload failed:', err);
 
       // Determine error message based on error type
       let errorMessage = 'Upload failed';
@@ -1146,7 +1165,7 @@ const AddItemsDetailPage = () => {
     setQualityModalOpen(false);
 
     if (!pendingQualityBlob || !pendingQualityTempId) {
-      console.error('Missing quality context for resuming upload');
+      if (process.env.NODE_ENV !== 'production') console.error('Missing quality context for resuming upload');
       return;
     }
 
@@ -1200,7 +1219,7 @@ const AddItemsDetailPage = () => {
         pollForAI(itemId);
       }
     } catch (err: any) {
-      console.error('[quality] Resume upload failed:', err);
+      if (process.env.NODE_ENV !== 'production') console.error('[quality] Resume upload failed:', err);
       showToast('Upload failed. Please try again.', 'error');
     } finally {
       setPendingQualityBlob(null);
@@ -1236,7 +1255,7 @@ const AddItemsDetailPage = () => {
     setFaceDetectionOpen(false);
 
     if (!pendingFaceBlob || !pendingFaceTempId) {
-      console.error('Missing face detection context for resuming upload');
+      if (process.env.NODE_ENV !== 'production') console.error('Missing face detection context for resuming upload');
       return;
     }
 
@@ -1288,7 +1307,7 @@ const AddItemsDetailPage = () => {
         pollForAI(itemId);
       }
     } catch (err: any) {
-      console.error('[face detection] Resume upload failed:', err);
+      if (process.env.NODE_ENV !== 'production') console.error('[face detection] Resume upload failed:', err);
       showToast('Upload failed. Please try again.', 'error');
     } finally {
       setPendingFaceBlob(null);
@@ -1385,7 +1404,7 @@ const AddItemsDetailPage = () => {
 
       showToast(`Heard: "${finalTranscript}"`, 'success');
     } catch (error) {
-      console.error('[voice] Error extracting data:', error);
+      if (process.env.NODE_ENV !== 'production') console.error('[voice] Error extracting data:', error);
       showToast('Failed to process voice input', 'error');
     } finally {
       setVoiceLoading(false);
@@ -1849,7 +1868,7 @@ const AddItemsDetailPage = () => {
           {activeTab === 'camera' && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
               <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-6">
-                {items.length > 0 ? '📷 Add More Photos' : 'Capture with Camera'}
+                {(items.length > 0 || rapidItems.length > 0) ? '📷 Add More Photos' : 'Capture with Camera'}
               </h2>
 
               <div className="space-y-5">
@@ -1944,10 +1963,14 @@ const AddItemsDetailPage = () => {
                 // Read from ref instead of state to avoid stale closure after auto-analysis completes
                 processAndUploadRapidPhoto(photo, tempId, addingToItemIdRef.current);
               }}
-              onEnhanceAll={() => {
-                // BUG 6 FIX: Show placeholder since no backend endpoint exists yet
-                showToast('Enhancement coming soon', 'info');
-              }}
+              onEnhanceAll={
+                ENHANCE_ALL_ENABLED
+                  ? () => {
+                      // BUG 6 FIX: Show placeholder since no backend endpoint exists yet
+                      showToast('Enhancement coming soon', 'info');
+                    }
+                  : undefined
+              }
               onAnalyze={captureMode === 'regular' ? handleRegularAnalyze : undefined}
               isAnalyzing={regularAnalyzing}
               qualityOverlay={
@@ -1961,13 +1984,13 @@ const AddItemsDetailPage = () => {
                   : null
               }
               faceDetectionOverlay={
-                faceDetectionOpen && pendingFaceBlob
+                faceDetectionOpen && pendingFaceBlob && pendingFacePreviewUrl
                   ? {
                       onUploadAnyway: handleFaceDetectionUploadAnyway,
                       onRetake: handleFaceDetectionRetake,
                       pendingPhoto: {
                         blob: pendingFaceBlob,
-                        previewUrl: URL.createObjectURL(pendingFaceBlob),
+                        previewUrl: pendingFacePreviewUrl,
                       },
                     }
                   : null
@@ -2382,20 +2405,39 @@ const AddItemsDetailPage = () => {
                             {bundle.items?.length ?? 0} item{bundle.items?.length !== 1 ? 's' : ''} &middot; ${Number(bundle.bundlePrice).toFixed(2)}
                           </p>
                         </div>
-                        <button
-                          onClick={async () => {
-                            if (!confirm(`Remove bundle "${bundle.title}"?`)) return;
-                            try {
-                              await api.delete(`/sales/${saleId}/bundles/${bundle.id}`);
-                              refetchBundles();
-                            } catch {
-                              // ignore
-                            }
-                          }}
-                          className="text-xs text-red-500 hover:text-red-700 ml-4 flex-shrink-0"
-                        >
-                          Remove
-                        </button>
+                        {confirmingBundleId === bundle.id ? (
+                          <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                            <span className="text-xs text-warm-600 dark:text-gray-400">Remove?</span>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await api.delete(`/sales/${saleId}/bundles/${bundle.id}`);
+                                  refetchBundles();
+                                } catch {
+                                  // ignore
+                                } finally {
+                                  setConfirmingBundleId(null);
+                                }
+                              }}
+                              className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-2 py-1 rounded"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => setConfirmingBundleId(null)}
+                              className="text-xs text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200 px-2 py-1"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmingBundleId(bundle.id)}
+                            className="text-xs text-red-500 hover:text-red-700 ml-4 flex-shrink-0"
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

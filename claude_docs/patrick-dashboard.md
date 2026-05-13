@@ -1,6 +1,66 @@
-# Patrick's Dashboard — S723 Wrap
+# Patrick's Dashboard — S724 Wrap
 
 ---
+
+## What Happened This Session — S724 (UX Spot-Check Burn-Down)
+
+Ran the 5 most-recent UX spotchecks against current code. Bunch were already silently fixed in prior sessions (dashboard salesError, edit-sale isError, add-items hooks order, Pickups tab, search input aria-label, etc.). Dispatched 6 parallel dev agents to fix everything still broken.
+
+**Shipped:**
+
+- **`isOnlineOnly` toggle now actually persists.** Front-end was sending it nowhere AND backend was zod-stripping the field. Both fixed.
+- **Hooks-rules crash on `/organizer/line-queue/[id].tsx`** when a non-organizer hit the URL — fixed (auth redirect moved into useEffect, render-guard runs identically every render).
+- **Sale detail OG meta double-render** — was rendering `<SaleOGMeta>` twice in `<head>` simultaneously (SSR path), confusing FB/Twitter scrapers. Fixed.
+- **Buyer's Premium disclosure** moved from left photo column to immediately above the Auction Items header so bidders can't miss it.
+- **`alert()` for referral copy** → toast.
+- **Save This Search button** showing to logged-out users → guests now see "Sign in to save" link.
+- **`window.location.reload()` on dashboard reopen** → `queryClient.invalidateQueries` (no more full-page flash).
+- **Dashboard reload "Save bundle" native confirm()** → inline Confirm/Cancel state.
+- **9 console.error calls** in production paths → dev-only guards.
+- **URL.createObjectURL leak** on face detection overlay → memoized + cleanup.
+- **12 form inputs on edit-sale missing label-association** → `id`/`htmlFor` added.
+- **"Enhance All" stub button** that toasted "coming soon" → feature-flagged behind `NEXT_PUBLIC_ENABLE_ENHANCE_ALL`, will re-enable when backend ships.
+- Plus a handful of aria-labels (welcome banner ✕, photo manipulation buttons, Mark Entered button, date filter aria-pressed, line-queue staleness indicator).
+
+**Backend:** `saleCreateSchema` now declares `isOnlineOnly: z.boolean().optional()` — `saleUpdateSchema = saleCreateSchema.partial()` automatically picks it up for the update path.
+
+**Removal Gate respected:** Nothing removed. The "Enhance All" button is HIDDEN behind a feature flag, not deleted. `alert()` and `confirm()` calls were REPLACED with toast/modal patterns, not removed. The "Save Search" button was REPLACED with an alt UI for guests, not removed.
+
+**Mount caveat:** VM-side `npx tsc` couldn't run cleanly due to a mount truncation issue — multiple unrelated `.tsx` files showed phantom syntax errors in stale snapshots. All edits verified via Read tool against the real Windows source-of-truth. Final TS signal comes from the Vercel build on push.
+
+---
+
+## S724 Push Block
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+
+# Frontend — UX spotcheck fixes
+git add packages/frontend/pages/organizer/create-sale.tsx
+git add packages/frontend/pages/organizer/add-items/[saleId].tsx
+git add packages/frontend/pages/organizer/line-queue/[id].tsx
+git add packages/frontend/pages/shopper/dashboard.tsx
+git add packages/frontend/pages/index.tsx
+git add packages/frontend/pages/sales/[id].tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/organizer/edit-sale/[id].tsx
+
+# Backend — saleCreateSchema isOnlineOnly zod
+git add packages/backend/src/controllers/saleController.ts
+
+# Wrap doc updates (HARD RULE §12)
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+
+git commit -m "S724: UX spotcheck burn-down — isOnlineOnly persist (front+back), hooks fix, OG dedupe, buyer's premium reposition, 12 aria/htmlFor, alert+confirm+reload replacements"
+.\push.ps1
+```
+
+**If push.ps1 flags additional uncommitted files** (e.g., leftover S723 iteration files, S722 doc cleanup, S721 Gmail API migration), `git add` them in the same block and commit again. Use the existing S723 wrap block below for the prior wave that hadn't pushed yet.
+
+---
+
+## Previous Session — S723
 
 ## What Happened This Session
 
