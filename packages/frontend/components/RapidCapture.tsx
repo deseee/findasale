@@ -1451,7 +1451,8 @@ const VoiceTagButtonThumbnail: React.FC<VoiceTagButtonThumbnailProps> = ({
   onVoiceInput,
   showIndicator,
 }) => {
-  const { isSupported, startListening, stopListening } = useVoiceInput();
+  const { isSupported, startListening, stopListening, errorCode } = useVoiceInput();
+  const { showToast } = useToast();
   const [recordingState, setRecordingState] = useState<'idle' | 'listening' | 'processing'>('idle');
 
   const handleToggle = async () => {
@@ -1466,6 +1467,21 @@ const VoiceTagButtonThumbnail: React.FC<VoiceTagButtonThumbnailProps> = ({
 
       if (finalTranscript.trim()) {
         onVoiceInput(itemId, finalTranscript);
+      } else {
+        // Empty transcript: surface a visible reason so the tap is never silent.
+        // Was the #1 reason rapidfire voice notes "didn't seem to do anything" — the
+        // function bailed without feedback when Web Speech returned no final result.
+        if (errorCode === 'not-allowed' || errorCode === 'service-not-allowed') {
+          showToast('Microphone permission denied. Allow microphone access in browser settings.', 'error');
+        } else if (errorCode === 'no-speech') {
+          showToast('No speech detected. Try speaking closer to the mic.', 'info');
+        } else if (errorCode === 'audio-capture') {
+          showToast('Microphone not available. Check device input settings.', 'error');
+        } else if (errorCode && errorCode !== '') {
+          showToast(`Voice input error (${errorCode}). Try again.`, 'error');
+        } else {
+          showToast('No speech detected. Try again.', 'info');
+        }
       }
 
       setTimeout(() => {
