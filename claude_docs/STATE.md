@@ -8,9 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S722 — Monthly Retro + Auth Security Hardening (COMPLETE)**
+**Latest: S723 — eBay Push End-to-End + Blocked Queue Burn-Down (COMPLETE)**
 
-Monthly retrospective run. Rate limit fix shipped (loginLimiter 5→15 + skipSuccessfulRequests). Auth security audit completed — hacker agent found 3 P0s, 4 P1s, 5 P2s, 4 P3s. 10 fixes dispatched and applied: JWT access token expiry 7d→15m, /auth/oauth rate limiter added, tokenVersion absent bypass fixed, organizerTokenVersion multi-role miss fixed, resend-verification regenerates token, logout clearCookie attributes fixed, jwt.verify algorithms constraint added, /verify-email rate limiter added, X-Forwarded-For logging fixed, OAuthBridge CSRF skip documented. OSM scraper URL fixed (overpass-api.de → overpass.kumi.systems). Indiana licensing scraper fixed (3 root causes: session cookie forwarding, __VIEWSTATEGENERATOR field, Recaptcha1 field). Doc cleanup: 22 root violations resolved, 2 deprecated files archived. One P0 (email verification token expiry) needs schema migration. One P1 (OAuth auto-link account takeover) needs Patrick decision. See Next Session.
+Massive eBay-flow debugging + multiple Blocked Queue clearances. Patrick pushed a live eBay listing for the first time end-to-end. Iterative tonight: every Railway error became the next fix. Final state: weight 49oz + dims 10x13x4 + valid packageType (MAILING_BOX/PADDED_BAGS) persists, smart-pick picks CALCULATED→FLAT→FREE in correct order with weight-gate, eBay aspect filler uses tag/keyword/neutral cascade instead of `enums[0]` ("Accordion" on MIDI cables fixed), publish mode cascade (settings → sale-level toggle → per-call override) verified working, stale-category offer recreation works. Auto-save-before-push wired so eBay reads current form state. Fixes shipped: #326 eBay Comp Tiles (live listings array vs singleton), #280 Condition Rating XP (null-guard blocked AI-prefilled grades), #422 OAuth Option B (logged-in required for linking, 409 redirect with amber banner), #322 Encyclopedia category picker (Vercel proxy dropped `q` param — embedded in path), eBay frontendUrl + proxySecret ReferenceErrors in pushSaleToEbay, packageType enum allowlist (drops invalid like "BOX" via warn log, dropdown rebuilt with 17 real eBay values), edit-item form save (string→Int coercion, getItemById SELECT was missing package fields → form re-loaded blank after save), Favorite query `user: { isNot: null }` removed (required relation, invalid syntax, broke getSaleActivity). Schema migration deployed for `Organizer.ebayDefaultPublishMode` + `ebayDefaultShippingPolicyId`. ~25 file changes across the session, all in parallel/serial-batched dev dispatches plus inline edits for <20-line fixes.
+
+**Previous: S722 — Monthly Retro + Auth Security Hardening (COMPLETE)**
+
+Monthly retrospective run. Rate limit fix shipped (loginLimiter 5→15 + skipSuccessfulRequests). Auth security audit completed — hacker agent found 3 P0s, 4 P1s, 5 P2s, 4 P3s. 10 fixes dispatched and applied: JWT access token expiry 7d→15m, /auth/oauth rate limiter added, tokenVersion absent bypass fixed, organizerTokenVersion multi-role miss fixed, resend-verification regenerates token, logout clearCookie attributes fixed, jwt.verify algorithms constraint added, /verify-email rate limiter added, X-Forwarded-For logging fixed, OAuthBridge CSRF skip documented. OSM scraper URL fixed (overpass-api.de → overpass.kumi.systems). Indiana licensing scraper fixed (3 root causes: session cookie forwarding, __VIEWSTATEGENERATOR field, Recaptcha1 field). Doc cleanup: 22 root violations resolved, 2 deprecated files archived.
 
 **Previous: S721 — Outreach Gmail API Migration (COMPLETE)**
 
@@ -88,11 +92,13 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #405 Founding Badge | Built S719: backend GET /:id returns field, frontend renders amber pill in trust-signal cluster. Push block ready. | Push packages/backend/src/routes/organizers.ts + packages/frontend/pages/organizers/[id].tsx | S719 |
-| #326 eBay Comp Tiles | eBay search returns summary card (10 listings, Median $260) but EbayCompTiles.tsx image grid NOT rendering. ebayImageUrl from ItemCompLookup not displaying | Dispatch findasale-dev: check EbayCompTiles render condition, verify ebayImageUrl is returned from /api/items/comps/ebay endpoint | S719 |
-| #280 Condition Rating XP | Set grade B, saved on Victorian Silver Pocket Watch, XP balance unchanged at 15 XP. XP not awarded for condition rating action | Dispatch findasale-dev: trace xpService call in item save handler — confirm conditionGrade XP award is wired up | S719 |
+| #326 eBay Comp Tiles | FIXED S723 — endpoint rewritten to return live listings array (not singleton) | Chrome QA on edit-item page: confirm 2-3 tile grid renders under eBay summary card | S719 |
+| #280 Condition Rating XP | FIXED S723 — removed `!item.conditionGrade` guard (AI prefill broke it); pointsTransaction lookup is the once-per-item guard | Chrome QA: set conditionGrade on item, verify XP balance +5 in guild ledger | S719 |
+| eBay full push flow | FIXED S723 — weight/dims persist + auto-save before push + smart-pick respects weight + valid packageType dropdown | Chrome QA: full edit-item → save → push to eBay LIVE flow on a new item | S723 |
+| #422 OAuth Option B | FIXED S723 — `/auth/oauth` returns 409 OAUTH_LINK_REQUIRED for unauth email-match; logged-in `/auth/oauth/link` endpoint added | Chrome QA: register email/pwd, sign out, sign-in-with-Google same email → expect amber banner redirect, not silent takeover | S723 |
+| #322 Encyclopedia category picker | FIXED S723 — Vercel proxy dropped `q` param; embedded in path query string. status=200 count=N confirmed live | Chrome QA: type free-text in EbayCategoryPicker, confirm dropdown populates | S723 |
+| Settings UI for linked OAuth providers | Backend endpoint `/auth/oauth/link` ready, no frontend surface yet | Build linked-accounts section in organizer/settings.tsx (deferred — security hole closed by backend rejection alone) | S723 |
 | P0-3: Email verification token expiry | Schema migration required — add emailVerificationTokenExpiry field to User model | Run migration, update authController verifyEmail check + resend-verification generation | S722 |
-| P1-1: OAuth auto-link account takeover | Design decision needed — current flow auto-links Google to any matching email with no re-auth | Choose: A) email confirmation before link, B) require logged-in session, C) rate limit only. Patrick deciding. | S722 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
@@ -105,6 +111,34 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S723 — eBay Push End-to-End + Blocked Queue Burn-Down (COMPLETE)
+
+Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in production: every Railway error log became the next dispatch. Burns down 5 Blocked Queue items (#326, #280, #322, #405 from prior, #422 P1-1) and ships full eBay publish-mode + shipping-cascade infrastructure.
+
+**Dev dispatches:**
+1. #326 eBay Comp Tiles — `getItemEbayComps` was returning the `ItemCompLookup` singleton row (one image), but `EbayCompTiles.slice(0,3)` needs an array. Rewrote endpoint to call live `fetchEbayPriceComps` + return top 3 listings with per-listing image/price/condition. Files: itemController.ts, useItemEbayComps.ts.
+2. #280 Condition Rating XP — guard required `!item.conditionGrade`, but `processRapidDraft` auto-fills it from AI before organizer ever saves, so guard always blocked legitimate awards. Removed null-check. Single line in itemController.ts.
+3. #422 OAuth Option B — full implementation: backend 409 `OAUTH_LINK_REQUIRED` on unauth email-match, new `/auth/oauth/link` endpoint behind `authenticate`, frontend OAuthBridge catches 409 → redirects to `/login?message=...` with amber info banner, next.config.js rewrite for new endpoint. Account takeover vector closed. Settings linked-accounts UI deferred (backend surface ready).
+4. eBay publish mode + shipping cascade — `Organizer.ebayDefaultPublishMode` (DRAFT|LIVE) + `ebayDefaultShippingPolicyId` schema + migration + backend whitelist + smart-pick logic + frontend settings UI (eBay tab) + sale-level split buttons (`Push draft` / `Push live`) + per-item override on edit-item. Migration deployed against Railway DB. 8 files.
+
+**Inline edits during iteration:**
+5. eBay aspect crash — `enums[0]` fallback was picking "Accordion" for "For Instrument" on MIDI cables (alphabetical). Rewrote `fillRequiredAspects` cascade: tag → keyword → neutral values (Universal/Other/Not Specified/N/A/Does Not Apply) → skip with warn log. Structured `[eBay Push Failed]` log + `[eBay AspectFill]` reason codes. EOF truncation in same file (~120 missing lines in `syncEndedListingsForOrganizer`) restored from git as bonus.
+6. eBay `frontendUrl is not defined` + `proxySecret is not defined` — both vars used in pushSaleToEbay loop but never declared in that function (declared locally in other functions only). Added both at top of items loop.
+7. eBay smart-pick weight-gate — was picking CALCULATED policy even when `packageWeightOz` was null, causing eBay error 25020. Added `itemHasWeight` param; CALCULATED skipped with warn log if no weight. Falls through to FLAT_RATE → FREE_FALLBACK correctly now.
+8. eBay packageType enum allowlist — eBay rejected "BOX" with serialize error. Built valid-enum Set (US-relevant 17 values: MAILING_BOX, PADDED_BAGS, PARCEL_OR_PADDED_ENVELOPE, etc.). Drops invalid values with `[eBay InventoryPayload] dropping invalid packageType="X"` warn. Frontend dropdown rebuilt with real eBay enum values + friendly labels.
+9. Edit-item form save coercion — `formData.packageWeightOz/dims` were strings; backend zod required Int, silently dropped strings. Added `toIntOrNull()` coercion in mutationFn payload build.
+10. `getItemById` SELECT — package fields not in `select` clause, so GET response didn't include them, form re-loaded blank after save. Added packageWeightOz/Length/Width/Height/Type to SELECT.
+11. #322 Encyclopedia category picker — `[ebayTaxonomy] suggestCategories FAILED status=400 "Missing keyword 'q'"`. Vercel proxy only forwards `path` param and drops other query params. Fix: embedded `q` in path query string. After deploy: `count=9` for "guitar multi" + real dropdown working.
+12. Auto-save before eBay push — eBay reads DB, not form state, so unsaved edits were lost. Inlined PUT call (not `updateMutation` since onSuccess navigates to /dashboard, which would abort the push). Title validation gate added.
+13. Favorite isNot:null fix — `prisma.favorite.findMany({where: {user: {isNot: null}}})` invalid syntax; Favorite.user is required relation. Removed filter; try/catch handles orphan FK runtime errors. Was breaking `getSaleActivity` endpoint.
+14. eBay sales/[id]/index.tsx onError signature — Vercel build error: mutation variables type changed to `{itemIds, publishMode}` but onError still expected `string[]`. Updated to destructure `variables.itemIds`.
+
+**Diagnostic logging added (kept in for future debugging):** `[eBay PublishMode]`, `[eBay ShippingPick]`, `[eBay AspectFill]`, `[eBay InventoryPayload]`, `[eBay Push Failed]`, `[ebayTaxonomy] suggestCategories`, `[updateItem]`.
+
+**Verification:** Patrick's live test of Zoom B3 Multi-Effects Processor end-to-end: weight 49oz + dims 10x13x4 + packageType MAILING_BOX saved → auto-save before push fired → eBay offer created → published as DRAFT (offerId=165891558011) → stale-category detection + recreation worked → live-feed PRICE_DROP event fired. Full chain proven.
+
+**Token note:** Patrick flagged limited Sonnet budget Tuesday afternoon → Friday reset. Session ran token-conscious: 2 parallel dev dispatches early, then inline edits for all <20-line iteration fixes, no agent dispatches for log diagnostics. Direct DB updates via psycopg2 used to bypass form-save bug during isolation testing.
 
 ### S722 — Monthly Retro + Auth Security Hardening (COMPLETE)
 
@@ -148,122 +182,56 @@ Chrome QA on 12 Wave 2 features (main session, no subagent). ✅ #406 Split Bill
 
 ---
 
-## Next Session — S723
+## Next Session — S724
 
-### Patrick Decision Required Before Session Start
+### First Action — Chrome QA Smoke Test on S723 Fixes
 
-**OAuth auto-link (P1 security issue):**
-Current `/auth/oauth` flow will silently link a Google identity to any existing account that matches by email — with no re-auth, no confirmation email, no notification. Options:
-- **A** — Send email confirmation before linking (safest)
-- **B** — Require user to be logged in before linking is allowed
-- **C** — Rate limit only (minimal, doesn't fix root cause)
+Per CLAUDE.md §10 (Post-fix live verification): the next session MUST start with a Chrome smoke test of the S723 fixes before any new work. Pages to hit:
 
-Reply with A, B, or C and dev will implement it this session.
+1. `/organizer/edit-item/[id]` — confirm packageType dropdown shows new eBay enum values (MAILING_BOX, PADDED_BAGS, etc., NOT "Box / Mailing Tube / Thick Envelope"). Save weight/dims/packageType → reload → values still there. Click Push to eBay → toast confirms push, NO category/price reversion.
+2. `/organizer/edit-item/[id]` EbayCompTiles — eBay summary card AND 2-3 image tile grid both render.
+3. Condition grade B/A/etc. on a fresh item → XP balance +5 in guild ledger.
+4. Logged-out attempt: register `victim@yahoo.com` w/ password, sign out, click Sign in with Google using same email → expect amber banner redirect to /login, NO silent takeover.
+5. EbayCategoryPicker on edit-item — type "musical", "guitar", "table" → dropdown should populate with real eBay categories.
 
-### Patrick Action Required First — Big Push Block
+### S723 Wrap Push Block
 
-This session changed a lot of files. Run these in order:
+Most code files were pushed iteratively during the session. The final wrap push consolidates any remaining uncommitted changes + the doc updates (STATE.md + dashboard are HARD RULE per CLAUDE.md §12). Run:
 
 ```powershell
-# S721 Gmail API migration (still pending from last session)
-git add packages/backend/src/jobs/outreachEmailsCron.ts
-git add packages/backend/package.json
+# Most likely still uncommitted (last-iteration code edits)
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/saleController.ts
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
 
-# S722 Auth security hardening
-git add packages/backend/src/controllers/authController.ts
-git add packages/backend/src/routes/auth.ts
-git add packages/backend/src/middleware/auth.ts
-git add packages/frontend/pages/_app.tsx
-
-# S722 Scraper fixes
-git add packages/backend/src/services/scraper/osmScraper.ts
-git add packages/backend/src/scripts/diagnostics/diagnose-osm.ts
-git add packages/backend/src/services/scraper/sources/indianaLicensingScraper.ts
-
-# S722 Doc cleanup — new destinations
-git add claude_docs/workflow-retrospectives/monthly-retro-2026-05-08.md
-git add claude_docs/archive/CORE-deprecated.md
-git add claude_docs/archive/next-session-brief-deprecated.md
-git add claude_docs/archive/COMPLETED_PHASES-archived.md
-git add claude_docs/archive/monthly-digest-2026-04.md
-git add claude_docs/archive/monthly-digest-2026-04-archive.md
-git add "claude_docs/archive/session696_roadmap_ideas.xls"
-git add claude_docs/archive/archive-index.json
-git add claude_docs/operations/API_RESPONSE_FORMAT.md
-git add claude_docs/operations/legal-hold-to-pay-risk-review.md
-git add claude_docs/audits/ARCHITECT_ASSESSMENT_FEEDBACK_SCHEMA.md
-git add claude_docs/audits/ARCHITECT_PATRICK_SUMMARY.md
-git add claude_docs/audits/S248-walkthrough-findings.md
-git add claude_docs/audits/human-QA-walkthrough-findings.md
-git add claude_docs/audits/patrick-walkthrough-S248.md
-git add claude_docs/feature-specs/FEEDBACK_DEV_QUICKSTART.md
-git add claude_docs/feature-specs/FEEDBACK_SURVEY_MAPPING.md
-git add claude_docs/feature-specs/FEEDBACK_SYSTEM_SPEC.md
-git add claude_docs/feature-specs/PRICING_PAGE_UX_SPEC_S392.md
-git add claude_docs/feature-specs/UX_MODERNIZATION_SPEC.md
-git add claude_docs/handoffs/FEEDBACK_SYSTEM_HANDOFF.md
-git add claude_docs/guides/payment-testing-content-package.md
-git add claude_docs/guides/pre-sale-payment-testing-guide.md
-git add claude_docs/research/pricing-data-sources-research.md
-git add "claude_docs/improvement-memos/innovation-shopper-engagement-ideas.md"
-git add claude_docs/ux-spotchecks/ux-shopper-engagement-ecosystem.md
-
-# S722 Doc cleanup — tombstoned originals
-git add claude_docs/CORE.md
-git add claude_docs/next-session-brief.md
-git add claude_docs/API_RESPONSE_FORMAT.md
-git add claude_docs/ARCHITECT_ASSESSMENT_FEEDBACK_SCHEMA.md
-git add claude_docs/ARCHITECT_PATRICK_SUMMARY.md
-git add claude_docs/COMPLETED_PHASES.md
-git add claude_docs/FEEDBACK_DEV_QUICKSTART.md
-git add claude_docs/FEEDBACK_SURVEY_MAPPING.md
-git add claude_docs/FEEDBACK_SYSTEM_HANDOFF.md
-git add claude_docs/FEEDBACK_SYSTEM_SPEC.md
-git add claude_docs/PRICING_PAGE_UX_SPEC_S392.md
-git add claude_docs/UX_MODERNIZATION_SPEC.md
-git add claude_docs/S248-walkthrough-findings.md
-git add claude_docs/human-QA-walkthrough-findings.md
-git add claude_docs/patrick-walkthrough-S248.md
-git add claude_docs/innovation-shopper-engagement-ideas.md
-git add claude_docs/legal-hold-to-pay-risk-review.md
-git add claude_docs/monthly-digest-2026-04-archive.md
-git add claude_docs/monthly-digest-2026-04.md
-git add claude_docs/payment-testing-content-package.md
-git add claude_docs/pre-sale-payment-testing-guide.md
-git add claude_docs/pricing-data-sources-research.md
-git add claude_docs/ux-shopper-engagement-ecosystem.md
-
-# Remove junk files
-git rm claude_docs/test-write-check
-
-# S722 updated docs
-git add CLAUDE.md
-git add claude_docs/self-healing/self_healing_skills.md
-git add claude_docs/decisions-log.md
+# Wrap doc updates (HARD RULE §12)
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 
-git commit -m "fix: auth security hardening (10 fixes P0-P3), scraper URL fixes, doc cleanup (22 root violations resolved)"
+git commit -m "S723 wrap: auto-save before eBay push, Favorite isNot:null fix, getItemById package fields, [updateItem] diagnostic log; doc updates"
 .\push.ps1
 ```
 
-### Priority 1 — Schema Migration (P0-3: Email Verification Token Expiry)
+If `push.ps1` flags additional uncommitted files (likely `ebayController.ts`, `ebayTaxonomyService.ts`, or any frontend file not yet pushed), `git add` them and commit again — they're all S723 work.
 
-Email verification tokens currently never expire. Need to add `emailVerificationTokenExpiry DateTime?` to schema.prisma and update the verify + resend flows. Dispatch findasale-dev after push lands.
+### Priority 1 — Chrome QA on S723 fixes (see "First Action" above)
 
-### Priority 2 — QA Session (MANDATORY — 12 items in Blocked Queue)
+### Priority 2 — Schema Migration (P0-3: Email Verification Token Expiry)
 
-QA ceiling rule: ≥8 Blocked Queue items → next session must be QA. Currently at 12. Dispatch QA agents for the top bugs: #326 eBay Comp Tiles, #280 Condition Rating XP.
+Email verification tokens currently never expire. Add `emailVerificationTokenExpiry DateTime?` to User model, update authController verifyEmail check + resend-verification generation. Dispatch findasale-dev with schema-change protocol (§6).
 
-### Priority 3 — Verify Outreach Sends
+### Priority 3 — Verify Outreach Gmail API Sends
 
-Check Railway logs for outreach cron execution since S721 deploy. Look for `[OutreachCron]` success lines.
+Check Railway logs for outreach cron execution since S721/S722 deploy. Look for `[OutreachCron]` success lines + verify Gmail API quota usage on console.cloud.google.com.
 
-### Other Blocked Queue Items
+### Priority 4 — Build Settings UI for OAuth Linked Accounts
 
-- #405 Founding Badge — included in push block above (built S719)
-- #322 Encyclopedia Inline Tip — needs category pre-set via psycopg2
-- Wyoming pawnbroker — diagnostic needed
+Backend `/auth/oauth/link` endpoint is ready (S723). No frontend surface yet. Build linked-accounts section in `pages/organizer/settings.tsx` (or a new `/settings/security` tab) — list connected providers, "Link Google" button that initiates OAuth, "Unlink" button.
+
+### Other Blocked Queue Items (low priority)
+
+- Wyoming pawnbroker scraper — diagnostic needed
 - AI listing enrichment — check Railway logs for `[listingEnrichmentService]`
 - CategoryTopFinds TrendingSection — verify after nightly 05:00 UTC cron
 - Outreach open/click pixel tracking — verify after first Gmail API cron send
+- AuctionNinja + NAA scrapers — flag in sourceRegistry decision needed

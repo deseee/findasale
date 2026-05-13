@@ -1,36 +1,45 @@
-# Patrick's Dashboard — S722 Wrap
+# Patrick's Dashboard — S723 Wrap
 
 ---
 
 ## What Happened This Session
 
-Monthly retrospective ran, then a full auth security audit. The hacker agent found some real holes — 3 P0 severity and 4 P1 severity issues in the auth system, all fixed this session (except one that needs a schema migration and one that needs your decision).
+**Big one — you pushed your first end-to-end live eBay listing tonight.** The eBay push pipeline finally works clean: edit an item with weight + dimensions + a valid packageType → push to eBay → eBay creates the offer with calculated shipping → publish as DRAFT (so you finalize in Seller Hub) or LIVE (immediate). The cascade behaved correctly: Settings default → sale-level toggle → per-item override, with weight-gating so calculated shipping only fires if you actually have a weight.
 
-**Auth security fixes shipped:**
-- Access tokens were valid for 7 days even though the cookie expired after 15 minutes — anyone who captured a login response body token had a 7-day session. Fixed: tokens now expire in 15 minutes.
-- `/auth/oauth` had no rate limiter at all — open to account takeover at scale. Fixed: rate limiter added.
-- Old JWTs without a `tokenVersion` field could bypass password-change invalidation. Fixed.
-- Multi-role organizers could hold onto stale tier claims after subscription lapse. Fixed.
-- Logout wasn't properly clearing cookies in all browsers. Fixed.
-- Verification resend was reusing the original token (if someone intercepted the old link, it stayed valid forever). Fixed: regenerates token on every resend.
+Five Blocked Queue items closed this session:
 
-**Scraper fixes:**
-- OSM scraper was failing for all 137 metros — the endpoint it was hitting (overpass-api.de) is returning 406. Switched to overpass.kumi.systems. All metros should run next trigger.
-- Indiana licensing scraper was returning 0 records — found 3 root causes: wasn't forwarding the ASP.NET session cookie between the form fetch and form submit, was missing two required hidden form fields. All fixed.
+- **#326 eBay Comp Tiles** — the image grid wasn't rendering because the endpoint was returning one cached row instead of the live 10-listing array. Rewrote it.
+- **#280 Condition Rating XP** — wasn't awarding because the AI prefills the grade, so the "is grade currently null?" guard always blocked it. Removed the guard.
+- **#422 OAuth Option B (Patrick chose B)** — `/auth/oauth` no longer silently takes over an existing account. Returns 409 + redirects to login with an amber banner telling you to log in and link from settings. Account takeover vector closed.
+- **#322 Encyclopedia category picker** — was returning "No categories found" for everything because the Vercel proxy was dropping the `q` parameter. Fix: embed it in the path query string. Now returns proper eBay categories.
+- **eBay aspect "Accordion" crash** — was picking `enumValues[0]` for required aspects, so every MIDI cable became "For Instrument: Accordion." Replaced with tag → keyword → neutral-value cascade (Universal/Other/Not Specified). If nothing matches, skip the aspect with a warn log instead of fabricating.
 
-**Doc cleanup:** 22 files that had been dumped in the claude_docs/ root moved to correct subdirectories.
+**eBay infrastructure shipped:**
+
+- `Organizer.ebayDefaultPublishMode` (DRAFT|LIVE) + `ebayDefaultShippingPolicyId` schema fields and migration deployed
+- Settings → eBay tab has new Push Defaults section (publish mode select + shipping policy select)
+- Sale page has split "Push draft" / "Push live" buttons that override the setting
+- Smart-pick shipping priority: CALCULATED (weight-based) → FLAT_RATE → free fallback, with weight-gate so it doesn't pick calculated when item has no weight
+- Auto-save before push so eBay reads your current edits, not stale DB state
+
+**Three "supposed to persist but didn't" bugs all in one chain:**
+
+- Weight/dimensions on edit-item weren't saving — the form sent them as strings but the backend expected Int, silently dropped. Now coerced before PUT.
+- After saving, weight/dims showed blank on reload — the GET response wasn't including those fields. Added to the SELECT.
+- packageType dropdown had wrong values ("BOX", "MAILING_TUBE") that eBay rejected. Rebuilt with eBay's actual 17-value enum.
+
+**One backend crash fixed:** `getSaleActivity` was throwing because `prisma.favorite.findMany` used `user: { isNot: null }` — invalid Prisma syntax for a required relation. Removed.
 
 ---
 
 ## Do First Next Session
 
-**One decision needed from you:**
+**Chrome QA smoke test on the S723 fixes** — see STATE.md "## Next Session" for the 5-item checklist. The pages to hit are edit-item, EbayCompTiles, condition grade XP, the OAuth takeover-attempt scenario, and the category picker.
 
-The OAuth auto-link flow (`/auth/oauth`) will silently take over an existing account if someone POSTs `{ email: 'victim@gmail.com', provider: 'google' }`. This was probably intentional for "existing user signs in with Google for the first time" — but it's a P1 security issue. Reply with your choice before the session:
-
-- **A** — Send a "someone tried to link Google to your account — click to approve" email before linking
-- **B** — Only allow linking when the user is already logged in
-- **C** — Rate limit only (easiest, doesn't fully close the hole)
+**Then in priority order:**
+1. Schema migration for email verification token expiry (P0-3 still pending from S722 — needs `emailVerificationTokenExpiry DateTime?` on User)
+2. Verify outreach Gmail API sends (cron should have fired several times since S721 deploy)
+3. Build settings UI for OAuth linked accounts (backend ready, frontend stub deferred S723)
 
 **Then push everything:**
 
