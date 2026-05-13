@@ -1996,7 +1996,24 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
                   height: Number(item.packageHeightIn),
                 },
               } : {}),
-              ...(item.packageType ? { packageType: item.packageType } : {}),
+              // eBay packageType is a strict enum — drop the field if value isn't on the allowlist (avoids err 2004)
+              ...((): { packageType?: string } => {
+                const valid = new Set([
+                  'LETTER','BULKY_GOODS','CARAVAN','CARS','EUROPALLET','EXPANDABLE_TOUGH_BAGS',
+                  'EXTRA_LARGE_PACK','FURNITURE','INDUSTRY_VEHICLES','LARGE_CANADA_POSTBOX',
+                  'LARGE_CANADA_POST_BUBBLE_MAILER','LARGE_ENVELOPE','MAILING_BOX',
+                  'MEDIUM_CANADA_POST_BOX','MEDIUM_CANADA_POST_BUBBLE_MAILER','MOTORBIKES',
+                  'ONE_WAY_PALLET','PACKAGE_THICK_ENVELOPE','PADDED_BAGS',
+                  'PARCEL_OR_PADDED_ENVELOPE','ROLL','SMALL_CANADA_POST_BOX',
+                  'SMALL_CANADA_POST_BUBBLE_MAILER','TOUGH_BAGS','UPS_LETTER',
+                  'USPS_FLAT_RATE_ENVELOPE','USPS_LARGE_PACK','VERY_LARGE_PACK',
+                  'WINE_PRESENTATION_BOX',
+                ]);
+                const pt = item.packageType ? String(item.packageType).trim().toUpperCase().replace(/\s+/g, '_') : '';
+                if (pt && valid.has(pt)) return { packageType: pt };
+                if (item.packageType) console.warn(`[eBay InventoryPayload] dropping invalid packageType="${item.packageType}" (not in eBay enum)`);
+                return {};
+              })(),
             },
           } : {}),
         };
