@@ -1254,7 +1254,8 @@ export const getSaleActivity = async (req: Request, res: Response) => {
           item: {
             saleId: id,
           },
-          user: { isNot: null },
+          // Favorite.user is a required relation — `isNot: null` is invalid Prisma syntax here.
+          // Orphan-FK runtime errors (rare) are caught by the surrounding try/catch.
         },
         include: {
           user: { select: { name: true } },
