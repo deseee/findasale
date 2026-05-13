@@ -49,6 +49,13 @@ interface VoiceDescriptionInputProps {
    * that preserves any typed text in the textarea.
    */
   itemId?: string;
+  /**
+   * Fires after the server-side append endpoint successfully persists. The parent
+   * can use this to sync external caches (e.g. react-query) so a subsequent refetch
+   * or useEffect doesn't clobber the new description. Receives the composed description
+   * returned by the server.
+   */
+  onAppendPersisted?: (description: string) => void;
 }
 
 type RecordingState = 'idle' | 'listening' | 'processing';
@@ -66,6 +73,7 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
   existingFields = {},
   disabled = false,
   itemId,
+  onAppendPersisted,
 }) => {
   const { showToast } = useToast();
   const { isSupported, isListening, transcript, startListening, stopListening, errorCode } = useVoiceInput();
@@ -126,6 +134,11 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
             source: 'VOICE',
           });
           newDescription = appendRes.data?.description ?? finalTranscript;
+          // Notify parent so it can sync external caches (react-query) before any
+          // useEffect-driven refetch clobbers formData with stale cached data.
+          if (onAppendPersisted) {
+            onAppendPersisted(newDescription);
+          }
         } catch (appendErr: any) {
           console.error('[VoiceDescriptionInput] append failed:', appendErr);
           showToast(appendErr?.response?.data?.message || 'Could not save voice note.', 'error');
