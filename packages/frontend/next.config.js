@@ -246,8 +246,11 @@ const nextConfig = {
           {
             key: 'Permissions-Policy',
             // camera=(self): RapidCapture uses getUserMedia() — camera=() blocks it entirely.
-            // microphone=(): No audio features in FindA.Sale — block by policy.
-            value: 'camera=(self), microphone=(), geolocation=(self), payment=(self)',
+            // microphone=(self): VoiceDescriptionInput + RapidCapture's VoiceTagButtonThumbnail use
+            // SpeechRecognition + getUserMedia for voice notes. Previously '()' (blocked) — that's
+            // why the browser never showed Microphone in Site Settings and SpeechRecognition fired
+            // 'not-allowed' instantly with no prompt. Fixed 2026-05-13.
+            value: 'camera=(self), microphone=(self), geolocation=(self), payment=(self)',
           },
           // Content Security Policy
           {
