@@ -581,20 +581,30 @@ const EditItemPage = () => {
 
             <VoiceDescriptionInput
               value={formData.description}
-              onChange={(description) => setFormData({ ...formData, description })}
+              onChange={(description) => setFormData((prev) => ({ ...prev, description }))}
               itemId={typeof router.query.id === 'string' ? router.query.id : undefined}
+              onAppendPersisted={(description) => {
+                // S724 Branch B fix: sync react-query cache so the line 276 useEffect
+                // (which resets formData when `item` ref changes) doesn't clobber the
+                // new description on a subsequent refetch or manual invalidation.
+                queryClient.setQueryData(['item', id], (old: any) =>
+                  old ? { ...old, description } : old
+                );
+              }}
               onFieldUpdate={(fields) => {
-                const updates: any = { description: fields.description };
-                if (fields.title && !formData.title) updates.title = fields.title;
-                if (fields.category && !formData.category) updates.category = fields.category;
-                if (fields.price && !formData.price) updates.price = fields.price;
-                if (fields.tags && fields.tags.length > 0) {
-                  const newTags = fields.tags.filter((tag: string) => !formData.tags.includes(tag));
-                  if (newTags.length > 0) {
-                    updates.tags = [...formData.tags, ...newTags];
+                setFormData((prev) => {
+                  const updates: any = { description: fields.description };
+                  if (fields.title && !prev.title) updates.title = fields.title;
+                  if (fields.category && !prev.category) updates.category = fields.category;
+                  if (fields.price && !prev.price) updates.price = fields.price;
+                  if (fields.tags && fields.tags.length > 0) {
+                    const newTags = fields.tags.filter((tag: string) => !prev.tags.includes(tag));
+                    if (newTags.length > 0) {
+                      updates.tags = [...prev.tags, ...newTags];
+                    }
                   }
-                }
-                setFormData({ ...formData, ...updates });
+                  return { ...prev, ...updates };
+                });
               }}
               existingFields={{
                 title: formData.title,
