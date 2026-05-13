@@ -173,6 +173,7 @@ import settlementRoutes from './routes/settlement';           // Feature #228: S
 import posRoutes from './routes/pos';                         // POS Upgrade: Open Cart & Payment Links
 import ebayRoutes from './routes/ebay';                       // eBay Marketplace Account Deletion
 import ebayTaxonomyRoutes from './routes/ebayTaxonomy';       // Phase C: eBay Taxonomy, Catalog, AI Suggest
+import barcodeRoutes from './routes/barcode';                  // Barcode scan -> eBay Catalog product enrichment
 import shopifyRoutes from './routes/shopify';              // Feature #XXX: Shopify Cross-Listing
 import luckyRollRoutes from './routes/lucky-roll';             // Phase 2b: Lucky Roll — weekly XP gacha
 import crewsRoutes from './routes/crews';                       // Phase 2a: Explorer's Guild — Crew Creation
@@ -564,6 +565,7 @@ app.use('/api/support', supportRoutes);                                 // #128:
 app.use('/api/sales', settlementRoutes);                                   // Feature #228: Settlement Hub
 app.use('/api/ebay', ebayRoutes);                                          // eBay Marketplace Account Deletion
 app.use('/api/ebay', ebayTaxonomyRoutes);                                  // Phase C: eBay Taxonomy + Catalog + AI Suggest
+app.use('/api/barcode', barcodeRoutes);                                    // Barcode scan -> eBay Catalog product enrichment
 app.use('/api/shopify', shopifyRoutes);                              // Feature #XXX: Shopify Cross-Listing
 app.use('/api/lucky-roll', luckyRollRoutes);                               // Phase 2b: Lucky Roll — weekly XP gacha
 app.use('/api/crews', crewsRoutes);                                        // Phase 2a: Explorer's Guild — Crew Creation

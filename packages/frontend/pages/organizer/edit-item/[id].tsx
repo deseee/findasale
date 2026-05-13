@@ -32,6 +32,7 @@ import EncyclopediaInlineTip from '../../../components/EncyclopediaInlineTip';
 import EbayCompTiles from '../../../components/EbayCompTiles';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import VoiceDescriptionInput from '../../../components/VoiceDescriptionInput';
+import BarcodeScanner from '../../../components/BarcodeScanner';
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -71,6 +72,10 @@ const EditItemPage = () => {
     packageWidthIn: '',
     packageHeightIn: '',
     packageType: '',
+    // Product identifiers (populated by barcode scan)
+    brand: '',
+    upc: '',
+    mpn: '',
   });
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -99,9 +104,57 @@ const EditItemPage = () => {
   // Confirm dialog state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
+  // Barcode scanner state
+  const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
+
   const openDiscountModal = (xpToSpend: number) => {
     setPendingXpToSpend(xpToSpend);
     setDiscountModalOpen(true);
+  };
+
+  // Barcode scan → eBay Catalog lookup handler
+  // "Organizer-set wins": only fills EMPTY fields, never overwrites existing values.
+  const handleBarcodeScan = async (code: string, codeType: string) => {
+    setBarcodeScannerOpen(false);
+    setBarcodeLoading(true);
+    try {
+      const res = await api.post('/barcode/lookup', { code, codeType });
+      const result = res.data;
+      if (result?.found) {
+        setFormData((prev) => ({
+          ...prev,
+          title: prev.title || result.title || prev.title,
+          brand: prev.brand || result.brand || prev.brand,
+          upc: prev.upc || result.upc || prev.upc,
+          mpn: prev.mpn || result.mpn || prev.mpn,
+          packageWeightOz:
+            prev.packageWeightOz ||
+            (result.weightOz != null ? String(Math.round(result.weightOz)) : prev.packageWeightOz),
+          packageLengthIn:
+            prev.packageLengthIn ||
+            (result.lengthIn != null ? String(result.lengthIn) : prev.packageLengthIn),
+          packageWidthIn:
+            prev.packageWidthIn ||
+            (result.widthIn != null ? String(result.widthIn) : prev.packageWidthIn),
+          packageHeightIn:
+            prev.packageHeightIn ||
+            (result.heightIn != null ? String(result.heightIn) : prev.packageHeightIn),
+        }));
+        const label = [result.brand, result.title].filter(Boolean).join(' ');
+        showToast(`Found: ${label}. Review the prefilled fields.`, 'success');
+      } else {
+        showToast(`No product match for ${code}. Fill in manually.`, 'info');
+      }
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        showToast(`No product match for ${code}. Fill in manually.`, 'info');
+      } else {
+        showToast('Lookup failed. Try again or fill in manually.', 'error');
+      }
+    } finally {
+      setBarcodeLoading(false);
+    }
   };
 
   // eBay push state
@@ -358,6 +411,10 @@ const EditItemPage = () => {
         packageWidthIn: item.packageWidthIn !== undefined && item.packageWidthIn !== null ? String(item.packageWidthIn) : '',
         packageHeightIn: item.packageHeightIn !== undefined && item.packageHeightIn !== null ? String(item.packageHeightIn) : '',
         packageType: item.packageType || '',
+        // Product identifiers (populated by barcode scan or pre-existing data)
+        brand: item.brand || '',
+        upc: item.upc || '',
+        mpn: item.mpn || '',
       });
     }
   }, [item]);
@@ -592,7 +649,33 @@ const EditItemPage = () => {
             updateMutation.mutate();
           }} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Title</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">Title</label>
+                <button
+                  type="button"
+                  onClick={() => setBarcodeScannerOpen(true)}
+                  disabled={barcodeLoading}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-700 rounded-lg transition-colors disabled:opacity-50"
+                  title="Scan a barcode to prefill product details"
+                >
+                  {barcodeLoading ? (
+                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <rect x="2" y="5" width="2" height="14" rx="0.5" />
+                      <rect x="6" y="5" width="1" height="14" rx="0.5" />
+                      <rect x="9" y="5" width="2" height="14" rx="0.5" />
+                      <rect x="13" y="5" width="1" height="14" rx="0.5" />
+                      <rect x="16" y="5" width="2" height="14" rx="0.5" />
+                      <rect x="20" y="5" width="2" height="14" rx="0.5" />
+                    </svg>
+                  )}
+                  {barcodeLoading ? 'Looking up…' : 'Scan barcode'}
+                </button>
+              </div>
               <input
                 type="text"
                 value={formData.title}
@@ -619,6 +702,10 @@ const EditItemPage = () => {
                   if (fields.title && !prev.title) updates.title = fields.title;
                   if (fields.category && !prev.category) updates.category = fields.category;
                   if (fields.price && !prev.price) updates.price = fields.price;
+                  if (fields.packageWeightOz && !prev.packageWeightOz) updates.packageWeightOz = fields.packageWeightOz;
+                  if (fields.packageLengthIn && !prev.packageLengthIn) updates.packageLengthIn = fields.packageLengthIn;
+                  if (fields.packageWidthIn && !prev.packageWidthIn) updates.packageWidthIn = fields.packageWidthIn;
+                  if (fields.packageHeightIn && !prev.packageHeightIn) updates.packageHeightIn = fields.packageHeightIn;
                   if (fields.tags && fields.tags.length > 0) {
                     const newTags = fields.tags.filter((tag: string) => !prev.tags.includes(tag));
                     if (newTags.length > 0) {
@@ -633,6 +720,10 @@ const EditItemPage = () => {
                 category: formData.category,
                 tags: formData.tags,
                 price: formData.price,
+                packageWeightOz: formData.packageWeightOz,
+                packageLengthIn: formData.packageLengthIn,
+                packageWidthIn: formData.packageWidthIn,
+                packageHeightIn: formData.packageHeightIn,
               }}
             />
 
@@ -1386,6 +1477,14 @@ const EditItemPage = () => {
           />
         </div>
       </div>
+
+      {/* Barcode scanner modal — full-viewport, outside page scroll container */}
+      {barcodeScannerOpen && (
+        <BarcodeScanner
+          onScan={handleBarcodeScan}
+          onCancel={() => setBarcodeScannerOpen(false)}
+        />
+      )}
     </>
   );
 };
