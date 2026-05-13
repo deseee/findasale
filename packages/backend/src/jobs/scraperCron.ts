@@ -493,6 +493,20 @@ export function initScraperCron(): void {
       console.log('[scraperCron] EstateSalesNet skipped — GitHub Actions handles it (USE_GH_ACTIONS_ESTATESALESNET=true)');
       continue;
     }
+    // Cost-reduction batch: these three sources have active GH Actions workflows.
+    // Default: GH Actions wins (unset env = skip backend cron). To re-enable backend cron, set env to "false".
+    if (sourceDef.id === 'GarageSaleFinder' && process.env.USE_GH_ACTIONS_GARAGESALEFINDER !== 'false') {
+      console.log('[scraperCron] GarageSaleFinder skipped — GitHub Actions handles it (set USE_GH_ACTIONS_GARAGESALEFINDER=false to re-enable backend cron)');
+      continue;
+    }
+    if (sourceDef.id === 'FacebookMarketplace' && process.env.USE_GH_ACTIONS_FACEBOOKMARKETPLACE !== 'false') {
+      console.log('[scraperCron] FacebookMarketplace skipped — GitHub Actions handles it (set USE_GH_ACTIONS_FACEBOOKMARKETPLACE=false to re-enable backend cron)');
+      continue;
+    }
+    if (sourceDef.id === 'YellowPagesCA' && process.env.USE_GH_ACTIONS_YELLOWPAGESCA !== 'false') {
+      console.log('[scraperCron] YellowPagesCA skipped — GitHub Actions handles it (set USE_GH_ACTIONS_YELLOWPAGESCA=false to re-enable backend cron)');
+      continue;
+    }
 
     const { id, cronSchedule, runMode } = sourceDef;
 

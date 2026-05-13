@@ -173,9 +173,30 @@ export async function getBatchOfUnenrichedSales(req: Request, res: Response): Pr
 }
 
 /**
+ * Shape of a single enriched result accepted by /enrich-sale-details/bulk.
+ * `streetAddress` is accepted as an alias for `address` (ESN payload uses
+ * `streetAddress` per schema.org; the workflow may send either).
+ */
+interface EnrichedSaleResult {
+  id: string;
+  description?: string | null;
+  photoUrls?: string[] | null;
+  address?: string | null;
+  streetAddress?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+}
+
+/**
  * POST /api/internal/enrich-sale-details/bulk
  * Accepts enriched results from GitHub Actions backfill
- * Batch-upserts enriched descriptions and photos
+ * Batch-upserts enriched descriptions, photos, and address fields.
+ *
+ * Address fields (address/city/state/zip) are only written if:
+ *   (a) the incoming value is non-empty, AND
+ *   (b) the existing DB value is empty.
+ * This prevents overwriting human-edited addresses.
  */
 export async function bulkUpsertEnrichedSales(req: Request, res: Response): Promise<void> {
   try {
@@ -187,25 +208,61 @@ export async function bulkUpsertEnrichedSales(req: Request, res: Response): Prom
     }
 
     // Parse request body
-    const { results } = req.body;
+    const { results } = req.body as { results?: EnrichedSaleResult[] };
     if (!Array.isArray(results)) {
       res.status(400).json({ message: 'Body must contain results array' });
       return;
     }
 
     let updated = 0;
+    let addressFilled = 0;
 
     // Batch upsert: update each sale with enriched data
     for (const result of results) {
       const { id, description, photoUrls } = result;
+      if (!id) continue;
 
-      // Only update non-null fields provided in the result
-      const updateData: any = {};
+      // Build the always-overwritable fields first (description, photoUrls)
+      const updateData: Record<string, unknown> = {};
       if (description) {
         updateData.description = description;
       }
       if (photoUrls && Array.isArray(photoUrls)) {
         updateData.photoUrls = photoUrls;
+      }
+
+      // Address fields require a "fill empty only" check — fetch current row
+      const incomingAddress = (result.streetAddress ?? result.address ?? '').toString().trim();
+      const incomingCity = (result.city ?? '').toString().trim();
+      const incomingState = (result.state ?? '').toString().trim();
+      const incomingZip = (result.zip ?? '').toString().trim();
+      const hasAnyAddressUpdate = incomingAddress || incomingCity || incomingState || incomingZip;
+
+      let didFillAddress = false;
+      if (hasAnyAddressUpdate) {
+        const existing = await prisma.sale.findUnique({
+          where: { id },
+          select: { address: true, city: true, state: true, zip: true },
+        });
+
+        if (existing) {
+          if (incomingAddress && (!existing.address || existing.address.trim() === '')) {
+            updateData.address = incomingAddress;
+            didFillAddress = true;
+          }
+          if (incomingCity && (!existing.city || existing.city.trim() === '')) {
+            updateData.city = incomingCity;
+            didFillAddress = true;
+          }
+          if (incomingState && (!existing.state || existing.state.trim() === '')) {
+            updateData.state = incomingState;
+            didFillAddress = true;
+          }
+          if (incomingZip && (!existing.zip || existing.zip.trim() === '')) {
+            updateData.zip = incomingZip;
+            didFillAddress = true;
+          }
+        }
       }
 
       if (Object.keys(updateData).length > 0) {
@@ -214,10 +271,11 @@ export async function bulkUpsertEnrichedSales(req: Request, res: Response): Prom
           data: updateData,
         });
         updated++;
+        if (didFillAddress) addressFilled++;
       }
     }
 
-    res.status(200).json({ updated });
+    res.status(200).json({ updated, addressFilled });
   } catch (error) {
     console.error(
       '[SaleDetailEnrichment Bulk] Request error:',

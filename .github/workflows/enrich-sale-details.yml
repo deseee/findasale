@@ -6,14 +6,14 @@ on:
       batches:
         description: 'Number of parallel batches (1-6)'
         required: false
-        default: '3'
+        default: '2'
       batch_size:
         description: 'Sales per batch (max 200)'
         required: false
-        default: '150'
+        default: '100'
   schedule:
-    # Run once daily at 3 AM UTC for ongoing new scraped sales
-    - cron: '0 3 * * *'
+    # Run every 3 days at 3 AM UTC for ongoing new scraped sales (cost-reduction batch)
+    - cron: '0 3 */3 * *'
 
 jobs:
   setup:
@@ -23,7 +23,7 @@ jobs:
     steps:
       - id: set-matrix
         run: |
-          BATCHES=${{ github.event.inputs.batches || 3 }}
+          BATCHES=${{ github.event.inputs.batches || 2 }}
           python3 -c "import json; print(json.dumps(list(range(int('$BATCHES')))))" > /tmp/matrix.json
           echo "matrix=$(cat /tmp/matrix.json)" >> $GITHUB_OUTPUT
 
@@ -40,11 +40,11 @@ jobs:
       - name: Fetch batch of unenriched sales
         id: fetch
         run: |
-          OFFSET=$(( ${{ matrix.batch_index }} * ${{ github.event.inputs.batch_size || 150 }} ))
+          OFFSET=$(( ${{ matrix.batch_index }} * ${{ github.event.inputs.batch_size || 100 }} ))
           # Write response to file to avoid ARG_MAX / GITHUB_OUTPUT size limits
           curl -s -f \
             -H "x-scraper-key: ${{ secrets.INTERNAL_SCRAPER_KEY }}" \
-            "${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/enrich-sale-details/batch?limit=${{ github.event.inputs.batch_size || 150 }}&offset=${OFFSET}" \
+            "${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/enrich-sale-details/batch?limit=${{ github.event.inputs.batch_size || 100 }}&offset=${OFFSET}" \
             -o /tmp/fetch_response.json
           SALE_COUNT=$(python3 -c "import json; d=json.load(open('/tmp/fetch_response.json')); print(len(d['sales']))")
           echo "sale_count=${SALE_COUNT}" >> $GITHUB_OUTPUT

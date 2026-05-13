@@ -8,9 +8,22 @@ import { cronGuard } from '../utils/cronGuard';
 import { enrichSaleDetails } from '../services/scraper/saleDetailEnrichment';
 
 /**
- * Schedule the enrichment cron to run every 4 hours (0, 4, 8, 12, 16, 20 UTC)
+ * Schedule the enrichment cron to run every 4 hours (0, 4, 8, 12, 16, 20 UTC).
+ *
+ * NOTE: As of the Railway cost-reduction batch, this cron is DISABLED by default.
+ * GitHub Actions (`.github/workflows/enrich-sale-details.yml`) is the canonical owner
+ * of sale-detail enrichment. To re-enable the backend cron (e.g., if GH Actions fails),
+ * set USE_BACKEND_SALE_ENRICHMENT=true in Railway env.
  */
 export function scheduleSaleDetailEnrichmentCron(): void {
+  if (process.env.USE_BACKEND_SALE_ENRICHMENT !== 'true') {
+    console.log(
+      '[saleDetailEnrichment-cron] Skipped — GH Actions handles enrichment ' +
+      '(set USE_BACKEND_SALE_ENRICHMENT=true to re-enable backend cron)'
+    );
+    return;
+  }
+
   // Every 4 hours: 0 */4 * * * (at 0, 4, 8, 12, 16, 20 UTC)
   cron.schedule('0 */4 * * *', cronGuard({ jobName: 'saleDetailEnrichmentCron' }, async () => {
     const startTime = Date.now();
@@ -35,7 +48,7 @@ export function scheduleSaleDetailEnrichmentCron(): void {
         error instanceof Error ? error.message : String(error)
       );
     }
-  });
+  }));
 
   console.log('[saleDetailEnrichment-cron] Registered enrichment cron (every 4 hours at :00 UTC)');
 }

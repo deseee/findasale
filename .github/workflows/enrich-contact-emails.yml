@@ -2,8 +2,8 @@ name: Enrich Contact Emails
 
 on:
   schedule:
-    # Every 6 hours
-    - cron: '0 */6 * * *'
+    # Daily at 2 AM UTC (cost-reduction batch — was every 6 hours)
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 concurrency:
