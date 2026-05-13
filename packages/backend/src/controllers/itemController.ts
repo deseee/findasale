@@ -870,6 +870,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (packageWidthIn !== undefined) updateData.packageWidthIn = packageWidthIn === null ? null : Number(packageWidthIn);
     if (packageHeightIn !== undefined) updateData.packageHeightIn = packageHeightIn === null ? null : Number(packageHeightIn);
     if (packageType !== undefined) updateData.packageType = packageType || null;
+    console.log(`[updateItem] id=${id} body.packageType=${JSON.stringify(packageType)} body.packageWeightOz=${JSON.stringify(packageWeightOz)} body.packageLengthIn=${JSON.stringify(packageLengthIn)} updateData.packageType=${JSON.stringify(updateData.packageType)}`);
     if (upc !== undefined) updateData.upc = upc || null;
     if (ean !== undefined) updateData.ean = ean || null;
     if (isbn !== undefined) updateData.isbn = isbn || null;
