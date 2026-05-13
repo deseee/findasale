@@ -54,12 +54,14 @@ const VoiceTagButton: React.FC<VoiceTagButtonProps> = ({
   };
 
   const handleStopRecording = async () => {
-    await stopListening();
+    // S724 closure fix: read the final transcript from stopListening's return,
+    // not the closure-stale `transcript` state variable.
+    const finalTranscript = await stopListening();
     setRecordingState('processing');
     setIsProcessing(true);
 
     try {
-      if (!transcript.trim()) {
+      if (!finalTranscript.trim()) {
         showToast('No speech detected. Please try again.', 'info');
         setRecordingState('idle');
         setIsProcessing(false);
@@ -68,7 +70,7 @@ const VoiceTagButton: React.FC<VoiceTagButtonProps> = ({
 
       // Send transcript to backend for extraction
       const response = await api.post('/voice/extract', {
-        transcript,
+        transcript: finalTranscript,
       });
 
       const result: VoiceExtractionResult = response.data;

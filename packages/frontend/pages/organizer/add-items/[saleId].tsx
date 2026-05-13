@@ -289,7 +289,9 @@ const AddItemsDetailPage = () => {
   const inMutationFlight = useRef<boolean>(false);
 
   // Feature #42: Voice-to-tag input
-  const { isSupported: voiceSupported, isListening, transcript, startListening, stopListening } = useVoiceInput();
+  // `transcript` intentionally NOT destructured — handleVoiceExtract receives the final
+  // transcript directly from stopListening's return to avoid the S724 closure race.
+  const { isSupported: voiceSupported, isListening, startListening, stopListening } = useVoiceInput();
   const [voiceLoading, setVoiceLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('camera');
@@ -1360,15 +1362,18 @@ const AddItemsDetailPage = () => {
     }));
   };
 
-  const handleVoiceExtract = async () => {
-    if (!transcript.trim()) {
+  // S724 closure fix: accepts the final transcript as a parameter so we no longer
+  // depend on React state being flushed before the call. handleVoiceToggle passes
+  // the value straight from stopListening's return.
+  const handleVoiceExtract = async (finalTranscript: string) => {
+    if (!finalTranscript.trim()) {
       showToast('No speech detected. Try again.', 'error');
       return;
     }
 
     setVoiceLoading(true);
     try {
-      const response = await api.post('/voice/extract', { transcript });
+      const response = await api.post('/voice/extract', { transcript: finalTranscript });
       const { name, category, estimatedPrice } = response.data;
 
       setFormData((prev) => ({
@@ -1378,7 +1383,7 @@ const AddItemsDetailPage = () => {
         price: estimatedPrice ? estimatedPrice.toString() : prev.price,
       }));
 
-      showToast(`Heard: "${transcript}"`, 'success');
+      showToast(`Heard: "${finalTranscript}"`, 'success');
     } catch (error) {
       console.error('[voice] Error extracting data:', error);
       showToast('Failed to process voice input', 'error');
@@ -1389,9 +1394,10 @@ const AddItemsDetailPage = () => {
 
   const handleVoiceToggle = async () => {
     if (isListening) {
-      await stopListening();
-      // Auto-extract after a short delay to let speech recognition finalize
-      setTimeout(handleVoiceExtract, 500);
+      // Closure-safe: stopListening returns the final accumulated transcript.
+      // The previous setTimeout(..., 500) hack was a workaround for the same race.
+      const finalTranscript = await stopListening();
+      handleVoiceExtract(finalTranscript);
     } else {
       await startListening();
     }
