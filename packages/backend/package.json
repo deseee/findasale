@@ -13,8 +13,12 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "roots": ["<rootDir>/src"],
-    "testMatch": ["**/__tests__/**/*.test.ts"]
+    "roots": [
+      "<rootDir>/src"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.test.ts"
+    ]
   },
   "keywords": [],
   "author": "",
@@ -66,7 +70,9 @@
     "cheerio": "^1.0.0",
     "google-trends-api": "^4.9.2",
     "robots-parser": "^3.0.1",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.1",
+    "@undecaf/zbar-wasm": "^0.11.0",
+    "jpeg-js": "^0.4.4"
   },
   "devDependencies": {
     "@types/archiver": "^6.0.3",
@@ -89,6 +95,7 @@
     "prisma": "^5.0.0",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.1",
-    "typescript": "^5.1.3"
+    "typescript": "^5.1.3",
+    "@types/jpeg-js": "^0.4.4"
   }
 }

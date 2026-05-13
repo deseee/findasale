@@ -26,6 +26,8 @@ import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { suggestCategories } from '../services/ebayTaxonomyService';
 import { getEbayAccessToken } from './ebayController';
+import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
+import { lookupByBarcode } from '../services/ebayCatalogLookup';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -338,6 +340,25 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               }
             }
 
+            // Barcode auto-detection: scan the cluster's first photo buffer.
+            // Non-blocking — any error = silent skip. Barcode eBay category overrides AI.
+            let batchBarcodeEnrichment: import('../services/ebayCatalogLookup').EbayCatalogResult | null = null;
+            try {
+              const firstBuffer = clusterImages[0]?.buffer;
+              if (firstBuffer) {
+                const detected = await decodeBarcodeFromImage(firstBuffer);
+                if (detected) {
+                  console.log(`[batchAnalyze] Barcode detected for item ${itemId}: ${detected.code} (${detected.codeType})`);
+                  batchBarcodeEnrichment = await lookupByBarcode(detected.code, detected.codeType);
+                  if (batchBarcodeEnrichment) {
+                    console.log(`[batchAnalyze] Barcode enrichment found for item ${itemId}: "${batchBarcodeEnrichment.title}"`);
+                  }
+                }
+              }
+            } catch {
+              // Non-blocking — never interrupt batch analysis
+            }
+
             await prisma.item.update({
               where: { id: itemId },
               data: {
@@ -349,6 +370,27 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 tags: summary.suggestedTags,
                 aiConfidence: summary.aiConfidence,
                 ...(ebayCategoryId ? { ebayCategoryId, ebayCategoryName } : {}),
+                // Barcode enrichment: exact-product-match fields. Organizer values win.
+                ...(batchBarcodeEnrichment ? {
+                  ...(existing && !userEdited.includes('brand') && !(existing as any).brand && batchBarcodeEnrichment.brand
+                    ? { brand: batchBarcodeEnrichment.brand } : {}),
+                  ...((existing && !(existing as any).upc) && batchBarcodeEnrichment.upc
+                    ? { upc: batchBarcodeEnrichment.upc } : {}),
+                  ...(existing && !userEdited.includes('mpn') && !(existing as any).mpn && batchBarcodeEnrichment.mpn
+                    ? { mpn: batchBarcodeEnrichment.mpn } : {}),
+                  ...(existing && !userEdited.includes('packageWeightOz') && !(existing as any).packageWeightOz && batchBarcodeEnrichment.weightOz != null
+                    ? { packageWeightOz: batchBarcodeEnrichment.weightOz } : {}),
+                  ...(existing && !(existing as any).packageLengthIn && batchBarcodeEnrichment.lengthIn != null
+                    ? { packageLengthIn: batchBarcodeEnrichment.lengthIn } : {}),
+                  ...(existing && !(existing as any).packageWidthIn && batchBarcodeEnrichment.widthIn != null
+                    ? { packageWidthIn: batchBarcodeEnrichment.widthIn } : {}),
+                  ...(existing && !(existing as any).packageHeightIn && batchBarcodeEnrichment.heightIn != null
+                    ? { packageHeightIn: batchBarcodeEnrichment.heightIn } : {}),
+                  // Barcode eBay category overrides AI title-based guess
+                  ...(!userEdited.includes('ebayCategoryId') && batchBarcodeEnrichment.ebayCategoryId
+                    ? { ebayCategoryId: batchBarcodeEnrichment.ebayCategoryId, ebayCategoryName: batchBarcodeEnrichment.ebayCategoryName ?? ebayCategoryName }
+                    : {}),
+                } : {}),
               },
             });
           } catch (err) {
