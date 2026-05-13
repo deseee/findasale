@@ -374,6 +374,12 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     if (!transcript.trim()) {
       return;
     }
+    // Defensive: temp- IDs aren't valid server-side. The thumbnail mic is already hidden
+    // for them, but guard here too so any future caller path is safe.
+    if (itemId.startsWith('temp-')) {
+      showToast('Photo still uploading — try again in a moment.', 'info');
+      return;
+    }
 
     try {
       await api.post(`/items/${itemId}/description/append`, {
@@ -386,7 +392,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       setTimeout(() => setVoiceIndicator({ itemId, showing: false }), 2000);
     } catch (error: any) {
       console.error('[RapidCapture] Voice input error:', error);
-      const message = error?.response?.data?.message || 'Could not save voice note. Try again.';
+      const status = error?.response?.status;
+      const message = status === 404
+        ? 'Item not ready yet — try again in a moment.'
+        : (error?.response?.data?.message || 'Could not save voice note. Try again.');
       showToast(message, 'error');
     }
   }, [showToast]);
@@ -1263,8 +1272,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         {isAddingTo ? '×' : '+'}
                       </button>
 
-                      {/* Feature #331: Voice-to-tag mic button (bottom-left corner, only rapidfire) */}
-                      {isRapidfire && (
+                      {/* Feature #331: Voice-to-tag mic button (bottom-left corner, only rapidfire).
+                          Suppressed for temp- IDs because the item doesn't exist server-side yet —
+                          POSTing /api/items/temp-xyz/description/append would 404. Reappears once
+                          the real cuid lands in rapidItems state (typically 1-3s after capture). */}
+                      {isRapidfire && !item.id.startsWith('temp-') && (
                         <VoiceTagButtonThumbnail
                           itemId={item.id}
                           isRecording={voiceItemId === item.id}
