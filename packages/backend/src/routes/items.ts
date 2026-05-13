@@ -6,6 +6,7 @@ import {
   getItemsBySaleId,
   createItem,
   updateItem,
+  appendDescription,
   deleteItem,
   getBids,
   placeBid,
@@ -772,6 +773,8 @@ router.get('/:id', optionalAuthenticate, getItemById);
 router.get('/', getItemsBySaleId);
 router.post('/', authenticate, upload.array('images', 5), createItem);
 router.put('/:id', authenticate, updateItem);
+// Item Description Authoring Contract (2026-05-12): voice + auto append with merge
+router.post('/:id/description/append', authenticate, appendDescription);
 router.delete('/:id', authenticate, deleteItem);
 router.get('/:id/bids', optionalAuthenticate, getBids);
 router.post('/:id/bids', authenticate, bidRateLimiter, accountAgeGate, placeBid);
