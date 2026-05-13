@@ -66,22 +66,32 @@ export function useVoiceInput(): UseVoiceInputReturn {
     };
 
     recognition.onresult = (event: any) => {
+      // Rebuild transcript from the authoritative results array on every event,
+      // rather than appending. Web Speech in continuous mode can re-emit the same
+      // final result across multiple events (especially when Chrome internally
+      // restarts the recognition session on brief silence), and append-based
+      // accumulation caused the "2 lb 222 lb 2 lb 8 2 lb 8 oz..." duplication.
+      // event.results is the SR API's source of truth — iterate it whole each time.
+      const finalParts: string[] = [];
       let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const segment = event.results[i][0].transcript;
+      for (let i = 0; i < event.results.length; i++) {
+        const segment = event.results[i][0].transcript.trim();
         if (event.results[i].isFinal) {
-          // Append final result to both state and ref (ref is closure-safe)
-          transcriptRef.current = transcriptRef.current
-            ? transcriptRef.current + ' ' + segment
-            : segment;
-          setTranscript(transcriptRef.current);
+          if (segment) finalParts.push(segment);
         } else {
-          interim += segment;
+          interim += segment + ' ';
         }
       }
-      if (interim) {
-        latestInterimRef.current = interim;
+      // Collapse consecutive identical segments (e.g., "2 lb 2 lb")
+      const deduped: string[] = [];
+      for (const p of finalParts) {
+        if (deduped.length === 0 || deduped[deduped.length - 1].toLowerCase() !== p.toLowerCase()) {
+          deduped.push(p);
+        }
       }
+      transcriptRef.current = deduped.join(' ');
+      latestInterimRef.current = interim.trim();
+      setTranscript(transcriptRef.current || latestInterimRef.current);
     };
 
     recognition.onend = () => {
