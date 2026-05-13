@@ -47,44 +47,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [onRankUp, setOnRankUp] = useState<((newRank: string) => void) | undefined>(undefined);
 
   useEffect(() => {
+    const hydrateFromMeResponse = (user: any) => {
+      setUser({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        firstName: user.firstName || '',
+        businessName: user.businessName || '',
+        role: user.role,
+        roles: user.roles || [user.role],
+        points: user.points || 0,
+        guildXp: user.guildXp || 0,
+        referralCode: user.referralCode || '',
+        huntPassActive: user.huntPassActive,
+        huntPassExpiry: user.huntPassExpiry,
+        organizerTier: user.organizerTier || 'SIMPLE',
+        subscriptionStatus: user.subscriptionStatus ?? null,
+        subscriptionLapsed: user.subscriptionLapsed ?? false,
+        onboardingComplete: user.onboardingComplete ?? false,
+        teamsOnboardingComplete: user.teamsOnboardingComplete ?? false,
+        createdAt: user.createdAt,
+        emailVerified: user.emailVerified ?? true,
+      });
+    };
+
     const initAuth = async () => {
+      // P0 Security Fix: Restore session from httpOnly cookie on mount
       try {
-        // P0 Security Fix: Restore session from httpOnly cookie on mount
         const meResponse = await api.get('/auth/me');
         if (meResponse.data?.user) {
-          // Session restored from cookie successfully
-          const user = meResponse.data.user;
-          setUser({
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            firstName: user.firstName || '',
-            businessName: user.businessName || '',
-            role: user.role,
-            roles: user.roles || [user.role],
-            points: user.points || 0,
-            guildXp: user.guildXp || 0,
-            referralCode: user.referralCode || '',
-            huntPassActive: user.huntPassActive,
-            huntPassExpiry: user.huntPassExpiry,
-            organizerTier: user.organizerTier || 'SIMPLE',
-            subscriptionStatus: user.subscriptionStatus ?? null,
-            subscriptionLapsed: user.subscriptionLapsed ?? false,
-            onboardingComplete: user.onboardingComplete ?? false,
-            teamsOnboardingComplete: user.teamsOnboardingComplete ?? false,
-            createdAt: user.createdAt,
-            emailVerified: user.emailVerified ?? true,
-          });
+          hydrateFromMeResponse(meResponse.data.user);
           setIsLoading(false);
           return;
         }
       } catch (err: any) {
-        // 401: Not authenticated (no valid cookie)
         if (err.response?.status === 401) {
+          // S708 sign-off fix: access token may have expired while refresh token is still valid.
+          // Try POST /auth/refresh once — if successful, retry /auth/me. Only treat as logged-out
+          // if the refresh itself fails. Without this, any tab idle longer than the access-token
+          // TTL appears signed out even though the user has a valid 30-day refresh cookie.
+          try {
+            await api.post('/auth/refresh');
+            const retryMe = await api.get('/auth/me');
+            if (retryMe.data?.user) {
+              hydrateFromMeResponse(retryMe.data.user);
+              setIsLoading(false);
+              return;
+            }
+          } catch {
+            // Refresh failed — user is genuinely logged out. Fall through to setIsLoading(false).
+          }
           setIsLoading(false);
           return;
         }
-        // Other errors: log and continue
         console.error('[AuthContext] Session restore failed:', err?.message);
       }
 

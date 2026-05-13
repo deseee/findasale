@@ -633,8 +633,10 @@ export default function POSPage() {
     import('socket.io-client').then(({ io }) => {
       if (!isMounted) return;
 
+      // S708: accessToken is in an httpOnly cookie — withCredentials carries it on handshake
       socketInstance = io(socketUrl, {
         auth: token ? { token } : {},
+        withCredentials: true,
         transports: ['websocket'],
         upgrade: false,
         reconnection: true,

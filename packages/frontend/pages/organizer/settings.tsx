@@ -438,8 +438,10 @@ const OrganizerSettingsPage = () => {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
       (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/^http/, 'ws');
     const token = localStorage.getItem('token');
+    // S708: accessToken is in an httpOnly cookie — withCredentials carries it on handshake
     const socket = socketIO(socketUrl, {
       auth: { token: token || undefined },
+      withCredentials: true,
       transports: ['websocket'],
       upgrade: false,
     });

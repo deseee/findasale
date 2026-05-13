@@ -58,13 +58,15 @@ export const useLiveFeed = (saleId: string | undefined): UseLiveFeedReturn => {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
                       (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/^http/, 'ws');
 
-    // Get JWT token from localStorage for authentication
+    // S708: accessToken is in an httpOnly cookie post-migration. withCredentials carries it on
+    // the handshake. Keep legacy localStorage token as a fallback for any older code paths.
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
     // Create or reuse socket connection
     if (!socketRef.current) {
       socketRef.current = io(socketUrl, {
         auth: { token: token || undefined },
+        withCredentials: true,
         transports: ['websocket'], // polling causes 502 on Railway
         upgrade: false,
         reconnection: true,

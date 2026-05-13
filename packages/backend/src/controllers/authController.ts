@@ -432,7 +432,7 @@ export const register = async (req: Request, res: Response) => {
         // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
-      { expiresIn: '15m' }
+      { expiresIn: '1h' } // S708: bumped from 15m — was causing apparent sign-offs on idle tabs
     );
 
     // P0 Security Fix: Set httpOnly cookies for secure token storage
@@ -445,7 +445,7 @@ export const register = async (req: Request, res: Response) => {
         roles: userRoles,
       },
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
     );
 
     res.cookie('accessToken', token, {
@@ -453,7 +453,7 @@ export const register = async (req: Request, res: Response) => {
       secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/',
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 60 * 60 * 1000, // 1 hour (S708 — must match JWT expiresIn above)
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -463,7 +463,7 @@ export const register = async (req: Request, res: Response) => {
       path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
       // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
       // refresh cookie is sent regardless of proxy path depth.
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (S708 — must match refreshToken expiresIn)
     });
 
     // Return user without password. Still include token in body for backward compatibility during transition
@@ -637,7 +637,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
-      { expiresIn: '15m' }
+      { expiresIn: '1h' } // S708: bumped from 15m — was causing apparent sign-offs on idle tabs
     );
 
     // P0 Security Fix: Set httpOnly cookies for secure token storage
@@ -650,7 +650,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         roles: userRoles,
       },
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
     );
 
     res.cookie('accessToken', token, {
@@ -658,7 +658,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
       secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/',
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 60 * 60 * 1000, // 1 hour (S708 — must match JWT expiresIn above)
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -668,7 +668,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
       path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
       // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
       // refresh cookie is sent regardless of proxy path depth.
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (S708 — must match refreshToken expiresIn)
     });
 
     const { password: _, ...userWithoutPassword } = user;
@@ -845,7 +845,7 @@ export const login = async (req: Request, res: Response) => {
         // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
-      { expiresIn: '15m' }
+      { expiresIn: '1h' } // S708: bumped from 15m — was causing apparent sign-offs on idle tabs
     );
 
     // P0 Security Fix: Set httpOnly cookies for secure token storage
@@ -858,7 +858,7 @@ export const login = async (req: Request, res: Response) => {
         roles: userRoles,
       },
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
     );
 
     res.cookie('accessToken', token, {
@@ -866,7 +866,7 @@ export const login = async (req: Request, res: Response) => {
       secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/',
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 60 * 60 * 1000, // 1 hour (S708 — must match JWT expiresIn above)
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -876,7 +876,7 @@ export const login = async (req: Request, res: Response) => {
       path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
       // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
       // refresh cookie is sent regardless of proxy path depth.
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (S708 — must match refreshToken expiresIn)
     });
 
     // Return user without password. Still include token in body for backward compatibility during transition
@@ -1013,7 +1013,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
         // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
-      { expiresIn: '15m' }
+      { expiresIn: '1h' } // S708: bumped from 15m — was causing apparent sign-offs on idle tabs
     );
 
     // P0 Security Fix: Set httpOnly cookies for secure token storage
@@ -1026,7 +1026,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
         roles: userRoles,
       },
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
     );
 
     res.cookie('accessToken', token, {
@@ -1034,7 +1034,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
       secure: true, // P0 Security Fix Item 7: Always require HTTPS
       sameSite: 'lax',
       path: '/',
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 60 * 60 * 1000, // 1 hour (S708 — must match JWT expiresIn above)
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -1044,7 +1044,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
       path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
       // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
       // refresh cookie is sent regardless of proxy path depth.
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (S708 — must match refreshToken expiresIn)
     });
 
     const { password: _, ...userWithoutPassword } = updatedUser;
