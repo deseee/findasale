@@ -317,7 +317,7 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
         roles: freshUser.roles || [freshUser.role],
       },
       jwtSecret,
-      { expiresIn: '15m' }
+      { expiresIn: '1h' } // S708: bumped from 15m — must match login/oauth/refresh TTL
     );
 
     res.cookie('accessToken', newAccessToken, {
@@ -325,7 +325,7 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
       secure: true,
       sameSite: 'lax',
       path: '/',
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 60 * 60 * 1000, // 1 hour (S708)
     });
 
     res.json({ token: newAccessToken });

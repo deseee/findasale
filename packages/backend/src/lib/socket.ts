@@ -43,9 +43,18 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
   }
 
   _io.on('connection', (socket: Socket) => {
-    // Feature #70: JWT socket auth middleware — extract and verify token from handshake
-    // Unauthenticated connections allowed for public live feed viewing
-    const token = socket.handshake.auth.token as string | undefined;
+    // Feature #70: JWT socket auth middleware — extract and verify token from handshake.
+    // Unauthenticated connections allowed for public live feed viewing.
+    // S708: Read token from accessToken cookie as primary source (httpOnly cookie auth is
+    // canonical post-migration). Fall back to handshake.auth.token for legacy/native clients.
+    let token = socket.handshake.auth.token as string | undefined;
+    if (!token) {
+      const cookieHeader = socket.handshake.headers.cookie;
+      if (cookieHeader) {
+        const match = /(?:^|;\s*)accessToken=([^;]+)/.exec(cookieHeader);
+        if (match) token = decodeURIComponent(match[1]);
+      }
+    }
     if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
@@ -54,8 +63,13 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
         // Auto-join authenticated users to their personal user room for direct notifications (POS payment requests, etc.)
         socket.join(`user:${decoded.id}`);
       } catch (err) {
-        // Invalid/expired token — log silently, allow connection for public feed access
-        console.log('[socket] Invalid token on connection:', (err as any).message);
+        // S708: TokenExpiredError is expected — the client will refresh via /auth/refresh on
+        // the next API call and reconnect with a fresh cookie. Only log truly invalid tokens
+        // (forged/malformed) so the logs stay useful and don't drown out real issues.
+        const errName = (err as any)?.name;
+        if (errName !== 'TokenExpiredError') {
+          console.log('[socket] Invalid token on connection:', (err as any).message);
+        }
       }
     }
     // socket.data.userId remains undefined if no valid token

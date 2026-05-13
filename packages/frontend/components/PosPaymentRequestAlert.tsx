@@ -63,8 +63,10 @@ export function PosPaymentRequestAlert() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (!token) return;
+    // S708: accessToken now lives in an httpOnly cookie. Drop the legacy localStorage guard
+    // (which always returned null post-migration and effectively disabled this socket) and
+    // rely on withCredentials so the cookie travels on the WebSocket handshake.
+    const legacyToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
     const socketUrl =
       process.env.NEXT_PUBLIC_SOCKET_URL ||
@@ -73,7 +75,8 @@ export function PosPaymentRequestAlert() {
         .replace(/^http/, 'ws');
 
     socketRef.current = io(socketUrl, {
-      auth: { token },
+      auth: { token: legacyToken || undefined },
+      withCredentials: true,
       transports: ['websocket'],
       upgrade: false,
       reconnection: true,

@@ -333,7 +333,9 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
     let newSocket: Socket | null = null;
 
     import('socket.io-client').then(({ io }) => {
+      // S708: accessToken is in an httpOnly cookie — withCredentials carries it on handshake
       newSocket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001', {
+        withCredentials: true,
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,

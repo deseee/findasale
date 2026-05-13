@@ -165,9 +165,13 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
     if (!user?.id) return;
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
       (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001');
+    // S708: accessToken now lives in an httpOnly cookie. Send cookies on the socket handshake
+    // (withCredentials) so the backend can read it. Keep legacy auth.token fallback for any
+    // older code paths that still write to localStorage.
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const socket = io(socketUrl, {
       auth: { token: token || undefined },
+      withCredentials: true,
       transports: ['websocket'],
       upgrade: false,
     });

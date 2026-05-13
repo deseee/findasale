@@ -666,8 +666,10 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName, 
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
+    // S708: accessToken is in an httpOnly cookie — withCredentials carries it on handshake
     const socket = io(socketUrl, {
       auth: { token: token || undefined },
+      withCredentials: true,
       transports: ['websocket'],
       upgrade: false,
       reconnection: true,
