@@ -1,9 +1,9 @@
 name: SMTP Permutation Verifier
 
 on:
-  # Run daily at 2am (after enrichment has had time to populate websites)
+  # Run weekly Monday 2am UTC (cost-reduction batch — was daily)
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * 1'
   workflow_dispatch:
     inputs:
       smtp_verify:

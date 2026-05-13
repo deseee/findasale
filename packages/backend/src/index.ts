@@ -237,6 +237,7 @@ import { initAutoSeedOutreachCron } from './jobs/autoSeedOutreachCron'; // Gap 1
 import { initOutreachEmailsCron } from './jobs/outreachEmailsCron'; // Phase 1: Cold outreach email pipeline
 import { initEmailDiscoveryCron } from './jobs/emailDiscoveryJob'; // ADR-073 Phase 2: Email discovery for unmanaged organizers
 import { initWebsiteEnrichmentCron } from './jobs/websiteEnrichmentJob'; // ADR-077 Phase 3: Website enrichment for licensed organizers with no website
+import { scheduleOrganizerWebsiteAddressCron } from './jobs/organizerWebsiteAddressCron'; // Address-gap fix: scrape organizer websites for street addresses
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
 import { scheduleLeadScoringCron } from './jobs/leadScoringJob'; // ADR-076 Phase 2: Weekly lead score recomputation
@@ -709,6 +710,10 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-077 Phase 3: Initialize website enrichment cron (gated by WEBSITE_ENRICHMENT_ENABLED env var)
   initWebsiteEnrichmentCron();
+
+  // Address-gap fix: scrape organizer websites for street addresses
+  // (gated by ENABLE_ORGANIZER_WEBSITE_ENRICHMENT env var, default off)
+  scheduleOrganizerWebsiteAddressCron();
 
   // ADR-073 Phase 2: Initialize email discovery cron (gated by EMAIL_DISCOVERY_ENABLED env var)
   initEmailDiscoveryCron();
