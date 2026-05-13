@@ -138,11 +138,13 @@ git commit -m "fix: auth security hardening (10 fixes P0-P3), scraper URL fixes,
 
 ## Still Waiting (Blocked Queue)
 
-- **#405 Founding Badge** — in push block above (built S719, push was pending)
-- **#326 eBay Comp Tiles** ❌ — image grid not rendering
-- **#280 Condition Rating XP** ❌ — XP not awarded for condition grade
-- **P0-3 Email verification expiry** — schema migration next session
-- **P1-1 OAuth auto-link** — your decision (A/B/C above)
-- **#322 Encyclopedia Inline Tip** — UNVERIFIED
+- **P0-3 Email verification expiry** ⚠️ — schema migration still needed (deferred since S722 — active security gap)
+- **#326 eBay Comp Tiles** — FIXED S723, pending Chrome QA (edit-item page tile grid)
+- **#280 Condition Rating XP** — FIXED S723, pending Chrome QA (set grade, verify +5 XP)
+- **eBay full push flow** — FIXED S723, pending Chrome QA (weight/dims/packageType full flow)
+- **#422 OAuth Option B** — FIXED S723, pending Chrome QA (amber banner redirect on email match)
+- **#322 Encyclopedia category picker** — FIXED S723, pending Chrome QA (type free-text, dropdown populates)
+- **eBay DRAFT mode decision** — awaiting Patrick A/B/C choice (Blocked Queue item S723)
+- **Settings UI — OAuth linked accounts** — backend ready, no frontend yet
+- **Outreach open/click tracking** — verify Railway logs for [OutreachCron] sends (unverified 3 sessions)
 - **Wyoming pawnbroker** — diagnostic pending
-- **Outreach open/click tracking** — verify after first Gmail API cron window
