@@ -371,7 +371,10 @@ model Organizer {
   ebayPushesThisMonth     Int                    @default(0) // Count of eBay pushes this calendar month
   ebayPushesResetAt       DateTime? // When the monthly eBay push counter was last reset
   // eBay Push — publish-mode cascade + shipping smart-pick (organizer-level defaults)
-  ebayDefaultPublishMode       EbayPublishMode @default(DRAFT) // DRAFT (recommended) or LIVE — applied when the push request doesn't specify a mode
+  // @deprecated S725 — DRAFT mode removed; field unused, retained to avoid migration.
+  // eBay Inventory API unpublished offers cannot be viewed/published from the
+  // Seller Hub UI, making DRAFT mode broken-by-design. All pushes now go LIVE.
+  ebayDefaultPublishMode       EbayPublishMode @default(DRAFT) // DEPRECATED S725 — unused
   ebayDefaultShippingPolicyId  String? // When set, used as the fulfillment policy on every push (overrides smart-pick). Null = use smart-pick.
   // Feature: Graceful Tier Degradation — grace period fields
   graceEndAt              DateTime? // When grace period expires (7 days from downgrade)

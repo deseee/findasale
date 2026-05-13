@@ -284,6 +284,9 @@ export const getItemById = async (req: Request, res: Response) => {
         category: true,
         ebayCategoryId: true,
         ebayCategoryName: true,
+        ebayListingId: true, // S725: surfaces "Live on eBay" badge on edit-item page
+        ebayOfferId: true, // S725: surfaces "Pending Publish" + Publish-now button
+        ebayNeedsReview: true,
         condition: true,
         photoUrls: true,
         shippingAvailable: true,
@@ -2073,6 +2076,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         // Status chip data — distinguish Draft / Published / On eBay
         status: true,
         ebayListingId: true,
+        ebayOfferId: true, // S725: surfaces "Pending Publish" state in organizer UI
         listedOnEbayAt: true,
         // Feature #91: Auto-Markdown (P3: Fix 2)
         priceBeforeMarkdown: true,

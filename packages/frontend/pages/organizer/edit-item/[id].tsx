@@ -107,13 +107,12 @@ const EditItemPage = () => {
   // eBay push state
   const [ebayPushPending, setEbayPushPending] = useState(false);
 
-  // eBay push mutation
+  // eBay push mutation — S725 always LIVE (DRAFT mode killed)
   const ebayPushMutation = useMutation({
-    mutationFn: async ({ itemId, publishMode }: { itemId: string; publishMode?: 'DRAFT' | 'LIVE' }) => {
+    mutationFn: async ({ itemId }: { itemId: string }) => {
       if (!item?.saleId) throw new Error('Sale ID not found');
       return api.post(`/ebay/organizer/sales/${item.saleId}/ebay-push`, {
         itemIds: [itemId],
-        ...(publishMode ? { publishMode } : {}),
       });
     },
     onSuccess: (response) => {
@@ -121,9 +120,6 @@ const EditItemPage = () => {
       const result = results[0];
       if (result?.status === 'success') {
         showToast('Item listed on eBay', 'success');
-        queryClient.invalidateQueries({ queryKey: ['item', id] });
-      } else if (result?.status === 'DRAFT_CREATED' || result?.status === 'draft') {
-        showToast('Draft created on eBay — finalize in eBay Seller Hub', 'success');
         queryClient.invalidateQueries({ queryKey: ['item', id] });
       } else {
         const errorMsg = result?.code?.includes('NOT_CONNECTED')
@@ -144,7 +140,28 @@ const EditItemPage = () => {
     },
   });
 
-  const handlePushToEbay = async (publishMode?: 'DRAFT' | 'LIVE') => {
+  // S725: Publish-now mutation — publishes an existing unpublished offer LIVE.
+  const ebayPublishMutation = useMutation({
+    mutationFn: async ({ itemId }: { itemId: string }) => {
+      return api.post(`/ebay/items/${itemId}/publish`);
+    },
+    onSuccess: (response) => {
+      if (response.data?.ebayListingId) {
+        showToast('Published to eBay', 'success');
+        queryClient.invalidateQueries({ queryKey: ['item', id] });
+      } else {
+        showToast('Publish failed', 'error');
+      }
+      setEbayPushPending(false);
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || 'Failed to publish item to eBay';
+      showToast(msg, 'error');
+      setEbayPushPending(false);
+    },
+  });
+
+  const handlePushToEbay = async () => {
     if (!ebayConnected) {
       showToast('Connect eBay in Settings first', 'error');
       return;
@@ -178,7 +195,12 @@ const EditItemPage = () => {
       showToast('Save failed — fix errors before pushing to eBay', 'error');
       return;
     }
-    ebayPushMutation.mutate({ itemId: String(id), publishMode });
+    ebayPushMutation.mutate({ itemId: String(id) });
+  };
+
+  const handlePublishNow = () => {
+    setEbayPushPending(true);
+    ebayPublishMutation.mutate({ itemId: String(id) });
   };
 
   const handlePhotoUpload = async (files: FileList | null, mode: 'upload' | 'camera') => {
@@ -1226,47 +1248,56 @@ const EditItemPage = () => {
               </div>
             )}
 
-            {/* eBay Push Section */}
+            {/* eBay Push Section — S725 three states: Live / Pending Publish / Push */}
             {tier !== 'SIMPLE' && (
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
                 {item?.ebayListingId ? (
-                  <a
-                    href={`https://www.ebay.com/itm/${item.ebayListingId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-                  >
-                    View on eBay
-                  </a>
-                ) : (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handlePushToEbay('DRAFT')}
-                      disabled={ebayPushPending || !ebayConnected}
-                      title={!ebayConnected ? 'Connect eBay in Settings first' : 'Create unpublished offer — finalize in eBay Seller Hub'}
-                      className={`flex-1 font-bold py-2 px-4 rounded-lg transition-colors ${
-                        ebayConnected
-                          ? 'bg-warm-200 hover:bg-warm-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100'
-                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      } disabled:opacity-50`}
+                  <div className="space-y-2">
+                    <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
+                      Live on eBay
+                    </div>
+                    <a
+                      href={`https://www.ebay.com/itm/${item.ebayListingId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
                     >
-                      {ebayPushPending ? 'Pushing...' : 'Push as draft'}
-                    </button>
+                      View on eBay
+                    </a>
+                  </div>
+                ) : item?.ebayOfferId ? (
+                  <div className="space-y-2">
+                    <div className="inline-block bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200 text-xs font-semibold px-2 py-1 rounded">
+                      Pending Publish
+                    </div>
                     <button
                       type="button"
-                      onClick={() => handlePushToEbay('LIVE')}
+                      onClick={handlePublishNow}
                       disabled={ebayPushPending || !ebayConnected}
-                      title={!ebayConnected ? 'Connect eBay in Settings first' : 'Publish live to eBay immediately'}
-                      className={`flex-1 font-bold py-2 px-4 rounded-lg transition-colors ${
+                      title="Publish this draft offer live on eBay now"
+                      className={`w-full font-bold py-2 px-4 rounded-lg transition-colors ${
                         ebayConnected
                           ? 'bg-blue-600 hover:bg-blue-700 text-white'
                           : 'bg-gray-400 text-gray-600 cursor-not-allowed'
                       } disabled:opacity-50`}
                     >
-                      {ebayPushPending ? 'Pushing...' : 'Push live'}
+                      {ebayPushPending ? 'Publishing...' : 'Publish to eBay now'}
                     </button>
                   </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handlePushToEbay}
+                    disabled={ebayPushPending || !ebayConnected}
+                    title={!ebayConnected ? 'Connect eBay in Settings first' : 'Publish live to eBay immediately'}
+                    className={`w-full font-bold py-2 px-4 rounded-lg transition-colors ${
+                      ebayConnected
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                        : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    } disabled:opacity-50`}
+                  >
+                    {ebayPushPending ? 'Pushing...' : 'Push to eBay'}
+                  </button>
                 )}
               </div>
             )}

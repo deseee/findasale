@@ -57,8 +57,9 @@ const organizerProfileSchema = z.object({
   timezone: z.string().optional(),
   byAppointment: z.boolean().optional(),
   organizerTypes: z.array(z.string()).optional(),
-  // eBay Push — publish-mode cascade + shipping smart-pick organizer defaults
-  ebayDefaultPublishMode: z.enum(['DRAFT', 'LIVE']).optional(),
+  // eBay Push — shipping smart-pick organizer default.
+  // S725: ebayDefaultPublishMode removed from PATCH allowlist (DRAFT mode killed —
+  // see Organizer.ebayDefaultPublishMode @deprecated comment in schema.prisma).
   ebayDefaultShippingPolicyId: z.string().nullable().optional(),
 }).strict();
 
@@ -318,7 +319,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultPublishMode, ebayDefaultShippingPolicyId } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -358,7 +359,6 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(timezone !== undefined && { timezone }),
         ...(byAppointment !== undefined && { byAppointment }),
         ...(organizerTypes !== undefined && { organizerTypes }),
-        ...(ebayDefaultPublishMode !== undefined && { ebayDefaultPublishMode }),
         ...(ebayDefaultShippingPolicyId !== undefined && { ebayDefaultShippingPolicyId }),
       },
     });

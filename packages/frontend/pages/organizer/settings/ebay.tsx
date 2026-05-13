@@ -89,7 +89,7 @@ interface PolicyMapping {
   heavyOversizedPolicyId?: string | null;
   fragilePolicyId?: string | null;
   unknownPolicyId?: string | null;
-  pushAsDraft: boolean;
+  // S725: DRAFT mode removed — pushAsDraft removed from UI; backend ignores it.
   merchantLocationSource: 'EXISTING' | 'SALE_ADDRESS' | 'ORGANIZER_ADDRESS';
 }
 
@@ -113,15 +113,14 @@ const EbayPolicySetupPage = () => {
   const [setupData, setSetupData] = useState<SetupData | null>(null);
   const [mapping, setMapping] = useState<PolicyMapping | null>(null);
   const [originalMapping, setOriginalMapping] = useState<PolicyMapping | null>(null);
-  // eBay Push — publish-mode cascade + shipping smart-pick (organizer-level defaults)
+  // eBay Push — shipping smart-pick organizer default.
+  // S725: ebayDefaultPublishMode removed (DRAFT mode killed — see ebayController.ts).
   const [organizerDefaults, setOrganizerDefaults] = useState<{
-    ebayDefaultPublishMode: 'DRAFT' | 'LIVE';
     ebayDefaultShippingPolicyId: string | null;
-  }>({ ebayDefaultPublishMode: 'DRAFT', ebayDefaultShippingPolicyId: null });
+  }>({ ebayDefaultShippingPolicyId: null });
   const [originalOrganizerDefaults, setOriginalOrganizerDefaults] = useState<{
-    ebayDefaultPublishMode: 'DRAFT' | 'LIVE';
     ebayDefaultShippingPolicyId: string | null;
-  }>({ ebayDefaultPublishMode: 'DRAFT', ebayDefaultShippingPolicyId: null });
+  }>({ ebayDefaultShippingPolicyId: null });
 
   // Fetch setup data on mount
   useEffect(() => {
@@ -150,7 +149,7 @@ const EbayPolicySetupPage = () => {
           heavyOversizedPolicyId: null,
           fragilePolicyId: null,
           unknownPolicyId: null,
-          pushAsDraft: false,
+          // S725: pushAsDraft removed — DRAFT mode killed
           merchantLocationSource: 'SALE_ADDRESS',
         };
 
@@ -164,7 +163,7 @@ const EbayPolicySetupPage = () => {
         setOriginalMapping(JSON.parse(JSON.stringify(currentMapping)));
 
         const defaults = {
-          ebayDefaultPublishMode: (organizerRes?.data?.ebayDefaultPublishMode ?? 'DRAFT') as 'DRAFT' | 'LIVE',
+          // S725: ebayDefaultPublishMode removed (DRAFT mode killed)
           ebayDefaultShippingPolicyId: organizerRes?.data?.ebayDefaultShippingPolicyId ?? null,
         };
         setOrganizerDefaults(defaults);
@@ -209,10 +208,9 @@ const EbayPolicySetupPage = () => {
       const payload = { ...mapping, weightTierMappings: sortedTiers };
       // Save the policy mapping (existing path)
       await api.post('/ebay/policy-mapping', payload);
-      // Save organizer-level eBay defaults (publish mode + default shipping policy)
+      // Save organizer-level eBay defaults (default shipping policy only — S725 removed publish-mode).
       if (JSON.stringify(organizerDefaults) !== JSON.stringify(originalOrganizerDefaults)) {
         await api.patch('/organizers/me', {
-          ebayDefaultPublishMode: organizerDefaults.ebayDefaultPublishMode,
           ebayDefaultShippingPolicyId: organizerDefaults.ebayDefaultShippingPolicyId,
         });
       }
@@ -435,36 +433,14 @@ const EbayPolicySetupPage = () => {
                   </div>
                 </div>
 
-                {/* Section B2: Push defaults — publish mode + default shipping policy */}
+                {/* Section B2: Push defaults — default shipping policy. S725 removed publish-mode (DRAFT was broken-by-design). */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Push Defaults</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Defaults applied to every Push to eBay action. The per-push dropdown on each item can override the publish mode.
+                    Default shipping policy applied to every Push to eBay action.
                   </p>
 
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Default publish mode
-                      </label>
-                      <select
-                        value={organizerDefaults.ebayDefaultPublishMode}
-                        onChange={(e) =>
-                          setOrganizerDefaults({
-                            ...organizerDefaults,
-                            ebayDefaultPublishMode: e.target.value as 'DRAFT' | 'LIVE',
-                          })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
-                      >
-                        <option value="DRAFT">Draft (recommended) — review in eBay Seller Hub before publishing</option>
-                        <option value="LIVE">Publish live immediately</option>
-                      </select>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        Draft mode creates the offer in your eBay account without listing it publicly. Useful for reviewing photos and pricing before the item goes live.
-                      </p>
-                    </div>
-
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Default shipping policy
@@ -479,7 +455,7 @@ const EbayPolicySetupPage = () => {
                         }
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">Smart-pick (calculated → flat-rate → free)</option>
+                        <option value="">Smart-pick (weight tier → calculated → flat-rate → free)</option>
                         {setupData.fulfillmentPolicies.map((policy) => (
                           <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
                             {policy.name} · {policy.classification}
@@ -487,7 +463,7 @@ const EbayPolicySetupPage = () => {
                         ))}
                       </select>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        Smart-pick chooses the most accurate option from your eBay policies: weight-based calculated shipping first, then flat-rate, then free as a last resort. Pick a specific policy to override.
+                        Smart-pick chooses the most accurate option from your eBay policies: weight-tier rules first, then calculated shipping, then flat-rate, then free as a last resort. Pick a specific policy to override.
                       </p>
                     </div>
                   </div>
@@ -745,30 +721,11 @@ const EbayPolicySetupPage = () => {
                   />
                 </div>
 
-                {/* Section G: Push preferences */}
+                {/* Section G: Pickup Location. S725 removed Draft toggle (DRAFT mode killed). */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Push Behavior</h2>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Pickup Location</h2>
 
                   <div className="space-y-6">
-                    {/* Draft toggle */}
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          id="pushAsDraft"
-                          checked={mapping.pushAsDraft}
-                          onChange={(e) => setMapping({ ...mapping, pushAsDraft: e.target.checked })}
-                          className="h-4 w-4 text-sage-600 focus:ring-sage-600 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
-                        />
-                        <label htmlFor="pushAsDraft" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Push items as drafts (require manual publish in eBay Seller Hub)
-                        </label>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 ml-7">
-                        When on, items are created as unpublished Offers in your eBay account. You review and publish each one manually. When off, items are published live immediately.
-                      </p>
-                    </div>
-
                     {/* Location radio group */}
                     <div>
                       <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Pickup location for listings</p>
