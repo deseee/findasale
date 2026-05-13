@@ -1110,10 +1110,23 @@ const EditItemPage = () => {
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                     >
                       <option value="">Select package type</option>
-                      <option value="BOX">Box</option>
-                      <option value="LETTER">Letter</option>
-                      <option value="MAILING_TUBE">Mailing Tube</option>
+                      <option value="MAILING_BOX">Box (standard)</option>
+                      <option value="PARCEL_OR_PADDED_ENVELOPE">Parcel / Padded Envelope</option>
+                      <option value="PADDED_BAGS">Padded Bag</option>
+                      <option value="LARGE_ENVELOPE">Large Envelope</option>
                       <option value="PACKAGE_THICK_ENVELOPE">Thick Envelope</option>
+                      <option value="LETTER">Letter</option>
+                      <option value="USPS_FLAT_RATE_ENVELOPE">USPS Flat Rate Envelope</option>
+                      <option value="USPS_LARGE_PACK">USPS Large Pack</option>
+                      <option value="UPS_LETTER">UPS Letter</option>
+                      <option value="ROLL">Roll / Tube</option>
+                      <option value="TOUGH_BAGS">Tough Bag</option>
+                      <option value="WINE_PRESENTATION_BOX">Wine Presentation Box</option>
+                      <option value="EXTRA_LARGE_PACK">Extra Large Pack</option>
+                      <option value="VERY_LARGE_PACK">Very Large Pack</option>
+                      <option value="BULKY_GOODS">Bulky Goods</option>
+                      <option value="FURNITURE">Furniture</option>
+                      <option value="ONE_WAY_PALLET">Pallet (one-way)</option>
                     </select>
                   </div>
                   <div>
