@@ -49,7 +49,21 @@ interface WeightTierMapping {
   maxOz: number;
   policyId: string;
   policyName: string;
+  // Client-only stable id to keep React row identity across re-renders/sorts.
+  // Not persisted — stripped before POST in handleSaveMapping.
+  _clientId?: string;
 }
+
+// Generate a stable client-side id for a weight tier row. Falls back to a
+// counter-based id if crypto.randomUUID is unavailable (older browsers).
+let _tierIdCounter = 0;
+const newClientId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  _tierIdCounter += 1;
+  return `tier_${Date.now()}_${_tierIdCounter}`;
+};
 
 interface CategoryOverride {
   categoryId: string;
@@ -140,6 +154,12 @@ const EbayPolicySetupPage = () => {
           merchantLocationSource: 'SALE_ADDRESS',
         };
 
+        // Assign stable client-only ids to every loaded tier so React keys
+        // survive re-renders and (deferred) re-sorts without remounting inputs.
+        currentMapping.weightTierMappings = (currentMapping.weightTierMappings || []).map(
+          (tier: WeightTierMapping) => ({ ...tier, _clientId: tier._clientId || newClientId() })
+        );
+
         setMapping(currentMapping);
         setOriginalMapping(JSON.parse(JSON.stringify(currentMapping)));
 
@@ -177,8 +197,18 @@ const EbayPolicySetupPage = () => {
 
     try {
       setSaving(true);
+      // Build the API payload: sort weight tiers by maxOz once (canonical order)
+      // and strip the client-only _clientId field so it never leaves the browser.
+      const sortedTiers = [...mapping.weightTierMappings]
+        .sort((a, b) => {
+          const aVal = a.maxOz === Infinity ? Number.MAX_VALUE : a.maxOz;
+          const bVal = b.maxOz === Infinity ? Number.MAX_VALUE : b.maxOz;
+          return aVal - bVal;
+        })
+        .map(({ _clientId, ...rest }) => rest);
+      const payload = { ...mapping, weightTierMappings: sortedTiers };
       // Save the policy mapping (existing path)
-      await api.post('/ebay/policy-mapping', mapping);
+      await api.post('/ebay/policy-mapping', payload);
       // Save organizer-level eBay defaults (publish mode + default shipping policy)
       if (JSON.stringify(organizerDefaults) !== JSON.stringify(originalOrganizerDefaults)) {
         await api.patch('/organizers/me', {
@@ -187,7 +217,17 @@ const EbayPolicySetupPage = () => {
         });
       }
       showToast('eBay settings saved', 'success');
-      setOriginalMapping(JSON.parse(JSON.stringify(mapping)));
+      // Reflect the canonical sort order locally — preserve _clientId so React
+      // keys stay stable and inputs don't remount after save.
+      const idByMaxOz = new Map(mapping.weightTierMappings.map(t => [t, t._clientId]));
+      const sortedWithIds = [...mapping.weightTierMappings].sort((a, b) => {
+        const aVal = a.maxOz === Infinity ? Number.MAX_VALUE : a.maxOz;
+        const bVal = b.maxOz === Infinity ? Number.MAX_VALUE : b.maxOz;
+        return aVal - bVal;
+      }).map(t => ({ ...t, _clientId: idByMaxOz.get(t) || t._clientId || newClientId() }));
+      const savedMapping = { ...mapping, weightTierMappings: sortedWithIds };
+      setMapping(savedMapping);
+      setOriginalMapping(JSON.parse(JSON.stringify(savedMapping)));
       setOriginalOrganizerDefaults(JSON.parse(JSON.stringify(organizerDefaults)));
       // Refetch to ensure sync with backend
       const res = await api.get('/ebay/setup-data');
@@ -212,6 +252,7 @@ const EbayPolicySetupPage = () => {
       maxOz: tier.maxOz,
       policyId: tier.policyId,
       policyName: tier.policyName,
+      _clientId: newClientId(),
     }));
     setMapping(newMapping);
     showToast('Applied suggested weight tiers', 'success');
@@ -220,20 +261,21 @@ const EbayPolicySetupPage = () => {
   // Weight tier handlers
   const addWeightTier = () => {
     if (!mapping) return;
-    const newTiers = [...mapping.weightTierMappings, { maxOz: Infinity, policyId: '', policyName: '' }];
+    const newTiers = [
+      ...mapping.weightTierMappings,
+      { maxOz: Infinity, policyId: '', policyName: '', _clientId: newClientId() },
+    ];
     setMapping({ ...mapping, weightTierMappings: newTiers });
   };
 
+  // NOTE: do NOT sort here. Sorting on every keystroke causes rows to jump
+  // mid-input and steals focus from the active <input>. Canonical sort happens
+  // once at save time in handleSaveMapping. Backend re-sorts on read for
+  // routing correctness (matchWeightTier in ebayPolicyParser.ts).
   const updateWeightTier = (index: number, field: string, value: any) => {
     if (!mapping) return;
     const newTiers = [...mapping.weightTierMappings];
     newTiers[index] = { ...newTiers[index], [field]: value };
-    // Sort by maxOz
-    newTiers.sort((a, b) => {
-      const aVal = a.maxOz === Infinity ? Number.MAX_VALUE : a.maxOz;
-      const bVal = b.maxOz === Infinity ? Number.MAX_VALUE : b.maxOz;
-      return aVal - bVal;
-    });
     setMapping({ ...mapping, weightTierMappings: newTiers });
   };
 
@@ -481,7 +523,7 @@ const EbayPolicySetupPage = () => {
                       </thead>
                       <tbody>
                         {mapping.weightTierMappings.map((tier, index) => (
-                          <tr key={index} className="border-b border-gray-200 dark:border-gray-700">
+                          <tr key={tier._clientId || `tier-fallback-${index}`} className="border-b border-gray-200 dark:border-gray-700">
                             <td className="py-3 px-3">
                               <input
                                 type="text"
