@@ -1455,13 +1455,30 @@ const VoiceTagButtonThumbnail: React.FC<VoiceTagButtonThumbnailProps> = ({
   const { showToast } = useToast();
   const [recordingState, setRecordingState] = useState<'idle' | 'listening' | 'processing'>('idle');
 
+  /**
+   * Attempt to recover from a 'not-allowed' SpeechRecognition error by calling
+   * getUserMedia directly. If the permission state is 'prompt' (user dismissed
+   * an earlier prompt without choosing), Chrome will re-show the dialog. If
+   * permission is fully 'denied' at the site level, getUserMedia fails too
+   * and we fall through to instructional copy. Pure browser API — web pages
+   * cannot programmatically open chrome:// settings.
+   */
+  const attemptMicRecovery = async (): Promise<boolean> => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) return false;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop()); // release immediately
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleToggle = async () => {
     if (recordingState === 'idle') {
       setRecordingState('listening');
       await startListening();
     } else if (recordingState === 'listening') {
-      // S724 closure fix: read the final transcript from stopListening's return,
-      // not from the stale `transcript` state captured by this closure.
       const finalTranscript = await stopListening();
       setRecordingState('processing');
 
@@ -1469,10 +1486,16 @@ const VoiceTagButtonThumbnail: React.FC<VoiceTagButtonThumbnailProps> = ({
         onVoiceInput(itemId, finalTranscript);
       } else {
         // Empty transcript: surface a visible reason so the tap is never silent.
-        // Was the #1 reason rapidfire voice notes "didn't seem to do anything" — the
-        // function bailed without feedback when Web Speech returned no final result.
         if (errorCode === 'not-allowed' || errorCode === 'service-not-allowed') {
-          showToast('Microphone permission denied. Allow microphone access in browser settings.', 'error');
+          const recovered = await attemptMicRecovery();
+          if (recovered) {
+            showToast('Mic permission granted. Tap the mic again to record.', 'success');
+          } else {
+            showToast(
+              'Mic blocked. Click the 🔒 in your address bar → Site settings → Microphone → Allow, then reload.',
+              'error',
+            );
+          }
         } else if (errorCode === 'no-speech') {
           showToast('No speech detected. Try speaking closer to the mic.', 'info');
         } else if (errorCode === 'audio-capture') {
