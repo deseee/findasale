@@ -686,8 +686,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       {ogHead ? (
-        // SSR version — full OG image with watermark policy applied
-        saleForOGMeta && <SaleOGMeta sale={saleForOGMeta} organizer={sale?.organizer} />
+        // SSR version — render the already-built ogHead element directly.
+        // Rendering <SaleOGMeta> again here would inject duplicate OG tags into <head>.
+        ogHead
       ) : (
         // CSR fallback — used only when getServerSideProps didn't return ogData
         sale ? (
@@ -976,15 +977,6 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
             {/* Flash Deal Banner */}
             <FlashDealBanner saleId={sale.id} itemIds={sale.items.map((item) => item.id)} />
 
-            {/* Buyer's premium disclosure */}
-            {sale.buyersPremiumPct && sale.buyersPremiumPct > 0 && (
-              <div className="rounded-xl p-4 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30">
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                  Buyer's Premium: {sale.buyersPremiumPct}% added to final bid price at checkout.
-                </p>
-              </div>
-            )}
-
             {/* #413: Physical Safety Disclosures */}
             {sale.safetyNotes && sale.safetyNotes.trim() && (
               <div className="rounded-lg p-4 flex gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700">
@@ -1240,6 +1232,15 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                   ))}
                 </div>
               </section>
+            )}
+
+            {/* Buyer's premium disclosure — placed directly above items so bidders see the financial disclosure before bidding */}
+            {sale.buyersPremiumPct && sale.buyersPremiumPct > 0 && (
+              <div className="rounded-xl p-4 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30">
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                  Buyer's Premium: {sale.buyersPremiumPct}% added to final bid price at checkout.
+                </p>
+              </div>
             )}
 
             {/* ── ITEMS GRID ── */}

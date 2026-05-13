@@ -11,7 +11,7 @@
  *  - Auto-polls every 10 seconds
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import api from '../../../lib/api';
 import Head from 'next/head';
@@ -50,19 +50,25 @@ const LineQueuePage = () => {
   const [entries, setEntries] = useState<LineEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [now, setNow] = useState<Date>(new Date());
+  const hasLoadedOnce = useRef(false);
 
   const loadStatus = useCallback(async () => {
     if (!saleId) return;
     try {
       const res = await api.get(`/lines/${saleId}/status`);
       setEntries(res.data);
+      setLoadError(null);
+      setLastSyncedAt(new Date());
+      hasLoadedOnce.current = true;
     } catch {
-      // Silently ignore poll errors
+      // Only surface the error on first-load failure.
+      // Subsequent poll failures stay silent; staleness indicator handles them.
+      if (!hasLoadedOnce.current) {
+        setLoadError("Couldn't load the line — tap to retry.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -73,6 +79,24 @@ const LineQueuePage = () => {
     const interval = setInterval(loadStatus, 10000);
     return () => clearInterval(interval);
   }, [loadStatus]);
+
+  // Tick "Updated Xs ago" indicator every 5s so staleness is visible to user.
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 5000);
+    return () => clearInterval(tick);
+  }, []);
+
+  // Auth guard: redirect non-organizers AFTER all hooks have run (Rules of Hooks).
+  useEffect(() => {
+    if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+      router.push('/login');
+    }
+  }, [authLoading, user, router]);
+
+  // Render guard — runs identically on every render (no hooks below this point).
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    return null;
+  }
 
   const handleAction = async (
     label: string,
@@ -106,7 +130,7 @@ const LineQueuePage = () => {
         <div className="max-w-2xl mx-auto px-4 pt-6 pb-24">
 
           {/* Header */}
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-3 mb-2">
             <Link href="/organizer/dashboard" className="text-warm-500 hover:text-warm-700 dark:text-gray-400 dark:hover:text-gray-300 p-2 rounded hover:bg-warm-100 dark:hover:bg-gray-800" aria-label="Go back">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -114,6 +138,19 @@ const LineQueuePage = () => {
             </Link>
             <h1 className="text-2xl font-bold text-warm-900 dark:text-gray-100">Virtual Line</h1>
           </div>
+
+          {/* Staleness indicator — shows when last successful poll was, warns if >30s stale */}
+          {lastSyncedAt && (() => {
+            const secondsSinceSync = Math.floor((now.getTime() - lastSyncedAt.getTime()) / 1000);
+            const isStale = secondsSinceSync > 30;
+            return (
+              <p className={`text-xs mb-4 ml-12 ${isStale ? 'text-amber-700 dark:text-amber-400' : 'text-warm-500 dark:text-gray-500'}`}>
+                Updated {secondsSinceSync < 5 ? 'just now' : `${secondsSinceSync}s ago`}
+                {isStale && ' ⚠ Not updating'}
+              </p>
+            );
+          })()}
+          {!lastSyncedAt && <div className="mb-4" />}
 
           {/* Stats bar */}
           <div className="grid grid-cols-3 gap-3 mb-6">
@@ -161,7 +198,24 @@ const LineQueuePage = () => {
             <div className="text-center text-warm-500 dark:text-gray-400 py-10">Loading line…</div>
           )}
 
-          {!isLoading && active.length === 0 && (
+          {!isLoading && loadError && entries.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-4xl mb-3">⚠️</p>
+              <p className="text-warm-700 dark:text-gray-300 font-medium mb-4">{loadError}</p>
+              <button
+                onClick={() => {
+                  setLoadError(null);
+                  setIsLoading(true);
+                  loadStatus();
+                }}
+                className="bg-amber-600 text-white px-6 py-2 rounded-xl font-semibold hover:bg-amber-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {!isLoading && !loadError && active.length === 0 && (
             <div className="text-center py-12">
               <p className="text-4xl mb-3">🏁</p>
               <p className="text-warm-600 dark:text-gray-400 font-medium">No one in line yet.</p>
@@ -194,6 +248,7 @@ const LineQueuePage = () => {
                           () => api.post(`/lines/entry/${entry.id}/entered`),
                           `${entry.user.name} marked as entered`
                         )}
+                        aria-label={`Mark ${entry.user.name} as entered`}
                         className="text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 disabled:opacity-40 transition-colors"
                       >
                         {actionLoading === `enter-${entry.id}` ? '…' : 'Entered ✓'}

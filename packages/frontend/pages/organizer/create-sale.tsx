@@ -5,7 +5,7 @@
  * All existing API submission logic, validation, and field shapes are preserved.
  *
  * Step 1 — Sale type + name
- * Step 2 — Dates & location (Online Only toggle wired to UI; TODO: schema field)
+ * Step 2 — Dates & location (Online Only toggle wired to isOnlineOnly schema field)
  * Step 3 — Photos
  * Step 4 — Details (type-progressive)
  * Step 5 — Review + publish
@@ -96,7 +96,7 @@ interface WizardFormData {
   zip: string;
   lat: number | null;
   lng: number | null;
-  isOnlineOnly: boolean; // TODO: wire to isOnlineOnly field once schema migration lands
+  isOnlineOnly: boolean; // Maps to Sale.isOnlineOnly schema field
   entranceNote: string;
   entranceLat: number | null;
   entranceLng: number | null;
@@ -837,7 +837,6 @@ function Step2({ c, form, setForm, validationErrors, setValidationErrors }: Step
           </div>
           <div style={{ fontSize: 12, color: c.textDim, marginTop: 2, fontFamily: 'Inter, sans-serif' }}>
             Items ship to buyers. Address section hides.
-            {/* TODO: wire to isOnlineOnly field once schema migration lands */}
           </div>
         </div>
         <ToggleSwitch
@@ -1232,6 +1231,7 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
                 <button
                   type="button"
                   onClick={() => movePhoto(idx, idx - 1)}
+                  aria-label={`Move photo ${idx + 1} left`}
                   style={{
                     width: 24, height: 24, borderRadius: 6,
                     background: 'rgba(0,0,0,0.55)', color: '#fff',
@@ -1243,6 +1243,7 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
                 <button
                   type="button"
                   onClick={() => movePhoto(idx, idx + 1)}
+                  aria-label={`Move photo ${idx + 1} right`}
                   style={{
                     width: 24, height: 24, borderRadius: 6,
                     background: 'rgba(0,0,0,0.55)', color: '#fff',
@@ -1253,6 +1254,7 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
               <button
                 type="button"
                 onClick={() => removePhoto(idx)}
+                aria-label={`Remove photo ${idx + 1}`}
                 style={{
                   width: 24, height: 24, borderRadius: 6,
                   background: 'rgba(180,0,0,0.7)', color: '#fff',
@@ -2179,6 +2181,7 @@ const CreateSalePage: React.FC = () => {
       ...(entranceLat !== null ? { entranceLat } : {}),
       ...(entranceLng !== null ? { entranceLng } : {}),
       retailAutoRenewDays: form.retailAutoRenewDays,
+      isOnlineOnly: form.isOnlineOnly,
       status: 'DRAFT',
     };
   };

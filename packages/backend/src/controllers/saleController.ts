@@ -119,6 +119,8 @@ const saleCreateSchema = z.object({
   estatePrivacyMode: z.boolean().optional(),
   // S696 Wave 2: Cover the Fee — organizer absorbs platform fee (AUCTION sales only)
   coversFee: z.boolean().optional(),
+  // Online-only sale flag — sale has no physical location (e.g., shipping-only retail, virtual auction)
+  isOnlineOnly: z.boolean().optional(),
 });
 
 const saleUpdateSchema = saleCreateSchema.partial();

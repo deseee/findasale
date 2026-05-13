@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
@@ -79,6 +79,7 @@ interface Sale {
 
 const OrganizerDashboard = () => {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { tier: orgTier, isSimple, isTeams, canAccess, isLapsed } = useOrganizerTier();
@@ -617,6 +618,7 @@ const OrganizerDashboard = () => {
               </div>
               <button
                 onClick={() => setWelcomedWorkspace(null)}
+                aria-label="Dismiss welcome message"
                 className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-semibold"
               >
                 ✕
@@ -1562,7 +1564,7 @@ const OrganizerDashboard = () => {
                                   try {
                                     await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
                                     showToast('Sale reopened', 'success');
-                                    setTimeout(() => window.location.reload(), 1000);
+                                    queryClient.invalidateQueries({ queryKey: ['organizer-sales', user?.id] });
                                   } catch (error: any) {
                                     // Feature #249: Handle concurrent sales tier limit (409)
                                     if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
@@ -1687,7 +1689,7 @@ const OrganizerDashboard = () => {
                                     try {
                                       await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
                                       showToast('Sale reopened', 'success');
-                                      setTimeout(() => window.location.reload(), 1000);
+                                      queryClient.invalidateQueries({ queryKey: ['organizer-sales', user?.id] });
                                     } catch (error: any) {
                                       console.error('Failed to reopen sale:', error);
                                       // Feature #249: Handle concurrent sales tier limit (409)
