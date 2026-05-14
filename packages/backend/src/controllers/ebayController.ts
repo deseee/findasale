@@ -2227,6 +2227,12 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           data: { ebayOfferId: offerId },
         });
 
+        // Track which condition is currently committed to eBay's inventory item.
+        // Initially this matches what we PUT in Step 1 (ebayCondition). When the 25021
+        // retry succeeds with a new value, we update this so the 25101 retry uses the
+        // correct condition instead of reverting to the original payload's value.
+        let currentInventoryCondition: string = ebayCondition;
+
         // Step 3: Publish offer LIVE (S725: DRAFT mode removed — broken-by-design)
         const publishPath = encodeURIComponent(`/sell/inventory/v1/offer/${offerId}/publish`);
         const publishUrl = `${frontendUrl}/api/proxy/ebay?path=${publishPath}`;
@@ -2252,14 +2258,14 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           const publishErrorText = await publishResponse.clone().text();
           if (publishErrorText.includes('25021')) {
             const accepted = await getAcceptedConditionsForCategory(categoryId ?? '99');
-            const retryOrder = [
-              'NEW_OTHER',
-              'USED_VERY_GOOD',
-              'USED_EXCELLENT',
-              'USED_GOOD',
-              'USED_ACCEPTABLE',
-              'NEW',
-            ].filter((c) => c !== ebayCondition && (!accepted || accepted.has(c)));
+            // Bias retry toward conditions that MATCH the item's current condition family
+            // (USED_* vs NEW_*). For a used item with USED_VERY_GOOD initially rejected,
+            // try USED_GOOD next, not NEW_OTHER (which is wrong for a used item).
+            const isUsedFamily = typeof ebayCondition === 'string' && ebayCondition.startsWith('USED_');
+            const retryOrder = (isUsedFamily
+              ? ['USED_GOOD', 'USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_ACCEPTABLE', 'FOR_PARTS_OR_NOT_WORKING', 'NEW_OTHER', 'NEW']
+              : ['NEW_OTHER', 'NEW', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT', 'USED_GOOD']
+            ).filter((c) => c !== ebayCondition && (!accepted || accepted.has(c)));
 
             for (const retryCondition of retryOrder) {
               console.log(
@@ -2288,8 +2294,12 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               });
               if (publishResponse.ok) {
                 console.log(`[eBay Retry25021] ${sku}: succeeded with condition=${retryCondition}`);
+                currentInventoryCondition = retryCondition;
                 break;
               }
+              // Even if THIS publish ultimately fails with a different error (e.g. 25101),
+              // remember that the PUT succeeded with this condition — Pass 3 needs it.
+              currentInventoryCondition = retryCondition;
               const retryErr = await publishResponse.clone().text();
               if (!retryErr.includes('25021')) {
                 console.warn(`[eBay Retry25021] ${sku}: non-25021 error, stopping: ${retryErr.slice(0, 200)}`);
@@ -2387,8 +2397,11 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         if (!publishResponse.ok) {
           const currentErrorText = await publishResponse.clone().text();
           if (currentErrorText.includes('25101')) {
-            console.warn(`[eBay 25101 Retry] sku=${sku} pickedPolicy=${routing.fulfillmentPolicyId} itemPackageType="${item.packageType ?? 'null'}" — stripping packageType and retrying`);
-            const stripped = { ...inventoryPayload };
+            console.warn(`[eBay 25101 Retry] sku=${sku} pickedPolicy=${routing.fulfillmentPolicyId} itemPackageType="${item.packageType ?? 'null'}" currentCondition=${currentInventoryCondition} — stripping packageType and retrying`);
+            // Preserve whatever condition is currently on eBay's inventory item (which
+            // may have been updated by Pass 1's 25021 retry). Reverting to the original
+            // inventoryPayload.condition would re-trigger the 25021 we just resolved.
+            const stripped = { ...inventoryPayload, condition: currentInventoryCondition };
             if ((stripped as any).packageWeightAndSize) {
               const pkg = { ...((stripped as any).packageWeightAndSize as Record<string, unknown>) };
               delete (pkg as any).packageType;
