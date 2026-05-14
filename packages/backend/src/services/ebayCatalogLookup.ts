@@ -32,16 +32,33 @@ function parseNumeric(raw: string): number | null {
   return m ? parseFloat(m[1]) : null;
 }
 
-/** Normalize eBay weight aspect to ounces. Returns null if unit is unknown. */
+/**
+ * Normalize eBay weight aspect to total ounces. Returns null if no unit recognized.
+ * SUMS compound units: "1.5 lb 6 oz" → 30 oz (24 + 6), not 24 oz. Same shipping-accuracy
+ * fix as the voice regex — eBay catalog occasionally returns compound formats for
+ * heavier items (e.g. media weights as "2 lb 4 oz"). Returns null only if NO unit
+ * substring matches anywhere in the string.
+ */
 function toOzFromAspect(raw: string): number | null {
-  const num = parseNumeric(raw);
-  if (num === null) return null;
   const lower = raw.toLowerCase();
-  if (lower.includes('lb') || lower.includes('pound')) return Math.round(num * 16);
-  if (lower.includes('oz') || lower.includes('ounce')) return Math.round(num);
-  if (lower.includes('kg') || lower.includes('kilogram')) return Math.round(num * 35.274);
-  if (lower.includes('g') || lower.includes('gram')) return Math.round(num * 0.03527396 * 10) / 10;
-  return null; // unknown unit — drop rather than guess
+  // Each unit is matched per-occurrence via a global regex, then summed.
+  // Order: most-specific first to prevent "g" matching inside "kg" / "kilogram".
+  const patterns: Array<{ re: RegExp; mult: number }> = [
+    { re: /(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)\b/gi, mult: 16 },
+    { re: /(\d+(?:\.\d+)?)\s*(?:kg|kilograms?)\b/gi, mult: 35.274 },
+    { re: /(\d+(?:\.\d+)?)\s*(?:oz|ounces?)\b/gi, mult: 1 },
+    { re: /(\d+(?:\.\d+)?)\s*(?:g|grams?)\b/gi, mult: 0.03527396 },
+  ];
+  let totalOz = 0;
+  let matched = false;
+  for (const { re, mult } of patterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(lower)) !== null) {
+      totalOz += parseFloat(m[1]) * mult;
+      matched = true;
+    }
+  }
+  return matched ? Math.round(totalOz) : null;
 }
 
 /** Normalize eBay dimension aspect to inches. Returns null if unit is unknown. */
