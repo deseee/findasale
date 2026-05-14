@@ -61,14 +61,19 @@ function toOzFromAspect(raw: string): number | null {
   return matched ? Math.round(totalOz) : null;
 }
 
-/** Normalize eBay dimension aspect to inches. Returns null if unit is unknown. */
+/**
+ * Normalize eBay dimension aspect to inches. Returns null if unit is unknown.
+ * Uses word-boundary regex for "in" to avoid false positives on substrings like
+ * "origin" or "thin". The other units (cm, mm) are unambiguous as substrings.
+ */
 function toInchesFromAspect(raw: string): number | null {
   const num = parseNumeric(raw);
   if (num === null) return null;
   const lower = raw.toLowerCase();
-  if (lower.includes('cm') || lower.includes('centimeter')) return parseFloat((num / 2.54).toFixed(2));
-  if (lower.includes('mm') || lower.includes('millimeter')) return parseFloat((num / 25.4).toFixed(2));
-  if (lower.includes('"') || lower.includes('in') || lower.includes('inch')) return parseFloat(num.toFixed(2));
+  if (/\bcm\b|centimeter/.test(lower)) return parseFloat((num / 2.54).toFixed(2));
+  if (/\bmm\b|millimeter/.test(lower)) return parseFloat((num / 25.4).toFixed(2));
+  if (lower.includes('"') || /\b(?:in|inch|inches)\b/.test(lower)) return parseFloat(num.toFixed(2));
+  if (/\b(?:ft|feet|foot)\b/.test(lower)) return parseFloat((num * 12).toFixed(2));
   return null;
 }
 
@@ -174,16 +179,22 @@ export async function lookupByBarcode(
 
   const dimBundled = getAspect(aspects, 'Item Dimensions LxWxH', 'Item Dimensions', 'Dimensions');
   if (dimBundled) {
-    // Common formats: "10 x 5 x 3 inches" or "25.4 x 12.7 x 7.62 cm"
+    // Common formats: "10 x 5 x 3 inches", "25.4 x 12.7 x 7.62 cm", "100 x 50 x 30 mm",
+    // "2 x 1 x 0.5 ft". Detect unit from string context — defaults to inches only if
+    // NO recognized unit is present (which is typical for unitless "10x5x3" strings).
+    // Earlier version defaulted everything-not-cm to inches, which silently mis-parsed
+    // mm strings as 100-inch boxes. Now we explicitly check each unit.
     const parts = dimBundled.split(/[xX×]/);
     if (parts.length >= 3) {
-      // Determine unit from string context
       const lower = dimBundled.toLowerCase();
-      const isCm = lower.includes('cm') || lower.includes('centimeter');
+      const factor = /\bcm\b|centimeter/.test(lower) ? (1 / 2.54)
+        : /\bmm\b|millimeter/.test(lower) ? (1 / 25.4)
+        : /\b(?:ft|feet|foot)\b/.test(lower) ? 12
+        : 1; // default inches
       const convert = (raw: string): number | undefined => {
         const num = parseNumeric(raw.trim());
         if (num === null) return undefined;
-        return parseFloat((isCm ? num / 2.54 : num).toFixed(2));
+        return parseFloat((num * factor).toFixed(2));
       };
       lengthIn = convert(parts[0]);
       widthIn = convert(parts[1]);

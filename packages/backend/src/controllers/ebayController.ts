@@ -2684,8 +2684,16 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         if (invGet.ok) {
           const invBody = (await invGet.json()) as any;
           const accepted = await getAcceptedConditionsForCategory(item.ebayCategoryId);
-          const retryOrder = ['NEW_OTHER', 'USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE', 'NEW']
-            .filter((c) => c !== invBody.condition && (!accepted || accepted.has(c)));
+          // Bias retry toward conditions that MATCH the item's current condition family
+          // (USED_* vs NEW_*). If the existing condition is a USED_* variant, prefer
+          // USED_GOOD (eBay's universal "Used") and other USED variants before falling
+          // back to NEW_OTHER. Prevents auto-listing used items as NEW_OTHER just
+          // because that came first alphabetically in the fallback list.
+          const isUsedFamily = typeof invBody.condition === 'string' && invBody.condition.startsWith('USED_');
+          const retryOrder = (isUsedFamily
+            ? ['USED_GOOD', 'USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_ACCEPTABLE', 'FOR_PARTS_OR_NOT_WORKING', 'NEW_OTHER', 'NEW']
+            : ['NEW_OTHER', 'NEW', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT', 'USED_GOOD']
+          ).filter((c) => c !== invBody.condition && (!accepted || accepted.has(c)));
           for (const retryCondition of retryOrder) {
             console.log(`[eBay PublishNow Retry25021] ${sku}: retrying with condition=${retryCondition}`);
             const retryInvPayload = { ...invBody, condition: retryCondition };
