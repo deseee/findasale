@@ -29,7 +29,7 @@ import { awardXp, XP_AWARDS, spendXp, getSpendableXp, checkMonthlyXpCap } from '
 import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
 import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase 2: Async eBay comps
 import { fetchEbayPriceComps } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid
-import { composeDescription, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
+import { composeDescription, stripShippingPhrases, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -1255,7 +1255,12 @@ export const appendDescription = async (req: AuthRequest, res: Response) => {
         return { status: 403 as const };
       }
 
-      const compose = composeDescription(item.description, text, source as DescriptionSource);
+      // Strip weight/dimension phrases from the transcript when those values were extracted
+      const cleanedText = stripShippingPhrases(text, {
+        hasWeight: typeof weightOz === 'number',
+        hasDimensions: typeof lengthIn === 'number' || typeof widthIn === 'number' || typeof heightIn === 'number',
+      });
+      const compose = composeDescription(item.description, cleanedText, source as DescriptionSource);
 
       // Build dimension update: only fill fields that are currently null on the item
       const dimensionUpdate: Record<string, unknown> = {};
