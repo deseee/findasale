@@ -531,6 +531,9 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       zelleHandle: (organizer as any).zelleHandle || null,
       foundingOrgBadge: (organizer as any).foundingOrgBadge ?? false,
       address: organizer.address || null,
+      pickupWindows: (organizer as any).pickupWindows || null,
+      timezone: (organizer as any).timezone || null,
+      byAppointment: (organizer as any).byAppointment ?? false,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);
