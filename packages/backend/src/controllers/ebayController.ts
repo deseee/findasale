@@ -3205,7 +3205,7 @@ function mapConditionIdToEbayCondition(conditionId: string): string {
     '1500': 'NEW_OTHER',
     '1750': 'NEW_WITH_DEFECTS',
     '2500': 'SELLER_REFURBISHED',
-    '3000': 'USED_GOOD',        // Trading API 3000 = "Used" → USED_GOOD
+    '3000': 'USED_EXCELLENT',   // eBay conditionId 3000 "Used" → Inventory API USED_EXCELLENT (confirmed 2026-05-13)
     '4000': 'USED_VERY_GOOD',   // Trading API 4000 = "Very Good"
     '5000': 'USED_GOOD',        // Trading API 5000 = "Good"
     '6000': 'USED_ACCEPTABLE',  // Trading API 6000 = "Acceptable"
@@ -3304,11 +3304,13 @@ async function getAcceptedConditionsForCategory(categoryId: string): Promise<Set
       '2030': 'GOOD_REFURBISHED',
       '2500': 'SELLER_REFURBISHED',
       '2750': 'LIKE_NEW',
-      // eBay's universal "Used" (ID 3000) maps to USED_GOOD in the Inventory API.
-      // Categories without granular conditions (e.g. guitar effects pedals 22669)
-      // only accept this enum, not USED_EXCELLENT. Fixed 2026-05-13: was USED_EXCELLENT
-      // which caused errorId 25021 on every Inventory API publish for those categories.
-      '3000': 'USED_GOOD',
+      // eBay conditionId 3000 ("Used") maps to the Inventory API enum USED_EXCELLENT.
+      // Confirmed empirically 2026-05-13: category 22669 accepts conditionId 3000, and
+      // publishing succeeds ONLY when the inventory item's condition enum is USED_EXCELLENT
+      // (USED_GOOD = conditionId 5000, which 22669 does NOT accept → errorId 25021).
+      // This matches eBay's official condition-id-values table. The real prior bug was
+      // the phantom "accepted.add('USED_VERY_GOOD')" alias, now removed.
+      '3000': 'USED_EXCELLENT',
       '4000': 'USED_VERY_GOOD',
       '5000': 'USED_GOOD',
       '6000': 'USED_ACCEPTABLE',
