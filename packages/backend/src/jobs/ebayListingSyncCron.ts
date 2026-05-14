@@ -80,6 +80,14 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
     },
   });
 
+  // Fetch template once for this organizer — skip description pull-sync when a template is active
+  // (eBay stores the expanded template HTML; pulling it back would overwrite the clean item description)
+  const policyMapping = await prisma.ebayPolicyMapping.findUnique({
+    where: { organizerId },
+    select: { defaultDescriptionHtml: true },
+  });
+  const hasDescriptionTemplate = !!(policyMapping?.defaultDescriptionHtml);
+
   if (!items.length) {
     return;
   }
@@ -121,11 +129,13 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
           changeLog.push(`title "${item.title}" -> "${ebayTitle}"`);
         }
 
-        // Description
-        const ebayDescription = inventoryData.product?.description?.trim();
-        if (ebayDescription && ebayDescription !== (item.description ?? '')) {
-          updates.description = ebayDescription;
-          changeLog.push(`description updated`);
+        // Description — skip if organizer has a template (eBay stores expanded HTML; pulling back would clobber the clean item description)
+        if (!hasDescriptionTemplate) {
+          const ebayDescription = inventoryData.product?.description?.trim();
+          if (ebayDescription && ebayDescription !== (item.description ?? '')) {
+            updates.description = ebayDescription;
+            changeLog.push(`description updated`);
+          }
         }
 
         // Condition
@@ -236,5 +246,4 @@ export function startEbayListingSyncCron(): void {
     console.log('[eBay PullSync] Starting 4-hour sync cycle...');
     await ebayListingSync();
   }));
-  console.log('[eBay PullSync] Cron registered -- runs every 4 hours (2,6,10,14,18,22 UTC)');
-}
+  console.log('[eBay PullSync] Cron registered -- runs every 4

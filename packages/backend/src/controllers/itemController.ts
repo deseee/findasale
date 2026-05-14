@@ -1058,7 +1058,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           const { refreshEbayAccessToken } = await import('../controllers/ebayController');
           const organizer = await prisma.organizer.findUnique({
             where: { userId: req.user!.id },
-            select: { id: true },
+            select: {
+              id: true,
+              ebayPolicyMapping: { select: { defaultDescriptionHtml: true } },
+            },
           });
           if (!organizer) return;
 
@@ -1092,8 +1095,21 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           if (title !== undefined && updatedItem.title) {
             inventoryUpdates['product.title'] = updatedItem.title;
           }
-          if (description !== undefined && updatedItem.description) {
-            inventoryUpdates['product.description'] = updatedItem.description;
+          if (description !== undefined && updatedItem.description !== undefined) {
+            // Apply organizer's eBay description template if configured
+            const templateHtml = organizer.ebayPolicyMapping?.defaultDescriptionHtml ?? null;
+            const rawDesc = updatedItem.description ?? '';
+            let finalDesc = rawDesc;
+            if (templateHtml) {
+              if (templateHtml.includes('{{DESCRIPTION}}')) {
+                finalDesc = templateHtml.replace('{{DESCRIPTION}}', rawDesc);
+              } else {
+                finalDesc = rawDesc ? `${rawDesc}\n\n${templateHtml}` : templateHtml;
+              }
+            }
+            if (finalDesc) {
+              inventoryUpdates['product.description'] = finalDesc;
+            }
           }
           if (condition !== undefined && updatedItem.condition) {
             // Map FindA.Sale condition → eBay Inventory API condition enum
