@@ -530,6 +530,7 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       venmoHandle: (organizer as any).venmoHandle || null,
       zelleHandle: (organizer as any).zelleHandle || null,
       foundingOrgBadge: (organizer as any).foundingOrgBadge ?? false,
+      address: organizer.address || null,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);
