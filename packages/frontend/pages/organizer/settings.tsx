@@ -2008,4 +2008,12 @@ const OrganizerSettingsPage = () => {
             disabled={deleteAccountMutation.isPending}
             className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-gray-100 font-medium hover:bg-warm-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
           >
-           
+            Cancel
+          </button>
+        </div>
+      </AccessibleModal>
+    </>
+  );
+};
+
+export default OrganizerSettingsPage;
