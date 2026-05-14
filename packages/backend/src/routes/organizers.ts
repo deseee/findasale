@@ -61,6 +61,7 @@ const organizerProfileSchema = z.object({
   // S725: ebayDefaultPublishMode removed from PATCH allowlist (DRAFT mode killed —
   // see Organizer.ebayDefaultPublishMode @deprecated comment in schema.prisma).
   ebayDefaultShippingPolicyId: z.string().nullable().optional(),
+  address: z.string().optional(),
 }).strict();
 
 const awardBadgesSchema = z.object({
@@ -319,7 +320,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, address } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -360,6 +361,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(byAppointment !== undefined && { byAppointment }),
         ...(organizerTypes !== undefined && { organizerTypes }),
         ...(ebayDefaultShippingPolicyId !== undefined && { ebayDefaultShippingPolicyId }),
+        ...(address !== undefined && { address }),
       },
     });
 
@@ -2029,8 +2031,4 @@ router.get('/claim/verify/:token', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error verifying claim request:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-export default router;
+ 
