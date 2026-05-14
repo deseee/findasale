@@ -375,11 +375,19 @@ const OrganizerSettingsPage = () => {
         // Fetch hours
         try {
           const hoursRes = await api.get('/organizers/me/hours');
-          if (hoursRes.data && Array.isArray(hoursRes.data)) {
+          if (hoursRes.data && Array.isArray(hoursRes.data) && hoursRes.data.length > 0) {
             setHours(hoursRes.data);
+          } else {
+            // No saved hours yet — initialize with default open hours for all 7 days
+            const defaultHours = Array.from({ length: 7 }, (_, i) => ({
+              dayOfWeek: i,
+              openTime: '09:00',
+              closeTime: '17:00',
+            }));
+            setHours(defaultHours);
           }
         } catch (error) {
-          // Hours not found is OK, initialize with defaults
+          // Hours fetch failed — initialize with defaults
           const defaultHours = Array.from({ length: 7 }, (_, i) => ({
             dayOfWeek: i,
             openTime: '09:00',
