@@ -166,8 +166,9 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       const snapshotUpdatedAt = item.updatedAt;
 
       // Description: append-if-novel via composeDescription (architect contract 2026-05-12)
-      // userEditedFields gate still applies — voice/manual edits block AI append entirely
-      const composedDescription = !userEdited.includes('description') && aiResult.description
+      // No userEditedFields gate — composeDescription with 'AUTO' handles merge safely:
+      // voice content (above sentinel) is never touched; AI appends below sentinel only.
+      const composedDescription = aiResult.description
         ? composeDescription(item.description, aiResult.description, 'AUTO').description
         : item.description;
 

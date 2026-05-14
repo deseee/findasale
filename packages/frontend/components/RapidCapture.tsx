@@ -370,6 +370,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   // Feature #331: Handle voice input for a specific item.
   // Routes through POST /items/:id/description/append (Item Description Authoring Contract, 2026-05-12)
   // so voice transcripts append before any auto-generated content instead of overwriting it.
+  // Also calls /voice/extract to get structured fields (weight, dims) and passes them
+  // to the append endpoint in one request — fills empty fields, never overwrites existing.
   const handleVoiceInput = useCallback(async (itemId: string, transcript: string) => {
     if (!transcript.trim()) {
       return;
@@ -382,10 +384,52 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     }
 
     try {
-      await api.post(`/items/${itemId}/description/append`, {
+      // Extract structured fields from transcript (weight, dims, etc.) — best-effort
+      let extractedWeight: number | undefined;
+      let extractedLength: number | undefined;
+      let extractedWidth: number | undefined;
+      let extractedHeight: number | undefined;
+
+      try {
+        const extractRes = await api.post('/voice/extract', { transcript });
+        const extract = extractRes.data;
+        if (extract.weightOz && typeof extract.weightOz === 'number') {
+          extractedWeight = extract.weightOz;
+        }
+        if (extract.lengthIn && typeof extract.lengthIn === 'number') extractedLength = extract.lengthIn;
+        if (extract.widthIn && typeof extract.widthIn === 'number') extractedWidth = extract.widthIn;
+        if (extract.heightIn && typeof extract.heightIn === 'number') extractedHeight = extract.heightIn;
+      } catch {
+        // Extract is best-effort — never block the append on failure
+      }
+
+      // Single append call — passes transcript + any extracted dimensions.
+      // Backend only writes dimensions if item fields are currently null.
+      const appendRes = await api.post(`/items/${itemId}/description/append`, {
         text: transcript,
         source: 'VOICE',
+        ...(extractedWeight != null ? { weightOz: extractedWeight } : {}),
+        ...(extractedLength != null ? { lengthIn: extractedLength } : {}),
+        ...(extractedWidth != null ? { widthIn: extractedWidth } : {}),
+        ...(extractedHeight != null ? { heightIn: extractedHeight } : {}),
       });
+
+      // Build summary toast from what actually got persisted
+      const filledDims = appendRes.data?.dimensionsFilled as string[] | undefined;
+      const parts: string[] = [];
+      if (filledDims?.includes('packageWeightOz') && extractedWeight != null) {
+        parts.push(`weight ${extractedWeight}oz`);
+      }
+      if (
+        filledDims?.includes('packageLengthIn') &&
+        filledDims?.includes('packageWidthIn') &&
+        filledDims?.includes('packageHeightIn') &&
+        extractedLength != null && extractedWidth != null && extractedHeight != null
+      ) {
+        parts.push(`dims ${extractedLength}\u00d7${extractedWidth}\u00d7${extractedHeight} in`);
+      }
+      const summary = parts.length > 0 ? `Voice saved: ${parts.join(', ')}` : 'Voice saved.';
+      showToast(summary, 'success');
 
       // Show success indicator on thumbnail
       setVoiceIndicator({ itemId, showing: true });

@@ -318,7 +318,9 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               select: { description: true, userEditedFields: true, ebayCategoryId: true },
             });
             const userEdited = existing?.userEditedFields ?? [];
-            const nextDescription = !userEdited.includes('description') && summary.suggestedDescription
+            // No userEditedFields gate on description — composeDescription with 'AUTO' merges safely:
+            // voice content (above sentinel) is never touched; AI appends below sentinel only.
+            const nextDescription = summary.suggestedDescription
               ? composeDescription(existing?.description ?? null, summary.suggestedDescription, 'AUTO').description
               : existing?.description ?? summary.suggestedDescription;
 

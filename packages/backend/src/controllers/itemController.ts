@@ -1065,13 +1065,47 @@ export const appendDescription = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { text, source } = req.body as { text?: unknown; source?: unknown };
+    const {
+      text,
+      source,
+      weightOz,
+      lengthIn,
+      widthIn,
+      heightIn,
+    } = req.body as {
+      text?: unknown;
+      source?: unknown;
+      weightOz?: unknown;
+      lengthIn?: unknown;
+      widthIn?: unknown;
+      heightIn?: unknown;
+    };
 
     if (typeof text !== 'string' || text.trim().length === 0) {
       return res.status(400).json({ message: 'Field "text" is required and must be a non-empty string' });
     }
     if (source !== 'VOICE' && source !== 'AUTO') {
       return res.status(400).json({ message: 'Field "source" must be "VOICE" or "AUTO"' });
+    }
+
+    // Optional dimension fields — only written if item fields are currently null
+    const dimensionPatch: {
+      packageWeightOz?: number;
+      packageLengthIn?: number;
+      packageWidthIn?: number;
+      packageHeightIn?: number;
+    } = {};
+    if (typeof weightOz === 'number' && Number.isFinite(weightOz) && weightOz > 0) {
+      dimensionPatch.packageWeightOz = Math.round(weightOz);
+    }
+    if (typeof lengthIn === 'number' && Number.isFinite(lengthIn) && lengthIn > 0) {
+      dimensionPatch.packageLengthIn = lengthIn;
+    }
+    if (typeof widthIn === 'number' && Number.isFinite(widthIn) && widthIn > 0) {
+      dimensionPatch.packageWidthIn = widthIn;
+    }
+    if (typeof heightIn === 'number' && Number.isFinite(heightIn) && heightIn > 0) {
+      dimensionPatch.packageHeightIn = heightIn;
     }
 
     const callerUserId = req.user.id;
@@ -1102,7 +1136,26 @@ export const appendDescription = async (req: AuthRequest, res: Response) => {
 
       const compose = composeDescription(item.description, text, source as DescriptionSource);
 
+      // Build dimension update: only fill fields that are currently null on the item
+      const dimensionUpdate: Record<string, unknown> = {};
+      if (dimensionPatch.packageWeightOz != null && item.packageWeightOz == null) {
+        dimensionUpdate.packageWeightOz = dimensionPatch.packageWeightOz;
+      }
+      if (dimensionPatch.packageLengthIn != null && item.packageLengthIn == null) {
+        dimensionUpdate.packageLengthIn = dimensionPatch.packageLengthIn;
+      }
+      if (dimensionPatch.packageWidthIn != null && item.packageWidthIn == null) {
+        dimensionUpdate.packageWidthIn = dimensionPatch.packageWidthIn;
+      }
+      if (dimensionPatch.packageHeightIn != null && item.packageHeightIn == null) {
+        dimensionUpdate.packageHeightIn = dimensionPatch.packageHeightIn;
+      }
+
       if (!compose.appended) {
+        // Description unchanged — but still apply any dimension patch
+        if (Object.keys(dimensionUpdate).length > 0) {
+          await tx.item.update({ where: { id: item.id }, data: dimensionUpdate });
+        }
         return {
           status: 200 as const,
           payload: {
@@ -1111,6 +1164,7 @@ export const appendDescription = async (req: AuthRequest, res: Response) => {
             source,
             appended: false,
             reason: compose.reason,
+            dimensionsFilled: Object.keys(dimensionUpdate),
           },
         };
       }
@@ -1126,6 +1180,7 @@ export const appendDescription = async (req: AuthRequest, res: Response) => {
         data: {
           description: compose.description,
           userEditedFields: nextUserEdited,
+          ...dimensionUpdate,
         },
       });
 
@@ -1136,6 +1191,7 @@ export const appendDescription = async (req: AuthRequest, res: Response) => {
           description: compose.description,
           source,
           appended: true,
+          dimensionsFilled: Object.keys(dimensionUpdate),
         },
       };
     });
