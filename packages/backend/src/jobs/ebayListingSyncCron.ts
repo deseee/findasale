@@ -246,4 +246,4 @@ export function startEbayListingSyncCron(): void {
     console.log('[eBay PullSync] Starting 4-hour sync cycle...');
     await ebayListingSync();
   }));
-  console.log('[eBay PullSync] Cron registered -- runs every 4
+  console.log('[eBay PullSync] Cron registered -- runs every 4 hours (2,6,10,14,18,22 UTC)');
