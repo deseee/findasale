@@ -1040,6 +1040,111 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     invalidateCommandCenterCache(req.user.organizer!.id).catch((err) =>
       console.warn('Failed to invalidate command center cache:', err)
     );
+
+    // Feature #244 Phase 4: Push-on-save eBay sync (fire-and-forget, non-blocking)
+    // Only fires if this item is currently live on eBay (has an offer ID)
+    if (updatedItem.ebayOfferId) {
+      (async () => {
+        try {
+          const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+          const proxySecret = process.env.EBAY_PROXY_SECRET;
+          const proxyHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'Content-Language': 'en-US',
+            ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+          };
+
+          // Refresh access token for this organizer
+          const { refreshEbayAccessToken } = await import('../controllers/ebayController');
+          const organizer = await prisma.organizer.findUnique({
+            where: { userId: req.user!.id },
+            select: { id: true },
+          });
+          if (!organizer) return;
+
+          const accessToken = await refreshEbayAccessToken(organizer.id);
+          if (!accessToken) {
+            console.warn(`[eBay PushSync] Could not refresh token for organizer ${organizer.id}`);
+            return;
+          }
+
+          const authHeaders = { ...proxyHeaders, Authorization: `Bearer ${accessToken}` };
+
+          // Push price if updated
+          if (price !== undefined && updatedItem.price !== null) {
+            const offerPath = `/sell/inventory/v1/offer/${encodeURIComponent(updatedItem.ebayOfferId)}`;
+            const offerBody = {
+              pricingSummary: {
+                price: { value: String(updatedItem.price), currency: 'USD' },
+              },
+            };
+            const offerRes = await fetch(
+              `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(offerPath)}`,
+              { method: 'PUT', headers: authHeaders, body: JSON.stringify(offerBody) }
+            );
+            if (!offerRes.ok && offerRes.status !== 204) {
+              console.warn(`[eBay PushSync] Offer price push failed for item ${id}: HTTP ${offerRes.status}`);
+            }
+          }
+
+          // Push inventory item fields (title, description, condition) if any were updated
+          const inventoryUpdates: Record<string, unknown> = {};
+          if (title !== undefined && updatedItem.title) {
+            inventoryUpdates['product.title'] = updatedItem.title;
+          }
+          if (description !== undefined && updatedItem.description) {
+            inventoryUpdates['product.description'] = updatedItem.description;
+          }
+          if (condition !== undefined && updatedItem.condition) {
+            // Map FindA.Sale condition → eBay Inventory API condition enum
+            const condMap: Record<string, string> = {
+              NEW: 'NEW',
+              USED: 'USED_GOOD',
+              REFURBISHED: 'SELLER_REFURBISHED',
+              PARTS_OR_REPAIR: 'FOR_PARTS_OR_NOT_WORKING',
+            };
+            inventoryUpdates['condition'] = condMap[updatedItem.condition] ?? 'USED_GOOD';
+          }
+
+          if (Object.keys(inventoryUpdates).length > 0) {
+            const sku = `FAS-${id}`;
+            const invPath = `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+            // Build minimal inventory item body with only the fields that changed
+            const invBody: Record<string, unknown> = {};
+            if ('product.title' in inventoryUpdates || 'product.description' in inventoryUpdates) {
+              invBody.product = {
+                ...(inventoryUpdates['product.title'] ? { title: inventoryUpdates['product.title'] } : {}),
+                ...(inventoryUpdates['product.description'] ? { description: inventoryUpdates['product.description'] } : {}),
+              };
+            }
+            if ('condition' in inventoryUpdates) {
+              invBody.condition = inventoryUpdates['condition'];
+            }
+
+            const invRes = await fetch(
+              `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(invPath)}`,
+              { method: 'PUT', headers: authHeaders, body: JSON.stringify(invBody) }
+            );
+            if (!invRes.ok && invRes.status !== 204) {
+              console.warn(`[eBay PushSync] Inventory item push failed for SKU ${sku}: HTTP ${invRes.status}`);
+            }
+          }
+
+          const pushedFields = [
+            price !== undefined ? 'price' : null,
+            title !== undefined ? 'title' : null,
+            description !== undefined ? 'description' : null,
+            condition !== undefined ? 'condition' : null,
+          ].filter(Boolean);
+
+          if (pushedFields.length > 0) {
+            console.log(`[eBay PushSync] Item ${id}: pushed ${pushedFields.join('/')} to eBay`);
+          }
+        } catch (err) {
+          console.warn(`[eBay PushSync] Non-fatal error pushing item ${id} to eBay:`, (err as Error).message);
+        }
+      })().catch(err => console.warn(`[eBay PushSync] Unhandled error for item ${id}:`, err));
+    }
   } catch (error) {
     console.error('Error updating item:', error);
     res.status(500).json({ message: 'Server error while updating item' });
