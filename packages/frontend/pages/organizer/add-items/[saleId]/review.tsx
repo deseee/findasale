@@ -210,39 +210,6 @@ const ReviewPage = () => {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [editStates, setEditStates] = useState<Map<string, ItemEditState>>(new Map());
 
-  // Sync dimension fields from fresh server data into already-initialized editStates.
-  // Needed because getEditState only initialises once — a voice note that fills
-  // packageWeightOz etc. triggers a query refetch, but the cached editState still
-  // has the old (empty) values unless we merge here.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(() => {
-    let changed = false;
-    items.forEach((item: Item) => {
-      if (!editStates.has(item.id)) return;
-      const existing = editStates.get(item.id)!;
-      const serverW = item.packageWeightOz ?? undefined;
-      const serverL = item.packageLengthIn ?? undefined;
-      const serverWi = item.packageWidthIn ?? undefined;
-      const serverH = item.packageHeightIn ?? undefined;
-      if (
-        existing.packageWeightOz !== serverW ||
-        existing.packageLengthIn !== serverL ||
-        existing.packageWidthIn !== serverWi ||
-        existing.packageHeightIn !== serverH
-      ) {
-        editStates.set(item.id, {
-          ...existing,
-          packageWeightOz: serverW,
-          packageLengthIn: serverL,
-          packageWidthIn: serverWi,
-          packageHeightIn: serverH,
-        });
-        changed = true;
-      }
-    });
-    if (changed) setEditStates(new Map(editStates));
-  // items is the only dep that matters — editStates is mutated in-place intentionally
-  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkCategory, setBulkCategory] = useState('');
   const [showBuyerPreview, setShowBuyerPreview] = useState(router.query.preview === 'true');
@@ -337,7 +304,39 @@ const ReviewPage = () => {
     if (items.length > 0) handleItemsLoaded(items);
   }, [items, handleItemsLoaded]);
 
-  const updateItemMutation = useMutation({
+  // Sync dimension fields from fresh server data into already-initialized editStates.
+  // getEditState only initialises once — a voice note that saves packageWeightOz etc.
+  // triggers a query refetch, but the cached editState keeps stale (empty) values
+  // unless we merge the new server values here.
+  React.useEffect(() => {
+    let changed = false;
+    items.forEach((item: Item) => {
+      if (!editStates.has(item.id)) return;
+      const existing = editStates.get(item.id)!;
+      const serverW = item.packageWeightOz ?? undefined;
+      const serverL = item.packageLengthIn ?? undefined;
+      const serverWi = item.packageWidthIn ?? undefined;
+      const serverH = item.packageHeightIn ?? undefined;
+      if (
+        existing.packageWeightOz !== serverW ||
+        existing.packageLengthIn !== serverL ||
+        existing.packageWidthIn !== serverWi ||
+        existing.packageHeightIn !== serverH
+      ) {
+        editStates.set(item.id, {
+          ...existing,
+          packageWeightOz: serverW,
+          packageLengthIn: serverL,
+          packageWidthIn: serverWi,
+          packageHeightIn: serverH,
+        });
+        changed = true;
+      }
+    });
+    if (changed) setEditStates(new Map(editStates));
+  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const updateItemMutation = useMutation({
     mutationFn: async (payload: {
       itemId: string;
       updates: Partial<Item>;
