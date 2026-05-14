@@ -53,6 +53,7 @@ const OrganizerSettingsPage = () => {
   const [venmoHandle, setVenmoHandle] = useState('');
   const [zelleHandle, setZelleHandle] = useState('');
   const [pickupWindows, setPickupWindows] = useState('');
+  const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [timezone, setTimezone] = useState('');
   const [byAppointment, setByAppointment] = useState(false);
@@ -363,6 +364,7 @@ const OrganizerSettingsPage = () => {
           setVenmoHandle(response.data.venmoHandle || '');
           setZelleHandle(response.data.zelleHandle || '');
           setPickupWindows(response.data.pickupWindows || '');
+          setAddress(response.data.address || '');
           setStripeConnected(response.data.stripeConnected || false);
           setFoundingOrgBadge(response.data.foundingOrgBadge || false);
           setOrganizerTier(response.data.subscriptionTier || null);
@@ -545,6 +547,7 @@ const OrganizerSettingsPage = () => {
         timezone,
         byAppointment,
         organizerTypes,
+        address,
       });
       // Refetch organizer data to sync local state with backend
       const response = await api.get('/organizers/me');
@@ -567,6 +570,7 @@ const OrganizerSettingsPage = () => {
         setTimezone(response.data.timezone || '');
         setByAppointment(response.data.byAppointment || false);
         setOrganizerTypes(response.data.organizerTypes || []);
+        setAddress(response.data.address || '');
       }
       showToast('Profile updated', 'success');
       showSurvey('OG-5');
@@ -1388,6 +1392,18 @@ const OrganizerSettingsPage = () => {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Business Address</label>
+                  <input
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="e.g., 123 Main St, Grand Rapids, MI 49503"
+                  />
+                  <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Used for sale listings and eBay pickup location</p>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Bio</label>
                   <textarea
                     value={bio}
@@ -1992,12 +2008,4 @@ const OrganizerSettingsPage = () => {
             disabled={deleteAccountMutation.isPending}
             className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-gray-100 font-medium hover:bg-warm-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
           >
-            Cancel
-          </button>
-        </div>
-      </AccessibleModal>
-    </>
-  );
-};
-
-export default OrganizerSettingsPage;
+           
