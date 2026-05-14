@@ -50,7 +50,7 @@ export function splitOnSentinel(current: string | null | undefined): { voiceBloc
  * Algorithm:
  * - <12 chars: too short to dedup reliably, always novel
  * - Exact normalized substring match: duplicate
- * - 30-char sliding window with 10-char stride: if ≥60% of needle's chars
+ * - 30-char sliding window with 10-char stride: if >=60% of needle's chars
  *   overlap with windows already in haystack, treat as rephrase (duplicate)
  */
 export function isNovel(haystack: string, needle: string): boolean {
@@ -82,6 +82,83 @@ function appendWithSeparator(block: string, incoming: string): string {
     return trimmed + ' ' + incoming;
   }
   return trimmed + '. ' + incoming;
+}
+
+/**
+ * Strip weight and dimension phrases from a voice-note transcript when those
+ * values have already been captured in the item's structured fields.
+ *
+ * Only strips patterns for the dimensions that were actually extracted
+ * (controlled by the `has*` flags). After stripping, cleans up orphaned
+ * punctuation and collapses extra whitespace.
+ *
+ * Examples removed when hasWeight=true:
+ *   "weighs about 3 pounds" / "it's 48 ounces" / "3 lbs total"
+ * Examples removed when hasDimensions=true:
+ *   "12 by 8 by 4 inches" / "measures 10 x 6 x 3" / "dimensions are 12 by 8 by 4"
+ *   "10 inches wide" / "6 inches tall"
+ */
+export function stripShippingPhrases(
+  text: string,
+  opts: { hasWeight?: boolean; hasDimensions?: boolean }
+): string {
+  let t = text;
+
+  if (opts.hasWeight) {
+    // "weighs [about|approximately|around]? NUMBER [pound(s)|ounce(s)|lb(s)|oz]"
+    t = t.replace(
+      /\bweigh(?:s|ed|ing)?\s+(?:about|approximately|around|~)?\s*\d+(?:\.\d+)?\s*(?:pounds?|ounces?|lbs?\.?|ozs?\.?)\b/gi,
+      ''
+    );
+    // "it('s| is| weighs) NUMBER [unit]"
+    t = t.replace(
+      /\bit(?:'s| is| weighs)\s+(?:about|approximately|around|~)?\s*\d+(?:\.\d+)?\s*(?:pounds?|ounces?|lbs?\.?|ozs?\.?)\b/gi,
+      ''
+    );
+    // "NUMBER [unit] (in weight|heavy|total|net)?" standalone
+    t = t.replace(
+      /\b\d+(?:\.\d+)?\s*(?:pounds?|ounces?|lbs?\.?|ozs?\.?)\s*(?:in weight|total|net|heavy|gross)?\b/gi,
+      ''
+    );
+  }
+
+  if (opts.hasDimensions) {
+    const num = '\\d+(?:[./]\\d+)?';
+    const sep = '\\s*(?:by|x|\u00d7|and)\\s*';
+    const unit = '(?:inches?|in\\.?|")?';
+
+    // "dimensions are X by Y by Z [inches]"
+    t = t.replace(
+      new RegExp(`\\bdimensions?\\s+(?:are|is|:)?\\s*${num}\\s*${unit}\\s*${sep}${num}\\s*${unit}\\s*${sep}${num}\\s*${unit}`, 'gi'),
+      ''
+    );
+    // "measures X by Y by Z [inches]"
+    t = t.replace(
+      new RegExp(`\\bmeasures?\\s+${num}\\s*${unit}\\s*${sep}${num}\\s*${unit}\\s*${sep}${num}\\s*${unit}`, 'gi'),
+      ''
+    );
+    // Bare "X by Y by Z [inches]" — three-part dimension string
+    t = t.replace(
+      new RegExp(`\\b${num}\\s*${unit}\\s*${sep}${num}\\s*${unit}\\s*${sep}${num}\\s*${unit}`, 'gi'),
+      ''
+    );
+    // "X inches [wide|tall|long|deep|in width|in height|in length]"
+    t = t.replace(
+      /\b\d+(?:[./]\d+)?\s*(?:inches?|in\.?|")\s*(?:wide|tall|long|deep|in width|in height|in length|by|x)?\b/gi,
+      ''
+    );
+  }
+
+  // Clean up orphaned punctuation + collapse whitespace
+  t = t
+    .replace(/[,;]\s*[,;]/g, ',')
+    .replace(/\s+[,;.]/g, '.')
+    .replace(/^[,;.\s]+/, '')
+    .replace(/[,;\s]+$/, '.')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return t;
 }
 
 /**
