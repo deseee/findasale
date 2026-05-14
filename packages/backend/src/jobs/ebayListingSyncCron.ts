@@ -232,9 +232,9 @@ async function ebayListingSync(): Promise<void> {
 
 // Register the cron job to run every 4 hours (offset by 2 hours from ended-listings cron at :00)
 export function startEbayListingSyncCron(): void {
-  cron.schedule('0 2/4 * * *', cronGuard({ jobName: 'ebayListingSyncCron' }, async () => {
+  cron.schedule('0 2,6,10,14,18,22 * * *', cronGuard({ jobName: 'ebayListingSyncCron' }, async () => {
     console.log('[eBay PullSync] Starting 4-hour sync cycle...');
     await ebayListingSync();
   }));
-  console.log('[eBay PullSync] Cron registered -- runs every 4 hours');
+  console.log('[eBay PullSync] Cron registered -- runs every 4 hours (2,6,10,14,18,22 UTC)');
 }
