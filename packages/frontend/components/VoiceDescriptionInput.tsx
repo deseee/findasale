@@ -149,6 +149,16 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
         return;
       }
 
+      // Extract structured fields first so we can pass weight/dim context to append.
+      // Backend uses them to strip shipping phrases from the saved description
+      // (e.g. "12 oz" captured in weightOz → "12" stripped from the voice note text).
+      // No chips/Accept/Keep UX — empty fields are filled immediately; filled fields are skipped.
+      const response = await api.post('/voice/extract', {
+        transcript: finalTranscript,
+      });
+
+      const result: VoiceExtractionResult = response.data;
+
       // Append the transcript to item.description.
       // If itemId is known, route through the server-side append endpoint so the
       // organizer-first ordering and voice-locks-description rules apply.
@@ -159,6 +169,12 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
           const appendRes = await api.post(`/items/${itemId}/description/append`, {
             text: finalTranscript,
             source: 'VOICE',
+            // Forward extracted dims so backend can strip shipping phrases that were
+            // captured in structured fields (e.g. "12 oz" → removes "12" from desc).
+            ...(result.weightOz !== undefined ? { weightOz: result.weightOz } : {}),
+            ...(result.lengthIn !== undefined ? { lengthIn: result.lengthIn } : {}),
+            ...(result.widthIn !== undefined ? { widthIn: result.widthIn } : {}),
+            ...(result.heightIn !== undefined ? { heightIn: result.heightIn } : {}),
           });
           newDescription = appendRes.data?.description ?? finalTranscript;
           // Notify parent so it can sync external caches (react-query) before any
@@ -187,14 +203,6 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
       }
 
       onChange(newDescription);
-
-      // Extract structured fields from the transcript and auto-fill empty fields silently.
-      // No chips/Accept/Keep UX — empty fields are filled immediately; filled fields are skipped.
-      const response = await api.post('/voice/extract', {
-        transcript: finalTranscript,
-      });
-
-      const result: VoiceExtractionResult = response.data;
 
       // Build auto-fill update: only populate empty fields (never overwrite existing values)
       const autoUpdates: Parameters<NonNullable<typeof onFieldUpdate>>[0] = {
