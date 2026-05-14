@@ -2031,4 +2031,8 @@ router.get('/claim/verify/:token', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error verifying claim request:', error);
- 
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+export default router;

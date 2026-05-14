@@ -2814,36 +2814,36 @@ async function getOrCreateMerchantLocation(
     'Content-Language': 'en-US',
   };
 
-  // Try to find an existing enabled location
-  try {
-    const listRes = await fetch(ebayProxyUrl('/sell/inventory/v1/location'), {
-      headers: {
-        ...headers,
-        ...ebayProxyHeaders(),
-      },
-    });
-    if (listRes.ok) {
-      const data = (await listRes.json()) as any;
-      const locations: any[] = data.locations || [];
-      // Prefer ENABLED locations; fall back to first available
-      const enabled = locations.find((l: any) => l.merchantLocationStatus === 'ENABLED');
-      const chosen = enabled || locations[0];
-      if (chosen) {
-        console.log(`[eBay] Using existing merchant location: ${chosen.merchantLocationKey}`);
-        return { merchantLocationKey: chosen.merchantLocationKey };
-      }
-    }
-  } catch (err) {
-    console.error('[eBay] Failed to list merchant locations:', err);
-  }
-
-  // If saleAddressHint provided, try to create a location from it
+  // --- Path 1: saleAddressHint provided — use deterministic zip-based location key ---
   if (saleAddressHint) {
-    console.log('[eBay] No existing merchant location — creating from sale address');
+    const locationKey = `findasale-${saleAddressHint.zip}`;
+    console.log(`[eBay] saleAddressHint provided — using deterministic location key: ${locationKey}`);
+
+    // Try to GET the specific location first
     try {
-      const locationKey = `findasale-sale-${Date.now()}`;
+      const getRes = await fetch(ebayProxyUrl(`/sell/inventory/v1/location/${locationKey}`), {
+        headers: {
+          ...headers,
+          ...ebayProxyHeaders(),
+        },
+      });
+      if (getRes.ok) {
+        console.log(`[eBay] Existing location found for key ${locationKey} — reusing`);
+        return { merchantLocationKey: locationKey };
+      }
+      // If 404 or any non-OK response, fall through to create
+      const statusText = getRes.status;
+      console.log(`[eBay] Location ${locationKey} not found (HTTP ${statusText}) — will create`);
+    } catch (err) {
+      console.error(`[eBay] Exception fetching location ${locationKey}:`, err);
+      // Fall through to create attempt
+    }
+
+    // Location doesn't exist — create it with the sale address
+    console.log(`[eBay] Creating merchant location ${locationKey} for ${saleAddressHint.city}, ${saleAddressHint.state} ${saleAddressHint.zip}`);
+    try {
       const createRes = await fetch(
-        ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/location/${locationKey}`)),
+        ebayProxyUrl(`/sell/inventory/v1/location/${locationKey}`),
         {
           method: 'POST',
           headers: {
@@ -2867,34 +2867,91 @@ async function getOrCreateMerchantLocation(
         }
       );
       if (!createRes.ok) {
-        const err = await createRes.text();
-        console.error('[eBay] Failed to create merchant location from sale address:', err);
-        return { error: 'MERCHANT_LOCATION_CREATION_FAILED' };
-      } else {
-        // Enable the newly created location
-        const enableRes = await fetch(
-          ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/location/${locationKey}/enable`)),
+        const errText = await createRes.text();
+        console.warn(`[eBay] Failed to create merchant location ${locationKey} with full address — retrying with city/state/zip only:`, errText);
+
+        // Retry without addressLine1 — eBay sometimes rejects specific street addresses
+        // but accepts city + state + zip (same "nearest match" fallback used in geocoding)
+        const retryRes = await fetch(
+          ebayProxyUrl(`/sell/inventory/v1/location/${locationKey}`),
           {
             method: 'POST',
             headers: {
               ...headers,
               ...ebayProxyHeaders(),
             },
+            body: JSON.stringify({
+              location: {
+                address: {
+                  city: saleAddressHint.city,
+                  stateOrProvince: saleAddressHint.state,
+                  postalCode: saleAddressHint.zip,
+                  country: 'US',
+                },
+              },
+              locationInstructions: 'Items ship from this location',
+              name: `FindA.Sale ${saleAddressHint.city}`,
+              locationTypes: ['WAREHOUSE'],
+            }),
           }
         );
-        if (!enableRes.ok) {
-          const err = await enableRes.text();
-          console.warn('[eBay] Failed to enable merchant location (may already be enabled):', err);
+        if (!retryRes.ok) {
+          const retryErr = await retryRes.text();
+          console.error(`[eBay] Retry (city/zip only) also failed for ${locationKey}:`, retryErr);
+          return { error: 'MERCHANT_LOCATION_CREATION_FAILED' };
         }
-        return { merchantLocationKey: locationKey };
+        console.log(`[eBay] Retry succeeded — created ${locationKey} with city/zip only`);
       }
+
+      // Enable the newly created location
+      const enableRes = await fetch(
+        ebayProxyUrl(`/sell/inventory/v1/location/${locationKey}/enable`),
+        {
+          method: 'POST',
+          headers: {
+            ...headers,
+            ...ebayProxyHeaders(),
+          },
+        }
+      );
+      if (!enableRes.ok) {
+        const errText = await enableRes.text();
+        console.warn(`[eBay] Failed to enable location ${locationKey} (may already be enabled):`, errText);
+      }
+
+      console.log(`[eBay] Created and enabled merchant location: ${locationKey}`);
+      return { merchantLocationKey: locationKey };
     } catch (err) {
-      console.error('[eBay] Exception creating merchant location from sale address:', err);
+      console.error(`[eBay] Exception creating merchant location ${locationKey}:`, err);
       return { error: 'MERCHANT_LOCATION_CREATION_FAILED' };
     }
   }
 
-  // No existing location and no sale address hint — fail
+  // --- Path 2: No saleAddressHint — fall back to listing all locations ---
+  console.log('[eBay] No saleAddressHint — falling back to listing all merchant locations');
+  try {
+    const listRes = await fetch(ebayProxyUrl('/sell/inventory/v1/location'), {
+      headers: {
+        ...headers,
+        ...ebayProxyHeaders(),
+      },
+    });
+    if (listRes.ok) {
+      const data = (await listRes.json()) as any;
+      const locations: any[] = data.locations || [];
+      // Prefer ENABLED locations; fall back to first available
+      const enabled = locations.find((l: any) => l.merchantLocationStatus === 'ENABLED');
+      const chosen = enabled || locations[0];
+      if (chosen) {
+        console.log(`[eBay] Using existing merchant location (fallback): ${chosen.merchantLocationKey}`);
+        return { merchantLocationKey: chosen.merchantLocationKey };
+      }
+    }
+  } catch (err) {
+    console.error('[eBay] Failed to list merchant locations:', err);
+  }
+
+  // No address hint and no existing locations — fail
   return { error: 'MERCHANT_LOCATION_UNAVAILABLE' };
 }
 
