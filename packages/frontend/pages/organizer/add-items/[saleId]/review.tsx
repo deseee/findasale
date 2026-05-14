@@ -209,6 +209,40 @@ const ReviewPage = () => {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [editStates, setEditStates] = useState<Map<string, ItemEditState>>(new Map());
+
+  // Sync dimension fields from fresh server data into already-initialized editStates.
+  // Needed because getEditState only initialises once — a voice note that fills
+  // packageWeightOz etc. triggers a query refetch, but the cached editState still
+  // has the old (empty) values unless we merge here.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    let changed = false;
+    items.forEach((item: Item) => {
+      if (!editStates.has(item.id)) return;
+      const existing = editStates.get(item.id)!;
+      const serverW = item.packageWeightOz ?? undefined;
+      const serverL = item.packageLengthIn ?? undefined;
+      const serverWi = item.packageWidthIn ?? undefined;
+      const serverH = item.packageHeightIn ?? undefined;
+      if (
+        existing.packageWeightOz !== serverW ||
+        existing.packageLengthIn !== serverL ||
+        existing.packageWidthIn !== serverWi ||
+        existing.packageHeightIn !== serverH
+      ) {
+        editStates.set(item.id, {
+          ...existing,
+          packageWeightOz: serverW,
+          packageLengthIn: serverL,
+          packageWidthIn: serverWi,
+          packageHeightIn: serverH,
+        });
+        changed = true;
+      }
+    });
+    if (changed) setEditStates(new Map(editStates));
+  // items is the only dep that matters — editStates is mutated in-place intentionally
+  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkCategory, setBulkCategory] = useState('');
   const [showBuyerPreview, setShowBuyerPreview] = useState(router.query.preview === 'true');
@@ -803,12 +837,20 @@ const ReviewPage = () => {
           condition: editState.condition,
           conditionGrade: editState.conditionGrade,
           tags: editState.tags,
+          packageWeightOz: editState.packageWeightOz ?? null,
+          packageLengthIn: editState.packageLengthIn ?? null,
+          packageWidthIn: editState.packageWidthIn ?? null,
+          packageHeightIn: editState.packageHeightIn ?? null,
         },
       });
       await api.post(`/items/${item.id}/publish`);
       queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
       setApprovedIds(prev => new Set(prev).add(item.id));
       showToast('Item published!', 'success');
+      // Fire eBay push if the organizer checked the push toggle for this item
+      if (ebayPushItems[item.id] && ebayConnected && tier !== 'SIMPLE') {
+        ebayPushMutation.mutate([item.id]);
+      }
     } catch (err: any) {
       showToast(err?.response?.data?.message || 'Failed to publish', 'error');
     }
@@ -852,6 +894,10 @@ const ReviewPage = () => {
             condition: editState.condition,
             conditionGrade: editState.conditionGrade,
             tags: editState.tags,
+            packageWeightOz: editState.packageWeightOz ?? null,
+            packageLengthIn: editState.packageLengthIn ?? null,
+            packageWidthIn: editState.packageWidthIn ?? null,
+            packageHeightIn: editState.packageHeightIn ?? null,
           },
         });
         await api.post(`/items/${item.id}/publish`);
@@ -863,6 +909,11 @@ const ReviewPage = () => {
     queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
     if (toApprove.length > 0) {
       showToast(`${toApprove.length} item${toApprove.length !== 1 ? 's' : ''} published!`, 'success');
+    }
+    // Fire eBay push for any approved items that had the push toggle checked
+    const ebayIds = toApprove.map(i => i.id).filter(id => ebayPushItems[id]);
+    if (ebayIds.length > 0 && ebayConnected && tier !== 'SIMPLE') {
+      ebayPushMutation.mutate(ebayIds);
     }
   };
 
