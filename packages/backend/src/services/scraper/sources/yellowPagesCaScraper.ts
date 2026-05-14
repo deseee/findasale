@@ -194,7 +194,7 @@ async function fetchPage(
 ): Promise<{ listings: YPListing[]; hasMore: boolean }> {
   const url = `${YP_BASE}/search/si/${page}/${encodeURIComponent(keyword)}/${province}/`;
 
-  await defaultRateLimiter();
+  await defaultRateLimiter.waitBeforeRequest('www.yellowpages.ca');
 
   const res = await fetch(url, {
     headers: {
