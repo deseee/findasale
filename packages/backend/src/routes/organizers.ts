@@ -901,8 +901,6 @@ router.post('/admin/claim-requests/:id/reject', authenticate, async (req: AuthRe
 // P1 Security: Strip PII (phone, address) from unauthenticated responses
 router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Response) => {
   try {
-    const isAuthenticated = !!(req.headers.authorization?.startsWith('Bearer '));
-
     // Try lookup by ID first (internal CUID)
     let organizer = await prisma.organizer.findUnique({
       where: { id: req.params.id },
@@ -1097,11 +1095,18 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
       }
     }
 
-    // P1 Security: Only return PII (phone, address) to authenticated requests
     const responseData: any = {
       id: organizer.id,
       businessName: organizer.businessName,
       reputationTier: organizer.reputationTier,
+      // Public business contact details — these are directory-listing info
+      // meant to help shoppers reach the organizer (claimed and unclaimed listings).
+      phone: organizer.phone,
+      address: organizer.address,
+      lat: organizer.lat,
+      lng: organizer.lng,
+      contactEmail: organizer.contactEmail || organizer.scrapedEmail || null,
+      businessCategory: organizer.businessCategory,
       // Profile fields (S609 + storefront)
       bio: organizer.bio,
       tagline: organizer.tagline,
@@ -1115,6 +1120,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
       tiktokUrl: organizer.tiktokUrl,
       youtubeUrl: organizer.youtubeUrl,
       pinterestUrl: organizer.pinterestUrl,
+      linkedInUrl: organizer.linkedInUrl,
       // Brand kit fields (#355 org types, brand customization)
       organizerTypes: organizer.organizerTypes,
       brandLogoUrl: organizer.brandLogoUrl,
@@ -1154,12 +1160,6 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
       isUnmanagedListing: organizer.isUnmanagedListing,
       foundingOrgBadge: organizer.foundingOrgBadge,
     };
-
-    // Include contact details only if authenticated
-    if (isAuthenticated) {
-      responseData.phone = organizer.phone;
-      responseData.address = organizer.address;
-    }
 
     res.json(responseData);
   } catch (error) {
