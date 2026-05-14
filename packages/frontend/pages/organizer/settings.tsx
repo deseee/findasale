@@ -1398,7 +1398,7 @@ const OrganizerSettingsPage = () => {
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="e.g., 123 Main St, Grand Rapids, MI 49503"
+                    placeholder="e.g., 123 Main St, Holland, MI 49423"
                   />
                   <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Used for sale listings and eBay pickup location</p>
                 </div>
