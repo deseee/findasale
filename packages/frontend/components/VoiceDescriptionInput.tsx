@@ -5,8 +5,8 @@
  * - Records voice input via Web Speech API (useVoiceInput hook)
  * - Sends transcript to backend voice-extract endpoint
  * - Always saves the full transcript/description
- * - Smart field population: auto-fill empty fields, confirm before overwriting
- * - Shows inline "Replace / Keep" suggestions for fields with existing values
+ * - Silent auto-fill: empty fields are populated immediately, no chip UX
+ * - Single summary toast confirms what got filled
  * - Graceful degradation for unsupported browsers
  */
 
@@ -72,12 +72,6 @@ interface VoiceDescriptionInputProps {
 
 type RecordingState = 'idle' | 'listening' | 'processing';
 
-interface FieldSuggestion {
-  field: string;
-  newValue: string;
-  displayValue: string;
-}
-
 const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
   value,
   onChange,
@@ -91,8 +85,6 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
   const { isSupported, isListening, transcript, startListening, stopListening, errorCode } = useVoiceInput();
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [fieldSuggestions, setFieldSuggestions] = useState<FieldSuggestion[]>([]);
-  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number | null>(null);
 
   // Determine button disabled state
   const isDisabled = disabled || !isSupported || isProcessing;
@@ -196,132 +188,81 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
 
       onChange(newDescription);
 
-      // Extract structured fields (title/category/tags/price) from the transcript.
-      // Description is no longer pulled from /voice/extract — that came from the append result above.
+      // Extract structured fields from the transcript and auto-fill empty fields silently.
+      // No chips/Accept/Keep UX — empty fields are filled immediately; filled fields are skipped.
       const response = await api.post('/voice/extract', {
         transcript: finalTranscript,
       });
 
       const result: VoiceExtractionResult = response.data;
 
-      // Collect field suggestions for empty vs filled fields
-      const suggestions: FieldSuggestion[] = [];
+      // Build auto-fill update: only populate empty fields (never overwrite existing values)
+      const autoUpdates: Parameters<NonNullable<typeof onFieldUpdate>>[0] = {
+        description: newDescription,
+      };
+      const filledParts: string[] = [];
 
-      // Check title
       if (result.name && !existingFields.title) {
-        suggestions.push({
-          field: 'title',
-          newValue: result.name,
-          displayValue: result.name,
-        });
-      } else if (result.name && existingFields.title && existingFields.title !== result.name) {
-        suggestions.push({
-          field: 'title',
-          newValue: result.name,
-          displayValue: result.name,
-        });
+        autoUpdates.title = result.name;
+        filledParts.push('title');
       }
 
-      // Check category
       if (result.category && !existingFields.category) {
-        suggestions.push({
-          field: 'category',
-          newValue: result.category,
-          displayValue: result.category,
-        });
-      } else if (result.category && existingFields.category && existingFields.category !== result.category) {
-        suggestions.push({
-          field: 'category',
-          newValue: result.category,
-          displayValue: result.category,
-        });
+        autoUpdates.category = result.category;
+        filledParts.push('category');
       }
 
-      // Check tags
       if (result.tags && result.tags.length > 0) {
         const existingTags = existingFields.tags || [];
-        const newTags = result.tags.filter(tag => !existingTags.includes(tag));
+        const newTags = result.tags.filter((tag: string) => !existingTags.includes(tag));
         if (newTags.length > 0) {
-          suggestions.push({
-            field: 'tags',
-            newValue: JSON.stringify(newTags),
-            displayValue: newTags.join(', '),
-          });
+          autoUpdates.tags = [...existingTags, ...newTags];
+          filledParts.push(`tags +${newTags.length}`);
         }
       }
 
-      // Check price
       if (result.estimatedPrice && !existingFields.price) {
-        suggestions.push({
-          field: 'price',
-          newValue: result.estimatedPrice.toString(),
-          displayValue: `$${result.estimatedPrice.toFixed(2)}`,
-        });
-      } else if (result.estimatedPrice && existingFields.price && parseFloat(existingFields.price) !== result.estimatedPrice) {
-        suggestions.push({
-          field: 'price',
-          newValue: result.estimatedPrice.toString(),
-          displayValue: `$${result.estimatedPrice.toFixed(2)}`,
-        });
+        autoUpdates.price = result.estimatedPrice.toString();
+        filledParts.push(`price $${result.estimatedPrice.toFixed(2)}`);
       }
 
-      // Check weight
       if (result.weightOz && !existingFields.packageWeightOz) {
-        const lbs = (result.weightOz / 16).toFixed(1);
-        suggestions.push({
-          field: 'packageWeightOz',
-          newValue: result.weightOz.toString(),
-          displayValue: `${result.weightOz} oz (~${lbs} lb)`,
-        });
+        autoUpdates.packageWeightOz = result.weightOz.toString();
+        filledParts.push(`weight ${result.weightOz}oz`);
       }
 
-      // Check length
       if (result.lengthIn && !existingFields.packageLengthIn) {
-        suggestions.push({
-          field: 'packageLengthIn',
-          newValue: result.lengthIn.toString(),
-          displayValue: `${result.lengthIn} in`,
-        });
+        autoUpdates.packageLengthIn = result.lengthIn.toString();
       }
-
-      // Check width
       if (result.widthIn && !existingFields.packageWidthIn) {
-        suggestions.push({
-          field: 'packageWidthIn',
-          newValue: result.widthIn.toString(),
-          displayValue: `${result.widthIn} in`,
-        });
+        autoUpdates.packageWidthIn = result.widthIn.toString();
+      }
+      if (result.heightIn && !existingFields.packageHeightIn) {
+        autoUpdates.packageHeightIn = result.heightIn.toString();
       }
 
-      // Check height
-      if (result.heightIn && !existingFields.packageHeightIn) {
-        suggestions.push({
-          field: 'packageHeightIn',
-          newValue: result.heightIn.toString(),
-          displayValue: `${result.heightIn} in`,
-        });
+      // Include dims in summary if all three were filled
+      if (result.lengthIn && !existingFields.packageLengthIn &&
+          result.widthIn && !existingFields.packageWidthIn &&
+          result.heightIn && !existingFields.packageHeightIn) {
+        filledParts.push(`dims ${result.lengthIn}×${result.widthIn}×${result.heightIn} in`);
       }
 
       // Return to idle state
       setRecordingState('idle');
       setIsProcessing(false);
 
-      // Display suggestions
-      setFieldSuggestions(suggestions);
-      if (suggestions.length > 0) {
-        setActiveSuggestionIndex(0);
-        showToast('Voice description saved. Review suggestions below.', 'success');
-      } else {
-        showToast('Voice description saved.', 'success');
+      // Fire one combined update to parent (description + all auto-filled fields)
+      if (onFieldUpdate) {
+        onFieldUpdate(autoUpdates);
       }
 
-      // Call parent callback with description (always)
-      // Parent will decide what to do with other fields
-      if (onFieldUpdate) {
-        onFieldUpdate({
-          description: newDescription,
-        });
-      }
+      // Show single summary toast
+      const toastMsg = filledParts.length > 0
+        ? `Voice saved. Filled: ${filledParts.join(', ')}`
+        : 'Voice description saved.';
+      showToast(toastMsg, 'success');
+
     } catch (error: any) {
       console.error('[VoiceDescriptionInput] Error processing voice:', error);
       setRecordingState('idle');
@@ -342,66 +283,6 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
       handleStopRecording();
     }
   };
-
-  const handleSuggestionAccept = (suggestion: FieldSuggestion) => {
-    if (!onFieldUpdate) return;
-
-    const fieldUpdate: {
-      title?: string;
-      category?: string;
-      tags?: string[];
-      price?: string;
-      packageWeightOz?: string;
-      packageLengthIn?: string;
-      packageWidthIn?: string;
-      packageHeightIn?: string;
-      description: string;
-    } = {
-      description: value,
-    };
-
-    if (suggestion.field === 'title') {
-      fieldUpdate.title = suggestion.newValue;
-    } else if (suggestion.field === 'category') {
-      fieldUpdate.category = suggestion.newValue;
-    } else if (suggestion.field === 'tags') {
-      fieldUpdate.tags = JSON.parse(suggestion.newValue);
-    } else if (suggestion.field === 'price') {
-      fieldUpdate.price = suggestion.newValue;
-    } else if (suggestion.field === 'packageWeightOz') {
-      fieldUpdate.packageWeightOz = suggestion.newValue;
-    } else if (suggestion.field === 'packageLengthIn') {
-      fieldUpdate.packageLengthIn = suggestion.newValue;
-    } else if (suggestion.field === 'packageWidthIn') {
-      fieldUpdate.packageWidthIn = suggestion.newValue;
-    } else if (suggestion.field === 'packageHeightIn') {
-      fieldUpdate.packageHeightIn = suggestion.newValue;
-    }
-
-    onFieldUpdate(fieldUpdate);
-
-    // Remove this suggestion and move to next
-    const newSuggestions = fieldSuggestions.filter((_, i) => i !== activeSuggestionIndex);
-    setFieldSuggestions(newSuggestions);
-    if (newSuggestions.length > 0) {
-      setActiveSuggestionIndex(Math.min(activeSuggestionIndex || 0, newSuggestions.length - 1));
-    } else {
-      setActiveSuggestionIndex(null);
-    }
-  };
-
-  const handleSuggestionKeep = () => {
-    // Remove current suggestion and move to next
-    const newSuggestions = fieldSuggestions.filter((_, i) => i !== activeSuggestionIndex);
-    setFieldSuggestions(newSuggestions);
-    if (newSuggestions.length > 0) {
-      setActiveSuggestionIndex(Math.min(activeSuggestionIndex || 0, newSuggestions.length - 1));
-    } else {
-      setActiveSuggestionIndex(null);
-    }
-  };
-
-  const activeSuggestion = activeSuggestionIndex !== null ? fieldSuggestions[activeSuggestionIndex] : null;
 
   return (
     <div className="space-y-2">
@@ -477,38 +358,6 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
       {isListening && transcript && (
         <div className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-xs rounded px-3 py-2 max-w-full break-words">
           <strong>Transcript:</strong> {transcript}
-        </div>
-      )}
-
-      {/* Field suggestions */}
-      {activeSuggestion && (
-        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-800 dark:text-blue-200 text-xs rounded px-3 py-2 flex items-center justify-between gap-2 animate-in fade-in slide-in-from-top-1">
-          <span>
-            <strong>Voice suggestion for {activeSuggestion.field}:</strong> {activeSuggestion.displayValue}
-          </span>
-          <div className="flex gap-1 flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => handleSuggestionAccept(activeSuggestion)}
-              className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 font-medium"
-            >
-              Accept
-            </button>
-            <button
-              type="button"
-              onClick={handleSuggestionKeep}
-              className="px-2 py-0.5 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded text-xs hover:bg-gray-400 dark:hover:bg-gray-500 font-medium"
-            >
-              Keep
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Remaining suggestions indicator */}
-      {fieldSuggestions.length > 1 && activeSuggestionIndex !== null && (
-        <div className="text-xs text-gray-600 dark:text-gray-400">
-          {activeSuggestionIndex + 1} of {fieldSuggestions.length} suggestions
         </div>
       )}
     </div>
