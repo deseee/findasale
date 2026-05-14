@@ -222,6 +222,7 @@ import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature
 import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jobs/pricingEngineCron'; // Phase S574: Pricing engine quota + recovery
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
+import { startEbayListingSyncCron } from './jobs/ebayListingSyncCron'; // Feature #244 Phase 4: eBay bidirectional listing sync
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
 import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
 import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJob'; // D-XP-004 Phase 4: Referral reward age gate cron
@@ -667,6 +668,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #244 Phase 3: Register eBay ended listings sync cron (every 4 hours — passive reconciliation)
   startEbayEndedListingsSyncCron();
+
+  // Feature #244 Phase 4: Register eBay bidirectional listing sync cron (every 4 hours — pull eBay changes back)
+  startEbayListingSyncCron();
 
   // Feature #244 Phase 4: Register eBay Commerce Notification subscription (real-time sold sync)
   registerEbayNotificationSubscription().catch(err =>
