@@ -593,7 +593,10 @@ const OrganizerSettingsPage = () => {
     setIsSavingHours(true);
     try {
       const hoursToSave = byAppointment ? [] : hours;
-      await api.put('/organizers/me/hours', hoursToSave);
+      await Promise.all([
+        api.put('/organizers/me/hours', hoursToSave),
+        api.patch('/organizers/me', { timezone, byAppointment }),
+      ]);
       showToast('Business hours updated', 'success');
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to update business hours', 'error');
