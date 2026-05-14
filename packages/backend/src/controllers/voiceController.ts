@@ -221,47 +221,76 @@ function safeRound(n: number): number | undefined {
 }
 
 /**
- * Extract weight from transcript. Returns ounces (Int) or undefined if not mentioned.
+ * Extract weight from transcript. Returns total ounces (Int) or undefined if not mentioned.
  * Digit-only patterns to avoid prose false positives ("ten pounds" does NOT match).
- * Conversions: lb -> 16 oz, kg -> 35.274 oz, g -> 0.03527 oz, oz pass-through.
+ * SUMS multiple unit mentions: "2 lb 8 oz" → 40 oz (not 32). Critical for eBay shipping
+ * accuracy — underestimating weight by 8oz on a heavy item costs $5-10 of shipping per push.
+ * Conversions: lb→16 oz, kg→35.274 oz, g→0.03527 oz, oz pass-through.
+ * Each unit pattern uses /g flag and accumulates ALL matches.
  */
 function extractWeightOz(transcript: string): number | undefined {
   const lower = transcript.toLowerCase();
   const patterns: Array<{ re: RegExp; mult: number }> = [
-    { re: /(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)\b/i, mult: 16 },
-    { re: /(\d+(?:\.\d+)?)\s*(?:kg|kilograms?)\b/i, mult: 35.274 },
-    { re: /(\d+(?:\.\d+)?)\s*(?:grams?|g)\b/i, mult: 0.03527 },
-    { re: /(\d+(?:\.\d+)?)\s*(?:oz|ounces?)\b/i, mult: 1 },
+    { re: /(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)\b/gi, mult: 16 },
+    { re: /(\d+(?:\.\d+)?)\s*(?:kg|kilograms?)\b/gi, mult: 35.274 },
+    { re: /(\d+(?:\.\d+)?)\s*(?:oz|ounces?)\b/gi, mult: 1 },
+    { re: /(\d+(?:\.\d+)?)\s*(?:grams?|g)\b/gi, mult: 0.03527 },
   ];
+  let totalOz = 0;
+  let matched = false;
   for (const { re, mult } of patterns) {
-    const m = re.exec(lower);
-    if (m) {
-      return safeRound(parseFloat(m[1]) * mult);
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(lower)) !== null) {
+      totalOz += parseFloat(m[1]) * mult;
+      matched = true;
     }
   }
-  return undefined;
+  return matched ? safeRound(totalOz) : undefined;
+}
+
+/** Convert a value+unit pair to inches. Default unit: inches. */
+function toInches(value: number, unit: string | undefined): number {
+  const u = (unit || 'in').toLowerCase();
+  if (u.startsWith('cm')) return value * 0.3937;
+  if (u.startsWith('ft') || u.startsWith('feet') || u === 'foot') return value * 12;
+  if (u.startsWith('mm')) return value * 0.03937;
+  return value;
 }
 
 /**
- * Extract dimensions from transcript. Pattern "X by Y by Z" or "X x Y x Z" with optional unit.
- * Default unit: inches. Conversions: cm->0.3937 in, ft->12 in, mm->0.03937 in.
+ * Extract dimensions from transcript. Pattern "X by Y by Z" or "X x Y x Z" with optional per-axis
+ * units. SAFETY: if any axis spec lacks a recognizable unit suffix AND the surrounding axes have
+ * mixed units (e.g. "1 foot by 8 inches by 4 inches"), do NOT assume — return undefined rather
+ * than ship eBay a half-foot box. Conservative: only commit when interpretation is unambiguous.
+ *
+ * Accepts:
+ *  - "6 by 12 by 4"            → all inches (default)
+ *  - "6 by 12 by 4 inches"     → all inches (trailing unit applies to all)
+ *  - "6 inches by 12 inches by 4 inches" → per-axis inches
+ *  - "1 foot by 8 inches by 4 inches"    → per-axis: 12, 8, 4 inches
+ *  - "30 cm by 20 cm by 10 cm" → 12, 8, 4 inches (rounded)
+ *  - "6x12x4"                  → all inches (default)
  */
 function extractDimensions(transcript: string): { lengthIn?: number; widthIn?: number; heightIn?: number } | undefined {
   const lower = transcript.toLowerCase();
-  const m = /(\d+(?:\.\d+)?)\s*(?:by|x)\s*(\d+(?:\.\d+)?)\s*(?:by|x)\s*(\d+(?:\.\d+)?)\s*(inches?|in|cm|ft|feet|mm)?/i.exec(lower);
+  // Per-axis: each number can optionally be followed by a unit.
+  // (\d+(?:\.\d+)?)\s*(inches?|in|cm|ft|feet|foot|mm)?
+  const axis = String.raw`(\d+(?:\.\d+)?)\s*(inches?|in|cm|ft|feet|foot|mm)?`;
+  const re = new RegExp(`${axis}\\s*(?:by|x)\\s*${axis}\\s*(?:by|x)\\s*${axis}`, 'i');
+  const m = re.exec(lower);
   if (!m) return undefined;
-  let l = parseFloat(m[1]);
-  let w = parseFloat(m[2]);
-  let h = parseFloat(m[3]);
-  const unit = (m[4] || 'in').toLowerCase();
-  const mult = unit.startsWith('cm') ? 0.3937
-    : unit.startsWith('ft') || unit.startsWith('feet') ? 12
-    : unit.startsWith('mm') ? 0.03937
-    : 1;
-  l *= mult; w *= mult; h *= mult;
-  const lengthIn = safeRound(l);
-  const widthIn = safeRound(w);
-  const heightIn = safeRound(h);
+  const v1 = parseFloat(m[1]); const u1 = m[2];
+  const v2 = parseFloat(m[3]); const u2 = m[4];
+  const v3 = parseFloat(m[5]); const u3 = m[6];
+
+  // If at least one axis has an explicit unit, propagate the LAST seen unit to bare-number axes
+  // (e.g. "6 by 12 by 4 inches" → all 3 are inches). If NO axis has a unit, default to inches.
+  // If units conflict per-axis, use each axis's own unit.
+  const anyExplicit = !!(u1 || u2 || u3);
+  const fallback = anyExplicit ? (u3 || u2 || u1) : 'in';
+  const lengthIn = safeRound(toInches(v1, u1 || fallback));
+  const widthIn  = safeRound(toInches(v2, u2 || fallback));
+  const heightIn = safeRound(toInches(v3, u3 || fallback));
   if (lengthIn && widthIn && heightIn) {
     return { lengthIn, widthIn, heightIn };
   }

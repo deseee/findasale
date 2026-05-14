@@ -3283,7 +3283,11 @@ async function getAcceptedConditionsForCategory(categoryId: string): Promise<Set
       '2030': 'GOOD_REFURBISHED',
       '2500': 'SELLER_REFURBISHED',
       '2750': 'LIKE_NEW',
-      '3000': 'USED_EXCELLENT',
+      // eBay's universal "Used" (ID 3000) maps to USED_GOOD in the Inventory API.
+      // Categories without granular conditions (e.g. guitar effects pedals 22669)
+      // only accept this enum, not USED_EXCELLENT. Fixed 2026-05-13: was USED_EXCELLENT
+      // which caused errorId 25021 on every Inventory API publish for those categories.
+      '3000': 'USED_GOOD',
       '4000': 'USED_VERY_GOOD',
       '5000': 'USED_GOOD',
       '6000': 'USED_ACCEPTABLE',
@@ -3294,8 +3298,6 @@ async function getAcceptedConditionsForCategory(categoryId: string): Promise<Set
       const enumName = idToEnum[c.conditionId];
       if (enumName) accepted.add(enumName);
     }
-    // Also accept the alternate "USED_GOOD"↔"3000" naming eBay uses in some responses
-    if (accepted.has('USED_EXCELLENT')) accepted.add('USED_VERY_GOOD');
     CATEGORY_CONDITION_CACHE.set(categoryId, accepted);
     console.log(
       `[eBay ConditionPolicies] category ${categoryId} accepts: ${Array.from(accepted).join(', ')}`
