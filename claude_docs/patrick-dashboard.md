@@ -1,30 +1,41 @@
-# Patrick's Dashboard — S729 Wrap
+# Patrick's Dashboard — S730 Wrap
 
 ---
 
-## What Happened This Session — S729
+## What Happened This Session — S730
 
-Smart Venmo and Zelle payment UX shipped on two pages. No database changes needed — the handles were already in the schema from S716.
+Sale creation flow cleanup based on your review. Five things shipped.
 
-**POS page** — when you have a Venmo handle set in Settings, the payment section now shows a QR code the shopper can scan with their phone camera. Venmo opens with your handle, the cart total, and the sale name already filled in — they just tap Send. The Zelle section shows your handle in large text with the amount and a copy button.
+**Photo upload** — errors were silently swallowed with no feedback. Fixed: failed uploads now show an error toast.
 
-**Shopper holds page** — if the organizer has Venmo configured, shoppers see a "Pay with Venmo" button that fires the deeplink with their hold total pre-filled. Zelle shows the handle, amount owed, and a copy button. Both sections are silent if the handles aren't set.
+**Hold duration** — removed from organizer control entirely. Organizers no longer set it per-sale. It's now purely rank-based: INITIATE=30min, SCOUT=45min, RANGER=60min, SAGE=75min, GRANDMASTER=90min — the values that were already in the system via `getRankBenefits()`. (Note: the dispatch agent initially used wrong hours-based values — caught and corrected before wrap.)
 
-Both pages only need handles configured in Settings → Profile to activate.
+**Return window** — moved from per-sale to your account settings (Profile tab). Set it once, applies to all your sales.
+
+**Grief Firewall** — removed. The feature and its checkbox are gone from both create-sale and edit-sale. The DB column stays but nothing references it.
+
+**Price/category suggestion toggle** — removed. Was the Grief Firewall mechanism, gone with it.
 
 ---
 
-## Do First Next Session — S730
+## Push Block — S730
 
-**Push wrap docs:**
 ```powershell
+git add packages/frontend/pages/organizer/create-sale.tsx
+git add packages/frontend/pages/organizer/edit-sale/[id].tsx
+git add packages/frontend/pages/organizer/settings.tsx
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/reservationController.ts
+git add packages/backend/src/routes/organizers.ts
+git add packages/database/prisma/migrations/20260515200000_add_return_window_to_organizer/migration.sql
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S729 wrap: STATE + dashboard"
+git commit -m "S730: Photo toast, hold duration via getRankBenefits, remove Grief Firewall, return window to account settings"
 .\push.ps1
 ```
 
-**Deploy pending migrations if not done yet** (email verification from S726 + eBay store URL from S728):
+Then deploy all three pending migrations (S726 + S728 + S730):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -38,20 +49,20 @@ npx prisma generate
 
 | | |
 |---|---|
-| Vercel (frontend) | ✅ Deploying (S729 pushed this session) |
-| Railway (backend) | ✅ Deploying |
+| Vercel (frontend) | ✅ Live |
+| Railway (backend) | ✅ Live |
 | Pipeline (enrich/score/outreach) | ✅ Durably running via GitHub Actions |
-| Address enrichment cron | ✅ Re-enabled S726 |
 | Outreach emails | ✅ Gmail API live (4h cron) |
 | Email verification migration | ⚠️ Pending deploy (20260515180000) |
 | eBay store URL migration | ⚠️ Pending deploy (20260515000000) |
+| Return window migration | ⚠️ Pending deploy (20260515200000) |
 
 ---
 
 ## Still Waiting (Blocked Queue)
 
-- **Pending migrations** — email verification + eBay store URL (deploy block above)
-- **Chrome QA backlog** — Venmo/Zelle (S729), eBay push flow, card borders, comp tiles, XP, OAuth banner (S723/S724/S727)
+- **Three pending migrations** — deploy block above covers all of them
+- **Chrome QA backlog** — Venmo/Zelle (S729), eBay push flow/borders/Best Offers/local pickup (S727), comp tiles/XP/OAuth banner (S723), isOnlineOnly/line-queue staleness (S724)
 - **Settings UI for OAuth linked accounts** — backend ready, no frontend
 - **Wyoming pawnbroker scraper** — diagnostic pending
 - **AuctionNinja+NAA scrapers** — Patrick decision to enable

@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S729 — Venmo Deeplink QR + Zelle Display on POS + Shopper Holds (COMPLETE)**
+**Latest: S730 — Sale Wizard Cleanup: Photo Toast, Hold Duration Rework, Grief Firewall Removal, Return Window to Account Settings (COMPLETE)**
+
+Five issues addressed from sale creation flow review. (1) **Photo upload toast** — Step3 catch block in create-sale.tsx was silently swallowing errors; wired `useToast()` into Step3, catch now shows error toast. (2) **Hold duration removed from organizer control** — removed `holdDurationHours` from create-sale WizardFormData + buildPayload + Advanced Settings UI; removed from saleController.ts zod schema; reservationController.ts now uses `getRankBenefits(explorerRank).holdDurationMinutes` (INITIATE=30min, SCOUT=45min, RANGER=60min, SAGE=75min, GRANDMASTER=90min). Agent initially inserted wrong hours-based map — caught and corrected inline. (3) **Return window moved to account settings** — removed from per-sale wizard; added to organizer settings.tsx Profile tab + organizers.ts PATCH/GET + new migration 20260515200000. Field already existed in schema.prisma. (4) **Grief Firewall removed** — `estatePrivacyMode` checkbox removed from edit-sale; info card removed from settings.tsx; removed from saleController zod schema + itemController tag-analysis handler. DB column left intact. (5) **Price/category suggestion toggle removed** — was the Grief Firewall mechanism; gone with it. Files: create-sale.tsx, edit-sale/[id].tsx, settings.tsx, saleController.ts, itemController.ts, reservationController.ts, organizers.ts, migration 20260515200000.
+
+**Previous: S729 — Venmo Deeplink QR + Zelle Display on POS + Shopper Holds (COMPLETE)**
 
 Smart payment UX for Venmo and Zelle across two pages. No schema changes needed — `venmoHandle`/`zelleHandle` were already on Organizer model (S716). (1) **POS page** — when organizer has `venmoHandle` set, payment section now shows a 160px QR code generated from the Venmo deeplink URL with cart total + sale name pre-filled; shopper scans with camera app, Venmo opens ready to send. Zelle section shows handle in large text + amount + copy-to-clipboard button + "send in your bank app" note. Both sections silent when handle not set. (2) **Shopper holds page** — Venmo "Pay with Venmo" button fires deeplink with hold total pre-filled; Zelle shows handle + amount + copy button. Backend extended: `getMyHoldsFull` in reservationController.ts now includes `organizer: { select: { venmoHandle, zelleHandle } }` in the sale query and surfaces as `organizerVenmoHandle`/`organizerZelleHandle` on each hold. Added `react-qr-code ^2.0.0` to frontend package.json; Patrick ran `pnpm install` to sync lockfile. Files: package.json, pnpm-lock.yaml, pos.tsx, holds.tsx, reservationController.ts.
 
@@ -197,21 +201,26 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 
 ---
 
-## Next Session — S730
+## Next Session — S731
 
-### First Action — Push S729 wrap docs
+### First Action — Push S730 + deploy all pending migrations (Patrick actions)
 
-S729 feature code pushed this session (Venmo QR + Zelle). Push wrap docs:
 ```powershell
+git add packages/frontend/pages/organizer/create-sale.tsx
+git add packages/frontend/pages/organizer/edit-sale/[id].tsx
+git add packages/frontend/pages/organizer/settings.tsx
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/reservationController.ts
+git add packages/backend/src/routes/organizers.ts
+git add packages/database/prisma/migrations/20260515200000_add_return_window_to_organizer/migration.sql
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S729 wrap: STATE + dashboard"
+git commit -m "S730: Photo toast, hold duration via getRankBenefits, remove Grief Firewall, return window to account settings"
 .\push.ps1
 ```
 
-### Pending migrations (if not yet deployed)
-
-Both S726 and S728 migrations still need deploying if not done:
+Then deploy all pending migrations (S726 email verification + S728 eBay store URL + S730 return window):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -219,18 +228,15 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-### Chrome QA backlog (S723/S724/S727/S729 all unverified)
+### Chrome QA backlog
 
-Priority order:
-- Venmo QR on POS: set venmoHandle in settings → go to POS → confirm QR renders + scans correctly
-- Zelle display on POS: confirm handle + amount + copy button visible
-- Shopper holds Venmo/Zelle: confirm payment buttons appear on holds page
-- eBay push flow end-to-end: review page → approve → verify push fires (S727)
-- Card readiness borders: verify red/yellow/green/blue on review cards
-- Best Offers: edit-item → toggle → push to eBay → verify payload
-- Local pickup: set override → push → verify fulfillment policy
-- eBay comp tiles, Condition Rating XP, OAuth amber banner — S723
-- isOnlineOnly toggle, line-queue staleness, save-search for guests — S724
+- Venmo QR on POS + Zelle display + shopper holds payment buttons (S729)
+- eBay push flow end-to-end (S727)
+- Card readiness borders (S727)
+- Best Offers (S727)
+- Local pickup (S727)
+- eBay comp tiles, Condition Rating XP, OAuth amber banner (S723)
+- isOnlineOnly toggle persists, line-queue staleness indicator (S724)
 
 ### Lower priority carries
 
@@ -238,4 +244,6 @@ Priority order:
 - AI listing enrichment — check Railway logs for `[listingEnrichmentService]`
 - CategoryTopFinds TrendingSection — QA after nightly run
 - AuctionNinja+NAA scrapers — Patrick decision to enable
+- Settings UI for linked OAuth accounts — backend ready, no frontend
+- support.tsx + shopper/holds.tsx hardcoded "24 hours" hold copy — update to reflect rank-based system
 - Settings UI for linked OAuth accounts — backend ready, no frontend
