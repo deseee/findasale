@@ -1,4 +1,4 @@
-import { Prisma } from '@findasale/database';
+import { Prisma } from '@prisma/client';
 import * as cheerio from 'cheerio';
 import * as dns from 'dns';
 import * as net from 'net';
