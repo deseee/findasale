@@ -192,9 +192,10 @@ model User {
   fraudSuspect      Boolean @default(false) // Flag: set true if 2+ accounts share same device fingerprint
 
   // Feature #XXX: First Sale Free PRO — Email Verification Gate
-  emailVerified          Boolean   @default(false) // Whether user has verified their email address
-  emailVerificationToken String?   @unique // Random token for email verification link
-  emailVerifiedAt        DateTime? // Timestamp when email was verified
+  emailVerified               Boolean   @default(false) // Whether user has verified their email address
+  emailVerificationToken      String?   @unique // Random token for email verification link
+  emailVerificationTokenExpiry DateTime? // Expiry timestamp for email verification token (24h from generation)
+  emailVerifiedAt             DateTime? // Timestamp when email was verified
 
   // P0-L1: COPPA Compliance — Age Verification Gate
   ageVerifiedAt          DateTime? // Timestamp when user's age was verified (18+)
