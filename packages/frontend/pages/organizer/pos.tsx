@@ -30,6 +30,7 @@ import PosOpenCarts from '../../components/PosOpenCarts';
 import PosPaymentQr from '../../components/PosPaymentQr';
 import PosManualCard from '../../components/PosManualCard';
 import { PosTierStatus } from '../../lib/types/posTiers';
+import QRCode from 'react-qr-code';
 
 // ─── Types ────────────────────────────────────────────────────────────────────────────
 
@@ -2508,17 +2509,31 @@ export default function POSPage() {
           {paymentMode === 'venmo' && (
             <>
               <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                <p className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-1">Venmo — Collect Outside App</p>
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-1">Pay with Venmo</p>
                 <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
                   The buyer pays you directly via Venmo. You collect the full ${cartTotal.toFixed(2)} yourself. FindA.Sale will deduct its platform fee from your next Stripe payout.
                 </p>
                 {organizerVenmo ? (
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(organizerVenmo!); showToast('Venmo handle copied', 'success'); }}
-                    className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/60 transition font-medium mb-3"
-                  >
-                    @{organizerVenmo} — tap to copy 📋
-                  </button>
+                  (() => {
+                    const selectedSaleTitle = sales.find(s => s.id === selectedSaleId)?.title || 'FindA.Sale Purchase';
+                    const venmoUrl = `https://venmo.com/${organizerVenmo}?txn=pay&amount=${cartTotal.toFixed(2)}&note=${encodeURIComponent(selectedSaleTitle)}`;
+                    return (
+                      <div className="flex flex-col items-center gap-2 mb-3">
+                        <div className="bg-white p-3 rounded-xl border border-blue-200 dark:border-blue-700">
+                          <QRCode value={venmoUrl} size={160} />
+                        </div>
+                        <p className="text-xs text-blue-700 dark:text-blue-300 text-center">
+                          <span className="font-semibold">@{organizerVenmo}</span> &middot; ${cartTotal.toFixed(2)}
+                        </p>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(organizerVenmo!); showToast('Venmo handle copied', 'success'); }}
+                          className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/60 transition font-medium"
+                        >
+                          @{organizerVenmo} — tap to copy
+                        </button>
+                      </div>
+                    );
+                  })()
                 ) : (
                   <a
                     href="/organizer/settings#profile"
@@ -2544,17 +2559,24 @@ export default function POSPage() {
           {paymentMode === 'zelle' && (
             <>
               <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
-                <p className="text-sm font-semibold text-purple-900 dark:text-purple-200 mb-1">Zelle — Collect Outside App</p>
+                <p className="text-sm font-semibold text-purple-900 dark:text-purple-200 mb-1">Pay with Zelle</p>
                 <p className="text-xs text-purple-700 dark:text-purple-300 mb-3">
                   The buyer pays you directly via Zelle. You collect the full ${cartTotal.toFixed(2)} yourself. FindA.Sale will deduct its platform fee from your next Stripe payout.
                 </p>
                 {organizerZelle ? (
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(organizerZelle!); showToast('Zelle handle copied', 'success'); }}
-                    className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 px-3 py-1.5 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/60 transition font-medium mb-3"
-                  >
-                    {organizerZelle} — tap to copy 📋
-                  </button>
+                  <div className="flex flex-col gap-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl font-bold text-purple-900 dark:text-purple-100 tracking-wide">{organizerZelle}</span>
+                      <span className="text-lg font-semibold text-purple-700 dark:text-purple-300">&mdash; ${cartTotal.toFixed(2)}</span>
+                    </div>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(organizerZelle!); showToast('Zelle handle copied', 'success'); }}
+                      className="self-start text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 px-3 py-1.5 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/60 transition font-medium"
+                    >
+                      Tap to copy handle
+                    </button>
+                    <p className="text-xs text-purple-600 dark:text-purple-400">Send to {organizerZelle} in your bank app</p>
+                  </div>
                 ) : (
                   <a
                     href="/organizer/settings#profile"

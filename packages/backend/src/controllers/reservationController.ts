@@ -1365,6 +1365,12 @@ export const getMyHoldsFull = async (req: AuthRequest, res: Response) => {
                 id: true,
                 title: true,
                 startDate: true,
+                organizer: {
+                  select: {
+                    venmoHandle: true,
+                    zelleHandle: true,
+                  },
+                },
               },
             },
           },
@@ -1388,6 +1394,8 @@ export const getMyHoldsFull = async (req: AuthRequest, res: Response) => {
         sale: {
           id: hold.item.sale!.id,
           title: hold.item.sale!.title,
+          organizerVenmoHandle: hold.item.sale!.organizer?.venmoHandle ?? null,
+          organizerZelleHandle: hold.item.sale!.organizer?.zelleHandle ?? null,
         },
       },
     }));
