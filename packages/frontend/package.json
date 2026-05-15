@@ -29,6 +29,7 @@
     "focus-trap-react": "^10.2.3",
     "fuse.js": "^7.0.0",
     "html5-qrcode": "^2.3.4",
+    "react-qr-code": "^2.0.0",
     "jsonwebtoken": "^9.0.0",
     "jsqr": "^1.4.0",
     "leaflet": "^1.9.4",

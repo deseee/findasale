@@ -3,7 +3,7 @@
  * Route: /shopper/holds
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -28,7 +28,13 @@ interface HoldItem {
     price: number | null;
     photoUrls: string[];
     status: string;
-    sale: { id: string; title: string };
+    sale: {
+      id: string;
+      title: string;
+      /** Populated when backend extends getMyHoldsFull to include organizer payment handles */
+      organizerVenmoHandle?: string | null;
+      organizerZelleHandle?: string | null;
+    };
   };
 }
 
@@ -37,6 +43,7 @@ const ShopperHoldsPage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
 
   const { data: holds = [], isLoading: holdsLoading, refetch } = useQuery({
     queryKey: ['shopper-holds'],
@@ -79,6 +86,13 @@ const ShopperHoldsPage = () => {
     queryClient.invalidateQueries({ queryKey: ['shopper-holds'] });
     showToast('Hold expired', 'info');
   };
+
+  const handleCopyHandle = useCallback((handle: string) => {
+    navigator.clipboard.writeText(handle).then(() => {
+      setCopiedHandle(handle);
+      setTimeout(() => setCopiedHandle(null), 2000);
+    });
+  }, []);
 
   const activeHolds = holds.filter((h) => ['PENDING', 'CONFIRMED'].includes(h.status));
   const expiredHolds = holds.filter((h) => h.status === 'CANCELLED' || h.status === 'EXPIRED');
@@ -147,6 +161,38 @@ const ShopperHoldsPage = () => {
                         {hold.item.price && (
                           <p className="text-lg font-bold text-amber-700 dark:text-amber-500 mt-2">${hold.item.price.toFixed(2)}</p>
                         )}
+
+                        {/* Venmo / Zelle payment prompts — shown when organizer has configured handles */}
+                        {hold.item.price && (hold.item.sale.organizerVenmoHandle || hold.item.sale.organizerZelleHandle) && (
+                          <div className="mt-3 flex flex-col gap-2">
+                            {hold.item.sale.organizerVenmoHandle && (
+                              <a
+                                href={`https://venmo.com/${hold.item.sale.organizerVenmoHandle}?txn=pay&amount=${hold.item.price.toFixed(2)}&note=${encodeURIComponent(hold.item.sale.title + ' Hold Payment')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 bg-[#3D95CE] hover:bg-[#3285be] text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
+                              >
+                                <span>Pay with Venmo</span>
+                                <span className="opacity-80">&mdash; ${hold.item.price.toFixed(2)}</span>
+                              </a>
+                            )}
+                            {hold.item.sale.organizerZelleHandle && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-warm-700 dark:text-warm-300">
+                                  Pay with Zelle — send <span className="font-semibold">${hold.item.price.toFixed(2)}</span> to{' '}
+                                  <span className="font-semibold">{hold.item.sale.organizerZelleHandle}</span>
+                                </span>
+                                <button
+                                  onClick={() => handleCopyHandle(hold.item.sale.organizerZelleHandle!)}
+                                  className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 px-2 py-1 rounded transition hover:bg-purple-200 dark:hover:bg-purple-900/60"
+                                >
+                                  {copiedHandle === hold.item.sale.organizerZelleHandle ? 'Copied!' : 'Copy'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div className="mt-3">
                           <HoldTimer expiresAt={hold.expiresAt} onExpiry={() => handleHoldExpiry(hold.id)} />
                         </div>
