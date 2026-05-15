@@ -142,6 +142,20 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 ## Recent Sessions
 
+### S731 — GitHub Actions Audit + Scraper Overhaul + CI Monitoring (COMPLETE)
+
+No Sentry monitoring and 36 failing GitHub Actions workflows discovered via API audit. Three categories of scraper failures identified and fixed across 23 state source files + ESN timeout fix + new daily CI health check task created.
+
+**Monitoring:** Created `findasale-ci-sentry-health` Cowork scheduled task (daily 8am) — checks GitHub Actions failures from last 24h, flags pipeline/outreach failures as HIGH urgency vs. scraper failures as low urgency. Sentry leg wired but requires `SENTRY_AUTH_TOKEN` env var to activate.
+
+**ESN scraper (cancelled):** Root cause — ingest phase posted hundreds of batches sequentially to Railway; stalled past 60-min timeout. Fixed: 4-way matrix strategy (parallel chunks of ~12-13 grid centers each, 45-min ceiling, fail-fast off, concurrency-5 worker pool). Files: `scrape-estatesalesnet.yml` + `run-estatesalesnet.ts`. Push pending.
+
+**Category 1 (12 states — dead/moved URLs):** Montana, Maryland, Delaware, Connecticut — URL-only fix (working HTML portals found). RI, OR, NE, MO — flagged as JS-rendering required. KS, WY, OK, MN — no state auctioneer license exists (correct to return 0 records). Push pending.
+
+**Category 2 (3 states — bot-blocked 403):** AZ, GA, NH — all exit gracefully. AZ has no state auctioneer license. GA behind Cloudflare managed challenge. NH behind Akamai WAF. Push pending.
+
+**Category 3 (8 states — wrong approach):** Texas Socrata field fix → now pulls live data. South Carolina cookie-capture fix → now pulls live data. MA, NY, WI, ME, NJ, CA — graceful exits (most have no state auctioneer license or unfixable SPA). Push pending.
+
 ### S729 — Venmo Deeplink QR + Zelle Display on POS + Shopper Holds (COMPLETE)
 
 Smart Venmo/Zelle payment UX on POS and shopper holds page. `venmoHandle`/`zelleHandle` were already in schema. POS: Venmo QR code generated from deeplink URL (handle + cart total + sale name pre-filled); Zelle shows handle large + amount + copy button. Shopper holds page: Venmo "Pay" button fires deeplink with hold total; Zelle shows handle + copy. Backend: `getMyHoldsFull` extended to return `organizerVenmoHandle`/`organizerZelleHandle`. Added `react-qr-code ^2.0.0`; lockfile synced. 5 files changed.
@@ -162,10 +176,6 @@ Confirmed S725 deploy green. Patrick set `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=tr
 
 Diagnosed and overhauled the full organizer-acquisition pipeline. **Root systemic issue:** enrichment/scoring/outreach jobs were in-memory node-cron — Railway's frequent redeploys wiped them, so the pipeline barely ran (only ~7 outreach emails ever; `lastScoredAt` frozen 2026-05-10). **Keystone fix** (architect-spec'd → dev-built, Steps 1+2 of 3): `POST /api/internal/jobs/run` dispatcher (reuses `requireSecret` auth, in-process job lock) + 7 `pipeline-*.yml` GitHub Actions workflows. In-memory crons left running alongside as belt-and-suspenders; **green cycle confirmed** in Railway logs (`[InternalJobRunner]` fired all 7 jobs; lead-scoring scored 56,347 orgs COLD 14,165/WARM 41,598/HOT 584). Build broke twice on the first push: (1) `@findasale/database` import not a backend dep — `organizerWebsiteAddressCron.ts` used `Prisma.sql` as a runtime value so it crashed at startup; fixed both it and `emailDiscoveryService.ts` to `@prisma/client` (canonical pattern). **Earlier in session:** cron-frequency cleanup (3 double-running scrapers gated behind GH Actions, backend sale-enrichment disabled, enrich-sale-details daily→3d, enrich-contact-emails 6h→daily, smtp-verify daily→weekly, deleted auctionzip+canada411 workflows); address-enrichment pipeline (organizerWebsite.ts scraper + organizerWebsiteAddressCron + bulkUpsertEnrichedSales address fields; eligibility query fixed from 0→8,804 matching rows); outreach/enrichment bug fixes (email-discovery image-filename filter, `[state]` token parsed from address since `licenseState` is NULL for whole queue, category filter relaxed to allow NULL category +1,661 leads, website→email enrichment chaining). DB fixes via psycopg2: 46 junk image-filename emails nulled; 36 organizer addresses corrupted by the address cron's over-matching extractor — all recovered from each org's Sales city/state. **P0 mid-session:** address extractor was matching street-suffix words hundreds of chars downstream, writing page-nav text/auction descriptions into `Organizer.address` — dev rewrote with bounded regex + candidate validation + 60-word junk blocklist + 110-char cap + trailing-junk strip + JSON-LD-primary; self-tests confirm garbage rejected, real addresses accepted. Decisions: ESN authenticated-cookie route abandoned (Patrick chose website-only — lower legal/detection risk); HOT-tier signal set approved (state-licensed / active platform sales / website+custom-domain email / 3+ source corroboration — NO Google API). Three consolidated pushblocks delivered + one build-fix pushblock. Git index corruption fixed (`Remove-Item .git\index; git reset`). VM mount truncation bug recurred repeatedly — all final files verified Windows-side.
 
-### S724 — UX Spot-Check Backlog Burn-Down (COMPLETE)
-
-Reviewed five recent UX spotchecks, grep-verified each issue against live code, then dispatched six parallel general-purpose agents (with embedded findasale-dev context per CLAUDE.md §7) to fix everything still unfixed. Files touched: `pages/organizer/create-sale.tsx`, `pages/organizer/add-items/[saleId].tsx`, `pages/organizer/line-queue/[id].tsx`, `pages/shopper/dashboard.tsx`, `pages/index.tsx`, `pages/sales/[id].tsx`, `pages/organizer/dashboard.tsx`, `pages/organizer/edit-sale/[id].tsx`, `packages/backend/src/controllers/saleController.ts`. Total ~25 distinct fixes shipped across 9 files. Knock-on found and chased: frontend `isOnlineOnly` payload addition was insufficient because backend `saleCreateSchema` (zod) stripped the field before Prisma; backend dispatch added the optional zod field, `saleUpdateSchema = saleCreateSchema.partial()` automatically picks it up. Removal Gate respected throughout — feature-flagged "Enhance All" button instead of deleting it, replaced (not removed) native `confirm()` and `alert()` calls. No subagent git operations. VM-side TS check unreliable (mount truncation); deferred to Vercel/Railway build pipeline for final signal.
-
 ### S723 — eBay Push End-to-End + Blocked Queue Burn-Down (COMPLETE)
 
 Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in production: every Railway error log became the next dispatch. Burns down 5 Blocked Queue items (#326, #280, #322, #405 from prior, #422 P1-1) and ships full eBay publish-mode + shipping-cascade infrastructure.
@@ -179,71 +189,4 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 **Inline edits during iteration:**
 5. eBay aspect crash — `enums[0]` fallback was picking "Accordion" for "For Instrument" on MIDI cables (alphabetical). Rewrote `fillRequiredAspects` cascade: tag → keyword → neutral values (Universal/Other/Not Specified/N/A/Does Not Apply) → skip with warn log. Structured `[eBay Push Failed]` log + `[eBay AspectFill]` reason codes. EOF truncation in same file (~120 missing lines in `syncEndedListingsForOrganizer`) restored from git as bonus.
 6. eBay `frontendUrl is not defined` + `proxySecret is not defined` — both vars used in pushSaleToEbay loop but never declared in that function (declared locally in other functions only). Added both at top of items loop.
-7. eBay smart-pick weight-gate — was picking CALCULATED policy even when `packageWeightOz` was null, causing eBay error 25020. Added `itemHasWeight` param; CALCULATED skipped with warn log if no weight. Falls through to FLAT_RATE → FREE_FALLBACK correctly now.
-8. eBay packageType enum allowlist — eBay rejected "BOX" with serialize error. Built valid-enum Set (US-relevant 17 values: MAILING_BOX, PADDED_BAGS, PARCEL_OR_PADDED_ENVELOPE, etc.). Drops invalid values with `[eBay InventoryPayload] dropping invalid packageType="X"` warn. Frontend dropdown rebuilt with real eBay enum values + friendly labels.
-9. Edit-item form save coercion — `formData.packageWeightOz/dims` were strings; backend zod required Int, silently dropped strings. Added `toIntOrNull()` coercion in mutationFn payload build.
-10. `getItemById` SELECT — package fields not in `select` clause, so GET response didn't include them, form re-loaded blank after save. Added packageWeightOz/Length/Width/Height/Type to SELECT.
-11. #322 Encyclopedia category picker — `[ebayTaxonomy] suggestCategories FAILED status=400 "Missing keyword 'q'"`. Vercel proxy only forwards `path` param and drops other query params. Fix: embedded `q` in path query string. After deploy: `count=9` for "guitar multi" + real dropdown working.
-12. Auto-save before eBay push — eBay reads DB, not form state, so unsaved edits were lost. Inlined PUT call (not `updateMutation` since onSuccess navigates to /dashboard, which would abort the push). Title validation gate added.
-13. Favorite isNot:null fix — `prisma.favorite.findMany({where: {user: {isNot: null}}})` invalid syntax; Favorite.user is required relation. Removed filter; try/catch handles orphan FK runtime errors. Was breaking `getSaleActivity` endpoint.
-14. eBay sales/[id]/index.tsx onError signature — Vercel build error: mutation variables type changed to `{itemIds, publishMode}` but onError still expected `string[]`. Updated to destructure `variables.itemIds`.
-
-**Diagnostic logging added (kept in for future debugging):** `[eBay PublishMode]`, `[eBay ShippingPick]`, `[eBay AspectFill]`, `[eBay InventoryPayload]`, `[eBay Push Failed]`, `[ebayTaxonomy] suggestCategories`, `[updateItem]`.
-
-**Verification:** Patrick's live test of Zoom B3 Multi-Effects Processor end-to-end: weight 49oz + dims 10x13x4 + packageType MAILING_BOX saved → auto-save before push fired → eBay offer created → published as DRAFT (offerId=165891558011) → stale-category detection + recreation worked → live-feed PRICE_DROP event fired. Full chain proven.
-
-**Token note:** Patrick flagged limited Sonnet budget Tuesday afternoon → Friday reset. Session ran token-conscious: 2 parallel dev dispatches early, then inline edits for all <20-line iteration fixes, no agent dispatches for log diagnostics. Direct DB updates via psycopg2 used to bypass form-save bug during isolation testing.
-
-### S722 — Monthly Retro + Auth Security Hardening (archived — see session-log-archive.md)
-
-
----
-
-## Next Session — S731
-
-### First Action — Push S730 + deploy all pending migrations (Patrick actions)
-
-```powershell
-git add packages/frontend/pages/support.tsx
-git add packages/frontend/pages/shopper/holds.tsx
-git add packages/frontend/pages/organizer/create-sale.tsx
-git add packages/frontend/pages/organizer/edit-sale/[id].tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/backend/src/controllers/saleController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/backend/src/controllers/reservationController.ts
-git add packages/backend/src/routes/organizers.ts
-git add packages/database/prisma/migrations/20260515200000_add_return_window_to_organizer/migration.sql
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S730: Photo toast, hold duration via getRankBenefits, remove Grief Firewall, return window to account settings"
-.\push.ps1
-```
-
-Then deploy all pending migrations (S726 email verification + S728 eBay store URL + S730 return window):
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-### Chrome QA backlog
-
-- Venmo QR on POS + Zelle display + shopper holds payment buttons (S729)
-- eBay push flow end-to-end (S727)
-- Card readiness borders (S727)
-- Best Offers (S727)
-- Local pickup (S727)
-- eBay comp tiles, Condition Rating XP, OAuth amber banner (S723)
-- isOnlineOnly toggle persists, line-queue staleness indicator (S724)
-
-### Lower priority carries
-
-- Wyoming pawnbroker scraper — diagnostic pending
-- AI listing enrichment — check Railway logs for `[listingEnrichmentService]`
-- CategoryTopFinds TrendingSection — QA after nightly run
-- AuctionNinja+NAA scrapers — Patrick decision to enable
-- Settings UI for linked OAuth accounts — backend ready, no frontend
-- support.tsx + shopper/holds.tsx hardcoded "24 hours" hold copy — update to reflect rank-based system
-- Settings UI for linked OAuth accounts — backend ready, no frontend
+7. eBay smart-pick weight-gate — was picking CALCULATED policy even when `packageWeightOz` was null, causing eBay error 25020. Added `itemHasWeight` param; CALCULATED skipped with warn log if no weight. Falls through 

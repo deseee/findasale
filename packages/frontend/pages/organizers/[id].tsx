@@ -214,6 +214,9 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                   <div className="flex flex-wrap items-center gap-3">
                     <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100">{organizer.businessName}</h1>
                     {!organizer.isUnmanagedListing && <ReputationTier tier={organizer.reputationTier} size="sm" />}
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
+                      🏷️ {organizer.sales.length} sale{organizer.sales.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
                   {(formatBusinessCategory(organizer.businessCategory) || organizer.address) && (
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-warm-500 dark:text-gray-400">
@@ -391,9 +394,7 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                 </div>
               )}
             </div>
-            <div className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ml-4">
-              {organizer.sales.length} sale{organizer.sales.length !== 1 ? 's' : ''}
-            </div>
+
           </div>
         </div>
 

@@ -1091,40 +1091,20 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 {/* Where */}
                 <div>
                   <div className="text-xs uppercase tracking-widest mb-2.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>Where</div>
-                  <div className="flex gap-3">
-                    {/* Map thumbnail */}
-                    {sale.lat && sale.lng ? (
-                      <button
-                        className="flex-shrink-0 rounded-lg overflow-hidden border border-black/10 dark:border-white/8"
-                        style={{ width: 96, height: 96 }}
-                        onClick={() => {
-                          const dest = sale.address ? `${sale.address}, ${sale.city}, ${sale.state}` : `${sale.city}, ${sale.state}`;
-                          window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`, '_blank');
-                        }}
-                        aria-label="Open in Maps"
-                      >
-                        <SaleMap singlePin={{ lat: sale.lat, lng: sale.lng, label: sale.title }} height="96px" />
-                      </button>
-                    ) : (
-                      <div className="flex-shrink-0 w-24 h-24 rounded-lg bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/8 flex items-center justify-center">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-[rgba(26,24,20,0.3)] dark:text-[rgba(242,240,234,0.3)]"><path d="M12 21s-7-7.5-7-12a7 7 0 0114 0c0 4.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
-                      </div>
-                    )}
-                    <div className="flex-1 text-sm leading-relaxed">
-                      {sale.address && <div className="font-medium">{sale.address}</div>}
-                      <div className="text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">{sale.city}, {sale.state} {sale.zip}</div>
-                      <button
-                        className="mt-2 text-xs font-medium flex items-center gap-1 hover:underline"
-                        style={{ color: '#C8552B' }}
-                        onClick={() => {
-                          const dest = sale.address ? `${sale.address}, ${sale.city}, ${sale.state}` : `${sale.city}, ${sale.state}`;
-                          window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`, '_blank');
-                        }}
-                      >
-                        Open in Maps
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                      </button>
-                    </div>
+                  <div className="text-sm leading-relaxed">
+                    {sale.address && <div className="font-medium">{sale.address}</div>}
+                    <div className="text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">{sale.city}, {sale.state} {sale.zip}</div>
+                    <button
+                      className="mt-2 text-xs font-medium flex items-center gap-1 hover:underline"
+                      style={{ color: '#C8552B' }}
+                      onClick={() => {
+                        const dest = sale.address ? `${sale.address}, ${sale.city}, ${sale.state}` : `${sale.city}, ${sale.state}`;
+                        window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`, '_blank');
+                      }}
+                    >
+                      Open in Maps
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1160,6 +1140,38 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 </div>
               )}
             </section>
+
+            {/* Where to Go — mobile only (mirrors desktop aside) */}
+            <div className="lg:hidden rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] overflow-hidden">
+              <div className="px-4 pt-4 pb-2">
+                <div className="text-xs uppercase tracking-widest mb-1.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>Where to go</div>
+                {sale.address && <div className="text-sm font-medium">{sale.address}</div>}
+                <div className="text-xs mb-2 text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">{sale.city}, {sale.state} {sale.zip}</div>
+              </div>
+              {sale.lat && sale.lng ? (
+                <SaleMap
+                  singlePin={{ lat: sale.lat, lng: sale.lng, label: sale.title }}
+                  entrancePin={sale.entranceLat && sale.entranceLng ? { lat: sale.entranceLat, lng: sale.entranceLng, note: sale.entranceNote } : undefined}
+                  height="160px"
+                />
+              ) : (
+                <div className="h-32 bg-black/5 dark:bg-white/5 flex items-center justify-center">
+                  <span className="text-xs text-[rgba(26,24,20,0.3)] dark:text-[rgba(242,240,234,0.3)]">Location not available</span>
+                </div>
+              )}
+              <div className="px-4 py-3">
+                <button
+                  onClick={() => {
+                    const dest = sale.address ? `${sale.address}, ${sale.city}, ${sale.state}` : `${sale.city}, ${sale.state}`;
+                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`, '_blank');
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-black/18 dark:border-white/14 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s-7-7.5-7-12a7 7 0 0114 0c0 4.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                  Directions
+                </button>
+              </div>
+            </div>
 
             {/* Live activity */}
             <div className="space-y-2">
@@ -1644,6 +1656,18 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
               )}
             </section>
 
+            {/* Holds & shipping — mobile */}
+            <div className="lg:hidden rounded-xl p-4 text-xs leading-relaxed text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)] bg-black/5 dark:bg-white/5">
+              <div className="font-medium mb-1.5 uppercase tracking-wider text-[10px] text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.08em' }}>Holds & shipping</div>
+              Holds last <strong className="text-[#1A1814] dark:text-[#F2F0EA]">{sale.holdDurationHours || 48} hours</strong> after a yellow tag. Items marked "ships" are paid via Stripe and sent within 3 business days.
+              {sale.returnWindowHours && <div className="mt-1">Returns accepted within {sale.returnWindowHours}h of pickup.</div>}
+            </div>
+
+            {/* Share card — mobile */}
+            <div className="lg:hidden">
+              <SaleShareCard saleId={sale.id} saleTitle={sale.title} userId={user?.id} />
+            </div>
+
             {/* ── SIMILAR ITEMS ── */}
             {sale.items.length > 0 && sale.items[0] && (
               <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
@@ -1707,6 +1731,17 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 <Link href={`/organizers/${sale.organizer.id}`} className="flex-1 text-center text-xs px-3 py-1.5 rounded-lg border border-black/18 dark:border-white/14 font-medium hover:bg-black/5 dark:hover:bg-white/5 transition-colors">Storefront</Link>
                 {!isOrganizer && <FollowOrganizerButton organizerId={sale.organizer.id} organizerName={sale.organizer.businessName} />}
               </div>
+              {!sale.organizer.isClaimed && (
+                <div className="mt-3 pt-3 border-t border-black/8 dark:border-white/8 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300">Is this your sale?</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Claim this listing to manage photos, reply to reviews, and connect with shoppers.</p>
+                  </div>
+                  <button onClick={() => setShowClaimModal(true)} className="text-xs bg-amber-600 dark:bg-amber-700 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-amber-700 dark:hover:bg-amber-600 transition-colors flex-shrink-0">
+                    Claim
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Holds & shipping info */}
