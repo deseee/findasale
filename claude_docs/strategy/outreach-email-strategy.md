@@ -199,10 +199,10 @@ Here's what we know about your business:
 Here's what we offer differently:
 
 **For High-Volume Sellers:**
-- Bulk photo upload (RapidFire: 100 items in 20 minutes via phone camera)
+- Bulk photo upload (RapidFire: 100 items in under an hour via phone camera)
 - Smart tagging powered by pricing data (not just keywords)
 - Printable inventory sheets (for your sale event)
-- API export to eBay, Shopify, or your own system
+- Inventory export to eBay, Shopify, accounting and your other systems anytime
 
 **For Professional Organizers:**
 - Staff accounts (delegate photos, pricing, listing reviews)
