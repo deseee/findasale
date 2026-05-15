@@ -185,12 +185,10 @@ export async function addOrganizerSubscriber(email: string, name: string): Promi
 }
 
 /**
- * syncLeadTierToMailerLite — upserts a directory organizer into the correct
+ * syncLeadTierToMailerLite — upserts a single directory organizer into the correct
  * lead-tier MailerLite group (COLD / WARM / HOT).
  *
- * Uses the MailerLite v2 subscriber upsert endpoint with `groups` array.
- * The API adds the subscriber to the group if not already present and
- * creates the subscriber record if it doesn't exist.
+ * Kept for one-off / ad-hoc use. For bulk sync jobs use batchSyncLeadTiersToMailerLite.
  *
  * ENTERPRISE organizers are intentionally skipped — they receive manual outreach.
  *
@@ -267,4 +265,174 @@ export async function syncLeadTierToMailerLite(
     // Non-critical — do not throw; caller logs and continues
     console.error(`[mailerlite:leadSync] Network error syncing org:${orgId}:`, err);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Batch helpers
+// ---------------------------------------------------------------------------
+
+const BATCH_SIZE = 500;           // MailerLite import endpoint accepts up to 1,000; 500 is safe
+const BATCH_DELAY_MS = 500;       // 500 ms between batches — stays well under rate limits
+const MAX_RETRIES = 3;            // Retry count per batch on 429 / 5xx
+const RETRY_FALLBACK_MS = 60_000; // Wait this long if Retry-After header is absent on 429
+
+/** Sleep helper */
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * sendBatchImport — POSTs one batch to MailerLite's v3 bulk import endpoint.
+ *
+ * Endpoint: POST /api/subscribers/import
+ * Docs: https://developers.mailerlite.com/docs/subscribers#import-subscribers
+ *
+ * The import endpoint accepts up to 1,000 subscribers per request and queues
+ * the import asynchronously. It returns 200/201 immediately; per-subscriber
+ * errors surface in the async import result (not in the HTTP response body),
+ * so a 2xx response is treated as success.
+ *
+ * Retries on 429 (rate limit) and 5xx (transient server errors):
+ *   - Reads Retry-After header (seconds) on 429; falls back to RETRY_FALLBACK_MS.
+ *   - Waits, then re-sends the same batch.
+ *   - Throws after MAX_RETRIES to let the caller log and continue.
+ */
+async function sendBatchImport(
+  subscribers: Array<{ email: string; groups: string[]; fields: Record<string, string> }>,
+  apiKey: string,
+  batchIndex: number,
+): Promise<void> {
+  let attempt = 0;
+
+  while (attempt < MAX_RETRIES) {
+    attempt++;
+
+    const response = await fetch(`${MAILERLITE_API_URL}/subscribers/import`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ subscribers }),
+    });
+
+    if (response.ok) {
+      // 200 or 201 — batch accepted by MailerLite
+      return;
+    }
+
+    if (response.status === 429 || response.status >= 500) {
+      const retryAfterHeader = response.headers.get('Retry-After');
+      const waitMs = retryAfterHeader
+        ? parseInt(retryAfterHeader, 10) * 1000
+        : RETRY_FALLBACK_MS;
+
+      console.warn(
+        `[mailerlite:batchSync] Batch ${batchIndex} attempt ${attempt}/${MAX_RETRIES} — ` +
+        `HTTP ${response.status}, waiting ${waitMs}ms before retry`,
+      );
+
+      if (attempt < MAX_RETRIES) {
+        await sleep(waitMs);
+        continue;
+      }
+    }
+
+    // 4xx (other than 429) or exhausted retries — give up on this batch
+    const body = await response.text().catch(() => '(unreadable)');
+    throw new Error(`HTTP ${response.status} after ${attempt} attempt(s): ${body}`);
+  }
+}
+
+/**
+ * batchSyncLeadTiersToMailerLite — bulk-syncs an array of organizers to their
+ * corresponding MailerLite lead-tier groups (COLD / WARM / HOT).
+ *
+ * Replaces the one-at-a-time loop in syncLeadTierGroups. Sends organizers in
+ * batches of BATCH_SIZE (500) with a BATCH_DELAY_MS (500 ms) pause between
+ * requests to stay within MailerLite's rate limits. Retries on 429 using the
+ * Retry-After response header.
+ *
+ * ENTERPRISE and null-tier organizers are filtered out before batching.
+ *
+ * @param organizers - array of { id, contactEmail, leadTier } objects (from Prisma)
+ * @returns { synced, skipped, failed } counts
+ */
+export async function batchSyncLeadTiersToMailerLite(
+  organizers: Array<{ id: string; contactEmail: string | null; leadTier: string | null }>,
+): Promise<{ synced: number; skipped: number; failed: number }> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.warn('[mailerlite:batchSync] MAILERLITE_API_KEY not set — skipping batch sync');
+    return { synced: 0, skipped: organizers.length, failed: 0 };
+  }
+
+  const groupIdMap: Record<string, string | undefined> = {
+    COLD: process.env.MAILERLITE_COLD_GROUP_ID,
+    WARM: process.env.MAILERLITE_WARM_GROUP_ID,
+    HOT:  process.env.MAILERLITE_HOT_GROUP_ID,
+  };
+
+  // Pre-filter: remove organizers we cannot sync (no email, ENTERPRISE, null tier, missing group env)
+  type Eligible = { email: string; groupId: string; leadTier: string };
+  const eligible: Eligible[] = [];
+  let skipped = 0;
+
+  for (const org of organizers) {
+    if (!org.contactEmail) { skipped++; continue; }
+    if (!org.leadTier || org.leadTier === 'ENTERPRISE') { skipped++; continue; }
+    const groupId = groupIdMap[org.leadTier];
+    if (!groupId) {
+      console.warn(`[mailerlite:batchSync] MAILERLITE_${org.leadTier}_GROUP_ID not set — skipping org:${org.id}`);
+      skipped++;
+      continue;
+    }
+    eligible.push({ email: org.contactEmail, groupId, leadTier: org.leadTier });
+  }
+
+  if (eligible.length === 0) {
+    console.log('[mailerlite:batchSync] No eligible organizers after filtering');
+    return { synced: 0, skipped, failed: 0 };
+  }
+
+  console.log(
+    `[mailerlite:batchSync] ${eligible.length} eligible organizers → ` +
+    `${Math.ceil(eligible.length / BATCH_SIZE)} batch(es) of up to ${BATCH_SIZE}`,
+  );
+
+  let synced = 0;
+  let failed = 0;
+  let batchIndex = 0;
+
+  for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
+    batchIndex++;
+    const chunk = eligible.slice(i, i + BATCH_SIZE);
+
+    const subscribers = chunk.map(({ email, groupId, leadTier }) => ({
+      email,
+      groups: [groupId],
+      fields: { lead_tier: leadTier },
+    }));
+
+    try {
+      await sendBatchImport(subscribers, apiKey, batchIndex);
+      synced += chunk.length;
+      console.log(
+        `[mailerlite:batchSync] Batch ${batchIndex} — sent ${chunk.length} subscribers ` +
+        `(total synced so far: ${synced})`,
+      );
+    } catch (err: any) {
+      failed += chunk.length;
+      console.error(
+        `[mailerlite:batchSync] Batch ${batchIndex} failed — ${chunk.length} organizers not synced: ` +
+        err.message,
+      );
+    }
+
+    // Pause between batches (skip delay after the final batch)
+    if (i + BATCH_SIZE < eligible.length) {
+      await sleep(BATCH_DELAY_MS);
+    }
+  }
+
+  return { synced, skipped, failed };
 }

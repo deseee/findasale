@@ -121,10 +121,12 @@ interface ScoringInput {
   contactEmail: string | null;
   scrapedEmail: string | null;
   phone: string | null;
+  website: string | null;
   sourceCount: number;
   corroborationScore: { toNumber(): number } | number | null;
   isStateLicensed: boolean | null;
   licenseNumber: string | null;
+  esnOrgId: number | null;
   googleRatingCount: number | null;
   hasPhysicalOffice: boolean | null;
   googlePlaceId: string | null;
@@ -191,15 +193,84 @@ export function calculateLeadScore(org: ScoringInput): LeadScoreResult {
   if (org.hasPhysicalOffice) physicalPresence += 3;
   if (org.googlePlaceId) physicalPresence += 2;
 
-  // ── Total & tier ──────────────────────────────────────────────────────────
+  // ── Total ─────────────────────────────────────────────────────────────────
   const score = Math.min(
     100,
     contactReachability + corroborationDepth + licensing + reviewStrength + physicalPresence
   );
 
+  // ── HOT-tier OR-gate (Patrick-approved signal set, ADR-076 Phase 2 rev) ──
+  //
+  // Any ONE of the following signals qualifies an organizer as at least HOT,
+  // regardless of numeric score. ENTERPRISE is still gated by score (≥75).
+  //
+  // Signal 1 — State-licensed
+  //   Field: isStateLicensed (Boolean) — set by state licensing scrapers.
+  const hotByLicense = org.isStateLicensed === true;
+
+  // Signal 2 — Active platform sales (ESN / EstateSales.NET)
+  //   Field: esnOrgId (Int) — populated when an organizer has an ESN company
+  //   profile. Non-null means they are an active listing organizer on ESN.
+  //   Note: "other active listing platforms" (e.g. AuctionZip, EstateSale.com)
+  //   do not have a dedicated presence flag in the current schema; esnOrgId is
+  //   the best available proxy. Add more flags here as scrapers land them.
+  const hotByPlatformSales = org.esnOrgId !== null && org.esnOrgId !== undefined;
+
+  // Signal 3 — Website + custom-domain email
+  //   Fields: website (String) + contactEmail / scrapedEmail (String).
+  //   Qualifies when the organizer has a website URL AND at least one email
+  //   whose domain matches the website domain (i.e. not a free provider).
+  const FREE_EMAIL_DOMAINS = new Set([
+    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
+    'icloud.com', 'me.com', 'mac.com', 'live.com', 'msn.com',
+    'protonmail.com', 'proton.me', 'ymail.com', 'comcast.net',
+    'sbcglobal.net', 'att.net', 'verizon.net', 'cox.net',
+  ]);
+
+  function extractEmailDomain(email: string | null | undefined): string | null {
+    if (!email) return null;
+    const parts = email.split('@');
+    return parts.length === 2 ? parts[1].toLowerCase() : null;
+  }
+
+  function extractWebsiteDomain(url: string | null | undefined): string | null {
+    if (!url) return null;
+    try {
+      const normalized = url.startsWith('http') ? url : `https://${url}`;
+      const hostname = new URL(normalized).hostname.toLowerCase();
+      // Strip leading "www."
+      return hostname.startsWith('www.') ? hostname.slice(4) : hostname;
+    } catch {
+      return null;
+    }
+  }
+
+  const websiteDomain = extractWebsiteDomain(org.website);
+  const emailDomain =
+    extractEmailDomain(org.contactEmail) ??
+    extractEmailDomain(org.scrapedEmail);
+  const hotByCustomDomainEmail =
+    websiteDomain !== null &&
+    emailDomain !== null &&
+    !FREE_EMAIL_DOMAINS.has(emailDomain) &&
+    emailDomain === websiteDomain;
+
+  // Signal 4 — 3+ source corroboration
+  //   Field: sourceCount (Int) — count of distinct scraper sources that have
+  //   seen this organizer. ≥3 means multiple independent platforms agree.
+  const hotByCorroboration = (org.sourceCount ?? 1) >= 3;
+
+  const isHotQualified =
+    hotByLicense || hotByPlatformSales || hotByCustomDomainEmail || hotByCorroboration;
+
+  // Tier assignment:
+  //   ENTERPRISE — score ≥ 75 (unchanged; high numeric score required)
+  //   HOT        — OR-gate qualifies, OR score ≥ 50 (whichever fires first)
+  //   WARM       — score ≥ 25 (unchanged)
+  //   COLD       — everything else (unchanged)
   const tier: LeadTier =
     score >= 75 ? 'ENTERPRISE' :
-    score >= 50 ? 'HOT' :
+    (isHotQualified || score >= 50) ? 'HOT' :
     score >= 25 ? 'WARM' : 'COLD';
 
   return {
@@ -280,10 +351,12 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
         contactEmail: true,
         scrapedEmail: true,
         phone: true,
+        website: true,
         sourceCount: true,
         corroborationScore: true,
         isStateLicensed: true,
         licenseNumber: true,
+        esnOrgId: true,
         googleRatingCount: true,
         hasPhysicalOffice: true,
         googlePlaceId: true,

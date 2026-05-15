@@ -30,8 +30,71 @@ interface SMTPVerifyResult {
 // Strict format validation — must match before any storage
 const EMAIL_FORMAT_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 
-// Legacy extraction regex (permissive, for scraping raw text)
-const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+/**
+ * Candidate extraction regex for scraping raw text.
+ *
+ * Local part rules (before @):
+ *   - Only [a-zA-Z0-9_%+\-] and dots, but:
+ *     - Must start and end with a non-dot character
+ *     - No consecutive dots (handled by structure: atom(\.atom)*)
+ *     - Minimum 2 characters enforced by {1,}(\.[atom]+)* requiring at least one leading atom
+ *   - Apostrophes, brackets, backticks, and markdown syntax are excluded
+ *
+ * Domain rules (after @):
+ *   - [a-zA-Z0-9\-]+ labels separated by dots
+ *   - TLD minimum 2 chars
+ *
+ * Additional post-extraction checks (minimum lengths, etc.) are applied
+ * by isMalformedCandidate() before any candidate is used.
+ */
+const EMAIL_REGEX =
+  /[a-zA-Z0-9_%+\-]+(?:\.[a-zA-Z0-9_%+\-]+)*@[a-zA-Z0-9\-]+(?:\.[a-zA-Z0-9\-]+)+\.[a-zA-Z]{2,}/g;
+
+/**
+ * Pre-process raw HTML/text before regex extraction.
+ * 1. Resolve markdown mailto links -> bare email address
+ *    e.g.  [Email us](mailto:hello@example.com)  ->  hello@example.com
+ * 2. Strip remaining markdown link wrappers that don't contain mailto
+ *    e.g.  [some text](https://...)  ->  (removed so the label text doesn't
+ *          accidentally produce a false candidate)
+ * 3. Strip bracketed link labels  [label]  that have no parens following them
+ */
+function preprocessTextForExtraction(text: string): string {
+  // Step 1: markdown mailto links -> bare address
+  let processed = text.replace(
+    /\[[^\]]*\]\(mailto:([^)\s?]+)(?:\?[^)]*)?\)/gi,
+    ' $1 '
+  );
+  // Step 2: remaining markdown links — keep the label text but drop the URL
+  processed = processed.replace(/\[[^\]]*\]\([^)]+\)/g, ' ');
+  // Step 3: lone bracketed tokens (e.g. [email] orphan labels -> remove)
+  processed = processed.replace(/\[[^\]@]+\]/g, ' ');
+  return processed;
+}
+
+/**
+ * Reject a candidate string that passed the regex but violates structural rules
+ * that are cheaper to enforce here than to encode in the regex.
+ *
+ *  - Local part < 2 chars
+ *  - Domain (without TLD) < 4 chars total
+ *  - Local part starts or ends with a dot (regex already prevents this, but guard anyway)
+ *  - Local part contains two consecutive dots (regex prevents; secondary guard)
+ */
+function isMalformedCandidate(email: string): boolean {
+  const atIdx = email.indexOf('@');
+  if (atIdx < 0) return true;
+
+  const local = email.substring(0, atIdx);
+  const domain = email.substring(atIdx + 1);
+
+  if (local.length < 2) return true;
+  if (domain.length < 4) return true;
+  if (local.startsWith('.') || local.endsWith('.')) return true;
+  if (local.includes('..')) return true;
+
+  return false;
+}
 
 // Minimum confidence required to write to the DB
 const MIN_CONFIDENCE_TO_STORE = 0.60;
@@ -221,14 +284,23 @@ async function scrapeWebsiteEmails(domain: string): Promise<string[]> {
       $('a[href^="mailto:"]').each((_, el) => {
         const href = $(el).attr('href');
         if (href) {
-          const match = href.match(/mailto:([^?]*)/);
-          if (match) emails.push(match[1]);
+          const match = href.match(/mailto:([^?#\s]*)/);
+          if (match && match[1]) {
+            const candidate = match[1].trim();
+            // Apply structural checks — malformed mailto hrefs are rare but do occur
+            if (!isMalformedCandidate(candidate)) {
+              emails.push(candidate);
+            }
+          }
         }
       });
 
-      // Extract emails from text content
-      const text = $('body').text();
-      const textEmails = text.match(EMAIL_REGEX) || [];
+      // Extract emails from text content — preprocess first to strip markdown artifacts
+      const rawText = $('body').text();
+      const cleanText = preprocessTextForExtraction(rawText);
+      const textEmails = (cleanText.match(EMAIL_REGEX) || []).filter(
+        (e) => !isMalformedCandidate(e)
+      );
       emails.push(...textEmails);
 
       // Parse schema.org Person markup
@@ -402,7 +474,7 @@ export async function discoverEmail(organizerId: string): Promise<string | null>
         organizer.address ?? null
       );
       if (confidence < MIN_CONFIDENCE_TO_STORE) {
-        console.debug(`[emailDiscoveryService] Discarding ${bestEmail} — confidence ${confidence.toFixed(2)} below threshold`);
+        console.debug(`[emailDiscoveryService] Discarding ${bestEmail} - confidence ${confidence.toFixed(2)} below threshold`);
         return null;
       }
       await updateOrganizerEmail(organizerId, bestEmail, 'website_scrape', confidence);
@@ -429,7 +501,7 @@ export async function discoverEmail(organizerId: string): Promise<string | null>
           organizer.address ?? null
         );
         if (confidence < MIN_CONFIDENCE_TO_STORE) {
-          console.debug(`[emailDiscoveryService] Discarding ${email} — confidence ${confidence.toFixed(2)} below threshold`);
+          console.debug(`[emailDiscoveryService] Discarding ${email} - confidence ${confidence.toFixed(2)} below threshold`);
           continue;
         }
         await updateOrganizerEmail(organizerId, email, 'smtp_pattern', confidence);
@@ -474,7 +546,7 @@ async function updateOrganizerEmail(
     return;
   }
   if (confidence < MIN_CONFIDENCE_TO_STORE) {
-    console.debug(`[emailDiscoveryService] Final gate discarded ${email} — confidence ${confidence.toFixed(2)} below ${MIN_CONFIDENCE_TO_STORE}`);
+    console.debug(`[emailDiscoveryService] Final gate discarded ${email} - confidence ${confidence.toFixed(2)} below ${MIN_CONFIDENCE_TO_STORE}`);
     return;
   }
   try {

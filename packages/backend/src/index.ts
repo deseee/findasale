@@ -235,14 +235,11 @@ import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Ph
 import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Directory scraper national cron
 import { initMetroSyncCron } from './jobs/metroSyncCron'; // ADR-074: Metro Sync — eBay sold items nightly cron
 import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase 2: Category Sync — eBay category items nightly cron
-import { initAutoSeedOutreachCron } from './jobs/autoSeedOutreachCron'; // Gap 1 fix: Auto-seed new scraped organizers into outreach queue daily
-import { initOutreachEmailsCron } from './jobs/outreachEmailsCron'; // Phase 1: Cold outreach email pipeline
-import { initEmailDiscoveryCron } from './jobs/emailDiscoveryJob'; // ADR-073 Phase 2: Email discovery for unmanaged organizers
-import { initWebsiteEnrichmentCron } from './jobs/websiteEnrichmentJob'; // ADR-077 Phase 3: Website enrichment for licensed organizers with no website
-import { scheduleOrganizerWebsiteAddressCron } from './jobs/organizerWebsiteAddressCron'; // Address-gap fix: scrape organizer websites for street addresses
+// Pipeline crons below moved to GitHub Actions (Steps 1+2 complete — Step 3 removes in-memory scheduling).
+// Imports for autoSeedOutreachCron, outreachEmailsCron, emailDiscoveryJob,
+// websiteEnrichmentJob, organizerWebsiteAddressCron removed — no longer scheduled in-process.
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
-import { scheduleLeadScoringCron } from './jobs/leadScoringJob'; // ADR-076 Phase 2: Weekly lead score recomputation
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -684,9 +681,6 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // ADR-073: Geocoding success rate audit cron (daily at 6 AM UTC)
   scheduleGeocodingAuditCron();
 
-  // ADR-076 Phase 2: Lead scoring recomputation (Sundays at 2 AM UTC)
-  scheduleLeadScoringCron();
-
   // Feature #75: Tier grace period finalization cron
   startTierGraceCron();
 
@@ -713,20 +707,4 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-074 Phase 2: Initialize category sync cron (gated by CATEGORY_SYNC_ENABLED env var)
   initCategorySyncCron();
-
-  // ADR-077 Phase 3: Initialize website enrichment cron (gated by WEBSITE_ENRICHMENT_ENABLED env var)
-  initWebsiteEnrichmentCron();
-
-  // Address-gap fix: scrape organizer websites for street addresses
-  // (gated by ENABLE_ORGANIZER_WEBSITE_ENRICHMENT env var, default off)
-  scheduleOrganizerWebsiteAddressCron();
-
-  // ADR-073 Phase 2: Initialize email discovery cron (gated by EMAIL_DISCOVERY_ENABLED env var)
-  initEmailDiscoveryCron();
-
-  // Gap 1 fix: Auto-seed new scraped organizers into outreach queue (daily at 06:00 UTC, gated by OUTREACH_ENABLED)
-  initAutoSeedOutreachCron();
-
-  // ADR-075: Initialize outreach email send cron (gated by OUTREACH_ENABLED env var)
-  initOutreachEmailsCron();
 });
