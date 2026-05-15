@@ -7,7 +7,15 @@
  * - INTERNAL_SCRAPER_KEY: shared secret for authentication
  * - ESTATESALESNET_ORGANIZER_ID: organizer to attribute scraped listings to
  *
- * Usage: npx ts-node src/scripts/run-estatesalesnet.ts
+ * Chunking (for matrix workflow):
+ * - SCRAPER_CHUNK: 1-based chunk index (e.g. 1, 2, 3, 4)
+ * - SCRAPER_TOTAL_CHUNKS: total number of chunks (e.g. 4)
+ * Each chunk processes its slice of NATIONAL_GRID independently.
+ * Deduplication is idempotent — ingest uses upsert on sourceItemId, so
+ * overlap between chunks (due to 250-mile radii) produces no duplicates.
+ *
+ * Usage (full run):   npx ts-node src/scripts/run-estatesalesnet.ts
+ * Usage (chunked):    SCRAPER_CHUNK=1 SCRAPER_TOTAL_CHUNKS=4 npx ts-node src/scripts/run-estatesalesnet.ts
  */
 
 import { scrapeEstateSalesNetItems } from '../services/scraper/sources/estatesalesnet';
@@ -17,6 +25,25 @@ import { RateLimiter } from '../services/scraper/rateLimiter';
 const INGEST_URL = (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') + '/api/internal/scraper/ingest';
 const SCRAPER_KEY = process.env.INTERNAL_SCRAPER_KEY;
 const ORGANIZER_ID = process.env.ESTATESALESNET_ORGANIZER_ID;
+
+// Chunking: split NATIONAL_GRID into SCRAPER_TOTAL_CHUNKS slices and run only SCRAPER_CHUNK (1-based).
+// If neither is set, run the full grid (backwards-compatible).
+const CHUNK_INDEX = process.env.SCRAPER_CHUNK ? parseInt(process.env.SCRAPER_CHUNK, 10) : null;
+const TOTAL_CHUNKS = process.env.SCRAPER_TOTAL_CHUNKS ? parseInt(process.env.SCRAPER_TOTAL_CHUNKS, 10) : null;
+
+function getGridSlice() {
+  if (CHUNK_INDEX === null || TOTAL_CHUNKS === null) {
+    return NATIONAL_GRID; // No chunking — full run
+  }
+  if (CHUNK_INDEX < 1 || CHUNK_INDEX > TOTAL_CHUNKS) {
+    throw new Error(`SCRAPER_CHUNK must be between 1 and SCRAPER_TOTAL_CHUNKS (got ${CHUNK_INDEX} of ${TOTAL_CHUNKS})`);
+  }
+  // Distribute grid entries as evenly as possible across chunks
+  const chunkSize = Math.ceil(NATIONAL_GRID.length / TOTAL_CHUNKS);
+  const start = (CHUNK_INDEX - 1) * chunkSize;
+  const end = Math.min(start + chunkSize, NATIONAL_GRID.length);
+  return NATIONAL_GRID.slice(start, end);
+}
 
 async function main() {
   // Validate required env vars
@@ -28,17 +55,20 @@ async function main() {
     console.log('[run-estatesalesnet] No ESTATESALESNET_ORGANIZER_ID set — will use system organizer');
   }
 
-  console.log(`[run-estatesalesnet] Starting scrape of ${NATIONAL_GRID.length} coordinate centers`);
+  const grid = getGridSlice();
+  const chunkLabel = CHUNK_INDEX !== null ? ` (chunk ${CHUNK_INDEX}/${TOTAL_CHUNKS})` : '';
+
+  console.log(`[run-estatesalesnet] Starting scrape of ${grid.length}/${NATIONAL_GRID.length} coordinate centers${chunkLabel}`);
   console.log(`[run-estatesalesnet] Backend URL: ${INGEST_URL}`);
 
   const rateLimiter = new RateLimiter({ requestsPerSecond: 1, maxRetries: 3 });
   const allItems: any[] = [];
-  const seenIds = new Set<string>(); // Dedup across overlapping circles
+  const seenIds = new Set<string>(); // Dedup across overlapping circles within this chunk
   let successCount = 0;
   let failureCount = 0;
 
-  // Scrape each coordinate center sequentially
-  for (const center of NATIONAL_GRID) {
+  // Scrape each coordinate center in this chunk sequentially
+  for (const center of grid) {
     try {
       console.log(`[run-estatesalesnet] Scraping ${center.label}...`);
       const items = await scrapeEstateSalesNetItems(center, rateLimiter);
@@ -63,13 +93,13 @@ async function main() {
   }
 
   console.log(
-    `[run-estatesalesnet] Scraping complete — ${successCount} centers OK, ${failureCount} failed`
+    `[run-estatesalesnet] Scraping complete${chunkLabel} — ${successCount} centers OK, ${failureCount} failed`
   );
   console.log(`[run-estatesalesnet] Total items collected (after dedup): ${allItems.length}`);
 
   // POST to Railway in batches of 25, processed with bounded concurrency
-  // so one slow request doesn't gate the whole run. With CONCURRENCY=5 a full
-  // 220-batch national pass finishes in ~1 minute instead of ~5-7.
+  // so one slow request does not gate the whole run. With CONCURRENCY=5 a full
+  // chunk pass (12-13 centers) finishes in well under 10 minutes.
   const batchSize = 25;
   const CONCURRENCY = 5;
 
@@ -171,7 +201,7 @@ async function main() {
   const ingestSec = ((Date.now() - ingestStart) / 1000).toFixed(1);
 
   console.log(
-    `[run-estatesalesnet] Ingest complete in ${ingestSec}s — ${totals.created} created, ${totals.skipped} skipped, ${totals.failed} failed (item-level), ${totals.httpErrors} batch HTTP errors`
+    `[run-estatesalesnet] Ingest complete in ${ingestSec}s${chunkLabel} — ${totals.created} created, ${totals.skipped} skipped, ${totals.failed} failed (item-level), ${totals.httpErrors} batch HTTP errors`
   );
 }
 
