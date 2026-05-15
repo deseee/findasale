@@ -1,7 +1,7 @@
 /**
  * Maryland Auctioneer License Scraper
  * Scrapes licensed auctioneers from Maryland Department of Labor Licensing and Regulation
- * Source: https://www.dllr.state.md.us/license/occpro.shtml
+ * Source: https://www.dllr.state.md.us/cgi-bin/ElectronicLicensing/OP_Search/OP_search.cgi?calling_app=ALL::ALL_personal_name (updated 2026 — old occpro.shtml page moved)
  * Public directory with auctioneer license records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,9 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const MARYLAND_SEARCH_URL = 'https://www.dllr.state.md.us/license/occpro.shtml';
+// NOTE: The old Maryland occpro.shtml page is no longer the entry point.
+// The universal occupational license search (all professions including auctioneers) is at the CGI endpoint below.
+const MARYLAND_SEARCH_URL = 'https://www.dllr.state.md.us/cgi-bin/ElectronicLicensing/OP_Search/OP_search.cgi?calling_app=ALL::ALL_personal_name';
 
 /**
  * Parse an address string into city and zip components

@@ -1,7 +1,7 @@
 /**
  * Oklahoma Auctioneers Board — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Oklahoma licensing system
- * Source: https://www.auctioneers.ok.gov/search
+ * Source: https://oklahoma.gov/pes/consumers/license-lookup.html (updated 2026 — OK has NO state auctioneer license; old domain connection refused)
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,8 +11,11 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const OKLAHOMA_BASE_URL = 'https://www.auctioneers.ok.gov';
-const SEARCH_URL = 'https://www.auctioneers.ok.gov/search';
+// NOTE: Oklahoma does NOT require a state auctioneer license for general/personal
+// property auctions. The old auctioneers.ok.gov domain is connection-refused.
+// Updated to the OK general professional license lookup — will not yield auctioneer records.
+const OKLAHOMA_BASE_URL = 'https://oklahoma.gov';
+const SEARCH_URL = 'https://oklahoma.gov/pes/consumers/license-lookup.html';
 
 /**
  * Parse an address string like "City, ST 12345" into city and zip components

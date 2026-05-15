@@ -1,7 +1,7 @@
 /**
  * Kansas Auctioneer License Scraper
  * Scrapes licensed auctioneers from Kansas Secretary of State auctioneer search
- * Source: https://www.kansas.gov/KSAuctioneerSearch/
+ * Source: https://prolicenseverify.ks.gov/ (updated 2026 — KS has NO state auctioneer license requirement; old KSAuctioneerSearch URL is 404)
  * Public directory with auctioneer license records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,10 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const KANSAS_SEARCH_URL = 'https://www.kansas.gov/KSAuctioneerSearch/';
+// NOTE: Kansas does NOT issue a state auctioneer license. The old KSAuctioneerSearch
+// URL is a 404. The general KS license verification portal (prolicenseverify.ks.gov)
+// does not include auctioneers. This scraper will return no auctioneer records.
+const KANSAS_SEARCH_URL = 'https://prolicenseverify.ks.gov/';
 
 /**
  * Parse an address string into city and zip components

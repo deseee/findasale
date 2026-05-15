@@ -1,7 +1,7 @@
 /**
  * Montana Department of Labor & Industry — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Montana BSD license lookup system
- * Source: https://bsd.dli.mt.gov/license-lookup
+ * Source: https://ebizws.mt.gov/PUBLICPORTAL/searchform?mylist=licenses (updated 2026 — old bsd.dli.mt.gov URL dead)
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,8 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const MONTANA_BASE_URL = 'https://bsd.dli.mt.gov/license-lookup';
+// NOTE: Montana BSD moved their license lookup from bsd.dli.mt.gov to ebizws.mt.gov.
+const MONTANA_BASE_URL = 'https://ebizws.mt.gov/PUBLICPORTAL/searchform?mylist=licenses';
 
 /**
  * Parse an address string into city and zip components

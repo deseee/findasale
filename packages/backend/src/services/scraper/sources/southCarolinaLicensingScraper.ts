@@ -4,15 +4,20 @@
  * Source: https://verify.llronline.com/LicLookup/Auctioneer/Auctioneer.aspx?div=29
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
+ *
+ * Fix (S-Cat3): Added proper cookie handling — the site sets AspxAutoDetectCookieSupport
+ * cookie on first request and redirects. Without following the redirect with the
+ * cookie, the POST gets no results. Also fixed form field names from live inspection:
+ * ddl_type=296 (Auctioneer), btn_find is the submit button.
  */
 
-import { RateLimiter, defaultRateLimiter } from '../rateLimiter';
+import { defaultRateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const SOUTHCAROLINA_LLR_BASE_URL = 'https://llr.sc.gov';
 const SEARCH_URL = 'https://verify.llronline.com/LicLookup/Auctioneer/Auctioneer.aspx?div=29';
+const AUCTIONEER_LICENSE_TYPE_VALUE = '296';
 
 /**
  * Parse an address string into city and state components
@@ -24,9 +29,17 @@ function parseAddress(address: string): { city: string } {
 }
 
 /**
+ * Extract a hidden field value from HTML
+ */
+function extractHiddenField(html: string, name: string): string {
+  const regex = new RegExp(`name="${name}"[^>]*value="([^"]*)"`, 'i');
+  const match = html.match(regex);
+  return match ? match[1] : '';
+}
+
+/**
  * Scrape South Carolina auctioneer licenses from LLR search.
- * Public directory — no authentication required.
- * Ingests records into Organizer table with SouthCarolinaLicensing source attribution.
+ * Handles the AspxAutoDetectCookieSupport redirect + ASP.NET ViewState form flow.
  */
 export async function runSouthCarolinaLicensingScraper(): Promise<void> {
   const rateLimiter = defaultRateLimiter;
@@ -37,42 +50,90 @@ export async function runSouthCarolinaLicensingScraper(): Promise<void> {
   try {
     console.log('[SouthCarolinaLicensing] Starting auctioneer license scraper');
 
-    // Fetch the search page
+    // Step 1: Initial GET to pick up the AspxAutoDetectCookieSupport cookie
     await rateLimiter.waitBeforeRequest(domain);
 
-    const formPageResponse = await fetch(SEARCH_URL, {
+    const cookieJar: Record<string, string> = {};
+
+    const initResponse = await fetch(SEARCH_URL, {
       method: 'GET',
       headers: {
         'User-Agent': getRandomUserAgent(),
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
+        Connection: 'keep-alive',
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(30000),
+    });
+
+    // Collect cookies from the initial response
+    const setCookieHeader = initResponse.headers.get('set-cookie');
+    if (setCookieHeader) {
+      const cookieParts = setCookieHeader.split(';')[0].split('=');
+      if (cookieParts.length >= 2) {
+        cookieJar[cookieParts[0].trim()] = cookieParts.slice(1).join('=').trim();
+      }
+    }
+
+    // Build cookie string
+    const cookieString = Object.entries(cookieJar)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('; ');
+
+    // Step 2: Follow redirect to get the actual form page with ViewState
+    await rateLimiter.waitBeforeRequest(domain);
+
+    const formResponse = await fetch(SEARCH_URL, {
+      method: 'GET',
+      headers: {
+        'User-Agent': getRandomUserAgent(),
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        Cookie: cookieString || 'AspxAutoDetectCookieSupport=1',
         Connection: 'keep-alive',
       },
       signal: AbortSignal.timeout(30000),
     });
 
-    if (!formPageResponse.ok) {
-      throw new Error(`Failed to fetch search form: ${formPageResponse.status}`);
+    if (!formResponse.ok) {
+      console.warn(
+        `[SouthCarolinaLicensing] Form page returned ${formResponse.status} — returning 0 records`
+      );
+      return;
     }
 
-    const formHtml = await formPageResponse.text();
+    const formHtml = await formResponse.text();
 
-    // Extract ASP.NET form state if present
-    const viewStateMatch = formHtml.match(/name="__VIEWSTATE"\s+value="([^"]+)"/);
-    const eventValidationMatch = formHtml.match(/name="__EVENTVALIDATION"\s+value="([^"]+)"/);
+    // Check for transient "database refresh" message
+    if (formHtml.includes('Database is currently being refreshed')) {
+      console.warn(
+        '[SouthCarolinaLicensing] WARNING: Site reports database refresh in progress. ' +
+          'Returning 0 records — retry later.'
+      );
+      return;
+    }
 
-    const viewState = viewStateMatch ? viewStateMatch[1] : '';
-    const eventValidation = eventValidationMatch ? eventValidationMatch[1] : '';
+    const viewState = extractHiddenField(formHtml, '__VIEWSTATE');
+    const viewStateGenerator = extractHiddenField(formHtml, '__VIEWSTATEGENERATOR');
+    const eventValidation = extractHiddenField(formHtml, '__EVENTVALIDATION');
 
-    console.log('[SouthCarolinaLicensing] Extracted form state');
+    if (!viewState) {
+      console.warn(
+        '[SouthCarolinaLicensing] WARNING: Could not extract ViewState from form page. ' +
+          'Returning 0 records.'
+      );
+      return;
+    }
 
-    // Build form data for search
+    console.log('[SouthCarolinaLicensing] Extracted form state, submitting search');
+
+    // Step 3: POST search with license type = Auctioneer (value 296)
     const formData = new URLSearchParams();
-    if (viewState) formData.append('__VIEWSTATE', viewState);
+    formData.append('__VIEWSTATE', viewState);
+    if (viewStateGenerator) formData.append('__VIEWSTATEGENERATOR', viewStateGenerator);
     if (eventValidation) formData.append('__EVENTVALIDATION', eventValidation);
-    formData.append('ctl00$ContentPlaceHolder1$btnSearch', 'Search');
+    formData.append('ctl00$ContentPlaceHolder1$UserInputGen1$ddl_type', AUCTIONEER_LICENSE_TYPE_VALUE);
+    formData.append('ctl00$ContentPlaceHolder1$UserInputGen1$btn_find', 'Search');
 
-    // Submit search
     await rateLimiter.waitBeforeRequest(domain);
 
     const searchResponse = await fetch(SEARCH_URL, {
@@ -81,16 +142,19 @@ export async function runSouthCarolinaLicensingScraper(): Promise<void> {
         'User-Agent': getRandomUserAgent(),
         'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
+        Cookie: cookieString || 'AspxAutoDetectCookieSupport=1',
         Referer: SEARCH_URL,
+        Connection: 'keep-alive',
       },
       body: formData.toString(),
       signal: AbortSignal.timeout(30000),
     });
 
     if (!searchResponse.ok) {
-      throw new Error(`Search failed: ${searchResponse.status}`);
+      console.warn(
+        `[SouthCarolinaLicensing] Search POST returned ${searchResponse.status} — returning 0 records`
+      );
+      return;
     }
 
     const html = await searchResponse.text();
@@ -101,32 +165,25 @@ export async function runSouthCarolinaLicensingScraper(): Promise<void> {
 
     console.log(`[SouthCarolinaLicensing] Found ${rows.length} table rows`);
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+    const extractText = (cellHtml: string): string =>
+      cellHtml
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .trim();
 
+    for (const row of rows) {
       const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/g;
       const cells = row.match(cellRegex) || [];
 
-      if (cells.length < 3) {
-        continue;
-      }
-
-      const extractText = (html: string): string => {
-        return html
-          .replace(/<[^>]*>/g, '')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
-          .trim();
-      };
+      if (cells.length < 3) continue;
 
       const name = extractText(cells[0]);
       const licenseNum = extractText(cells[1]);
-      const addressFull = extractText(cells[2] || '');
-      const status = extractText(cells[3] || 'Active');
+      const addressFull = extractText(cells[2]);
+      const status = cells.length > 3 ? extractText(cells[3]) : 'Active';
 
-      if (!name || !licenseNum) {
-        continue;
-      }
+      if (!name || !licenseNum) continue;
 
       totalRecords++;
 
@@ -139,7 +196,9 @@ export async function runSouthCarolinaLicensingScraper(): Promise<void> {
         continue;
       }
 
-      console.log(`[SouthCarolinaLicensing] Processing: ${name} (License ${licenseNum}) in ${city}, SC`);
+      console.log(
+        `[SouthCarolinaLicensing] Processing: ${name} (License ${licenseNum}) in ${city}, SC`
+      );
 
       const organizerId = await getOrCreateScrapedOrganizer(
         name,

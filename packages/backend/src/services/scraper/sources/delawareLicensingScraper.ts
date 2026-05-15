@@ -1,7 +1,7 @@
 /**
  * Delaware Department of Professional Regulation — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Delaware DPR license verification system
- * Source: https://dpr.delaware.gov/boards/auctioneers/
+ * Source: https://delpros.delaware.gov/OH_VerifyLicense (updated 2026 — old DPR board page moved to DelPros eLicense portal)
  * Public directory with auctioneer records
  */
 
@@ -10,7 +10,8 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const DELAWARE_DPR_URL = 'https://dpr.delaware.gov/boards/auctioneers/';
+// NOTE: Delaware DPR auctioneer board page moved to the DelPros eLicensing portal.
+const DELAWARE_DPR_URL = 'https://delpros.delaware.gov/OH_VerifyLicense';
 
 /**
  * Scrape Delaware auctioneer licenses from DPR verification system.

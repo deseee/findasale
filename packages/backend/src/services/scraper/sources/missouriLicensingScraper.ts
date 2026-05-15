@@ -1,7 +1,7 @@
 /**
  * Missouri Division of Professional Registration — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Missouri DPOR license database
- * Source: https://pr.mo.gov/
+ * Source: https://mopro.mo.gov/license/s/license-search (updated 2026 — pr.mo.gov connection refused; new portal is Salesforce SPA, needs JS rendering)
  * Public directory with searchable auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -16,7 +16,11 @@ import { getRandomUserAgent } from '../userAgents';
 // Missouri DPS cert chain is missing intermediate — rejectUnauthorized: false required
 const moHttpsAgent = new https.Agent({ rejectUnauthorized: false });
 
-const MO_SEARCH_URL = 'https://pr.mo.gov/';
+// NOTE: pr.mo.gov is connection-refused (decommissioned). Missouri moved professional
+// registration to the MOPRO Salesforce portal: https://mopro.mo.gov/license/s/license-search
+// That portal is a full JS SPA (Salesforce/Aura) — static HTML fetch returns no data.
+// Flagged as needing JS rendering. URL updated to point to the new portal.
+const MO_SEARCH_URL = 'https://mopro.mo.gov/license/s/license-search';
 
 export async function runMissouriLicensingScraper(): Promise<void> {
   const rateLimiter = defaultRateLimiter;

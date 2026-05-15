@@ -4,9 +4,15 @@
  * Source: https://data.texas.gov/resource/7358-krk7.json
  * Public API endpoint with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
+ *
+ * Fix (S-Cat3): Removed invalid `status` and `city_name` field filters — those
+ * fields do not exist in the dataset. Use $where=license_type='Auctioneer' only.
+ * Available fields: license_type, license_number, business_name, owner_name,
+ * license_subtype, license_expiration_date_mmddccyy, business_county,
+ * mailing_address_county, continuing_education_flag.
  */
 
-import { RateLimiter, defaultRateLimiter } from '../rateLimiter';
+import { defaultRateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
@@ -15,12 +21,14 @@ const SOCRATA_API_URL = 'https://data.texas.gov/resource/7358-krk7.json';
 const PAGE_SIZE = 1000;
 
 interface SocrataRecord {
-  license_holder_name?: string;
+  license_type?: string;
   license_number?: string;
-  city_name?: string;
-  city?: string;
-  status?: string;
-  expiration_date?: string;
+  business_name?: string;
+  owner_name?: string;
+  license_subtype?: string;
+  license_expiration_date_mmddccyy?: string;
+  business_county?: string;
+  mailing_address_county?: string;
 }
 
 /**
@@ -40,13 +48,11 @@ export async function runTexasLicensingScraper(): Promise<void> {
 
     const socrataAppToken = process.env.SOCRATA_APP_TOKEN;
 
-    // Pagination loop
     let hasMore = true;
     while (hasMore) {
-      // Build query URL with pagination and filters
+      // Use $where to filter by license_type — the dataset has no `status` or `city_name` field
       const queryParams = new URLSearchParams();
-      queryParams.append('license_type', 'Auctioneer');
-      queryParams.append('status', 'Active');
+      queryParams.append('$where', "license_type='Auctioneer'");
       queryParams.append('$limit', PAGE_SIZE.toString());
       queryParams.append('$offset', offset.toString());
 
@@ -85,26 +91,18 @@ export async function runTexasLicensingScraper(): Promise<void> {
 
       console.log(`[TexasLicensing] Fetched ${records.length} records at offset=${offset}`);
 
-      // Process each record
       for (const record of records) {
-        const name = record.license_holder_name?.trim();
+        const name = (record.business_name || record.owner_name || '').trim();
         const licenseNum = record.license_number?.trim();
-        const city = (record.city_name || record.city || 'Texas').trim();
-        const status = record.status?.trim() || 'Active';
+        // Use business_county as the city proxy — dataset has no city field
+        const county = (record.business_county || record.mailing_address_county || 'Texas').trim();
+        const city = county ? `${county} County` : 'Texas';
 
         if (!name || !licenseNum) {
           continue;
         }
 
         totalRecords++;
-
-        // Double-check status is Active (should be filtered by API, but verify)
-        if (status !== 'Active') {
-          console.log(
-            `[TexasLicensing] Skipping ${name} (license ${licenseNum}): status=${status}`
-          );
-          continue;
-        }
 
         console.log(`[TexasLicensing] Processing: ${name} (License ${licenseNum}) in ${city}, TX`);
 
@@ -141,10 +139,8 @@ export async function runTexasLicensingScraper(): Promise<void> {
         }
       }
 
-      // Update offset for next iteration
       offset += PAGE_SIZE;
 
-      // If we got fewer than PAGE_SIZE records, we've reached the end
       if (records.length < PAGE_SIZE) {
         hasMore = false;
       }

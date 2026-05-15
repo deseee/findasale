@@ -1,7 +1,7 @@
 /**
  * Nebraska Department of Regulation & Licensure — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Nebraska Public License Lookup (LUP)
- * Source: https://www.nebraska.gov/LUP/pages/publicLicenseLookup.faces
+ * Source: https://www.nebraska.gov/LISSearch/search.cgi (updated 2026 — old LUP portal dead; new DHHS search uses AJAX, needs JS rendering for full data)
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,10 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const NEBRASKA_BASE_URL = 'https://www.nebraska.gov/LUP/pages/publicLicenseLookup.faces';
+// NOTE: The old Nebraska LUP portal is dead. The current DHHS License Search uses AJAX
+// to load profession lists and results — static HTML fetch returns an empty form only.
+// Flagged as needing JS rendering for full data access.
+const NEBRASKA_BASE_URL = 'https://www.nebraska.gov/LISSearch/search.cgi';
 
 /**
  * Parse an address string into city and zip components
