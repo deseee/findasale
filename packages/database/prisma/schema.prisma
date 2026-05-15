@@ -357,6 +357,7 @@ model Organizer {
   // Feature #48: Treasure Trails — organizer-created discovery trails
   trails                  TreasureTrail[]        @relation("OrganizerTrails")
   // Feature #244 Phase 2: eBay OAuth connection
+  ebayStoreUrl            String?  // eBay store URL e.g. https://www.ebay.com/str/your-store-name
   ebayConnection          EbayConnection?        @relation("OrganizerEbayConnection")
   // Feature #244 Phase 2c: eBay Policy Routing — per-organizer weight-tier policy mappings
   ebayPolicyMapping       EbayPolicyMapping?     @relation("OrganizerEbayPolicyMapping")

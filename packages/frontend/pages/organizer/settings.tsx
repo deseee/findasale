@@ -46,6 +46,7 @@ const OrganizerSettingsPage = () => {
   const [facebook, setFacebook] = useState('');
   const [instagram, setInstagram] = useState('');
   const [etsy, setEtsy] = useState('');
+  const [ebayStoreUrl, setEbayStoreUrl] = useState('');
   const [twitterUrl, setTwitterUrl] = useState('');
   const [tiktokUrl, setTiktokUrl] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -357,6 +358,7 @@ const OrganizerSettingsPage = () => {
           setFacebook(response.data.facebook || '');
           setInstagram(response.data.instagram || '');
           setEtsy(response.data.etsy || '');
+          setEbayStoreUrl(response.data.ebayStoreUrl || '');
           setTwitterUrl(response.data.twitterUrl || '');
           setTiktokUrl(response.data.tiktokUrl || '');
           setYoutubeUrl(response.data.youtubeUrl || '');
@@ -545,6 +547,7 @@ const OrganizerSettingsPage = () => {
         facebook,
         instagram,
         etsy,
+        ebayStoreUrl,
         twitterUrl,
         tiktokUrl,
         youtubeUrl,
@@ -568,6 +571,7 @@ const OrganizerSettingsPage = () => {
         setFacebook(response.data.facebook || '');
         setInstagram(response.data.instagram || '');
         setEtsy(response.data.etsy || '');
+        setEbayStoreUrl(response.data.ebayStoreUrl || '');
         setTwitterUrl(response.data.twitterUrl || '');
         setTiktokUrl(response.data.tiktokUrl || '');
         setYoutubeUrl(response.data.youtubeUrl || '');
@@ -1492,6 +1496,17 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setEtsy(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://etsy.com/shop/yourshop"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">eBay Store URL</label>
+                  <input
+                    type="url"
+                    value={ebayStoreUrl}
+                    onChange={(e) => setEbayStoreUrl(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="https://www.ebay.com/str/your-store-name"
                   />
                 </div>
 
