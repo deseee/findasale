@@ -8,9 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S728 — eBay Store URL + Category Overrides Picker (COMPLETE)**
+**Latest: S729 — Venmo Deeplink QR + Zelle Display on POS + Shopper Holds (COMPLETE)**
 
-Two eBay settings improvements. (1) **eBay store URL** — added `ebayStoreUrl String?` to Organizer model + migration (20260515000000_add_ebay_store_url_to_organizer) + backend organizers.ts (Zod schema, PATCH handler, GET /me response) + organizer/settings.tsx frontend (input in profile tab, load/save/post-save). Schema migration required. (2) **Category Overrides picker** — organizer/settings/ebay.tsx Category Overrides section now uses `EbayCategoryPicker` component instead of raw numeric text inputs; confirmed `EbayCategoryPicker` was already wired to edit-item and review pages from a prior session — no changes needed there. Files: schema.prisma, migration SQL, organizers.ts, settings.tsx, settings/ebay.tsx. TS clean.
+Smart payment UX for Venmo and Zelle across two pages. No schema changes needed — `venmoHandle`/`zelleHandle` were already on Organizer model (S716). (1) **POS page** — when organizer has `venmoHandle` set, payment section now shows a 160px QR code generated from the Venmo deeplink URL with cart total + sale name pre-filled; shopper scans with camera app, Venmo opens ready to send. Zelle section shows handle in large text + amount + copy-to-clipboard button + "send in your bank app" note. Both sections silent when handle not set. (2) **Shopper holds page** — Venmo "Pay with Venmo" button fires deeplink with hold total pre-filled; Zelle shows handle + amount + copy button. Backend extended: `getMyHoldsFull` in reservationController.ts now includes `organizer: { select: { venmoHandle, zelleHandle } }` in the sale query and surfaces as `organizerVenmoHandle`/`organizerZelleHandle` on each hold. Added `react-qr-code ^2.0.0` to frontend package.json; Patrick ran `pnpm install` to sync lockfile. Files: package.json, pnpm-lock.yaml, pos.tsx, holds.tsx, reservationController.ts.
 
 **Previous: S727 — eBay Integration Fixes + Feature Batch (COMPLETE)**
 
@@ -140,6 +140,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 ## Recent Sessions
 
+### S729 — Venmo Deeplink QR + Zelle Display on POS + Shopper Holds (COMPLETE)
+
+Smart Venmo/Zelle payment UX on POS and shopper holds page. `venmoHandle`/`zelleHandle` were already in schema. POS: Venmo QR code generated from deeplink URL (handle + cart total + sale name pre-filled); Zelle shows handle large + amount + copy button. Shopper holds page: Venmo "Pay" button fires deeplink with hold total; Zelle shows handle + copy. Backend: `getMyHoldsFull` extended to return `organizerVenmoHandle`/`organizerZelleHandle`. Added `react-qr-code ^2.0.0`; lockfile synced. 5 files changed.
+
 ### S728 — eBay Store URL + Category Overrides Picker (COMPLETE)
 
 Two small eBay settings features. (1) **eBay store URL field** — `ebayStoreUrl String?` added to Organizer model; new migration `20260515000000_add_ebay_store_url_to_organizer`; organizers.ts updated (Zod schema + PATCH handler + GET /me); organizer/settings.tsx gets "eBay Store URL" input in profile tab with load/save/post-save wired. Schema migration required before field works in production. (2) **Category Overrides picker** — organizer/settings/ebay.tsx Category Overrides section previously had raw `<input type="text">` for numeric IDs; replaced with `EbayCategoryPicker`. Confirmed `EbayCategoryPicker` was already fully implemented and wired on edit-item and review pages from a prior session — no changes needed there. 5 files changed, all TS clean.
@@ -193,24 +197,21 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 
 ---
 
-## Next Session — S729
+## Next Session — S730
 
-### First Action — Push S728 code + deploy migrations (Patrick actions)
+### First Action — Push S729 wrap docs
 
-S726 and S727 were pushed this session. Push S728:
+S729 feature code pushed this session (Venmo QR + Zelle). Push wrap docs:
 ```powershell
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260515000000_add_ebay_store_url_to_organizer/migration.sql
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/frontend/pages/organizer/settings/ebay.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S728: eBay store URL on organizer profile, category picker on eBay settings overrides"
+git commit -m "S729 wrap: STATE + dashboard"
 .\push.ps1
 ```
 
-Then deploy both pending migrations (email verification token expiry from S726 + eBay store URL from S728):
+### Pending migrations (if not yet deployed)
+
+Both S726 and S728 migrations still need deploying if not done:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -218,21 +219,22 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-### Chrome QA backlog (still needed — S723/S724/S727 all unverified)
+### Chrome QA backlog (S723/S724/S727/S729 all unverified)
 
 Priority order:
-- eBay push flow end-to-end: review page checkbox → approve → verify push fires (S727 fix)
-- Card readiness borders: verify red/yellow/green/blue render correctly on review cards
-- Best Offers: edit-item → toggle on → set percentages → push to eBay → verify bestOfferTerms in payload
-- Local pickup: set override → push → verify correct fulfillment policy used
-- eBay comp tiles (2-3 tile grid on edit-item page) — S723
-- Condition Rating XP (+5 on grade set) — S723
-- OAuth amber banner (sign-in-with-Google on email-match account) — S723
-- isOnlineOnly toggle persists, line-queue staleness indicator, save-search for guests — S724
+- Venmo QR on POS: set venmoHandle in settings → go to POS → confirm QR renders + scans correctly
+- Zelle display on POS: confirm handle + amount + copy button visible
+- Shopper holds Venmo/Zelle: confirm payment buttons appear on holds page
+- eBay push flow end-to-end: review page → approve → verify push fires (S727)
+- Card readiness borders: verify red/yellow/green/blue on review cards
+- Best Offers: edit-item → toggle → push to eBay → verify payload
+- Local pickup: set override → push → verify fulfillment policy
+- eBay comp tiles, Condition Rating XP, OAuth amber banner — S723
+- isOnlineOnly toggle, line-queue staleness, save-search for guests — S724
 
 ### Lower priority carries
 
-- Wyoming pawnbroker scraper — run diagnostic
+- Wyoming pawnbroker scraper — diagnostic pending
 - AI listing enrichment — check Railway logs for `[listingEnrichmentService]`
 - CategoryTopFinds TrendingSection — QA after nightly run
 - AuctionNinja+NAA scrapers — Patrick decision to enable

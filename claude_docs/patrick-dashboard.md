@@ -1,33 +1,30 @@
-# Patrick's Dashboard — S728 Wrap
+# Patrick's Dashboard — S729 Wrap
 
 ---
 
-## What Happened This Session — S728
+## What Happened This Session — S729
 
-S726 and S727 code pushed and redeploying. Two quick eBay settings improvements shipped.
+Smart Venmo and Zelle payment UX shipped on two pages. No database changes needed — the handles were already in the schema from S716.
 
-**eBay Store URL on organizer profile** — organizers can now save their eBay store link (`https://www.ebay.com/str/your-store-name`) in the Profile tab of Settings. Field added to the database schema (migration required), backend PATCH/GET endpoints updated, frontend input wired with load/save.
+**POS page** — when you have a Venmo handle set in Settings, the payment section now shows a QR code the shopper can scan with their phone camera. Venmo opens with your handle, the cart total, and the sale name already filled in — they just tap Send. The Zelle section shows your handle in large text with the amount and a copy button.
 
-**Category Overrides now use search** — the Category Overrides section on the eBay Settings page previously showed raw numeric ID inputs (e.g., "176983"). Those are now replaced with the `EbayCategoryPicker` search component — same search-as-you-type UI already used on edit-item and the review queue. Organizers type a category name, pick from the dropdown, and the ID is stored automatically. (Confirmed edit-item and review queue were already using EbayCategoryPicker from a prior session — nothing needed there.)
+**Shopper holds page** — if the organizer has Venmo configured, shoppers see a "Pay with Venmo" button that fires the deeplink with their hold total pre-filled. Zelle shows the handle, amount owed, and a copy button. Both sections are silent if the handles aren't set.
+
+Both pages only need handles configured in Settings → Profile to activate.
 
 ---
 
-## Do First Next Session — S729
+## Do First Next Session — S730
 
-**Step 1 — Push S728 code:**
+**Push wrap docs:**
 ```powershell
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260515000000_add_ebay_store_url_to_organizer/migration.sql
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/frontend/pages/organizer/settings/ebay.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S728: eBay store URL on organizer profile, category picker on eBay settings overrides"
+git commit -m "S729 wrap: STATE + dashboard"
 .\push.ps1
 ```
 
-**Step 2 — Deploy both pending migrations** (email verification token expiry from S726 + eBay store URL from S728 — `migrate deploy` applies all pending in one shot):
+**Deploy pending migrations if not done yet** (email verification from S726 + eBay store URL from S728):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -41,21 +38,20 @@ npx prisma generate
 
 | | |
 |---|---|
-| Vercel (frontend) | ✅ Redeploying (S726+S727 pushed this session) |
-| Railway (backend) | ✅ Redeploying |
+| Vercel (frontend) | ✅ Deploying (S729 pushed this session) |
+| Railway (backend) | ✅ Deploying |
 | Pipeline (enrich/score/outreach) | ✅ Durably running via GitHub Actions |
 | Address enrichment cron | ✅ Re-enabled S726 |
 | Outreach emails | ✅ Gmail API live (4h cron) |
-| Email verification migration | ⚠️ Pending deploy (Step 2 above — 20260515180000) |
-| eBay store URL migration | ⚠️ Pending deploy (Step 2 above — 20260515000000) |
+| Email verification migration | ⚠️ Pending deploy (20260515180000) |
+| eBay store URL migration | ⚠️ Pending deploy (20260515000000) |
 
 ---
 
 ## Still Waiting (Blocked Queue)
 
-- **P0-3 Email verification token expiry** — deploy pending (Step 2 above)
-- **eBay store URL field** — deploy pending (Step 2 above)
-- **Chrome QA backlog** — S723/S724/S727 fixes all unverified in browser
+- **Pending migrations** — email verification + eBay store URL (deploy block above)
+- **Chrome QA backlog** — Venmo/Zelle (S729), eBay push flow, card borders, comp tiles, XP, OAuth banner (S723/S724/S727)
 - **Settings UI for OAuth linked accounts** — backend ready, no frontend
 - **Wyoming pawnbroker scraper** — diagnostic pending
 - **AuctionNinja+NAA scrapers** — Patrick decision to enable
