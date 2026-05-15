@@ -1,154 +1,33 @@
 /**
  * Maine Auctioneer License Scraper
- * Scrapes licensed auctioneers from Maine Department of Professional and Financial Regulation
- * Source: https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/Welcome.aspx?board=4210
- * Public directory with auctioneer license records
+ * Source: https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/SearchIndividual.aspx
  * ADR-073: Directory Scraper Phase 1 — State licensing data
+ *
+ * Status (S-Cat3): The original URL (Welcome.aspx?board=4210) is a landing page
+ * with no data — it just lists search links. The real search is SearchIndividual.aspx
+ * with regulator=4210 (AUCTIONEERS). However, the ALMS form uses AJAX-driven
+ * cascading dropdowns (Department → Agency → Regulator), and a direct POST with
+ * scRegulator=4210 triggers a server error because the AJAX cascade state is not
+ * reproduced. Without a headless browser to drive the cascade, this scraper cannot
+ * reliably retrieve results. Returns gracefully with 0 records.
+ * TODO: Investigate ALMS data export or FOIA request for auctioneer list.
  */
 
-import { RateLimiter, defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
-import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
-
-const MAINE_SEARCH_URL = 'https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/Welcome.aspx?board=4210';
+const MAINE_SEARCH_URL =
+  'https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/SearchIndividual.aspx';
 
 /**
- * Parse an address string into city and zip components
- */
-function parseAddress(address: string): { city: string; zip: string } {
-  const parts = address.split(',').map((s) => s.trim());
-  if (parts.length < 2) {
-    return { city: address, zip: '' };
-  }
-  const cityPart = parts[0];
-  const stateZip = parts[1];
-  const zipMatch = stateZip.match(/\d{5}/);
-  const zip = zipMatch ? zipMatch[0] : '';
-  return { city: cityPart, zip };
-}
-
-/**
- * Scrape Maine auctioneer licenses from PFR database.
- * Public directory — no authentication required.
- * Ingests records into Organizer table with MaineLicensing source attribution.
+ * Scrape Maine auctioneer licenses from PFR ALMS database.
+ * Currently returns empty — the ALMS form requires AJAX cascade state that
+ * cannot be replicated without a headless browser.
  */
 export async function runMaineLicensingScraper(): Promise<void> {
-  const rateLimiter = defaultRateLimiter;
-  const domain = new URL(MAINE_SEARCH_URL).hostname;
-  let totalRecords = 0;
-  let createdOrganizers = 0;
-
-  try {
-    console.log('[MaineLicensing] Starting auctioneer license scraper');
-
-    // Fetch search page
-    await rateLimiter.waitBeforeRequest(domain);
-
-    const searchResponse = await fetch(MAINE_SEARCH_URL, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!searchResponse.ok) {
-      throw new Error(`Failed to fetch Maine auctioneer search: ${searchResponse.status}`);
-    }
-
-    const html = await searchResponse.text();
-
-    // Parse HTML table rows
-    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
-    const rows = html.match(rowRegex) || [];
-
-    console.log(`[MaineLicensing] Found ${rows.length} table rows`);
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-
-      // Extract cells from row
-      const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/g;
-      const cells = row.match(cellRegex) || [];
-
-      if (cells.length < 4) {
-        continue;
-      }
-
-      // Extract text from cells, removing HTML tags
-      const extractText = (html: string): string => {
-        return html
-          .replace(/<[^>]*>/g, '')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
-          .trim();
-      };
-
-      const name = extractText(cells[0]);
-      const licenseNum = extractText(cells[1]);
-      const status = extractText(cells[2]);
-      const addressFull = extractText(cells[3]);
-
-      if (!name || !licenseNum) {
-        continue;
-      }
-
-      totalRecords++;
-
-      // Only ingest active licenses
-      if (status !== 'Active') {
-        console.log(
-          `[MaineLicensing] Skipping ${name} (license ${licenseNum}): status=${status}`
-        );
-        continue;
-      }
-
-      const { city, zip } = parseAddress(addressFull);
-
-      console.log(`[MaineLicensing] Processing: ${name} (License ${licenseNum}) in ${city}, ME`);
-
-      const organizerId = await getOrCreateScrapedOrganizer(
-        name,
-        'MaineLicensing',
-        city || 'Maine',
-        'ME',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'AUCTION_HOUSE',
-        undefined
-      );
-
-      if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: {
-            licenseNumber: licenseNum,
-            licenseState: 'ME',
-            isStateLicensed: true,
-          },
-        });
-
-        createdOrganizers++;
-
-        if (totalRecords % 50 === 0) {
-          console.log(
-            `[MaineLicensing] Progress: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
-          );
-        }
-      }
-    }
-
-    console.log(
-      `[MaineLicensing] Scraper completed: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
-    );
-  } catch (error) {
-    console.error('[MaineLicensing] Scraper error:', error);
-    throw error;
-  }
+  console.log('[MaineLicensing] Starting auctioneer license scraper');
+  console.warn(
+    '[MaineLicensing] WARNING: Maine ALMS search form uses AJAX-driven cascading ' +
+      `dropdowns at ${MAINE_SEARCH_URL}. Direct POST with scRegulator=4210 returns ` +
+      'a server error because the cascade state cannot be replicated without a ' +
+      'headless browser. Returning 0 records.'
+  );
+  console.log('[MaineLicensing] Scraper completed: 0 records (AJAX form — no direct POST access)');
 }

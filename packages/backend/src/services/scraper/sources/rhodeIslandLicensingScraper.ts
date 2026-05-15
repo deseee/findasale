@@ -1,7 +1,7 @@
 /**
  * Rhode Island Department of Business Regulation — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Rhode Island DBR auctioneer license search
- * Source: https://dbr.ri.gov/auctioneer-license-search
+ * Source: https://dbr.ri.gov/about-dbr/lookup-license (updated 2026 — old URL 404; RI repealed general auctioneer license in 2015)
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -12,7 +12,9 @@ import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
 const RHODEISLAND_DBR_BASE_URL = 'https://dbr.ri.gov';
-const SEARCH_URL = 'https://dbr.ri.gov/auctioneer-license-search';
+// NOTE: RI repealed the general auctioneer license requirement in 2015. Motor vehicle
+// auctioneers may still be licensed. DBR lookup portal moved; old URL was 404.
+const SEARCH_URL = 'https://dbr.ri.gov/about-dbr/lookup-license';
 
 /**
  * Parse an address string into city and state components

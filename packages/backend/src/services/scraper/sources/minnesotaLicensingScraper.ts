@@ -1,7 +1,7 @@
 /**
  * Minnesota Department of Commerce — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Minnesota real estate license lookup
- * Source: https://mn.gov/commerce/real-estate/auctioneers/
+ * Source: https://mn.gov/commerce/licensing/license-lookup/ (updated 2026 — old URL dead; MN auctioneer licenses are county-issued, not in state DB)
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,10 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const MINNESOTA_BASE_URL = 'https://mn.gov/commerce/real-estate/auctioneers/';
+// NOTE: Minnesota auctioneer licenses are issued at the county level, not state level.
+// The old Commerce real-estate/auctioneers path is dead. The MN Commerce license lookup
+// is the closest state portal but does not contain auctioneer records (county-issued only).
+const MINNESOTA_BASE_URL = 'https://mn.gov/commerce/licensing/license-lookup/';
 
 /**
  * Parse an address string into city and zip components

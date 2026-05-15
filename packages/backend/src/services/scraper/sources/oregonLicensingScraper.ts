@@ -1,7 +1,7 @@
 /**
  * Oregon Department of Consumer and Business Services — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Oregon DCBS licensing system
- * Source: https://www.oregon.gov/dcbs/business/Pages/licensing.aspx
+ * Source: https://sos.oregon.gov/business/Pages/check-state-license-requirements.aspx (updated 2026 — old DCBS URL 404; OR has no dedicated auctioneer license)
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,8 +11,10 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const OREGON_BASE_URL = 'https://www.oregon.gov';
-const SEARCH_URL = 'https://www.oregon.gov/dcbs/business/Pages/licensing.aspx';
+const OREGON_BASE_URL = 'https://sos.oregon.gov';
+// NOTE: Oregon has no dedicated statewide auctioneer license search. The old DCBS URL
+// is a 404. Updated to the SOS license directory — unlikely to yield auctioneer records.
+const SEARCH_URL = 'https://sos.oregon.gov/business/Pages/check-state-license-requirements.aspx';
 
 /**
  * Parse an address string like "City, ST 12345" into city and zip components

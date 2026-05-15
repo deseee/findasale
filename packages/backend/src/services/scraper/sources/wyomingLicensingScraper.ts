@@ -1,7 +1,7 @@
 /**
  * Wyoming Secretary of State — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Wyoming professional licenses directory
- * Source: https://www.wyoming.gov/business/professionalLicenses
+ * Source: https://wyobiz.wyo.gov/Business/RegistrationType.aspx (updated 2026 — WY has NO state auctioneer license; old URL connection refused)
  * Public directory with auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +11,10 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const WYOMING_BASE_URL = 'https://www.wyoming.gov/business/professionalLicenses';
+// NOTE: Wyoming does NOT require a state auctioneer license. Some municipalities
+// require local permits. The old wyoming.gov URL is connection-refused (site restructured).
+// Updated to the WY Secretary of State business portal — will not yield auctioneer records.
+const WYOMING_BASE_URL = 'https://wyobiz.wyo.gov/Business/RegistrationType.aspx';
 
 /**
  * Scrape Wyoming auctioneer licenses from state professional licenses directory.

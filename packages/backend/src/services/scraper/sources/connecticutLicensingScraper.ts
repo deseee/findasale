@@ -1,7 +1,7 @@
 /**
  * Connecticut Department of Consumer Protection — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Connecticut public license verification system
- * Source: https://www.elicense.ct.gov/Lookup/GeneralSearch.aspx
+ * Source: https://www.elicense.ct.gov/lookup/licenselookup.aspx (updated 2026 — GeneralSearch.aspx path moved)
  * Public directory with auctioneer license records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -12,7 +12,8 @@ import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
 const CONNECTICUT_LICENSE_BASE_URL = 'https://www.elicense.ct.gov';
-const SEARCH_URL = 'https://www.elicense.ct.gov/Lookup/GeneralSearch.aspx';
+// NOTE: GeneralSearch.aspx was renamed/moved to licenselookup.aspx.
+const SEARCH_URL = 'https://www.elicense.ct.gov/lookup/licenselookup.aspx';
 
 /**
  * Parse an address string into components
