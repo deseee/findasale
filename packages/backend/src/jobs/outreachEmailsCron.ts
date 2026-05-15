@@ -173,6 +173,10 @@ export const sendOutreachEmails = async (): Promise<void> => {
     const today = new Date();
     const daysSinceStart = Math.floor((today.getTime() - WARMUP_START.getTime()) / (1000 * 60 * 60 * 24));
     const dailyQuota = getDailyQuota(daysSinceStart);
+    // NOTE: the `/ 6` divisor assumes 6 send windows per day. It is coupled to the
+    // every-4-hours workflow cadence (.github/workflows/pipeline-outreach-emails.yml,
+    // cron '0 */4 * * *' = 6 runs/day). If that workflow schedule changes, update this
+    // divisor to match — otherwise the daily quota will be over- or under-sent.
     const quotaPerWindow = Math.max(1, Math.floor(dailyQuota / 6));
     console.log(`[OutreachCron] Day ${daysSinceStart}, quota: ${dailyQuota}/day, this window: ${quotaPerWindow}`);
 

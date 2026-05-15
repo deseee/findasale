@@ -1,0 +1,24 @@
+name: Pipeline — Email Discovery
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger email-discovery job
+        env:
+          OUTREACH_SECRET: ${{ secrets.INTERNAL_API_TOKEN }}
+          RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
+        run: |
+          curl -X POST \
+            -H "x-internal-secret: ${OUTREACH_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d '{"job":"email-discovery"}' \
+            "${RAILWAY_BACKEND_URL}/api/internal/jobs/run" \
+            --fail-with-body --connect-timeout 10 --max-time 60
