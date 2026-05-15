@@ -136,6 +136,7 @@ export const register = async (req: Request, res: Response) => {
           deviceFingerprint: hashedFingerprint,
           emailVerified: false, // New accounts must verify email
           emailVerificationToken, // Store token for verification link
+          emailVerificationTokenExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000), // P0-3: Token expires 24h from now
           ageVerifiedAt: new Date(), // P0-L1: COPPA compliance — age verified at registration
         }
       });
@@ -1079,6 +1080,11 @@ export const verifyEmail = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Invalid or expired verification token' });
     }
 
+    // P0-3: Enforce token expiry — reject tokens older than 24 hours
+    if (user.emailVerificationTokenExpiry && user.emailVerificationTokenExpiry < new Date()) {
+      return res.status(400).json({ error: 'VERIFICATION_TOKEN_EXPIRED', message: 'Verification link has expired. Please request a new one.' });
+    }
+
     // Check if email is already verified (idempotent)
     if (user.emailVerified) {
       return res.status(200).json({
@@ -1094,6 +1100,7 @@ export const verifyEmail = async (req: Request, res: Response) => {
         emailVerified: true,
         emailVerifiedAt: new Date(),
         emailVerificationToken: null, // Clear the token after use
+        emailVerificationTokenExpiry: null, // P0-3: Clear expiry alongside token
       }
     });
 
