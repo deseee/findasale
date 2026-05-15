@@ -16,6 +16,7 @@ import Head from 'next/head';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
+import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 
 // Type definitions
 type PolicyClassification = 'weight-tier' | 'local-pickup' | 'free-shipping' | 'calculated' | 'category-specific' | 'international' | 'unknown';
@@ -67,6 +68,7 @@ const newClientId = (): string => {
 
 interface CategoryOverride {
   categoryId: string;
+  categoryName?: string;
   policyId: string;
   policyName: string;
 }
@@ -647,16 +649,23 @@ const EbayPolicySetupPage = () => {
                         {mapping.categoryOverrides.map((override, index) => (
                           <tr key={index} className="border-b border-gray-200 dark:border-gray-700">
                             <td className="py-3 px-3">
-                              <input
-                                type="text"
-                                value={override.categoryId}
-                                onChange={(e) => updateCategoryOverride(index, 'categoryId', e.target.value)}
-                                placeholder="e.g., 30009"
-                                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
-                               aria-label="e.g., 30009" />
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Find eBay category IDs in your existing listings or the eBay category tree.
-                              </p>
+                              <EbayCategoryPicker
+                                label=""
+                                value=""
+                                ebayCategoryName={override.categoryName}
+                                defaultSearch={override.categoryId || undefined}
+                                placeholder="Search eBay categories…"
+                                onChange={(payload) => {
+                                  if (!mapping) return;
+                                  const newOverrides = [...mapping.categoryOverrides];
+                                  newOverrides[index] = {
+                                    ...newOverrides[index],
+                                    categoryId: payload.leafCategoryId,
+                                    categoryName: payload.leafCategoryName,
+                                  };
+                                  setMapping({ ...mapping, categoryOverrides: newOverrides });
+                                }}
+                              />
                             </td>
                             <td className="py-3 px-3">
                               <select
