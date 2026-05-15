@@ -87,7 +87,6 @@ const EditSalePage = () => {
     endTime: '15:00' as string,
     // S696 Wave 2 features
     safetyNotes: '' as string,
-    estatePrivacyMode: false,
     coversFee: false,
   });
 
@@ -201,7 +200,6 @@ const EditSalePage = () => {
       holdsEnabled: sale.holdsEnabled ?? true,
       // S696 Wave 2 features
       safetyNotes: sale.safetyNotes ?? '',
-      estatePrivacyMode: sale.estatePrivacyMode ?? false,
       coversFee: sale.coversFee ?? false,
     });
 
@@ -1064,26 +1062,6 @@ const EditSalePage = () => {
                     </span>
                     <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
                       Shoppers can reserve items for pickup. Holds expire automatically.
-                    </span>
-                  </label>
-                </div>
-
-                {/* S696 Wave 2: Grief Firewall */}
-                <div className="flex items-start space-x-3 pt-4">
-                  <input
-                    type="checkbox"
-                    id="estatePrivacyMode"
-                    name="estatePrivacyMode"
-                    checked={formData.estatePrivacyMode}
-                    onChange={(e) => setFormData({ ...formData, estatePrivacyMode: e.target.checked })}
-                    className="mt-1 w-4 h-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded cursor-pointer"
-                  />
-                  <label htmlFor="estatePrivacyMode" className="cursor-pointer flex flex-col">
-                    <span className="text-sm font-medium text-warm-700 dark:text-gray-300">
-                      Enable Privacy Protection
-                    </span>
-                    <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
-                      Suppresses family name extraction and removes estate-specific language from public listings. Recommended for sensitive sales.
                     </span>
                   </label>
                 </div>

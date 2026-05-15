@@ -115,8 +115,6 @@ const saleCreateSchema = z.object({
   buyersPremiumPct: z.number().min(0).max(50).optional(),
   // S696 Wave 2: Safety Notes — parking/entry info shown on sale detail
   safetyNotes: z.string().max(1000).optional().nullable(),
-  // S696 Wave 2: Grief Firewall — suppress person-name extraction and "estate sale" copy
-  estatePrivacyMode: z.boolean().optional(),
   // S696 Wave 2: Cover the Fee — organizer absorbs platform fee (AUCTION sales only)
   coversFee: z.boolean().optional(),
   // Online-only sale flag — sale has no physical location (e.g., shipping-only retail, virtual auction)

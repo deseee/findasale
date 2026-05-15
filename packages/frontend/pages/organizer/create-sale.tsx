@@ -105,8 +105,6 @@ interface WizardFormData {
   tags: string[];
   customTagInput: string;
   notes: string;
-  holdDurationHours: number;
-  returnWindowHours: number | null;
   // Auction extras
   buyersPremiumPct: number | null;
   biddingType: string;
@@ -213,8 +211,6 @@ const DEFAULT_FORM: WizardFormData = {
   tags: [],
   customTagInput: '',
   notes: '',
-  holdDurationHours: 48,
-  returnWindowHours: null,
   buyersPremiumPct: null,
   biddingType: 'Timed online',
   vendorCount: '',
@@ -1115,6 +1111,7 @@ interface Step3Props {
 function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const { showToast } = useToast();
 
   const handleFileChange = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -1135,7 +1132,7 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
       const urls = await Promise.all(uploadPromises);
       setPhotoUrls(prev => [...prev, ...urls].slice(0, 20));
     } catch {
-      // silently handle — toast handled by parent
+      showToast('Photo upload failed. Check your connection and try again.', 'error');
     } finally {
       setUploading(false);
     }
@@ -1373,7 +1370,6 @@ function Step4({ c, form, setForm }: Step4Props) {
   const isAuction = form.saleType === 'AUCTION';
   const isFlea = form.saleType === 'FLEA_MARKET';
   const isDormDash = form.saleType === 'DORM_DASH';
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [customTag, setCustomTag] = useState('');
 
   const toggleTag = (tag: string) => {
@@ -1596,58 +1592,6 @@ function Step4({ c, form, setForm }: Step4Props) {
         </label>
       </div>
 
-      {/* ADVANCED settings */}
-      <button
-        type="button"
-        onClick={() => setShowAdvanced(v => !v)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 13, color: c.textDim, cursor: 'pointer',
-          background: 'none', border: 'none', padding: '6px 0',
-          fontFamily: 'Inter, sans-serif',
-        }}
-      >
-        {showAdvanced ? '▾' : '▸'} Advanced settings — holds, returns, branding overrides
-      </button>
-
-      {showAdvanced && (
-        <div style={{
-          marginTop: 12, background: c.surface, border: `1px solid ${c.border}`,
-          borderRadius: 14, padding: 22,
-          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16,
-        }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: 'Inter, sans-serif' }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
-              Hold duration (hours){' '}
-              <Tooltip content="How long a shopper can hold an item before it's released. Default 48h." />
-            </span>
-            <input
-              type="number"
-              min={1}
-              max={168}
-              value={form.holdDurationHours}
-              onChange={e => setForm(f => ({ ...f, holdDurationHours: parseInt(e.target.value) || 48 }))}
-              style={inputStyle}
-            />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: 'Inter, sans-serif' }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
-              Return window (hours) <span style={{ fontWeight: 400, color: c.textFaint }}>Optional</span>
-            </span>
-            <input
-              type="number"
-              min={0}
-              value={form.returnWindowHours ?? ''}
-              onChange={e => setForm(f => ({
-                ...f,
-                returnWindowHours: e.target.value ? parseInt(e.target.value) : null,
-              }))}
-              placeholder="None"
-              style={inputStyle}
-            />
-          </label>
-        </div>
-      )}
     </div>
   );
 }
@@ -2173,8 +2117,6 @@ const CreateSalePage: React.FC = () => {
       photoUrls,
       tags: form.tags,
       notes: form.notes || undefined,
-      holdDurationHours: form.holdDurationHours,
-      ...(form.returnWindowHours !== null ? { returnWindowHours: form.returnWindowHours } : {}),
       ...(buyersPremiumPct !== null ? { buyersPremiumPct } : {}),
       ...(form.locationId ? { locationId: form.locationId } : {}),
       ...(form.entranceNote ? { entranceNote: form.entranceNote } : {}),

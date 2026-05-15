@@ -63,6 +63,7 @@ const organizerProfileSchema = z.object({
   ebayDefaultShippingPolicyId: z.string().nullable().optional(),
   ebayStoreUrl: z.string().url().optional().or(z.literal('')),
   address: z.string().optional(),
+  returnWindowHours: z.number().int().min(0).nullable().optional(),
 }).strict();
 
 const awardBadgesSchema = z.object({
@@ -321,7 +322,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address, returnWindowHours } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -364,6 +365,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(ebayDefaultShippingPolicyId !== undefined && { ebayDefaultShippingPolicyId }),
         ...(ebayStoreUrl !== undefined && { ebayStoreUrl }),
         ...(address !== undefined && { address }),
+        ...(returnWindowHours !== undefined && { returnWindowHours }),
       },
     });
 
@@ -537,6 +539,7 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       pickupWindows: (organizer as any).pickupWindows || null,
       timezone: (organizer as any).timezone || null,
       byAppointment: (organizer as any).byAppointment ?? false,
+      returnWindowHours: (organizer as any).returnWindowHours ?? null,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);

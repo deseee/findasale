@@ -1,0 +1,1 @@
+ALTER TABLE "Organizer" ADD COLUMN IF NOT EXISTS "returnWindowHours" INTEGER;
