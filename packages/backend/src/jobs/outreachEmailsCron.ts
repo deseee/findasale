@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { suppressionService } from '../services/suppressionService';
-import { syncLeadTierToMailerLite } from '../services/mailerliteService';
+import { batchSyncLeadTiersToMailerLite } from '../services/mailerliteService';
 
 // Tier-specific T1 templates (strategy doc §2.1–2.3). T2–T4 are shared across tiers.
 // Token format: [Token Name] — replaced by renderTemplate() below.
@@ -369,8 +369,17 @@ export const sendOutreachEmails = async (): Promise<void> => {
         // the address (e.g. "Clayton, AL" -> "AL"). If neither source yields a
         // state, SKIP the row — sending an email with a blank [state] token
         // ("Shoppers in  are already looking") is worse than skipping.
-        const licenseState = (record.organizer.licenseState || '').trim();
-        const addressStateMatch = (record.organizer.address || '').match(/,\s*([A-Z]{2})\s*$/);
+        // Normalize dotted territory abbreviations before regex matching.
+        const normalizeDottedState = (s: string) =>
+          s.replace(/Washington,?\s*D\.C\./gi, 'Washington, DC')
+           .replace(/\bD\.C\./gi, 'DC')
+           .replace(/\bP\.R\./gi, 'PR')
+           .replace(/\bU\.S\.V\.I\./gi, 'VI')
+           .replace(/\bG\.U\./gi, 'GU')
+           .replace(/\bA\.S\./gi, 'AS');
+        const licenseState = normalizeDottedState((record.organizer.licenseState || '').trim());
+        const normalizedAddress = normalizeDottedState(record.organizer.address || '');
+        const addressStateMatch = normalizedAddress.match(/,\s*([A-Z]{2})\s*(?:\d{5}(?:-\d{4})?)?\s*$/i);
         const resolvedState = licenseState || (addressStateMatch ? addressStateMatch[1] : '');
         if (!resolvedState) {
           console.log(`[OutreachCron] Skipped org:${record.organizerId} — no state resolvable (licenseState NULL, address="${record.organizer.address}")`);
@@ -463,16 +472,24 @@ export const sendOutreachEmails = async (): Promise<void> => {
  * syncLeadTierGroups — weekly job that syncs Organizer.leadTier to the
  * matching MailerLite group (COLD / WARM / HOT).
  *
+ * Previously sent one HTTP request per organizer, generating thousands of 429
+ * errors when scoring jobs ran over 55k+ organizers. Now uses
+ * batchSyncLeadTiersToMailerLite which POSTs to MailerLite's bulk import
+ * endpoint in batches of 500 with 500ms inter-batch delay and Retry-After
+ * aware retry logic.
+ *
  * Syncs all organizers that:
  *   - have a valid contactEmail
- *   - have a non-null leadTier (ENTERPRISE skipped inside syncLeadTierToMailerLite)
+ *   - have a non-null, non-ENTERPRISE leadTier
  *   - were scored in the past 7 days (lastScoredAt > now - 7d)
  *
- * Errors per-organizer are caught and logged without stopping the batch.
- * Runs weekly on Sundays at 02:00 UTC via initOutreachEmailsCron.
+ * Runs weekly on Sundays at 04:00 UTC via initOutreachEmailsCron.
  */
 export async function syncLeadTierGroups(): Promise<void> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Fetch all recently-scored organizers with an email and a lead tier.
+  // ENTERPRISE/null filtering and group assignment happen inside batchSyncLeadTiersToMailerLite.
   const organizers = await prisma.organizer.findMany({
     where: {
       contactEmail: { not: null },
@@ -482,28 +499,18 @@ export async function syncLeadTierGroups(): Promise<void> {
     select: { id: true, contactEmail: true, leadTier: true },
   });
 
-  console.log(`[syncLeadTierGroups] Syncing ${organizers.length} organizers to MailerLite`);
-  let synced = 0;
-  let failed = 0;
+  console.log(`[syncLeadTierGroups] ${organizers.length} organizers fetched — starting batch sync`);
 
-  for (const org of organizers) {
-    try {
-      await syncLeadTierToMailerLite(org.contactEmail!, org.leadTier!, org.id);
-      synced++;
-    } catch (err: any) {
-      failed++;
-      console.error(`[syncLeadTierGroups] Failed for org ${org.id}:`, err.message);
-    }
-  }
+  const { synced, skipped, failed } = await batchSyncLeadTiersToMailerLite(organizers);
 
-  console.log(`[syncLeadTierGroups] Complete: ${synced} synced, ${failed} failed`);
+  console.log(`[syncLeadTierGroups] Complete: ${synced} synced, ${skipped} skipped, ${failed} failed`);
 }
 
 /**
  * initOutreachEmailsCron — registers outreach email jobs in the cron scheduler.
  *
  * sendOutreachEmails: runs every 4 hours (6 windows/day) to distribute the daily quota.
- * syncLeadTierGroups: runs weekly on Sundays at 02:00 UTC.
+ * syncLeadTierGroups: runs weekly on Sundays at 04:00 UTC.
  *
  * Both gates on OUTREACH_ENABLED=true.
  */
@@ -525,4 +532,3 @@ export function initOutreachEmailsCron(): void {
   }), { timezone: 'UTC' });
   console.log('[OutreachCron] syncLeadTierGroups registered — runs Sundays 04:00 UTC');
 }
-
