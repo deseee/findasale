@@ -13,9 +13,6 @@ import { getCachedHeaders, setCachedHeaders, fetchWithConditionalHeaders, extrac
 const ESTATESALES_BASE_URL = 'https://www.estatesales.net';
 const ESTATESALES_API_URL = 'https://www.estatesales.net/api/sale-details';
 
-// Module-level flag so we only log auth-mode status once per process
-let _esnAuthLogged = false;
-
 /**
  * EstateSales.NET API response type code mapping.
  * 1=Estate Sales, 2=Auctions, 16=Other (default to ESTATE if unknown)
@@ -116,21 +113,6 @@ export async function scrapeEstateSalesNetItems(
     // Only add Referer header if not empty string
     if (referer) {
       headers['Referer'] = referer;
-    }
-
-    // Auth mode: if ESN_AUTH_COOKIE env is set, attach as Cookie header.
-    // ESN gates streetAddress behind login — with the cookie the API returns
-    // real street addresses for sales that otherwise come back with empty `address`.
-    const esnAuthCookie = process.env.ESN_AUTH_COOKIE;
-    if (esnAuthCookie && esnAuthCookie.trim().length > 0) {
-      headers['Cookie'] = esnAuthCookie.trim();
-      if (!_esnAuthLogged) {
-        console.log('[EstateSalesNet] Auth mode active — Cookie header attached to API requests');
-        _esnAuthLogged = true;
-      }
-    } else if (!_esnAuthLogged) {
-      console.log('[EstateSalesNet] Auth mode inactive — ESN_AUTH_COOKIE unset; street addresses will be limited');
-      _esnAuthLogged = true;
     }
 
     // Try to use cached ETag/Last-Modified for conditional request (RFC 7232)

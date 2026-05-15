@@ -13,6 +13,7 @@
 
 import * as cron from 'node-cron';
 import { prisma } from '../lib/prisma';
+import { discoverEmail } from '../services/emailDiscoveryService';
 
 const BATCH_SIZE = 50;
 const BATCH_DELAY_MS = 2000;
@@ -132,6 +133,20 @@ async function enrichBatch(skip: number): Promise<number> {
       if (website) console.log(`[WebsiteEnrichment] Found website for "${org.businessName}": ${website}`);
       if (phone && !org.phone) console.log(`[WebsiteEnrichment] Found phone for "${org.businessName}": ${phone}`);
       enriched++;
+
+      // Chain email discovery: now that this organizer has a website, trigger
+      // email discovery inline rather than waiting for emailDiscoveryJob's next run.
+      if (website) {
+        try {
+          const email = await discoverEmail(org.id);
+          if (email) console.log(`[WebsiteEnrichment] Chained email discovery found "${email}" for "${org.businessName}"`);
+        } catch (err) {
+          console.warn(
+            `[WebsiteEnrichment] Chained email discovery failed for "${org.businessName}":`,
+            err instanceof Error ? err.message : String(err)
+          );
+        }
+      }
     }
 
     // Small delay between individual lookups to respect rate limits

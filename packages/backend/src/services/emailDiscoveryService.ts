@@ -131,6 +131,13 @@ function isJunkEmail(email: string): boolean {
     return true;
   }
 
+  // 7. Asset paths that accidentally match the email pattern
+  //    (image filenames, scripts, fonts — e.g. "First_team_vintage_Logo-09_125x@2x.png")
+  if (/\.(png|jpg|jpeg|gif|svg|webp|js|css|woff)/i.test(lower)) {
+    console.debug(`[emailDiscoveryService] Rejected (asset extension): ${email}`);
+    return true;
+  }
+
   return false;
 }
 

@@ -181,29 +181,37 @@ export const sendOutreachEmails = async (): Promise<void> => {
       status: { notIn: ['BOUNCED', 'OPTED_OUT', 'CLAIMED'] },
       organizer: {
         directoryStatus: { not: 'CLOSED' },
-        // Only legitimate organizer types (estate sale, auction, antique, consignment, etc.)
-        businessCategory: {
-          in: [
-            'ESTATE_SALE_CO',
-            'AUCTION_HOUSE',
-            'ANTIQUE_MALL',
-            'ANTIQUE_DEALER',
-            'CONSIGNMENT',
-            'THRIFT_STORE',
-            'FLEA_MARKET',
-            'VINTAGE',
-            'LIQUIDATION',
-            'USED_FURNITURE',
-            'PAWN_SHOP',
-            'USED_BOOKSTORE',
-            'RECORD_STORE',
-            'USED_ELECTRONICS',
-            'COIN_DEALER',
-            'RESALE_SHOP',
-            'USED_SPORTING_GOODS',
-            'JEWELRY_RESALE',
-          ],
-        },
+        // Only legitimate organizer types (estate sale, auction, antique, consignment, etc.).
+        // NULL businessCategory is ALSO eligible: those organizers were already filtered at
+        // seed time by autoSeedOutreachCron — the existence of a DirectoryClaimEmail row IS
+        // the eligibility signal. Excluding NULL silently hid ~1,661 legitimate leads forever.
+        OR: [
+          {
+            businessCategory: {
+              in: [
+                'ESTATE_SALE_CO',
+                'AUCTION_HOUSE',
+                'ANTIQUE_MALL',
+                'ANTIQUE_DEALER',
+                'CONSIGNMENT',
+                'THRIFT_STORE',
+                'FLEA_MARKET',
+                'VINTAGE',
+                'LIQUIDATION',
+                'USED_FURNITURE',
+                'PAWN_SHOP',
+                'USED_BOOKSTORE',
+                'RECORD_STORE',
+                'USED_ELECTRONICS',
+                'COIN_DEALER',
+                'RESALE_SHOP',
+                'USED_SPORTING_GOODS',
+                'JEWELRY_RESALE',
+              ],
+            },
+          },
+          { businessCategory: null },
+        ],
         // Respect suppressOutreach flag
         suppressOutreach: false,
         // Canada outreach is paused by default (OUTREACH_CANADA_ENABLED != 'true').
@@ -287,12 +295,15 @@ export const sendOutreachEmails = async (): Promise<void> => {
 
     // Fallback: fill remaining quota with ENTERPRISE or untiered (leadTier IS NULL)
     if (untieredQuota > 0 && recordsToSend.length < quotaPerWindow) {
+      // baseWhere.organizer already owns an `OR` (the businessCategory filter).
+      // A second top-level `OR` here would silently overwrite it, so the leadTier
+      // condition is combined via `AND` to preserve the category filter.
       const untieredRecords = await prisma.directoryClaimEmail.findMany({
         where: {
           ...baseWhere,
           organizer: {
             ...baseWhere.organizer,
-            OR: [{ leadTier: 'ENTERPRISE' }, { leadTier: null }],
+            AND: [{ OR: [{ leadTier: 'ENTERPRISE' }, { leadTier: null }] }],
           },
         },
         include: { organizer: true },
@@ -348,8 +359,20 @@ export const sendOutreachEmails = async (): Promise<void> => {
         const unsubscribeLink = `${backendUrl}/api/outreach/unsubscribe?token=${trackingToken}`;
         const trackingPixelUrl = `${backendUrl}/api/outreach/pixel?trackingId=${trackingPixelId}`;
         const physicalAddress = process.env.OUTREACH_PHYSICAL_ADDRESS || '219 E Michigan Ave, Suite F, Paw Paw, MI 49079';
-        // licenseState is the most reliable state field on Organizer for scraped listings
-        const stateValue = escapeHtml(record.organizer.licenseState || '');
+
+        // Resolve the [state] token. licenseState is NULL for the entire scraped
+        // outreach queue, so fall back to parsing the trailing 2-letter code from
+        // the address (e.g. "Clayton, AL" -> "AL"). If neither source yields a
+        // state, SKIP the row — sending an email with a blank [state] token
+        // ("Shoppers in  are already looking") is worse than skipping.
+        const licenseState = (record.organizer.licenseState || '').trim();
+        const addressStateMatch = (record.organizer.address || '').match(/,\s*([A-Z]{2})\s*$/);
+        const resolvedState = licenseState || (addressStateMatch ? addressStateMatch[1] : '');
+        if (!resolvedState) {
+          console.log(`[OutreachCron] Skipped org:${record.organizerId} — no state resolvable (licenseState NULL, address="${record.organizer.address}")`);
+          continue;
+        }
+        const stateValue = escapeHtml(resolvedState);
 
         const html = renderTemplate(template.html, {
           'Business Name': escapeHtml(record.organizer.businessName || 'Your Business'),

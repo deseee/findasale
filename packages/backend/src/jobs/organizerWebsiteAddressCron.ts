@@ -12,6 +12,7 @@
  */
 
 import cron from 'node-cron';
+import { Prisma } from '@findasale/database';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { RateLimiter } from '../services/scraper/rateLimiter';
@@ -19,6 +20,16 @@ import {
   scrapeOrganizerWebsiteAddress,
   ExtractedAddress,
 } from '../services/scraper/sources/organizerWebsite';
+
+/**
+ * Row shape returned by the eligibility raw query.
+ */
+interface EligibleOrganizerRow {
+  id: string;
+  businessName: string;
+  website: string;
+  address: string;
+}
 
 const PER_RUN_LIMIT = 500;
 const JOB_NAME = 'organizerWebsiteAddress';
@@ -37,23 +48,21 @@ export async function runOrganizerWebsiteAddressEnrichment(): Promise<{
     return { processed: 0, filled: 0, missed: 0 };
   }
 
-  // Pull organizers with a website and empty address.
-  // Organizer.address is a non-null String column, so "empty" means '' (or whitespace).
-  const candidates = await prisma.organizer.findMany({
-    where: {
-      website: { not: null },
-      NOT: { website: '' },
-      OR: [{ address: '' }, { address: { equals: ' ' } }],
-    },
-    select: {
-      id: true,
-      businessName: true,
-      website: true,
-      address: true,
-    },
-    take: PER_RUN_LIMIT,
-    orderBy: { id: 'asc' },
-  });
+  // Pull organizers with a website set but only a "City, ST" address (no street
+  // component). In this database every scraped organizer has `address` populated
+  // as "City, ST" — none are empty — so the eligible set is rows whose address
+  // has NO leading street number. Postgres regex: starts with a non-digit and
+  // ends with ", XX" (two-letter state). Prisma's typed filters can't express
+  // this, so we use a raw query.
+  const candidates = await prisma.$queryRaw<EligibleOrganizerRow[]>(Prisma.sql`
+    SELECT "id", "businessName", "website", "address"
+    FROM "Organizer"
+    WHERE "website" IS NOT NULL
+      AND "website" <> ''
+      AND "address" ~ '^[^0-9].*,\\s*[A-Z]{2}$'
+    ORDER BY "id" ASC
+    LIMIT ${PER_RUN_LIMIT}
+  `);
 
   console.log(`[${JOB_NAME}] Processing ${candidates.length} organizers`);
 
