@@ -61,6 +61,7 @@ const organizerProfileSchema = z.object({
   // S725: ebayDefaultPublishMode removed from PATCH allowlist (DRAFT mode killed —
   // see Organizer.ebayDefaultPublishMode @deprecated comment in schema.prisma).
   ebayDefaultShippingPolicyId: z.string().nullable().optional(),
+  ebayStoreUrl: z.string().url().optional().or(z.literal('')),
   address: z.string().optional(),
 }).strict();
 
@@ -320,7 +321,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, address } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -361,6 +362,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(byAppointment !== undefined && { byAppointment }),
         ...(organizerTypes !== undefined && { organizerTypes }),
         ...(ebayDefaultShippingPolicyId !== undefined && { ebayDefaultShippingPolicyId }),
+        ...(ebayStoreUrl !== undefined && { ebayStoreUrl }),
         ...(address !== undefined && { address }),
       },
     });
@@ -529,6 +531,7 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       graceTierBefore: (organizer as any).graceTierBefore || null,
       venmoHandle: (organizer as any).venmoHandle || null,
       zelleHandle: (organizer as any).zelleHandle || null,
+      ebayStoreUrl: (organizer as any).ebayStoreUrl || null,
       foundingOrgBadge: (organizer as any).foundingOrgBadge ?? false,
       address: organizer.address || null,
       pickupWindows: (organizer as any).pickupWindows || null,
