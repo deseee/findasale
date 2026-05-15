@@ -95,8 +95,6 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 **S712 addition:** 183 high-confidence organizers seeded directly into DirectoryClaimEmail table via psycopg2 Python script (live DB change, 2026-05-10). Warmup schedule confirmed: 20/day (days 0-7) → 50 (8-14) → 100 (15-21) → 200/day stable, 6 four-hour windows.
 
-**S712 addition:** 183 high-confidence organizers seeded directly into DirectoryClaimEmail table via psycopg2 Python script (live DB change, 2026-05-10). Warmup schedule confirmed: 20/day (days 0-7) → 50 (8-14) → 100 (15-21) → 200/day stable, 6 four-hour windows.
-
 **Source attribution:** 94.5% have NULL `directoryMostRecentSource`. Only Foursquare (1,130) and HEREPlaces (920) have tags — everything else predates the S696 source-tracking forward-fix. Provenance of ~35,481 orgs is unknown from tags alone (ESN + state licensing scrapers predated the fix).
 
 **Email coverage:**
@@ -206,6 +204,8 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 ### First Action — Push S730 + deploy all pending migrations (Patrick actions)
 
 ```powershell
+git add packages/frontend/pages/support.tsx
+git add packages/frontend/pages/shopper/holds.tsx
 git add packages/frontend/pages/organizer/create-sale.tsx
 git add packages/frontend/pages/organizer/edit-sale/[id].tsx
 git add packages/frontend/pages/organizer/settings.tsx

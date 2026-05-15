@@ -115,7 +115,7 @@ const ShopperHoldsPage = () => {
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
               <p className="text-sm text-blue-900">
                 You have <span className="font-semibold">{activeHolds.length}</span> active{' '}
-                {activeHolds.length === 1 ? 'hold' : 'holds'}. Items are held for 24 hours from placement.
+                {activeHolds.length === 1 ? 'hold' : 'holds'}. Hold duration depends on your Explorer rank (30–90 minutes).
               </p>
             </div>
           )}

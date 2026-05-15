@@ -191,7 +191,7 @@ const FAQ_DATA = [
     category: 'Holds & Reservations',
     question: 'How long do holds last?',
     answer:
-      'By default, accepted holds expire 24 hours after the sale opens. You can customize the hold duration in your sale settings. If a shopper doesn\'t complete their purchase within the hold window, the item becomes available again automatically.',
+      'Hold duration is based on the shopper\'s Explorer rank — ranging from 30 minutes for new shoppers up to 90 minutes for Grandmasters. If a shopper doesn\'t complete their purchase within the hold window, the item becomes available again automatically.',
   },
   {
     id: 'holds-3',
