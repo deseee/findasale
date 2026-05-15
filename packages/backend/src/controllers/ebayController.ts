@@ -1793,6 +1793,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             allowBestOffer: true,
             bestOfferAutoAcceptAmt: true,
             bestOfferMinimumAmt: true,
+            draftStatus: true,
+            ebayShippingOverride: true,
           },
         },
       },
@@ -1876,6 +1878,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayShippingClassification: item.ebayShippingClassification,
             ebayCategoryId: item.ebayCategoryId,
             category: item.category,
+            ebayShippingOverride: item.ebayShippingOverride,
           },
           { fetchFulfillmentPolicies: getFulfillmentPoliciesOnce }
         );
@@ -2064,7 +2067,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // Inject description template if configured and item has no custom description HTML
         let finalDescription = sanitizedDescription;
         if (routing.descriptionHtml && !sanitizedDescription) {
-          finalDescription = routing.descriptionHtml;
+          finalDescription = routing.descriptionHtml.includes('{{DESCRIPTION}}')
+            ? routing.descriptionHtml.replace('{{DESCRIPTION}}', '')
+            : routing.descriptionHtml;
         } else if (routing.descriptionHtml && sanitizedDescription) {
           if (routing.descriptionHtml.includes('{{DESCRIPTION}}')) {
             finalDescription = routing.descriptionHtml.replace('{{DESCRIPTION}}', sanitizedDescription);
@@ -2507,6 +2512,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           status: 'success',
           ebayUrl: `https://www.ebay.com/itm/${ebayListingId}`,
           publishedAt: new Date(),
+          ...(item.draftStatus !== 'PUBLISHED' ? { warning: 'DRAFT_ON_FINDASALE' } : {}),
         });
       } catch (itemError) {
         // Structured per-item error log — captures saleId/itemId/category/reason
@@ -3056,6 +3062,7 @@ async function resolvePoliciesForItem(
     ebayShippingClassification?: string | null;
     ebayCategoryId?: string | null;
     category?: string | null;
+    ebayShippingOverride?: string | null;
   },
   smartPickContext?: {
     fetchFulfillmentPolicies?: () => Promise<any[]>;
@@ -3076,6 +3083,30 @@ async function resolvePoliciesForItem(
 
   const mapping = organizer.ebayPolicyMapping;
   const conn = organizer.ebayConnection;
+
+  // Item-level LOCAL_PICKUP_ONLY override — highest priority, beats all other routing rules.
+  // Looks for a synced fulfillment policy with pickupDropOff=true or name containing "local pickup".
+  if (item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') {
+    const returnPolicyId = mapping?.defaultReturnPolicyId || conn.returnPolicyId;
+    const paymentPolicyId = mapping?.defaultPaymentPolicyId || conn.paymentPolicyId;
+    const allPolicies: any[] = (conn as any).fulfillmentPolicies || [];
+    const localPickupPolicy = allPolicies.find(
+      (p: any) => p.pickupDropOff === true || /local\s*pickup/i.test(p.name || '')
+    );
+    if (localPickupPolicy) {
+      console.log(`[eBay ShippingPick] item=${item.id} LOCAL_PICKUP_ONLY → policy="${localPickupPolicy.fulfillmentPolicyId}"`);
+      return {
+        fulfillmentPolicyId: localPickupPolicy.fulfillmentPolicyId,
+        returnPolicyId: returnPolicyId || '',
+        paymentPolicyId: paymentPolicyId || '',
+        descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
+        pushAsDraft: false,
+        merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+        routingReason: 'local-pickup-override',
+      };
+    }
+    console.warn(`[eBay ShippingPick] item=${item.id} LOCAL_PICKUP_ONLY requested but no local pickup policy found — falling through to normal routing`);
+  }
 
   // Organizer-level explicit override beats every other rule.
   // When ebayDefaultShippingPolicyId is set, smart-pick and weight/category mappings are skipped.

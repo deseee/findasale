@@ -58,6 +58,7 @@ interface ItemEditState {
   packageLengthIn?: number;
   packageWidthIn?: number;
   packageHeightIn?: number;
+  ebayShippingOverride?: string | null;
 }
 
 interface HealthBreakdown {
@@ -112,6 +113,8 @@ interface Item {
   packageLengthIn?: number | null;
   packageWidthIn?: number | null;
   packageHeightIn?: number | null;
+  ebayShippingOverride?: string | null;
+  photos?: { url: string }[];
 }
 
 // Track which items should be pushed to eBay
@@ -181,6 +184,21 @@ function groupTagsByType(tags: string[]): { group: string; tags: string[] }[] {
   const result = Object.entries(groups).map(([group, tags]) => ({ group, tags }));
   if (ungrouped.length > 0) result.push({ group: 'Other', tags: ungrouped });
   return result;
+}
+
+function computeReadiness(item: Item, editState: ItemEditState, ebayConnected: boolean): 'red' | 'yellow' | 'green' | 'blue' {
+  const title = editState.title || item.title || '';
+  const price = editState.price || item.price || 0;
+  const hasPhoto = (item.photoUrls?.length ?? 0) > 0;
+  const category = editState.category || item.category || '';
+  const condition = editState.condition || item.condition || '';
+  const description = editState.description || item.description || '';
+  const hasWeight = !!(editState.packageWeightOz || item.packageWeightOz);
+
+  if (!title.trim() || price <= 0 || !hasPhoto) return 'red';
+  if (!category || !condition || !description.trim()) return 'yellow';
+  if (hasWeight && ebayConnected) return 'blue';
+  return 'green';
 }
 
 function confidenceBorderClass(score: number | null | undefined, isAiTagged?: boolean): string {
@@ -386,6 +404,11 @@ const ReviewPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
       showToast('Items published successfully!', 'success');
+      // Fire eBay push for any published items that had the push toggle checked
+      const ebayIds = items.map(i => i.id).filter(id => ebayPushItems[id]);
+      if (ebayIds.length > 0 && ebayConnected && tier !== 'SIMPLE') {
+        ebayPushMutation.mutate(ebayIds);
+      }
       // Auto-reopen camera for batch workflow: pass query params to signal intent
       router.push(`/organizer/add-items/${saleId}?openCamera=1&captureMode=rapidfire`);
     },
@@ -422,6 +445,10 @@ const ReviewPage = () => {
       results.forEach((result: any) => {
         if (result.status === 'success') {
           successCount++;
+          // Warn if item is still a draft on FindA.Sale after eBay push
+          if (result.warning === 'DRAFT_ON_FINDASALE') {
+            showToast('Item pushed to eBay but is still a draft on FindA.Sale — shoppers won\'t see it until you approve it.', 'info');
+          }
         } else {
           const errorMsg = result.error?.includes('NOT_CONNECTED')
             ? 'eBay not connected'
@@ -438,8 +465,8 @@ const ReviewPage = () => {
       setEbayPushItems({});
     },
     onError: (error: any) => {
-      const msg = error.response?.data?.message || 'Failed to push items to eBay';
-      showToast(msg, 'error');
+      const message = error.response?.data?.message || 'eBay push failed';
+      showToast(message, 'error');
     },
   });
 
@@ -623,6 +650,7 @@ const ReviewPage = () => {
         packageLengthIn: item.packageLengthIn ?? undefined,
         packageWidthIn: item.packageWidthIn ?? undefined,
         packageHeightIn: item.packageHeightIn ?? undefined,
+        ebayShippingOverride: item.ebayShippingOverride ?? null,
       });
       setEditStates(new Map(editStates));
     }
@@ -840,6 +868,7 @@ const ReviewPage = () => {
           packageLengthIn: editState.packageLengthIn ?? null,
           packageWidthIn: editState.packageWidthIn ?? null,
           packageHeightIn: editState.packageHeightIn ?? null,
+          ebayShippingOverride: editState.ebayShippingOverride ?? null,
         },
       });
       await api.post(`/items/${item.id}/publish`);
@@ -897,6 +926,7 @@ const ReviewPage = () => {
             packageLengthIn: editState.packageLengthIn ?? null,
             packageWidthIn: editState.packageWidthIn ?? null,
             packageHeightIn: editState.packageHeightIn ?? null,
+            ebayShippingOverride: editState.ebayShippingOverride ?? null,
           },
         });
         await api.post(`/items/${item.id}/publish`);
@@ -1226,12 +1256,19 @@ const ReviewPage = () => {
                 const hasError = priceErrors.has(item.id);
                 const currentTags = editState.tags || item.tags || [];
                 const rarityKey = item.rarity && rarityColors[item.rarity] ? item.rarity : 'COMMON';
+                const readiness = computeReadiness(item, editState, ebayConnected);
+                const readinessBorder = {
+                  red: 'border-l-4 border-l-red-500',
+                  yellow: 'border-l-4 border-l-yellow-400',
+                  green: 'border-l-4 border-l-green-500',
+                  blue: 'border-l-4 border-l-blue-500',
+                }[readiness];
 
                 return (
                   <div
                     key={item.id}
                     ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
-                    className="relative bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] overflow-hidden"
+                    className={`relative bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] overflow-hidden ${readinessBorder}`}
                     style={{ boxShadow: '0 1px 3px rgba(20,18,14,0.06)' }}
                   >
                     {/* Review stripe — amber, persists until approved */}
@@ -1666,6 +1703,20 @@ const ReviewPage = () => {
                                     className="h-4 w-4 rounded border-gray-300 accent-blue-600" />
                                   <label htmlFor={`ebay-push-${item.id}`} className="text-sm font-medium text-blue-700 dark:text-blue-300 cursor-pointer">
                                     Also push to eBay
+                                  </label>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    id={`local-pickup-${item.id}`}
+                                    checked={getEditState(item).ebayShippingOverride === 'LOCAL_PICKUP_ONLY'}
+                                    onChange={(e) => {
+                                      handleEditChange(item.id, 'ebayShippingOverride', e.target.checked ? 'LOCAL_PICKUP_ONLY' : null);
+                                    }}
+                                    className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                                  />
+                                  <label htmlFor={`local-pickup-${item.id}`} className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer">
+                                    Local pickup only (skip eBay shipping)
                                   </label>
                                 </div>
                                 {/* Shipping weight & dimensions (used by eBay push to select fulfillment policy) */}
