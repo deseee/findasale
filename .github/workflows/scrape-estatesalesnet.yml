@@ -4,15 +4,30 @@ on:
   schedule:
     - cron: '0 0 * * *'  # Midnight UTC
   workflow_dispatch:
+    inputs:
+      chunk:
+        description: 'Run a single chunk only (1-4). Leave blank to run all chunks.'
+        required: false
+        default: ''
 
+# Each chunk gets its own concurrency group so chunks run in parallel
+# and a re-triggered run only cancels the matching chunk, not all chunks.
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-chunk-${{ matrix.chunk }}
   cancel-in-progress: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false   # One chunk failure does not cancel the others
+      matrix:
+        chunk: [1, 2, 3, 4]
+
+    # Skip chunks not matching a manual single-chunk dispatch
+    if: ${{ github.event.inputs.chunk == '' || github.event.inputs.chunk == matrix.chunk }}
 
     steps:
       - name: Checkout
@@ -36,11 +51,13 @@ jobs:
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
 
-      - name: Run EstateSalesNet scraper
+      - name: Run EstateSalesNet scraper (chunk ${{ matrix.chunk }}/4)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
+          SCRAPER_CHUNK: ${{ matrix.chunk }}
+          SCRAPER_TOTAL_CHUNKS: '4'
         run: |
           cd packages/backend
           ./node_modules/.bin/ts-node src/scripts/run-estatesalesnet.ts
