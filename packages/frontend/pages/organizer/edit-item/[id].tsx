@@ -76,6 +76,12 @@ const EditItemPage = () => {
     brand: '',
     upc: '',
     mpn: '',
+    // eBay Best Offers
+    allowBestOffer: false,
+    bestOfferAcceptPct: '' as number | '',
+    bestOfferDeclinePct: '' as number | '',
+    // eBay shipping override
+    ebayShippingOverride: null as string | null,
   });
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -107,6 +113,9 @@ const EditItemPage = () => {
   // Barcode scanner state
   const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
+
+  // Local pickup smart detection nudge
+  const [showLocalPickupNudge, setShowLocalPickupNudge] = useState(false);
 
   const openDiscountModal = (xpToSpend: number) => {
     setPendingXpToSpend(xpToSpend);
@@ -235,12 +244,25 @@ const EditItemPage = () => {
         const n = parseInt(String(v).trim(), 10);
         return Number.isFinite(n) && n > 0 ? n : null;
       };
+      const pushPrice = parseFloat(String(formData.price)) || 0;
+      const pushAcceptPct = typeof formData.bestOfferAcceptPct === 'number' ? formData.bestOfferAcceptPct : null;
+      const pushDeclinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
       const savePayload = {
         ...formData,
         packageWeightOz: toIntOrNull(formData.packageWeightOz),
         packageLengthIn: toIntOrNull(formData.packageLengthIn),
         packageWidthIn: toIntOrNull(formData.packageWidthIn),
         packageHeightIn: toIntOrNull(formData.packageHeightIn),
+        allowBestOffer: formData.allowBestOffer,
+        bestOfferAutoAcceptAmt: formData.allowBestOffer && pushAcceptPct !== null && pushPrice > 0
+          ? parseFloat((pushPrice * (1 - pushAcceptPct / 100)).toFixed(2))
+          : null,
+        bestOfferMinimumAmt: formData.allowBestOffer && pushDeclinePct !== null && pushPrice > 0
+          ? parseFloat((pushPrice * (1 - pushDeclinePct / 100)).toFixed(2))
+          : null,
+        ebayShippingOverride: formData.ebayShippingOverride || null,
+        bestOfferAcceptPct: undefined,
+        bestOfferDeclinePct: undefined,
       };
       await api.put(`/items/${id}`, savePayload);
     } catch (err) {
@@ -415,9 +437,34 @@ const EditItemPage = () => {
         brand: item.brand || '',
         upc: item.upc || '',
         mpn: item.mpn || '',
+        // eBay Best Offers — reverse-compute percentages from stored dollar amounts
+        allowBestOffer: item.allowBestOffer === true,
+        bestOfferAcceptPct: (() => {
+          const price = parseFloat(item.price);
+          const amt = item.bestOfferAutoAcceptAmt != null ? parseFloat(item.bestOfferAutoAcceptAmt) : null;
+          if (price > 0 && amt != null) return Math.round((1 - amt / price) * 100);
+          return '';
+        })(),
+        bestOfferDeclinePct: (() => {
+          const price = parseFloat(item.price);
+          const amt = item.bestOfferMinimumAmt != null ? parseFloat(item.bestOfferMinimumAmt) : null;
+          if (price > 0 && amt != null) return Math.round((1 - amt / price) * 100);
+          return '';
+        })(),
+        // eBay shipping override
+        ebayShippingOverride: item.ebayShippingOverride || null,
       });
     }
   }, [item]);
+
+  // Smart local pickup detection — nudge when description/notes mention local pickup
+  useEffect(() => {
+    const localPickupPhrases = /local\s*pickup|pickup\s*only|no\s*shipping|will\s*not\s*ship|local\s*only/i;
+    const text = `${formData.description || ''} ${(formData as any).conditionNotes || ''}`;
+    if (localPickupPhrases.test(text) && formData.ebayShippingOverride !== 'LOCAL_PICKUP_ONLY') {
+      setShowLocalPickupNudge(true);
+    }
+  }, [formData.description, (formData as any).conditionNotes, formData.ebayShippingOverride]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
@@ -426,12 +473,26 @@ const EditItemPage = () => {
         const n = parseInt(String(v).trim(), 10);
         return Number.isFinite(n) && n > 0 ? n : null;
       };
+      const price = parseFloat(String(formData.price)) || 0;
+      const acceptPct = typeof formData.bestOfferAcceptPct === 'number' ? formData.bestOfferAcceptPct : null;
+      const declinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
       const payload = {
         ...formData,
         packageWeightOz: toIntOrNull(formData.packageWeightOz),
         packageLengthIn: toIntOrNull(formData.packageLengthIn),
         packageWidthIn: toIntOrNull(formData.packageWidthIn),
         packageHeightIn: toIntOrNull(formData.packageHeightIn),
+        allowBestOffer: formData.allowBestOffer,
+        bestOfferAutoAcceptAmt: formData.allowBestOffer && acceptPct !== null && price > 0
+          ? parseFloat((price * (1 - acceptPct / 100)).toFixed(2))
+          : null,
+        bestOfferMinimumAmt: formData.allowBestOffer && declinePct !== null && price > 0
+          ? parseFloat((price * (1 - declinePct / 100)).toFixed(2))
+          : null,
+        ebayShippingOverride: formData.ebayShippingOverride || null,
+        // strip UI-only percentage fields
+        bestOfferAcceptPct: undefined,
+        bestOfferDeclinePct: undefined,
       };
       return await api.put(`/items/${id}`, payload);
     },
@@ -1335,6 +1396,138 @@ const EditItemPage = () => {
                       />
                     </div>
                   </div>
+
+                  {/* Local Pickup checkbox */}
+                  <div className="mt-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="local-pickup"
+                        checked={formData.ebayShippingOverride === 'LOCAL_PICKUP_ONLY'}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          ebayShippingOverride: e.target.checked ? 'LOCAL_PICKUP_ONLY' : null,
+                        }))}
+                        className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                      />
+                      <label htmlFor="local-pickup" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                        Local pickup only (no shipping on eBay)
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 ml-6">
+                      When checked, this item will use a local pickup fulfillment policy on eBay instead of calculated/flat-rate shipping.
+                    </p>
+                    {showLocalPickupNudge && formData.ebayShippingOverride !== 'LOCAL_PICKUP_ONLY' && (
+                      <div className="mt-2 flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-700 dark:text-blue-300">
+                        <span>We detected &quot;local pickup&quot; in your notes — enable local pickup mode for eBay?</span>
+                        <button
+                          type="button"
+                          onClick={() => { setFormData(prev => ({ ...prev, ebayShippingOverride: 'LOCAL_PICKUP_ONLY' })); setShowLocalPickupNudge(false); }}
+                          className="underline ml-1 whitespace-nowrap"
+                        >Enable</button>
+                        <button
+                          type="button"
+                          onClick={() => setShowLocalPickupNudge(false)}
+                          className="underline ml-1"
+                        >Dismiss</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* eBay Best Offers Section */}
+            {tier !== 'SIMPLE' && ebayConnected && (
+              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Best Offers</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="allowBestOffer"
+                      checked={formData.allowBestOffer}
+                      onChange={(e) => setFormData(prev => ({ ...prev, allowBestOffer: e.target.checked }))}
+                      className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                    />
+                    <label htmlFor="allowBestOffer" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                      Accept Best Offers on eBay
+                    </label>
+                  </div>
+
+                  {formData.allowBestOffer && (() => {
+                    const currentPrice = parseFloat(String(formData.price)) || 0;
+                    const acceptPct = typeof formData.bestOfferAcceptPct === 'number' ? formData.bestOfferAcceptPct : null;
+                    const declinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
+                    const acceptDollar = acceptPct !== null && currentPrice > 0
+                      ? (currentPrice * (1 - acceptPct / 100)).toFixed(2)
+                      : null;
+                    const declineDollar = declinePct !== null && currentPrice > 0
+                      ? (currentPrice * (1 - declinePct / 100)).toFixed(2)
+                      : null;
+                    const thresholdError = acceptPct !== null && declinePct !== null && declinePct <= acceptPct
+                      ? 'Auto-decline threshold must be higher than auto-accept threshold.'
+                      : null;
+                    return (
+                      <div className="ml-6 space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                            Auto-accept offers above: <span className="font-normal">% of price</span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="1"
+                              max="99"
+                              step="1"
+                              placeholder="e.g. 10"
+                              value={formData.bestOfferAcceptPct === '' ? '' : formData.bestOfferAcceptPct}
+                              onChange={(e) => {
+                                const v = e.target.value === '' ? '' : parseInt(e.target.value, 10);
+                                setFormData(prev => ({ ...prev, bestOfferAcceptPct: v as number | '' }));
+                              }}
+                              className="w-24 px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-500">%</span>
+                            {acceptDollar && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                → offers above <span className="font-semibold text-green-600 dark:text-green-400">${acceptDollar}</span> will be auto-accepted
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                            Auto-decline offers below: <span className="font-normal">% of price</span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="1"
+                              max="99"
+                              step="1"
+                              placeholder="e.g. 25"
+                              value={formData.bestOfferDeclinePct === '' ? '' : formData.bestOfferDeclinePct}
+                              onChange={(e) => {
+                                const v = e.target.value === '' ? '' : parseInt(e.target.value, 10);
+                                setFormData(prev => ({ ...prev, bestOfferDeclinePct: v as number | '' }));
+                              }}
+                              className="w-24 px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-500">%</span>
+                            {declineDollar && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                → offers below <span className="font-semibold text-red-600 dark:text-red-400">${declineDollar}</span> will be auto-declined
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {thresholdError && (
+                          <p className="text-xs text-red-600 dark:text-red-400">{thresholdError}</p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}
