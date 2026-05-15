@@ -15,6 +15,7 @@ import {
 } from '../controllers/internalSaleDetailEnrichmentController';
 import { sendOutreachEmails } from '../jobs/outreachEmailsCron';
 import { runWebsiteEnrichmentBackfill } from '../jobs/websiteEnrichmentJob';
+import { runInternalJob } from '../controllers/internalJobRunnerController';
 import { runCategorySync } from '../jobs/categorySyncCron';
 import { runLeadScoringBackfill } from '../services/leadScoringService';
 import { runScrapeRun } from '../services/scraper/index';
@@ -932,5 +933,9 @@ router.post('/scraper/run-tennessee-phase2', requireSecret, async (req: express.
 router.post('/scraper/run-vermont-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runVermontPhase2Scraper(); res.json({ success: true, message: 'Vermont Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
 router.post('/scraper/run-west-virginia-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runWestVirginiaPhase2Scraper(); res.json({ success: true, message: 'West Virginia Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
 router.post('/scraper/run-virginia-general-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runVirginiaGeneralPhase2Scraper(); res.json({ success: true, message: 'Virginia General Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
+
+
+// POST /api/internal/jobs/run — single dispatcher for background pipeline jobs (GitHub Actions cron)
+router.post('/jobs/run', requireSecret, runInternalJob);
 
 export default router;
