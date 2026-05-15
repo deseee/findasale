@@ -12,7 +12,7 @@
  */
 
 import cron from 'node-cron';
-import { Prisma } from '@findasale/database';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { RateLimiter } from '../services/scraper/rateLimiter';
