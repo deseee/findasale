@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S727 — eBay Integration Fixes + Feature Batch (COMPLETE)**
+**Latest: S728 — eBay Store URL + Category Overrides Picker (COMPLETE)**
+
+Two eBay settings improvements. (1) **eBay store URL** — added `ebayStoreUrl String?` to Organizer model + migration (20260515000000_add_ebay_store_url_to_organizer) + backend organizers.ts (Zod schema, PATCH handler, GET /me response) + organizer/settings.tsx frontend (input in profile tab, load/save/post-save). Schema migration required. (2) **Category Overrides picker** — organizer/settings/ebay.tsx Category Overrides section now uses `EbayCategoryPicker` component instead of raw numeric text inputs; confirmed `EbayCategoryPicker` was already wired to edit-item and review pages from a prior session — no changes needed there. Files: schema.prisma, migration SQL, organizers.ts, settings.tsx, settings/ebay.tsx. TS clean.
+
+**Previous: S727 — eBay Integration Fixes + Feature Batch (COMPLETE)**
 
 Five eBay issues diagnosed and fixed in three parallel agent dispatches. (1) **{{DESCRIPTION}} template bug** — ebayController.ts: when item had no description, first branch left `{{DESCRIPTION}}` literal in eBay listing; fixed to replace with empty string in the no-description case. (2) **eBay push not firing from Publish All** — review.tsx: `publishMutation.onSuccess` was missing the eBay push call entirely; wired to fire for checked items matching pattern from `handleApproveAll`. `ebayPushMutation.onError` toast also added (was silent). (3) **Draft item eBay push** — `draftStatus` and `ebayShippingOverride` were both missing from item SELECT in push loop (silent regression); added. Push now includes `warning: 'DRAFT_ON_FINDASALE'` for draft items; review.tsx shows info toast. (4) **Card readiness borders** — review.tsx: `computeReadiness()` helper added; each item card now has `border-l-4` in red/yellow/green/blue based on completeness (blue = green + weight set + eBay connected). (5) **Best Offers UI** — edit-item/[id].tsx: toggle + two percentage inputs (auto-accept/auto-decline) with live dollar previews and threshold validation; converts to dollar amounts on save; reverse-computed from stored amounts on load. (6) **Local pickup checkbox** — edit-item/[id].tsx: checkbox sets `ebayShippingOverride = 'LOCAL_PICKUP_ONLY'`; smart phrase detector scans description/notes and shows dismissible nudge. review.tsx: same checkbox added to per-item eBay section. ebayController.ts: `resolvePoliciesForItem` routes to local pickup fulfillment policy when override is set. S726 push still pending (see Next Session).
 
@@ -136,6 +140,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 ## Recent Sessions
 
+### S728 — eBay Store URL + Category Overrides Picker (COMPLETE)
+
+Two small eBay settings features. (1) **eBay store URL field** — `ebayStoreUrl String?` added to Organizer model; new migration `20260515000000_add_ebay_store_url_to_organizer`; organizers.ts updated (Zod schema + PATCH handler + GET /me); organizer/settings.tsx gets "eBay Store URL" input in profile tab with load/save/post-save wired. Schema migration required before field works in production. (2) **Category Overrides picker** — organizer/settings/ebay.tsx Category Overrides section previously had raw `<input type="text">` for numeric IDs; replaced with `EbayCategoryPicker`. Confirmed `EbayCategoryPicker` was already fully implemented and wired on edit-item and review pages from a prior session — no changes needed there. 5 files changed, all TS clean.
+
 ### S727 — eBay Integration Fixes + Feature Batch (COMPLETE)
 
 Five eBay issues fixed in three parallel dispatches. (1) `{{DESCRIPTION}}` template bug — empty-description path left placeholder literal; fixed. (2) eBay push missing from `publishMutation.onSuccess` in review.tsx — wired. (3) `draftStatus` + `ebayShippingOverride` missing from item SELECT in push loop — added; draft warning field added to push results. (4) Card readiness borders (red/yellow/green/blue) added to review page item cards via `computeReadiness()`. (5) Best Offers UI — toggle + percentage inputs with live dollar preview on edit-item page. (6) Local pickup checkbox on edit-item + review cards; smart phrase detector nudge; backend routing to local pickup fulfillment policy when override set. Files: ebayController.ts, review.tsx, edit-item/[id].tsx. All TS clean.
@@ -185,42 +193,29 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 
 ---
 
-## Next Session — S728
+## Next Session — S729
 
-### First Action — Push S726 + S727 code and deploy email verification migration (Patrick actions)
+### First Action — Push S728 code + deploy migrations (Patrick actions)
 
-Push S726 files first (were pending):
+S726 and S727 were pushed this session. Push S728:
 ```powershell
-git add packages/backend/src/index.ts
-git add packages/backend/src/services/leadScoringService.ts
-git add packages/backend/src/services/mailerliteService.ts
-git add packages/backend/src/jobs/outreachEmailsCron.ts
-git add packages/backend/src/services/emailDiscoveryService.ts
 git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260515180000_add_email_verification_token_expiry/migration.sql
-git add packages/backend/src/controllers/authController.ts
-git commit -m "S726: pipeline punch list (cron step 3, HOT-tier, MailerLite batching, DC parser, email extraction), email verification token expiry migration"
+git add packages/database/prisma/migrations/20260515000000_add_ebay_store_url_to_organizer/migration.sql
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/pages/organizer/settings.tsx
+git add packages/frontend/pages/organizer/settings/ebay.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S728: eBay store URL on organizer profile, category picker on eBay settings overrides"
 .\push.ps1
 ```
 
-Then deploy the email verification migration:
+Then deploy both pending migrations (email verification token expiry from S726 + eBay store URL from S728):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
-```
-
-Then push S727 files:
-```powershell
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
-git add packages/frontend/pages/organizer/edit-item/[id].tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "S727: eBay fixes — description template, draft warning, local pickup routing, push from Publish All, card readiness borders, best offers UI, local pickup checkbox"
-.\push.ps1
 ```
 
 ### Chrome QA backlog (still needed — S723/S724/S727 all unverified)

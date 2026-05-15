@@ -1,53 +1,38 @@
-# Patrick's Dashboard — S727 Wrap
+# Patrick's Dashboard — S728 Wrap
 
 ---
 
-## What Happened This Session — S727 (eBay Integration Fixes)
+## What Happened This Session — S728
 
-Six eBay fixes and features shipped in three parallel agent dispatches.
+S726 and S727 code pushed and redeploying. Two quick eBay settings improvements shipped.
 
-**Bugs fixed:** `{{DESCRIPTION}}` placeholder was showing literally in eBay listings when an item had no description — one-line fix. eBay push was completely missing from the "Publish All" button path in the review queue — it only fired on "Approve" and "Approve All." Also found that `draftStatus` and `ebayShippingOverride` were both accidentally missing from the item database query in the push loop.
+**eBay Store URL on organizer profile** — organizers can now save their eBay store link (`https://www.ebay.com/str/your-store-name`) in the Profile tab of Settings. Field added to the database schema (migration required), backend PATCH/GET endpoints updated, frontend input wired with load/save.
 
-**New features:** Best Offers UI on the edit-item page — toggle + two percentage inputs (e.g. 10% accept threshold and 25% decline threshold on a $100 item = auto-accept above $90, auto-decline below $75) with live dollar previews. Local pickup checkbox on both the edit-item page and the review queue cards, with a smart detector that auto-suggests it when your description mentions "local pickup," "no shipping," or similar phrases. The backend now automatically routes to your local pickup fulfillment policy when this is set. Card readiness borders on the review queue — each item card now has a left border that tells you at a glance: red = not ready (missing title/price/photo), yellow = usable but could use improvement (missing category/condition/description), green = FindA.Sale ready, blue = green plus weight and eBay connected.
+**Category Overrides now use search** — the Category Overrides section on the eBay Settings page previously showed raw numeric ID inputs (e.g., "176983"). Those are now replaced with the `EbayCategoryPicker` search component — same search-as-you-type UI already used on edit-item and the review queue. Organizers type a category name, pick from the dropdown, and the ID is stored automatically. (Confirmed edit-item and review queue were already using EbayCategoryPicker from a prior session — nothing needed there.)
 
 ---
 
-## Do First Next Session — S728
+## Do First Next Session — S729
 
-Three Patrick actions needed — do these in order:
-
-**Step 1 — Push S726 code** (was pending from last session):
+**Step 1 — Push S728 code:**
 ```powershell
-git add packages/backend/src/index.ts
-git add packages/backend/src/services/leadScoringService.ts
-git add packages/backend/src/services/mailerliteService.ts
-git add packages/backend/src/jobs/outreachEmailsCron.ts
-git add packages/backend/src/services/emailDiscoveryService.ts
 git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260515180000_add_email_verification_token_expiry/migration.sql
-git add packages/backend/src/controllers/authController.ts
-git commit -m "S726: pipeline punch list (cron step 3, HOT-tier, MailerLite batching, DC parser, email extraction), email verification token expiry migration"
+git add packages/database/prisma/migrations/20260515000000_add_ebay_store_url_to_organizer/migration.sql
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/pages/organizer/settings.tsx
+git add packages/frontend/pages/organizer/settings/ebay.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S728: eBay store URL on organizer profile, category picker on eBay settings overrides"
 .\push.ps1
 ```
 
-**Step 2 — Deploy email verification migration** (required after S726 push is live):
+**Step 2 — Deploy both pending migrations** (email verification token expiry from S726 + eBay store URL from S728 — `migrate deploy` applies all pending in one shot):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
-```
-
-**Step 3 — Push S727 code:**
-```powershell
-git add packages/backend/src/controllers/ebayController.ts
-git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
-git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "S727: eBay fixes — description template, draft warning, local pickup routing, push from Publish All, card readiness borders, best offers UI, local pickup checkbox"
-.\push.ps1
 ```
 
 ---
@@ -56,18 +41,20 @@ git commit -m "S727: eBay fixes — description template, draft warning, local p
 
 | | |
 |---|---|
-| Vercel (frontend) | ✅ Green |
-| Railway (backend) | ✅ Green |
+| Vercel (frontend) | ✅ Redeploying (S726+S727 pushed this session) |
+| Railway (backend) | ✅ Redeploying |
 | Pipeline (enrich/score/outreach) | ✅ Durably running via GitHub Actions |
 | Address enrichment cron | ✅ Re-enabled S726 |
 | Outreach emails | ✅ Gmail API live (4h cron) |
-| Email verification migration | ⚠️ Migration file created S726 — Patrick must deploy (Step 2 above) |
+| Email verification migration | ⚠️ Pending deploy (Step 2 above — 20260515180000) |
+| eBay store URL migration | ⚠️ Pending deploy (Step 2 above — 20260515000000) |
 
 ---
 
 ## Still Waiting (Blocked Queue)
 
 - **P0-3 Email verification token expiry** — deploy pending (Step 2 above)
+- **eBay store URL field** — deploy pending (Step 2 above)
 - **Chrome QA backlog** — S723/S724/S727 fixes all unverified in browser
 - **Settings UI for OAuth linked accounts** — backend ready, no frontend
 - **Wyoming pawnbroker scraper** — diagnostic pending
