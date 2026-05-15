@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S724 — UX Spot-Check Backlog Burn-Down (COMPLETE)**
+**Latest: S725 — Organizer Pipeline Overhaul + Cron Reliability Keystone (COMPLETE)**
+
+Full diagnosis + overhaul of the scrape→enrich→score→outreach pipeline. ROOT SYSTEMIC ISSUE found: enrichment/scoring/outreach jobs ran as in-memory node-cron inside the backend — every Railway redeploy wiped the schedules, so they ran erratically or not at all (only ~7 outreach emails ever sent; `lastScoredAt` frozen at 2026-05-10). KEYSTONE FIX shipped (architect-spec'd, dev-built, Steps 1+2 of 3): new `POST /api/internal/jobs/run` dispatcher endpoint (reuses `requireSecret`/`x-internal-secret` auth) + 7 `pipeline-*.yml` GitHub Actions workflows that trigger the jobs durably. In-memory crons left running alongside until green cycle — **green cycle now CONFIRMED** (logs show `[InternalJobRunner]` fired all 7 jobs, lead-scoring scored 56,347 orgs). Step 3 (remove in-memory crons) is unblocked. Also shipped: cron cleanup (gated 3 double-running scrapers behind GH Actions, disabled backend sale-enrichment cron, enrich-sale-details daily→3-days, enrich-contact-emails 6h→daily, smtp-verify daily→weekly, deleted auctionzip+canada411 workflows); address enrichment pipeline (new organizerWebsite.ts scraper + organizerWebsiteAddressCron, bulkUpsertEnrichedSales accepts address fields, eligibility query fixed 0→8,804 rows); bug fixes (email-discovery image-filename filter, outreach `[state]` token parsed from address, outreach category filter relaxed +1,661 leads, website→email chaining, `@prisma/client` import build-break fix). DB fixes via psycopg2: 46 junk image-filename emails nulled, 36 corrupted organizer addresses recovered from Sales city/state. ESN auth-cookie route abandoned (Patrick chose website-only). HOT-tier rework signal set approved by Patrick (state-licensed / active platform sales / website+custom-domain-email / 3+ source corroboration — NO Google API) — not yet dispatched. P0 caught + fixed mid-session: address extractor was over-matching and writing page-nav text into Organizer.address — bounded regex + validation + junk blocklist + 110-char cap rewrite shipped.
+
+**Previous: S724 — UX Spot-Check Backlog Burn-Down (COMPLETE)**
 
 Reviewed five most-recent UX spotchecks (2026-05-13, 2026-05-06, 2026-05-02, 2026-04-22, 2026-04-15), grep-verified each issue against current code, dispatched six parallel dev agents to fix everything still unfixed. Confirmed-already-fixed: dashboard salesError destructure + render, edit-sale isError + window.confirm removal, shopper Pickups tab render block (now uses local holds query), add-items useMutation hooks moved before early returns, add-items duplicate saleId useEffect collapsed, search input aria-label, sale type filter aria-label, approachNotes.startDate parseISO bug (file refactored, code path gone). Shipped this session: (1) **create-sale.tsx** — added `isOnlineOnly: form.isOnlineOnly` to `buildPayload()` + matching backend `saleCreateSchema` zod field so the toggle now actually persists (frontend was sending nothing, knock-on found backend strip), removed 3 stale TODO comments, added aria-labels to 3 photo manipulation buttons. (2) **add-items/[saleId].tsx** — feature-flagged "Enhance All" stub button behind `NEXT_PUBLIC_ENABLE_ENHANCE_ALL` (RapidCapture already gates on `&& onEnhanceAll`), wrapped 8 `console.error` calls in dev-only guards, hoisted `URL.createObjectURL(pendingFaceBlob)` into a `useMemo` + `useEffect` revoke cleanup, replaced native `confirm()` for bundle delete with inline confirm-state pattern, camera heading now reflects `rapidItems.length` too. (3) **line-queue/[id].tsx** — fixed Rules of Hooks violation (auth redirect now in useEffect after all hooks; render-guard runs identically every render), added initial-load error state with Retry, added `lastSyncedAt` staleness indicator ("Updated Xs ago" + amber "⚠ Not updating" after 30s), added aria-label to Mark Entered button. (4) **shopper/dashboard.tsx** — replaced `alert()` with `showToast` for referral copy, wrapped 2 `console.error` in dev guards. (5) **index.tsx** — added `isError` to search useQuery + error message, gated "Save This Search" behind `user` (guests get sign-in link), added `aria-pressed` to date filters, gated SaleMap on `hasMapPins` (no more 220px empty container). (6) **sales/[id].tsx** — fixed OG meta double-render (was rendering `<SaleOGMeta>` twice when SSR ogHead truthy), moved Buyer's Premium disclosure from left column to immediately above Auction Items section header. (7) **organizer/dashboard.tsx** — aria-label on welcome banner ✕, replaced `setTimeout(window.location.reload, 1000)` with `queryClient.invalidateQueries(['organizer-sales', user?.id])` at both reopen sites. (8) **edit-sale/[id].tsx** — added `id="edit-{field}"` + matching `htmlFor` to 12 label/input pairs (title, saleType, description, startDate, endDate, startTime, endTime, address, city, state, zip, notes). (9) **backend saleController.ts** — added `isOnlineOnly: z.boolean().optional()` to `saleCreateSchema` (S724 knock-on from frontend dispatch). All edits verified via Read tool against Windows source-of-truth files; VM-side TS check unreliable due to mount truncation, deferred to Vercel/Railway build for final signal.
 
@@ -112,10 +116,21 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | AI listing enrichment | Fire-and-forget | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` | S651 |
 | CategoryTopFinds TrendingSection | Cron runs 05:00 UTC — no data until first run | QA after nightly run; verify TrendingSection on `/categories/[category]` | S647 |
 | Outreach pipeline open/click tracking | Gmail API live but no cron send yet | After next 4-hour cron window: check Railway logs for send success, then verify pixel route 200 | S721 |
+| Cron migration Step 3 | Steps 1+2 shipped S725, green cycle confirmed | Dispatch dev: remove in-memory `cron.schedule` calls + index.ts wiring for the 7 pipeline jobs (outreachEmailsCron, leadScoringJob, websiteEnrichmentJob, emailDiscoveryJob, organizerWebsiteAddressCron, autoSeedOutreachCron) so GitHub workflows are sole trigger | S725 |
+| HOT-tier rework | Patrick approved signal set S725 | Dispatch dev to rework leadScoringService: HOT = state-licensed OR active platform sales OR website+custom-domain email OR 3+ source corroboration. NO Google API. | S725 |
+| MailerLite 429 storm | `syncLeadTierGroups` syncs orgs one-at-a-time, thousands of HTTP 429s | Dispatch dev: batch the MailerLite tier sync (their API has batch endpoint) or add rate-limiting | S725 |
+| Washington D.C. orgs skipped | outreach `[state]` regex expects 2-letter code, address says "D.C." | Dispatch dev: map "D.C."/"Washington, D.C." → "DC" in the state parser | S725 |
+| Email discovery extraction quality | extracts malformed strings (apostrophe-emails, markdown links) — rejected correctly but wasteful | Dispatch dev: tighten email candidate extraction in emailDiscoveryService | S725 |
+| Re-enable address cron | `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT` set to false S725 as stopgap during extractor bug | After S725 extractor-fix push deploys: set `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=true` in Railway | S725 |
+| Confirm 7 new pipeline workflows | Need `RAILWAY_BACKEND_URL` + `INTERNAL_API_TOKEN` GitHub repo secrets confirmed | Verify both secrets exist in repo Settings; manually run one `pipeline-*.yml` workflow, expect 202 | S725 |
 
 ---
 
 ## Recent Sessions
+
+### S725 — Organizer Pipeline Overhaul + Cron Reliability Keystone (COMPLETE)
+
+Diagnosed and overhauled the full organizer-acquisition pipeline. **Root systemic issue:** enrichment/scoring/outreach jobs were in-memory node-cron — Railway's frequent redeploys wiped them, so the pipeline barely ran (only ~7 outreach emails ever; `lastScoredAt` frozen 2026-05-10). **Keystone fix** (architect-spec'd → dev-built, Steps 1+2 of 3): `POST /api/internal/jobs/run` dispatcher (reuses `requireSecret` auth, in-process job lock) + 7 `pipeline-*.yml` GitHub Actions workflows. In-memory crons left running alongside as belt-and-suspenders; **green cycle confirmed** in Railway logs (`[InternalJobRunner]` fired all 7 jobs; lead-scoring scored 56,347 orgs COLD 14,165/WARM 41,598/HOT 584). Build broke twice on the first push: (1) `@findasale/database` import not a backend dep — `organizerWebsiteAddressCron.ts` used `Prisma.sql` as a runtime value so it crashed at startup; fixed both it and `emailDiscoveryService.ts` to `@prisma/client` (canonical pattern). **Earlier in session:** cron-frequency cleanup (3 double-running scrapers gated behind GH Actions, backend sale-enrichment disabled, enrich-sale-details daily→3d, enrich-contact-emails 6h→daily, smtp-verify daily→weekly, deleted auctionzip+canada411 workflows); address-enrichment pipeline (organizerWebsite.ts scraper + organizerWebsiteAddressCron + bulkUpsertEnrichedSales address fields; eligibility query fixed from 0→8,804 matching rows); outreach/enrichment bug fixes (email-discovery image-filename filter, `[state]` token parsed from address since `licenseState` is NULL for whole queue, category filter relaxed to allow NULL category +1,661 leads, website→email enrichment chaining). DB fixes via psycopg2: 46 junk image-filename emails nulled; 36 organizer addresses corrupted by the address cron's over-matching extractor — all recovered from each org's Sales city/state. **P0 mid-session:** address extractor was matching street-suffix words hundreds of chars downstream, writing page-nav text/auction descriptions into `Organizer.address` — dev rewrote with bounded regex + candidate validation + 60-word junk blocklist + 110-char cap + trailing-junk strip + JSON-LD-primary; self-tests confirm garbage rejected, real addresses accepted. Decisions: ESN authenticated-cookie route abandoned (Patrick chose website-only — lower legal/detection risk); HOT-tier signal set approved (state-licensed / active platform sales / website+custom-domain email / 3+ source corroboration — NO Google API). Three consolidated pushblocks delivered + one build-fix pushblock. Git index corruption fixed (`Remove-Item .git\index; git reset`). VM mount truncation bug recurred repeatedly — all final files verified Windows-side.
 
 ### S724 — UX Spot-Check Backlog Burn-Down (COMPLETE)
 
@@ -191,74 +206,32 @@ Chrome QA on 12 Wave 2 features (main session, no subagent). ✅ #406 Split Bill
 
 ---
 
-## Next Session — S725
+## Next Session — S726
 
-### First Action — Chrome QA Smoke Test on S723 + S724 Fixes
+### First Action — Verify S725 pipeline overhaul is live
 
-S724 added a second wave of changes (UX spotcheck burn-down). The S724 verification checklist is separate from the S723 list — see "S724 Verification Checklist" below. Run the S723 checklist (below) first, then S724.
+1. Confirm Railway deploy is green after the S725 build-fix push (organizerWebsiteAddressCron.ts + emailDiscoveryService.ts `@prisma/client` import + organizerWebsite.ts extractor rewrite). If Patrick hasn't pushed it yet, that pushblock is the first thing.
+2. Confirm the 7 `pipeline-*.yml` GitHub workflows run green — requires `RAILWAY_BACKEND_URL` + `INTERNAL_API_TOKEN` repo secrets (Settings → Secrets and variables → Actions). Manually run one (Auto Seed is quickest), expect HTTP 202.
+3. After the deploy is green: set `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=true` in Railway (set false S725 as a stopgap during the extractor bug).
 
-### S724 Verification Checklist (Chrome QA)
+### Priority work — dispatch the pipeline punch list (all S725-added in Blocked Queue)
 
-1. `/organizer/create-sale` Step 2 → toggle "Online Only" → publish → verify the new Sale row in DB has `isOnlineOnly=true` (psycopg2 query against Railway).
-2. `/organizer/create-sale` Step 3 → tab through photo thumbnails with keyboard → confirm screen reader announces "Move photo left/right/Remove photo" not Unicode glyphs.
-3. `/organizer/line-queue/[saleId]` as a non-organizer account → expect redirect to /login, NO React "Rendered fewer hooks than expected" error in DevTools console.
-4. `/organizer/line-queue/[saleId]` → kill backend → wait 30s → confirm "⚠ Not updating" amber indicator appears.
-5. `/shopper/dashboard` → click "Copy Referral Link" → expect a toast (no native browser alert).
-6. `/` (homepage) as guest → type a search → confirm "Sign in to save" link appears (not the broken Save button). Sign in → confirm Save button appears.
-7. `/sales/[id]` an auction sale → view source on `<head>` → confirm exactly ONE `<meta property="og:title">` element (was duplicating).
-8. `/sales/[id]` an auction sale with buyer's premium → scroll to items section → confirm the buyer's premium block sits immediately above "Auction Items" header (was hidden in left column).
-9. `/organizer/dashboard` → reopen an ended sale → expect no full-page flash (was reloading).
-10. `/organizer/edit-sale/[id]` → click any field label → confirm focus lands on the matching input (proves `htmlFor`/`id` pairing).
-11. `/organizer/add-items/[saleId]` → bundle row → click Remove → expect inline Confirm/Cancel (not native confirm dialog).
+1. **Cron migration Step 3** — remove the in-memory `cron.schedule` calls + index.ts wiring for the 7 pipeline jobs now that the green cycle is confirmed. GitHub workflows become sole trigger.
+2. **HOT-tier rework** — leadScoringService: HOT = state-licensed OR active platform sales OR website+custom-domain email OR 3+ source corroboration. Signal set approved by Patrick. NO Google API.
+3. **MailerLite 429 batching** — `syncLeadTierGroups` syncs one-org-at-a-time; batch it.
+4. **D.C. state parser** — outreach `[state]` regex skips "Washington, D.C." orgs; map to "DC".
+5. **Email discovery extraction quality** — tighten candidate extraction (apostrophe-emails, markdown links).
 
-### First Action — Chrome QA Smoke Test on S723 Fixes
+These touch different files mostly — can dispatch in parallel. HOT-tier rework needs a Chrome QA pass after (tier distribution check).
 
-Per CLAUDE.md §10 (Post-fix live verification): the next session MUST start with a Chrome smoke test of the S723 fixes before any new work. Pages to hit:
+### Pending push
 
-1. `/organizer/edit-item/[id]` — confirm packageType dropdown shows new eBay enum values (MAILING_BOX, PADDED_BAGS, etc., NOT "Box / Mailing Tube / Thick Envelope"). Save weight/dims/packageType → reload → values still there. Click Push to eBay → toast confirms push, NO category/price reversion.
-2. `/organizer/edit-item/[id]` EbayCompTiles — eBay summary card AND 2-3 image tile grid both render.
-3. Condition grade B/A/etc. on a fresh item → XP balance +5 in guild ledger.
-4. Logged-out attempt: register `victim@yahoo.com` w/ password, sign out, click Sign in with Google using same email → expect amber banner redirect to /login, NO silent takeover.
-5. EbayCategoryPicker on edit-item — type "musical", "guitar", "table" → dropdown should populate with real eBay categories.
+S725 build-fix pushblock (3 files: organizerWebsiteAddressCron.ts, emailDiscoveryService.ts, organizerWebsite.ts) — confirm pushed. This wrap push: claude_docs/STATE.md + claude_docs/patrick-dashboard.md.
 
-### S723 Wrap Push Block
+### Carried-over Blocked Queue items (lower priority)
 
-Most code files were pushed iteratively during the session. The final wrap push consolidates any remaining uncommitted changes + the doc updates (STATE.md + dashboard are HARD RULE per CLAUDE.md §12). Run:
-
-```powershell
-# Most likely still uncommitted (last-iteration code edits)
-git add packages/backend/src/controllers/itemController.ts
-git add packages/backend/src/controllers/saleController.ts
-git add packages/frontend/pages/organizer/edit-item/[id].tsx
-
-# Wrap doc updates (HARD RULE §12)
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-
-git commit -m "S723 wrap: auto-save before eBay push, Favorite isNot:null fix, getItemById package fields, [updateItem] diagnostic log; doc updates"
-.\push.ps1
-```
-
-If `push.ps1` flags additional uncommitted files (likely `ebayController.ts`, `ebayTaxonomyService.ts`, or any frontend file not yet pushed), `git add` them and commit again — they're all S723 work.
-
-### Priority 1 — Chrome QA on S723 fixes (see "First Action" above)
-
-### Priority 2 — Schema Migration (P0-3: Email Verification Token Expiry)
-
-Email verification tokens currently never expire. Add `emailVerificationTokenExpiry DateTime?` to User model, update authController verifyEmail check + resend-verification generation. Dispatch findasale-dev with schema-change protocol (§6).
-
-### Priority 3 — Verify Outreach Gmail API Sends
-
-Check Railway logs for outreach cron execution since S721/S722 deploy. Look for `[OutreachCron]` success lines + verify Gmail API quota usage on console.cloud.google.com.
-
-### Priority 4 — Build Settings UI for OAuth Linked Accounts
-
-Backend `/auth/oauth/link` endpoint is ready (S723). No frontend surface yet. Build linked-accounts section in `pages/organizer/settings.tsx` (or a new `/settings/security` tab) — list connected providers, "Link Google" button that initiates OAuth, "Unlink" button.
-
-### Other Blocked Queue Items (low priority)
-
-- Wyoming pawnbroker scraper — diagnostic needed
-- AI listing enrichment — check Railway logs for `[listingEnrichmentService]`
-- CategoryTopFinds TrendingSection — verify after nightly 05:00 UTC cron
-- Outreach open/click pixel tracking — verify after first Gmail API cron send
-- AuctionNinja + NAA scrapers — flag in sourceRegistry decision needed
+- P0-3 Email verification token expiry — schema migration needed
+- Settings UI for OAuth linked accounts — backend `/auth/oauth/link` ready, no frontend
+- eBay DRAFT push artifact — Patrick decision (recommended option C: "Publish to eBay now" button)
+- Chrome QA backlog: S723 + S724 fixes never got their smoke tests (eBay packageType/comp tiles/XP/OAuth, UX spotcheck items) — see prior Next Session checklists in git history if needed
+- Wyoming pawnbroker scraper, AI listing enrichment, CategoryTopFinds TrendingSection, AuctionNinja+NAA scrapers
