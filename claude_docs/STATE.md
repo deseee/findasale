@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S726 — Pipeline Punch List + Email Verification Token (COMPLETE)**
+**Latest: S727 — eBay Integration Fixes + Feature Batch (COMPLETE)**
+
+Five eBay issues diagnosed and fixed in three parallel agent dispatches. (1) **{{DESCRIPTION}} template bug** — ebayController.ts: when item had no description, first branch left `{{DESCRIPTION}}` literal in eBay listing; fixed to replace with empty string in the no-description case. (2) **eBay push not firing from Publish All** — review.tsx: `publishMutation.onSuccess` was missing the eBay push call entirely; wired to fire for checked items matching pattern from `handleApproveAll`. `ebayPushMutation.onError` toast also added (was silent). (3) **Draft item eBay push** — `draftStatus` and `ebayShippingOverride` were both missing from item SELECT in push loop (silent regression); added. Push now includes `warning: 'DRAFT_ON_FINDASALE'` for draft items; review.tsx shows info toast. (4) **Card readiness borders** — review.tsx: `computeReadiness()` helper added; each item card now has `border-l-4` in red/yellow/green/blue based on completeness (blue = green + weight set + eBay connected). (5) **Best Offers UI** — edit-item/[id].tsx: toggle + two percentage inputs (auto-accept/auto-decline) with live dollar previews and threshold validation; converts to dollar amounts on save; reverse-computed from stored amounts on load. (6) **Local pickup checkbox** — edit-item/[id].tsx: checkbox sets `ebayShippingOverride = 'LOCAL_PICKUP_ONLY'`; smart phrase detector scans description/notes and shows dismissible nudge. review.tsx: same checkbox added to per-item eBay section. ebayController.ts: `resolvePoliciesForItem` routes to local pickup fulfillment policy when override is set. S726 push still pending (see Next Session).
+
+**Previous: S726 — Pipeline Punch List + Email Verification Token (COMPLETE)**
 
 Confirmed S725 deploy green (all 3 commits on main, Railway healthy). Set `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=true` in Railway (re-enabled after S725 extractor fix). Verified GH Actions pipeline: auto-seed-outreach workflow fired, InternalJobRunner confirmed, 255 eligible orgs found, 0 new to seed (queue caught up). Dispatched 5 pipeline punch list items in parallel — all shipped: (1) **Cron Step 3** — removed 6 in-memory `cron.schedule` calls + imports from index.ts; GitHub Actions now sole trigger for all pipeline jobs. (2) **HOT-tier rework** — leadScoringService.ts: HOT = isStateLicensed OR esnOrgId non-null OR website+custom-domain-email OR sourceCount≥3; numeric score path unchanged. (3) **MailerLite 429 batching** — mailerliteService.ts: 55k one-at-a-time HTTP calls → bulk import 500/batch with 500ms delay + Retry-After retry logic; outreachEmailsCron.ts import updated. (4) **D.C. state parser** — outreachEmailsCron.ts: `normalizeDottedState()` helper added, handles D.C./P.R./VI/GU/AS; addressStateMatch regex updated to tolerate trailing ZIP. (5) **Email discovery extraction quality** — emailDiscoveryService.ts: EMAIL_REGEX tightened (no apostrophes/brackets), `preprocessTextForExtraction()` strips markdown links, `isMalformedCandidate()` gate added. Also shipped: **P0-3 Email verification token expiry** — schema migration created (20260515180000), schema.prisma updated (`emailVerificationTokenExpiry DateTime?` on User), authController.ts updated (set 24h expiry on register, check+clear on verifyEmail). **Migration NOT yet deployed** — Patrick must run manually (see Next Session). Confirmed: eBay DRAFT "option C" already implemented in a prior session — removed from Blocked Queue.
 
@@ -132,6 +136,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 ## Recent Sessions
 
+### S727 — eBay Integration Fixes + Feature Batch (COMPLETE)
+
+Five eBay issues fixed in three parallel dispatches. (1) `{{DESCRIPTION}}` template bug — empty-description path left placeholder literal; fixed. (2) eBay push missing from `publishMutation.onSuccess` in review.tsx — wired. (3) `draftStatus` + `ebayShippingOverride` missing from item SELECT in push loop — added; draft warning field added to push results. (4) Card readiness borders (red/yellow/green/blue) added to review page item cards via `computeReadiness()`. (5) Best Offers UI — toggle + percentage inputs with live dollar preview on edit-item page. (6) Local pickup checkbox on edit-item + review cards; smart phrase detector nudge; backend routing to local pickup fulfillment policy when override set. Files: ebayController.ts, review.tsx, edit-item/[id].tsx. All TS clean.
+
 ### S726 — Pipeline Punch List + Email Verification Token (COMPLETE)
 
 Confirmed S725 deploy green. Patrick set `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=true` in Railway (re-enabled after extractor fix). GH Actions verified: auto-seed-outreach fired, InternalJobRunner confirmed, 255 eligible orgs found, 0 new to seed (queue caught up — healthy signal). Dispatched 5 pipeline punch list items in parallel, all shipped: (1) **Cron Step 3** — removed 6 in-memory `cron.schedule` calls + all related imports from index.ts; GitHub Actions workflows are now the sole trigger for all 7 pipeline jobs. (2) **HOT-tier rework** — leadScoringService.ts rewritten: HOT = isStateLicensed OR esnOrgId non-null OR website+custom-domain-email OR sourceCount≥3; numeric score path unchanged. (3) **MailerLite 429 batching** — mailerliteService.ts: one-at-a-time HTTP calls replaced with bulk-import 500-org batches + 500ms inter-batch delay + Retry-After header retry; outreachEmailsCron.ts import updated. (4) **D.C. state parser** — outreachEmailsCron.ts: `normalizeDottedState()` helper handles D.C./P.R./VI/GU/AS; addressStateMatch regex updated to tolerate trailing ZIP code. (5) **Email discovery extraction quality** — emailDiscoveryService.ts: EMAIL_REGEX tightened (strips apostrophes/brackets), `preprocessTextForExtraction()` strips markdown links before scanning, `isMalformedCandidate()` gate added. Also shipped: **P0-3 Email verification token expiry** — migration file 20260515180000 created, schema.prisma updated (`emailVerificationTokenExpiry DateTime?` on User), authController.ts updated (24h expiry set on register, expiry checked+cleared on verifyEmail). Migration not yet deployed — Patrick action required. Confirmed eBay DRAFT "option C" (Publish to eBay button) already implemented in a prior session; removed from Blocked Queue.
@@ -172,34 +180,17 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 
 **Token note:** Patrick flagged limited Sonnet budget Tuesday afternoon → Friday reset. Session ran token-conscious: 2 parallel dev dispatches early, then inline edits for all <20-line iteration fixes, no agent dispatches for log diagnostics. Direct DB updates via psycopg2 used to bypass form-save bug during isolation testing.
 
-### S722 — Monthly Retro + Auth Security Hardening (COMPLETE)
-
-Monthly retro (automated task, 8th of month). 5/9 April recommendations were still open — all dispatched and fixed. Rate limiter fix: loginLimiter raised from 5→15 attempts per 15min + `skipSuccessfulRequests: true` (rate limit was blocking Patrick on two devices at home because Redis persisted failed OAuth attempts from S671-S674 debugging storm). Auth hacker audit: 16 findings (3 P0, 4 P1, 5 P2, 4 P3). 10 fixes applied: access JWT expiry 7d→15m (was valid after cookie expired); /auth/oauth got registerLimiter (was open to account takeover at scale); tokenVersion absent-JWT bypass fixed; organizerTokenVersion check extended to roles[] array; logout clearCookie attributes matched set-cookie; resend-verification regenerates token; jwt.verify locked to HS256; /verify-email got rate limiter; req.ip used for password reset logging; OAuthBridge CSRF skip documented. Two scrapers fixed: OSM changed to overpass.kumi.systems (overpass-api.de was 406 for all 137 metros); Indiana licensing: 3 root causes found (session cookie not forwarded between GET/POST, missing __VIEWSTATEGENERATOR field, missing Recaptcha1 field). Doc cleanup: 22 root violations in claude_docs/ root resolved, 2 deprecated files archived. CLAUDE.md updated: QA ceiling rule (≥8 Blocked Queue → mandatory QA session), dev agent prompt items 5+6 (auth grep, bulk-edit batching), file placement pre-check. SH-020/021/022 added to self_healing_skills.md. Two items deferred: P0-3 (email verification token expiry — needs schema migration) and P1-1 (OAuth auto-link — Patrick decision needed). **Push block in Next Session.**
+### S722 — Monthly Retro + Auth Security Hardening (archived — see session-log-archive.md)
 
 
 ---
 
-## Next Session — S727
+## Next Session — S728
 
-### First Action — Deploy email verification migration (Patrick action required)
+### First Action — Push S726 + S727 code and deploy email verification migration (Patrick actions)
 
+Push S726 files first (were pending):
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-Then push the following files via pushblock:
-- `packages/database/prisma/schema.prisma`
-- `packages/database/prisma/migrations/20260515180000_add_email_verification_token_expiry/migration.sql`
-- `packages/backend/src/controllers/authController.ts`
-
-### S726 wrap push
-
-```powershell
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
 git add packages/backend/src/index.ts
 git add packages/backend/src/services/leadScoringService.ts
 git add packages/backend/src/services/mailerliteService.ts
@@ -212,13 +203,37 @@ git commit -m "S726: pipeline punch list (cron step 3, HOT-tier, MailerLite batc
 .\push.ps1
 ```
 
-### Chrome QA backlog (still needed)
+Then deploy the email verification migration:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-S723 + S724 fixes never got smoke tests. Priority:
-- eBay comp tiles (2-3 tile grid on edit-item page)
-- Condition Rating XP (+5 on grade set)
-- OAuth amber banner (sign-in-with-Google on email-match account)
-- UX spotcheck items (isOnlineOnly toggle persists, line-queue staleness indicator, save-search for guests)
+Then push S727 files:
+```powershell
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "S727: eBay fixes — description template, draft warning, local pickup routing, push from Publish All, card readiness borders, best offers UI, local pickup checkbox"
+.\push.ps1
+```
+
+### Chrome QA backlog (still needed — S723/S724/S727 all unverified)
+
+Priority order:
+- eBay push flow end-to-end: review page checkbox → approve → verify push fires (S727 fix)
+- Card readiness borders: verify red/yellow/green/blue render correctly on review cards
+- Best Offers: edit-item → toggle on → set percentages → push to eBay → verify bestOfferTerms in payload
+- Local pickup: set override → push → verify correct fulfillment policy used
+- eBay comp tiles (2-3 tile grid on edit-item page) — S723
+- Condition Rating XP (+5 on grade set) — S723
+- OAuth amber banner (sign-in-with-Google on email-match account) — S723
+- isOnlineOnly toggle persists, line-queue staleness indicator, save-search for guests — S724
 
 ### Lower priority carries
 

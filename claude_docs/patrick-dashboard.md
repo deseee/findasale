@@ -1,62 +1,54 @@
-# Patrick's Dashboard — S725 Wrap
+# Patrick's Dashboard — S727 Wrap
 
 ---
 
-## What Happened This Session — S725 (Organizer Pipeline Overhaul)
+## What Happened This Session — S727 (eBay Integration Fixes)
 
-You asked which crons are running, whether they're optimized, and why scraped organizers were missing addresses. That turned into a full diagnosis and overhaul of the scrape → enrich → score → outreach pipeline.
+Six eBay fixes and features shipped in three parallel agent dispatches.
 
-**The big finding:** the enrichment, lead-scoring, and outreach jobs ran as in-memory schedules inside the backend. Every Railway redeploy wiped them — so the pipeline barely ran. Only ~7 outreach emails had ever been sent, and lead scoring hadn't run since May 10. The scrapers survived because they're GitHub Actions; everything downstream didn't.
+**Bugs fixed:** `{{DESCRIPTION}}` placeholder was showing literally in eBay listings when an item had no description — one-line fix. eBay push was completely missing from the "Publish All" button path in the review queue — it only fired on "Approve" and "Approve All." Also found that `draftStatus` and `ebayShippingOverride` were both accidentally missing from the item database query in the push loop.
 
-**Keystone fix shipped — cron reliability migration (Steps 1 & 2 of 3):** a new authenticated endpoint (`POST /api/internal/jobs/run`) plus 7 GitHub Actions workflows that trigger the pipeline jobs durably, the same way the scrapers already work. The old in-memory crons were left running alongside as a safety net. **The green cycle is confirmed** — your logs showed all 7 jobs firing through the new endpoint and lead scoring processing 56,347 organizers. Step 3 (removing the old in-memory crons) is now unblocked for next session.
-
-**Also shipped:**
-
-- **Cron cleanup** — gated 3 scrapers that were double-running (backend + GitHub Actions), disabled the redundant backend sale-enrichment cron, stretched over-frequent jobs (enrich-sale-details daily→3 days, contact-emails 6h→daily, smtp-verify daily→weekly), deleted 2 dead workflow files.
-- **Address enrichment pipeline** — new scraper that reads an organizer's own website for their street address (you chose this over the riskier EstateSales.NET login-cookie route). Fixed its eligibility query, which was matching zero rows — it now correctly targets 8,804 organizers.
-- **Outreach bug fixes** — every outreach email was rendering "[state]" as blank ("Shoppers in  are already looking"); now parsed from the address. Half the outreach queue (1,661 leads) was silently invisible behind a category filter; fixed. Email discovery was grabbing image filenames as email addresses; filter fixed.
-- **Database cleanup** — 46 junk image-filename "emails" nulled out. 36 organizer addresses that got corrupted by a bug (see below) were all recovered from each organizer's own Sales records.
-
-**P0 caught mid-session:** the new address scraper's extraction was over-matching — writing page navigation text and auction descriptions into the address field ("Chairish Auctions" got an address of "0 Shopping Cart Your cart is currently empty..."). Caught it in your logs, recovered the 36 corrupted rows, and rewrote the extractor with a bounded regex, validation, a junk-word blocklist, and a length cap. Self-tests confirm garbage is now rejected.
-
-**Decisions you made:** abandon the EstateSales.NET auth-cookie route (website scraping is lower legal/detection risk); HOT-tier signal set approved — state-licensed OR active platform sales OR website+custom-domain email OR 3+ source corroboration, with no Google API use.
+**New features:** Best Offers UI on the edit-item page — toggle + two percentage inputs (e.g. 10% accept threshold and 25% decline threshold on a $100 item = auto-accept above $90, auto-decline below $75) with live dollar previews. Local pickup checkbox on both the edit-item page and the review queue cards, with a smart detector that auto-suggests it when your description mentions "local pickup," "no shipping," or similar phrases. The backend now automatically routes to your local pickup fulfillment policy when this is set. Card readiness borders on the review queue — each item card now has a left border that tells you at a glance: red = not ready (missing title/price/photo), yellow = usable but could use improvement (missing category/condition/description), green = FindA.Sale ready, blue = green plus weight and eBay connected.
 
 ---
 
-## Do First Next Session — S726
+## Do First Next Session — S728
 
-1. **Confirm the S725 build-fix push is live and green on Railway.** If you haven't pushed the 3-file build-fix block yet, that's first.
-2. **Confirm the 7 new `pipeline-*.yml` workflows run green** — they need two GitHub repo secrets: `RAILWAY_BACKEND_URL` and `INTERNAL_API_TOKEN` (Settings → Secrets and variables → Actions). Your scrapers already use both so they almost certainly exist. Manually run one workflow to test — expect HTTP 202.
-3. **Set `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=true` in Railway** — it was set to false as a stopgap during the extractor bug. Turn it back on once the deploy is green.
+Three Patrick actions needed — do these in order:
 
-**Then dispatch the pipeline punch list** (all in STATE.md Blocked Queue): cron migration Step 3, HOT-tier rework, MailerLite 429 batching, D.C. state parser fix, email-discovery extraction quality. Mostly different files — can run in parallel.
-
----
-
-## Pending Pushes
-
-**S725 build-fix block** (the most recent thing — confirm it's pushed):
-
+**Step 1 — Push S726 code** (was pending from last session):
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/jobs/organizerWebsiteAddressCron.ts
+git add packages/backend/src/index.ts
+git add packages/backend/src/services/leadScoringService.ts
+git add packages/backend/src/services/mailerliteService.ts
+git add packages/backend/src/jobs/outreachEmailsCron.ts
 git add packages/backend/src/services/emailDiscoveryService.ts
-git add packages/backend/src/services/scraper/sources/organizerWebsite.ts
-git commit -m "Fix address extractor over-matching + Prisma import build break"
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260515180000_add_email_verification_token_expiry/migration.sql
+git add packages/backend/src/controllers/authController.ts
+git commit -m "S726: pipeline punch list (cron step 3, HOT-tier, MailerLite batching, DC parser, email extraction), email verification token expiry migration"
 .\push.ps1
 ```
 
-**This wrap** (STATE.md + dashboard — HARD RULE §12):
-
+**Step 2 — Deploy email verification migration** (required after S726 push is live):
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**Step 3 — Push S727 code:**
+```powershell
+git add packages/backend/src/controllers/ebayController.ts
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S725 wrap: pipeline overhaul + cron reliability keystone — doc updates"
+git add claude_docs/strategy/roadmap.md
+git commit -m "S727: eBay fixes — description template, draft warning, local pickup routing, push from Publish All, card readiness borders, best offers UI, local pickup checkbox"
 .\push.ps1
 ```
-
-If `push.ps1` flags other uncommitted files, they're earlier S725 work (the big pipeline pushblock) — `git add` and commit them too.
 
 ---
 
@@ -65,23 +57,18 @@ If `push.ps1` flags other uncommitted files, they're earlier S725 work (the big 
 | | |
 |---|---|
 | Vercel (frontend) | ✅ Green |
-| Railway (backend) | ✅ Green — was failing 3× today on a bad import; fixed |
-| Cron reliability keystone | ✅ Steps 1+2 live, green cycle confirmed — Step 3 pending |
-| Pipeline (enrich/score/outreach) | ✅ Now running durably via GitHub Actions |
-| Address enrichment cron | ⚠️ `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=false` — re-enable after build-fix deploys |
-| Outreach emails | ✅ Sending in test mode (to your Yahoo). Live = unset `OUTREACH_TEST_EMAIL` |
-| Lead scoring | ✅ Ran — 56,347 orgs (COLD 14,165 / WARM 41,598 / HOT 584). HOT logic still old — rework approved, not yet built |
+| Railway (backend) | ✅ Green |
+| Pipeline (enrich/score/outreach) | ✅ Durably running via GitHub Actions |
+| Address enrichment cron | ✅ Re-enabled S726 |
+| Outreach emails | ✅ Gmail API live (4h cron) |
+| Email verification migration | ⚠️ Migration file created S726 — Patrick must deploy (Step 2 above) |
 
 ---
 
-## Still Waiting (Blocked Queue — see STATE.md for full list)
+## Still Waiting (Blocked Queue)
 
-- **Cron migration Step 3** — remove in-memory crons (green cycle confirmed, unblocked)
-- **HOT-tier rework** — signal set approved, not yet dispatched
-- **MailerLite 429 storm** — tier sync needs batching
-- **D.C. state parser** — Washington D.C. organizers skipped
-- **Email discovery extraction quality** — malformed candidates (rejected, but wasteful)
-- **P0-3 Email verification token expiry** — schema migration, carried from S722
+- **P0-3 Email verification token expiry** — deploy pending (Step 2 above)
+- **Chrome QA backlog** — S723/S724/S727 fixes all unverified in browser
 - **Settings UI for OAuth linked accounts** — backend ready, no frontend
-- **eBay DRAFT push** — your A/B/C decision (recommended: option C)
-- **Chrome QA backlog** — S723 + S724 fixes still never got their smoke tests
+- **Wyoming pawnbroker scraper** — diagnostic pending
+- **AuctionNinja+NAA scrapers** — Patrick decision to enable
