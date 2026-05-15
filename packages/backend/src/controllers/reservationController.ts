@@ -216,17 +216,9 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Hold duration by shopper rank (platform-controlled, not organizer-set)
-    const HOLD_DURATION_BY_RANK: Record<string, number> = {
-      INITIATE: 24,
-      SCOUT: 36,
-      RANGER: 48,
-      SAGE: 72,
-      GRANDMASTER: 96,
-    };
-    const holdHours = HOLD_DURATION_BY_RANK[explorerRank] ?? 24;
-    const holdMinutes = holdHours * 60;
-    const expiresAt = new Date(Date.now() + holdHours * 60 * 60 * 1000);
+    // Hold duration by shopper rank — uses canonical getRankBenefits() from rankUtils.ts
+    const holdMinutes = rankBenefits.holdDurationMinutes;
+    const expiresAt = new Date(Date.now() + holdMinutes * 60 * 1000);
 
     const reservation = await prisma.$transaction(async (tx) => {
       // Clear any stale (CANCELLED/EXPIRED) reservation so @unique slot is free
