@@ -54,6 +54,7 @@ const OrganizerSettingsPage = () => {
   const [venmoHandle, setVenmoHandle] = useState('');
   const [zelleHandle, setZelleHandle] = useState('');
   const [pickupWindows, setPickupWindows] = useState('');
+  const [returnWindowHours, setReturnWindowHours] = useState<string>('');
   const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [timezone, setTimezone] = useState('');
@@ -366,6 +367,7 @@ const OrganizerSettingsPage = () => {
           setVenmoHandle(response.data.venmoHandle || '');
           setZelleHandle(response.data.zelleHandle || '');
           setPickupWindows(response.data.pickupWindows || '');
+          setReturnWindowHours(response.data.returnWindowHours != null ? String(response.data.returnWindowHours) : '');
           setAddress(response.data.address || '');
           setStripeConnected(response.data.stripeConnected || false);
           setFoundingOrgBadge(response.data.foundingOrgBadge || false);
@@ -555,6 +557,7 @@ const OrganizerSettingsPage = () => {
         venmoHandle,
         zelleHandle,
         pickupWindows,
+        returnWindowHours: returnWindowHours !== '' ? parseInt(returnWindowHours, 10) : null,
         timezone,
         byAppointment,
         organizerTypes,
@@ -579,6 +582,7 @@ const OrganizerSettingsPage = () => {
         setVenmoHandle(response.data.venmoHandle || '');
         setZelleHandle(response.data.zelleHandle || '');
         setPickupWindows(response.data.pickupWindows || '');
+        setReturnWindowHours(response.data.returnWindowHours != null ? String(response.data.returnWindowHours) : '');
         setTimezone(response.data.timezone || '');
         setByAppointment(response.data.byAppointment || false);
         setOrganizerTypes(response.data.organizerTypes || []);
@@ -687,27 +691,7 @@ const OrganizerSettingsPage = () => {
                 )}
               </div>
 
-              {/* #414 — Grief Firewall (info card — this is a per-sale setting) */}
-              <div className="card p-6">
-                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-1">Grief Firewall</h2>
-                <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
-                  When you're working with a bereaved family, you can turn off automated price and category suggestions for that sale. It keeps the experience quiet and respectful — nothing gets auto-filled without your input.
-                </p>
-                <div className="flex items-start gap-3 p-4 rounded-lg bg-warm-50 dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
-                  <svg className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                  </svg>
-                  <p className="text-sm text-warm-700 dark:text-gray-300">
-                    The Grief Firewall is enabled per sale. When creating or editing a sale, look for <strong>Grief Firewall</strong> in the sale settings.
-                  </p>
-                </div>
-                <Link
-                  href="/organizer/sales"
-                  className="mt-4 inline-block text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 underline"
-                >
-                  Go to My Sales →
-                </Link>
-              </div>
+
             </div>
           )}
 
@@ -1592,6 +1576,19 @@ const OrganizerSettingsPage = () => {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Default Return Window</label>
+                  <p className="text-xs text-warm-500 dark:text-gray-400 mb-1">Hours shoppers have to return an item after pickup. Leave blank for no returns.</p>
+                  <input
+                    type="number"
+                    min={0}
+                    value={returnWindowHours}
+                    onChange={(e) => setReturnWindowHours(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="No returns"
+                  />
+                </div>
+
                 <p className="text-xs text-warm-500 dark:text-gray-400">
                   Your profile helps build trust with shoppers. Keep your information accurate and up-to-date.
                 </p>
@@ -2022,24 +2019,4 @@ const OrganizerSettingsPage = () => {
               deleteAccountMutation.mutate(deletePassword);
             }}
             disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
-            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete My Account'}
-          </button>
-          <button
-            onClick={() => {
-              setIsDeleteModalOpen(false);
-              setDeletePassword('');
-            }}
-            disabled={deleteAccountMutation.isPending}
-            className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-900 dark:text-gray-100 font-medium hover:bg-warm-50 dark:hover:bg-gray-800 disabled:opacity-50 transition"
-          >
-            Cancel
-          </button>
-        </div>
-      </AccessibleModal>
-    </>
-  );
-};
-
-export default OrganizerSettingsPage;
+   

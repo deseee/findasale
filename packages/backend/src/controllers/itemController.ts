@@ -1739,7 +1739,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
 
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { select: { isUnmanagedListing: true, estatePrivacyMode: true, organizer: { select: { userId: true, id: true, subscriptionTier: true } } } } }
+      include: { sale: { select: { isUnmanagedListing: true, organizer: { select: { userId: true, id: true, subscriptionTier: true } } } } }
     });
 
     if (!item) {
@@ -1752,7 +1752,6 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
         message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
         code: 'UNMANAGED_LISTING'
       });
-    }
     }
 
     if (item.sale!.organizer.userId !== req.user.id) {
@@ -1777,12 +1776,6 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
         limit: quotaStatus.limit,
         remaining: quotaStatus.remaining,
       });
-    }
-
-    // #414: Grief Firewall — suppress AI for estate privacy mode
-    if (item.sale?.estatePrivacyMode === true) {
-      console.log(`[GriefFirewall] AI suppressed for sale ${item.saleId} (estatePrivacyMode)`);
-      return res.json({ suggestedTags: [] });
     }
 
     let suggestedTags: string[] = [];
