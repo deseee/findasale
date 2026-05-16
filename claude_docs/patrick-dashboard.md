@@ -2,6 +2,20 @@
 
 ---
 
+## Audit Alerts — Weekly Audit 2026-05-16 🚨
+
+Full report: `claude_docs/audits/weekly-audit-2026-05-16.md`
+
+**CRITICAL — Rate limiter breaks authenticated navigation.** After any failed auth attempt (wrong password, duplicate-email register), the rate limiter starts a ~15-minute window that intercepts the auth-check call made on every page transition. Authenticated users get redirected to `/login` with a "Rate limited. Please wait Xs" toast mid-session. Browser-confirmed: logged in successfully → first page loaded → navigated to second page → session dropped. Any user who mistyps their password is effectively locked out of the app for 15 minutes. **Dispatch findasale-dev before next beta outreach.** (See CRIT-1 in full report.)
+
+**HIGH — #430 Register form still swallowing errors (browser-confirmed this session).** Submitted registration with an existing email — zero feedback, no toast, no inline error, nothing. This is an acquisition blocker. Every outreach email pointing people to register must result in a working flow. (See HIGH-1 in full report.)
+
+**HIGH — Rate limit toast appearing on page load, before any user action.** Organizer profile pages and `/login` are showing "Rate limited. Please wait 269s before retrying" within 1 second of load, before the user has clicked anything. Confusing on high-traffic public routes. (See HIGH-2 in full report.)
+
+**Dispatch order:** CRIT-1 → HIGH-1 (#430) → HIGH-2, then mobile QA (MED-1).
+
+---
+
 ## What Happened This Session — S735
 
 Redesigned the unclaimed organizer profile page into a proper acquisition landing page.
