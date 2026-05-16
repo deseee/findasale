@@ -149,7 +149,7 @@ cron.schedule('0 23 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
   } catch (error) {
     console.error('[TierLapse] Batch tier lapse processing job failed:', error);
   }
-});
+}));
 
 // Run tier-lapse warning queue daily at 8 AM UTC (12 AM EST)
 cron.schedule('0 8 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
@@ -160,4 +160,4 @@ cron.schedule('0 8 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
   } catch (error) {
     console.error('[TierLapse] Tier-lapse warning queue job failed:', error);
   }
-});
+}));

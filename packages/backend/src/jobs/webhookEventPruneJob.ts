@@ -35,7 +35,7 @@ export function scheduleWebhookEventPruneJob(): void {
       console.error('[webhook-prune] Error in webhook event pruning cron:', err?.message || err);
       // Continue — don't let cron job crash
     }
-  });
+  }));
 
   console.log('[webhook-prune] Registered webhook event pruning cron (daily at 3 AM UTC)');
 }
