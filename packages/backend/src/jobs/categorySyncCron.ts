@@ -55,16 +55,15 @@ async function fetchEbayToken(): Promise<string | null> {
   } catch (err) { console.error('[CategorySync] Token fetch error:', err); return null; }
 }
 
-async function syncCategory(slug: string, config: { display: string; ebayIds: string[] }): Promise<void> {
+async function syncCategory(slug: string, config: { display: string; ebayIds: string[] }): Promise<number> {
   const accessToken = await fetchEbayToken();
-  if (!accessToken) { console.error(`[CategorySync] No eBay token — skipping ${slug}`); return; }
+  if (!accessToken) { console.error(`[CategorySync] No eBay token — skipping ${slug}`); return -1; }
 
   const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
   const proxySecret = process.env.EBAY_PROXY_SECRET;
-  // eBay filter syntax requires {id1|id2} — braces must be pre-encoded so Akamai
-  // doesn't reject the raw HTTP path. The Vercel proxy decodes req.query.path once,
-  // leaving %7B/%7C/%7D intact when forwarded to eBay via https.request.
-  const ids = config.ebayIds.join('%7C'); // %7C = pipe (eBay OR separator)
+  // eBay Browse API filter syntax: categoryIds:{id1,id2} — comma-separated, braces pre-encoded.
+  // Pipe (%7C) is Finding API syntax and returns empty results from Browse API.
+  const ids = config.ebayIds.join(',');
   const apiPath = `/buy/browse/v1/item_summary/search?filter=categoryIds%3A%7B${ids}%7D&sort=newlyListed&limit=12`;
 
   try {
@@ -80,7 +79,11 @@ async function syncCategory(slug: string, config: { display: string; ebayIds: st
         },
       }
     );
-    if (!res.ok) { console.error(`[CategorySync] eBay API error for ${slug}: ${res.status}`); return; }
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.error(`[CategorySync] eBay API error for ${slug}: ${res.status} — ${body.slice(0, 200)}`);
+      return -res.status;
+    }
     const data = await res.json() as { itemSummaries?: EbayItem[] };
     const items = data.itemSummaries ?? [];
     console.log(`[CategorySync] ${slug}: ${items.length} items from eBay`);
@@ -107,16 +110,19 @@ async function syncCategory(slug: string, config: { display: string; ebayIds: st
         },
       });
     }
-  } catch (err) { console.error(`[CategorySync] Error for ${slug}:`, err); }
+  } catch (err) { console.error(`[CategorySync] Error for ${slug}:`, err); return -1; }
+  return 0;
 }
 
-export async function runCategorySync(): Promise<void> {
+export async function runCategorySync(): Promise<Record<string, number>> {
   console.log('[CategorySync] Starting...');
+  const results: Record<string, number> = {};
   for (const [slug, config] of Object.entries(CATEGORY_EBAY_MAP)) {
-    await syncCategory(slug, config);
-    await new Promise(r => setTimeout(r, 1000));
+    results[slug] = await syncCategory(slug, config);
+    await new Promise(r => setTimeout(r, 500));
   }
-  console.log('[CategorySync] Done.');
+  console.log('[CategorySync] Done.', results);
+  return results;
 }
 
 export function initCategorySyncCron(): void {

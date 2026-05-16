@@ -851,8 +851,8 @@ router.post('/enrich-sale-details/bulk', bulkUpsertEnrichedSales);
 // POST /api/internal/category-sync/trigger
 router.post('/category-sync/trigger', async (req: express.Request, res: express.Response) => {
   try {
-    runCategorySync().catch(err => console.error('[CategorySync] Trigger error:', err));
-    res.json({ ok: true, message: 'Category sync started' });
+    const results = await runCategorySync();
+    res.json({ ok: true, results });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });
   }
