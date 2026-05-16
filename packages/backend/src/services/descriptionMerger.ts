@@ -94,6 +94,7 @@ function appendWithSeparator(block: string, incoming: string): string {
  *
  * Examples removed when hasWeight=true:
  *   "weighs about 3 pounds" / "it's 48 ounces" / "3 lbs total"
+ *   "2 lb 4 oz" / "2 lb and 4 oz" / "2 lb, 4 oz"
  * Examples removed when hasDimensions=true:
  *   "12 by 8 by 4 inches" / "measures 10 x 6 x 3" / "dimensions are 12 by 8 by 4"
  *   "10 inches wide" / "6 inches tall"
@@ -105,26 +106,35 @@ export function stripShippingPhrases(
   let t = text;
 
   if (opts.hasWeight) {
-    // "weighs [about|approximately|around]? NUMBER [pound(s)|ounce(s)|lb(s)|oz]"
+    // weightUnit: all unit spellings, dot suffix optional (oz, oz., lb, lb., lbs, lbs., etc.)
+    const weightUnit = '(?:pounds?|ounces?|lbs?\\.?|ozs?\\.?)';
+    // weightVal: a single NUMBER UNIT pair
+    const weightVal  = `\\d+(?:\\.\\d+)?\\s*${weightUnit}`;
+    // weightExpr: one or more NUMBER UNIT pairs joined by optional "and" or ","
+    // Consumes compound weights ("2 lb 4 oz", "2 lb and 4 oz", "2 lb, 4 oz")
+    // in a single match so no leading number or connector is left behind.
+    const weightExpr = `${weightVal}(?:\\s*(?:and|,)?\\s*${weightVal})*`;
+
+    // "weighs [about|approximately|around]? <weightExpr>"
     t = t.replace(
-      /\bweigh(?:s|ed|ing)?\s+(?:about|approximately|around|~)?\s*\d+(?:\.\d+)?\s*(?:pounds?|ounces?|lbs?\.?|ozs?\.?)\b/gi,
+      new RegExp(`\\bweigh(?:s|ed|ing)?\\s+(?:about|approximately|around|~)?\\s*${weightExpr}`, 'gi'),
       ''
     );
-    // "it('s| is| weighs) NUMBER [unit]"
+    // "it('s| is| weighs) [about|~]? <weightExpr>"
     t = t.replace(
-      /\bit(?:'s| is| weighs)\s+(?:about|approximately|around|~)?\s*\d+(?:\.\d+)?\s*(?:pounds?|ounces?|lbs?\.?|ozs?\.?)\b/gi,
+      new RegExp(`\\bit(?:'s| is| weighs)\\s+(?:about|approximately|around|~)?\\s*${weightExpr}`, 'gi'),
       ''
     );
-    // "NUMBER [unit] (in weight|heavy|total|net)?" standalone
+    // Standalone "<weightExpr> (in weight|heavy|total|net|gross)?"
     t = t.replace(
-      /\b\d+(?:\.\d+)?\s*(?:pounds?|ounces?|lbs?\.?|ozs?\.?)\s*(?:in weight|total|net|heavy|gross)?\b/gi,
+      new RegExp(`\\b${weightExpr}\\s*(?:in weight|total|net|heavy|gross)?\\b`, 'gi'),
       ''
     );
   }
 
   if (opts.hasDimensions) {
     const num = '\\d+(?:[./]\\d+)?';
-    const sep = '\\s*(?:by|x|\u00d7|and)\\s*';
+    const sep = '\\s*(?:by|x|×|and)\\s*';
     const unit = '(?:inches?|in\\.?|")?';
 
     // "dimensions are X by Y by Z [inches]"
@@ -149,13 +159,16 @@ export function stripShippingPhrases(
     );
   }
 
-  // Clean up orphaned punctuation + collapse whitespace
+  // Clean up orphaned connectors, empty parens, punctuation, and extra whitespace
   t = t
-    .replace(/[,;]\s*[,;]/g, ',')
-    .replace(/\s+[,;.]/g, '.')
-    .replace(/^[,;.\s]+/, '')
-    .replace(/[,;\s]+$/, '.')
-    .replace(/\s{2,}/g, ' ')
+    .replace(/\(\s*\)/g, '')                              // empty parens "()"
+    .replace(/\s+\band\b\s+/gi, ' ')                    // orphaned "and" between spaces
+    .replace(/\s+\bor\b\s+/gi, ' ')                     // orphaned "or" between spaces
+    .replace(/[,;]\s*[,;]/g, ',')                          // doubled commas/semicolons
+    .replace(/\s+([,;.!?])/g, (_m, p: string) => p)         // space before punctuation
+    .replace(/^[,;.\s]+/, '')                              // leading junk
+    .replace(/[,;\s]+$/, '.')                              // trailing junk → period
+    .replace(/\s{2,}/g, ' ')                               // collapse multiple spaces
     .trim();
 
   return t;
