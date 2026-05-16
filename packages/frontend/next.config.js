@@ -287,6 +287,25 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=604800, stale-while-revalidate=86400' },
         ],
       },
+      // Service worker — must never be cached by the browser (ensures update checks work)
+      // Service-Worker-Allowed: / grants the SW scope over the full origin even if the
+      // script path is at the root, which some strict UA implementations require explicitly.
+      {
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
+          { key: 'Service-Worker-Allowed', value: '/' },
+          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+        ],
+      },
+      // Workbox companion file — same no-cache treatment
+      {
+        source: '/workbox-:hash.js',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
+          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+        ],
+      },
     ];
   },
 };

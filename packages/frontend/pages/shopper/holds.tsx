@@ -72,6 +72,15 @@ const ShopperHoldsPage = () => {
     }
   }, [user, authLoading, router]);
 
+  const handleCopyHandle = useCallback((handle: string) => {
+    navigator.clipboard.writeText(handle).then(() => {
+      setCopiedHandle(handle);
+      setTimeout(() => setCopiedHandle(null), 2000);
+    }).catch((err) => {
+      console.warn('[holds] Clipboard write failed:', err);
+    });
+  }, []);
+
   if (authLoading || !user) {
     return null;
   }
@@ -86,13 +95,6 @@ const ShopperHoldsPage = () => {
     queryClient.invalidateQueries({ queryKey: ['shopper-holds'] });
     showToast('Hold expired', 'info');
   };
-
-  const handleCopyHandle = useCallback((handle: string) => {
-    navigator.clipboard.writeText(handle).then(() => {
-      setCopiedHandle(handle);
-      setTimeout(() => setCopiedHandle(null), 2000);
-    });
-  }, []);
 
   const activeHolds = holds.filter((h) => ['PENDING', 'CONFIRMED'].includes(h.status));
   const expiredHolds = holds.filter((h) => h.status === 'CANCELLED' || h.status === 'EXPIRED');
@@ -245,4 +247,4 @@ const ShopperHoldsPage = () => {
   );
 };
 
-export default ShopperHoldsPage;
+export default
