@@ -150,6 +150,8 @@ const ShopperDashboard = () => {
     if (referralLink) {
       navigator.clipboard.writeText(referralLink).then(() => {
         showToast('Referral link copied!', 'success');
+      }).catch((err) => {
+        console.warn('[dashboard] Clipboard write failed:', err);
       });
     }
   };
