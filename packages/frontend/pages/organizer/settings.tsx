@@ -2019,4 +2019,25 @@ const OrganizerSettingsPage = () => {
               deleteAccountMutation.mutate(deletePassword);
             }}
             disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
-   
+            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {deleteAccountMutation.isPending ? 'Deleting account...' : 'Yes, Delete My Account'}
+          </button>
+          <button
+            onClick={() => {
+              setIsDeleteModalOpen(false);
+              setDeletePassword('');
+            }}
+            className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 font-medium text-sm transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </AccessibleModal>
+    </div>
+  </div>
+  </>
+  );
+};
+
+export default OrganizerSettingsPage;
