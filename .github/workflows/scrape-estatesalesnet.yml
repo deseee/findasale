@@ -15,11 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
-    # Each chunk gets its own concurrency group so chunks run in parallel
-    # and a re-triggered run only cancels the matching chunk, not all chunks.
-    concurrency:
-      group: ${{ github.workflow }}-chunk-${{ matrix.chunk }}
-      cancel-in-progress: false
+    # Note: no `concurrency:` block — matrix already runs all 4 chunks in
+    # parallel, and GH's default behavior is to NOT cancel in-progress runs
+    # when a new run is triggered. Adding a per-chunk concurrency group caused
+    # chunks 2–4 to serialize behind chunk 1 (S715: chunk 1 finished, 2–4 hung).
 
     strategy:
       fail-fast: false   # One chunk failure does not cancel the others
@@ -36,7 +35,7 @@ jobs:
           node-version: '20'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v4
         with:
           version: 8
 
