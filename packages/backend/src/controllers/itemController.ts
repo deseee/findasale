@@ -2260,6 +2260,17 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         isLegendary: true,
         legendaryPublishedAt: true,
         tagColor: true, // Feature #310: Color-tagged discount rules
+        // eBay push card + editState shipping fields — required for review page
+        packageWeightOz: true,
+        packageLengthIn: true,
+        packageWidthIn: true,
+        packageHeightIn: true,
+        ebayShippingOverride: true,
+        // editState fields for auction/reverse-auction display
+        quantity: true,
+        listingType: true,
+        reverseDailyDrop: true,
+        reverseFloorPrice: true,
       },
       orderBy: { createdAt: 'desc' },
       skip: (pageNum - 1) * limitNum,
