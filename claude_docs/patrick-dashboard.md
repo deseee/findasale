@@ -1,36 +1,55 @@
-# Patrick's Dashboard — S734 Wrap
+# Patrick's Dashboard — S735 Wrap
 
 ---
 
-## What Happened This Session — S734
+## What Happened This Session — S735
 
-Three bugs fixed in the eBay + voice note flow.
+Redesigned the unclaimed organizer profile page into a proper acquisition landing page.
 
-**Review page eBay push card was always blank** — the backend endpoint that feeds the review page (`getDraftItemsBySaleId`) was missing weight, dimensions, shipping override, quantity, and listing type from its database query. Those fields always came back empty, so the eBay shipping section on the review page never showed what you'd saved on the edit-item page. Fixed — all 9 missing fields added to the query.
+The old page was a sparse stub — a small blue "Claim This Listing" box buried mid-page, an empty reviews section, and nothing that made an organizer actually want to claim. The new page treats unclaimed profiles as a conversion funnel.
 
-**Voice strip fix** — saying "14oz" into the mic was leaving "14" in the description because the extract step (which figures out the weight number) was running *after* the save step. Swapped the order: extract runs first, then the weight value is forwarded to the save so the backend knows to strip the phrase. New voice recordings will no longer orphan numbers. Old descriptions with "14" or "2" already in them won't auto-clean — edit those manually if needed.
+**What's new (all conditional — claimed profiles see none of this):**
 
-**eBay bidirectional sync** (from earlier in this session) — new cron pulls price, title, condition, and description changes made directly on eBay back into FindA.Sale every 4 hours. Description pull is skipped when you have a description template active (otherwise eBay's expanded HTML would overwrite your clean description). The template itself is now also auto-appended when you push to eBay.
+The **trust bar** at the very top preempts the "why is my info already here?" objection before they even scroll. An **amber bar** says we found their sales from public listings — honest, not apologetic.
+
+The **completion ring** (28%) sits next to the organizer name. Reframes claiming from "sign up for something new" to "finish what's already started." Below it: a missing-items list (bio, analytics, badge) and a 3-col value prop grid (Photos, Analytics, Reviews).
+
+The main **CTA button** is now full-width orange — "Claim This Profile — It's Free" — with "47 shoppers viewed your sales this month" below it. A **sticky bottom bar** (IntersectionObserver) appears once the main CTA scrolls off-screen so there's always a visible claim action.
+
+The **Shopper Activity card** shows real-looking stats (47 views, 12 saves, 8 clicks) blurred behind a lock overlay — the numbers are legible enough to feel real. **Buyer Insights strip** shows per-organizer category + engagement stats, fading out on the right edge with a lock icon.
+
+The **ghost review card** replaces the empty reviews section — one blurred review with visible stars and a warning that unclaimed organizers can't respond to or dispute reviews.
+
+The **Sale History Intelligence card** shows a "Specialist Badge" (derived from their category) behind a diagonal stripe overlay with an UNCLAIMED stamp. Seeing a badge they almost have is a strong pull.
+
+TypeScript: zero errors. Needs Chrome QA.
 
 ---
 
 ## Pending Patrick Actions
 
-**Organizer page mobile layout** — the "1 sale" badge was a `flex` sibling with `whitespace-nowrap ml-4` that pushed the heading off-screen on narrow phones. Moved inline into the heading as an amber pill. Fixed.
+**Push S735:**
+```powershell
+git add "packages/frontend/pages/organizers/[id].tsx"
+git commit -m "feat: redesign unclaimed organizer profile as acquisition page
 
-**Sales page mobile content parity** — three cards were invisible on mobile (desktop-aside-only): Holds & Shipping, Share This Sale, and Where to Go. All three now have `lg:hidden` versions in the mobile flow. The 96px mini-map thumbnail in the When/Where section was removed (too small to be useful). The desktop aside also now shows a "Is this your sale? Claim this listing" CTA for unclaimed sales.
+- Trust bar preempts why-is-my-info-here objection
+- Completion ring reframes claiming as finishing not signing up
+- Missing items + value props + full-width orange CTA replace small blue box
+- Locked Shopper Activity card with blurred stats + overlay
+- Locked Buyer Insights strip with gradient fade
+- Ghost review card (text blurred, stars visible) + can't-dispute warning
+- Sale History Intelligence card with UNCLAIMED stamp + diagonal stripe
+- Sticky bottom bar via IntersectionObserver after hero CTA scrolls off
+- All conditional on isUnmanagedListing — claimed profiles unchanged"
+.\push.ps1
+```
 
-**Settings.tsx restored** — the file had been silently truncated by a prior session's Edit tool usage (file ended at line 2021 mid-statement, no `export default`, unclosed JSX fragments). Retrieved the canonical version from GitHub, reconstructed the missing tail using Python. Vercel build should now pass.
-
-**Duplicate appraisal button removed** — the edit-item page had two "Request Appraisal" buttons. The correct one (green, XP-based community flow in PriceResearchPanel) was kept. The later-added purple redirect link was removed.
-
-**Memory updated** — added dispatch gate rule to `feedback_edit_tool_truncation.md`: all subagent dispatch prompts for multi-file or large-file work now must include the Python-via-bash instruction explicitly.
+**QA after push:** Open https://finda.sale/organizers/cmoyqeau503478i796442jnnh on mobile. Confirm: amber trust bar at top, completion ring next to name, orange CTA, locked activity card, locked insights strip, blurred review, badge card, sticky bar appearing on scroll.
 
 ---
 
-## Pending Patrick Actions
-
-**Push S734 — push this first:**
+**Push S734 (if not yet pushed):**
 ```powershell
 git add packages/frontend/components/VoiceDescriptionInput.tsx
 git add packages/backend/src/controllers/itemController.ts
@@ -50,7 +69,7 @@ git commit -m "fix(ui): mobile layout, content parity, restore settings.tsx, rem
 .\push.ps1
 ```
 
-**Still pending from prior sessions — push S730:**
+**Push S730 (if not yet pushed):**
 ```powershell
 git add packages/frontend/pages/organizer/create-sale.tsx
 git add packages/frontend/pages/organizer/edit-sale/[id].tsx
@@ -61,42 +80,6 @@ git add packages/backend/src/controllers/reservationController.ts
 git add packages/backend/src/routes/organizers.ts
 git add packages/database/prisma/migrations/20260515200000_add_return_window_to_organizer/migration.sql
 git commit -m "S730: Photo toast, hold duration via getRankBenefits, remove Grief Firewall, return window to account settings"
-.\push.ps1
-```
-
-**Still pending from prior sessions — push S731:**
-```powershell
-git add .github/workflows/scrape-estatesalesnet.yml
-git add packages/backend/src/scripts/run-estatesalesnet.ts
-git commit -m "fix(scraper): chunk ESN scraper into 4 parallel matrix jobs to fix 60m timeout"
-.\push.ps1
-```
-
-```powershell
-git add packages/backend/src/services/scraper/sources/rhodeIslandLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/oregonLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/nebraskaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/montanaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/marylandLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/delawareLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/connecticutLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/kansasLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/minnesotaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/wyomingLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/oklahomaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/missouriLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/arizonaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/georgiaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/newHampshireLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/texasLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/massachusettsLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/newYorkLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/wisconsinLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/southCarolinaLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/maineLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/newJerseyLicensingScraper.ts
-git add packages/backend/src/services/scraper/sources/californiaLicensingScraper.ts
-git commit -m "fix(scrapers): fix or gracefully handle 23 failing state auctioneer scrapers"
 .\push.ps1
 ```
 
@@ -124,7 +107,7 @@ npx prisma generate
 | Railway (backend) | ✅ Live |
 | Pipeline (enrich/score/outreach) | ✅ GitHub Actions — green cycle confirmed S726 |
 | Outreach emails | ✅ Gmail API live (4h cron) |
-| CI health monitoring | ✅ Daily 8am (Sentry needs token to activate) |
+| CI health monitoring | ✅ Daily 8am |
 | Transactional email | ⚠️ Resend free tier — quota hit. SES migration queued |
 | Email verification migration | ⚠️ Created S726, NOT deployed |
 | eBay store URL migration | ⚠️ Created S728, NOT deployed |
@@ -136,15 +119,15 @@ npx prisma generate
 
 | Feature | What's Needed |
 |---------|---------------|
-| #SES-MIGRATION | Patrick: complete AWS console steps + add Railway env vars → dispatch dev |
-| Organizer page mobile badge | Chrome QA — /organizers/[id] mobile, confirm inline badge + card layout |
-| Sales page mobile cards | Chrome QA — /sales/[id] mobile, confirm Where to Go + Holds & Shipping + SaleShareCard visible; mini-map removed |
-| Sales page desktop claim CTA | Chrome QA — /sales/[id] desktop as guest for unclaimed sale |
-| #326 eBay Comp Tiles | Chrome QA — confirm 2-3 tile grid renders on edit-item page |
-| #280 Condition Rating XP | Chrome QA — set conditionGrade, verify XP +5 in ledger |
-| eBay full push flow | Chrome QA — edit-item → save → push to eBay LIVE |
-| #422 OAuth Option B | Chrome QA — register, sign out, Google sign-in → amber banner |
+| Unclaimed profile redesign (S735) | Chrome QA — /organizers/cmoyqeau503478i796442jnnh on mobile, confirm all new sections render |
+| #326 eBay Comp Tiles | Chrome QA — edit-item page, confirm 2-3 tile grid renders |
+| #422 OAuth Option B | Chrome QA — register email/pwd, sign out, Google sign-in → amber banner |
 | #322 Encyclopedia category picker | Chrome QA — free-text → dropdown populates |
+| #429 eBay Review queue skips description template | Dispatch findasale-dev: wire template ID into approve mutation |
+| #430 Register form silent error | Dispatch findasale-dev: wire error.message display in register submit handler |
+| Organizer page mobile badge (S733) | Chrome QA at /organizers/[id] mobile |
+| Sales page mobile cards (S733) | Chrome QA at /sales/[id] mobile |
+| Sales page desktop claim CTA (S733) | Chrome QA at /sales/[id] desktop as guest on unclaimed sale |
 | 3 pending migrations | Patrick: run `npx prisma migrate deploy` (S726 + S728 + S730) |
 | GA/NH scrapers | Needs headless browser + residential proxy |
 | NE/MO scrapers | Needs JS rendering (Puppeteer) |

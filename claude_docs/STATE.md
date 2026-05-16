@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S734 — QA Session (COMPLETE). Chrome QA on Blocked Queue items + bug discovery.**
+**Latest: S735 — Unclaimed Organizer Profile Redesign (COMPLETE).**
+
+Redesigned the unclaimed organizer profile page (`pages/organizers/[id].tsx`) from a sparse data stub into a conversion-focused acquisition page. 8 targeted additions, all conditional on `isUnmanagedListing === true` — claimed profiles unchanged. New elements: amber trust bar ("We found your sales listed publicly"), profile completion ring SVG (28%) next to organizer name, missing-items block + 3-col value props grid, full-width orange "Claim This Profile — It's Free" CTA button with IntersectionObserver sticky bottom bar, locked Shopper Activity card (blurred stats + backdrop overlay), locked Buyer Insights strip (gradient-fade right edge), ghost review card (text CSS-blurred, stars visible, warning about losing review control), locked Sale History Intelligence card with diagonal stripe + UNCLAIMED stamp. TypeScript: zero errors. Needs Chrome QA at /organizers/cmoyqeau503478i796442jnnh.
+
+**Previous: S734 — QA Session (COMPLETE). Chrome QA on Blocked Queue items + bug discovery.**
 
 Four findings: (1) #280 Condition Rating XP VERIFIED via DB — PointsTransaction confirmed +5 XP on conditionGrade save; removed from Blocked Queue. (2) eBay push from Review queue VERIFIED — listing #137314168141 created successfully; cleared from Blocked Queue. (3) NEW BUG #430 — Register form swallows "existing email" API error silently (P2 BROKEN). (4) NEW BUG #429 — Review queue approve handler doesn't pass store description template to eBay push; listing uses raw AI text instead of template (P2 BROKEN).
 
@@ -137,6 +141,7 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | Sales page desktop claim-listing CTA (S733) | Added to aside for unclaimed sales — not Chrome-verified | Chrome QA at /sales/[id] on desktop as guest for an unclaimed sale — confirm CTA renders | S733 |
 | #429 eBay push from Review queue skips store description template | BROKEN P2 — approve handler doesn't pass template ID; listing uses raw AI description text instead of organizer's custom store template | Dispatch findasale-dev: audit review.tsx approve mutation vs edit-item eBay push path; wire template ID lookup | S734 |
 | #430 Register form silent error — existing email | BROKEN P2 — POST /api/auth/register returns error message but frontend doesn't display it; user sees silent failure | Dispatch findasale-dev: wire error.message display in register form submit handler | S734 |
+| Unclaimed profile page redesign (S735) | Implemented but not Chrome-verified | Chrome QA at /organizers/cmoyqeau503478i796442jnnh — confirm trust bar, completion ring, CTA, locked sections, ghost review, sticky bar all render correctly | S735 |
 | Voice strip — weight/dims (S734) | Fix deployed but not live-tested | Record a voice note saying "14oz" or "2 lb 4 oz" on an existing item. Confirm: (a) number is absent from saved description, (b) weight field populated in structured fields | S734 |
 | Review page eBay card — dims/weight (S734) | getDraftItemsBySaleId select fix deployed but not live-tested | Save weight+dims on edit-item page → navigate to review page → confirm eBay push card shipping fields show correct values (not empty). Also confirm Local Pickup checkbox reflects saved ebayShippingOverride. | S734 |
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated (24h expiry set on register, checked+cleared on verifyEmail). **Patrick must deploy:** `cd packages/database` → `$env:DATABASE_URL=[Railway URL]` → `npx prisma migrate deploy` → `npx prisma generate`. Then push: schema.prisma + migration file + authController.ts | S722 |
@@ -223,50 +228,3 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 7. eBay smart-pick weight-gate — CALCULATED policy picked even when `packageWeightOz` was null (caused eBay error 25020); added `itemHasWeight` guard, CALCULATED skipped with warn log when no weight.
 
 ---
-
-## Next Session
-
-### Patrick Actions Required (before next dev session)
-
-| Action | Priority | Context |
-|--------|----------|---------|
-| Push S733 (see push block below) | HIGH | 4 UI fix files + STATE.md + dashboard |
-| AWS SES: verify `send.finda.sale` identity in SES console (us-east-1) | HIGH | May already be verified — just confirm |
-| AWS SES: submit production access request | HIGH | 24–48h approval — do today so it clears in time |
-| AWS SES: create SMTP credentials, download CSV | HIGH | One-time — secret only shown once |
-| Railway: add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SES_FROM_EMAIL` env vars | HIGH | From the CSV + `email-smtp.us-east-1.amazonaws.com` / `587` / `noreply@send.finda.sale` |
-| Deploy pending migrations (S726 + S728 + S730) | P0 | `cd packages/database` → `$env:DATABASE_URL=[Railway URL]` → `npx prisma migrate deploy` → `npx prisma generate` |
-
-### Push Block — S734 (push this first)
-
-```powershell
-git add packages/frontend/components/VoiceDescriptionInput.tsx
-git add packages/backend/src/controllers/itemController.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "fix: review page eBay card missing weight/dims + voice strip order
-
-getDraftItemsBySaleId select was missing packageWeightOz/In/Width/Height,
-ebayShippingOverride, quantity, listingType, reverseDailyDrop, reverseFloorPrice.
-VoiceDescriptionInput now calls voice/extract before append so stripShippingPhrases fires."
-.\push.ps1
-```
-
-### Push Block — S733 (if not yet pushed)
-
-```powershell
-git add "packages/frontend/pages/organizers/[id].tsx"
-git add "packages/frontend/pages/sales/[id].tsx"
-git add "packages/frontend/pages/organizer/settings.tsx"
-git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git commit -m "fix(ui): mobile layout, content parity, restore settings.tsx, remove duplicate appraisal button"
-.\push.ps1
-```
-
-### Next Dev Session Priority Order
-
-1. **Chrome QA smoke test** — verify S733 mobile layout + missing cards on live site.
-2. **SES migration** — once Patrick has Railway env vars set, dispatch dev to migrate all 37 email files + suppression check fix. Plan: `claude_docs/operations/ses-migration-plan.md`.
-3. **S731 push block** — ESN scraper fix + 23-state scraper repair batch still pending Patrick `.\push.ps1` run.
-4. **Blocked Queue Chrome QA** — #326 eBay Comp Tiles, #280 Condition Rating XP, eBay full push flow, #422 OAuth Option B, #322 Encyclopedia category picker.
-5. **Investigate rate limiter IP whitelist — P1 bug #431.** Need to either (a) verify VM IP and update whitelist, or (b) add a QA-mode bypass that skips rate limiting for authenticated organizer sessions. Rate limiter halted QA multiple times in S733–S734 (15-failed-attempt window, 15-min lockout). Three root cause hypotheses logged in roadmap #431 Notes.
