@@ -34,10 +34,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        # version auto-detected from root package.json "packageManager" field
-        # (pnpm@8.15.5). v4 errors if both are set — keep package.json as source of truth.
+      - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
+        run: corepack enable
+        # Replaces pnpm/action-setup — that action's post-step was deadlocking
+        # all 4 matrix jobs after ingest completed. Corepack ships with Node 20+
+        # and has no post-step. pnpm version is still resolved from package.json.
 
       - name: Install dependencies
         run: pnpm install --filter backend --filter database
