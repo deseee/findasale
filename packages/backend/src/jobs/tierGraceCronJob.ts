@@ -37,7 +37,7 @@ export function startTierGraceCron() {
     } catch (err) {
       console.error('[tierGraceCron] Fatal error:', err);
     }
-  });
+  }));
 
   console.log('[tierGraceCron] Started');
 }

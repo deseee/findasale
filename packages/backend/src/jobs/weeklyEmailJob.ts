@@ -15,4 +15,4 @@ cron.schedule('0 18 * * 0', cronGuard({ jobName: 'weeklyEmailJob' }, async () =>
   } catch (error) {
     console.error('[Cron] Weekly shopper email job failed:', error);
   }
-});
+}));

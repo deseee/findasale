@@ -210,4 +210,4 @@ cron.schedule('0 * * * *', cronGuard({ jobName: 'saleEndingSoonJob' }, async () 
   } catch (error) {
     console.error('Sale ending soon job failed:', error);
   }
-});
+}));

@@ -99,6 +99,6 @@ const job = cron.schedule('0 6 * * *', cronGuard({ jobName: 'reverseAuctionJob' 
   } catch (error) {
     console.error('[reverseAuctionJob] Error:', error);
   }
-});
+}));
 
 export default job;

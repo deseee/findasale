@@ -112,7 +112,7 @@ export function scheduleReferralRewardAgeGateCron() {
     } catch (error) {
       console.error('[referralRewardAgeGateCron] Job failed:', error);
     }
-  });
+  }));
 
   console.log('[referralRewardAgeGateCron] Scheduled (0 2 * * *)');
 }
