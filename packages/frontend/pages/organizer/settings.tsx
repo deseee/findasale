@@ -2087,4 +2087,3 @@ const OrganizerSettingsPage = () => {
 };
 
 export default OrganizerSettingsPage;
-                  
