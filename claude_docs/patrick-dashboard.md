@@ -1,29 +1,31 @@
-# Patrick's Dashboard — S742 Wrap (Complete)
+# Patrick's Dashboard — S743 Wrap (Complete)
 
 ---
 
-## What Happened This Session — S742
+## What Happened This Session — S743
 
-Help Library shipped. 75 guides written, fabricated claims cleaned out, voice notes coverage added, `/guides` route live.
+Four areas fixed and closed.
 
-**Content** — 75 guides across 13 clusters in `claude_docs/strategy/guides-drafts/`. Covers every major feature for both organizers and shoppers: photo workflow, review & publish, promotion, at-the-sale, discovery, trust, sale day, inventory, advanced tools, sale creation, setup, Explorer's Guild, community. Every guide has a VO script where video applies.
+**CategoryTopFinds** — The eBay Browse API was being called with wrong syntax. Two bugs: `filter=categoryIds:{3199}` should be `category_ids=3199` (direct query param), and the API only allows 1 category per call (we were passing comma-separated IDs). Fixed to loop per category ID and merge. All 9 categories now have live data: furniture 12 items, jewelry 24, art-decor 24, clothing 20, kitchenware 22, tools-hardware 23, collectibles 12, electronics 24, books-media 24. Nightly cron at 05:00 UTC keeps it fresh.
 
-**Fabrication audit** — 16 files had invented speed/quantity claims ("60 items in five minutes", "setup takes three minutes"). All removed. 53 files were clean. eBay sync now says "almost immediately" instead of "60 seconds."
+**Category sync trigger** — The `/trigger` endpoint was waiting for the full 30-second sync before responding, which caused PowerShell to time out and crash the connection. Flipped to fire-and-forget: responds immediately, runs sync in background.
 
-**Voice notes** — 4 photo workflow guides now cover the feature accurately. It uses the browser's Web Speech API (Chrome/Edge only), appends transcript to item description without overwriting, extracts category/tags/weight/dims via keyword matching. No AI, no audio stored.
+**Voice strip QA** — ✅ PASS. Confirmed in Chrome JS console using the exact deployed code: "8 oz" → empty, "2 lb 4 oz" → empty, normal description phrases untouched. Fix is good.
 
-**Route** — `/guides` index and `/guides/[slug]` pages built with ISR, full dark mode, mobile-first. No new npm dependencies.
+**Wyoming scraper** — An agent had replaced the active scraper with a disabled stub and registered it in sourceRegistry. Both reverted. Scraper now attempts to fetch the page (returns 0 results, as expected — the page is JS-rendered and won't have data until headless browser support is added). No longer in sourceRegistry.
+
+**Outreach seeder** — Fixed false-positive image filenames (`.png`, `.jpg`, etc.) being inserted as email addresses in the outreach queue.
 
 ---
 
 ## Pending Patrick Actions
 
-**1. SES smoke test** (highest priority):
+**1. SES smoke test** (highest priority — from S739):
 - Trigger any transactional email in the app (publish a sale, send a notification, etc.)
 - Confirm it hits your inbox from noreply@send.finda.sale
 - Then: remove `resend` from `packages/backend/package.json` + pull `RESEND_API_KEY` and `RESEND_FROM_EMAIL` from Railway env vars
 
-**2. Deploy email verification migration** (no rush):
+**2. Deploy email verification migration** (no rush — from S726):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -31,29 +33,30 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**3. Guide video recording** — 30+ guides have VO scripts ready. Record when you're ready and drop the URLs into the entry files (`videoUrl` field). Next session can wire them in bulk.
+**3. Clear the stray voice note on the Art Deco Brooch item** — QA agent accidentally appended "my plans for dinner not existent totally I'm just like" to item cf3io6c1o685f4bk0ltbxs3b2. Description should be: "Sterling silver and enamel, 1920s, excellent condition." Fix via the item's Full Edit page.
 
 ---
 
 ## Blocked Queue Summary
 
-6 items — below the 8-item QA ceiling. Feature work remains unblocked.
+5 active items — below the 8-item QA ceiling. Feature work remains unblocked.
 
 - **SES smoke test** — Patrick action above
-- **Voice strip** — needs real device with microphone
-- **/guides Chrome QA** — needs browser verification next session
+- **CategoryTopFinds TrendingSection** — data confirmed live, UI needs Chrome QA (`/categories/furniture`)
+- **AuctionNinja + NAA scrapers** — decision: enable or leave disabled
+- **AI listing enrichment** — Railway log check needed
+- **Outreach pipeline open/click tracking** — check Railway logs after next cron window
 
 ---
 
-## Push Block — S742
+## Push Block — S743
 
 ```powershell
-git add packages/frontend/data/guides/
-git add packages/frontend/pages/guides/
-git add claude_docs/strategy/guides-drafts/
-git add claude_docs/strategy/roadmap.md
+git add packages/backend/src/routes/internal.ts
+git add packages/backend/src/services/scraper/sources/wyomingPhase2Scraper.ts
+git add packages/backend/src/services/scraper/sourceRegistry.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S742: Help Library — 75 guides, /guides route, fabrication audit, voice notes"
+git commit -m "S743: CategorySync Browse API fix, fire-and-forget trigger, Wyoming scraper restore, outreach image filter"
 .\push.ps1
 ```
