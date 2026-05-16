@@ -56,6 +56,16 @@ const verifyEmailLimiter = rateLimit({
 });
 
 // L1: Login rate limiter
+// QA bypass: if QA_RATE_LIMIT_BYPASS_SECRET is set in Railway env vars, requests carrying
+// that secret in the X-QA-Bypass header skip this limiter entirely.
+// This fixes the bug where Chrome QA sessions hit the 15-attempt cap during wrong-account
+// login tests and account switching (bug #431). The authLimiter in index.ts has the same bypass.
+const isQABypass = (req: import('express').Request): boolean => {
+  const secret = process.env.QA_RATE_LIMIT_BYPASS_SECRET;
+  if (!secret) return false;
+  return req.headers['x-qa-bypass'] === secret;
+};
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 15,
@@ -63,6 +73,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many failed login attempts. Please try again in 15 minutes.' },
+  skip: (req) => isQABypass(req),
 });
 
 // L2: Register rate limiter
@@ -72,6 +83,7 @@ const registerLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many registration attempts.' },
+  skip: (req) => isQABypass(req),
 });
 
 const router = Router();
