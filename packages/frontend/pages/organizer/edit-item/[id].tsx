@@ -955,16 +955,6 @@ const EditItemPage = () => {
               {/* Feature #338: Multi-source pricing comp summary */}
               {id && <PricingCompSummary itemId={id as string} />}
 
-              {/* Request Appraisal CTA */}
-              <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
-                <Link
-                  href="/organizer/appraisals?open=true"
-                  className="w-full inline-block text-center bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-                >
-                  Request Appraisal for This Item
-                </Link>
-              </div>
-
               {/* Price Research Panel — consolidated pricing tools */}
               <div className="mt-3">
                 {id && (
