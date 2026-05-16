@@ -247,4 +247,4 @@ const ShopperHoldsPage = () => {
   );
 };
 
-export default
+export default ShopperHoldsPage;
