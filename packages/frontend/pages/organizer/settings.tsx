@@ -2034,9 +2034,7 @@ const OrganizerSettingsPage = () => {
           </button>
         </div>
       </AccessibleModal>
-    </div>
-  </div>
-  </>
+    </>
   );
 };
 
