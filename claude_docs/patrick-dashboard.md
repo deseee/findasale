@@ -1,26 +1,26 @@
-# Patrick's Dashboard — S739 Wrap (Complete)
+# Patrick's Dashboard — S740 Wrap (Complete)
 
 ---
 
-## What Happened This Session — S739
+## What Happened This Session — S740
 
-AWS SES migration is fully done. All infrastructure confirmed, code pushed green.
+Three features shipped in parallel. One Chrome QA item uncovered a seed data bug.
 
-**AWS SES** — `send.finda.sale` identity verified ✅. All 3 DKIM CNAME records in Vercel DNS ✅. Production access approved ✅ (50,000/day, 14/sec). 5 Railway env vars confirmed set.
+**#251 priceBeforeMarkdown FIXED** — Crossed-out original price (~~$75.00~~ $56.25) now renders correctly on sale detail pages for STANDARD items with manual discounts. Root cause: a stale `markdownApplied` guard was blocking it — that flag only fires for the auto-markdown cron, not manual organizer discounts. File: `pages/sales/[id].tsx`.
 
-**Code migration** — emailService.ts nodemailer wrapper + ~37 backend files updated + all from addresses → @send.finda.sale. Pushed green.
+**Settings linked OAuth UI** — Organizer Settings → Profile tab now has a "Linked Accounts" section showing whether your Google account is connected. If connected: green "Connected" pill. If not: "Link Google Account" button. File: `pages/organizer/settings.tsx`.
 
-**Resend cleanup** — on hold until you smoke test one email and confirm inbox delivery. Then: remove resend from package.json + pull RESEND_API_KEY/RESEND_FROM_EMAIL from Railway.
+**Roadmap cleanup** — Bugs #429 and #430 (both fixed last session) are now correctly marked FIXED in the roadmap.
 
-**QA dims seed** — user2@example.com now has a PENDING_REVIEW item (`qa-dims-test-item-001`) with 24oz / 12×8×4in dims ready for the Review page eBay card test next QA session.
+**Chrome QA finding** — user2@example.com (Maya Jackson) turns out to be a SHOPPER in production, not an organizer. The S739 seed data attached a test sale to a shopper account, so the review page dims QA could not be run. Code was confirmed correct by file inspection. Also found: the correct review page route is `/organizer/add-items/[saleId]/review`, not `/organizer/review`.
 
 ---
 
 ## Pending Patrick Actions
 
-**1. SES smoke test** (once you're ready):
+**1. SES smoke test** (highest priority):
 - Trigger any transactional email in the app (publish a sale, send a notification, etc.)
-- Confirm it hits your inbox (not spam)
+- Confirm it hits your inbox from noreply@send.finda.sale
 - Then: remove `resend` from `packages/backend/package.json` + pull `RESEND_API_KEY` and `RESEND_FROM_EMAIL` from Railway env vars
 
 **2. Deploy email verification migration** (no rush):
@@ -31,47 +31,30 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**3. Deploy pending migrations (S726 + S728 + S730)** — run same block above when convenient.
+**3. Confirm MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831 is set on Railway** (if not already done)
 
 ---
 
-## Infrastructure Status
+## Blocked Queue Summary
 
-| | |
-|---|---|
-| Vercel (frontend) | ✅ Live |
-| Railway (backend) | ✅ Live |
-| Pipeline (enrich/score/outreach) | ✅ GitHub Actions — green cycle confirmed S726 |
-| Outreach emails | ✅ Gmail API live (4h cron) |
-| CI health monitoring | ✅ Daily 8am |
-| Transactional email | ✅ AWS SES wired — pending smoke test before Resend removal |
-| SES identity + DKIM | ✅ Verified |
-| AWS production access | ✅ Approved |
-| Email verification migration | ⚠️ Created S726, NOT deployed |
-| eBay store URL migration | ⚠️ Created S728, NOT deployed |
-| Return window migration | ⚠️ Created S730, NOT deployed |
+6 items total — below the 8-item QA ceiling. Feature work remains unblocked.
+
+Key items:
+- **SES smoke test** — Patrick action above
+- **Review page eBay dims** — UNVERIFIABLE: user2 is a shopper. Next session: fix via psycopg2 UPDATE to make user2 ORGANIZER in production DB, then re-test at `/organizer/add-items/[saleId]/review`
+- **Voice strip** — needs real device with microphone
+- **OAuth Option B** — needs real Google test account
 
 ---
 
-## Blocked Queue (active)
+## Push Block — S740
 
-| Feature | What's Needed |
-|---------|---------------|
-| SES smoke test + Resend cleanup | Patrick: send one test email → confirm inbox → remove resend |
-| #422 OAuth Option B | Chrome QA — register email/pwd, sign out, Google sign-in → amber banner |
-| Voice strip weight/dims (S734) | Patrick test on real device: record "14oz" → verify stripped from description, weight field populated |
-| Review page eBay card dims/weight (S734) | Data seeded S739. Login user2@example.com / Seedy2025! → /organizer/review → verify 24oz / 12×8×4in in eBay push card |
-| Email verification token expiry | Migration 20260515180000 created but not deployed (see Patrick action above) |
-
----
-
-## Next Session — S740
-
-**QA ceiling:** 6 items in Blocked Queue — below 8-item threshold. Feature work is open.
-
-1. Review page eBay dims QA (seed data ready — user2@example.com)
-2. #251 priceBeforeMarkdown — dev dispatch, crossed-out price not showing
-3. BROKEN table cleanup — #429 + #430 fixed S736 but roadmap rows stale; Records dispatch
-4. SEO completion — 116 remaining pages (seo-agent-dispatch.md), Sonnet
-5. Help Library (#377/#378) — 75 guides + /guides route, Sonnet
-6. Settings UI for linked OAuth providers — small frontend dispatch, backend done S723
+```powershell
+git add packages/frontend/pages/sales/[id].tsx
+git add packages/frontend/pages/organizer/settings.tsx
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S740: priceBeforeMarkdown fix, linked OAuth UI, roadmap #429/#430 cleanup"
+.\push.ps1
+```

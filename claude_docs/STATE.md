@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S739 — AWS SES Migration (COMPLETE). Code pushed ✅. Awaiting smoke test + Resend cleanup.**
+**Latest: S740 — Parallel Feature Batch (COMPLETE). Push block below.**
+
+Three parallel dispatches shipped. (1) **#251 priceBeforeMarkdown FIXED** — `sales/[id].tsx` line 1492 had `item.markdownApplied &&` guard that only fires for cron-auto-markdowns; manual discounts have `priceBeforeMarkdown` set but `markdownApplied=false`, so crossed-out price never rendered. Removed the extra guard. All other card components (ItemCard.tsx, items/[id].tsx, InventoryItemCard.tsx) already used the correct guard — only this one file was wrong. TS: zero errors. (2) **Settings linked OAuth UI** — added Linked Accounts card to organizer/settings.tsx Profile tab. Uses `oauthProvider` from `/auth/me` query; shows Google Connected pill or "Link Google Account" button. Disconnect omitted (no backend unlink endpoint yet). Python/bash used for edit (file is 2043 lines). TS: zero errors. (3) **Roadmap cleanup** — #429 (eBay review queue skips description template) and #430 (register form silent error) rows updated to FIXED S736 with 5 targeted edits. Chrome QA: Review page eBay dims remains UNVERIFIABLE — user2/Maya Jackson is a shopper in production (access-denied on organizer area); seed data incorrectly attached qa-dims-test-sale-001 to a shopper account. Code confirmed: all 9 fields present in getDraftItemsBySaleId lines 2283–2292. Patrick's Google session restored ✅.
+
+**Previous: S739 — AWS SES Migration (COMPLETE). Code pushed ✅. Awaiting smoke test + Resend cleanup.**
 
 AWS SES migration complete. `send.finda.sale` domain verified ✅. All 3 DKIM CNAME records confirmed in Vercel DNS ✅. AWS production access approved ✅ (quota: 50,000/day, 14/sec). Patrick added 5 Railway env vars (SMTP_HOST, SMTP_PORT=587, SMTP_USERNAME, SMTP_PASSWORD, SES_FROM_EMAIL=noreply@send.finda.sale). Code migration pushed green: emailService.ts nodemailer wrapper, ~37 backend files updated, all from addresses → @send.finda.sale. Pending: smoke test one transactional email → confirm inbox delivery → remove resend from package.json + Railway env vars.
 
@@ -151,7 +155,7 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 | Sales page desktop claim-listing CTA (S733) | ✅ VERIFIED S737 — Navigated to /sales/cmoyqeblk035j8i79qtgjtt3m as guest. Desktop aside showed "Is this your sale? Claim this listing..." + orange Claim button. CLOSED. | — | S733 |
 | Voice strip — weight/dims (S734) | Fix deployed but not live-tested | Record a voice note saying "14oz" or "2 lb 4 oz" on an existing item. Confirm: (a) number is absent from saved description, (b) weight field populated in structured fields | S734 |
-| Review page eBay card — dims/weight (S734) | getDraftItemsBySaleId select fix deployed but not live-tested. S739: seed data created via psycopg2 — item `qa-dims-test-item-001` in sale `qa-dims-test-sale-001` owned by user2@example.com. Item has 24oz weight, 12×8×4in dims, draftStatus=PENDING_REVIEW. | Login as user2@example.com / Seedy2025! → /organizer/review → confirm eBay push card shows 24oz / 12×8×4in. Also confirm Local Pickup checkbox reflects saved ebayShippingOverride. | S734 |
+| Review page eBay card — dims/weight (S734) | UNVERIFIABLE S740 — user2/Maya Jackson is a SHOPPER in production (access-denied on organizer area). Seed attached sale to shopper account — bad seed data. Code confirmed: all 9 fields in getDraftItemsBySaleId lines 2283–2292. Need organizer test account with pending-review items to verify. | Fix seed: update user2 to ORGANIZER role in production DB, OR re-seed qa-dims-test-sale to a known organizer account, then login → /organizer/add-items/[saleId]/review → check eBay card dims. NOTE: route is /organizer/add-items/[saleId]/review NOT /organizer/review. | S734 |
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
 | #SES-MIGRATION — email provider move | S739 COMPLETE — code pushed, domain verified, production access approved. | Smoke test one transactional email → confirm inbox delivery → remove resend from package.json + RESEND_API_KEY/RESEND_FROM_EMAIL from Railway. | S739 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
@@ -173,6 +177,18 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S740 — Parallel Feature Batch: priceBeforeMarkdown + Linked OAuth UI + Roadmap Cleanup (COMPLETE)
+
+Three parallel dispatches shipped; Chrome QA attempted.
+
+**(1) #251 priceBeforeMarkdown FIXED** — `packages/frontend/pages/sales/[id].tsx` line 1492: removed `item.markdownApplied &&` guard from the crossed-out price conditional. `markdownApplied` is only set by the auto-markdown cron — manually discounted items always had `priceBeforeMarkdown` set but `markdownApplied=false`, so the ~~$X~~ display never fired. All other components (ItemCard.tsx, items/[id].tsx, InventoryItemCard.tsx) already used the correct check. TS: zero errors.
+
+**(2) Settings linked OAuth UI** — `packages/frontend/pages/organizer/settings.tsx`: added Linked Accounts card to Profile tab. Fetches `oauthProvider` from `/auth/me` (stale 60s); shows Google Connected green pill when `linkedProvider === 'google'`, otherwise shows "Link Google Account" anchor → `/api/auth/google`. Disconnect omitted (no backend unlink endpoint yet). Python/bash used for the edit (file is 2043 lines — Edit tool would truncate). TS: zero errors.
+
+**(3) Roadmap cleanup** — `claude_docs/strategy/roadmap.md`: #429 and #430 updated from BROKEN to FIXED S736 with 5 targeted edits. Last Updated header updated.
+
+**(4) Chrome QA — Review page eBay dims** — UNVERIFIABLE. user2/Maya Jackson is a SHOPPER in production despite seed marking them as organizer. Access-denied on /organizer/dashboard. Additionally, the correct review page route is `/organizer/add-items/[saleId]/review` not `/organizer/review` (which 404s). Code confirmed: all 9 missing fields present in getDraftItemsBySaleId at lines 2283–2292. Patrick's Google session restored after QA.
 
 ### S739 — AWS SES Migration Infrastructure Setup (IN-FLIGHT)
 
@@ -317,14 +333,12 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 
 **Next session priority order:**
 1. **SES smoke test + Resend cleanup** — Patrick action (see above). Once confirmed, close SES-MIGRATION from Blocked Queue.
-2. **Review page eBay dims QA** — seed data ready: login as user2@example.com / Seedy2025! → /organizer/review for sale qa-dims-test-sale-001 → verify eBay push card shows 24oz / 12×8×4in.
+2. **Review page eBay dims QA** — UNVERIFIABLE S740: user2 is a shopper in production. Fix: update user2 role to ORGANIZER in Railway DB (psycopg2 UPDATE), then login → /organizer/add-items/[saleId]/review for the qa-dims sale. Correct route is /add-items/[saleId]/review NOT /organizer/review.
 3. **Voice strip weight/dims S734** — UNVERIFIABLE until real device test; keep in Blocked Queue.
 4. **#422 OAuth Option B** — needs real Google test account.
 5. **Feature work** — see roadmap recommendations below.
 
-**Roadmap feature work (S740+) — all confirmed for next session:**
-1. **#251 priceBeforeMarkdown** — Patrick noted "don't see this?" in roadmap — P2 bug, crossed-out price not rendering on item cards/detail. Dev dispatch.
-2. **BROKEN table cleanup (#429 + #430)** — both fixed in S736 but roadmap rows still say BROKEN. Records dispatch to close out.
-3. **SEO completion** — 116 remaining pages from S714 plan at `claude_docs/strategy/seo-agent-dispatch.md`. Use Sonnet (not Haiku).
-4. **Help Library (#377/#378)** — 75 guides + video scripts + /guides route. Use Sonnet. High SEO value.
-5. **Settings UI for linked OAuth providers** — backend done since S723, just needs frontend section in organizer/settings.tsx. Small dev dispatch.
+**Roadmap feature work (S741+):**
+1. **SEO completion** — 116 remaining pages from S714 plan at `claude_docs/strategy/seo-agent-dispatch.md`. Use Sonnet (not Haiku).
+2. **Help Library (#377/#378)** — 75 guides + video scripts + /guides route. Use Sonnet. High SEO value.
+3. Already shipped S740: #251 priceBeforeMarkdown ✅, Settings linked OAuth UI ✅, roadmap cleanup ✅.

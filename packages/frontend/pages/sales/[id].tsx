@@ -1489,7 +1489,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                             ) : (
                               <div className="flex items-center justify-between">
                                 <div>
-                                  {item.markdownApplied && item.priceBeforeMarkdown && item.priceBeforeMarkdown > item.price ? (
+                                  {item.priceBeforeMarkdown && item.priceBeforeMarkdown > item.price ? (
                                     <>
                                       <div className="flex items-center gap-1">
                                         <div className="text-xs line-through text-gray-400">{formatPrice(item.priceBeforeMarkdown)}</div>

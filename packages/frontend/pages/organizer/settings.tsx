@@ -143,6 +143,14 @@ const OrganizerSettingsPage = () => {
   });
 
   // Storefront slug — used in verification done step
+  const { data: authMe } = useQuery({
+    queryKey: ['auth-me-oauth'],
+    queryFn: () => api.get('/auth/me').then(r => r.data?.user),
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+  const linkedProvider: string | null = authMe?.oauthProvider ?? null;
+
   const { data: storefrontSlug } = useQuery({
     queryKey: ['organizer-storefront-slug'],
     queryFn: () => api.get('/brand-kit/organizers/me').then(r => r.data?.customStorefrontSlug || null),
@@ -1604,6 +1612,46 @@ const OrganizerSettingsPage = () => {
             </div>
           )}
 
+          {/* Linked Accounts — Profile Tab continuation */}
+          {activeTab === 'profile' && (
+            <div className="card p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Linked Accounts</h2>
+                <Tooltip content="Connect a Google account so you can sign in with one click. Your password login still works either way." position="right" />
+              </div>
+              <div className="flex items-center justify-between py-3 border border-warm-200 dark:border-gray-700 rounded-lg px-4">
+                <div className="flex items-center gap-3">
+                  {/* Google "G" badge */}
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-warm-200 dark:border-gray-600 shadow-sm text-sm font-bold" style={{ color: '#4285F4' }}>G</span>
+                  <div>
+                    <p className="text-sm font-medium text-warm-900 dark:text-gray-100">Google</p>
+                    {linkedProvider === 'google' ? (
+                      <p className="text-xs text-green-600 dark:text-green-400">Connected — sign in with Google is enabled</p>
+                    ) : (
+                      <p className="text-xs text-warm-500 dark:text-gray-400">Not connected</p>
+                    )}
+                  </div>
+                </div>
+                {linkedProvider === 'google' ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-3 py-1 rounded-full border border-green-200 dark:border-green-800">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    Connected
+                  </span>
+                ) : (
+                  <a
+                    href="/api/auth/google"
+                    className="text-sm font-medium text-amber-700 dark:text-amber-400 hover:underline"
+                  >
+                    Link Google Account
+                  </a>
+                )}
+              </div>
+              <p className="text-xs text-warm-500 dark:text-gray-400 mt-3">
+                Linking lets you sign in with Google without entering your password.
+              </p>
+            </div>
+          )}
+
           {/* Appearance Tab */}
           {activeTab === 'appearance' && (
             <div className="space-y-6">
@@ -2039,3 +2087,4 @@ const OrganizerSettingsPage = () => {
 };
 
 export default OrganizerSettingsPage;
+                  

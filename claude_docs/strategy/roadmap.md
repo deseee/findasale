@@ -1,5 +1,6 @@
 # ROADMAP – FindA.Sale v2
 
+**Last Updated:** 2026-05-16 (S740: #429 eBay review queue description template skip FIXED S736. #430 Register form silent error FIXED S736.)
 **Last Updated:** 2026-05-15 (v147 — Added #431 Rate Limiter Triggering During QA Despite IP Whitelist (BROKEN P1 — VM IP rotation suspected, whitelist likely stale, halts QA for 15 min per incident, S733–S734). Also added #429 eBay push from Review queue skips description template and #430 register form silent error on duplicate email to BROKEN table.)
 **Last Updated:** 2026-05-15 (v146 — S734 QA: #280 Condition Rating XP VERIFIED (DB confirms +5 XP PointsTransaction on conditionGrade save). eBay push from Review queue VERIFIED live listing created (#137314168141). Two new bugs: #429 eBay push from Review queue skips store description template (BROKEN P2 — review approve handler doesn't pass template ID); register form silent error on duplicate email (BROKEN P2 — frontend swallows API error, no feedback shown). #422 OAuth Option B re-flagged: register form silent-failure bug distinct from backend logic.)
 **Last Updated:** 2026-05-15 (v145 — S727: eBay integration fixes + feature batch. #424 {{DESCRIPTION}} template bug fixed (empty-description path left placeholder literal). #425 eBay push from Publish All path wired (was missing entirely). #426 Best Offers UI shipped (edit-item: toggle + percentage inputs + live dollar preview). #427 Local Pickup mode shipped (edit-item + review cards: checkbox + phrase detector nudge; backend: routes to local pickup fulfillment policy). #428 Card readiness borders shipped (review page: red/yellow/green/blue border-l-4 per completeness state). draftStatus + ebayShippingOverride added to item SELECT in push loop (were missing). S726 push still pending Patrick action.)
@@ -171,8 +172,8 @@ Features that Patrick's human QA walkthrough confirmed are broken. Use the two-s
 |  #  | DB | API | UI | Nav | Claude QA | Human QA | Status | Feature | Role | Tier | Needs | Notes |
 |-----|----|----|----|----|-----------|----------|--------|---------|------|------|-------|-------|
 | 431 | NA | ✅ | NA | NA | ❌ | ❌ | BROKEN P1 — S733/S734 | Rate Limiter Triggering During QA Despite IP Whitelist | ORG | ALL | Investigate VM IP rotation + whitelist staleness. Root cause analysis required before fix dispatch. | Chrome QA sessions hit 15-failed-attempt rate limiter despite supposedly whitelisted VM IP. skipSuccessfulRequests:true means only failed auth attempts count — QA workflows with wrong-account logins, duplicate-email tests, and account switching accumulate fast and halt QA for 15 min. Three hypotheses: (1) VM IP rotates between sessions making whitelist stale; (2) rate limiter applies before IP whitelist check; (3) skipSuccessfulRequests applies to limiter count only but IP bypass is actually non-functional. Occurred multiple times S733–S734. Fix options: (a) verify VM IP + update whitelist each session, (b) add QA-mode bypass skipping rate limiting for authenticated organizer sessions. |
-| 429 | NA | ✅ | NA | NA | ❌ | ❌ | BROKEN P2 — found S734 | eBay Push from Review Queue Skips Description Template | ORG | SIMPLE | Dispatch dev fix to review approve handler — pass template ID into eBay push call. | Review queue approve handler doesn't pass organizer's defaultDescriptionHtml template ID to the eBay push call. Listing uses raw AI text instead of the organizer's store description template. Push-on-save path (edit-item) was fixed S727 ({{DESCRIPTION}} placeholder wired); review-queue approve path is a separate code path that missed the fix. |
-| 430 | NA | ✅ | ✅ | NA | ❌ | ❌ | BROKEN P2 — found S734 | Register Form Silent Error on Duplicate Email | BOTH | FREE | Frontend swallows "email already exists" API error — show error toast or inline message. | Register form makes no visible error when submitted with an already-registered email. Backend returns error correctly; frontend catch block is silent. User gets stuck with no feedback. |
+| 429 | NA | ✅ | NA | NA | ✅ | ✅ | FIXED S736 | eBay Push from Review Queue Skips Description Template | ORG | SIMPLE | Fixed S736: review.tsx handleApproveItem and handleApproveAll now include description in update payloads. | Review queue approve handler didn't pass organizer's defaultDescriptionHtml template ID to the eBay push call. Fixed S736: description: editState.description added to both handleApproveItem and handleApproveAll update payloads in review.tsx. |
+| 430 | NA | ✅ | ✅ | NA | ✅ | ✅ | FIXED S736 | Register Form Silent Error on Duplicate Email | BOTH | FREE | Fixed S736: pages/register.tsx catch block now calls showToast(msg, 'error') so error is always visible. | Register form made no visible error when submitted with an already-registered email. Backend returns error correctly; frontend catch block was silent. Fixed S736: catch block now extracts error.message and calls showToast(msg, 'error'). |
 | 174 | ✅ | ✅ | ✅ | NA | ✅ | ✅ | Chrome-verified S716 (Patrick-confirmed S718) | Auction Mechanics + Close Flow | ORG | SIMPLE | Patrick confirmed done S718. S716: auctionIsOver fix verified in Chrome. | S693: bidAmount→maxBidAmount fix (items/[id].tsx), draftStatus fixed in DB. S716: auction closed state UX verified. |
 |  46 | ✅ | ✅ | ✅ | ✅ | ✅ |✅⬜ FIXED S346 | FIXED S346 | Treasure Typology Classifier | ORG | PRO | Deprecated Feature
 
@@ -615,8 +616,8 @@ Infrastructure and internal systems. All code-verified. No browser QA needed.
 | 426 | eBay Best Offers UI | ORG | PRO | S727: toggle + auto-accept/auto-decline percentage inputs on edit-item eBay section. Live dollar preview. Threshold validation (decline > accept). Converts to dollar amounts on save. edit-item/[id].tsx. Schema fields already existed (allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt). Pending Chrome QA. |
 | 427 | eBay Local Pickup Mode | ORG | PRO | S727: checkbox on edit-item + review cards sets ebayShippingOverride=LOCAL_PICKUP_ONLY. Smart phrase detector nudge on description/notes. Backend routes to local pickup fulfillment policy (pickupDropOff=true or name match). Pending Chrome QA. |
 | 428 | Review Card Readiness Borders | ORG | ALL | S727: border-l-4 color on each item card in review queue. Red=missing title/price/photo. Yellow=missing category/condition/description. Green=FindA.Sale ready. Blue=green+weight+eBay connected. computeReadiness() helper in review.tsx. Pending Chrome QA. |
-| 429 | eBay Push from Review Queue Skips Store Description Template | ORG | PRO | BROKEN P2 (found S734). When approving an item from the Smart Review Queue and pushing to eBay, the listing uses raw AI-generated description text instead of the organizer's custom store description template. The edit-item page push passes a template ID correctly; the Review queue approve handler does not. Root cause: review.tsx approve handler doesn't pass descriptionTemplateId (or equivalent) to the eBay push endpoint. Fix: audit ebayController pushSaleToEbay and the review queue approve mutation — ensure template lookup matches edit-item flow. |
-| 430 | Register Form Silent Error — Existing Email Shows No Feedback | PLATFORM | ALL | BROKEN P2 (found S734). POST /api/auth/register returns {"message":"An account already exists with this email address."} (HTTP 400/409) but the frontend register form displays no error message to the user. Silent failure — user sees nothing and cannot understand why registration didn't proceed. Root cause: register form submit handler swallows the API error response without extracting and displaying the error.message. Fix: wire error display in register form submit handler. |
+| 429 | eBay Push from Review Queue Skips Store Description Template | ORG | PRO | FIXED S736. review.tsx handleApproveItem and handleApproveAll now include description: editState.description in update payloads. Pending Chrome QA. |
+| 430 | Register Form Silent Error — Existing Email Shows No Feedback | PLATFORM | ALL | FIXED S736. pages/register.tsx catch block now calls showToast(msg, 'error') so error is always visible. Pending Chrome QA. |
 | 220 | Cloudinary URL Utility | PLATFORM | ALL | Consolidated Cloudinary URL generation into single shared utility. S317. |
 
 ## Blocked
@@ -747,64 +748,4 @@ Deferred until 200+ organizers across 5+ metro areas. Requires aggregated anonym
 | Moving Company Logistics Integration (B2B) | B2B | PAID_ADDON | White-label partnership + data feed. Help moving companies identify estate liquidation opportunities. Revenue: commission on referrals or subscription access. | After 500+ organizers |
 | Nonprofit Fundraising Suite (B2C) | B2C | PAID_ADDON | Turnkey platform for nonprofits to run rummage/silent auctions. FindA.Sale handles fulfillment; nonprofit gets 100% of proceeds. Revenue: 10% of non-profit GMV. | After core nonprofit features prove demand |
 | Consignment Shop Operations Suite (B2B) | B2B | TEAMS | Full SaaS for independent consignment shops (inventory, multi-vendor, POS, settlement). FindA.Sale becomes fulfillment + marketing layer. Revenue: $99–$199/month per shop. | After core organizer features stable + consignment demand validated |
-| Organizer Certification Program (B2C/B2B) | B2C | PAID_ADDON | Accredited training + badge program for professional estate organizers. Courses: valuation, pricing psychology, buyer psychology, legal compliance. Revenue: $99/course, lifetime access, badge marketplace. | After 1,000+ shoppers + 200+ organizers |
-| Shopper Behavior API (B2B) | B2B | PAID_ADDON | Anonymized behavioral data: search patterns, purchase intent, seasonal demand, demographic affinities. License to retailers, category managers, B2C marketplaces. $499–$999/mo. | After 10,000+ shoppers + 12+ months behavioral data |
-| Circular Economy Data Feed (B2E) | B2E | PAID_ADDON | ESG/sustainability data: avg item lifecycle cost, resale % by category, waste reduction metrics. Target: ESG consultants, corporate sustainability teams, nonprofits. $199–$499/mo. | After 300+ organizers + data cleanup |
-| Liquidation Insurance Product (B2B) | B2B | PAID_ADDON | Partner with specialty insurer: FindA.Sale users insure auction liquidations against underperformance. Revenue: 3–5% commission on policies written. | After 200+ organizers + claims data validated |
-| Estate Sale Futures Market (Speculative R&D) | B2B | TEAMS | Speculative — bundle future estate sales; institutional buyers bid on portfolios. High-risk, high-reward. Regulatory review required. Legal TBD. | Long-term R&D — post-2027 |
-| Full-Service Liquidation Platform (Speculative R&D) | ORG | TEAMS | Speculative — FindA.Sale hires liquidation coordinators; coordinates end-to-end estate liquidation for high-value estates. Revenue: 12–18% of GMV. Operational complexity TBD. | Long-term R&D — post-2027 |
-
-### Gamification Research (Innovation Round 3)
-
-| Feature | Role | Tier | Reason | Revisit Trigger |
-|---------|------|------|--------|-----------------|
-| Mystery Box Drops | SHO | FREE | Pre-beta, zero shoppers. Needs gamification scaffold + shopper base. MI gambling/sweepstakes law review needed. | After badge/XP system + Legal clears compliance |
-| Daily Spin Wheel | SHO | FREE | Requires reward infrastructure + shopper base. Board may flag "too gamey" — position as daily check-in reward. | After badge/XP system + 500+ daily shoppers |
-| Boost My Listing ($1-$5 microtx) | ORG | PAID_ADDON | Zero value until 50+ active sales + 500+ daily shoppers. FTC paid placement disclosure required. | After 500+ daily shoppers + Legal reviews disclosure |
-| Instant Appraisal Token ($0.99) | SHO | PAID_ADDON | Needs sold-item data to be credible. Overlaps with AI Valuations. Requires 1,000+ sold items per category. | After AI Valuations + 6 months transaction data |
-| Priority Checkout Pass ($2.99) | SHO | PAID_ADDON | Requires in-person QR validation + POS integration + organizer opt-in. Only viable at high-traffic sales. | After POS v2 sees real usage |
-| Scan-to-Know (NFC Item Tags) | BOTH | SIMPLE | NFC tags add $0.05-$0.15/item cost. Start with QR labels first. Evolution of QR/Barcode Labels. | After QR labels prove demand |
-| Agentic AI Assistant ("Scout") | SHO | PRO | Requires Wishlist Alerts + Collector Passport + sold-item data. XL complexity. Overlaps with AI Buying Agent Scout. | Schema migration dispatched S544 — tasteProfile Json? field added to User model. Awaiting Wishlist + Collector Passport + 6 months behavioral data. |
-| Voice Search + Navigation | SHO | SIMPLE | Web Speech API browser-native. Nice-to-have, not a retention driver. | After core search polished |
-| RaaS for Organizers (Resale-as-a-Service) | ORG | TEAMS | Long-term platform vision: full business management suite. Japan/EU circular economy model. | After individual features prove themselves — 2027+ |
-| Multi-Language Support (Spanish First) | PUB | SIMPLE | 42M native Spanish speakers in U.S. i18n framework. Important for national scale, not urgent for GR beta. | Before national expansion — Q1 2027 — **pre-wire: install next-intl now and extract all UI strings to locale files; every future UI addition becomes translation-ready automatically** |
-| API-First Organizer Toolkit | ORG | TEAMS | OAuth2 auth, docs, rate limiting, versioning for public API. Behind Premium Tier. Enables Zapier. | Schema migration dispatched S544 — ApiKey model added to schema. Auth middleware stub ready. Awaiting OAuth2 docs + rate limiting implementation. Q4 2026-Q1 2027 target. |
-| Zapier/Make.com Integration Hub | ORG | TEAMS | Requires API-First Toolkit first. Official Zapier app with triggers + actions. 2.2M businesses use Zapier. | After API-First ships — Q1-Q2 2027 |
-| TikTok-Style Item Reveal Feed | SHO | FREE | Vertical swipe feed of item reveals. Only works with high photo quality + item volume (100+/area). | After Rapidfire + Listing Factory drive quality up |
-| Organizer AMAs (Reddit-Style Q&A) | BOTH | FREE | Scheduled pre-sale preview + Q&A sessions. Requires chat infrastructure + organizer willingness. | After 10+ active organizers |
-| Workflow Automations (Built-in IFTTT) | ORG | PRO | Rule builder: Trigger → Condition → Action. Start with 5-10 hardcoded automations. | Hardcoded Q3 2026; custom rules 2027 |
-| Auto-Reprice (Market-Responsive Pricing) | ORG | PRO | AI adjusts prices based on real-time demand signals. Extends Auto-Markdown. Requires transaction data. | After 6+ months transaction data |
-
-*Deprecated (won't build): Co-Branded Yard Signs*
-
----
-
-## Rejected by Board
-
-### Innovation Session — Brand Spreading [REJECT]
-
-| Idea | Role | Tier | Reason |
-|------|------|------|--------|
-| Shopper Instagram Sticker Sharing | SHO | FREE | Instagram API too restrictive. Revisit Q3 if partnership emerges. |
-| White-Label Resale Platform (B2B) | ORG | TEAMS | Too early. Revisit after 10+ paying organizers + $5K+ MRR proven. |
-| Marketplace Watermark Variants | ORG | SIMPLE | Too micro-tactical. Merge into Nextdoor export template work. |
-
-### Historical Rejections
-| Idea | Role | Tier | Reason |
-|------|------|------|--------|
-| Pokéstop-Style Sale Markers | SHO | FREE | Gamification mismatch — estate sale shoppers skew older, Pokémon framing alienates core demo. |
-| Trader Network | BOTH | TEAMS | P2P trading adds liability, moderation, and trust complexity. Not core to organizer value prop. |
-| Egg Hatching Mechanic | SHO | FREE | Too game-y for audience. Confusing metaphor for non-gamers. |
-| Team Rivalries | SHO | FREE | Competitive team mechanics don't match collaborative sale-shopping culture. |
-| Raid-Style Group Events | SHO | FREE | Complex coordination + real-time features for uncertain demand. |
-| Professional Certifications | ORG | TEAMS | Requires industry partnerships, legal review, ongoing administration. Low ROI for beta stage. |
-| Mood Boards | SHO | FREE | Nice-to-have but no clear retention or revenue driver. |
-| AR Item Overlay | SHO | TEAMS | Hardware/browser support still spotty. High build cost for novelty feature. |
-| Feedback Widget (Global Floating Button) #245 | BOTH | FREE | Deprecated S465 — replaced with micro-surveys approach. |
-
-## Design Decisions (Locked — Session 155)
-| Holds expiry: 48 hours default, configurable per-sale in organizer settings. Nightly cron cleanup.
-| Health score: Hybrid gate — block publishing below 40% (no photo or title), nudge 40–70%, free above 70%. Progress bar UX, never punitive.
-| Tag vocabulary: Curated list of 30–50 core tags + 1 free-form custom slot per item. AI suggests from curated list. Quarterly review.
-| Social templates: Auto-fill v1 with 3 tone options (Casual, Professional, Friendly). Defer WYSIWYG editor to post-beta.
-|                                                                                                                                                         
+| Organizer Certification Program (B2C/B2B) | B2C | PAID_ADDON | Accredited training + badge program for professional estate organizers. Courses: valuation, pricing psychology, buyer psychology, legal compliance. Revenue: $99/course, lifeti
