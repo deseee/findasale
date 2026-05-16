@@ -11,6 +11,7 @@ import { scrapeFacebookMarketplace } from './sources/facebook-marketplace';
 import { scrapeNAADirectory } from './sources/naaAuctioneerDirectory';
 import { scrapeAuctionNinja } from './sources/auctionNinjaScraper';
 import { runYellowPagesCaScraper } from './sources/yellowPagesCaScraper';
+import { runWyomingPhase2Scraper } from './sources/wyomingPhase2Scraper';
 
 export type SourceType = 'directory' | 'licensing' | 'crawl-queue' | 'places-api';
 export type SourceRunMode = 'metro-loop' | 'national-once';
@@ -119,6 +120,21 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     run: async (_metro: string, _organizerId: string, _rateLimiter: RateLimiter): Promise<ScrapeStats> => {
       await runYellowPagesCaScraper();
       return { itemsFound: 0, itemsCreated: 0, itemsUpdated: 0, itemsSkipped: 0, itemsFailed: 0 };
+    },
+  },
+  {
+    id: 'WyomingPhase2',
+    displayName: 'Wyoming Division of Banking — Pawnbroker Licensees',
+    type: 'licensing',
+    runMode: 'national-once',
+    // DISABLED: source page is Google Sites (JS-rendered). No static data available.
+    // Re-enable once headless browser support is wired. See wyomingPhase2Scraper.ts for full investigation notes.
+    enabled: false,
+    cronSchedule: '0 3 * * 1', // Monday 03:00 UTC (weekly — licensing data changes infrequently)
+    qualityTier: 'high',
+    legalNote: 'Public state licensing registry — no ToS prohibition',
+    run: async (_metro: string, _organizerId: string, _rateLimiter: RateLimiter): Promise<ScrapeStats> => {
+      return runWyomingPhase2Scraper();
     },
   },
 ];
