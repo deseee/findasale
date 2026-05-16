@@ -16,8 +16,6 @@
  * when page is JS-rendered (empty result expected until headless browser support is added).
  */
 
-import { prisma } from '../../lib/prisma';
-
 export interface ScrapeStats {
   itemsFound: number;
   itemsCreated: number;
@@ -101,21 +99,9 @@ export async function runWyomingPhase2Scraper(): Promise<ScrapeStats> {
 
     console.log(`[WyomingPhase2] Found ${licensees.length} licensees — upserting...`);
 
-    for (const licensee of licensees) {
-      try {
-        const existing = await prisma.organizer.findFirst({
-          where: { businessName: licensee.name, state: licensee.state },
-        });
-        if (existing) {
-          stats.itemsUpdated++;
-        } else {
-          stats.itemsSkipped++;
-        }
-      } catch (err: any) {
-        console.error(`[WyomingPhase2] Error processing ${licensee.name}:`, err?.message ?? err);
-        stats.itemsFailed++;
-      }
-    }
+    // Upsert logic pending headless browser support — page is JS-rendered so this
+    // branch is never reached. Wire prisma import and upsert when Playwright is added.
+    stats.itemsSkipped = licensees.length;
   } catch (err: any) {
     console.error('[WyomingPhase2] Fetch error:', err?.message ?? err);
   }
