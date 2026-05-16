@@ -36,8 +36,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 8
+        # version auto-detected from root package.json "packageManager" field
+        # (pnpm@8.15.5). v4 errors if both are set — keep package.json as source of truth.
 
       - name: Install dependencies
         run: pnpm install --filter backend --filter database
