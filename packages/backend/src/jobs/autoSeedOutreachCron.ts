@@ -37,9 +37,15 @@ const PLACEHOLDER_FULL_ADDRESSES = new Set([
   'donotreply@gmail.com',
 ]);
 
+const IMAGE_EXTENSION_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?|ico)(\b|$)/i;
+
 const isValidEmail = (email: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  if (!emailRegex.test(email)) return false;
+  // Reject image filenames that accidentally match email pattern
+  // (e.g. "wastelandlogo_250x@2x.png", "Pink_Yellow_Star@2x.jpeg")
+  if (IMAGE_EXTENSION_RE.test(email)) return false;
+  return true;
 };
 
 const isPlaceholderEmail = (email: string): boolean => {
@@ -128,7 +134,12 @@ export async function runAutoSeedOutreach(): Promise<void> {
 
       const email = org.contactEmail;
       if (!email) continue;
-      if (!isValidEmail(email)) continue;
+      if (!isValidEmail(email)) {
+        if (IMAGE_EXTENSION_RE.test(email)) {
+          console.warn(`[AutoSeedCron] Skipped organizer ${org.id} — contactEmail looks like an image filename: ${email}`);
+        }
+        continue;
+      }
       if (isPlaceholderEmail(email)) continue;
       if (suppressedEmails.has(email.toLowerCase())) continue;
 
