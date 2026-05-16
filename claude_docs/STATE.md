@@ -8,9 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S737 — QA Session (COMPLETE).**
+**Latest: S738 — Bug Fix Session (COMPLETE). Pushed ✅.**
 
-Chrome QA burn-down. Three Blocked Queue items verified this session: #326 eBay Comp Tiles ✅, #322 EbayCategoryPicker ✅, S733 desktop claim-listing CTA ✅. Two items UNVERIFIABLE (no VM microphone for voice strip; all user2 items published — no draft queue for review-card dims test). Patrick confirmed: S736 push done, QA_RATE_LIMIT_BYPASS_SECRET added to Railway, SES AWS steps completed, MailerLite group ID set. Email verification migration (20260515180000) deploying next week.
+Three Railway production bugs diagnosed and fixed from logs Patrick sent during session. (1) **valuationService.ts** — `orderBy: { createdAt: 'desc' }` on PriceBenchmark (field doesn't exist; correct is `updatedAt`). One-line fix. (2) **appraisalService.ts** — `getOpenRequests()` crashed on orphaned AppraisalRequest rows where linked user was deleted; added `submittedBy: { isNot: null }` filter. (3) **FavoriteButton + favoriteController** — clicking save/heart on a sale detail page passed the sale ID as `itemId` to the item-only favorites endpoint → P2003 FK violation. Favorite model already had `saleId String?`; added `POST /sale/:id` and `GET /sale/:id` routes + `toggleSaleFavorite`/`getSaleFavoriteStatus` controllers; FavoriteButton now routes to `/sale/:id` endpoint when no `itemId` is provided. Also confirmed and included in push: organizers.ts returnWindowHours removal from Prisma update (P2025 fix from prior session) + index.ts authLimiter /me exemption (CRIT-1 fix). Push green ✅.
+
+**Previous: S737 — QA Session (COMPLETE).**
+
+Chrome QA burn-down. Three Blocked Queue items verified: #326 eBay Comp Tiles ✅, #322 EbayCategoryPicker ✅, S733 desktop claim-listing CTA ✅. Two items UNVERIFIABLE (no VM microphone for voice strip; all user2 items published — no draft queue for review-card dims test). Patrick confirmed: S736 push done, QA_RATE_LIMIT_BYPASS_SECRET added to Railway, SES AWS steps completed, MailerLite group ID set. Email verification migration (20260515180000) deploying next week.
 
 **Previous: S735 — Unclaimed Organizer Profile Redesign (COMPLETE).**
 
@@ -139,7 +143,7 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | #422 OAuth Option B | FIXED S723 — backend 409 + amber banner redirect works. UNVERIFIED Chrome (needs real Google test account — seed accounts can't do Google OAuth). Separate bug found S734: register form swallows "existing email" API error silently (#430). | Chrome QA: register email/pwd, sign out, sign-in-with-Google same email → expect amber banner redirect | S723 |
 | #322 Encyclopedia category picker | ✅ VERIFIED S737 — Typed "pocket watch" → dropdown populated with real eBay taxonomy: Pocket Watches (3937), Movements (57720), Other Watch Parts (10324), etc. CLOSED. | — | S723 |
 | Settings UI for linked OAuth providers | Backend endpoint `/auth/oauth/link` ready, no frontend surface yet | Build linked-accounts section in organizer/settings.tsx (deferred — security hole closed by backend rejection alone) | S723 |
-| #431 Rate limiter QA bypass | ✅ DONE — S736 fix pushed, QA_RATE_LIMIT_BYPASS_SECRET added to Railway. CLOSED. CRIT-1 residual: authLimiter still applies globally to /api/auth/me (fires on every page nav); bypass header not sent by browsers. Needs scope fix — exempt /api/auth/me from authLimiter. | Dispatch dev for scope fix | S736 |
+| #431 Rate limiter QA bypass | ✅ DONE — S736 fix pushed, QA_RATE_LIMIT_BYPASS_SECRET added to Railway. CLOSED. CRIT-1 residual also FIXED S738 — authLimiter /me exemption added to index.ts and pushed. CLOSED. | — | S736 |
 
 | Sales page desktop claim-listing CTA (S733) | ✅ VERIFIED S737 — Navigated to /sales/cmoyqeblk035j8i79qtgjtt3m as guest. Desktop aside showed "Is this your sale? Claim this listing..." + orange Claim button. CLOSED. | — | S733 |
 | Voice strip — weight/dims (S734) | Fix deployed but not live-tested | Record a voice note saying "14oz" or "2 lb 4 oz" on an existing item. Confirm: (a) number is absent from saved description, (b) weight field populated in structured fields | S734 |
@@ -165,6 +169,20 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S738 — Bug Fix Session: 3 Production Crashes Fixed (COMPLETE) ✅ Pushed
+
+Three bugs diagnosed from Railway logs Patrick sent during session, all fixed and pushed.
+
+**(1) valuationService.ts** — `orderBy: { createdAt: 'desc' }` in `prisma.priceBenchmark.findMany()`. PriceBenchmark has no `createdAt` field (only `updatedAt`). Changed to `orderBy: { updatedAt: 'desc' }`. Fixes valuation 500 crash.
+
+**(2) appraisalService.ts** — `getOpenRequests()` / `getOpenAppraisalsForCommunity()` crashed (`Field submittedBy is required to return data, got null`) on orphaned AppraisalRequest rows where the linked user was deleted. Added `submittedBy: { isNot: null }` to the `where` clause.
+
+**(3) FavoriteButton + favoriteController + favorites routes** — Sale detail page rendered FavoriteButton with `itemId={sale.id}` but `POST /api/favorites/item/:id` only accepts Item FK. Favorite model already had `saleId String?` + `@@unique([userId, saleId])`. Added: `toggleSaleFavorite` + `getSaleFavoriteStatus` controllers; `POST /sale/:id` + `GET /sale/:id` routes; FavoriteButton updated to call `/sale/:id` when `itemId` prop absent; `pages/sales/[id].tsx` updated to pass no `itemId` (sale-level renders only).
+
+**Also confirmed + included in push:** organizers.ts returnWindowHours removal from Prisma update (P2025 fix coded prior session, never pushed) + index.ts authLimiter `/me` exemption (CRIT-1). All 8 files pushed green.
+
+**eBay 400 errors (observed):** Stale offer/inventory IDs returning 400 from eBay (listings removed from eBay since sync). Sync handles gracefully — logs and continues. Data issue, not code bug.
 
 ### S737 — QA Session: Blocked Queue Burn-Down (COMPLETE)
 
@@ -266,7 +284,7 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 
 ## Next Session
 
-**QA ceiling rule:** Blocked Queue still has items — continue QA or dispatch CRIT-1 fix + SES migration as priority dev work.
+**QA ceiling rule:** Blocked Queue still has items — continue QA or dispatch SES migration as priority dev work.
 
 **Patrick actions remaining:**
 1. Deploy email verification migration 20260515180000 (next week):
@@ -278,9 +296,9 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
    ```
 
 **Next session priority order:**
-1. CRIT-1 fix: Dispatch dev to exempt `/api/auth/me` from `authLimiter` in `packages/backend/src/index.ts` (scope limiter to non-auth routes only)
-2. SES migration: Dispatch dev for 37-file migration (plan: `claude_docs/operations/ses-migration-plan.md`) — AWS steps done
-3. Voice strip weight/dims S734 — UNVERIFIABLE until real device test; keep in Blocked Queue
-4. Review page eBay card dims/weight S734 — UNVERIFIABLE until user2 has a draft item in review queue
-5. #422 OAuth Option B — still needs real Google test account
+1. SES migration: Dispatch dev for 37-file migration (plan: `claude_docs/operations/ses-migration-plan.md`) — AWS steps done by Patrick S737
+2. Voice strip weight/dims S734 — UNVERIFIABLE until real device test; keep in Blocked Queue
+3. Review page eBay card dims/weight S734 — UNVERIFIABLE until user2 has a draft item in review queue
+4. #422 OAuth Option B — still needs real Google test account
+5. Organizer profile save: verify Railway 500 is gone after S738 push (was PrismaClientValidationError from un-pushed returnWindowHours fix)
 6. If Blocked Queue drops below 8 → resume roadmap feature work
