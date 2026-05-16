@@ -8,9 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S739 — AWS SES Migration Infrastructure (IN-FLIGHT). Code dispatch not yet returned.**
+**Latest: S739 — AWS SES Migration (COMPLETE). Code pushed ✅. Awaiting smoke test + Resend cleanup.**
 
-AWS SES identity created (`send.finda.sale`, verification pending DNS propagation up to 72h). All 3 DKIM CNAME records added to Vercel DNS and confirmed saved. AWS production access quota requests submitted (200→50,000/day and 1→14/sec, 24–48h approval window). Patrick added 5 Railway env vars (SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SES_FROM_EMAIL). Code migration dispatched to findasale-dev (create emailService.ts, update ~37 backend files, add suppression check to saleEndingSoonJob.ts, swap from addresses to @send.finda.sale) — results not yet returned.
+AWS SES migration complete. `send.finda.sale` domain verified ✅. All 3 DKIM CNAME records confirmed in Vercel DNS ✅. AWS production access approved ✅ (quota: 50,000/day, 14/sec). Patrick added 5 Railway env vars (SMTP_HOST, SMTP_PORT=587, SMTP_USERNAME, SMTP_PASSWORD, SES_FROM_EMAIL=noreply@send.finda.sale). Code migration pushed green: emailService.ts nodemailer wrapper, ~37 backend files updated, all from addresses → @send.finda.sale. Pending: smoke test one transactional email → confirm inbox delivery → remove resend from package.json + Railway env vars.
 
 **Previous: S738 — Bug Fix Session (COMPLETE). Pushed ✅.**
 
@@ -151,9 +151,9 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 | Sales page desktop claim-listing CTA (S733) | ✅ VERIFIED S737 — Navigated to /sales/cmoyqeblk035j8i79qtgjtt3m as guest. Desktop aside showed "Is this your sale? Claim this listing..." + orange Claim button. CLOSED. | — | S733 |
 | Voice strip — weight/dims (S734) | Fix deployed but not live-tested | Record a voice note saying "14oz" or "2 lb 4 oz" on an existing item. Confirm: (a) number is absent from saved description, (b) weight field populated in structured fields | S734 |
-| Review page eBay card — dims/weight (S734) | getDraftItemsBySaleId select fix deployed but not live-tested | Save weight+dims on edit-item page → navigate to review page → confirm eBay push card shipping fields show correct values (not empty). Also confirm Local Pickup checkbox reflects saved ebayShippingOverride. | S734 |
+| Review page eBay card — dims/weight (S734) | getDraftItemsBySaleId select fix deployed but not live-tested. S739: seed data created via psycopg2 — item `qa-dims-test-item-001` in sale `qa-dims-test-sale-001` owned by user2@example.com. Item has 24oz weight, 12×8×4in dims, draftStatus=PENDING_REVIEW. | Login as user2@example.com / Seedy2025! → /organizer/review → confirm eBay push card shows 24oz / 12×8×4in. Also confirm Local Pickup checkbox reflects saved ebayShippingOverride. | S734 |
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
-| #SES-MIGRATION — email provider move | Code migration dispatched S739 (in-flight). AWS infra done: identity pending DNS verification (up to 72h), quota requests submitted (24–48h). Railway env vars set by Patrick. Awaiting dev agent return. | Land dev results, run TS check, push. Then smoke test one email. Verify inbox delivery before removing Resend. | S732 |
+| #SES-MIGRATION — email provider move | S739 COMPLETE — code pushed, domain verified, production access approved. | Smoke test one transactional email → confirm inbox delivery → remove resend from package.json + RESEND_API_KEY/RESEND_FROM_EMAIL from Railway. | S739 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
@@ -302,7 +302,7 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 
 ## Next Session
 
-**QA ceiling rule:** Blocked Queue still has items — SES code landing takes priority, then QA burn-down.
+**QA ceiling rule:** Blocked Queue at 6 items — below 8-item threshold. Feature work is unblocked.
 
 **Patrick actions remaining:**
 1. Deploy email verification migration 20260515180000 (when ready):
@@ -312,13 +312,19 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
    npx prisma migrate deploy
    npx prisma generate
    ```
+2. SES smoke test: trigger one transactional email (e.g., send a test notification or trigger a sale publish flow), verify inbox delivery. Then remove `resend` from package.json + pull RESEND_API_KEY/RESEND_FROM_EMAIL from Railway.
+3. MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831 still listed as unchecked in Patrick's checklist — confirm if this is set on Railway.
 
 **Next session priority order:**
-1. **SES code landing** — Wait for findasale-dev to return from S739 dispatch. Review changed files, run TS check, provide pushblock. After deploy: smoke test one email (transactional controller), verify inbox delivery.
-2. **SES verification checks** — Check AWS SES console: is `send.finda.sale` verified? Check Service Quotas request status (production access approval).
-3. **Post-SES cleanup** — Once email delivery confirmed working: remove `resend` from package.json, remove RESEND_API_KEY from Railway.
-4. Voice strip weight/dims S734 — UNVERIFIABLE until real device test; keep in Blocked Queue
-5. Review page eBay card dims/weight S734 — UNVERIFIABLE until user2 has a draft item in review queue
-6. #422 OAuth Option B — still needs real Google test account
-7. Organizer profile save: verify Railway 500 is gone after S738 push (PrismaClientValidationError from returnWindowHours)
-8. If Blocked Queue drops below 8 → resume roadmap feature work
+1. **SES smoke test + Resend cleanup** — Patrick action (see above). Once confirmed, close SES-MIGRATION from Blocked Queue.
+2. **Review page eBay dims QA** — seed data ready: login as user2@example.com / Seedy2025! → /organizer/review for sale qa-dims-test-sale-001 → verify eBay push card shows 24oz / 12×8×4in.
+3. **Voice strip weight/dims S734** — UNVERIFIABLE until real device test; keep in Blocked Queue.
+4. **#422 OAuth Option B** — needs real Google test account.
+5. **Feature work** — see roadmap recommendations below.
+
+**Roadmap feature work (S740+) — all confirmed for next session:**
+1. **#251 priceBeforeMarkdown** — Patrick noted "don't see this?" in roadmap — P2 bug, crossed-out price not rendering on item cards/detail. Dev dispatch.
+2. **BROKEN table cleanup (#429 + #430)** — both fixed in S736 but roadmap rows still say BROKEN. Records dispatch to close out.
+3. **SEO completion** — 116 remaining pages from S714 plan at `claude_docs/strategy/seo-agent-dispatch.md`. Use Sonnet (not Haiku).
+4. **Help Library (#377/#378)** — 75 guides + video scripts + /guides route. Use Sonnet. High SEO value.
+5. **Settings UI for linked OAuth providers** — backend done since S723, just needs frontend section in organizer/settings.tsx. Small dev dispatch.

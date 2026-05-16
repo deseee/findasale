@@ -1,30 +1,29 @@
-# Patrick's Dashboard — S739 Wrap
+# Patrick's Dashboard — S739 Wrap (Complete)
 
 ---
 
 ## What Happened This Session — S739
 
-AWS SES migration infrastructure is fully set up. Code migration dispatched but agent results not yet returned — next session lands the code.
+AWS SES migration is fully done. All infrastructure confirmed, code pushed green.
 
-**AWS SES identity** — Created `send.finda.sale` in us-east-1. Showing "Verification pending" — DNS propagation can take up to 72 hours. Check the SES console next session to confirm it flipped to Verified.
+**AWS SES** — `send.finda.sale` identity verified ✅. All 3 DKIM CNAME records in Vercel DNS ✅. Production access approved ✅ (50,000/day, 14/sec). 5 Railway env vars confirmed set.
 
-**DKIM DNS records** — All 3 CNAME records added and saved in Vercel DNS for finda.sale. These authenticate outgoing email so it doesn't land in spam.
+**Code migration** — emailService.ts nodemailer wrapper + ~37 backend files updated + all from addresses → @send.finda.sale. Pushed green.
 
-**AWS production access** — Submitted quota increase requests to lift the 200/day sandbox limit to 50,000/day and the rate from 1/sec to 14/sec. AWS typically approves in 24–48h. You'll get an email when it's approved.
+**Resend cleanup** — on hold until you smoke test one email and confirm inbox delivery. Then: remove resend from package.json + pull RESEND_API_KEY/RESEND_FROM_EMAIL from Railway.
 
-**Railway env vars** — You confirmed adding SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, and SES_FROM_EMAIL. Those are in place and waiting for the code to use them.
-
-**Code dispatch** — findasale-dev was dispatched to create the new email service layer and update ~37 backend files. The agent hadn't returned by session end. Next session: receive the results, review, push.
+**QA dims seed** — user2@example.com now has a PENDING_REVIEW item (`qa-dims-test-item-001`) with 24oz / 12×8×4in dims ready for the Review page eBay card test next QA session.
 
 ---
 
 ## Pending Patrick Actions
 
-**1. Check next session (no action yet — just verify):**
-- AWS SES console → Identities → confirm `send.finda.sale` shows Verified (green)
-- Service Quotas → SES → confirm production access approved
+**1. SES smoke test** (once you're ready):
+- Trigger any transactional email in the app (publish a sale, send a notification, etc.)
+- Confirm it hits your inbox (not spam)
+- Then: remove `resend` from `packages/backend/package.json` + pull `RESEND_API_KEY` and `RESEND_FROM_EMAIL` from Railway env vars
 
-**2. Deploy email verification migration** (when ready — no rush):
+**2. Deploy email verification migration** (no rush):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -45,9 +44,9 @@ npx prisma generate
 | Pipeline (enrich/score/outreach) | ✅ GitHub Actions — green cycle confirmed S726 |
 | Outreach emails | ✅ Gmail API live (4h cron) |
 | CI health monitoring | ✅ Daily 8am |
-| Transactional email | ⚠️ Resend free tier — quota hit. SES infra done S739; code migration in-flight |
-| SES identity verification | ⏳ DNS propagating — check SES console (up to 72h) |
-| AWS production access | ⏳ Quota request submitted — awaiting AWS approval (24–48h) |
+| Transactional email | ✅ AWS SES wired — pending smoke test before Resend removal |
+| SES identity + DKIM | ✅ Verified |
+| AWS production access | ✅ Approved |
 | Email verification migration | ⚠️ Created S726, NOT deployed |
 | eBay store URL migration | ⚠️ Created S728, NOT deployed |
 | Return window migration | ⚠️ Created S730, NOT deployed |
@@ -58,9 +57,21 @@ npx prisma generate
 
 | Feature | What's Needed |
 |---------|---------------|
-| #SES-MIGRATION code | Next session: receive dev agent results, TS check, push, smoke test one email |
+| SES smoke test + Resend cleanup | Patrick: send one test email → confirm inbox → remove resend |
 | #422 OAuth Option B | Chrome QA — register email/pwd, sign out, Google sign-in → amber banner |
-| Voice strip weight/dims (S734) | Record "14oz" voice note — verify number absent from description, weight field populated |
-| Review page eBay card dims/weight (S734) | Save weight+dims on edit-item → review page eBay card shows values |
-| 3 pending migrations | Patrick: run `npx prisma migrate deploy` (S726 + S728 + S730) |
-| P0-3 Email verification token | Migration 20260515180000 created but not deployed |
+| Voice strip weight/dims (S734) | Patrick test on real device: record "14oz" → verify stripped from description, weight field populated |
+| Review page eBay card dims/weight (S734) | Data seeded S739. Login user2@example.com / Seedy2025! → /organizer/review → verify 24oz / 12×8×4in in eBay push card |
+| Email verification token expiry | Migration 20260515180000 created but not deployed (see Patrick action above) |
+
+---
+
+## Next Session — S740
+
+**QA ceiling:** 6 items in Blocked Queue — below 8-item threshold. Feature work is open.
+
+1. Review page eBay dims QA (seed data ready — user2@example.com)
+2. #251 priceBeforeMarkdown — dev dispatch, crossed-out price not showing
+3. BROKEN table cleanup — #429 + #430 fixed S736 but roadmap rows stale; Records dispatch
+4. SEO completion — 116 remaining pages (seo-agent-dispatch.md), Sonnet
+5. Help Library (#377/#378) — 75 guides + /guides route, Sonnet
+6. Settings UI for linked OAuth providers — small frontend dispatch, backend done S723
