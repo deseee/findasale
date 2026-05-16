@@ -1,43 +1,34 @@
-# Patrick's Dashboard — S732 Wrap
+# Patrick's Dashboard — S733 Wrap
 
 ---
 
-## What Happened This Session — S732
+## What Happened This Session — S733
 
-Email infrastructure triage + SES migration planning. No product features — pure ops.
+Four UI fixes across two pages + a file restore + duplicate button removal.
 
-**Resend quota incident diagnosed** — `saleEndingSoonJob` fired and sent 200 emails (200% of the 100/day free tier limit). Root cause: the job correctly finds all PUBLISHED sales ending in 23–25h with `endingSoonNotified: false`, then sends to every `SaleSubscriber.email` with zero suppression check. The `endingSoonNotified` flag prevents re-sends on the same sales, but new sales entering the window will keep triggering it. Secondary finding: 37 backend files all use Resend directly — no central abstraction.
+**Organizer page mobile layout** — the "1 sale" badge was a `flex` sibling with `whitespace-nowrap ml-4` that pushed the heading off-screen on narrow phones. Moved inline into the heading as an amber pill. Fixed.
 
-**Decision: migrate to AWS SES** — $0.10/1,000 emails (~$5 for 50k/month vs. Resend's $20). `send.finda.sale` subdomain already has SES DNS records from a prior setup. Migration plan written to `claude_docs/operations/ses-migration-plan.md`. Strategy: create a central `lib/emailService.ts` wrapper so all 37 files change one import line only.
+**Sales page mobile content parity** — three cards were invisible on mobile (desktop-aside-only): Holds & Shipping, Share This Sale, and Where to Go. All three now have `lg:hidden` versions in the mobile flow. The 96px mini-map thumbnail in the When/Where section was removed (too small to be useful). The desktop aside also now shows a "Is this your sale? Claim this listing" CTA for unclaimed sales.
 
-**Roadmap + STATE updated** — `#SES-MIGRATION` added to roadmap Infrastructure section. Blocked Queue entry added to STATE.md with Patrick's AWS action items. Next Session section added to STATE.md.
+**Settings.tsx restored** — the file had been silently truncated by a prior session's Edit tool usage (file ended at line 2021 mid-statement, no `export default`, unclosed JSX fragments). Retrieved the canonical version from GitHub, reconstructed the missing tail using Python. Vercel build should now pass.
+
+**Duplicate appraisal button removed** — the edit-item page had two "Request Appraisal" buttons. The correct one (green, XP-based community flow in PriceResearchPanel) was kept. The later-added purple redirect link was removed.
+
+**Memory updated** — added dispatch gate rule to `feedback_edit_tool_truncation.md`: all subagent dispatch prompts for multi-file or large-file work now must include the Python-via-bash instruction explicitly.
 
 ---
 
 ## Pending Patrick Actions
 
-**URGENT — do today (starts the 24–48h AWS approval clock):**
-
-1. Log into AWS console → Simple Email Service → region us-east-1
-2. Confirm `send.finda.sale` shows as "Verified" under Identities
-3. Click "Request production access" → fill out form (transactional, finda.sale, under 5k/month)
-4. Create SMTP credentials → download CSV
-5. Add to Railway backend env vars:
-   ```
-   SMTP_HOST=email-smtp.us-east-1.amazonaws.com
-   SMTP_PORT=587
-   SMTP_USERNAME=[from CSV]
-   SMTP_PASSWORD=[from CSV]
-   SES_FROM_EMAIL=noreply@send.finda.sale
-   ```
-
-**Push S732 — docs only:**
+**Push S733 — code + docs:**
 ```powershell
+git add "packages/frontend/pages/organizers/[id].tsx"
+git add "packages/frontend/pages/sales/[id].tsx"
+git add "packages/frontend/pages/organizer/settings.tsx"
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/operations/ses-migration-plan.md
-git commit -m "docs(S732): SES migration plan + roadmap + STATE update"
+git commit -m "fix(ui): mobile layout, content parity, restore settings.tsx, remove duplicate appraisal button"
 .\push.ps1
 ```
 
@@ -99,6 +90,12 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
+**SES setup (when ready):**
+1. Log into AWS console → SES → us-east-1 → confirm `send.finda.sale` is Verified
+2. Request production access
+3. Create SMTP credentials, download CSV
+4. Add to Railway: `SMTP_HOST=email-smtp.us-east-1.amazonaws.com`, `SMTP_PORT=587`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SES_FROM_EMAIL=noreply@send.finda.sale`
+
 ---
 
 ## Infrastructure Status
@@ -122,7 +119,10 @@ npx prisma generate
 | Feature | What's Needed |
 |---------|---------------|
 | #SES-MIGRATION | Patrick: complete AWS console steps + add Railway env vars → dispatch dev |
-| #326 eBay Comp Tiles | Chrome QA — confirm tile grid renders on edit-item page |
+| Organizer page mobile badge | Chrome QA — /organizers/[id] mobile, confirm inline badge + card layout |
+| Sales page mobile cards | Chrome QA — /sales/[id] mobile, confirm Where to Go + Holds & Shipping + SaleShareCard visible; mini-map removed |
+| Sales page desktop claim CTA | Chrome QA — /sales/[id] desktop as guest for unclaimed sale |
+| #326 eBay Comp Tiles | Chrome QA — confirm 2-3 tile grid renders on edit-item page |
 | #280 Condition Rating XP | Chrome QA — set conditionGrade, verify XP +5 in ledger |
 | eBay full push flow | Chrome QA — edit-item → save → push to eBay LIVE |
 | #422 OAuth Option B | Chrome QA — register, sign out, Google sign-in → amber banner |

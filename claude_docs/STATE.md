@@ -199,4 +199,41 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 4. eBay publish mode + shipping cascade — `Organizer.ebayDefaultPublishMode` (DRAFT|LIVE) + `ebayDefaultShippingPolicyId` schema + migration + backend whitelist + smart-pick logic + frontend settings UI (eBay tab) + sale-level split buttons (`Push draft` / `Push live`) + per-item override on edit-item. Migration deployed against Railway DB. 8 files.
 
 **Inline edits during iteration:**
-5. eBay aspect crash — `enums[0]` fallback was picking "Accordion" for "For Instrument" on MIDI cables (alphabetical). Rewrote `fillRequiredAspects` cascade: tag → keyword → neutral values (Universal/Other/Not Specified/N/A/Does Not Apply) → skip with warn log. Structured `[eBay Push Failed]` log + `[eBay AspectFill]` reason codes. EOF truncation in same file (~120 missing lines in `syncEndedListingsForOrganizer`) restored from git as bo
+5. eBay aspect crash — `enums[0]` fallback was picking "Accordion" for "For Instrument" on MIDI cables (alphabetical). Rewrote `fillRequiredAspects` cascade: tag → keyword → neutral values (Universal/Other/Not Specified/N/A/Does Not Apply) → skip with warn log. Structured `[eBay Push Failed]` log + `[eBay AspectFill]` reason codes. EOF truncation in same file (~120 missing lines in `syncEndedListingsForOrganizer`) restored from git as bonus.
+6. eBay `frontendUrl is not defined` + `proxySecret is not defined` — both vars declared locally in other functions only; added at top of items loop in pushSaleToEbay.
+7. eBay smart-pick weight-gate — CALCULATED policy picked even when `packageWeightOz` was null (caused eBay error 25020); added `itemHasWeight` guard, CALCULATED skipped with warn log when no weight.
+
+---
+
+## Next Session
+
+### Patrick Actions Required (before next dev session)
+
+| Action | Priority | Context |
+|--------|----------|---------|
+| Push S733 (see push block below) | HIGH | 4 UI fix files + STATE.md + dashboard |
+| AWS SES: verify `send.finda.sale` identity in SES console (us-east-1) | HIGH | May already be verified — just confirm |
+| AWS SES: submit production access request | HIGH | 24–48h approval — do today so it clears in time |
+| AWS SES: create SMTP credentials, download CSV | HIGH | One-time — secret only shown once |
+| Railway: add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SES_FROM_EMAIL` env vars | HIGH | From the CSV + `email-smtp.us-east-1.amazonaws.com` / `587` / `noreply@send.finda.sale` |
+| Deploy pending migrations (S726 + S728 + S730) | P0 | `cd packages/database` → `$env:DATABASE_URL=[Railway URL]` → `npx prisma migrate deploy` → `npx prisma generate` |
+
+### Push Block — S733
+
+```powershell
+git add "packages/frontend/pages/organizers/[id].tsx"
+git add "packages/frontend/pages/sales/[id].tsx"
+git add "packages/frontend/pages/organizer/settings.tsx"
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(ui): mobile layout, content parity, restore settings.tsx, remove duplicate appraisal button"
+.\push.ps1
+```
+
+### Next Dev Session Priority Order
+
+1. **Chrome QA smoke test** — verify S733 mobile layout + missing cards on live site.
+2. **SES migration** — once Patrick has Railway env vars set, dispatch dev to migrate all 37 email files + suppression check fix. Plan: `claude_docs/operations/ses-migration-plan.md`.
+3. **S731 push block** — ESN scraper fix + 23-state scraper repair batch still pending Patrick `.\push.ps1` run.
+4. **Blocked Queue Chrome QA** — #326 eBay Comp Tiles, #280 Condition Rating XP, eBay full push flow, #422 OAuth Option B, #322 Encyclopedia category picker.
