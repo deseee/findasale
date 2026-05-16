@@ -61,56 +61,60 @@ async function syncCategory(slug: string, config: { display: string; ebayIds: st
 
   const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
   const proxySecret = process.env.EBAY_PROXY_SECRET;
-  // eBay Browse API uses category_ids as a direct query param (comma-separated), not filter syntax.
-  const ids = config.ebayIds.join(',');
-  const apiPath = `/buy/browse/v1/item_summary/search?category_ids=${ids}&sort=newlyListed&limit=12`;
-
-  try {
-    const res = await fetch(
-      `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(apiPath)}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
-          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-        },
+  // Browse API only allows 1 category_id per call — fetch each ID separately and merge.
+  const allItems: EbayItem[] = [];
+  for (const categoryId of config.ebayIds) {
+    const apiPath = `/buy/browse/v1/item_summary/search?category_ids=${categoryId}&sort=newlyListed&limit=12`;
+    try {
+      const res = await fetch(
+        `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(apiPath)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
+            ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+          },
+        }
+      );
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        console.error(`[CategorySync] eBay API error for ${slug}/${categoryId}: ${res.status} — ${body.slice(0, 200)}`);
+        continue;
       }
-    );
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      console.error(`[CategorySync] eBay API error for ${slug}: ${res.status} — ${body.slice(0, 200)}`);
-      return -res.status;
-    }
-    const data = await res.json() as { itemSummaries?: EbayItem[] };
-    const items = data.itemSummaries ?? [];
-    console.log(`[CategorySync] ${slug}: ${items.length} items from eBay`);
+      const data = await res.json() as { itemSummaries?: EbayItem[] };
+      allItems.push(...(data.itemSummaries ?? []));
+    } catch (err) { console.error(`[CategorySync] Error for ${slug}/${categoryId}:`, err); }
+  }
+  // Deduplicate by itemId in case category IDs overlap
+  const seen = new Set<string>();
+  const items = allItems.filter(i => { if (seen.has(i.itemId)) return false; seen.add(i.itemId); return true; });
+  console.log(`[CategorySync] ${slug}: ${items.length} items from eBay`);
 
-    for (const item of items) {
-      await prisma.categoryTopFinds.upsert({
-        where: { categorySlug_ebayListingId: { categorySlug: slug, ebayListingId: item.itemId } },
-        update: {
-          itemTitle: item.title,
-          listingPrice: new Decimal(item.price?.value ?? '0'),
-          imageUrl: item.image?.imageUrl ?? null,
-          ebayUrl: item.itemWebUrl ?? null,
-          updatedAt: new Date(),
-        },
-        create: {
-          categorySlug: slug,
-          categoryDisplay: config.display,
-          itemTitle: item.title,
-          itemCategory: item.condition ?? null,
-          listingPrice: new Decimal(item.price?.value ?? '0'),
-          imageUrl: item.image?.imageUrl ?? null,
-          ebayListingId: item.itemId,
-          ebayUrl: item.itemWebUrl ?? null,
-        },
-      });
-    }
-  } catch (err) { console.error(`[CategorySync] Error for ${slug}:`, err); return -1; }
-  return 0;
+  for (const item of items) {
+    await prisma.categoryTopFinds.upsert({
+      where: { categorySlug_ebayListingId: { categorySlug: slug, ebayListingId: item.itemId } },
+      update: {
+        itemTitle: item.title,
+        listingPrice: new Decimal(item.price?.value ?? '0'),
+        imageUrl: item.image?.imageUrl ?? null,
+        ebayUrl: item.itemWebUrl ?? null,
+        updatedAt: new Date(),
+      },
+      create: {
+        categorySlug: slug,
+        categoryDisplay: config.display,
+        itemTitle: item.title,
+        itemCategory: item.condition ?? null,
+        listingPrice: new Decimal(item.price?.value ?? '0'),
+        imageUrl: item.image?.imageUrl ?? null,
+        ebayListingId: item.itemId,
+        ebayUrl: item.itemWebUrl ?? null,
+      },
+    });
+  }
+  return items.length;
 }
 
 export async function runCategorySync(): Promise<Record<string, number>> {
