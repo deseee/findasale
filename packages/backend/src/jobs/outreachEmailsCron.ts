@@ -521,8 +521,7 @@ export function initOutreachEmailsCron(): void {
   }
 
   // Every 4 hours — spreads daily quota across 6 windows
-  cron.schedule('0 */4 * * *', cronGuard({ jobName: 'outreach-emails' }, async () => {
-    await sendOutreachEmails();
+  cron.schedule('0 */4 * * *', cronGuard({ jobName: 'outreach-emails' }, async () => {    await sendOutreachEmails();
   }), { timezone: 'UTC' });
   console.log('[OutreachCron] Registered — runs every 4 hours UTC');
 
