@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S734 — eBay Bidirectional Sync + Voice Strip Fix + Review Card Dims (COMPLETE)**
+**Latest: S734 — QA Session (COMPLETE). Chrome QA on Blocked Queue items + bug discovery.**
+
+Four findings: (1) #280 Condition Rating XP VERIFIED via DB — PointsTransaction confirmed +5 XP on conditionGrade save; removed from Blocked Queue. (2) eBay push from Review queue VERIFIED — listing #137314168141 created successfully; cleared from Blocked Queue. (3) NEW BUG #430 — Register form swallows "existing email" API error silently (P2 BROKEN). (4) NEW BUG #429 — Review queue approve handler doesn't pass store description template to eBay push; listing uses raw AI text instead of template (P2 BROKEN).
+
+**Previous: S734 — eBay Bidirectional Sync + Voice Strip Fix + Review Card Dims (COMPLETE)**
 
 Three bugs fixed. (1) **eBay pull-sync cron** (`ebayListingSyncCron.ts`) — new cron every 4h pulls title, description, condition, and price back from eBay into FindA.Sale; skips description pull when organizer has a `defaultDescriptionHtml` template (prevents expanded HTML clobbering clean description). Also wired description template (`{{DESCRIPTION}}` placeholder) into push-on-save flow in `itemController.ts`. (2) **Voice strip fix** (`VoiceDescriptionInput.tsx`) — component was calling `voice/extract` AFTER `append`, so `weightOz` was never forwarded to the backend; swapped order (extract first, then pass values to append) so `stripShippingPhrases` now correctly fires on new recordings. Also verified: regex correctly strips compound weights ("2 lb 4 oz" → fully removed). (3) **Review page dims** (`itemController.ts` `getDraftItemsBySaleId`) — `packageWeightOz`, `packageLengthIn`, `packageWidthIn`, `packageHeightIn`, `ebayShippingOverride`, `quantity`, `listingType`, `reverseDailyDrop`, `reverseFloorPrice` were all missing from the Prisma select; eBay push card always showed empty shipping fields regardless of what was saved. Added all 9 fields. Note: old descriptions with orphaned numbers (e.g. "14" left from "14oz") are from pre-fix recordings — the fix only applies to new voice notes.
 
@@ -123,15 +127,16 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #326 eBay Comp Tiles | FIXED S723 — endpoint rewritten to return live listings array (not singleton) | Chrome QA on edit-item page: confirm 2-3 tile grid renders under eBay summary card | S719 |
-| #280 Condition Rating XP | FIXED S723 — removed `!item.conditionGrade` guard (AI prefill broke it); pointsTransaction lookup is the once-per-item guard | Chrome QA: set conditionGrade on item, verify XP balance +5 in guild ledger | S719 |
-| eBay full push flow | FIXED S723 — weight/dims persist + auto-save before push + smart-pick respects weight + valid packageType dropdown | Chrome QA: full edit-item → save → push to eBay LIVE flow on a new item | S723 |
-| #422 OAuth Option B | FIXED S723 — `/auth/oauth` returns 409 OAUTH_LINK_REQUIRED for unauth email-match; logged-in `/auth/oauth/link` endpoint added | Chrome QA: register email/pwd, sign out, sign-in-with-Google same email → expect amber banner redirect, not silent takeover | S723 |
+| eBay full push flow | VERIFIED S734 — listing #137314168141 created successfully via Review queue approve with "Also push to eBay" checked | CLOSED | S723 |
+| #422 OAuth Option B | FIXED S723 — backend 409 + amber banner redirect works. UNVERIFIED Chrome (needs real Google test account — seed accounts can't do Google OAuth). Separate bug found S734: register form swallows "existing email" API error silently (#430). | Chrome QA: register email/pwd, sign out, sign-in-with-Google same email → expect amber banner redirect | S723 |
 | #322 Encyclopedia category picker | FIXED S723 — Vercel proxy dropped `q` param; embedded in path query string. status=200 count=N confirmed live | Chrome QA: type free-text in EbayCategoryPicker, confirm dropdown populates | S723 |
 | Settings UI for linked OAuth providers | Backend endpoint `/auth/oauth/link` ready, no frontend surface yet | Build linked-accounts section in organizer/settings.tsx (deferred — security hole closed by backend rejection alone) | S723 |
 
 | Organizer page mobile badge (S733) | Fixed inline but not Chrome-verified | Chrome QA at /organizers/[id] on mobile — confirm 1-sale badge sits inline, card layout correct | S733 |
 | Sales page mobile cards (S733) | lg:hidden Where to Go + Holds & Shipping + SaleShareCard added but not Chrome-verified | Chrome QA at /sales/[id] on mobile — confirm all 3 cards visible; confirm mini-map removed from When/Where | S733 |
 | Sales page desktop claim-listing CTA (S733) | Added to aside for unclaimed sales — not Chrome-verified | Chrome QA at /sales/[id] on desktop as guest for an unclaimed sale — confirm CTA renders | S733 |
+| #429 eBay push from Review queue skips store description template | BROKEN P2 — approve handler doesn't pass template ID; listing uses raw AI description text instead of organizer's custom store template | Dispatch findasale-dev: audit review.tsx approve mutation vs edit-item eBay push path; wire template ID lookup | S734 |
+| #430 Register form silent error — existing email | BROKEN P2 — POST /api/auth/register returns error message but frontend doesn't display it; user sees silent failure | Dispatch findasale-dev: wire error.message display in register form submit handler | S734 |
 | Voice strip — weight/dims (S734) | Fix deployed but not live-tested | Record a voice note saying "14oz" or "2 lb 4 oz" on an existing item. Confirm: (a) number is absent from saved description, (b) weight field populated in structured fields | S734 |
 | Review page eBay card — dims/weight (S734) | getDraftItemsBySaleId select fix deployed but not live-tested | Save weight+dims on edit-item page → navigate to review page → confirm eBay push card shipping fields show correct values (not empty). Also confirm Local Pickup checkbox reflects saved ebayShippingOverride. | S734 |
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated (24h expiry set on register, checked+cleared on verifyEmail). **Patrick must deploy:** `cd packages/database` → `$env:DATABASE_URL=[Railway URL]` → `npx prisma migrate deploy` → `npx prisma generate`. Then push: schema.prisma + migration file + authController.ts | S722 |
@@ -155,6 +160,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S734 QA — Chrome QA Sprint: Blocked Queue Burn-Down + Bug Discovery (COMPLETE)
+
+Four findings from Chrome QA on the Blocked Queue. (1) **#280 Condition Rating XP — VERIFIED.** DB query confirmed PointsTransaction row with +5 XP awarded after conditionGrade save. Frontend XP balance display was stale cache, not a missing award. Removed from Blocked Queue. Roadmap #280 updated to Chrome QA ✅. (2) **eBay push from Review queue — VERIFIED.** Approved an item from the Smart Review Queue with "Also push to eBay" checked. Live eBay listing #137314168141 created successfully. Cleared from Blocked Queue. (3) **NEW BUG #430 — Register form silent error.** POST /api/auth/register correctly returns `{"message":"An account already exists with this email address."}` on duplicate email, but the frontend displays no error to the user — silent failure. Root cause: form submit handler swallows the API error response without extracting or displaying the message. P2 BROKEN. Added to roadmap and Blocked Queue. (4) **NEW BUG #429 — eBay Review queue push skips store description template.** When pushing to eBay from the Review queue, listing uses raw AI-generated description text instead of the organizer's custom store description template. The edit-item page push passes the template correctly; the Review queue approve handler does not. Root cause: review.tsx approve mutation doesn't pass descriptionTemplateId (or equivalent) to the eBay push endpoint. P2 BROKEN. Added to roadmap and Blocked Queue.
 
 ### S734 — eBay Bidirectional Sync + Voice Strip Fix + Review Card Dims (COMPLETE)
 
@@ -260,3 +269,4 @@ git commit -m "fix(ui): mobile layout, content parity, restore settings.tsx, rem
 2. **SES migration** — once Patrick has Railway env vars set, dispatch dev to migrate all 37 email files + suppression check fix. Plan: `claude_docs/operations/ses-migration-plan.md`.
 3. **S731 push block** — ESN scraper fix + 23-state scraper repair batch still pending Patrick `.\push.ps1` run.
 4. **Blocked Queue Chrome QA** — #326 eBay Comp Tiles, #280 Condition Rating XP, eBay full push flow, #422 OAuth Option B, #322 Encyclopedia category picker.
+5. **Investigate rate limiter IP whitelist — P1 bug #431.** Need to either (a) verify VM IP and update whitelist, or (b) add a QA-mode bypass that skips rate limiting for authenticated organizer sessions. Rate limiter halted QA multiple times in S733–S734 (15-failed-attempt window, 15-min lockout). Three root cause hypotheses logged in roadmap #431 Notes.
