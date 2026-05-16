@@ -1,13 +1,12 @@
 // Price Drop Alert Service
 // When an item price is reduced, notify all users who favorited the item
 
-import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { buildEmail } from './emailTemplateService';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
 /**
  * Send a price drop alert email to a single favoriter.
@@ -66,7 +65,7 @@ async function sendPriceDropEmail(
       accentColor: '#10b981', // green for good news
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: user.email,
       subject: `💰 Price drop on "${item.title}" — now $${newPriceStr}`,

@@ -1,6 +1,5 @@
 import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
-import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { buildEmail } from '../services/emailTemplateService';
 import {
@@ -8,10 +7,10 @@ import {
   queueTierLapseWarnings,
   markTierLapseWarning,
 } from '../services/tierLapseService';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
 /**
  * Send tier-lapse warning email to an organizer
@@ -34,7 +33,7 @@ const sendTierLapseWarningEmail = async (
   });
 
   try {
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: `Action needed: Your ${tierName} subscription expires in ${daysUntilLapse} days`,

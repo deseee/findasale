@@ -10,11 +10,10 @@
 
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService';
-import { Resend } from 'resend';
 import { buildNewSaleAlertEmail } from './emailTemplateService';
 import { sendPushNotification } from '../utils/webpush';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 interface SaleInfo {
   id: string;
@@ -65,8 +64,8 @@ export const notifyFollowersOfNewSale = async (sale: SaleInfo): Promise<void> =>
       // ── Email ──────────────────────────────────────────────────────────────
       if (follow.notifyEmail && follow.user.email) {
         try {
-await resend.emails.send({
-            from:    process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
+await emailService.emails.send({
+            from:    process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
             to:      follow.user.email,
             subject: `${organizer.businessName} just posted a sale near you`,
             html:    buildNewSaleAlertEmail({

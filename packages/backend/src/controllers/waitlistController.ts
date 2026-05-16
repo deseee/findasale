@@ -1,22 +1,11 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
+import { emailService } from '../lib/emailService';
 
-let _resend: any = null;
-const getResendClient = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    try {
-      _resend = new Resend(process.env.RESEND_API_KEY);
-    } catch {
-      _resend = null;
-    }
-  }
-  return _resend;
-};
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
 // Send waitlist notification email
 const sendWaitlistNotificationEmail = async (
@@ -28,8 +17,7 @@ const sendWaitlistNotificationEmail = async (
   itemId: string,
   saleName: string
 ): Promise<void> => {
-  const resend = getResendClient();
-  if (!resend) return;
+  
 
   const itemUrl = `${FRONTEND_URL}/items/${itemId}`;
   const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
@@ -96,7 +84,7 @@ const sendWaitlistNotificationEmail = async (
 </html>`;
 
   try {
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: `${itemTitle} is back in stock! 🎉`,

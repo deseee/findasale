@@ -1,19 +1,8 @@
-import { Resend } from 'resend';
 import { buildEmail } from './emailTemplateService';
+import { emailService } from '../lib/emailService';
 
-let _resend: any = null;
-const getResendClient = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    try {
-      _resend = new Resend(process.env.RESEND_API_KEY);
-    } catch {
-      _resend = null;
-    }
-  }
-  return _resend;
-};
 
-const fromEmail = process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale';
+const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@finda.sale';
 const siteUrl = process.env.FRONTEND_URL || 'https://finda.sale';
 
 /**
@@ -28,11 +17,7 @@ export const sendConsignorItemSold = async (params: {
   organizerName: string;
   saleId: string;
 }): Promise<void> => {
-  const resend = getResendClient();
-  if (!resend) {
-    console.warn('[consignor-email] Resend not configured, skipping item sold notification');
-    return;
-  }
+  
 
   try {
     const html = buildEmail({
@@ -54,7 +39,7 @@ export const sendConsignorItemSold = async (params: {
       accentColor: '#10b981',
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: fromEmail,
       to: params.consignorEmail,
       subject: `✓ Your item sold: ${params.itemName}`,
@@ -78,11 +63,7 @@ export const sendConsignorPayout = async (params: {
   organizerName: string;
   method?: string;
 }): Promise<void> => {
-  const resend = getResendClient();
-  if (!resend) {
-    console.warn('[consignor-email] Resend not configured, skipping payout notification');
-    return;
-  }
+  
 
   try {
     const methodDisplay = params.method ? ` via ${params.method}` : '';
@@ -102,7 +83,7 @@ export const sendConsignorPayout = async (params: {
       accentColor: '#3b82f6',
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: fromEmail,
       to: params.consignorEmail,
       subject: `Payout received: $${params.payoutAmount.toFixed(2)}`,
@@ -126,11 +107,7 @@ export const sendConsignorExpiryNotice = async (params: {
   organizerEmail: string;
   saleId: string;
 }): Promise<void> => {
-  const resend = getResendClient();
-  if (!resend) {
-    console.warn('[consignor-email] Resend not configured, skipping expiry notification');
-    return;
-  }
+  
 
   try {
     const html = buildEmail({
@@ -149,7 +126,7 @@ export const sendConsignorExpiryNotice = async (params: {
       accentColor: '#f59e0b',
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: fromEmail,
       to: params.consignorEmail,
       subject: `⏰ Item expiring: ${params.itemName}`,

@@ -1,8 +1,7 @@
 import { prisma } from '../index';
-import { Resend } from 'resend';
 import { buildEmail, buildItemCardModule, buildSpacer, buildCTARow, EMAIL_TOKENS as T } from './emailTemplateService';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const SITE_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
 // ─── Dedup guard: tracks (saleId, userId) pairs already emailed this run ───
@@ -91,8 +90,8 @@ async function sendSneakPeekEmail(opts: {
   const html = buildSneakPeekHtml(opts);
 
   try {
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
+    await emailService.emails.send({
+      from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
       to,
       subject,
       html,

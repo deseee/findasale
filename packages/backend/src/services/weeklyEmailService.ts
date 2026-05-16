@@ -1,14 +1,13 @@
 // CD2 Phase 2: Personalized weekly email recommendations for shoppers
 // Sends curated upcoming sale items based on purchase/browse history every Sunday at 6pm
 
-import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { regionConfig } from '../config/regionConfig';
 import { buildEmail } from './emailTemplateService';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
 interface WeeklyPickItem {
   id: string;
@@ -149,7 +148,7 @@ const sendWeeklyPicksEmail = async (email: string, userId: string, name: string,
   const html = buildEmailHtml(name, picks, unsubToken);
 
   try {
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: `${picks.length} New Sale Finds This Week (New Arrivals)`,

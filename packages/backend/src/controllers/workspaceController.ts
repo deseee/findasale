@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { TIER_LIMITS } from '../constants/tierLimits';
 import { TASK_TEMPLATES } from '../utils/taskTemplates';
+import { emailService } from '../lib/emailService';
 
 export const createWorkspace = async (req: AuthRequest, res: Response) => {
   try {
@@ -151,11 +152,9 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
 
     // Send invite email via Resend
     try {
-      const { Resend } = await import('resend');
-      const resend = new Resend(process.env.RESEND_API_KEY);
       const joinLink = `${process.env.FRONTEND_URL || 'https://finda.sale'}/join?token=${invite.inviteToken}`;
 
-      await resend.emails.send({
+      await emailService.emails.send({
         from: 'invites@finda.sale',
         to: email,
         subject: `You're invited to join "${workspace.name}" on FindA.Sale`,

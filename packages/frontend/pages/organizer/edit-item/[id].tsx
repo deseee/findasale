@@ -952,8 +952,8 @@ const EditItemPage = () => {
               {/* eBay Comp Tiles — comparable sales reference */}
               {id && <EbayCompTiles itemId={id as string} />}
 
-              {/* Feature #338: Multi-source pricing comp summary */}
-              {id && <PricingCompSummary itemId={id as string} />}
+              {/* Feature #338: Multi-source pricing comp summary — auto-fetches on load */}
+              {id && <PricingCompSummary itemId={id as string} itemTitle={formData.title} />}
 
               {/* Price Research Panel — consolidated pricing tools */}
               <div className="mt-3">

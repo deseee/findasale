@@ -1,21 +1,9 @@
 import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
-import { Resend } from 'resend';
 import { sendPushNotification } from '../utils/webpush';
 import { buildEmail } from '../services/emailTemplateService';
-
-let _resend: any = null;
-const getResendClient = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    try {
-      _resend = new Resend(process.env.RESEND_API_KEY);
-    } catch {
-      _resend = null;
-    }
-  }
-  return _resend;
-};
+import { emailService } from '../lib/emailService';
 
 interface EmailTemplate {
   subject: string;
@@ -45,15 +33,15 @@ const getEmailTemplate = (
 
   const html = buildEmail({
     preheader: `Last chance: ${saleTitle} ends tomorrow`,
-    headline: '⏰ Last chance! This sale ends tomorrow',
-    body: `<div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;"><h3 style="margin-top: 0; color: #333; margin-bottom: 12px;">${saleTitle}</h3><p style="margin: 8px 0; color: #666;">📍 ${city}</p><p style="margin: 8px 0; color: #666;">⏰ Ends ${formattedDate}</p><p style="margin: 8px 0; color: #666;">Featured: ${categoryList}</p></div>`,
+    headline: 'Last chance! This sale ends tomorrow',
+    body: `<div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;"><h3 style="margin-top: 0; color: #333; margin-bottom: 12px;">${saleTitle}</h3><p style="margin: 8px 0; color: #666;">${city}</p><p style="margin: 8px 0; color: #666;">Ends ${formattedDate}</p><p style="margin: 8px 0; color: #666;">Featured: ${categoryList}</p></div>`,
     ctaText: 'View Sale Now',
     ctaUrl: saleUrl,
     accentColor: '#dc2626',
   });
 
   return {
-    subject: `⏰ Last chance: ${saleTitle} ends tomorrow`,
+    subject: `Last chance: ${saleTitle} ends tomorrow`,
     html,
   };
 };
@@ -126,22 +114,24 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
         for (const subscriber of sale.subscribers) {
           // Send email if subscriber has email
           if (subscriber.email) {
+            // Suppression check before sending
+            const { suppressionService } = await import('../services/suppressionService');
+            const isSuppressed = await suppressionService.isSuppressed(subscriber.email);
+            if (isSuppressed) continue;
+
             try {
-              const resend = getResendClient();
-              if (resend) {
-                await resend.emails.send({
-                  from: process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
-                  to: subscriber.email,
-                  subject: emailTemplate.subject,
-                  html: emailTemplate.html,
-                });
-                console.log(
-                  `✓ Sale ending soon email sent to ${subscriber.email} for sale ${sale.id}`
-                );
-              }
+              await emailService.emails.send({
+                from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
+                to: subscriber.email,
+                subject: emailTemplate.subject,
+                html: emailTemplate.html,
+              });
+              console.log(
+                `Sale ending soon email sent to ${subscriber.email} for sale ${sale.id}`
+              );
             } catch (emailErr) {
               console.error(
-                `✗ Failed to send sale ending soon email to ${subscriber.email}:`,
+                `Failed to send sale ending soon email to ${subscriber.email}:`,
                 emailErr
               );
             }
@@ -156,7 +146,7 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
 
               for (const ps of pushSubs) {
                 await sendPushNotification(ps, {
-                  title: `⏰ Last chance: ${sale.title}`,
+                  title: `Last chance: ${sale.title}`,
                   body: `Sale ends tomorrow at ${sale.endDate.toLocaleString('en-US', {
                     month: 'short',
                     day: 'numeric',
@@ -167,14 +157,14 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
                   url: saleUrl,
                 }).catch((err) =>
                   console.warn(
-                    `⚠ Sale ending soon push failed for user ${subscriber.userId}:`,
+                    `Sale ending soon push failed for user ${subscriber.userId}:`,
                     err?.message
                   )
                 );
               }
             } catch (pushErr) {
               console.error(
-                `✗ Failed to send sale ending soon push for user ${subscriber.userId}:`,
+                `Failed to send sale ending soon push for user ${subscriber.userId}:`,
                 pushErr
               );
             }
@@ -187,17 +177,17 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
           data: { endingSoonNotified: true },
         });
 
-        console.log(`✓ Sale ending soon notifications sent for sale ${sale.id}`);
+        console.log(`Sale ending soon notifications sent for sale ${sale.id}`);
       } catch (saleErr) {
-        console.error(`✗ Error processing sale ${sale.id}:`, saleErr);
+        console.error(`Error processing sale ${sale.id}:`, saleErr);
       }
     }
 
     console.log(
-      `✓ Processed sale ending soon notifications: ${salesToNotify.length} sales checked`
+      `Processed sale ending soon notifications: ${salesToNotify.length} sales checked`
     );
   } catch (error) {
-    console.error('✗ Error in sale ending soon job:', error);
+    console.error('Error in sale ending soon job:', error);
   }
 };
 

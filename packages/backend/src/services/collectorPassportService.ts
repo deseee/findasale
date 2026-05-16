@@ -10,10 +10,9 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { Resend } from 'resend';
 import { sendPushNotification } from '../utils/webpush';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
  * Get or create a collector passport for a user
@@ -279,8 +278,8 @@ const sendMatchNotificationEmail = async (
     <p>Happy collecting!</p>
   `;
 
-  await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <notifications@finda.sale>',
+  await emailService.emails.send({
+    from: process.env.SES_FROM_EMAIL || 'FindA.Sale <notifications@finda.sale>',
     to: email,
     subject: `${matchedItems.length} item${matchedItems.length !== 1 ? 's' : ''} match your collection!`,
     html,

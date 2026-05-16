@@ -1,20 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { Resend } from 'resend';
-
-let _resend: any = null;
-const getResendClient = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    try {
-      _resend = new Resend(process.env.RESEND_API_KEY);
-    } catch {
-      console.warn('Failed to initialize Resend client');
-      _resend = null;
-    }
-  }
-  return _resend;
-};
+import { emailService } from '../lib/emailService';
 
 // POST /api/admin/broadcast
 export const sendBroadcast = async (req: AuthRequest, res: Response) => {
@@ -83,8 +70,7 @@ export const sendBroadcast = async (req: AuthRequest, res: Response) => {
     const recipientCount = users.length;
 
     // Send via Resend if available, otherwise log and mock
-    const resend = getResendClient();
-    if (resend && recipientCount > 0) {
+    if (recipientCount > 0) {
       try {
         // Send to first recipient as test; in production would use batch API
         // For now, just log the broadcast

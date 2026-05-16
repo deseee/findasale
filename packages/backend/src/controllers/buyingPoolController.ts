@@ -1,9 +1,8 @@
 import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
-import { Resend } from 'resend';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Create a new buying pool for an item
 export const createPool = async (req: AuthRequest, res: Response) => {
@@ -200,8 +199,8 @@ export const joinPool = async (req: AuthRequest, res: Response) => {
           const itemTitle = pool.item.title;
           const poolAmount = (pool.targetAmount / 100).toFixed(2);
 
-          await resend.emails.send({
-            from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
+          await emailService.emails.send({
+            from: process.env.SES_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
             to: orgEmail,
             subject: `Buying Pool Filled: ${itemTitle}`,
             html: `
@@ -322,8 +321,8 @@ export const cancelPool = async (req: AuthRequest, res: Response) => {
     try {
       for (const participant of pool.participants) {
         if (participant.user?.email) {
-          await resend.emails.send({
-            from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
+          await emailService.emails.send({
+            from: process.env.SES_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
             to: participant.user.email,
             subject: `Buying Pool Cancelled: ${pool.item.title}`,
             html: `

@@ -1,12 +1,11 @@
 import cron from 'node-cron';
-import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { buildEmail } from '../services/emailTemplateService';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
 // Send abandoned checkout recovery email to a single user
 const sendAbandonedCheckoutEmail = async (
@@ -29,7 +28,7 @@ const sendAbandonedCheckoutEmail = async (
   });
 
   try {
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: 'You left something behind at FindA.Sale 👀',

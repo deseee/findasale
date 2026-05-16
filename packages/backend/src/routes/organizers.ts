@@ -14,6 +14,7 @@ import { getCheatsheet, getItemsForLabels, createLabelBatch, printLabelBatch } f
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { awardOrganizerClaimedXp, getOrgReferralStats, generateReferralCode } from '../services/referralService';
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
+import { emailService } from '../lib/emailService';
 
 const router = Router();
 
@@ -1893,7 +1894,7 @@ router.get('/me/broadcasts', authenticate, async (req: AuthRequest, res: Respons
 router.post('/:id/claim', async (req: Request, res: Response) => {
   try {
     const { randomBytes } = require('crypto');
-    const { Resend } = require('resend');
+    
 
     // Validate request body
     const validation = claimRequestSchema.safeParse(req.body);
@@ -1956,13 +1957,13 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
     });
 
     // Send verification email via Resend
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    
     const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://finda.sale';
     const verificationUrl = `${frontendUrl}/claim/verify/${verificationToken}`;
 
     try {
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale',
+      await emailService.emails.send({
+        from: process.env.SES_FROM_EMAIL || 'notifications@finda.sale',
         to: claimantEmail,
         subject: `Verify your claim request for ${foundOrganizer.businessName}`,
         html: `

@@ -13,10 +13,9 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { Resend } from 'resend';
 import { sendPushNotification } from '../utils/webpush';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export interface WishlistAlertInput {
   name: string;
@@ -231,8 +230,8 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
       // Email notification
       if (alert.user.email) {
         try {
-          await resend.emails.send({
-            from: process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
+          await emailService.emails.send({
+            from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
             to: alert.user.email,
             subject: `✨ Found items matching your wishlist alert: ${alert.name}`,
             html: `

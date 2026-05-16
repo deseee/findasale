@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import twilio from 'twilio';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { Resend } from 'resend';
+import { emailService } from '../lib/emailService';
 
 // Lazy-loaded Twilio client
 let _twilioClient: any = null;
@@ -26,18 +26,6 @@ const getTwilioClient = () => {
 };
 
 // Lazy-loaded Resend client
-let _resend: any = null;
-const getResendClient = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    try {
-      _resend = new Resend(process.env.RESEND_API_KEY);
-    } catch (error) {
-      console.warn('⚠️ Failed to initialize Resend client:', error);
-      _resend = null;
-    }
-  }
-  return _resend;
-};
 
 // Subscribe to sale notifications
 export const subscribeToSale = async (req: AuthRequest, res: Response) => {
@@ -286,14 +274,13 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string): s
 // Send weekly digest email to all users with upcoming sales this weekend
 export const sendWeeklyDigest = async () => {
   try {
-    const resendClient = getResendClient();
     if (!resendClient) {
       console.warn('Email service not configured - skipping weekly digest');
       return;
     }
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'digest@finda.sale';
+    const fromEmail = process.env.SES_FROM_EMAIL || 'digest@finda.sale';
 
     // Find PUBLISHED sales starting in the next 7 days
     const now = new Date();
@@ -339,7 +326,7 @@ export const sendWeeklyDigest = async () => {
       try {
         const html = buildDigestHtml(user.name, upcomingSales, frontendUrl);
 
-        await resendClient.emails.send({
+        await emailService.emails.send({
           from: fromEmail,
           to: user.email,
           subject: `🏷️ ${upcomingSales.length} estate sale${upcomingSales.length > 1 ? 's' : ''} this weekend near you`,

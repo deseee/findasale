@@ -1,14 +1,13 @@
 // Wishlist Match Email Service
 // Notifies shoppers when new items match their wishlist keywords
 
-import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { buildEmail, buildItemCard, buildSmartMatchEmail, ItemCardData } from './emailTemplateService';
 import { regionConfig } from '../config/regionConfig';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
 /**
  * Check if item matches any user's wishlist keywords and send notifications
@@ -187,7 +186,7 @@ async function sendWishlistMatchEmail(data: WishlistMatchEmailData): Promise<voi
       },
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: data.userEmail,
       subject: `New match for your "${data.wishlistName}" wishlist 🎉`,
