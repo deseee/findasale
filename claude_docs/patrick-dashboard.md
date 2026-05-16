@@ -1,10 +1,20 @@
-# Patrick's Dashboard — S733 Wrap
+# Patrick's Dashboard — S734 Wrap
 
 ---
 
-## What Happened This Session — S733
+## What Happened This Session — S734
 
-Four UI fixes across two pages + a file restore + duplicate button removal.
+Three bugs fixed in the eBay + voice note flow.
+
+**Review page eBay push card was always blank** — the backend endpoint that feeds the review page (`getDraftItemsBySaleId`) was missing weight, dimensions, shipping override, quantity, and listing type from its database query. Those fields always came back empty, so the eBay shipping section on the review page never showed what you'd saved on the edit-item page. Fixed — all 9 missing fields added to the query.
+
+**Voice strip fix** — saying "14oz" into the mic was leaving "14" in the description because the extract step (which figures out the weight number) was running *after* the save step. Swapped the order: extract runs first, then the weight value is forwarded to the save so the backend knows to strip the phrase. New voice recordings will no longer orphan numbers. Old descriptions with "14" or "2" already in them won't auto-clean — edit those manually if needed.
+
+**eBay bidirectional sync** (from earlier in this session) — new cron pulls price, title, condition, and description changes made directly on eBay back into FindA.Sale every 4 hours. Description pull is skipped when you have a description template active (otherwise eBay's expanded HTML would overwrite your clean description). The template itself is now also auto-appended when you push to eBay.
+
+---
+
+## Pending Patrick Actions
 
 **Organizer page mobile layout** — the "1 sale" badge was a `flex` sibling with `whitespace-nowrap ml-4` that pushed the heading off-screen on narrow phones. Moved inline into the heading as an amber pill. Fixed.
 
@@ -20,14 +30,22 @@ Four UI fixes across two pages + a file restore + duplicate button removal.
 
 ## Pending Patrick Actions
 
-**Push S733 — code + docs:**
+**Push S734 — push this first:**
+```powershell
+git add packages/frontend/components/VoiceDescriptionInput.tsx
+git add packages/backend/src/controllers/itemController.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: review page eBay card missing weight/dims + voice strip order"
+.\push.ps1
+```
+
+**Push S733 (if not yet pushed):**
 ```powershell
 git add "packages/frontend/pages/organizers/[id].tsx"
 git add "packages/frontend/pages/sales/[id].tsx"
 git add "packages/frontend/pages/organizer/settings.tsx"
 git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
 git commit -m "fix(ui): mobile layout, content parity, restore settings.tsx, remove duplicate appraisal button"
 .\push.ps1
 ```

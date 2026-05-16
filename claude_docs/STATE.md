@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S733 — UI Fixes: Organizer Page Mobile Layout, Sales Page Content Parity, Settings.tsx Restore, Duplicate Appraisal Button Removed (COMPLETE)**
+**Latest: S734 — eBay Bidirectional Sync + Voice Strip Fix + Review Card Dims (COMPLETE)**
+
+Three bugs fixed. (1) **eBay pull-sync cron** (`ebayListingSyncCron.ts`) — new cron every 4h pulls title, description, condition, and price back from eBay into FindA.Sale; skips description pull when organizer has a `defaultDescriptionHtml` template (prevents expanded HTML clobbering clean description). Also wired description template (`{{DESCRIPTION}}` placeholder) into push-on-save flow in `itemController.ts`. (2) **Voice strip fix** (`VoiceDescriptionInput.tsx`) — component was calling `voice/extract` AFTER `append`, so `weightOz` was never forwarded to the backend; swapped order (extract first, then pass values to append) so `stripShippingPhrases` now correctly fires on new recordings. Also verified: regex correctly strips compound weights ("2 lb 4 oz" → fully removed). (3) **Review page dims** (`itemController.ts` `getDraftItemsBySaleId`) — `packageWeightOz`, `packageLengthIn`, `packageWidthIn`, `packageHeightIn`, `ebayShippingOverride`, `quantity`, `listingType`, `reverseDailyDrop`, `reverseFloorPrice` were all missing from the Prisma select; eBay push card always showed empty shipping fields regardless of what was saved. Added all 9 fields. Note: old descriptions with orphaned numbers (e.g. "14" left from "14oz") are from pre-fix recordings — the fix only applies to new voice notes.
+
+**Previous: S733 — UI Fixes: Organizer Page Mobile Layout, Sales Page Content Parity, Settings.tsx Restore, Duplicate Appraisal Button Removed (COMPLETE)**
 
 Four UI issues fixed. (1) **Organizer page mobile layout** — sales count badge was a `justify-between` sibling with `whitespace-nowrap ml-4` that pushed the heading off-screen on narrow viewports; moved inline into the heading row as an amber pill (🏷️ 1 sale). (2) **Sales page content parity** — removed the 96px mini-map thumbnail from the When/Where card (too small to read); added `lg:hidden` "Where to Go" card (160px SaleMap + Directions button) below When/Where; added `lg:hidden` Holds & Shipping card; added `lg:hidden` SaleShareCard — all three were desktop-aside-only and invisible on mobile. Added claim-this-listing CTA to the desktop aside organizer card (shown when `!sale.organizer.isClaimed`). (3) **Settings.tsx restored** — file was silently truncated at line 2021 by a prior session's Edit tool usage (6 opening `<>`, only 5 `</>`, no `export default`); retrieved canonical version from GitHub via MCP, dispatched agent to decode base64 + reconstruct missing tail using Python-via-bash. Final: 2043 lines, TypeScript clean. (4) **Duplicate appraisal button** — edit-item page had two "Request Appraisal" buttons: the correct green one in `PriceResearchPanel` (XP-based community flow) and a later-added purple `Link` to `/organizer/appraisals?open=true`; removed the purple one. Files: `pages/organizers/[id].tsx`, `pages/sales/[id].tsx`, `pages/organizer/settings.tsx`, `pages/organizer/edit-item/[id].tsx`.
 
@@ -128,6 +132,8 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | Organizer page mobile badge (S733) | Fixed inline but not Chrome-verified | Chrome QA at /organizers/[id] on mobile — confirm 1-sale badge sits inline, card layout correct | S733 |
 | Sales page mobile cards (S733) | lg:hidden Where to Go + Holds & Shipping + SaleShareCard added but not Chrome-verified | Chrome QA at /sales/[id] on mobile — confirm all 3 cards visible; confirm mini-map removed from When/Where | S733 |
 | Sales page desktop claim-listing CTA (S733) | Added to aside for unclaimed sales — not Chrome-verified | Chrome QA at /sales/[id] on desktop as guest for an unclaimed sale — confirm CTA renders | S733 |
+| Voice strip — weight/dims (S734) | Fix deployed but not live-tested | Record a voice note saying "14oz" or "2 lb 4 oz" on an existing item. Confirm: (a) number is absent from saved description, (b) weight field populated in structured fields | S734 |
+| Review page eBay card — dims/weight (S734) | getDraftItemsBySaleId select fix deployed but not live-tested | Save weight+dims on edit-item page → navigate to review page → confirm eBay push card shipping fields show correct values (not empty). Also confirm Local Pickup checkbox reflects saved ebayShippingOverride. | S734 |
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated (24h expiry set on register, checked+cleared on verifyEmail). **Patrick must deploy:** `cd packages/database` → `$env:DATABASE_URL=[Railway URL]` → `npx prisma migrate deploy` → `npx prisma generate`. Then push: schema.prisma + migration file + authController.ts | S722 |
 | #SES-MIGRATION — email provider move | Blocked on Patrick AWS console actions: (1) verify send.finda.sale identity in SES, (2) request production access, (3) create SMTP credentials + add 5 env vars to Railway. Full plan: `claude_docs/operations/ses-migration-plan.md`. Triggered by saleEndingSoonJob hitting 200% Resend quota (2026-05-15). | Patrick completes AWS steps → dispatch dev for 37-file migration + suppression check fix | S732 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
@@ -149,6 +155,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S734 — eBay Bidirectional Sync + Voice Strip Fix + Review Card Dims (COMPLETE)
+
+Three bugs fixed. (1) **eBay pull-sync cron** — new `ebayListingSyncCron.ts` runs every 4h (0 2,6,10,14,18,22 UTC); fetches title/description/condition from Inventory API + price from Offer API; merges changes back into FindA.Sale item; skips description pull when `defaultDescriptionHtml` template is active to prevent expanded HTML clobbering the clean description. Description template (`{{DESCRIPTION}}` placeholder) also wired into push-on-save flow in `itemController.ts` and `startEbayListingSyncCron()` registered in `index.ts`. (2) **Voice strip fix** — `VoiceDescriptionInput.tsx` was calling `voice/extract` after `append`, so extracted `weightOz`/dims were never forwarded to the backend strip call. Swapped order: extract fires first, values spread into the append payload. Backend `stripShippingPhrases` now correctly fires on new voice recordings. Regex verified in Node.js: strips "14oz", "14 oz", "2 lb 4 oz", "it weighs 2 lb 4 oz" correctly. Historical descriptions saved before deploy retain orphaned numbers — no retroactive cleanup. (3) **Review page eBay push card** — `getDraftItemsBySaleId` Prisma select was missing `packageWeightOz`, `packageLengthIn`, `packageWidthIn`, `packageHeightIn`, `ebayShippingOverride`, `quantity`, `listingType`, `reverseDailyDrop`, `reverseFloorPrice`. All fields came back `undefined` so the eBay shipping section always showed empty inputs. Added all 9 fields. Both modified files: `packages/frontend/components/VoiceDescriptionInput.tsx`, `packages/backend/src/controllers/itemController.ts`. Both TypeScript clean.
 
 ### S733 — UI Fixes: Organizer Page Mobile Layout, Sales Page Content Parity, Settings.tsx Restore, Duplicate Appraisal Button (COMPLETE)
 
@@ -218,15 +228,28 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 | Railway: add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SES_FROM_EMAIL` env vars | HIGH | From the CSV + `email-smtp.us-east-1.amazonaws.com` / `587` / `noreply@send.finda.sale` |
 | Deploy pending migrations (S726 + S728 + S730) | P0 | `cd packages/database` → `$env:DATABASE_URL=[Railway URL]` → `npx prisma migrate deploy` → `npx prisma generate` |
 
-### Push Block — S733
+### Push Block — S734 (push this first)
+
+```powershell
+git add packages/frontend/components/VoiceDescriptionInput.tsx
+git add packages/backend/src/controllers/itemController.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: review page eBay card missing weight/dims + voice strip order
+
+getDraftItemsBySaleId select was missing packageWeightOz/In/Width/Height,
+ebayShippingOverride, quantity, listingType, reverseDailyDrop, reverseFloorPrice.
+VoiceDescriptionInput now calls voice/extract before append so stripShippingPhrases fires."
+.\push.ps1
+```
+
+### Push Block — S733 (if not yet pushed)
 
 ```powershell
 git add "packages/frontend/pages/organizers/[id].tsx"
 git add "packages/frontend/pages/sales/[id].tsx"
 git add "packages/frontend/pages/organizer/settings.tsx"
 git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
 git commit -m "fix(ui): mobile layout, content parity, restore settings.tsx, remove duplicate appraisal button"
 .\push.ps1
 ```
