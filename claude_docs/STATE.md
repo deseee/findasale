@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S735 — Unclaimed Organizer Profile Redesign (COMPLETE).**
+**Latest: S737 — QA Session (COMPLETE).**
+
+Chrome QA burn-down. Three Blocked Queue items verified this session: #326 eBay Comp Tiles ✅, #322 EbayCategoryPicker ✅, S733 desktop claim-listing CTA ✅. Two items UNVERIFIABLE (no VM microphone for voice strip; all user2 items published — no draft queue for review-card dims test). Patrick confirmed: S736 push done, QA_RATE_LIMIT_BYPASS_SECRET added to Railway, SES AWS steps completed, MailerLite group ID set. Email verification migration (20260515180000) deploying next week.
+
+**Previous: S735 — Unclaimed Organizer Profile Redesign (COMPLETE).**
 
 Redesigned the unclaimed organizer profile page (`pages/organizers/[id].tsx`) from a sparse data stub into a conversion-focused acquisition page. 8 targeted additions, all conditional on `isUnmanagedListing === true` — claimed profiles unchanged. New elements: amber trust bar ("We found your sales listed publicly"), profile completion ring SVG (28%) next to organizer name, missing-items block + 3-col value props grid, full-width orange "Claim This Profile — It's Free" CTA button with IntersectionObserver sticky bottom bar, locked Shopper Activity card (blurred stats + backdrop overlay), locked Buyer Insights strip (gradient-fade right edge), ghost review card (text CSS-blurred, stars visible, warning about losing review control), locked Sale History Intelligence card with diagonal stripe + UNCLAIMED stamp. TypeScript: zero errors. Needs Chrome QA at /organizers/cmoyqeau503478i796442jnnh.
 
@@ -130,18 +134,18 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #326 eBay Comp Tiles | FIXED S723 — endpoint rewritten to return live listings array (not singleton) | Chrome QA on edit-item page: confirm 2-3 tile grid renders under eBay summary card | S719 |
+| #326 eBay Comp Tiles | ✅ VERIFIED S737 — 3-tile grid rendered on edit-item page (Victorian Pocket Watch): $295, $450, $675 Pre-owned Good listings with photos. CLOSED. | — | S719 |
 | eBay full push flow | VERIFIED S734 — listing #137314168141 created successfully via Review queue approve with "Also push to eBay" checked | CLOSED | S723 |
 | #422 OAuth Option B | FIXED S723 — backend 409 + amber banner redirect works. UNVERIFIED Chrome (needs real Google test account — seed accounts can't do Google OAuth). Separate bug found S734: register form swallows "existing email" API error silently (#430). | Chrome QA: register email/pwd, sign out, sign-in-with-Google same email → expect amber banner redirect | S723 |
-| #322 Encyclopedia category picker | FIXED S723 — Vercel proxy dropped `q` param; embedded in path query string. status=200 count=N confirmed live | Chrome QA: type free-text in EbayCategoryPicker, confirm dropdown populates | S723 |
+| #322 Encyclopedia category picker | ✅ VERIFIED S737 — Typed "pocket watch" → dropdown populated with real eBay taxonomy: Pocket Watches (3937), Movements (57720), Other Watch Parts (10324), etc. CLOSED. | — | S723 |
 | Settings UI for linked OAuth providers | Backend endpoint `/auth/oauth/link` ready, no frontend surface yet | Build linked-accounts section in organizer/settings.tsx (deferred — security hole closed by backend rejection alone) | S723 |
-| #431 Rate limiter QA bypass | FIXED S736 — QA_RATE_LIMIT_BYPASS_SECRET pattern added to authLimiter (index.ts) + loginLimiter/registerLimiter (auth.ts). Patrick must: (1) add QA_RATE_LIMIT_BYPASS_SECRET=<random> to Railway env vars, (2) push fix block. | Patrick action + push | S736 |
+| #431 Rate limiter QA bypass | ✅ DONE — S736 fix pushed, QA_RATE_LIMIT_BYPASS_SECRET added to Railway. CLOSED. CRIT-1 residual: authLimiter still applies globally to /api/auth/me (fires on every page nav); bypass header not sent by browsers. Needs scope fix — exempt /api/auth/me from authLimiter. | Dispatch dev for scope fix | S736 |
 
-| Sales page desktop claim-listing CTA (S733) | Added to aside for unclaimed sales — not Chrome-verified | Chrome QA at /sales/[id] on desktop as guest for an unclaimed sale — confirm CTA renders | S733 |
+| Sales page desktop claim-listing CTA (S733) | ✅ VERIFIED S737 — Navigated to /sales/cmoyqeblk035j8i79qtgjtt3m as guest. Desktop aside showed "Is this your sale? Claim this listing..." + orange Claim button. CLOSED. | — | S733 |
 | Voice strip — weight/dims (S734) | Fix deployed but not live-tested | Record a voice note saying "14oz" or "2 lb 4 oz" on an existing item. Confirm: (a) number is absent from saved description, (b) weight field populated in structured fields | S734 |
 | Review page eBay card — dims/weight (S734) | getDraftItemsBySaleId select fix deployed but not live-tested | Save weight+dims on edit-item page → navigate to review page → confirm eBay push card shipping fields show correct values (not empty). Also confirm Local Pickup checkbox reflects saved ebayShippingOverride. | S734 |
-| P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated (24h expiry set on register, checked+cleared on verifyEmail). **Patrick must deploy:** `cd packages/database` → `$env:DATABASE_URL=[Railway URL]` → `npx prisma migrate deploy` → `npx prisma generate`. Then push: schema.prisma + migration file + authController.ts | S722 |
-| #SES-MIGRATION — email provider move | Blocked on Patrick AWS console actions: (1) verify send.finda.sale identity in SES, (2) request production access, (3) create SMTP credentials + add 5 env vars to Railway. Full plan: `claude_docs/operations/ses-migration-plan.md`. Triggered by saleEndingSoonJob hitting 200% Resend quota (2026-05-15). | Patrick completes AWS steps → dispatch dev for 37-file migration + suppression check fix | S732 |
+| P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
+| #SES-MIGRATION — email provider move | Patrick completed AWS console steps (S737). Ready to dispatch dev for 37-file migration + suppression check fix. Full plan: `claude_docs/operations/ses-migration-plan.md`. | Dispatch findasale-dev for SES migration implementation | S732 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
@@ -161,6 +165,23 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S737 — QA Session: Blocked Queue Burn-Down (COMPLETE)
+
+Chrome QA continuation from S736. Session started mid-task on Elektra Vintage organizer profile page; compaction had occurred.
+
+**Verified this session:**
+- **#326 eBay Comp Tiles** ✅ — 3-tile grid on edit-item page (Victorian Pocket Watch): $295/$450/$675 Pre-owned Good listings with photos. CLOSED.
+- **#322 EbayCategoryPicker** ✅ — Typed "pocket watch" → real eBay taxonomy dropdown populated. CLOSED.
+- **S733 Sales page desktop claim-listing CTA** ✅ — Guest view of /sales/cmoyqeblk035j8i79qtgjtt3m: "Is this your sale? Claim this listing..." + orange Claim button in aside. CLOSED.
+
+**UNVERIFIABLE (queued):**
+- S734 Voice strip weight/dims — VM has no microphone. Stays in Blocked Queue.
+- S734 Review page eBay card dims/weight — all user2 items are live/published, no draft queue to test. Stays in Blocked Queue.
+
+**Patrick confirmed done:** S736 push ✅, QA_RATE_LIMIT_BYPASS_SECRET added to Railway ✅, SES AWS console steps ✅, MAILERLITE_SHOPPERS_GROUP_ID set ✅. Email verification migration (20260515180000) — deploying next week.
+
+**CRIT-1 residual bug logged:** `authLimiter` in index.ts applies globally including `/api/auth/me` (fires on every page nav). QA bypass header not sent by browsers for page navigations. Needs scope fix.
 
 ### S736 — QA/Fix Session: 3 BROKEN Bugs Fixed + Chrome QA Sprint (COMPLETE)
 
@@ -245,33 +266,21 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 
 ## Next Session
 
-**QA ceiling rule:** Blocked Queue has 12+ items — next session is STILL QA-focused. No new feature dev without explicit Patrick sign-off.
+**QA ceiling rule:** Blocked Queue still has items — continue QA or dispatch CRIT-1 fix + SES migration as priority dev work.
 
-**Patrick must do before next session:**
-1. Push the S736 fix block:
-   ```powershell
-   git add packages/frontend/pages/register.tsx
-   git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
-   git add packages/backend/src/index.ts
-   git add packages/backend/src/routes/auth.ts
-   git commit -m "S736: Fix #430 register silent error, #429 eBay review description, #431 rate limiter QA bypass"
-   .\push.ps1
-   ```
-2. Add `QA_RATE_LIMIT_BYPASS_SECRET=<choose a random string>` to Railway backend Variables (enables QA login bypass)
-3. Deploy email verification migration 20260515180000:
+**Patrick actions remaining:**
+1. Deploy email verification migration 20260515180000 (next week):
    ```powershell
    cd packages/database
    $env:DATABASE_URL="[Railway public proxy URL from Railway dashboard]"
    npx prisma migrate deploy
    npx prisma generate
    ```
-4. AWS SES migration steps — verify send.finda.sale identity, request production access, create SMTP credentials (full plan: claude_docs/operations/ses-migration-plan.md)
-5. Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway
 
 **Next session priority order:**
-1. Verify S736 push deployed to Railway/Vercel (check Railway logs)
-2. QA with rate limiter bypass active: #326 eBay Comp Tiles (edit-item page), #322 Encyclopedia category picker
-3. Voice strip weight/dims S734 — record "14oz" voice note, verify structured fields
-4. Review page eBay card dims/weight S734 — save weight+dims, verify in review push card
-5. Sales page desktop claim-listing CTA S733 — guest + unclaimed sale URL
+1. CRIT-1 fix: Dispatch dev to exempt `/api/auth/me` from `authLimiter` in `packages/backend/src/index.ts` (scope limiter to non-auth routes only)
+2. SES migration: Dispatch dev for 37-file migration (plan: `claude_docs/operations/ses-migration-plan.md`) — AWS steps done
+3. Voice strip weight/dims S734 — UNVERIFIABLE until real device test; keep in Blocked Queue
+4. Review page eBay card dims/weight S734 — UNVERIFIABLE until user2 has a draft item in review queue
+5. #422 OAuth Option B — still needs real Google test account
 6. If Blocked Queue drops below 8 → resume roadmap feature work
