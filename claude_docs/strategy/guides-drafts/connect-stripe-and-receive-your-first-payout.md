@@ -10,7 +10,7 @@ links-from: Settings → Payouts, FAQ payout questions
 
 # Connect Stripe and Receive Your First Payout
 
-Connect your bank account to receive payouts when you mark items sold. Setup takes about three minutes.
+Connect your bank account to receive payouts when you mark items sold.
 
 ## How it works
 

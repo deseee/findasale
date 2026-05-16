@@ -1,126 +1,149 @@
 ---
-title: Settle Up: Reconcile Sales, Pay Consignors, Get Your Payout
-slug: settle-up-reconcile-sales-and-get-your-payout
+title: "Settle up: reconcile sales, pay consignors, and get your payout"
+slug: settlement-and-payouts
 audience: organizer
 format: W+V
+priority: P1
 treatment: THIN
-section: 4.7
-links-from: /organizer/settlement, FAQ payout
+relatedGuides:
+  - run-the-pos
+  - onboard-a-consignor-and-set-their-split
+  - how-disputes-and-refunds-work
+linkFrom:
+  - /organizer/settlement
+  - 'FAQ: How do I get paid?'
+  - Settings → Payouts
 ---
 
-# Settle Up: Reconcile Sales, Pay Consignors, Get Your Payout
+# Settle up: reconcile sales, pay consignors, and get your payout
 
-After your sale closes, you need to settle. That means reconciling what you sold, calculating what each consignor is owed, deducting your commission, and getting your payout. FindA.Sale's Settlement Hub walks you through it step by step.
+Settlement is the five-step process that happens after your sale closes.
+You review what sold, confirm what each consignor is owed, export the report, and your payout goes to your bank.
+The whole thing usually takes under ten minutes.
 
-This guide covers how the settlement flow works, what numbers you'll see, and how to pay consignors and get your own payout.
+For a deeper look at how payouts work — timing, bank connection, and failure states — see [Connect Stripe and receive your first payout](/guides/connect-stripe-and-receive-your-first-payout).
 
-## How it works
+---
 
-**1. Close your sale**
-When your sale ends, go to the sale details and tap "Close Sale." The app stops accepting new sales and locks the POS.
+## The full settlement sequence
 
-**2. Open Settlement Hub**
-A "Settlement" button appears at the top of your sale. Tap it. The Settlement Hub shows:
-- Total revenue (all items sold, all payment methods)
-- Number of items sold
-- Average sale price
-- A breakdown by consignor (if you had consignors)
+### Step 1: Close the sale
 
-**3. Review the revenue**
-The app adds up all your POS transactions. It includes cash, card payments, and payment links. The total here is your gross revenue before any splits or fees.
+Go to your sale and tap **End Sale**.
+This locks the POS and stops new transactions.
+Don't close the sale while shoppers are still picking up — items need to be in the sold state before you finalize.
 
-**4. Allocate to consignors**
-If you have consignors, the app shows each one and how much of the revenue belongs to them. This is calculated from the items you sold that were marked as theirs when you onboarded them.
+### Step 2: Open the Settlement hub
 
-For each consignor, you'll see:
-- Total revenue from their items
-- Their split percentage (e.g., 50%, 40%, 30%)
-- Their payout amount (revenue × split %)
+A **Settle Up** button appears at the top of your sale dashboard.
+Tap it.
+You'll see gross revenue broken down by payment method (cash, Venmo/Zelle, Stripe), a total item count, and — if you have consignors — each consignor's section.
 
-The app subtracts payment processing fees from the total before calculating the split. Example: $1,000 revenue, $29.30 in Stripe fees, leaves $970.70. A 50% consignor gets $485.35.
+### Step 3: Review consignor splits
 
-**5. Deduct your commission**
-If you set a commission rate (% or flat fee), it's deducted from the remaining revenue after consignor splits. This is your take as the organizer. Some organizers don't charge consignors a commission—that's allowed. Others take 10–20%. It's your choice per consignor.
+Each consignor row shows the items they brought, total revenue from those items, their split percentage, and what they're owed.
+Adjust the split or flag an item for dispute now — you can't edit after you finalize.
 
-**6. Issue payouts**
-The app shows how much each consignor gets and how much you keep. You can:
-- Pay consignors via bank transfer (if they gave you their account info during onboarding)
-- Pay via check
-- Pay in cash at your location
-- Use a custom method you arrange with them
+**Common mistake:** closing the sale before all pickups happen.
+If a consignor comes to collect unsold items after you've settled, those items are already archived.
+Wait until everyone has cleared out.
 
-For bank transfers, the app can initiate a batch ACH payment if you've stored your bank info. Otherwise, you'll manually record who got paid and how.
+### Step 4: Export the settlement report
 
-**7. Get your payout**
-Once consignors are paid, the remainder is yours. The app shows your final payout amount. You can:
-- Request a payout to your bank account (usually processes in 1–2 business days)
-- Keep it in your FindA.Sale wallet as credit for future sales
-- Request a check by mail
+Tap **Export PDF**.
+The report lists every sold item, buyer (if paid through the app), consignor allocation, platform fee, and net amounts.
+Send the consignor their section as your record of payment.
 
-## What happens at settlement
+What consignors receive: an email with their item list, total sold, split percentage, and payout amount.
+They don't see other consignors' numbers.
 
-**Processing fees** are subtracted from the total revenue first. If you took $1,000 in card payments, Stripe deducted $29 in fees, your revenue is $971. Consignor splits are calculated on the $971, not the gross $1,000.
+### Step 5: Your Stripe payout
 
-**Consignor splits** are calculated after fees. A 50% consignor gets 50% of net revenue.
+Once you finalize settlement, Stripe initiates a transfer to your connected bank account.
+Standard timing is 2–5 business days.
+You'll get an email when it lands.
 
-**Your commission** (if any) comes out of your split, not the consignor's. Example:
-- Total revenue: $1,000
-- Stripe fee: $29
-- Net: $971
-- Consignor (50%): $485.50
-- Your take (50% minus 10% commission): $440
-- Commission paid: $45.50
+The platform fee is deducted before your payout is calculated — it's not a separate charge.
 
-**Items not sold** aren't included in settlement. They're stored for your next sale or can be returned to the consignor.
+---
+
+## If a consignor disputes their split
+
+Edit the split in the Settlement hub before you tap Finalize.
+Once finalized, splits are locked.
+If a dispute comes up after the fact, you'll need to sort it out manually (pay the difference by check, Venmo, etc.) and note it in your records.
+
+---
 
 ## Common questions
 
-**Q: Can I settle before my sale officially ends?**
-A: No. You close the sale first, then settle. This prevents accidental sales after you've already started dividing up the money.
+**What if I have cash sales that weren't logged through the POS?**
+Add them manually in the Settlement hub before you export. There's an "Add cash transaction" option. This keeps your PDF accurate.
 
-**Q: What if I made a mistake and need to refund a shopper?**
-A: You can issue refunds during settlement. Mark a refund, and it reduces the total revenue. The refund amount goes back to the shopper (or is deducted from your payout if it was cash).
+**Do I need Stripe to settle?**
+You need Stripe to receive your platform payout to a bank account. If you collected only cash or Venmo/Zelle and want to skip the payout step, you can export the PDF and mark settlement complete without initiating a Stripe transfer.
 
-**Q: How do I pay a consignor?**
-A: During settlement, you choose the payment method. The app can process bank transfers if you set up your bank account. You can also pay by check, cash, or however you and the consignor agreed. Record the payment in the app so you have a record.
+**Can I settle a partial sale — items from one day of a multi-day sale?**
+No. Settlement covers the entire sale when it closes. Run separate sales in the app if you need separate settlement periods.
 
-**Q: What if a consignor didn't pick up unsold items?**
-A: Those items aren't part of settlement. Store them and contact the consignor. Agree on a pickup date or arrange to donate/discard them.
+**What happens to unsold consignor items?**
+They're not included in settlement. They remain in your inventory, marked "Unsold." Return them to the consignor or carry them into your next sale.
 
-**Q: Can I change a split percentage after settlement?**
-A: No. Settlement locks in the split percentages as they were during the sale. If you need to adjust a future consignor's terms, change it for the next sale.
+**How do I know the PDF went to the consignor?**
+The Settlement hub marks each consignor's row as "Email sent" with a timestamp after you finalize. If it shows "Not sent," tap the resend button next to their name.
 
-**Q: How long does it take to get my payout?**
-A: Bank transfers usually take 1–2 business days. Checks by mail take 5–10 business days depending on your location.
+---
 
 ## Related guides
 
-- [Run the POS: Take Payments In Person](/guides/run-the-pos-take-payments-in-person)
-- [Onboard a Consignor and Set Their Split](/guides/onboard-a-consignor-and-set-their-split)
-- [Message Templates and the Built-In Inbox](/guides/message-templates-and-the-built-in-inbox)
+- [Run the POS: take payments in person](/guides/run-the-pos)
+- [Onboard a consignor and set their split](/guides/onboard-a-consignor-and-set-their-split)
+- [How disputes and refunds work](/guides/how-disputes-and-refunds-work)
 
-## Screen capture script
+---
 
-*[Shot 1: Sale details with "Close Sale" button visible]*
+## Video script
 
-"When your sale is done, close it. The app stops accepting sales and opens the Settlement Hub."
+*90-second screen-capture VO. Show Settlement hub throughout.*
 
-*[Shot 2: Settlement Hub showing total revenue, items sold, average price]*
+---
 
-"The Settlement Hub shows your total revenue and a breakdown by consignor if you had any."
+**[0:00 — Sale dashboard, End Sale button visible]**
 
-*[Shot 3: Consignor list with their items sold, split %, and payout amount]*
+"When your sale is done and everything's been picked up, tap End Sale. This locks the POS."
 
-"Each consignor's payout is calculated from their split percentage. Stripe fees are deducted first, then splits are calculated."
+**[0:07 — Settle Up button appears]**
 
-*[Shot 4: Your commission shown as a line item]*
+"A Settle Up button appears. Tap it."
 
-"Your commission (if you set one) comes out of your take, not the consignor's."
+**[0:10 — Settlement hub: gross revenue, payment method breakdown]**
 
-*[Shot 5: Payment method options—bank transfer, check, cash]*
+"You'll see your gross revenue split by how it was collected — cash, Venmo and Zelle, and Stripe."
 
-"You choose how to pay each consignor. The app can process bank transfers, or you can pay by check or cash."
+**[0:17 — Consignor rows expanding]**
 
-*[Shot 6: Your final payout amount with options to request to bank, keep as credit, or check]*
+"If you had consignors, each one has their own row. Items sold, revenue, their cut."
 
-"Once consignors are paid, your payout is ready. You can transfer to your bank, keep it as credit, or request a check."
+**[0:24 — Adjusting a split percentage]**
+
+"Adjust a split here if something changed. You can't edit after you finalize, so check now."
+
+**[0:31 — Export PDF tapped, PDF preview]**
+
+"Tap Export PDF. This is your settlement record — every item, every payment, every consignor."
+
+**[0:38 — Consignor email notification preview]**
+
+"Each consignor gets an email with just their numbers. They see their items and their payout. Nobody else's."
+
+**[0:45 — Finalize button tapped, Stripe payout initiated message]**
+
+"Tap Finalize. Stripe starts the transfer to your bank. Two to five business days."
+
+**[0:52 — Bank notification mockup, payout arrived]**
+
+"You'll get an email when it lands. Platform fee is already out — what you see is what you get."
+
+**[1:01 — Settlement hub showing all rows marked complete]**
+
+"That's settlement. Close the sale when pickups are done, not before. Everything else takes ten minutes."

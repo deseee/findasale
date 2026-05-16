@@ -1,106 +1,184 @@
 ---
-title: Create Your First Sale, Step by Step
+title: "Create your first sale, step by step"
 slug: create-your-first-sale
 audience: organizer
-format: W+V
-treatment: THIN
-section: 4.2
-links-from: Dashboard empty state, /guide, FAQ
+format: written+video
+priority: P1
+relatedGuides:
+  - pick-the-right-sale-type
+  - schedule-and-visibility
+  - add-items-to-a-sale
+linkFrom:
+  - Dashboard empty state
+  - /guide
+  - FAQ "How do I list a sale?"
 ---
 
-# Create Your First Sale, Step by Step
+Fill in the form fields below, preview your listing, then hit Publish when you're ready for shoppers to find it.
+Your sale stays in Draft until you publish — nothing is visible to the public before that.
 
-Post your first sale in 10 minutes. We'll walk through each field and what to fill in.
+---
 
-## How it works
+## Step 1 — Open the create-sale form
 
-1. Go to your dashboard and click "Create sale."
-2. Fill in the basics: sale name, type, date, and location.
-3. Write a description so shoppers know what you're selling.
-4. Choose your visibility settings (when the listing goes live to shoppers).
-5. Click "Create sale." You're done.
-6. Start adding items.
+From your dashboard, tap **New Sale**.
+The create-sale form opens.
 
-## Field-by-field guide
+---
 
-**Sale name:** What's this sale called? Examples: "Spring Cleaning," "Estate of John Smith," "Weekly Auction Friday," "Consignment Round 2." Be specific — shoppers use this to find you.
+## Step 2 — Name your sale
 
-**Sale type:** Pick one:
-- Yard sale (items on your property, shoppers visit)
-- Estate sale (larger residential sale, often multi-day)
-- Auction (you accept bids or timed bids)
-- Flea market (you're selling at a market or vendor event)
-- Consignment (items for a store or resale shop)
-- Other (if none fit)
+Type a name in the **Sale Name** field.
+Be specific. "Johnson Family Estate Sale" or "Riverside Garage Sale — Moving" works better than "Big Sale."
+Shoppers search by keywords, and your sale name is indexed.
 
-Don't overthink it. The type mostly affects how shoppers see your listing. Pick what feels closest to what you're doing.
+---
 
-**Sale date and time:** When is the sale? Time is optional — if you don't know the exact hour yet, leave it blank and fill it in later. You can also use date ranges (e.g., "Friday–Sunday") instead of exact times.
+## Step 3 — Pick a sale type
 
-**Location:** Where are shoppers going? Address, street name, or neighborhood works. If it's at a market or venue, put the market name. Exact latitude/longitude isn't required, but shoppers use this to filter sales near them.
+Tap **Sale Type** and choose from the list: Estate Sale, Yard/Garage Sale, Auction, Flea Market, Consignment, or Pop-Up/Retail.
 
-**Description:** 2–3 sentences about what you're selling. Examples:
-- "Household items, furniture, and vintage glassware from a 1950s home."
-- "Weekly consignment drop: jewelry, fashion, home goods."
-- "Auction of 100+ items: tools, collectibles, and sporting goods."
+Not sure which to pick? See [Pick the right sale type](pick-the-right-sale-type.md).
 
-Skip this field if you're not sure what you're selling yet. You can add it later.
+Sale type affects which features are available after you publish — pick the right one before you go live.
+You can change it in edit-sale before publishing, not after.
 
-**Visibility:** Choose when shoppers can see this sale.
-- **Immediately** (sale goes live now — shoppers can browse)
-- **At a specific date** (sale stays hidden until then — useful if you're posting early but don't want shoppers to see yet)
-- **Never share publicly** (only shoppers with a link can see — useful for private sales or preview-only)
+---
 
-## Adding items after you create the sale
+## Step 4 — Set your start and end date
 
-Once your sale is created:
-1. Click "Add items."
-2. Upload a photo (or skip it for now).
-3. Enter item name, price, and condition.
-4. Click "Save item."
-5. Repeat until you've posted everything.
+Tap **Start Date** and select the first day of your sale.
+Tap **End Date** and select the last day.
 
-Pro tip: You don't have to add all items before going live. Post 10 items, go live, then add more as you go.
+For a one-day yard sale, start and end dates are the same.
+For a multi-day estate sale, set the range to match all open days.
+
+---
+
+## Step 5 — Set your hours
+
+Tap **Start Time** and **End Time** for each day.
+End time is when the sale closes for in-person shoppers — not when online listings expire.
+
+If hours differ by day (e.g., 9 AM–5 PM Saturday, 10 AM–3 PM Sunday), you can set each day separately.
+
+---
+
+## Step 6 — Enter your address
+
+Type the full street address where the sale is happening.
+This address appears on your public listing and sets the pin on the search map.
+If you have multiple locations, you can add Hubs after you create the sale — see [Run a sale across multiple locations](multi-location-hubs.md).
+
+---
+
+## Step 7 — Write your description
+
+The description field is plain text.
+Say what's for sale, what condition items are in, and anything a shopper would want to know before driving over.
+A few good sentences is enough. Lists work well here.
+
+Example:
+> Three-bedroom home contents. Furniture, tools, kitchenware, vintage records, power equipment. Items priced to move. Cash and card accepted. No early birds.
+
+---
+
+## Step 8 — Set your Visibility Window
+
+The **Visibility Window** controls how many days before your start date shoppers can see your sale in search results.
+
+Default is **7 days**.
+If you're running a large auction or estate sale with a lot of inventory, set it to **14 days** so shoppers have time to browse and plan.
+
+A shorter window (3–5 days) works fine for quick yard sales or last-minute events.
+
+---
+
+## Step 9 — Save and preview
+
+Tap **Save**.
+Your sale is now in **Draft** status — not visible to shoppers yet.
+
+Tap **Preview** to see your public listing exactly as a shopper would see it.
+Check the address, hours, and description for typos.
+
+---
+
+## Step 10 — Publish
+
+When everything looks right, tap **Publish**.
+Your sale is now live and searchable.
+
+Shoppers can find it in search results, on the map, and via direct link.
+
+---
 
 ## Common questions
 
-**Q: Do I have to fill in every field?**
-A: No. Sale name, type, date, and location are required. Description is optional (but recommended). You can skip price field per item if you haven't set them yet.
+**My sale is published but I can't find it in search. What happened?**
+Check your Visibility Window setting. If your sale starts more than 14 days out and your window is set to 7 days, it won't appear yet. Edit your sale and adjust the Visibility Window.
 
-**Q: Can I change the sale date after I create it?**
-A: Yes. Click "Edit sale" and update the date anytime.
+**Can I edit the sale after publishing?**
+Yes. Tap the sale name from your dashboard, then tap **Edit Sale**. You can change the description, hours, and address at any time. Sale type is locked after publish.
 
-**Q: What if I'm not sure about the price yet?**
-A: Leave the price blank when you create the item. Add it later when you've decided. Or post a price range (e.g., "$10–$20").
+**What's the difference between Draft and Published?**
+Draft is invisible to shoppers. Published means the sale is live and searchable. You control when it goes live — nothing publishes automatically.
 
-**Q: Can I post the same item to multiple sales?**
-A: Not directly. Create one sale and add the item there. If it doesn't sell and you want to post it to a future sale, you can copy the item details and create a new one.
+**Can I unpublish a sale?**
+Yes. Open the sale from your dashboard and tap **Unpublish**. It returns to Draft. Shoppers who already saved the sale will see it as inactive.
 
-**Q: What if the sale is at multiple addresses?**
-A: Create one sale and add multiple hubs (locations). Each hub shows up separately for shoppers. See [Run a Sale Across Multiple Locations](/guides/run-a-sale-across-multiple-locations).
+**I accidentally published before I was ready. What do I do?**
+Unpublish immediately from your dashboard. Edit, then republish when you're ready. No shoppers are notified when a sale is unpublished.
 
-**Q: Can I post a sale but hide it until later?**
-A: Yes. Set visibility to "At a specific date" and pick when you want it to go live. The sale will be created but shoppers won't see it yet.
+**Do I need to add items before I publish?**
+No. You can publish an empty sale. But shoppers who visit before you add items will see nothing. Most organizers add at least a few items before publishing.
 
-**Q: What happens if I don't add any items?**
-A: The sale shows up empty for shoppers. They can still message you. You can add items anytime, even after you go live.
-
-## Next steps after creating your sale
-
-1. Add items and photos (most important for attracting buyers).
-2. Monitor your sale on the dashboard.
-3. Mark items sold as they go.
-4. See [Schedule a Sale and Pick Your Visibility Window](/guides/schedule-a-sale-and-pick-your-visibility-window) for visibility options.
-5. See [Pick the Right Sale Type](/guides/pick-the-right-sale-type) for a deeper dive on each type.
+---
 
 ## Related guides
 
-- [Pick the Right Sale Type for What You're Running](/guides/pick-the-right-sale-type)
-- [Schedule a Sale and Pick Your Visibility Window](/guides/schedule-a-sale-and-pick-your-visibility-window)
-- [Run a Sale Across Multiple Locations](/guides/run-a-sale-across-multiple-locations)
+- [Pick the right sale type](pick-the-right-sale-type.md)
+- [Schedule a sale and set your visibility window](schedule-and-visibility.md)
+- [Add items to a sale](add-items-to-a-sale.md)
 
-For complete setup details, see [Creating a Sale](/guide#creating-a-sale).
+---
 
-## Screen capture script
+## Video script
 
-Open your organizer dashboard. Click the "Create sale" button. A form appears with a "Sale name" field at the top. Type "Estate Household Items" as an example. Below, you see "Sale type" with a dropdown showing options like "Yard sale," "Estate sale," "Auction," "Flea market," "Consignment." Select "Estate sale." Next is a date picker — click it and choose a date a week from today. A time field shows below it (skip it for now, time is optional). Scroll down to see the location field. Type in an address or neighborhood name. Further down is a description field with a text area. Type a 2–3 sentence description of what you're selling. Below that, see "Visibility" with radio buttons: "Immediately," "At a specific date," "Never share publicly." Select "Immediately." At the bottom, a "Create sale" button. Click it. You're now on the sale detail page with an empty items list. Notice the "Add items" button — click it to start uploading photos and pricing items.
+*60-second screen-capture voiceover. Record with cursor visible. No music bed required.*
+
+---
+
+[0:00 — Dashboard, cursor on New Sale button]
+"From your dashboard, tap New Sale."
+
+[0:03 — Form opens, cursor moves to Sale Name field]
+"Give it a name. Be specific — shoppers search by keyword."
+
+[0:08 — Cursor clicks Sale Type dropdown]
+"Pick your sale type. Estate sale, yard sale, auction — whatever fits what you're running."
+
+[0:14 — Cursor clicks Start Date field]
+"Set your start and end dates."
+
+[0:17 — Cursor clicks Start Time field]
+"Add your hours. End time is when the door closes, not when listings expire."
+
+[0:22 — Cursor clicks Address field]
+"Enter the address. This is where the map pin lands."
+
+[0:26 — Cursor in Description field, typing]
+"Write a short description. What's for sale. What condition. Whether you take cards."
+
+[0:32 — Cursor hovers over Visibility Window field]
+"Visibility Window controls how far in advance shoppers can see your sale. Seven days is the default. Bump it to fourteen for a big event."
+
+[0:41 — Cursor clicks Save, then Preview]
+"Tap Save. Your sale is in Draft — nothing is public yet. Tap Preview to see what shoppers will see."
+
+[0:48 — Cursor clicks Publish button]
+"When it looks right, tap Publish. You're live. Shoppers can find you in search, on the map, and by direct link."
+
+[0:55 — End card with link to add-items guide]
+"Next: add your first items."
+

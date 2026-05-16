@@ -1,21 +1,18 @@
-# Patrick's Dashboard — S741 Wrap (Complete)
+# Patrick's Dashboard — S742 Wrap (Complete)
 
 ---
 
-## What Happened This Session — S741
+## What Happened This Session — S742
 
-SEO content moat completed. 116 new guide pages generated and merged into the site.
+Help Library shipped. 75 guides written, fabricated claims cleaned out, voice notes coverage added, `/guides` route live.
 
-**`packages/frontend/data/seo-pages/index.json` — 384 → 500 pages**
+**Content** — 75 guides across 13 clusters in `claude_docs/strategy/guides-drafts/`. Covers every major feature for both organizers and shoppers: photo workflow, review & publish, promotion, at-the-sale, discovery, trust, sale day, inventory, advanced tools, sale creation, setup, Explorer's Guild, community. Every guide has a VO script where video applies.
 
-Three batches shipped:
-- 16 missing pricing guides (Fenton, Rookwood, Gallé, Daum, Chippendale, vinyl records, vintage denim, and more)
-- 50 identification guides — how to authenticate Rolex, Hermès, Tiffany, sterling silver, depression glass, carnival glass, and 45 more
-- 50 buying guides — estate sale prep, negotiation scripts, pricing antiques, reselling, consignment, staging, and organizer operations
+**Fabrication audit** — 16 files had invented speed/quantity claims ("60 items in five minutes", "setup takes three minutes"). All removed. 53 files were clean. eBay sync now says "almost immediately" instead of "60 seconds."
 
-All 500 pages are live at `/guide/[slug]` with ISR, auto-populate the sitemap, and follow every content rule (no "AI" language, inclusive sale types, specific numbers throughout). Zero duplicate slugs.
+**Voice notes** — 4 photo workflow guides now cover the feature accurately. It uses the browser's Web Speech API (Chrome/Edge only), appends transcript to item description without overwriting, extracts category/tags/weight/dims via keyword matching. No AI, no audio stored.
 
-Session hit an API error mid-run — Batch 3 was re-dispatched cleanly and completed.
+**Route** — `/guides` index and `/guides/[slug]` pages built with ISR, full dark mode, mobile-first. No new npm dependencies.
 
 ---
 
@@ -34,7 +31,7 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**3. Confirm MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831 is set on Railway** (if not already done)
+**3. Guide video recording** — 30+ guides have VO scripts ready. Record when you're ready and drop the URLs into the entry files (`videoUrl` field). Next session can wire them in bulk.
 
 ---
 
@@ -43,18 +40,20 @@ npx prisma generate
 6 items — below the 8-item QA ceiling. Feature work remains unblocked.
 
 - **SES smoke test** — Patrick action above
-- **Review page eBay dims** — UNVERIFIABLE: user2 is a shopper. Fix next session: psycopg2 UPDATE to make user2 ORGANIZER, then re-test at `/organizer/add-items/[saleId]/review`
 - **Voice strip** — needs real device with microphone
-- **OAuth Option B** — needs real Google test account
+- **/guides Chrome QA** — needs browser verification next session
 
 ---
 
-## Push Block — S741
+## Push Block — S742
 
 ```powershell
-git add packages/frontend/data/seo-pages/index.json
+git add packages/frontend/data/guides/
+git add packages/frontend/pages/guides/
+git add claude_docs/strategy/guides-drafts/
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S741: SEO content moat complete — 116 pages added, 500 total"
+git commit -m "S742: Help Library — 75 guides, /guides route, fabrication audit, voice notes"
 .\push.ps1
 ```

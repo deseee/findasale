@@ -1,128 +1,147 @@
 ---
-title: Where to Post Flyers (and How to Use the Tear-Off Flyer)
+title: "Where to post flyers (and how to use the tear-off flyer)"
 slug: where-to-post-flyers
 audience: organizer
 format: W
+priority: P1
 treatment: FRESH
-section: 4.6
-links-from: /organizer/print-kit, FAQ
+relatedGuides:
+  - promote-page
+  - yard-signs-and-qr-codes
+  - share-cards
+linkFrom:
+  - /organizer/print-kit
+  - FAQ "How do people find my sale?"
+  - /guide Promotion section
 ---
 
-# Where to Post Flyers (and How to Use the Tear-Off Flyer)
+Flyers still work. A sheet of paper on a laundromat bulletin board pulls in shoppers who never open social media. This guide covers the 8–10 best spots to post physical flyers, how far in advance to post, how the tear-off flyer format works, and how to get them printed without spending much.
 
-A printed flyer is one of the most effective ways to attract local shoppers. FindA.Sale gives you a ready-to-print tear-off flyer — download it, print it, and post it in high-traffic community spaces. Here's where to put them for maximum visibility.
+Print 20–30 flyers. Post them 5–7 days before your sale opens. That window gives people time to plan a trip without forgetting about it by sale day.
 
-## Download and print your tear-off flyer
+---
 
-**Step 1: Get the flyer template.**
+## Where to post
 
-Go to **Print Kit** or **Marketing Tools** → **Printable Flyers**. Choose your flyer template (simple or branded) and customize:
-- Your sale date and times
-- Address and directions
-- Brief description (estate sale, yard sale, flea market)
-- Featured item photos (optional)
-- Tear-off phone number or website at the bottom
+### Community spaces
 
-**Step 2: Print it.**
+**Laundromats** are one of the best spots in any town. People wait there with nothing to do but read. Post on the bulletin board near the machines.
 
-Download as a PDF and print on standard 8.5 x 11" paper at home or a print shop. Color prints attract more attention, but black-and-white works fine. Print at least 20–50 flyers depending on the size of your sale and how many local spots you'll post at.
+**Grocery store bulletin boards** — most grocery stores have a corkboard near the entrance or customer service desk. Ask before posting. Some require approval or a date stamp.
 
-**Step 3: Add tear-off tabs.**
+**Libraries** — many libraries have a community board near the front desk. Call ahead. Some restrict commercial postings, but sale flyers are usually fine.
 
-The template includes perforated tear-off tabs at the bottom with your website or phone number. Shoppers grab a tab without needing to photograph or memorize anything. This dramatically increases follow-up from curious passersby.
+**Coffee shops** — independent coffee shops almost always have a board. Chains vary. Bring your own pushpins.
 
-## Best places to post flyers
+**Senior centers** — estate sales, consignment, and general household sales draw senior shoppers strongly. A flyer at a senior center is well targeted.
 
-**Community bulletin boards (free):**
-- Laundromats
-- Grocery store entrances and community boards
-- Libraries (ask staff; most allow it)
-- Community centers or recreation centers
-- Coffee shops and cafes
-- Churches (if you're a member; ask permission)
-- Apartment building lobbies and leasing offices
+**Community centers and recreation centers** — boards near the front desk or gym lobby. Ask staff where flyers are allowed.
 
-**Neighborhood apps and online (digital reach):**
-- Nextdoor (post in your neighborhood's feed)
-- Facebook neighborhood groups ("Buy/Sell/Trade," "Yard Sales," "Community Marketplace")
-- Local Craigslist (post under community or events if allowed)
-- Neighborhood email lists or HOA bulletins (ask your HOA)
-- Community subreddits (r/[YourCity] or r/[YourCity]Marketplace)
+**Hardware stores and farm supply stores** — these have bulletin boards and draw practical shoppers who are often in the market for tools, equipment, and household goods.
 
-**Physical high-traffic areas:**
-- Gas stations and convenience stores (ask manager)
-- Local small business windows (hair salon, dry cleaner, hardware store)
-- Parks and community gardens
-- Bus stops and transit shelters (check local rules)
-- Farmers markets or swap meets (if you're not already selling there)
+**Coin-operated car washes** — bulletin boards at the pay station or waiting area. Overlooked by most organizers.
 
-**Niche spots (depending on your sale type):**
-- For estate sales: senior centers, retirement communities, funeral homes (ask permission)
-- For furniture/home goods: furniture stores, home improvement stores, interior design studios
-- For family items: schools, playgrounds, daycare centers, pediatrician offices
-- For vintage/collectibles: thrift stores, antique malls, collector clubs
+### Neighborhood-specific
 
-## How to post effectively
+**Apartment complex lobbies** — if your city allows it, the mail room or lobby near the elevator is a good spot. Many residents are budget shoppers and bargain hunters.
 
-**Timing:** Post flyers 2–3 weeks before your sale for maximum exposure. Tear-offs get taken, so repost 1 week before to stay visible.
+**HOA community boards** — if your sale is in a neighborhood with a physical board at the entrance, post there.
 
-**Make it pop:** Use bright colors (neon yellow or pink) if possible. Shoppers scan bulletin boards quickly — you have 2 seconds to catch their eye.
+**Local Facebook groups and neighborhood apps** — these are not physical flyers, but they reach the same local audience. The Promote page in FindA.Sale generates a pre-filled post you can copy into any group. This is separate from physical flyer placement but worth doing the same week.
 
-**Lead with the most important info:** Big date, address, and "Yard Sale" or "Estate Sale" at the top. Details below.
+---
 
-**Include a photo:** One striking item photo (a colorful piece of furniture, jewelry, or unique find) beats a blank flyer. People come if they see something they want.
+## How far in advance to post
 
-**Test locations:** Some bulletin boards work better than others. If a laundromat is busy on Thursday mornings, that's your prime spot. Rotate or refresh flyers weekly.
+**5–7 days before your sale** is the right window for most locations.
 
-**Ask permission:** Community centers, libraries, and some shops want you to ask before posting. It takes 30 seconds and keeps you in good standing.
+Earlier than that and the flyer gets covered by newer postings. The day before is too late for people to make plans.
 
-**Avoid blocking other flyers:** Don't cover existing notices. Find an open space or replace very old, outdated flyers.
+For multi-day sales, post once at the 5–7 day mark. You do not need to re-post mid-sale unless your first batch gets taken down.
 
-## Tear-off strategy
+---
 
-The tear-off tabs are your secret weapon. Instead of asking shoppers to "find us online" or "call for directions," they grab a tab with all the details. This:
-- Removes friction (they don't have to type a URL or write down a number)
-- Tracks interest (count missing tabs to gauge how many people saw your flyer)
-- Builds urgency (a flyer with many missing tabs signals "this sale is popular")
+## The tear-off flyer format
 
-Place flyers where people stand or move slowly — laundromats, waiting areas, bulletin boards. Avoid fast-moving locations like sidewalks where people won't stop to read.
+The tear-off flyer has phone number tabs cut at the bottom — those little strips people tear off and put in their pocket. FindA.Sale's print kit includes a tear-off version you can download from /organizer/print-kit.
 
-## Hybrid approach: Flyers + online
+Why it works: people who want more information take a strip instead of taking the whole flyer. More people see it. The tab has just enough to act on — a phone number or a short URL.
 
-Flyers target local foot traffic. Combine them with online posts:
-- Post the same flyer image on Nextdoor and local Facebook groups.
-- Include a clickable link in your online posts; include only the tear-off in physical flyers.
-- Track which flyers generate the most tear-offs to learn which physical locations work best.
+If you are designing your own:
+
+- Keep the main body to sale name, dates, address, and 2–3 featured item types
+- Make the font large enough to read from 4 feet away
+- Put tabs at the bottom — each tab should have the sale date and one contact method (phone or short URL)
+- Print on bright paper: yellow, orange, or lime green. White gets lost.
+
+---
+
+## QR codes on flyers
+
+Add a QR code to your flyer and it links directly to your sale page on FindA.Sale. Shoppers scan it from the parking lot or their couch and see your full listing with photos and category list.
+
+Generate your QR code from /organizer/qr-codes. Download the PNG. Drop it into your flyer design — upper right corner or next to the address works well. Make the QR code at least 1.5 inches square so it scans reliably from a phone held at arm's length.
+
+Your dashboard shows how many times the QR code has been scanned. That number tells you which posting locations are working.
+
+---
+
+## Where to get flyers printed cheaply
+
+**Home printer** — if you have a color printer, print at home. 20–30 color copies costs roughly $2–4 in ink if you use draft mode. Fine for most locations.
+
+**FedEx Office** — color copies run $0.20–0.35 each depending on location. You can upload the file online and pick up the same day. Good for a clean, sharp result.
+
+**Staples** — similar pricing to FedEx Office. They also have a self-serve color copier in most stores if you want to control the process yourself.
+
+**Local print shops** — often cheaper per page for quantities over 50. Call ahead with your file format (PDF is universal).
+
+**Tip:** Print on 8.5x11 cardstock (65 lb) instead of regular paper. It holds up longer on outdoor or semi-outdoor boards.
+
+---
+
+## How many to print
+
+| Sale size | Recommended quantity |
+|-----------|---------------------|
+| Small yard sale (1–2 days) | 15–20 |
+| Medium estate or moving sale | 25–35 |
+| Large multi-day sale or auction | 40–60 |
+
+Print a few extras. Flyers get taken down, covered up, or water-damaged. Having spares means you can re-post quickly.
+
+---
 
 ## Common questions
 
-**Q: Is it legal to post flyers on utility poles or sidewalks?**
-A: Varies by city. Some allow it; many don't. Stick to private business windows (with permission) and public bulletin boards. Avoid poles and public property unless you're sure it's legal.
+**Do I need permission to post flyers?**
 
-**Q: How many flyers should I print?**
-A: For a local yard sale, 20–30. For a multi-day estate sale, 40–60. Estimate one flyer per location, plus extras for replacement.
+At private businesses (coffee shops, grocery stores), ask first. Most say yes if you ask politely. Public boards like library corkboards are generally open. Utility poles and street signs are regulated by city ordinance — check your local rules before stapling to a pole.
 
-**Q: Can I use digital flyers instead of printing?**
-A: Digital reaches online audiences well, but physical flyers attract walk-by shoppers who wouldn't otherwise know about you. Use both.
+**How do I make a flyer if I do not have a design program?**
 
-**Q: When should I take down flyers?**
-A: After your sale ends. It's professional and prevents wasted trips from people who show up late. Leave them up if you're planning another sale soon (just update dates).
+The print kit at /organizer/print-kit includes a ready-to-use flyer template. Download, open in any browser, fill in your sale details, and print. No design software needed.
 
-**Q: What if the tear-off tabs are all gone but the flyer is still there?**
-A: That's success! The tabs drove interest. But some people might come looking without a tab and get lost. Leave at least one tear-off or consider adding your website/phone directly to the main flyer.
+**Should I include prices on the flyer?**
 
-**Q: Can I reuse the same flyer design for different sales?**
-A: Yes. Change the date, address, and featured photo. A consistent look across sales builds brand recognition.
+Not usually. Prices change and a flyer with wrong prices causes friction. Instead list featured categories ("furniture, tools, vintage clothing, small appliances"). If you have a standout item, you can mention it — "including a vintage Craftsman tool chest."
 
-**Q: Should I mention specific categories on my flyer?**
-A: Yes, if you have standout items. "Estate sale with furniture, jewelry, and collectibles" gives shoppers a quick sense. Avoid long lists — keep it punchy.
+**What if my flyers keep getting taken down?**
 
-**Q: Do tear-offs work for online-only sales?**
-A: Not as well. Tear-offs are best for in-person events. For online sales, digital posts (social media, Nextdoor) are more effective.
+Some bulletin boards get cleared regularly. At laundromats, ask if there is a staff board versus a public board. At grocery stores, ask if there is a process to approve postings so staff do not remove them.
+
+**Does FindA.Sale give me a flyer template automatically?**
+
+Yes. Go to /organizer/print-kit after your sale is published. You will see a downloadable flyer with your sale name, dates, address, and QR code already filled in.
+
+**Can I post in buy-nothing or local deal groups?**
+
+Check each group's rules. Many allow sale announcements. Some require a specific format or require you to be a group member for 30+ days before posting. Read the pinned post before you share.
+
+---
 
 ## Related guides
 
-- [The Promote Page: Share your sale on 8 platforms](/guides/the-promote-page-share-your-sale-on-8-platforms)
-- [Yard signs and QR codes: Print, place, track](/guides/yard-signs-and-qr-codes)
-- [Send sale updates to followers](/guides/send-sale-updates-to-followers)
-- [Built-in share cards: Pick a theme and post it](/guides/built-in-share-cards)
+- [The promote page: share your sale on 8 platforms](promote-page.md)
+- [Yard signs and QR codes: print, place, and track](yard-signs-and-qr-codes.md)
+- [Built-in share cards: pick a theme and post it](share-cards.md)

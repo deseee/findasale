@@ -1,41 +1,72 @@
 ---
-title: Follow an Organizer (and What "Following" Means)
+title: "Following an organizer (and what it gets you)"
 slug: follow-an-organizer
 audience: shopper
 format: W
+priority: P2
 treatment: WRAPPER
-section: 4.9
-links-from:
-  - /organizer/[organizerId]
-  - /faq
+relatedGuides:
+  - find-sales-near-you
+  - browse-by-city
+linkFrom:
+  - Organizer profile Follow button
+  - FAQ "What happens when I follow an organizer?"
 ---
 
-# Follow an Organizer (and What "Following" Means)
+# Following an Organizer (and What It Gets You)
 
-If you keep hunting at the same consignment shop or estate sale company every month, follow them. You'll see their new sales in your feed and get a notification the moment they go live—no more guessing.
+If there's a consignment shop, auction house, or estate sale company you check every month — follow them. You'll get a push notification the moment they post a new sale, so you're not the last to know.
 
-## How it works
+---
 
-Tap the "Follow" button on any organizer's profile. Once you follow them:
+## How to follow
 
-- **New sales show up in your feed** — When they list a new sale, it appears in your "Following" feed (tap the home icon, then swipe to the "Following" tab).
-- **You get a notification** — The moment the sale opens, you'll get a push notification (if you allow them in settings).
-- **You can unfollow anytime** — Tap "Following" to switch back to "Unfollow."
+Open any organizer's profile. You'll see a Follow button near their name and photo. Tap it once. Done.
 
-Following is public—the organizer can see who follows them, but it doesn't cost you anything and they can't contact you just because you follow them.
+The button changes to Following. Their new sales will now appear in your feed and you'll get a notification when they go live.
+
+To find an organizer's profile: tap their name on any sale listing or any item card they've posted.
+
+---
+
+## What following gets you
+
+- **Push notification** — The moment they publish a new sale, you get pinged.
+- **Feed priority** — Their sales appear at the top of your Following feed (home screen, Following tab).
+- **Follower count** — Your follow shows up in their total. Other shoppers use that count to gauge how established an organizer is. Following a good organizer helps other shoppers find them too.
+
+---
+
+## How to unfollow
+
+Open their profile and tap Following. It toggles back to Follow. You'll stop getting notifications from them and their sales drop out of your Following feed.
+
+---
+
+## Where to see who you follow
+
+Go to your profile (tap your avatar, top right) and tap Following. You'll see every organizer you follow, with a link to their profile and their most recent sale.
+
+---
 
 ## Common questions
 
-**Q: What's the difference between following and saving a sale?**
-A: Following an organizer means you'll see all their future sales. Saving a sale means you're interested in that specific event. You can do both.
+**Q: What's the difference between following an organizer and saving a sale?**
+Following is ongoing — you'll see all their future sales. Saving a sale is one-time — you're tracking that specific event. You can do both.
 
-**Q: Will the organizer reach out to me if I follow?**
-A: No. Following is one-way. They can see your username on their follower list, but they won't contact you unless you message them first or place a hold on an item.
+**Q: Can the organizer contact me because I follow them?**
+No. Following is one-way. They can see your username in their follower list, but they can't message you unless you start the conversation.
 
-**Q: Can I follow multiple organizers?**
-A: Yes, follow as many as you want. Your "Following" feed will show all their new sales.
+**Q: Is following public?**
+Yes — your username shows up in the organizer's follower list, and other shoppers can see the total follower count. Your full profile is still private.
+
+---
+
+For more on organizer profiles and what to look for before a sale, see the organizer profile page directly at /organizer/[organizerId].
+
+---
 
 ## Related guides
 
 - [Find Sales Near You: Map, Search, and Calendar](/guides/find-sales-near-you)
-- [Browse by City: Weekend Sale Pages](/guides/browse-by-city-weekend-sale-pages)
+- [Browse by City: Weekend Sale Pages](/guides/browse-by-city)

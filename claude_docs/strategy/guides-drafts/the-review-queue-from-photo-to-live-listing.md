@@ -111,7 +111,7 @@ You go back to the queue. Next item is a ceramic bowl. The app called it 'Cerami
 
 Next item: a blue lamp. The app suggested $32 based on comparable sales. But you know this is a vintage lamp in great condition. You could ask more. You change the price to $45. Shoppers will either bid it up or pass, but you're starting at a fair price for the quality.
 
-You keep moving through the queue. Each listing takes two to five minutes. Name, condition, price, details, publish. You're not designing listings—you're reviewing and adjusting what the app already filled in. And that's the point: the app does the grunt work. You make the final calls."
+You keep moving through the queue. Name, condition, price, details, publish. You're not designing listings—you're reviewing and adjusting what the app already filled in. And that's the point: the app does the grunt work. You make the final calls."
 
 ---
 

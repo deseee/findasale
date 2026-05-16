@@ -10,7 +10,7 @@ links-from: Dashboard "Add items" CTA, /organizer/rapid-capture, FAQ
 
 # Rapidfire Mode: Photograph an Entire Sale in One Pass
 
-Rapidfire mode lets you photograph every item in your sale without stopping to type details. You photograph, the app recognizes what's in each photo, and you review and publish listings later. Most organizers photograph 60 items in 5 minutes.
+Rapidfire mode lets you photograph every item in your sale without stopping to type details. You photograph, the app recognizes what's in each photo, and you review and publish listings later.
 
 ## How it works
 
@@ -61,7 +61,7 @@ The camera opens. You're standing in front of a bookshelf. You point the phone a
 
 You turn left. There's a lamp. You photograph it. The app saves it. Now you turn again. Glass dishes. Photograph them. Each time, the photo appears in a list on the left side of the screen. You can see a stack of thumbnails growing as you shoot.
 
-Five minutes later, you've photographed sixty items. Your phone says you have 60 new photos in your queue.
+You work through the room. Your phone shows a growing stack of new photos in your queue.
 
 Later that evening, you tap 'Review queue' on your dashboard. Each photo is there with a tag already filled in. The bookshelf is tagged 'Bookshelf, Fair condition.' The lamp is 'Table lamp, Like new.' The dishes are 'Glassware set, Good condition.' You look at the first one. The name is right, the condition is right. You leave it. You check the price—the app suggested a comparable price based on what similar items sold for. You agree with it. You publish.
 

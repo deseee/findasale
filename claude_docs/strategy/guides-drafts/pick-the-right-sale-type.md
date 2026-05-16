@@ -1,146 +1,134 @@
 ---
-title: Pick the Right Sale Type for What You're Running
+title: "Pick the right sale type for what you're running"
 slug: pick-the-right-sale-type
 audience: organizer
-format: W
-treatment: FRESH
-section: 4.2
-links-from: Create-sale form, FAQ
+format: written
+priority: P1
+relatedGuides:
+  - create-your-first-sale
+  - schedule-and-visibility
+  - shop-mode
+linkFrom:
+  - Create-sale form sale type field
+  - FAQ "What's the difference between sale types?"
 ---
 
-# Pick the Right Sale Type for What You're Running
+Choosing the right sale type matters before you publish.
+It controls which features are available and how your sale appears in search.
+You can change it in edit-sale before publishing — not after.
 
-FindA.Sale supports six sale types. Pick the one that matches what you're actually doing.
-
-## Yard Sale
-
-**The idea:** You're selling stuff from your property (house, garage, yard). Shoppers visit your home or driveway to browse.
-
-**Who uses it:** Homeowners doing spring cleaning, downsizing, or moving.
-
-**What shows to shoppers:** A simple listing with your items and address. Shoppers can filter by category, price, and distance.
-
-**Example:** "Garage Sale — Household items, toys, tools. Saturday 8am–2pm, 1234 Oak Street."
+---
 
 ## Estate Sale
 
-**The idea:** You're liquidating a property — typically after a death or major life change. Often multi-day, larger inventory, more organized than a yard sale.
+An estate sale is a household liquidation event, usually spread across multiple rooms.
+Items are priced individually and buyers browse in person.
+Most estate sales run two to three days.
 
-**Who uses it:** Estate liquidators, families settling an estate, property managers.
+**Best for:** Full-house liquidations, estate settlements, downsizing a property.
 
-**What shows to shoppers:** More prominent listing with high-quality photos encouraged. Listings stay visible for longer (usually 1–2 weeks). Shoppers often travel farther for estate sales.
+**Features unlocked:** Standard item catalog, multi-day scheduling, Hubs for overflow locations.
 
-**Example:** "Estate of Margaret Thompson — Furniture, glassware, antiques, collectibles. Friday–Sunday, 10am–5pm, 5678 Maple Drive."
+---
 
-## Auction
+## Yard / Garage Sale
 
-**The idea:** Shoppers bid on items. You set opening prices and let bids run. You can run timed auctions (bids close at a specific time) or live auctions (you announce results in real time).
+A yard sale is an outdoor or driveway event with mixed household items.
+Prices tend to be low, turnover is fast, and setup is minimal.
 
-**Who uses it:** Auction houses, dealers, consignment sellers, anyone who wants competitive bidding.
+**Best for:** One-day neighborhood sales, moving sales, quick household cleanouts.
 
-**What shows to shoppers:** Each item shows as an auction with a countdown timer, current bid, and bid history. Shoppers bid directly on items.
+**Features unlocked:** Standard item catalog, single-day or weekend scheduling.
 
-**Example:** "Weekly Auction — Tools, collectibles, furniture. Bidding ends Friday 7pm."
-
-**Note:** You'll need to set reserve prices (minimum acceptable bid) and manage bid notifications and payment collection separately.
+---
 
 ## Flea Market
 
-**The idea:** You're a vendor at a market, show, or fair. Many vendors in one location, all selling at the same time.
+A flea market is a multi-vendor event where each vendor manages their own inventory.
+As the organizer, you host the space — vendors each handle their own table or booth.
 
-**Who uses it:** Market vendors, fair exhibitors, antique dealers, craft sellers.
+**Best for:** Organizers running a market where multiple sellers participate, indoor or outdoor.
 
-**What shows to shoppers:** Your individual vendor booth or booth number. Often bundled with the market event listing so shoppers can filter by market and then see all vendors.
+**Features unlocked:** Vendor management, per-vendor item catalogs, Hubs for booth areas.
 
-**Example:** "Downtown Antique Fair — Booth 42. Vintage home goods, linens, collectibles."
+---
 
-**Note:** You'll work with the market operator or fair organizer to coordinate. They may set the location and event date; you focus on your items.
+## Auction
+
+An auction sells items to the highest bidder.
+FindA.Sale supports two formats: timed (online bidding with a countdown) and live (in-person with an auctioneer).
+
+**Best for:** High-value items, antique collections, estate jewelry, farm equipment.
+
+**Features unlocked:** Bidding system, bid-bot (auto-bid up to a max), auction close and winner notification, Stripe checkout for winners.
+
+---
 
 ## Consignment
 
-**The idea:** You're a shop or resale store accepting items from other people. They bring stuff to you; you sell it and split the proceeds.
+A consignment sale holds items that belong to third parties.
+You sell on their behalf and take a percentage.
+The consignor portal lets you track which items belong to whom and calculate payouts.
 
-**Who uses it:** Consignment stores, thrift shops, resale boutiques, online resellers.
+**Best for:** Ongoing consignment shops, multi-consignor estate sales, organizers who handle goods for multiple clients.
 
-**What shows to shoppers:** Items appear in your shop's listing. Unlike time-limited sales, consignment inventory is usually ongoing — items cycle through as they sell and new items arrive.
+**Features unlocked:** Consignor portal, per-consignor item tracking, payout reports.
 
-**Example:** "StyleCycle Consignment — Women's fashion, home goods, shoes. Mon–Sat 10am–6pm."
+---
 
-**Note:** You'll manage consignor payouts and inventory turnover separately. Items can stay listed for 30, 60, 90+ days depending on your policy.
+## Pop-Up / Retail
 
-## Other
+A pop-up or retail sale is a recurring storefront or boutique.
+It works like a regular sale but is designed for organizers who run a permanent or semi-permanent booth.
 
-**The idea:** Your sale doesn't fit the above categories.
+**Best for:** Shop Mode organizers, flea market regulars with a fixed booth, estate liquidators with ongoing inventory.
 
-**Who uses it:** Pop-up shops, craft fairs, benefit sales, multi-family sales, garage sales at an unusual location.
+**Features unlocked:** Extended scheduling, Shop Mode eligibility (TEAMS tier).
 
-**What shows to shoppers:** A simple listing without the specific framing of the other types. Use the description field to clarify what you're doing.
+---
 
-**Example:** "Multi-family Yard Sale — Three neighborhoods, five properties. Saturday 9am–3pm."
+## What happens if you pick the wrong type?
 
-## How to choose
+You can change sale type in **edit-sale** any time before you publish.
+After you publish, sale type is locked.
 
-**Ask yourself:**
-1. **Are people coming to me, or am I at a specific event?**
-   - Coming to me → Yard Sale, Estate Sale, or Consignment
-   - At an event → Flea Market or Auction
+If you published with the wrong type, unpublish the sale, change the type, and republish.
+No shopper data or item data is lost when you unpublish.
 
-2. **Is this a one-time event or ongoing?**
-   - One-time → Yard Sale, Estate Sale, or Auction
-   - Ongoing → Consignment, Flea Market
+---
 
-3. **Is anyone bidding or just browsing and buying?**
-   - Just browsing/buying → Yard Sale, Estate Sale, Consignment
-   - Bidding → Auction
+## How sale type affects features
 
-4. **How long will this sale last?**
-   - Hours or days → Yard Sale, Estate Sale, Auction
-   - Weeks or ongoing → Consignment, Flea Market
+| Sale type | Bidding | Consignor portal | Vendor management | Shop Mode eligible |
+|---|---|---|---|---|
+| Estate Sale | No | No | No | No |
+| Yard/Garage Sale | No | No | No | No |
+| Auction | Yes | No | No | No |
+| Flea Market | No | No | Yes | No |
+| Consignment | No | Yes | No | No |
+| Pop-Up / Retail | No | No | No | Yes (TEAMS) |
 
-## What each type unlocks
-
-**Visibility features:**
-- Yard Sales and Estate Sales appear in neighborhood and distance-based searches
-- Auctions appear in "ending soon" filters and bid-tracking feeds
-- Flea Markets often link to the market event page
-- Consignment listings can stay live indefinitely
-
-**Shopper behavior:**
-- Yard Sale shoppers typically browse last-minute (day before or morning of)
-- Estate Sale shoppers plan trips and travel farther
-- Auction bidders are repeat visitors who watch items
-- Flea Market shoppers come for the event; browsing is secondary
-- Consignment shoppers are looking for ongoing inventory
-
-**Pricing:**
-- Yard Sales and Estate Sales: fixed prices
-- Auctions: opening bid + reserve price
-- Flea Market: fixed prices set by you
-- Consignment: cost + your margin (negotiable with consignor)
+---
 
 ## Common questions
 
-**Q: Can I change the sale type after creating it?**
-A: Yes. Go to "Edit sale" and pick a different type. Existing items stay; the listing presentation changes.
+**Can I run an auction that also has fixed-price items?**
+Yes. An Auction sale type supports both bidding items and buy-now items. Set individual items as "Auction" or "Fixed Price" in the item edit form.
 
-**Q: What if I'm running a fundraiser?**
-A: Use "Other" and explain in the description that it's a fundraiser. Or use "Auction" if you're accepting bids to raise money.
+**I run estate sales but sometimes take consignment items too. Which type do I pick?**
+Pick Consignment if tracking consignor payouts matters to you. If consignment is a small part of your business and you don't need payout reports, Estate Sale works fine.
 
-**Q: Can I run multiple types at the same location on the same day?**
-A: You'd need separate sales. One listing can't be both a yard sale and an auction. Create two sales with different names.
+**Can a flea market vendor use FindA.Sale for their own booth?**
+Yes — a vendor can create their own sale listing independent of the market organizer. The market organizer's Flea Market sale type is for managing the event itself, not individual vendor storefronts.
 
-**Q: Does the sale type affect my plan or pricing?**
-A: No. All types work on all plans (Simple, Pro, Teams). Sale type only changes how the listing appears to shoppers.
+**What's the difference between Auction and Estate Sale with high-value items?**
+Estate Sale items have a fixed asking price. Auction items go to the highest bidder. If you want to let buyers compete on price, choose Auction. If you want to set prices yourself, choose Estate Sale.
 
-**Q: What if I'm selling at my shop but accepting consignment items?**
-A: Use "Consignment." The type tells shoppers you're a shop with inventory that changes over time.
-
-**Q: Can I run a pop-up auction at a flea market?**
-A: You'd need to decide: is it primarily a flea market booth or an auction? Use the type that best describes the main draw. Use "Other" and describe both in the sale description if neither fits perfectly.
+---
 
 ## Related guides
 
-- [Create Your First Sale, Step by Step](/guides/create-your-first-sale)
-- [Schedule a Sale and Pick Your Visibility Window](/guides/schedule-a-sale-and-pick-your-visibility-window)
-- [Run a Sale Across Multiple Locations](/guides/run-a-sale-across-multiple-locations)
-- [Run a Permanent Storefront](/guides/run-a-permanent-storefront)
+- [Create your first sale, step by step](create-your-first-sale.md)
+- [Schedule a sale and set your visibility window](schedule-and-visibility.md)
+- [Run a permanent storefront with Shop Mode](shop-mode.md)
+

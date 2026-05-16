@@ -35,7 +35,7 @@ Print your inventory sheet (with colors) or display it on a tablet as your staff
 
 ## Why color rules matter
 
-Without color rules, your staff reads every single item label to find items by price or category. With them, visual scanning does 80% of the work. At a large estate sale with 500+ items, that saves hours.
+Without color rules, your staff reads every single item label to find items by price or category. With them, visual scanning does most of the work — staff spot the right tier at a glance instead of reading each tag.
 
 Color rules also reduce checkout errors. If a customer picks up a blue item and the register shows it should be green, you know something's wrong — the item got moved or mis-tagged during setup.
 

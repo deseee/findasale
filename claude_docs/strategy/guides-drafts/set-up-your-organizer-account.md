@@ -10,7 +10,7 @@ links-from: /guide, /register, organizer dashboard empty state
 
 # Set Up Your Organizer Account
 
-Get your organizer account running in five minutes. You'll create your login, verify your email, and be ready to post your first sale.
+Get your organizer account set up. You'll create your login, verify your email, and be ready to post your first sale.
 
 ## How it works
 

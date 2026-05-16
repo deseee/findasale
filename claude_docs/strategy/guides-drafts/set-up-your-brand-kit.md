@@ -29,7 +29,7 @@ In your organizer dashboard, click **Settings** → **Brand Kit** or **Brand & C
 - Your logo will appear on your online catalog, share cards, and printed materials.
 - Upload a white-background and a transparent-background version if you want flexibility for different uses.
 
-**Pro tip:** A simple text logo (just your name in a clean font) works fine if you don't have a graphic logo. Use a tool like Canva to design one in 5 minutes.
+**Pro tip:** A simple text logo (just your name in a clean font) works fine if you don't have a graphic logo. Use a tool like Canva to put one together.
 
 **Step 3: Set your brand colors.**
 

@@ -8,9 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S741 — SEO Content Moat Complete (COMPLETE). Push block below.**
+**Latest: S742 — Help Library Complete (COMPLETE).**
 
-116 SEO guide pages generated across 3 batches and appended to `packages/frontend/data/seo-pages/index.json`. Total: 384 → **500 pages live**. Breakdown added: 16 missing pricing guides (vintage denim, first editions, vinyl, Fenton, Rookwood, Frankoma, Chippendale, Arts & Crafts, Mission, Daum, Gallé, slag glass, Heisey, Imperial, Cambridge, Burmese glass) + 50 identification guides (how-to-identify-*/how-to-spot-*/how-to-authenticate-*) + 50 buying guides (how-to-evaluate-*/first-estate-sale-*/how-to-negotiate-* etc.). Zero duplicate slugs. All entries follow schema: type how-to/pricing-guide, saleType general, 4–7 sections, no "AI" language, inclusive sale-type language. Session hit API error mid-run — Batch 3 (buying guides) re-dispatched and completed. File: `packages/frontend/data/seo-pages/index.json`.
+Help Library shipped: 75 guides written, voice notes coverage added, fabrication audit completed, `/guides` route live. Clusters 1–13 covering organizer and shopper audiences: Photo Workflow, Review & Publish, Promotion, Shopper At-the-Sale, Shopper Discovery, Trust & Community, Sale Day, Inventory, Advanced, Sale Creation, Setup, Explorer's Guild, Community. Route: `packages/frontend/pages/guides/index.tsx` + `pages/guides/[slug].tsx` with ISR 24h, TypeScript array data source (76 entry files in `packages/frontend/data/guides/entries/`), custom markdown renderer, no new npm deps. Fabrication audit: 16 guide files fixed, 20+ invented performance/time claims removed. Voice notes: coverage added to rapidfire-mode, photo-sessions-with-helpers, categories-and-tags, review-queue (feature uses Web Speech API, Chrome/Edge only, keyword extraction only, no AI call). Cluster 7 slug fix: 5 stub entries populated from long-named draft files. TS: zero new errors.
 
 **Previous: S740 — Parallel Feature Batch (COMPLETE). Push block below.**
 
@@ -152,7 +152,7 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 |---------|--------|---------------|---------------|
 | #326 eBay Comp Tiles | ✅ VERIFIED S737 — 3-tile grid rendered on edit-item page (Victorian Pocket Watch): $295, $450, $675 Pre-owned Good listings with photos. CLOSED. | — | S719 |
 | eBay full push flow | VERIFIED S734 — listing #137314168141 created successfully via Review queue approve with "Also push to eBay" checked | CLOSED | S723 |
-| #422 OAuth Option B | FIXED S723 — backend 409 + amber banner redirect works. UNVERIFIED Chrome (needs real Google test account — seed accounts can't do Google OAuth). Separate bug found S734: register form swallows "existing email" API error silently (#430). | Chrome QA: register email/pwd, sign out, sign-in-with-Google same email → expect amber banner redirect | S723 |
+| #422 OAuth Option B | FIXED S723 — backend 409 + amber banner redirect works. CLOSED S742 — Patrick indicated this was tested. #430 register form silent error was a separate bug, fixed S736. | — | S723 |
 | #322 Encyclopedia category picker | ✅ VERIFIED S737 — Typed "pocket watch" → dropdown populated with real eBay taxonomy: Pocket Watches (3937), Movements (57720), Other Watch Parts (10324), etc. CLOSED. | — | S723 |
 | Settings UI for linked OAuth providers | Backend endpoint `/auth/oauth/link` ready, no frontend surface yet | Build linked-accounts section in organizer/settings.tsx (deferred — security hole closed by backend rejection alone) | S723 |
 | #431 Rate limiter QA bypass | ✅ DONE — S736 fix pushed, QA_RATE_LIMIT_BYPASS_SECRET added to Railway. CLOSED. CRIT-1 residual also FIXED S738 — authLimiter /me exemption added to index.ts and pushed. CLOSED. | — | S736 |
@@ -181,6 +181,20 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S742 — Help Library: 75 Guides + /guides Route (COMPLETE)
+
+Help Library shipped end-to-end. 75 markdown guide drafts written across 13 clusters, TypeScript entry files built, `/guides` route live with ISR, fabrication audit run, voice notes coverage added.
+
+**Route surface:** `packages/frontend/pages/guides/index.tsx` + `pages/guides/[slug].tsx`. ISR 24h revalidation. TypeScript array data source — no markdown libraries, no new npm deps. 76 entry files at `packages/frontend/data/guides/entries/<slug>.ts`. Custom `parseMarkdown()` function handles all heading/list/paragraph formatting. Index groups guides by audience (Organizer / Shopper / Both). Slug pages render title, audience badge, format label, optional video embed, parsed body, Related Guides footer.
+
+**Content (75 guides + 5 canonical slug files):** Clusters 1–13 in `claude_docs/strategy/guides-drafts/`. Audiences: 45 organizer, 25 shopper, 5 both. Formats: 52 written-only, 18 written+screen-capture VO, 5 written+explainer. Treatments: FRESH, THIN, WRAPPER.
+
+**Fabrication audit:** 16 files contained invented performance/time claims ("60 items in five minutes", "setup takes three minutes", etc.). All fixed — replaced with plain feature descriptions. eBay sync speed: "almost immediately" (not "60 seconds"). 53 of 75 files were clean.
+
+**Voice notes coverage:** 4 guides updated with accurate voice note feature description. Feature: Web Speech API (Chrome/Edge only), mic button per item in rapidfire session, transcript appended to description (never overwrites), keyword extraction (name/category/tags/weight/dims) via regex — no AI call, no audio stored. Also available from item detail/review view. No XP awarded.
+
+**Cluster 7 slug fix:** 5 stub entries ("Guide coming soon") replaced with real content from long-named draft files. Canonical slugs: run-the-pos, settlement-and-payouts, line-queue, message-templates, treasure-trails-organizer. TS: zero new errors.
 
 ### S741 — SEO Content Moat: 116 Pages Generated, 500 Total (COMPLETE)
 
@@ -290,72 +304,4 @@ No Sentry monitoring and 36 failing GitHub Actions workflows discovered via API 
 
 **Category 1 (12 states — dead/moved URLs):** Montana, Maryland, Delaware, Connecticut — URL-only fix (working HTML portals found). RI, OR, NE, MO — flagged as JS-rendering required. KS, WY, OK, MN — no state auctioneer license exists (correct to return 0 records). Push pending.
 
-**Category 2 (3 states — bot-blocked 403):** AZ, GA, NH — all exit gracefully. AZ has no state auctioneer license. GA behind Cloudflare managed challenge. NH behind Akamai WAF. Push pending.
-
-**Category 3 (8 states — wrong approach):** Texas Socrata field fix → now pulls live data. South Carolina cookie-capture fix → now pulls live data. MA, NY, WI, ME, NJ, CA — graceful exits (most have no state auctioneer license or unfixable SPA). Push pending.
-
-### S729 — Venmo Deeplink QR + Zelle Display on POS + Shopper Holds (COMPLETE)
-
-Smart Venmo/Zelle payment UX on POS and shopper holds page. `venmoHandle`/`zelleHandle` were already in schema. POS: Venmo QR code generated from deeplink URL (handle + cart total + sale name pre-filled); Zelle shows handle large + amount + copy button. Shopper holds page: Venmo "Pay" button fires deeplink with hold total; Zelle shows handle + copy. Backend: `getMyHoldsFull` extended to return `organizerVenmoHandle`/`organizerZelleHandle`. Added `react-qr-code ^2.0.0`; lockfile synced. 5 files changed.
-
-### S728 — eBay Store URL + Category Overrides Picker (COMPLETE)
-
-Two small eBay settings features. (1) **eBay store URL field** — `ebayStoreUrl String?` added to Organizer model; new migration `20260515000000_add_ebay_store_url_to_organizer`; organizers.ts updated (Zod schema + PATCH handler + GET /me); organizer/settings.tsx gets "eBay Store URL" input in profile tab with load/save/post-save wired. Schema migration required before field works in production. (2) **Category Overrides picker** — organizer/settings/ebay.tsx Category Overrides section previously had raw `<input type="text">` for numeric IDs; replaced with `EbayCategoryPicker`. Confirmed `EbayCategoryPicker` was already fully implemented and wired on edit-item and review pages from a prior session — no changes needed there. 5 files changed, all TS clean.
-
-### S727 — eBay Integration Fixes + Feature Batch (COMPLETE)
-
-Five eBay issues fixed in three parallel dispatches. (1) `{{DESCRIPTION}}` template bug — empty-description path left placeholder literal; fixed. (2) eBay push missing from `publishMutation.onSuccess` in review.tsx — wired. (3) `draftStatus` + `ebayShippingOverride` missing from item SELECT in push loop — added; draft warning field added to push results. (4) Card readiness borders (red/yellow/green/blue) added to review page item cards via `computeReadiness()`. (5) Best Offers UI — toggle + percentage inputs with live dollar preview on edit-item page. (6) Local pickup checkbox on edit-item + review cards; smart phrase detector nudge; backend routing to local pickup fulfillment policy when override set. Files: ebayController.ts, review.tsx, edit-item/[id].tsx. All TS clean.
-
-### S726 — Pipeline Punch List + Email Verification Token (COMPLETE)
-
-Confirmed S725 deploy green. Patrick set `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=true` in Railway (re-enabled after extractor fix). GH Actions verified: auto-seed-outreach fired, InternalJobRunner confirmed, 255 eligible orgs found, 0 new to seed (queue caught up — healthy signal). Dispatched 5 pipeline punch list items in parallel, all shipped: (1) **Cron Step 3** — removed 6 in-memory `cron.schedule` calls + all related imports from index.ts; GitHub Actions workflows are now the sole trigger for all 7 pipeline jobs. (2) **HOT-tier rework** — leadScoringService.ts rewritten: HOT = isStateLicensed OR esnOrgId non-null OR website+custom-domain-email OR sourceCount≥3; numeric score path unchanged. (3) **MailerLite 429 batching** — mailerliteService.ts: one-at-a-time HTTP calls replaced with bulk-import 500-org batches + 500ms inter-batch delay + Retry-After header retry; outreachEmailsCron.ts import updated. (4) **D.C. state parser** — outreachEmailsCron.ts: `normalizeDottedState()` helper handles D.C./P.R./VI/GU/AS; addressStateMatch regex updated to tolerate trailing ZIP code. (5) **Email discovery extraction quality** — emailDiscoveryService.ts: EMAIL_REGEX tightened (strips apostrophes/brackets), `preprocessTextForExtraction()` strips markdown links before scanning, `isMalformedCandidate()` gate added. Also shipped: **P0-3 Email verification token expiry** — migration file 20260515180000 created, schema.prisma updated (`emailVerificationTokenExpiry DateTime?` on User), authController.ts updated (24h expiry set on register, expiry checked+cleared on verifyEmail). Migration not yet deployed — Patrick action required. Confirmed eBay DRAFT "option C" (Publish to eBay button) already implemented in a prior session; removed from Blocked Queue.
-
-### S725 — Organizer Pipeline Overhaul + Cron Reliability Keystone (COMPLETE)
-
-Diagnosed and overhauled the full organizer-acquisition pipeline. **Root systemic issue:** enrichment/scoring/outreach jobs were in-memory node-cron — Railway's frequent redeploys wiped them, so the pipeline barely ran (only ~7 outreach emails ever; `lastScoredAt` frozen 2026-05-10). **Keystone fix** (architect-spec'd → dev-built, Steps 1+2 of 3): `POST /api/internal/jobs/run` dispatcher (reuses `requireSecret` auth, in-process job lock) + 7 `pipeline-*.yml` GitHub Actions workflows. In-memory crons left running alongside as belt-and-suspenders; **green cycle confirmed** in Railway logs (`[InternalJobRunner]` fired all 7 jobs; lead-scoring scored 56,347 orgs COLD 14,165/WARM 41,598/HOT 584). Build broke twice on the first push: (1) `@findasale/database` import not a backend dep — `organizerWebsiteAddressCron.ts` used `Prisma.sql` as a runtime value so it crashed at startup; fixed both it and `emailDiscoveryService.ts` to `@prisma/client` (canonical pattern). **Earlier in session:** cron-frequency cleanup (3 double-running scrapers gated behind GH Actions, backend sale-enrichment disabled, enrich-sale-details daily→3d, enrich-contact-emails 6h→daily, smtp-verify daily→weekly, deleted auctionzip+canada411 workflows); address-enrichment pipeline (organizerWebsite.ts scraper + organizerWebsiteAddressCron + bulkUpsertEnrichedSales address fields; eligibility query fixed from 0→8,804 matching rows); outreach/enrichment bug fixes (email-discovery image-filename filter, `[state]` token parsed from address since `licenseState` is NULL for whole queue, category filter relaxed to allow NULL category +1,661 leads, website→email enrichment chaining). DB fixes via psycopg2: 46 junk image-filename emails nulled; 36 organizer addresses corrupted by the address cron's over-matching extractor — all recovered from each org's Sales city/state. **P0 mid-session:** address extractor was matching street-suffix words hundreds of chars downstream, writing page-nav text/auction descriptions into `Organizer.address` — dev rewrote with bounded regex + candidate validation + 60-word junk blocklist + 110-char cap + trailing-junk strip + JSON-LD-primary; self-tests confirm garbage rejected, real addresses accepted. Decisions: ESN authenticated-cookie route abandoned (Patrick chose website-only — lower legal/detection risk); HOT-tier signal set approved (state-licensed / active platform sales / website+custom-domain email / 3+ source corroboration — NO Google API). Three consolidated pushblocks delivered + one build-fix pushblock. Git index corruption fixed (`Remove-Item .git\index; git reset`). VM mount truncation bug recurred repeatedly — all final files verified Windows-side.
-
-### S723 — eBay Push End-to-End + Blocked Queue Burn-Down (COMPLETE)
-
-Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in production: every Railway error log became the next dispatch. Burns down 5 Blocked Queue items (#326, #280, #322, #405 from prior, #422 P1-1) and ships full eBay publish-mode + shipping-cascade infrastructure.
-
-**Dev dispatches:**
-1. #326 eBay Comp Tiles — `getItemEbayComps` was returning the `ItemCompLookup` singleton row (one image), but `EbayCompTiles.slice(0,3)` needs an array. Rewrote endpoint to call live `fetchEbayPriceComps` + return top 3 listings with per-listing image/price/condition. Files: itemController.ts, useItemEbayComps.ts.
-2. #280 Condition Rating XP — guard required `!item.conditionGrade`, but `processRapidDraft` auto-fills it from AI before organizer ever saves, so guard always blocked legitimate awards. Removed null-check. Single line in itemController.ts.
-3. #422 OAuth Option B — full implementation: backend 409 `OAUTH_LINK_REQUIRED` on unauth email-match, new `/auth/oauth/link` endpoint behind `authenticate`, frontend OAuthBridge catches 409 → redirects to `/login?message=...` with amber info banner, next.config.js rewrite for new endpoint. Account takeover vector closed. Settings linked-accounts UI deferred (backend surface ready).
-4. eBay publish mode + shipping cascade — `Organizer.ebayDefaultPublishMode` (DRAFT|LIVE) + `ebayDefaultShippingPolicyId` schema + migration + backend whitelist + smart-pick logic + frontend settings UI (eBay tab) + sale-level split buttons (`Push draft` / `Push live`) + per-item override on edit-item. Migration deployed against Railway DB. 8 files.
-
-**Inline edits during iteration:**
-5. eBay aspect crash — `enums[0]` fallback was picking "Accordion" for "For Instrument" on MIDI cables (alphabetical). Rewrote `fillRequiredAspects` cascade: tag → keyword → neutral values (Universal/Other/Not Specified/N/A/Does Not Apply) → skip with warn log. Structured `[eBay Push Failed]` log + `[eBay AspectFill]` reason codes. EOF truncation in same file (~120 missing lines in `syncEndedListingsForOrganizer`) restored from git as bonus.
-6. eBay `frontendUrl is not defined` + `proxySecret is not defined` — both vars declared locally in other functions only; added at top of items loop in pushSaleToEbay.
-7. eBay smart-pick weight-gate — CALCULATED policy picked even when `packageWeightOz` was null (caused eBay error 25020); added `itemHasWeight` guard, CALCULATED skipped with warn log when no weight.
-
----
----
-
-## Next Session
-
-**QA ceiling rule:** Blocked Queue at 6 items — below 8-item threshold. Feature work is unblocked.
-
-**Patrick actions remaining:**
-1. Deploy email verification migration 20260515180000 (when ready):
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-   $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-   npx prisma migrate deploy
-   npx prisma generate
-   ```
-2. SES smoke test: trigger one transactional email (e.g., send a test notification or trigger a sale publish flow), verify inbox delivery. Then remove `resend` from package.json + pull RESEND_API_KEY/RESEND_FROM_EMAIL from Railway.
-3. MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831 still listed as unchecked in Patrick's checklist — confirm if this is set on Railway.
-
-**Next session priority order:**
-1. **SES smoke test + Resend cleanup** — Patrick action (see above). Once confirmed, close SES-MIGRATION from Blocked Queue.
-2. **Review page eBay dims QA** — UNVERIFIABLE S740: user2 is a shopper in production. Fix: update user2 role to ORGANIZER in Railway DB (psycopg2 UPDATE), then login → /organizer/add-items/[saleId]/review for the qa-dims sale. Correct route is /add-items/[saleId]/review NOT /organizer/review.
-3. **Voice strip weight/dims S734** — UNVERIFIABLE until real device test; keep in Blocked Queue.
-4. **#422 OAuth Option B** — needs real Google test account.
-5. **Feature work** — see roadmap recommendations below.
-
-**Roadmap feature work (S742+):**
-1. **Help Library (#377/#378)** — 75 guides + video scripts + /guides route. Use Sonnet. High SEO value.
-2. **Chrome QA burn-down** — Review page eBay dims (fix user2 role via psycopg2), OAuth Option B (needs real Google account), Voice strip (real device).
-3. **SES smoke test** — Patrick action above. Once confirmed, close SES-MIGRATION.
-4. SEO completion ✅ DONE S741 — 500 pages live.
+**Category 2 (3 states — bot-blocked 403):** AZ, GA, NH — all exit gracefully. AZ has no state 

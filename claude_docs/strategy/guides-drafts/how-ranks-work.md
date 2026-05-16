@@ -1,82 +1,106 @@
 ---
-title: How Ranks Work (Initiate to Grandmaster)
+title: "How ranks work (Initiate to Grandmaster)"
 slug: how-ranks-work
 audience: shopper
-format: W+E
+format: written+explainer
+priority: P1
 treatment: WRAPPER
-section: 4.11
-links-from: [Guild primer, profile rank badge]
+relatedGuides:
+  - earn-xp-for-free
+  - hunt-pass
+  - achievements
+linkFrom:
+  - Guild Primer (/shopper/guild-primer)
+  - Profile rank badge
+  - Rank-up notification
 ---
 
-# How Ranks Work (Initiate to Grandmaster)
+# How ranks work (Initiate to Grandmaster)
 
-FindA.Sale has six shopper ranks. As you earn XP by hunting, posting hauls, saving items, and referring friends, you climb from Initiate to Grandmaster. Your rank appears on your profile and unlocks small perks along the way.
+There are six shopper ranks on FindA.Sale, from Initiate to Grandmaster. Your rank reflects your activity history on the platform — how much you've hunted, posted, and engaged. It appears on your profile and affects a few things that matter.
 
-## The six ranks
+---
 
-**Initiate.** Your starting rank. You're learning the ropes.
+## What rank affects
 
-**Scout.** You've hit your first milestone. Organizers see you're active.
+- **Hold duration.** Higher ranks get longer hold windows on reserved items.
+- **Early Access window.** At certain ranks, your Early Access window extends beyond the base Hunt Pass window.
+- **Bonus XP multiplier.** Higher ranks earn a slightly larger XP bonus on actions.
+- **Leaderboard standing.** Your rank factors into monthly leaderboard placement.
 
-**Tracker.** Mid-level hunters. You're reliable and consistent.
+---
 
-**Ranger.** You know the terrain. You find good stuff regularly.
+## One important rule
 
-**Expedition Lead.** You're a serious hunter. Your posts and tips help the community.
+Your rank never goes down. Once you reach Scout, you stay Scout or higher. There is no decay, no reset, no way to lose a rank you've earned.
 
-**Grandmaster.** The top tier. Only the most active hunters reach this rank. You appear on the monthly leaderboard.
+---
 
-## What you get at each rank
+## Check the Guild Primer for everything else
 
-Your rank affects:
-- Whether organizers notice you (higher ranks get priority responses to questions)
-- Your place on the monthly leaderboard (Expedition Lead and Grandmaster only)
-- Eligibility for exclusive sales (some organizers offer rank-locked previews)
-- Your Hunt Pass bonus (slightly better deals at higher ranks)
+The [Guild Primer](/shopper/guild-primer) is the single source of truth for this cluster. It has:
 
-## How to rank up
+- Current XP thresholds for each rank (Initiate through Grandmaster)
+- The full perk breakdown per rank
+- The XP-to-rank conversion table
+- Which actions earn XP and how much
 
-You earn XP by:
-- Checking in at a sale
-- Saving an item to your wishlist
-- Posting a haul (photos of what you found)
-- Referring a friend who completes a purchase
-- Completing achievements
+Go there for the numbers. This guide covers the concept — the Guild Primer covers the mechanics.
 
-See the [Guild Primer](/shopper/guild-primer) for the exact XP amounts and thresholds for each rank.
+**[View the Guild Primer →](/shopper/guild-primer)**
 
-## Rank resets
+---
 
-Your rank does not reset. Once you hit Tracker, you stay Tracker or higher. You can't go down.
+## How to check your rank
+
+Open your profile. Your rank badge appears next to your name. Tap it to see your current XP, your progress to the next rank, and your full rank history.
+
+You can also see it at [/shopper/guild-primer](/shopper/guild-primer) alongside the threshold table.
+
+---
+
+## Common questions
+
+**Do ranks reset at the start of a new month?**
+No. Ranks are lifetime. Monthly leaderboard standings reset, but your rank stays where it is.
+
+**Can I see other shoppers' ranks?**
+Yes. Rank badges are visible on public profiles, haul posts, and in crew rosters.
+
+**Does Hunt Pass affect how fast I rank up?**
+Yes. Hunt Pass members earn bonus XP on their actions, which means faster rank progression. See the [Guild Primer](/shopper/guild-primer) for current multipliers.
+
+**What's the fastest way to rank up?**
+Post hauls, refer friends, and keep your login streak going. Those are the highest-XP actions available for free. See [Earning XP without spending](/guides/earn-xp-for-free) for a full list.
+
+---
 
 ## Related guides
 
-- [Guild Primer: XP, Ranks, and Achievements](/shopper/guild-primer)
-- [Earning XP Without Spending: 12 Ways](/guides/earning-xp-without-spending-12-ways)
-- [The Leaderboard and Monthly League](/guides/the-leaderboard-and-monthly-league)
+- [Earning XP without spending: 12 ways that cost nothing](/guides/earn-xp-for-free)
+- [Hunt Pass: what you get and whether it's worth it](/guides/hunt-pass)
+- [Achievements and the Hall of Fame](/guides/achievements)
 
 ---
 
 ## Explainer video script
 
-**SCENE 1: Profile card with rank badge (Initiate)**
-VO: "Every shopper on FindA.Sale starts as an Initiate. Your rank is just the beginning."
+*Format: 30-second vertical (9:16). VO only — no on-screen text needed.*
 
-**SCENE 2: Progression meter filling — Initiate to Scout to Tracker**
-VO: "As you hunt, post hauls, and refer friends, you earn XP. And XP means rank."
+---
 
-**SCENE 3: Six rank badges scrolling (Initiate → Scout → Tracker → Ranger → Expedition Lead → Grandmaster)**
-VO: "There are six ranks total. From Initiate all the way to Grandmaster."
+**[0:00–0:06]**
+*Shot: Profile card — rank badge reads "Initiate."*
+VO: "Every shopper starts as an Initiate. Your rank goes up from there."
 
-**SCENE 4: Ranger shopper's profile, noticing they're getting faster organizer replies**
-VO: "Higher ranks get small perks. Organizers respond faster to your questions. You unlock exclusive sales."
+**[0:07–0:14]**
+*Shot: Six rank badges scrolling — Initiate, Scout, Tracker, Ranger, Expedition Lead, Grandmaster.*
+VO: "There are six ranks. From Initiate all the way to Grandmaster. Each one unlocks better hold times, more XP, and more visibility."
 
-**SCENE 5: Grandmaster shopper on leaderboard**
-VO: "At Grandmaster? You're on the monthly leaderboard. The app recognizes you as a top hunter."
+**[0:15–0:22]**
+*Shot: Rank badge tapping open — XP bar filling, progress to next rank visible.*
+VO: "You climb by earning XP. Hunt, post hauls, refer friends. Check the Guild Primer for the exact thresholds."
 
-**SCENE 6: Shopper checking in at a sale, XP +10 notification**
-VO: "Every action earns XP. Checked in? Plus 10. Posted a haul? Plus 50. Referred a friend? Even bigger."
-
-**SCENE 7: Profile zooming out to show full rank history (never goes down)**
-VO: "And here's the thing: your rank never goes down. Once you're a Tracker, you stay Tracker or better."
-
+**[0:23–0:30]**
+*Shot: Rank badge — locked at Scout, not going down.*
+VO: "One rule: your rank never goes down. Once you earn it, you keep it."

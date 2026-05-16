@@ -1,70 +1,83 @@
 ---
-title: Yard Signs and QR Codes: Print, Place, Track
+title: "Yard signs and QR codes: print, place, and track"
 slug: yard-signs-and-qr-codes
 audience: organizer
 format: W
+priority: P2
 treatment: THIN
-section: 4.6
-links-from: /organizer/print-kit, /organizer/qr-codes
+relatedGuides:
+  - where-to-post-flyers
+  - promote-page
+  - brand-kit
+linkFrom:
+  - /organizer/print-kit
+  - /organizer/qr-codes
 ---
 
-# Yard Signs and QR Codes: Print, Place, Track
+A yard sign at the street corner sends shoppers to your driveway. A QR code on that sign sends them to your full listing before they even get out of the car. This guide covers where to get signs made, where to place them, and how to add a scannable QR code that tracks clicks in your dashboard.
 
-Yard signs are your most visible on-the-ground advertising. A sign at the end of your street or intersection can drive dozens of shoppers. Pair it with a QR code linking to your online catalog, and you can track exactly which sign brought each shopper in.
+For QR code basics — what they are and how to generate one — see /guide#qr-codes. This guide focuses on the physical sign side.
 
-## How it works
+---
 
-**Print and place yard signs.**
+## Getting signs printed
 
-1. Go to **Print Kit** → **Yard Signs**. Design a sign with your sale date, time, address, and any eye-catching phrase ("HUGE ESTATE SALE," "Everything Must Go").
-2. Download and print on cardstock or have a print shop produce vinyl signs (more durable for multi-day sales).
-3. Place signs at key intersections near your sale venue — especially where shoppers turn to find you.
+**Vistaprint** is the most common option. Search "yard sign" on their site. A 18x24 inch corrugated plastic sign runs $15–25 each. Turnaround is 5–7 days standard, 2–3 days with rush shipping. Order at least a week before your sale.
 
-**Add a QR code to the sign.**
+**Local print shops** are faster and easier to revise. Most can do corrugated plastic or foam core signs same-day or next-day. Call with your dimensions and file format (PDF or PNG at 300 DPI). Local shops are worth the slight price premium when timing is tight.
 
-1. The sign template includes an optional QR code field. The code links to your online catalog or a hold/contact form.
-2. When a shopper scans the QR code, they land on your sale page where they can browse, place holds, or get directions.
+**Foam core plus lamination** is the DIY option. Print your design at FedEx Office on full-sheet paper, mount it on foam core board (available at dollar stores), and laminate or cover with clear packing tape. Lasts 2–3 days in dry weather. Not great in rain.
 
-**Track which sign drove interest.**
+Standard yard sign size is 18x24 inches. Go bigger (24x36) if you are placing on a busy road where drivers see it at speed.
 
-Each sign can have a unique QR code (or the same code for all signs). When you generate analytics, you see how many scans came from your signs, which tells you which physical locations worked best.
+---
 
-## Where to place yard signs
+## Where to place signs
 
-**High-traffic intersections:** Place signs where shoppers will turn to reach your address. If your sale is on Maple Street, put a sign on the main road two blocks away pointing to Maple.
+**3 blocks out in each direction** from your sale address. Signs that far out catch people before they have already passed your turn.
 
-**Directional chain:** For larger sales, place signs leading into the neighborhood. First sign at major intersection: "Estate Sale This Way →" Second sign: "Estate Sale 2 blocks →" Third sign: Right at your address.
+**Street corners** at the nearest main road. This is your highest-value spot — drivers slowing for a light have time to read it.
 
-**Parking lot or entrance:** A large sign at the parking lot or house entrance confirms shoppers they've found the right place.
+**Driveway entrance** on the day of the sale. This is the confirmation sign — it tells people they found the right place.
 
-## QR code strategy
+**Arrow direction matters.** Point the arrow the direction a driver needs to turn or continue. A sign with an arrow pointing left when the sale is to the right is worse than no sign at all. Double-check before you drive away.
 
-**One code for all signs:** Simple. Everyone scans the same code, which lands on your sale catalog. You don't know which sign drove the traffic, but you know people are using the signs.
+Put signs out the evening before your sale starts. Pick them up the same day the sale ends. Leaving signs up after a sale is done frustrates shoppers and some municipalities will remove them after a set number of days.
 
-**Unique code per sign:** More work to generate and track, but data is rich. You learn "the sign at Oak and 5th brought 40 scans; the sign at Main and 2nd brought 15." Next time, invest more in high-performing locations.
+---
+
+## Adding a QR code to your sign
+
+1. Go to /organizer/qr-codes in your dashboard
+2. Your sale's QR code is already generated — tap **Download PNG**
+3. Send the PNG to your print shop when you order, or drop it into your sign design file
+4. Ask the print shop to place it in the lower right corner at 3 inches square minimum
+5. Include the short URL below the QR code as a fallback (printed below the image)
+
+Shoppers scan the QR code and land on your full FindA.Sale listing — photos, categories, dates, address, and anything else you have added.
+
+Your dashboard at /organizer/qr-codes shows the scan count. If one sign location is getting 10x more scans than another, that tells you where to put signs next time.
+
+---
 
 ## Common questions
 
-**Q: Can I reuse yard signs from a previous sale?**
-A: Yes. Edit the date and details, print new overlays or create new signs. Branded signs with your sale name are even more reusable.
+**Do I need a different QR code for each sign?**
 
-**Q: How far ahead of the sale should I post signs?**
-A: 3–5 days. Too early and shoppers forget. Too late and you lose last-minute walk-ins. For a Saturday sale, post Wednesday evening or Thursday morning.
+No. One QR code links to your sale listing. You can use the same code on every sign, flyer, and print card. The scan count in your dashboard reflects total scans across all uses.
 
-**Q: What if shoppers don't scan the QR code?**
-A: That's fine. The sign works as a traditional "Sale This Way" marker. The QR code is a bonus for tech-savvy shoppers. Either way, they find you.
+**How do I know if people are actually scanning?**
 
-**Q: Can I use the same QR code on flyers and yard signs?**
-A: Yes. Same code, same destination. But you won't be able to distinguish traffic sources (flyer vs. yard sign) from the data.
+Check /organizer/qr-codes after your sale. The scan count updates in real time. Compare scans to foot traffic to get a rough sense of which signs are pulling people in.
 
-**Q: How durable should my signs be?**
-A: Paper/cardstock works for one-day sales. Vinyl or plastic works for multi-day sales where weather matters. For reusable signs you'll use repeatedly, vinyl is worth the investment.
+**Can I reuse signs for future sales?**
 
-**Q: What if someone steals or damages a sign?**
-A: Post replacements or adjust location. For valuable signs, put them up the night before and take them down immediately after your sale.
+Corrugated plastic signs without specific dates on them can be reused. Generic "SALE THIS WAY →" signs work for any future event. Just update the QR code if you create a new sale listing.
+
+---
 
 ## Related guides
 
-- [Where to post flyers (and how to use the tear-off flyer)](/guides/where-to-post-flyers)
-- [The Promote page: Share your sale on 8 platforms](/guides/the-promote-page-share-your-sale-on-8-platforms)
-- [Send sale updates to followers](/guides/send-sale-updates-to-followers)
+- [Where to post flyers (and how to use the tear-off flyer)](where-to-post-flyers.md)
+- [The promote page: share your sale on 8 platforms](promote-page.md)
+- [Set up your brand kit (logo, colors, and storefront URL)](brand-kit.md)

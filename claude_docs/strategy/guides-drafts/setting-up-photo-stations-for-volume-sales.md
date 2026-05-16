@@ -42,7 +42,7 @@ Speed is the goal. You're capturing data, not making art.
 
 **Photographer A** can pre-stage the next 5 items while **Photographer B** is shooting, so there's no waiting.
 
-This setup can move 100 items through in under 30 minutes.
+This setup keeps the camera moving without waiting on item prep.
 
 ## Workflow for three or more people
 
@@ -68,11 +68,11 @@ The station manager can handle quality checks on the fly: "That photo is too dar
 
 **Estate sale (500+ items):** Set up three stations if you can. Each handles a different category or room. Total time: 2–3 hours for all items.
 
-**Yard sale (100–300 items):** One station outside. Natural daylight, pop-up tent for shade. Total time: 1–2 hours.
+**Yard sale (100–300 items):** One station outside. Natural daylight, pop-up tent for shade.
 
-**Flea market booth prep:** One station in-house before the event. Photograph all inventory the night before. Total time: 2–4 hours depending on count.
+**Flea market booth prep:** One station in-house before the event. Photograph all inventory the night before.
 
-**Consignment shop intake:** One permanent station with consistent lighting and background. Every item that comes in gets photographed here. Total time: 5–10 minutes per item.
+**Consignment shop intake:** One permanent station with consistent lighting and background. Every item that comes in gets photographed here.
 
 ## Troubleshooting
 

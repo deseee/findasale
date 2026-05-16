@@ -107,7 +107,7 @@ Place a hold or buy online
 
 **Use sticky label stock.** Office supply stores sell adhesive label sheets (Avery brand is common) in various sizes. Load them into your printer like regular paper.
 
-**Batch print before your sale.** Print all labels the night before or morning of. Labeling items takes time; pre-printing saves hours.
+**Batch print before your sale.** Print all labels the night before or morning of. Getting labels ready ahead of time keeps sale-day setup moving.
 
 **Consider a label printer.** If you run frequent sales, a dedicated label printer (thermal or inkjet) is faster than a regular printer and uses less space.
 
