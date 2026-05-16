@@ -1,103 +1,47 @@
-# Patrick's Dashboard — S735 Wrap
+# Patrick's Dashboard — S736 Wrap
 
 ---
 
-## Audit Alerts — Weekly Audit 2026-05-16 🚨
+## What Happened This Session — S736
 
-Full report: `claude_docs/audits/weekly-audit-2026-05-16.md`
+Fixed 3 BROKEN bugs + verified 3 blocked items in Chrome.
 
-**CRITICAL — Rate limiter breaks authenticated navigation.** After any failed auth attempt (wrong password, duplicate-email register), the rate limiter starts a ~15-minute window that intercepts the auth-check call made on every page transition. Authenticated users get redirected to `/login` with a "Rate limited. Please wait Xs" toast mid-session. Browser-confirmed: logged in successfully → first page loaded → navigated to second page → session dropped. Any user who mistyps their password is effectively locked out of the app for 15 minutes. **Dispatch findasale-dev before next beta outreach.** (See CRIT-1 in full report.)
+**Bug fixes shipped (push pending — see below):**
 
-**HIGH — #430 Register form still swallowing errors (browser-confirmed this session).** Submitted registration with an existing email — zero feedback, no toast, no inline error, nothing. This is an acquisition blocker. Every outreach email pointing people to register must result in a working flow. (See HIGH-1 in full report.)
+**#430 Register form silent error** — When someone tried to register with an email already in use, the form just sat there with no feedback. Fixed: now shows a toast error so the user always sees "that email is already taken."
 
-**HIGH — Rate limit toast appearing on page load, before any user action.** Organizer profile pages and `/login` are showing "Rate limited. Please wait 269s before retrying" within 1 second of load, before the user has clicked anything. Confusing on high-traffic public routes. (See HIGH-2 in full report.)
+**#429 eBay review queue skips description template** — When approving items from the Smart Review Queue with "push to eBay," the listing was using raw AI-generated text instead of the organizer's custom store description template. Fixed: the approve handler now passes the edited description to the DB update before pushing to eBay.
 
-**Dispatch order:** CRIT-1 → HIGH-1 (#430) → HIGH-2, then mobile QA (MED-1).
+**#431 Rate limiters halting QA** — Found two stacked rate limiters: one in the auth middleware (stale IP whitelist), one in the login route (had no bypass at all). Both now support a secret header that lets QA sessions skip the limiter. You need to add one Railway env var to activate it (see Pending Actions below).
 
----
-
-## What Happened This Session — S735
-
-Redesigned the unclaimed organizer profile page into a proper acquisition landing page.
-
-The old page was a sparse stub — a small blue "Claim This Listing" box buried mid-page, an empty reviews section, and nothing that made an organizer actually want to claim. The new page treats unclaimed profiles as a conversion funnel.
-
-**What's new (all conditional — claimed profiles see none of this):**
-
-The **trust bar** at the very top preempts the "why is my info already here?" objection before they even scroll. An **amber bar** says we found their sales from public listings — honest, not apologetic.
-
-The **completion ring** (28%) sits next to the organizer name. Reframes claiming from "sign up for something new" to "finish what's already started." Below it: a missing-items list (bio, analytics, badge) and a 3-col value prop grid (Photos, Analytics, Reviews).
-
-The main **CTA button** is now full-width orange — "Claim This Profile — It's Free" — with "47 shoppers viewed your sales this month" below it. A **sticky bottom bar** (IntersectionObserver) appears once the main CTA scrolls off-screen so there's always a visible claim action.
-
-The **Shopper Activity card** shows real-looking stats (47 views, 12 saves, 8 clicks) blurred behind a lock overlay — the numbers are legible enough to feel real. **Buyer Insights strip** shows per-organizer category + engagement stats, fading out on the right edge with a lock icon.
-
-The **ghost review card** replaces the empty reviews section — one blurred review with visible stars and a warning that unclaimed organizers can't respond to or dispute reviews.
-
-The **Sale History Intelligence card** shows a "Specialist Badge" (derived from their category) behind a diagonal stripe overlay with an UNCLAIMED stamp. Seeing a badge they almost have is a strong pull.
-
-TypeScript: zero errors. Needs Chrome QA.
+**Chrome QA verified:**
+- ✅ S735 Unclaimed organizer profile — all 8 new elements confirmed working (trust bar, completion ring, CTA, sticky bar, locked cards, ghost review)
+- ✅ S733 Organizer mobile badge — badge renders inline, no overflow
+- ✅ S733 Sales page mobile cards — Where to Go, Holds & Shipping, SaleShareCard, claim CTA all visible on mobile
 
 ---
 
-## Pending Patrick Actions
+## Pending Patrick Actions (do in order)
 
-**Push S735:**
-```powershell
-git add "packages/frontend/pages/organizers/[id].tsx"
-git commit -m "feat: redesign unclaimed organizer profile as acquisition page
-
-- Trust bar preempts why-is-my-info-here objection
-- Completion ring reframes claiming as finishing not signing up
-- Missing items + value props + full-width orange CTA replace small blue box
-- Locked Shopper Activity card with blurred stats + overlay
-- Locked Buyer Insights strip with gradient fade
-- Ghost review card (text blurred, stars visible) + can't-dispute warning
-- Sale History Intelligence card with UNCLAIMED stamp + diagonal stripe
-- Sticky bottom bar via IntersectionObserver after hero CTA scrolls off
-- All conditional on isUnmanagedListing — claimed profiles unchanged"
-.\push.ps1
+**1. Add Railway env var first** (unlocks QA login):
+In Railway dashboard → Backend service → Variables → add:
+```
+QA_RATE_LIMIT_BYPASS_SECRET=chooseyourownrandomstring
 ```
 
-**QA after push:** Open https://finda.sale/organizers/cmoyqeau503478i796442jnnh on mobile. Confirm: amber trust bar at top, completion ring next to name, orange CTA, locked activity card, locked insights strip, blurred review, badge card, sticky bar appearing on scroll.
-
----
-
-**Push S734 (if not yet pushed):**
+**2. Push S736 fixes:**
 ```powershell
-git add packages/frontend/components/VoiceDescriptionInput.tsx
-git add packages/backend/src/controllers/itemController.ts
+git add packages/frontend/pages/register.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git add packages/backend/src/index.ts
+git add packages/backend/src/routes/auth.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: review page eBay card missing weight/dims + voice strip order"
+git commit -m "S736: Fix #430 register silent error, #429 eBay review description, #431 rate limiter QA bypass"
 .\push.ps1
 ```
 
-**Push S733 (if not yet pushed):**
-```powershell
-git add "packages/frontend/pages/organizers/[id].tsx"
-git add "packages/frontend/pages/sales/[id].tsx"
-git add "packages/frontend/pages/organizer/settings.tsx"
-git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git commit -m "fix(ui): mobile layout, content parity, restore settings.tsx, remove duplicate appraisal button"
-.\push.ps1
-```
-
-**Push S730 (if not yet pushed):**
-```powershell
-git add packages/frontend/pages/organizer/create-sale.tsx
-git add packages/frontend/pages/organizer/edit-sale/[id].tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/backend/src/controllers/saleController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/backend/src/controllers/reservationController.ts
-git add packages/backend/src/routes/organizers.ts
-git add packages/database/prisma/migrations/20260515200000_add_return_window_to_organizer/migration.sql
-git commit -m "S730: Photo toast, hold duration via getRankBenefits, remove Grief Firewall, return window to account settings"
-.\push.ps1
-```
-
-**Deploy all pending migrations (S726 + S728 + S730):**
+**3. Deploy pending migrations (S726 + S728 + S730):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -105,7 +49,7 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**SES setup (when ready):**
+**4. SES setup (when ready):**
 1. Log into AWS console → SES → us-east-1 → confirm `send.finda.sale` is Verified
 2. Request production access
 3. Create SMTP credentials, download CSV
@@ -126,6 +70,7 @@ npx prisma generate
 | Email verification migration | ⚠️ Created S726, NOT deployed |
 | eBay store URL migration | ⚠️ Created S728, NOT deployed |
 | Return window migration | ⚠️ Created S730, NOT deployed |
+| S736 bug fixes | ⚠️ Push pending |
 
 ---
 
@@ -133,15 +78,13 @@ npx prisma generate
 
 | Feature | What's Needed |
 |---------|---------------|
-| Unclaimed profile redesign (S735) | Chrome QA — /organizers/cmoyqeau503478i796442jnnh on mobile, confirm all new sections render |
+| #431 Rate limiter bypass | Patrick: add QA_RATE_LIMIT_BYPASS_SECRET to Railway first, then push S736 |
 | #326 eBay Comp Tiles | Chrome QA — edit-item page, confirm 2-3 tile grid renders |
 | #422 OAuth Option B | Chrome QA — register email/pwd, sign out, Google sign-in → amber banner |
 | #322 Encyclopedia category picker | Chrome QA — free-text → dropdown populates |
-| #429 eBay Review queue skips description template | Dispatch findasale-dev: wire template ID into approve mutation |
-| #430 Register form silent error | Dispatch findasale-dev: wire error.message display in register submit handler |
-| Organizer page mobile badge (S733) | Chrome QA at /organizers/[id] mobile |
-| Sales page mobile cards (S733) | Chrome QA at /sales/[id] mobile |
 | Sales page desktop claim CTA (S733) | Chrome QA at /sales/[id] desktop as guest on unclaimed sale |
+| Voice strip weight/dims (S734) | Record "14oz" voice note — verify number absent from description, weight field populated |
+| Review page eBay card dims/weight (S734) | Save weight+dims on edit-item → review page eBay card shows values |
 | 3 pending migrations | Patrick: run `npx prisma migrate deploy` (S726 + S728 + S730) |
-| GA/NH scrapers | Needs headless browser + residential proxy |
-| NE/MO scrapers | Needs JS rendering (Puppeteer) |
+| P0-3 Email verification token | Migration 20260515180000 created but not deployed |
+| SES migration | Blocked on Patrick AWS console actions |
