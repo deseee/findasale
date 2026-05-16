@@ -2,7 +2,7 @@ import { buildEmail } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
 
 
-const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@finda.sale';
+const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
 const siteUrl = process.env.FRONTEND_URL || 'https://finda.sale';
 
 /**

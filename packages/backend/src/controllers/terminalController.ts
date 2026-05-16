@@ -376,7 +376,7 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       try {
         const { buildEmail } = await import('../services/emailTemplateService');
         
-        const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@finda.sale';
+        const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@send.finda.sale';
 
         // Build receipt with all items
         const itemsList = purchases
@@ -615,7 +615,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
       try {
         const { buildEmail } = await import('../services/emailTemplateService');
         
-        const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@finda.sale';
+        const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@send.finda.sale';
 
         const itemsList = items
           .map(i => `<li>${i.label ?? 'Item'}: $${i.amount.toFixed(2)}</li>`)

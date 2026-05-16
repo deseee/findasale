@@ -354,7 +354,7 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
           accentColor: '#10b981',
         });
         await emailService.emails.send({
-          from: process.env.SES_FROM_EMAIL || 'invoices@finda.sale',
+          from: process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale',
           to: buyerEmail,
           subject: `Payment link: $${amount.toFixed(2)}`,
           html,
@@ -558,7 +558,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       try {
         const { buildEmail } = await import('../services/emailTemplateService');
         
-        const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@finda.sale';
+        const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale';
 
         // Build item list for email
         let itemsList = `<strong>${reservation.item.title}</strong> - $${reservation.item.price?.toFixed(2)}`;
@@ -647,7 +647,7 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
 
     const { buildEmail } = await import('../services/emailTemplateService');
     
-    const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@finda.sale';
+    const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale';
 
     const amountStr = amount ? `$${Number(amount).toFixed(2)}` : 'your items';
     const html = buildEmail({
@@ -1143,7 +1143,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
     setImmediate(async () => {
       try {
         if (true) {
-          const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@finda.sale';
+          const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale';
           const expiryTime = new Date(expiresAt).toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit',

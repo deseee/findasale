@@ -200,7 +200,7 @@ export const joinPool = async (req: AuthRequest, res: Response) => {
           const poolAmount = (pool.targetAmount / 100).toFixed(2);
 
           await emailService.emails.send({
-            from: process.env.SES_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
+            from: process.env.SES_FROM_EMAIL || 'FindA.Sale <noreply@send.finda.sale>',
             to: orgEmail,
             subject: `Buying Pool Filled: ${itemTitle}`,
             html: `
@@ -322,7 +322,7 @@ export const cancelPool = async (req: AuthRequest, res: Response) => {
       for (const participant of pool.participants) {
         if (participant.user?.email) {
           await emailService.emails.send({
-            from: process.env.SES_FROM_EMAIL || 'FindA.Sale <noreply@finda.sale>',
+            from: process.env.SES_FROM_EMAIL || 'FindA.Sale <noreply@send.finda.sale>',
             to: participant.user.email,
             subject: `Buying Pool Cancelled: ${pool.item.title}`,
             html: `

@@ -45,7 +45,7 @@ const sendReceiptEmail = async (purchase: {
   discountAmount?: number;
 }) => {
   
-  const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@finda.sale';
+  const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@send.finda.sale';
   const historyUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`;
   try {
     // Platform Safety #97: Post-Purchase Confirmation Email with Premium Breakdown & Enrichment
@@ -1582,7 +1582,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // Fire async job: send "Tier Lapsed" email
       setImmediate(() => {
         if (organizer.user?.email) {
-          const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@finda.sale';
+          const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
           emailService.emails.send({
             from: fromEmail,
             to: organizer.user.email,
@@ -1622,7 +1622,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // Fire async job: send "Payment Failed" email with retry link
       setImmediate(() => {
         if (organizer.user?.email) {
-          const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@finda.sale';
+          const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
           const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
           emailService.emails.send({
             from: fromEmail,
@@ -1965,7 +1965,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           // Send confirmation emails (fire-and-forget)
           setImmediate(() => {
             if (true) {
-              const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@finda.sale';
+              const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale';
               const itemList = bundledItems.length > 1
                 ? `${bundledItems.length} items from ${holdInvoice.sale!.title}`
                 : bundledItems[0]?.title;
