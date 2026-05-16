@@ -1,13 +1,12 @@
 // Message Notification Email Service
 // Sends email notifications when users receive new messages
 
-import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { buildEmail } from './emailTemplateService';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
 interface NewMessageNotification {
   recipientEmail: string;
@@ -42,7 +41,7 @@ export async function sendNewMessageEmail(notification: NewMessageNotification):
       footerNote: 'Reply directly in the message thread',
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: notification.recipientEmail,
       subject: `New message from ${notification.senderName}`,

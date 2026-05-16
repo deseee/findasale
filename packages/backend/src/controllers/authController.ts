@@ -11,6 +11,7 @@ import { awardXp, XP_AWARDS } from '../services/xpService';
 import { referralTrancheService } from '../services/referralTrancheService';
 import { checkRegistrationLimit, recordRegistration } from '../lib/registrationRateLimiter';
 import { recordRegistration as recordFraudRegistration } from '../lib/fraudDetectionService';
+import { emailService } from '../lib/emailService';
 
 // SECURITY FIX P0: OAuth redirect URI allowlist to prevent open redirect attacks
 const ALLOWED_REDIRECT_URIS = () => {
@@ -284,12 +285,10 @@ export const register = async (req: Request, res: Response) => {
     // Security: Send email verification link (non-blocking)
     if (user.emailVerificationToken) {
       try {
-        const { Resend } = await import('resend');
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        const fromEmail = process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale';
+        const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@finda.sale';
         const verifyLink = `${process.env.FRONTEND_URL || 'https://finda.sale'}/verify-email?token=${user.emailVerificationToken}`;
 
-        await resend.emails.send({
+        await emailService.emails.send({
           from: fromEmail,
           to: user.email,
           subject: 'Verify Your FindA.Sale Email Address',
@@ -357,6 +356,11 @@ export const register = async (req: Request, res: Response) => {
 
         // Check for referral badge (non-blocking, after transaction)
         await handleReferralBadge(referrer.id);
+
+        // Create tranche record so subsequent trigger calls (recordLogin, recordSaleVisit, etc.) have a target
+        referralTrancheService.createTrancheRecord(referrer.id, user.id).catch((err) =>
+          console.error('[referral] Failed to create tranche record:', err)
+        );
       }
     }
 
@@ -724,11 +728,9 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
     // Send password reset email (non-blocking)
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
     try {
-      const { Resend } = await import('resend');
-      const resend = new Resend(process.env.RESEND_API_KEY);
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale';
+      const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@finda.sale';
 
-      await resend.emails.send({
+      await emailService.emails.send({
         from: fromEmail,
         to: user.email,
         subject: 'Reset Your FindA.Sale Password',

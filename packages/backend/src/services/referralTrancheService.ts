@@ -26,13 +26,17 @@ export const referralTrancheService = {
     referrerId: string,
     referredUserId: string
   ): Promise<ReferralTranche> {
-    return prisma.referralTranche.create({
-      data: {
+    // Use upsert for idempotency — safe to call multiple times (e.g., retry on transaction failure)
+    return prisma.referralTranche.upsert({
+      where: {
+        referrerId_referredUserId: { referrerId, referredUserId },
+      },
+      create: {
         referrerId,
         referredUserId,
-        createdAt: new Date(),
         lastActivityAt: new Date(),
       },
+      update: {}, // No-op if already exists
     });
   },
 

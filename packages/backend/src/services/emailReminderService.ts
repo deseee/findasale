@@ -1,10 +1,9 @@
 import { prisma } from '../index';
-import { Resend } from 'resend';
 import twilio from 'twilio';
 import { sendPushNotification } from '../utils/webpush';
 import { buildSaleDayReminderEmail } from './emailTemplateService';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Lazy-loaded Twilio client
 let _twilioClient: any = null;
@@ -115,8 +114,8 @@ export const sendReminderEmail = async (reminder: ReminderEmail): Promise<void> 
     try {
       // EM2: Retry up to 3 times with exponential backoff on transient Resend failures
       await withRetry(() =>
-        resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale',
+        emailService.emails.send({
+          from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
           to: reminder.to,
           subject,
           html,

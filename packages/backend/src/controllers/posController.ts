@@ -18,6 +18,7 @@ import { getStripe } from '../utils/stripe';
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { emailService } from '../lib/emailService';
 
 const stripe = () => getStripe();
 
@@ -340,11 +341,10 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
     });
 
     // Send payment link via email if buyer email provided
-    if (buyerEmail && process.env.RESEND_API_KEY) {
+    if (true) {
       try {
-        const { Resend } = await import('resend');
         const { buildEmail } = await import('../services/emailTemplateService');
-        const resend = new Resend(process.env.RESEND_API_KEY);
+        
         const html = buildEmail({
           preheader: `Your payment link for $${amount.toFixed(2)}`,
           headline: `Your Payment Link`,
@@ -353,8 +353,8 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
           ctaUrl: paymentLinkUrl,
           accentColor: '#10b981',
         });
-        await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale',
+        await emailService.emails.send({
+          from: process.env.SES_FROM_EMAIL || 'invoices@finda.sale',
           to: buyerEmail,
           subject: `Payment link: $${amount.toFixed(2)}`,
           html,
@@ -554,12 +554,11 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     });
 
     // Send email (Resend integration — basic version)
-    if (reservation.user.email && process.env.RESEND_API_KEY) {
+    if (true) {
       try {
-        const { Resend } = await import('resend');
         const { buildEmail } = await import('../services/emailTemplateService');
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale';
+        
+        const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@finda.sale';
 
         // Build item list for email
         let itemsList = `<strong>${reservation.item.title}</strong> - $${reservation.item.price?.toFixed(2)}`;
@@ -579,7 +578,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
           accentColor: '#10b981',
         });
 
-        await resend.emails.send({
+        await emailService.emails.send({
           from: fromEmail,
           to: reservation.user.email,
           subject: `Invoice: ${reservation.item.title}`,
@@ -646,14 +645,9 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'paymentLinkUrl and buyerEmail required' });
     }
 
-    if (!process.env.RESEND_API_KEY) {
-      return res.status(503).json({ message: 'Email service not configured' });
-    }
-
-    const { Resend } = await import('resend');
     const { buildEmail } = await import('../services/emailTemplateService');
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale';
+    
+    const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@finda.sale';
 
     const amountStr = amount ? `$${Number(amount).toFixed(2)}` : 'your items';
     const html = buildEmail({
@@ -665,7 +659,7 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
       accentColor: '#10b981',
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: fromEmail,
       to: buyerEmail,
       subject: `Your checkout is ready — ${amountStr}`,
@@ -1148,9 +1142,8 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
     // Send invoice email (fire-and-forget)
     setImmediate(async () => {
       try {
-        const resend = require('resend').Resend ? new (require('resend').Resend)(process.env.RESEND_API_KEY) : null;
-        if (resend) {
-          const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale';
+        if (true) {
+          const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@finda.sale';
           const expiryTime = new Date(expiresAt).toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit',
@@ -1188,7 +1181,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
             ${cautionCopy}
           `;
 
-          await resend.emails.send({
+          await emailService.emails.send({
             from: fromEmail,
             to: shopper.email,
             subject: `Invoice for your purchase`,

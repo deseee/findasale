@@ -1,18 +1,11 @@
 import cron from 'node-cron';
 import { getStripe } from '../utils/stripe';
-import { Resend } from 'resend';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from '../services/xpService'; // Explorer's Guild XP awards
+import { emailService } from '../lib/emailService';
 const stripe = () => getStripe();
 
-let _resend: any = null;
-const getResendClient = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    try { _resend = new Resend(process.env.RESEND_API_KEY); } catch { _resend = null; }
-  }
-  return _resend;
-};
 
 export const endAuctions = async () => {
   try {
@@ -164,12 +157,11 @@ export const endAuctions = async () => {
 
         // Email the winner with a payment link
         if (result.stripePaymentIntentId && result.highestBid.user?.email) {
-          const resend = getResendClient();
-          if (resend) {
-            const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@finda.sale';
+          if (true) {
+            const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@finda.sale';
             const payUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`;
             try {
-              await resend.emails.send({
+              await emailService.emails.send({
                 from: fromEmail,
                 to: result.highestBid.user.email,
                 subject: `You won: ${result.item.title}`,

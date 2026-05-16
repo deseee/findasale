@@ -799,6 +799,18 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       updateData.price = price ? parseFloat(price) : null;
       fieldsBeingEdited.push('price');
     }
+    if (category !== undefined) {
+      updateData.category = category || null;
+      fieldsBeingEdited.push('category');
+    }
+    if (condition !== undefined) {
+      updateData.condition = condition || null;
+      fieldsBeingEdited.push('condition');
+    }
+    if (brand !== undefined) {
+      // brand is also set later in the eBay parity block — skip here to avoid conflict
+      fieldsBeingEdited.push('brand');
+    }
 
     // Feature #57: Rarity is always auto-assigned from price — organizers cannot override it
     if (price !== undefined) {
@@ -2037,10 +2049,17 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     };
 
     // Apply optional organizer edits from request body
-    if (title !== undefined) updateData.title = title;
-    if (price !== undefined) updateData.price = price !== null ? parseFloat(price) : null;
-    if (category !== undefined) updateData.category = category;
-    if (condition !== undefined) updateData.condition = condition;
+    // D-006: Track which fields organizer explicitly edits at publish time
+    const publishEditedFields: string[] = [];
+    if (title !== undefined) { updateData.title = title; publishEditedFields.push('title'); }
+    if (price !== undefined) { updateData.price = price !== null ? parseFloat(price) : null; publishEditedFields.push('price'); }
+    if (category !== undefined) { updateData.category = category; publishEditedFields.push('category'); }
+    if (condition !== undefined) { updateData.condition = condition; publishEditedFields.push('condition'); }
+    if (publishEditedFields.length > 0) {
+      // Fetch current userEditedFields to merge (item was re-fetched above as fullItem — but we need userEditedFields)
+      const existingEdited = (await prisma.item.findUnique({ where: { id: itemId }, select: { userEditedFields: true } }))?.userEditedFields ?? [];
+      updateData.userEditedFields = Array.from(new Set([...existingEdited, ...publishEditedFields]));
+    }
 
     // Hunt Pass Feature: Set 6-hour early access embargo for LEGENDARY items
     // Fetch full item to check rarity

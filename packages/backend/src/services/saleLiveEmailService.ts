@@ -8,7 +8,6 @@
  * Sender: "The FindA.Sale Team" — never a personal name.
  */
 
-import { Resend } from 'resend';
 import {
   baseWrapper,
   buildHero,
@@ -16,9 +15,9 @@ import {
   buildSpacer,
   EMAIL_TOKENS as T,
 } from './emailTemplateService';
+import { emailService } from '../lib/emailService';
 
-const resend     = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'hello@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'hello@send.finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
 /**
@@ -98,7 +97,7 @@ export async function sendSaleLiveEmail(
   });
 
   try {
-    await resend.emails.send({
+    await emailService.emails.send({
       from:    FROM_EMAIL,
       to:      organizer.email,
       subject: `Your sale is live — share it now`,

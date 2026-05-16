@@ -4,10 +4,10 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { Resend } from 'resend';
 import crypto from 'crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
+import { emailService } from '../lib/emailService';
 
 // Auth validation schemas
 const changePasswordSchema = z.object({
@@ -27,7 +27,7 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
-// C2: Tight rate limit specifically for password reset — prevents email enumeration abuse and account takeover attempts
+// C2: Tight rate limit specifically for password reset
 const forgotPasswordLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 5,
@@ -55,8 +55,7 @@ const verifyEmailLimiter = rateLimit({
   message: { error: 'Too many verification requests. Please try again in an hour.' },
 });
 
-// L1: Login rate limiter — 15 failed attempts per 15 minutes per IP (P0-S2: COPPA compliance)
-// skipSuccessfulRequests: only failed logins count — legitimate multi-device users are never blocked.
+// L1: Login rate limiter
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 15,
@@ -66,7 +65,7 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many failed login attempts. Please try again in 15 minutes.' },
 });
 
-// L2: Register rate limiter — 5 attempts per hour per IP (P0-S2: COPPA compliance)
+// L2: Register rate limiter
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 5,
@@ -75,19 +74,13 @@ const registerLimiter = rateLimit({
   message: { error: 'Too many registration attempts.' },
 });
 
-let _resend: any = null;
-const getResend = () => {
-  if (!_resend && process.env.RESEND_API_KEY) _resend = new Resend(process.env.RESEND_API_KEY);
-  return _resend;
-};
-
 const router = Router();
 
 router.post('/register', registerLimiter, register);
 router.post('/login', loginLimiter, login);
-router.post('/oauth', registerLimiter, oauthLogin); // Phase 31: social login token exchange
-router.post('/redeem-invite', authenticate, redeemInvite); // Redeem beta invite for OAuth users
-router.post('/verify-email', verifyEmailLimiter, verifyEmail); // Security: Email verification gate (P0)
+router.post('/oauth', registerLimiter, oauthLogin);
+router.post('/redeem-invite', authenticate, redeemInvite);
+router.post('/verify-email', verifyEmailLimiter, verifyEmail);
 router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res: Response) => {
   // P0 Security Fix Item 5: Email verification resend endpoint with enumeration prevention
   try {
@@ -100,33 +93,28 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
 
     const user = await prisma.user.findUnique({ where: { email } });
 
-    // Generic response regardless of whether email exists (prevents enumeration)
-    const genericResponse = { message: 'If that email exists and hasn\'t been verified, a verification link has been sent.' };
+    const genericResponse = { message: "If that email exists and hasn't been verified, a verification link has been sent." };
 
     if (!user) {
       return res.json(genericResponse);
     }
 
-    // If email is already verified, also return generic response
     if (user.emailVerified) {
       return res.json(genericResponse);
     }
 
-    // Send verification email
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    // Regenerate token to invalidate previous links
     const newToken = crypto.randomBytes(32).toString('hex');
     await prisma.user.update({
       where: { id: user.id },
       data: { emailVerificationToken: newToken }
     });
     const verifyUrl = `${frontendUrl}/verify-email?token=${newToken}`;
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
-    const resend = getResend();
+    const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
-    if (resend && user.emailVerificationToken) {
+    if (user.emailVerificationToken) {
       try {
-        await resend.emails.send({
+        await emailService.emails.send({
           from: fromEmail,
           to: email,
           subject: 'Verify your FindA.Sale email address',
@@ -136,12 +124,12 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
               <p>Click the button below to verify your email address and complete your FindA.Sale account setup.</p>
               <a href="${verifyUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin:16px 0;">Verify Email</a>
               <p style="color:#6b7280;font-size:13px;">This link will expire in 24 hours.</p>
-              <p style="color:#6b7280;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+              <p style="color:#6b7280;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
             </div>
           `,
         });
       } catch (emailError) {
-        console.error('[Email Verification Resend] Failed to send email:', emailError);
+        console.error('[Email Verification] Failed to send email:', emailError);
       }
     }
 
@@ -151,10 +139,10 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
     res.status(500).json({ message: 'Server error processing your request' });
   }
 });
-router.post('/oauth-verify-age', authenticate, oauthVerifyAge); // P0-L1: COPPA compliance — OAuth age verification
-router.post('/oauth/link', authenticate, linkOAuthProvider); // Roadmap #422: authenticated OAuth provider linking (replaces silent auto-link in /oauth)
+router.post('/oauth-verify-age', authenticate, oauthVerifyAge);
+router.post('/oauth/link', authenticate, linkOAuthProvider);
 
-// Change password — requires current password for verification
+// Change password
 router.post('/change-password', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const validatedData = changePasswordSchema.parse(req.body);
@@ -171,13 +159,11 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
     }
 
     const hashed = await bcrypt.hash(newPassword, 10);
-    // P0 Fix 4: Increment tokenVersion to invalidate all old JWTs
     await prisma.user.update({
       where: { id: req.user.id },
       data: { password: hashed, tokenVersion: { increment: 1 } }
     });
 
-    // P0 Security Fix Item 3: Clear access and refresh cookies on password change
     res.clearCookie('accessToken', { httpOnly: true, secure: true, sameSite: 'strict', path: '/' });
     res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'strict', path: '/' });
 
@@ -191,14 +177,13 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
   }
 });
 
-// POST /api/auth/forgot-password — send a reset link
+// POST /api/auth/forgot-password
 router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res: Response) => {
   try {
     const validatedData = forgotPasswordSchema.parse(req.body);
     const { email } = validatedData;
 
     const user = await prisma.user.findUnique({ where: { email } });
-    // Always respond with 200 to prevent email enumeration
     if (!user) return res.json({ message: 'If that email exists, a reset link has been sent.' });
 
     const token = crypto.randomBytes(32).toString('hex');
@@ -209,17 +194,15 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
       data: { resetToken: token, resetTokenExpiry: expiry },
     });
 
-    // P0 Security Fix Item 6: Include IP and User-Agent context in password reset email
     const clientIp = req.ip || (req.headers['x-forwarded-for'] as string)?.split(',')[0] || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
-    const resend = getResend();
+    const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
-    if (resend) {
-      await resend.emails.send({
+    try {
+      await emailService.emails.send({
         from: fromEmail,
         to: email,
         subject: 'Reset your FindA.Sale password',
@@ -228,15 +211,15 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
             <h2 style="color:#2563eb;">Reset your password</h2>
             <p>We received a request to reset your password. Click the button below to choose a new one. This link expires in 1 hour.</p>
             <a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin:16px 0;">Reset Password</a>
-            <p style="color:#6b7280;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+            <p style="color:#6b7280;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
             <p style="color:#9ca3af;font-size:12px;">Link expires: ${expiry.toUTCString()}</p>
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;">
-            <p style="color:#9ca3af;font-size:11px;">For your security, this request was made from IP <code>${clientIp}</code> using <code>${userAgent.substring(0, 60)}...</code>. If this wasn't you, you can ignore this email and your password will remain unchanged.</p>
+            <p style="color:#9ca3af;font-size:11px;">For your security, this request was made from IP <code>${clientIp}</code> using <code>${userAgent.substring(0, 60)}...</code>. If this was not you, you can ignore this email and your password will remain unchanged.</p>
           </div>
         `,
       });
-    } else {
-      console.warn(`[Password Reset] Reset email not sent for ${email} — RESEND_API_KEY not configured.`);
+    } catch (emailErr) {
+      console.warn(`[Password Reset] Reset email not sent for ${email} — SMTP not configured.`);
     }
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
@@ -249,7 +232,7 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
   }
 });
 
-// POST /api/auth/reset-password — verify token and set new password (with rate limiting)
+// POST /api/auth/reset-password
 router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: Response) => {
   try {
     const validatedData = resetPasswordSchema.parse(req.body);
@@ -261,7 +244,6 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
     }
 
     const hashed = await bcrypt.hash(newPassword, 10);
-    // P0 Fix 4: Increment tokenVersion to invalidate all old JWTs
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -282,15 +264,14 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
   }
 });
 
-// P0 Security Fix: POST /auth/logout — clears both accessToken and refreshToken cookies
+// P0 Security Fix: POST /auth/logout
 router.post('/logout', (req: AuthRequest, res: Response) => {
   res.clearCookie('accessToken', { httpOnly: true, secure: true, sameSite: 'lax', path: '/' });
-  res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'lax', path: '/' }); // P0 FIX: match new path '/'
+  res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'lax', path: '/' });
   res.json({ message: 'Logged out' });
 });
 
-// P0 Security Fix: POST /auth/refresh — issues new access token using refresh token
-// SECURITY FIX S692: Read fresh role/roles from DB — never re-bake stale JWT roles into new token
+// P0 Security Fix: POST /auth/refresh
 router.post('/refresh', async (req: AuthRequest, res: Response) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
@@ -305,7 +286,6 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
 
     const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || jwtSecret) as any;
 
-    // Always read role from DB so role changes take effect on next refresh cycle
     const freshUser = await prisma.user.findUnique({ where: { id: payload.id }, select: { role: true, roles: true } });
     if (!freshUser) return res.status(401).json({ error: 'User not found' });
 
@@ -317,7 +297,7 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
         roles: freshUser.roles || [freshUser.role],
       },
       jwtSecret,
-      { expiresIn: '1h' } // S708: bumped from 15m — must match login/oauth/refresh TTL
+      { expiresIn: '1h' }
     );
 
     res.cookie('accessToken', newAccessToken, {
@@ -325,26 +305,21 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
       secure: true,
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 1000, // 1 hour (S708)
+      maxAge: 60 * 60 * 1000,
     });
 
     res.json({ token: newAccessToken });
   } catch (error) {
-    // Refresh token invalid or expired — clear both cookies and return 401
     res.clearCookie('accessToken', { path: '/' });
     res.clearCookie('refreshToken', { path: '/' });
     return res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 });
 
-// P0 Security Fix: GET /auth/me — returns current user from authenticated session (cookie or header)
-// P1 Fix (S689): Include organizerTier so AuthContext.initAuth correctly restores tier on refresh
+// P0 Security Fix: GET /auth/me
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
 
-  // Load organizer tier so PRO/TEAMS features work correctly after page refresh
-  // Note: subscriptionLapsed is NOT on the Organizer model — it's computed by checkTierLapse
-  // middleware (via UserRoleSubscription) and attached to req.user.subscriptionLapsed
   const organizer = await prisma.organizer.findUnique({
     where: { userId: req.user.id },
     select: { subscriptionTier: true, subscriptionStatus: true },

@@ -8,11 +8,10 @@
  * Simple, non-blocking fire-and-forget emails via Resend.
  */
 
-import { Resend } from 'resend';
 import { buildEmail } from './emailTemplateService';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'alerts@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'alerts@finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
 interface HoldPlacedAlertData {
@@ -67,7 +66,7 @@ export const sendHoldPlacedAlert = async (data: HoldPlacedAlertData): Promise<vo
       accentColor: '#8FB897', // sage-green
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: data.organizerEmail,
       subject: `New hold on ${data.itemTitle}`,
@@ -105,7 +104,7 @@ export const sendHoldPlacedToShopper = async (data: HoldPlacedShopperData): Prom
       accentColor: '#8FB897', // sage-green
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: data.shopperEmail,
       subject: `Your hold on "${data.itemTitle}" is confirmed`,
@@ -135,7 +134,7 @@ export const sendItemSoldAlert = async (data: ItemSoldAlertData): Promise<void> 
       accentColor: '#10b981', // success green
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: data.organizerEmail,
       subject: `${data.itemTitle} sold for $${data.price.toFixed(2)}`,
@@ -213,7 +212,7 @@ export const sendHoldStatusToShopper = async (data: HoldStatusShopperData): Prom
       accentColor,
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: data.shopperEmail,
       subject,

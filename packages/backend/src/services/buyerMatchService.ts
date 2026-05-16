@@ -2,13 +2,12 @@
 // Matches newly published sales against shoppers' interest profiles
 // and sends targeted email notifications to interested buyers
 
-import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { createNotification } from './notificationService';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
 interface MatchedBuyer {
   userId: string;
@@ -340,7 +339,7 @@ export async function notifyMatchedBuyers(saleId: string): Promise<void> {
         const unsubToken = await generateUnsubscribeToken(buyer.userId, 'newSales');
         const html = buildMatchNotificationHtml(buyer.name || 'Shopper', sale, topCategories, unsubToken);
 
-        await resend.emails.send({
+        await emailService.emails.send({
           from: FROM_EMAIL,
           to: buyer.email,
           subject: `New sale you might like: ${sale.title}`,

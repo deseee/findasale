@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { Resend } from 'resend';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
+import { emailService } from '../lib/emailService';
 
 const router = Router();
 
@@ -13,13 +13,6 @@ const contactFormSchema = z.object({
   message: z.string().min(1, 'Message is required').max(5000, 'Message must be 5000 characters or less'),
 });
 
-let _resend: any = null;
-const getResend = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    _resend = new Resend(process.env.RESEND_API_KEY);
-  }
-  return _resend;
-};
 
 // Rate limiter for contact form — 5 submissions per 15 minutes
 const contactLimiter = rateLimit({
@@ -37,12 +30,11 @@ router.post('/', contactLimiter, async (req: Request, res: Response) => {
     const { name, email, subject, message } = validatedData;
 
     const supportEmail = process.env.SUPPORT_EMAIL || 'support@finda.sale';
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
-    const resend = getResend();
+    const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
-    if (resend) {
+    if (true) {
       // Forward to support inbox
-      await resend.emails.send({
+      await emailService.emails.send({
         from: fromEmail,
         to: supportEmail,
         replyTo: email,
@@ -61,7 +53,7 @@ router.post('/', contactLimiter, async (req: Request, res: Response) => {
       });
 
       // Send confirmation to submitter
-      await resend.emails.send({
+      await emailService.emails.send({
         from: fromEmail,
         to: email,
         subject: 'We received your message – FindA.Sale',

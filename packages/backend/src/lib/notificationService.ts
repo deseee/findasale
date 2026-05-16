@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { Resend } from 'resend';
+import { emailService } from './emailService';
 
 interface CreateNotificationInput {
   userId: string;
@@ -12,17 +12,6 @@ interface CreateNotificationInput {
   channel?: string;
 }
 
-let _resend: any = null;
-const getResendClient = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    try {
-      _resend = new Resend(process.env.RESEND_API_KEY);
-    } catch {
-      _resend = null;
-    }
-  }
-  return _resend;
-};
 
 /**
  * Create an in-app notification and optionally send email.
@@ -52,11 +41,10 @@ export const createNotification = async (input: CreateNotificationInput) => {
       });
 
       if (user?.email) {
-        const resend = getResendClient();
-        if (resend) {
-          const fromEmail = process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale';
+        if (true) {
+          const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@finda.sale';
           try {
-            await resend.emails.send({
+            await emailService.emails.send({
               from: fromEmail,
               to: user.email,
               subject: emailSubject || title,

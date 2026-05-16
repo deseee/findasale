@@ -1,12 +1,11 @@
 // Organizer Analytics Weekly Email — sends performance digest to organizers
 // Contains: item sales, revenue, follower growth, top categories
 
-import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
+import { emailService } from '../lib/emailService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
 export interface SaleSummary {
   id: string;
@@ -286,7 +285,7 @@ async function sendOrganizerDigestEmail(stats: OrganizerWeeklyStats): Promise<vo
   const html = buildOrganizerDigestHtml(stats, unsubToken);
 
   try {
-    await resend.emails.send({
+    await emailService.emails.send({
       from: FROM_EMAIL,
       to: stats.organizerEmail,
       subject: `Your Weekly Performance Summary – ${stats.totalItemsSold} items sold`,

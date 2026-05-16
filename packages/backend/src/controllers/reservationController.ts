@@ -9,6 +9,7 @@ import { checkForFraud, calculateConfidenceScore } from '../services/fraudDetect
 import { getRankBenefits, calculateRankFromXp } from '../utils/rankUtils';
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature #397: Crew Invasion flash discount
+import { emailService } from '../lib/emailService';
 
 const DEFAULT_HOLD_MINUTES = 30; // Feature #121: fallback hold duration in minutes
 const EN_ROUTE_RADIUS_M = 16093; // 10 miles in meters — en route grace zone
@@ -1086,15 +1087,15 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     // Send checkout email to shopper (fire-and-forget)
     setImmediate(async () => {
       try {
-        const resend = require('resend').Resend ? new (require('resend').Resend)(process.env.RESEND_API_KEY) : null;
+        
         if (resend) {
           const expiryTime = new Date(expiresAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
           const itemList = bundledItemIds.length > 1
             ? `${bundledItemIds.length} items from ${reservation.item.sale!.title}`
             : `${allShopperHolds[0]?.item.title} from ${reservation.item.sale!.title}`;
 
-          await resend.emails.send({
-            from: process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale',
+          await emailService.emails.send({
+            from: process.env.SES_FROM_EMAIL || 'invoices@finda.sale',
             to: reservation.user.email,
             subject: `Complete your purchase: ${itemList}`,
             html: `

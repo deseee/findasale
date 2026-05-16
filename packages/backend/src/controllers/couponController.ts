@@ -7,19 +7,12 @@
 
 import crypto from 'crypto';
 import { Response } from 'express';
-import { Resend } from 'resend';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { spendXp, XP_SINKS, getSpendableXp } from '../services/xpService';
 import { buildEmail } from '../services/emailTemplateService';
+import { emailService } from '../lib/emailService';
 
-let _resend: any = null;
-const getResendClient = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    try { _resend = new Resend(process.env.RESEND_API_KEY); } catch { _resend = null; }
-  }
-  return _resend;
-};
 
 /** Generate an 8-char uppercase hex code, e.g. "A3F2C891" */
 function generateCouponCode(): string {

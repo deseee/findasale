@@ -1,17 +1,10 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { Resend } from 'resend';
+import { emailService } from '../lib/emailService';
 
-let _resend: any = null;
-const getResendClient = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    try { _resend = new Resend(process.env.RESEND_API_KEY); } catch { _resend = null; }
-  }
-  return _resend;
-};
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
 // POST /api/sale-waitlist/:saleId/join
 export const joinSaleWaitlist = async (req: AuthRequest, res: Response) => {
@@ -89,13 +82,11 @@ export const notifySaleWaitlist = async (req: AuthRequest, res: Response) => {
       where: { saleId, notified: false },
       include: { user: true },
     });
-
-    const resend = getResendClient();
     let notified = 0;
     for (const entry of waitlistEntries) {
-      if (resend && entry.user.email) {
+      if (entry.user.email) {
         try {
-          await resend.emails.send({
+          await emailService.emails.send({
             from: FROM_EMAIL,
             to: entry.user.email,
             subject: `New items added to ${sale.title}`,

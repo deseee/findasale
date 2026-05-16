@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { getStripe, getTestStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
-import { Resend } from 'resend';
 import { createNotification as createNotificationEmail } from '../services/notificationService';
 import { createNotification } from '../lib/notificationService';
 import { prisma } from '../lib/prisma';
@@ -27,17 +26,11 @@ import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature #XXX: Shopify Cross-Listing
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
 import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService'; // P2-2: Refund cap + logging
+import { emailService } from '../lib/emailService';
 
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
-let _resend: any = null;
-const getResendClient = () => {
-  if (!_resend && process.env.RESEND_API_KEY) {
-    try { _resend = new Resend(process.env.RESEND_API_KEY); } catch { _resend = null; }
-  }
-  return _resend;
-};
 
 const sendReceiptEmail = async (purchase: {
   id: string;
@@ -51,9 +44,8 @@ const sendReceiptEmail = async (purchase: {
   platformFeeAmount?: number;
   discountAmount?: number;
 }) => {
-  const resend = getResendClient();
-  if (!resend) return;
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'receipts@finda.sale';
+  
+  const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@finda.sale';
   const historyUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`;
   try {
     // Platform Safety #97: Post-Purchase Confirmation Email with Premium Breakdown & Enrichment
@@ -109,7 +101,7 @@ const sendReceiptEmail = async (purchase: {
       accentColor: '#10b981',
     });
 
-    await resend.emails.send({
+    await emailService.emails.send({
       from: fromEmail,
       to: purchase.user.email,
       subject: `Receipt: ${purchase.item?.title ?? 'Your purchase'} - Transaction ID: ${purchase.id.slice(0, 8)}`,
@@ -1589,10 +1581,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
       // Fire async job: send "Tier Lapsed" email
       setImmediate(() => {
-        const resend = getResendClient();
-        if (resend && organizer.user?.email) {
-          const fromEmail = process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale';
-          resend.emails.send({
+        if (organizer.user?.email) {
+          const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@finda.sale';
+          emailService.emails.send({
             from: fromEmail,
             to: organizer.user.email,
             subject: 'Your FindA.Sale PRO subscription has been canceled',
@@ -1630,11 +1621,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
       // Fire async job: send "Payment Failed" email with retry link
       setImmediate(() => {
-        const resend = getResendClient();
-        if (resend && organizer.user?.email) {
-          const fromEmail = process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale';
+        if (organizer.user?.email) {
+          const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@finda.sale';
           const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
-          resend.emails.send({
+          emailService.emails.send({
             from: fromEmail,
             to: organizer.user.email,
             subject: 'Action required: Your FindA.Sale payment failed',
@@ -1974,9 +1964,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
           // Send confirmation emails (fire-and-forget)
           setImmediate(() => {
-            const resend = getResendClient();
-            if (resend) {
-              const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale';
+            if (true) {
+              const fromEmail = process.env.SES_FROM_EMAIL || 'invoices@finda.sale';
               const itemList = bundledItems.length > 1
                 ? `${bundledItems.length} items from ${holdInvoice.sale!.title}`
                 : bundledItems[0]?.title;
@@ -1984,7 +1973,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               const platformFee = (holdInvoice.platformFeeAmount / 100).toFixed(2);
 
               // Email to shopper
-              resend.emails.send({
+              emailService.emails.send({
                 from: fromEmail,
                 to: holdInvoice.shopper.email,
                 subject: `Payment confirmed for ${itemList}`,
@@ -1998,7 +1987,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               }).catch((err: unknown) => console.warn('[hold-invoice] Failed to send shopper email:', err));
 
               // Email to organizer
-              resend.emails.send({
+              emailService.emails.send({
                 from: fromEmail,
                 to: holdInvoice.organizer.email,
                 subject: `Payment received: ${itemList}`,
@@ -2262,13 +2251,12 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     }
 
     // Send confirmation email to shopper
-    const resend = getResendClient();
-    if (resend && purchase.user?.email) {
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'support@finda.sale';
+    if (purchase.user?.email) {
+      const fromEmail = process.env.SES_FROM_EMAIL || 'support@finda.sale';
       const itemTitle = purchase.item?.title || 'your purchase';
       const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
 
-      resend.emails.send({
+      emailService.emails.send({
         from: fromEmail,
         to: purchase.user.email,
         subject: 'Refund processed for your FindA.Sale purchase',
