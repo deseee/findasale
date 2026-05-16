@@ -70,7 +70,7 @@ export async function generateValuation(itemId: string) {
         },
         include: { entry: true },
         take: 3,
-        orderBy: { createdAt: 'desc' }
+        orderBy: { updatedAt: 'desc' }
       });
 
       if (benchmarks.length > 0) {

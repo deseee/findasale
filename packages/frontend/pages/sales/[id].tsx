@@ -1040,7 +1040,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                       )}
                       <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8 flex flex-col gap-2">
                         <div className="flex items-center gap-2">
-                          <FavoriteButton itemId={undefined as any} saleId={sale.id} variant="icon" size="md" />
+                          <FavoriteButton saleId={sale.id} variant="icon" size="md" />
                           <div className="flex-1 min-w-0"><RemindMeButton saleId={sale.id} saleName={sale.title} disabled={false} /></div>
                           <div className="flex-1 min-w-0"><SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} /></div>
                         </div>
@@ -1073,7 +1073,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                       <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8 flex flex-col gap-2">
                         {/* Compact action row — save, remind, share, calendar */}
                         <div className="flex items-center gap-2">
-                          <FavoriteButton itemId={undefined as any} saleId={sale.id} variant="icon" size="md" />
+                          <FavoriteButton saleId={sale.id} variant="icon" size="md" />
                           <div className="flex-1 min-w-0"><RemindMeButton saleId={sale.id} saleName={sale.title} disabled={saleHasEnded} /></div>
                           <div className="flex-1 min-w-0"><SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} /></div>
                           {!saleHasEnded && (

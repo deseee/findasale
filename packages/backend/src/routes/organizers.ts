@@ -323,7 +323,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address, returnWindowHours } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -366,7 +366,10 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(ebayDefaultShippingPolicyId !== undefined && { ebayDefaultShippingPolicyId }),
         ...(ebayStoreUrl !== undefined && { ebayStoreUrl }),
         ...(address !== undefined && { address }),
-        ...(returnWindowHours !== undefined && { returnWindowHours }),
+        // returnWindowHours is a per-Sale field (Sale model) — not an Organizer field.
+        // Removed from Prisma update to prevent P2025 crash. Frontend still sends it
+        // (Zod allows it as optional); it is silently ignored here until an
+        // Organizer-level default field is added to schema.prisma.
       },
     });
 

@@ -401,6 +401,10 @@ const authLimiter = rateLimit({
     const email = req.body?.email?.toLowerCase();
     if (email && email.endsWith('@example.com')) return true;
 
+    // Bypass rate limit for session check — auth/me fires on every SSR page navigation
+    // and should never be subject to login-attempt throttling
+    if (req.path === '/me') return true;
+
     return false;
   },
   store: createRateLimitStore(),
