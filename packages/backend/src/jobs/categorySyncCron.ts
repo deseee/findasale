@@ -61,10 +61,9 @@ async function syncCategory(slug: string, config: { display: string; ebayIds: st
 
   const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
   const proxySecret = process.env.EBAY_PROXY_SECRET;
-  // eBay Browse API filter syntax: categoryIds:{id1,id2} — comma-separated, braces pre-encoded.
-  // Pipe (%7C) is Finding API syntax and returns empty results from Browse API.
+  // eBay Browse API uses category_ids as a direct query param (comma-separated), not filter syntax.
   const ids = config.ebayIds.join(',');
-  const apiPath = `/buy/browse/v1/item_summary/search?filter=categoryIds%3A%7B${ids}%7D&sort=newlyListed&limit=12`;
+  const apiPath = `/buy/browse/v1/item_summary/search?category_ids=${ids}&sort=newlyListed&limit=12`;
 
   try {
     const res = await fetch(
