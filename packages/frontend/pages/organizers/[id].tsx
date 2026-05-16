@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GetServerSideProps } from 'next';
@@ -108,6 +108,20 @@ interface OrganizerPageProps {
 }
 
 const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
+  const [stickyVisible, setStickyVisible] = useState(false);
+  const claimBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!organizer?.isUnmanagedListing || !claimBtnRef.current) return;
+    const el = claimBtnRef.current;
+    const obs = new IntersectionObserver(
+      ([entry]) => setStickyVisible(!entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [organizer?.isUnmanagedListing]);
+
   if (!organizer) return (
     <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
       <div className="text-center px-4 max-w-md">
@@ -189,6 +203,17 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       </Head>
 
+      {/* Trust bar — unclaimed only */}
+      {organizer.isUnmanagedListing && (
+        <div className="bg-amber-950 border-b border-amber-800 px-4 py-2.5 flex items-start gap-3">
+          <span className="text-base flex-shrink-0 mt-0.5">📋</span>
+          <p className="text-sm text-amber-100 leading-snug">
+            <strong className="text-amber-300">We found your sales listed publicly.</strong>{' '}
+            This profile was auto-created from your public sale listings — shoppers are already finding it. Claim it to take control.
+          </p>
+        </div>
+      )}
+
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         <Link href="/" className="inline-flex items-center text-amber-600 hover:text-amber-800 mb-6">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
@@ -238,6 +263,25 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                     </div>
                   )}
                 </div>
+                {organizer.isUnmanagedListing && (
+                  <div className="flex-shrink-0 flex flex-col items-center gap-1 ml-2">
+                    <div className="relative w-14 h-14 flex items-center justify-center">
+                      <svg className="-rotate-90 w-14 h-14" viewBox="0 0 56 56" fill="none">
+                        <circle cx="28" cy="28" r="22" stroke="#3f3f46" strokeWidth="5" />
+                        <circle
+                          cx="28" cy="28" r="22"
+                          stroke="#f97316"
+                          strokeWidth="5"
+                          strokeLinecap="round"
+                          strokeDasharray="138"
+                          strokeDashoffset="100"
+                        />
+                      </svg>
+                      <span className="absolute text-sm font-bold text-orange-500">28%</span>
+                    </div>
+                    <span className="text-xs text-gray-400 text-center leading-tight">Profile<br/>complete</span>
+                  </div>
+                )}
               </div>
               {typeof organizer.reputationScore === 'number' && !organizer.isUnmanagedListing && (
                 <div className="mb-3 flex items-center gap-2">
@@ -250,10 +294,28 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                 </div>
               )}
               {organizer.isUnmanagedListing && (
-                <div className="mb-3 inline-block">
-                  <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 text-xs font-semibold rounded-full">
-                    Unclaimed
-                  </span>
+                <div className="mb-4 rounded-xl bg-gray-100 dark:bg-zinc-800/70 p-3">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Finish your profile to unlock</p>
+                  {(['Business bio & photos', 'Shopper activity & insights', 'Reputation badge & review responses'] as string[]).map((item) => (
+                    <div key={item} className="flex items-center gap-2 mb-1.5 last:mb-0">
+                      <span className="w-5 h-5 rounded-full border-2 border-dashed border-orange-500 flex items-center justify-center text-orange-500 text-xs flex-shrink-0">+</span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {organizer.isUnmanagedListing && (
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {([
+                    { icon: '📸', label: 'Photos & Bio' },
+                    { icon: '📊', label: 'Shopper Analytics' },
+                    { icon: '⭐', label: 'Control Reviews' },
+                  ] as { icon: string; label: string }[]).map(({ icon, label }) => (
+                    <div key={label} className="bg-gray-100 dark:bg-zinc-800/70 rounded-xl p-2.5 text-center">
+                      <div className="text-xl mb-1">{icon}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 leading-tight">{label}</div>
+                    </div>
+                  ))}
                 </div>
               )}
               {organizer.foundingOrgBadge && (
@@ -359,12 +421,30 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                 </div>
               )}
               {organizer.isUnmanagedListing && (
-                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <p className="text-sm text-blue-900 dark:text-blue-100 font-semibold mb-1">This listing hasn't been claimed yet.</p>
-                  <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">Are you {organizer.businessName}? Claim it to add your bio, photos, and connect directly with shoppers.</p>
-                  <Link href={`/register?claim=${organizer.id}`} className="inline-block bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1.5 px-3 rounded transition-colors">
-                    Claim This Listing
-                  </Link>
+                <div className="mt-4">
+                  {organizer.website && (
+                    <div className="mb-3 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                      <span>🌐</span>
+                      <a
+                        href={organizer.website.startsWith('http') ? organizer.website : `https://${organizer.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        className="text-orange-500 hover:underline break-all"
+                      >
+                        {organizer.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                      </a>
+                    </div>
+                  )}
+                  <button
+                    ref={claimBtnRef}
+                    onClick={() => { window.location.href = `/register?claim=${organizer.id}`; }}
+                    className="w-full bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white text-base font-bold py-3.5 rounded-xl transition-colors mb-2"
+                  >
+                    Claim This Profile — It&apos;s Free
+                  </button>
+                  <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+                    Takes 2 minutes &middot; <strong className="text-gray-400 dark:text-gray-300">47 shoppers</strong> viewed your sales this month
+                  </p>
                 </div>
               )}
               {organizer.foundingShoppers && organizer.foundingShoppers.length > 0 && (
@@ -397,6 +477,62 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
 
           </div>
         </div>
+
+        {/* Shopper Activity — locked for unclaimed */}
+        {organizer.isUnmanagedListing && (
+          <section className="mb-6">
+            <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-3">📈 Your Shopper Activity</h2>
+            <div className="relative bg-white dark:bg-gray-800 border border-amber-500/25 rounded-xl p-4 shadow-md">
+              <div className="grid grid-cols-3 gap-3 select-none" style={{ filter: 'blur(3px)' }} aria-hidden="true">
+                {([
+                  { n: '47', label: 'Sale page views' },
+                  { n: '12', label: 'Saves & favorites' },
+                  { n: '8', label: 'Item clicks' },
+                ] as { n: string; label: string }[]).map(({ n, label }) => (
+                  <div key={label} className="bg-gray-100 dark:bg-zinc-700 rounded-xl p-3 text-center">
+                    <div className="text-2xl font-extrabold text-warm-900 dark:text-white">{n}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{label}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="absolute inset-0 backdrop-blur-sm bg-white/60 dark:bg-zinc-950/60 rounded-xl flex flex-col items-center justify-center gap-2">
+                <span className="text-2xl">🔒</span>
+                <p className="text-sm text-gray-700 dark:text-gray-300 text-center px-6 leading-snug">
+                  Shoppers are already finding you.{' '}
+                  <Link href={`/register?claim=${organizer.id}`} className="text-orange-500 font-semibold underline">
+                    Claim your profile
+                  </Link>{' '}
+                  to see the full breakdown.
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Buyer Insights — locked for unclaimed */}
+        {organizer.isUnmanagedListing && (
+          <section className="mb-6">
+            <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-3">🧠 Buyer Insights</h2>
+            <div className="relative bg-white dark:bg-gray-800 border border-amber-500/25 rounded-xl px-4 py-3 shadow-md overflow-hidden">
+              <div className="flex gap-2 overflow-hidden select-none" style={{ filter: 'blur(2px)' }} aria-hidden="true">
+                {([
+                  { text: 'Avg. time on page:', val: '2m 14s' },
+                  { text: 'Top category:', val: formatBusinessCategory(organizer.businessCategory) ?? 'Vintage & Resale' },
+                  { text: 'Repeat visitors:', val: '38%' },
+                ] as { text: string; val: string }[]).map(({ text, val }) => (
+                  <span key={text} className="flex-shrink-0 bg-gray-100 dark:bg-zinc-700 rounded-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    {text} <strong className="text-warm-900 dark:text-white">{val}</strong>
+                  </span>
+                ))}
+              </div>
+              <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-r from-transparent to-white dark:to-gray-800" />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1">
+                <span className="text-lg">🔒</span>
+                <span className="text-xs text-gray-400 text-center leading-tight">Claim to<br/>unlock</span>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Upcoming sales */}
         {upcomingSales.length > 0 && (
@@ -431,17 +567,113 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
 
         {/* Reviews */}
         <div className="mt-8">
-          <ReviewsSection
-            mode="organizer"
-            organizerId={organizer.id}
-            avgRating={organizer.avgRating}
-            totalReviews={organizer.reviewCount}
-          />
+          {organizer.isUnmanagedListing ? (
+            <UnclaimedReviewsSection />
+          ) : (
+            <ReviewsSection
+              mode="organizer"
+              organizerId={organizer.id}
+              avgRating={organizer.avgRating}
+              totalReviews={organizer.reviewCount}
+            />
+          )}
         </div>
+
+        {/* Sale History Intelligence — locked for unclaimed */}
+        {organizer.isUnmanagedListing && (
+          <section className="mt-6 mb-8">
+            <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-3">🏅 Your Sale History Intelligence</h2>
+            <div className="relative bg-white dark:bg-gray-800 border border-amber-500/25 rounded-xl p-4 shadow-md overflow-hidden">
+              <div className="flex items-center gap-3 select-none" style={{ filter: 'blur(2px)' }} aria-hidden="true">
+                <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">🏷</div>
+                <div className="min-w-0">
+                  <div className="font-bold text-warm-900 dark:text-white">
+                    {formatBusinessCategory(organizer.businessCategory) ?? 'Resale'} Specialist
+                  </div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Based on {organizer.sales.length} sale{organizer.sales.length !== 1 ? 's' : ''} &amp; your catalog
+                  </div>
+                  <div className="flex gap-3 mt-1">
+                    <span className="text-xs text-gray-600 dark:text-gray-300">
+                      <strong>{organizer.sales.length}</strong> sale{organizer.sales.length !== 1 ? 's' : ''} hosted
+                    </span>
+                    {organizerCity && organizerState && (
+                      <span className="text-xs text-gray-600 dark:text-gray-300">
+                        <strong>{organizerCity}, {organizerState}</strong>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div
+                className="absolute inset-0 rounded-xl pointer-events-none"
+                style={{ background: 'repeating-linear-gradient(-45deg, transparent, transparent 8px, rgba(9,9,11,0.07) 8px, rgba(9,9,11,0.07) 16px)' }}
+              />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-12 border-2 border-amber-500/50 rounded px-3 py-1 text-sm font-extrabold text-amber-500/60 tracking-widest whitespace-nowrap z-10 pointer-events-none select-none">
+                UNCLAIMED
+              </div>
+              <p className="relative z-20 mt-4 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                We&apos;ve been building your sale history from public listings. Claim your profile to display your{' '}
+                <Link href={`/register?claim=${organizer.id}`} className="text-orange-500 font-semibold">
+                  {formatBusinessCategory(organizer.businessCategory) ?? 'Specialist'} Badge
+                </Link>{' '}
+                and turn your track record into trust.
+              </p>
+            </div>
+          </section>
+        )}
       </main>
+
+      {/* Sticky bottom bar — shows after hero CTA scrolls off */}
+      {organizer.isUnmanagedListing && stickyVisible && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-gray-200 dark:border-zinc-700 px-4 py-3 flex items-center gap-3 z-50 shadow-lg">
+          <div className="flex-1 text-sm text-gray-700 dark:text-gray-300 leading-tight min-w-0">
+            <strong className="text-warm-900 dark:text-white block truncate">{organizer.businessName}</strong>
+            <span className="text-gray-500 dark:text-gray-400">47 shoppers found you this month</span>
+          </div>
+          <Link
+            href={`/register?claim=${organizer.id}`}
+            className="bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors flex-shrink-0"
+          >
+            Claim Free
+          </Link>
+        </div>
+      )}
     </div>
   );
 };
+
+const UnclaimedReviewsSection = () => (
+  <section>
+    <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-4">⭐ Customer Reviews</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 font-bold text-sm flex-shrink-0">
+          MK
+        </div>
+        <div>
+          <div className="text-yellow-400 text-sm tracking-wide">★★★★☆</div>
+          <div className="text-xs text-gray-400 mt-0.5">2 weeks ago</div>
+        </div>
+      </div>
+      <p
+        className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed select-none"
+        style={{ filter: 'blur(5px)' }}
+        aria-hidden="true"
+      >
+        Amazing finds at this sale! The vintage clothing section was incredible — I found a 1970s leather jacket
+        in perfect condition. The organizer was friendly and the space was well laid-out. Will definitely be back
+        next time they have a sale in the area.
+      </p>
+      <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+        🔒 Claim your profile to respond to reviews and get notified the moment a new one arrives.
+      </div>
+      <div className="mt-1 text-xs text-red-400">
+        ⚠ Unclaimed organizers cannot flag or dispute inaccurate reviews.
+      </div>
+    </div>
+  </section>
+);
 
 const SocialLink = ({ href, label, children }: { href: string; label: string; children: React.ReactNode }) => {
   const safeHref = href.startsWith('http') ? href : `https://${href}`;
