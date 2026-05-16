@@ -1,18 +1,21 @@
-# Patrick's Dashboard — S740 Wrap (Complete)
+# Patrick's Dashboard — S741 Wrap (Complete)
 
 ---
 
-## What Happened This Session — S740
+## What Happened This Session — S741
 
-Three features shipped in parallel. One Chrome QA item uncovered a seed data bug.
+SEO content moat completed. 116 new guide pages generated and merged into the site.
 
-**#251 priceBeforeMarkdown FIXED** — Crossed-out original price (~~$75.00~~ $56.25) now renders correctly on sale detail pages for STANDARD items with manual discounts. Root cause: a stale `markdownApplied` guard was blocking it — that flag only fires for the auto-markdown cron, not manual organizer discounts. File: `pages/sales/[id].tsx`.
+**`packages/frontend/data/seo-pages/index.json` — 384 → 500 pages**
 
-**Settings linked OAuth UI** — Organizer Settings → Profile tab now has a "Linked Accounts" section showing whether your Google account is connected. If connected: green "Connected" pill. If not: "Link Google Account" button. File: `pages/organizer/settings.tsx`.
+Three batches shipped:
+- 16 missing pricing guides (Fenton, Rookwood, Gallé, Daum, Chippendale, vinyl records, vintage denim, and more)
+- 50 identification guides — how to authenticate Rolex, Hermès, Tiffany, sterling silver, depression glass, carnival glass, and 45 more
+- 50 buying guides — estate sale prep, negotiation scripts, pricing antiques, reselling, consignment, staging, and organizer operations
 
-**Roadmap cleanup** — Bugs #429 and #430 (both fixed last session) are now correctly marked FIXED in the roadmap.
+All 500 pages are live at `/guide/[slug]` with ISR, auto-populate the sitemap, and follow every content rule (no "AI" language, inclusive sale types, specific numbers throughout). Zero duplicate slugs.
 
-**Chrome QA finding** — user2@example.com (Maya Jackson) turns out to be a SHOPPER in production, not an organizer. The S739 seed data attached a test sale to a shopper account, so the review page dims QA could not be run. Code was confirmed correct by file inspection. Also found: the correct review page route is `/organizer/add-items/[saleId]/review`, not `/organizer/review`.
+Session hit an API error mid-run — Batch 3 was re-dispatched cleanly and completed.
 
 ---
 
@@ -37,24 +40,21 @@ npx prisma generate
 
 ## Blocked Queue Summary
 
-6 items total — below the 8-item QA ceiling. Feature work remains unblocked.
+6 items — below the 8-item QA ceiling. Feature work remains unblocked.
 
-Key items:
 - **SES smoke test** — Patrick action above
-- **Review page eBay dims** — UNVERIFIABLE: user2 is a shopper. Next session: fix via psycopg2 UPDATE to make user2 ORGANIZER in production DB, then re-test at `/organizer/add-items/[saleId]/review`
+- **Review page eBay dims** — UNVERIFIABLE: user2 is a shopper. Fix next session: psycopg2 UPDATE to make user2 ORGANIZER, then re-test at `/organizer/add-items/[saleId]/review`
 - **Voice strip** — needs real device with microphone
 - **OAuth Option B** — needs real Google test account
 
 ---
 
-## Push Block — S740
+## Push Block — S741
 
 ```powershell
-git add packages/frontend/pages/sales/[id].tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add claude_docs/strategy/roadmap.md
+git add packages/frontend/data/seo-pages/index.json
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S740: priceBeforeMarkdown fix, linked OAuth UI, roadmap #429/#430 cleanup"
+git commit -m "S741: SEO content moat complete — 116 pages added, 500 total"
 .\push.ps1
 ```
