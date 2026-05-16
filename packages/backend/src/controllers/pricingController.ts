@@ -5,6 +5,7 @@
 
 import { Request, Response } from 'express';
 import { estimatePrice, PricingRequest, PricingResult } from '../services/pricingEngine';
+import { prisma } from '../lib/prisma';
 
 /**
  * POST /api/pricing/estimate
@@ -42,7 +43,6 @@ export async function estimatePriceController(req: Request, res: Response): Prom
  */
 export async function listSourcesController(_req: Request, res: Response): Promise<void> {
   try {
-    const prisma = require('@findasale/database').default;
     const sources = await prisma.pricingSourceConfig.findMany();
 
     const response = {
@@ -76,7 +76,6 @@ export async function updateSourceController(req: Request, res: Response): Promi
     const { sourceId } = req.params;
     const { enabled, weight } = req.body;
 
-    const prisma = require('@findasale/database').default;
     const source = await prisma.pricingSourceConfig.update({
       where: { sourceId },
       data: {
