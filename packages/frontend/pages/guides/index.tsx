@@ -9,6 +9,12 @@ interface GuidesIndexProps {
   shopper: GuideEntry[];
 }
 
+// Next.js cannot serialize `undefined` — replace with null before returning props
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitize<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj, (_k, v) => (v === undefined ? null : v)));
+}
+
 export const getStaticProps: GetStaticProps<GuidesIndexProps> = async () => {
   const sorted = [...guides].sort((a, b) => a.priority - b.priority);
   const organizer = sorted.filter(
@@ -18,7 +24,7 @@ export const getStaticProps: GetStaticProps<GuidesIndexProps> = async () => {
     (g) => g.audience === 'shopper' || g.audience === 'both'
   );
   return {
-    props: { organizer, shopper },
+    props: sanitize({ organizer, shopper }),
     revalidate: 86400,
   };
 };

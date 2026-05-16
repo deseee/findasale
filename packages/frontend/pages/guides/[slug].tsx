@@ -14,6 +14,12 @@ export const getStaticPaths: GetStaticPaths = async () => {
   return { paths, fallback: 'blocking' };
 };
 
+// Next.js cannot serialize `undefined` — replace with null before returning props
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitize<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj, (_k, v) => (v === undefined ? null : v)));
+}
+
 export const getStaticProps: GetStaticProps<GuidePageProps> = async ({ params }) => {
   const slug = typeof params?.slug === 'string' ? params.slug : '';
   const guide = getGuideBySlug(slug);
@@ -27,7 +33,7 @@ export const getStaticProps: GetStaticProps<GuidePageProps> = async ({ params })
     .filter((g): g is GuideEntry => g !== undefined);
 
   return {
-    props: { guide, relatedGuides },
+    props: sanitize({ guide, relatedGuides }),
     revalidate: 86400,
   };
 };
