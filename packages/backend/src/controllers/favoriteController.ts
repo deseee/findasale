@@ -132,3 +132,67 @@ export const getItemFavoriteStatus = async (req: AuthRequest, res: Response) => 
     res.status(500).json({ message: 'Server error while fetching favorite status' });
   }
 };
+
+export const toggleSaleFavorite = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { id: saleId } = req.params;
+
+    const existingFavorite = await prisma.favorite.findUnique({
+      where: {
+        userId_saleId: {
+          userId: req.user.id,
+          saleId: saleId,
+        },
+      },
+    });
+
+    if (existingFavorite) {
+      await prisma.favorite.deleteMany({
+        where: {
+          userId: req.user.id,
+          saleId: saleId,
+        },
+      });
+      res.json({ message: 'Sale removed from favorites', isFavorited: false });
+    } else {
+      await prisma.favorite.create({
+        data: {
+          userId: req.user.id,
+          saleId: saleId,
+        },
+      });
+      res.json({ message: 'Sale added to favorites', isFavorited: true });
+    }
+  } catch (error) {
+    console.error('Sale favorite toggle error:', error);
+    res.status(500).json({ message: 'Server error while toggling sale favorite' });
+  }
+};
+
+export const getSaleFavoriteStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { id: saleId } = req.params;
+
+    const favorite = await prisma.favorite.findUnique({
+      where: {
+        userId_saleId: {
+          userId: req.user.id,
+          saleId: saleId,
+        },
+      },
+    });
+
+    res.json({ isFavorited: !!favorite });
+  } catch (error) {
+    console.error('Sale favorite status error:', error);
+    res.status(500).json({ message: 'Server error while fetching sale favorite status' });
+  }
+};

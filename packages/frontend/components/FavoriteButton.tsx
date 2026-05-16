@@ -20,8 +20,8 @@ import { useToast } from './ToastContext';
 import api from '../lib/api';
 
 interface FavoriteButtonProps {
-  itemId: string;
-  saleId?: string; // Optional: for recording SAVE ripples
+  itemId?: string; // Optional when favoriting a sale directly (no item context)
+  saleId?: string; // Used for sale-level favorites and SAVE ripples
   label?: string;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'icon' | 'button';
@@ -44,14 +44,20 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
 
   // Fetch initial favorite status on mount
   useEffect(() => {
-    if (!user || !itemId) {
+    const endpoint = itemId
+      ? `/favorites/item/${itemId}`
+      : saleId
+      ? `/favorites/sale/${saleId}`
+      : null;
+
+    if (!user || !endpoint) {
       setIsInitialized(true);
       return;
     }
 
     const fetchStatus = async () => {
       try {
-        const res = await api.get(`/favorites/item/${itemId}`);
+        const res = await api.get(endpoint);
         setIsFavorited(res.data.isFavorited);
       } catch (err) {
         console.error('Failed to fetch favorite status:', err);
@@ -61,7 +67,7 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
     };
 
     fetchStatus();
-  }, [user, itemId]);
+  }, [user, itemId, saleId]);
 
   const handleToggle = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -81,8 +87,11 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
       // Optimistic UI update
       setIsFavorited(!isFavorited);
 
-      // Toggle favorite
-      const res = await api.post(`/favorites/item/${itemId}`, {});
+      // Toggle favorite — use sale endpoint when no itemId
+      const toggleEndpoint = itemId
+        ? `/favorites/item/${itemId}`
+        : `/favorites/sale/${saleId}`;
+      const res = await api.post(toggleEndpoint, {});
 
       // Verify status from response
       if (res.data.isFavorited !== undefined) {
@@ -93,8 +102,8 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
       const message = res.data.isFavorited ? '❤️ Saved!' : '✓ Removed from saves';
       showToast(message, 'success');
 
-      // Record SAVE ripple if item was favorited (only fire on add, not remove)
-      if (res.data.isFavorited && saleId) {
+      // Record SAVE ripple if favorited (only fire on add, not remove)
+      if (res.data.isFavorited && saleId && itemId) {
         api.post(`/sales/${saleId}/ripples`, { type: 'SAVE' }).catch(() => { /* fire-and-forget */ });
       }
     } catch (err) {

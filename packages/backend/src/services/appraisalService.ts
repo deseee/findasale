@@ -311,6 +311,7 @@ export const getOpenRequests = async (limit: number = 20, offset: number = 0) =>
           status: {
             in: ['PENDING', 'IN_REVIEW'],
           },
+          submittedBy: { isNot: null },
         },
         orderBy: { createdAt: 'desc' },
         skip: offset,
