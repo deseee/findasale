@@ -5,10 +5,12 @@ import { useRouter } from 'next/router';
 import { signIn } from 'next-auth/react';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
+import { useToast } from '../components/ToastContext';
 
 const RegisterPage = () => {
   const router = useRouter();
   const { login } = useAuth();
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -189,7 +191,9 @@ const RegisterPage = () => {
         router.push('/');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'An error occurred during registration');
+      const msg = err.response?.data?.message || 'An error occurred during registration';
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(false);
     }

@@ -860,6 +860,7 @@ const ReviewPage = () => {
         updates: {
           price: priceVal,
           title: editState.title,
+          description: editState.description,
           category: editState.category,
           condition: editState.condition,
           conditionGrade: editState.conditionGrade,
@@ -918,6 +919,7 @@ const ReviewPage = () => {
           updates: {
             price: priceVal,
             title: editState.title,
+            description: editState.description,
             category: editState.category,
             condition: editState.condition,
             conditionGrade: editState.conditionGrade,

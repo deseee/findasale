@@ -343,6 +343,15 @@ const isWhitelistedIP = (req: express.Request): boolean => {
   return RATE_LIMIT_WHITELIST.some((allowed) => clientIP === allowed || clientIP.endsWith(allowed));
 };
 
+// QA bypass — set QA_RATE_LIMIT_BYPASS_SECRET in Railway env vars.
+// Chrome QA sessions send this secret in the X-QA-Bypass header to skip all rate limiting.
+// Secure: requires knowledge of the secret; does not weaken prod security (secret is never public).
+const isQABypassRequest = (req: express.Request): boolean => {
+  const secret = process.env.QA_RATE_LIMIT_BYPASS_SECRET;
+  if (!secret) return false;
+  return req.headers['x-qa-bypass'] === secret;
+};
+
 // Global rate limit — anonymous: 500 req / 15 min per IP, authenticated: 3000 req / 15 min per IP
 // Authenticated users (valid Bearer token present) get 6x headroom — they're real logged-in users,
 // not bots. This prevents polling-heavy pages (POS, dashboard) from self-rate-limiting.
@@ -384,6 +393,9 @@ const authLimiter = rateLimit({
   skip: (req) => {
     // Bypass rate limit for whitelisted IPs
     if (isWhitelistedIP(req)) return true;
+
+    // Bypass rate limit for QA sessions using the shared bypass secret
+    if (isQABypassRequest(req)) return true;
 
     // Bypass rate limit for test accounts (@example.com)
     const email = req.body?.email?.toLowerCase();
