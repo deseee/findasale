@@ -1,2 +1,2 @@
 // rebuild: 2026-05-03h
-import { sendWeeklyDigest } from './controllers/notificationController'; sendWeeklyDigest().then(() => { console.log('Digest done'); process.exit(0); }).catch((e) => { console.error(e
+import { sendWeeklyDigest } from './controllers/notificationController'; sendWeeklyDigest().then(() => { console.log('Digest done'); process.exit(0); }).catch((e) => { console.error(e); process.exit(1); });
