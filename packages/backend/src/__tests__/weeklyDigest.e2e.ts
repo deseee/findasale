@@ -35,8 +35,8 @@ describe('Weekly Digest E2E', () => {
   let testSale: any;
 
   beforeAll(async () => {
-    process.env.RESEND_API_KEY = 'test_resend_key_digest_e2e';
-    process.env.RESEND_FROM_EMAIL = 'digest@finda.sale';
+    process.env.SMTP_USERNAME = 'test_smtp_user_digest_e2e';
+    process.env.SES_FROM_EMAIL = 'digest@finda.sale';
     process.env.FRONTEND_URL = 'http://localhost:3000';
 
     testOrganizer = await prisma.organizer.create({
@@ -91,8 +91,8 @@ describe('Weekly Digest E2E', () => {
     if (testSale) await prisma.sale.delete({ where: { id: testSale.id } }).catch(() => {});
     if (testUser) await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
     if (testOrganizer) await prisma.organizer.delete({ where: { id: testOrganizer.id } }).catch(() => {});
-    delete process.env.RESEND_API_KEY;
-    delete process.env.RESEND_FROM_EMAIL;
+    delete process.env.SMTP_USERNAME;
+    delete process.env.SES_FROM_EMAIL;
     delete process.env.FRONTEND_URL;
     console.log('✓ Weekly digest test data cleaned up');
   });

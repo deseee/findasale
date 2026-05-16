@@ -25,8 +25,6 @@ const getTwilioClient = () => {
   return _twilioClient;
 };
 
-// Lazy-loaded Resend client
-
 // Subscribe to sale notifications
 export const subscribeToSale = async (req: AuthRequest, res: Response) => {
   try {
@@ -274,13 +272,13 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string): s
 // Send weekly digest email to all users with upcoming sales this weekend
 export const sendWeeklyDigest = async () => {
   try {
-    if (!resendClient) {
-      console.warn('Email service not configured - skipping weekly digest');
+    if (!process.env.SMTP_USERNAME) {
+      console.warn('Email service not configured (SMTP_USERNAME missing) - skipping weekly digest');
       return;
     }
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const fromEmail = process.env.SES_FROM_EMAIL || 'digest@finda.sale';
+    const fromEmail = process.env.SES_FROM_EMAIL || 'digest@send.finda.sale';
 
     // Find PUBLISHED sales starting in the next 7 days
     const now = new Date();

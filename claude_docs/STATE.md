@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S738 — Bug Fix Session (COMPLETE). Pushed ✅.**
+**Latest: S739 — AWS SES Migration Infrastructure (IN-FLIGHT). Code dispatch not yet returned.**
+
+AWS SES identity created (`send.finda.sale`, verification pending DNS propagation up to 72h). All 3 DKIM CNAME records added to Vercel DNS and confirmed saved. AWS production access quota requests submitted (200→50,000/day and 1→14/sec, 24–48h approval window). Patrick added 5 Railway env vars (SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SES_FROM_EMAIL). Code migration dispatched to findasale-dev (create emailService.ts, update ~37 backend files, add suppression check to saleEndingSoonJob.ts, swap from addresses to @send.finda.sale) — results not yet returned.
+
+**Previous: S738 — Bug Fix Session (COMPLETE). Pushed ✅.**
 
 Three Railway production bugs diagnosed and fixed from logs Patrick sent during session. (1) **valuationService.ts** — `orderBy: { createdAt: 'desc' }` on PriceBenchmark (field doesn't exist; correct is `updatedAt`). One-line fix. (2) **appraisalService.ts** — `getOpenRequests()` crashed on orphaned AppraisalRequest rows where linked user was deleted; added `submittedBy: { isNot: null }` filter. (3) **FavoriteButton + favoriteController** — clicking save/heart on a sale detail page passed the sale ID as `itemId` to the item-only favorites endpoint → P2003 FK violation. Favorite model already had `saleId String?`; added `POST /sale/:id` and `GET /sale/:id` routes + `toggleSaleFavorite`/`getSaleFavoriteStatus` controllers; FavoriteButton now routes to `/sale/:id` endpoint when no `itemId` is provided. Also confirmed and included in push: organizers.ts returnWindowHours removal from Prisma update (P2025 fix from prior session) + index.ts authLimiter /me exemption (CRIT-1 fix). Push green ✅.
 
@@ -149,7 +153,7 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | Voice strip — weight/dims (S734) | Fix deployed but not live-tested | Record a voice note saying "14oz" or "2 lb 4 oz" on an existing item. Confirm: (a) number is absent from saved description, (b) weight field populated in structured fields | S734 |
 | Review page eBay card — dims/weight (S734) | getDraftItemsBySaleId select fix deployed but not live-tested | Save weight+dims on edit-item page → navigate to review page → confirm eBay push card shipping fields show correct values (not empty). Also confirm Local Pickup checkbox reflects saved ebayShippingOverride. | S734 |
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
-| #SES-MIGRATION — email provider move | Patrick completed AWS console steps (S737). Ready to dispatch dev for 37-file migration + suppression check fix. Full plan: `claude_docs/operations/ses-migration-plan.md`. | Dispatch findasale-dev for SES migration implementation | S732 |
+| #SES-MIGRATION — email provider move | Code migration dispatched S739 (in-flight). AWS infra done: identity pending DNS verification (up to 72h), quota requests submitted (24–48h). Railway env vars set by Patrick. Awaiting dev agent return. | Land dev results, run TS check, push. Then smoke test one email. Verify inbox delivery before removing Resend. | S732 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
@@ -169,6 +173,20 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 ---
 
 ## Recent Sessions
+
+### S739 — AWS SES Migration Infrastructure Setup (IN-FLIGHT)
+
+AWS-side setup completed; code migration dispatched but not yet returned.
+
+**(1) SES identity** — Created `send.finda.sale` in AWS SES us-east-1. Status: "Verification pending" (DNS CNAME propagation, up to 72h).
+
+**(2) DKIM DNS records** — All 3 CNAME records added to Vercel DNS for finda.sale domain: `gzd3woudjoavykvq7mzph5n3xdwxohng._domainkey.send`, `rlxrsyr3posfgqchqxain5wvjp7n2b5x._domainkey.send`, `4vzzlmhtdeyyz3gcsq2x7e327juexzke._domainkey.send`. All confirmed saved in Vercel dashboard.
+
+**(3) AWS production access** — Submitted Service Quota increase requests: sending quota 200/day → 50,000/day and sending rate 1/sec → 14/sec. Pending AWS approval (24–48h).
+
+**(4) Railway env vars** — Patrick confirmed added: SMTP_HOST, SMTP_PORT=587, SMTP_USERNAME, SMTP_PASSWORD (from CSV), SES_FROM_EMAIL=noreply@send.finda.sale.
+
+**(5) Code migration dispatched** — findasale-dev dispatched to: create `packages/backend/src/lib/emailService.ts` (nodemailer SMTP wrapper), update ~37 backend files to import emailService instead of Resend SDK, add suppression check to saleEndingSoonJob.ts, change all from addresses to @send.finda.sale. Results not yet returned — session ended before agent completed.
 
 ### S738 — Bug Fix Session: 3 Production Crashes Fixed (COMPLETE) ✅ Pushed
 
@@ -284,21 +302,23 @@ Patrick's first end-to-end live eBay listing tonight. Cascade of debugging in pr
 
 ## Next Session
 
-**QA ceiling rule:** Blocked Queue still has items — continue QA or dispatch SES migration as priority dev work.
+**QA ceiling rule:** Blocked Queue still has items — SES code landing takes priority, then QA burn-down.
 
 **Patrick actions remaining:**
-1. Deploy email verification migration 20260515180000 (next week):
+1. Deploy email verification migration 20260515180000 (when ready):
    ```powershell
-   cd packages/database
-   $env:DATABASE_URL="[Railway public proxy URL from Railway dashboard]"
+   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+   $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
    npx prisma migrate deploy
    npx prisma generate
    ```
 
 **Next session priority order:**
-1. SES migration: Dispatch dev for 37-file migration (plan: `claude_docs/operations/ses-migration-plan.md`) — AWS steps done by Patrick S737
-2. Voice strip weight/dims S734 — UNVERIFIABLE until real device test; keep in Blocked Queue
-3. Review page eBay card dims/weight S734 — UNVERIFIABLE until user2 has a draft item in review queue
-4. #422 OAuth Option B — still needs real Google test account
-5. Organizer profile save: verify Railway 500 is gone after S738 push (was PrismaClientValidationError from un-pushed returnWindowHours fix)
-6. If Blocked Queue drops below 8 → resume roadmap feature work
+1. **SES code landing** — Wait for findasale-dev to return from S739 dispatch. Review changed files, run TS check, provide pushblock. After deploy: smoke test one email (transactional controller), verify inbox delivery.
+2. **SES verification checks** — Check AWS SES console: is `send.finda.sale` verified? Check Service Quotas request status (production access approval).
+3. **Post-SES cleanup** — Once email delivery confirmed working: remove `resend` from package.json, remove RESEND_API_KEY from Railway.
+4. Voice strip weight/dims S734 — UNVERIFIABLE until real device test; keep in Blocked Queue
+5. Review page eBay card dims/weight S734 — UNVERIFIABLE until user2 has a draft item in review queue
+6. #422 OAuth Option B — still needs real Google test account
+7. Organizer profile save: verify Railway 500 is gone after S738 push (PrismaClientValidationError from returnWindowHours)
+8. If Blocked Queue drops below 8 → resume roadmap feature work

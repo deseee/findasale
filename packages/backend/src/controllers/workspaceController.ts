@@ -155,7 +155,7 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
       const joinLink = `${process.env.FRONTEND_URL || 'https://finda.sale'}/join?token=${invite.inviteToken}`;
 
       await emailService.emails.send({
-        from: 'invites@finda.sale',
+        from: 'invites@send.finda.sale',
         to: email,
         subject: `You're invited to join "${workspace.name}" on FindA.Sale`,
         html: `

@@ -158,7 +158,7 @@ export const endAuctions = async () => {
         // Email the winner with a payment link
         if (result.stripePaymentIntentId && result.highestBid.user?.email) {
           if (true) {
-            const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@finda.sale';
+            const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@send.finda.sale';
             const payUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`;
             try {
               await emailService.emails.send({

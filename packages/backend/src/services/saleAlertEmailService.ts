@@ -11,7 +11,7 @@
 import { buildEmail } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
 
-const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'alerts@finda.sale';
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'alerts@send.finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
 interface HoldPlacedAlertData {

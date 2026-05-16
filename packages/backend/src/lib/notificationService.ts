@@ -42,7 +42,7 @@ export const createNotification = async (input: CreateNotificationInput) => {
 
       if (user?.email) {
         if (true) {
-          const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@finda.sale';
+          const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
           try {
             await emailService.emails.send({
               from: fromEmail,

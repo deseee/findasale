@@ -1088,14 +1088,13 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     setImmediate(async () => {
       try {
         
-        if (resend) {
-          const expiryTime = new Date(expiresAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+        const expiryTime = new Date(expiresAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
           const itemList = bundledItemIds.length > 1
             ? `${bundledItemIds.length} items from ${reservation.item.sale!.title}`
             : `${allShopperHolds[0]?.item.title} from ${reservation.item.sale!.title}`;
 
           await emailService.emails.send({
-            from: process.env.SES_FROM_EMAIL || 'invoices@finda.sale',
+            from: process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale',
             to: reservation.user.email,
             subject: `Complete your purchase: ${itemList}`,
             html: `
@@ -1106,7 +1105,6 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
               <p style="color: #6b7280; font-size: 14px;">This link expires at ${expiryTime} (in approximately ${Math.round((expiresAt.getTime() - Date.now()) / 3600000)} hours).</p>
             `,
           });
-        }
       } catch (err) {
         console.warn('[hold-invoice] Failed to send checkout email:', err);
       }

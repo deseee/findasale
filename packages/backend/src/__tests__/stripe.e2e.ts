@@ -94,8 +94,8 @@ describe('Stripe Connect + Fee Capture E2E', () => {
   beforeAll(async () => {
     process.env.STRIPE_SECRET_KEY     = 'sk_test_fake_stripe_e2e';
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_fake_stripe_e2e';
-    process.env.RESEND_API_KEY        = 'test_resend_key_stripe_e2e';
-    process.env.RESEND_FROM_EMAIL     = 'receipts@finda.sale';
+    process.env.SMTP_USERNAME        = 'test_smtp_user_stripe_e2e';
+    process.env.SES_FROM_EMAIL     = 'receipts@finda.sale';
     process.env.FRONTEND_URL          = 'http://localhost:3000';
 
     // Organizer user (User must exist before Organizer — FK constraint)
@@ -210,8 +210,8 @@ describe('Stripe Connect + Fee Capture E2E', () => {
 
     delete process.env.STRIPE_SECRET_KEY;
     delete process.env.STRIPE_WEBHOOK_SECRET;
-    delete process.env.RESEND_API_KEY;
-    delete process.env.RESEND_FROM_EMAIL;
+    delete process.env.SMTP_USERNAME;
+    delete process.env.SES_FROM_EMAIL;
     delete process.env.FRONTEND_URL;
     console.log('✓ Stripe E2E test data cleaned up');
   });
