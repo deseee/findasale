@@ -198,6 +198,7 @@ export const endAuctions = async () => {
         `Auction ended for item ${result.item.id}. Winner: user ${result.highestBid?.userId || 'none'}, $${result.price}. ` +
         `Payment: ${result.stripePaymentIntentId ? 'PENDING (intent created)' : 'PAID (no Stripe account)'}`
       );
+    }
   } catch (error) {
     console.error('Error in auction end job:', error);
   }
