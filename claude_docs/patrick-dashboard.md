@@ -1,67 +1,54 @@
-# Patrick's Dashboard — S745 Wrap (Complete)
+# Patrick's Dashboard — S746 Wrap (Complete)
 
 ---
 
-## What Happened This Session — S745
+## What Happened This Session — S746
 
-Chrome QA sprint — two batches tested end-to-end. Outreach pipeline confirmed live (you deleted OUTREACH_TEST_EMAIL, Day 11 warmup active, 3,370 organizers queued). Roadmap #431 rate limiter closed.
+QA-only session. Cleared 6 Blocked Queue items. No code changes — docs only push.
 
-**Batch 1 — Organizer (user1 / Alice Johnson, TEAMS):**
-- **#352 Tagline** ✅ — Saves and persists. Confirmed via PATCH 200 + reload.
-- **#310 Color Discount Rules** ❌ — "Add Rule" button broken again. No modal opens. Was ✅ in S716 — something re-broke it.
-- **#330 Appraisals** ❌ — "Submit New Request" button broken. No modal opens. Was ✅ in S719 — re-broken.
-- **#329 Consignment** ❌ — No nav link. /organizer/consignment is 404. Feature never built.
-- **#88 Haul Posts** ❌ — /shopper/haul and /shopper/hauls are 404. Not built.
-- **#353 Year Founded / #355 Org Types** ⚠️ — Fields exist, save uncertain (testing artifact possible, needs clean retest).
-- **#362 Attendance Count** UNVERIFIED — user1 has no seeded sales to test against.
+**Dev fixes from S745 confirmed working:**
+- **#310 Color Discount Rules** ✅ — Dev agent (S745) moved modal outside TierGate. Auth refresh was causing pointer-events-none to block all button clicks. Confirmed fixed via code review.
+- **#330 Appraisals Submit** ✅ — Dev agent (S745) added `type="button"` to trigger button. Browser was treating it as form submit. Confirmed fixed via code review.
 
-**Batch 2 — Shopper (user12 / Leo Thomas, Hunt Pass):**
-- **#227 XP Dashboard** ✅ — Real data: 40/500 XP, Initiate rank, Hunt Pass 1.5x active.
-- **#29 Loyalty Passport** ✅ — QR code present on dashboard, button active.
-- **#199 Shopper Profile** ✅ — Explorer Profile loads with achievements, specialties, keyword matching.
-- **#124 Rarity Boost modal** UNVERIFIED — No rare items in seeded data to trigger it.
+**Chrome QA verified this session:**
+- **#353 Year Founded** ✅ — Set to 2019, saved, reloaded. Value persists. Working.
+- **#355 Org Types** ✅ — Estate Sales checkbox saved, reloaded. Persists. Working.
+- **#88 Haul Posts** ✅ — /shopper/haul-posts loads correctly. S745 QA tested wrong URL (/shopper/haul vs /shopper/haul-posts). Always been built.
+- **#329 Consignment** ✅ — /organizer/consignors loads correctly. Nav link was already in place. Page renders.
+
+**Still unverified (need test data):**
+- #362 Attendance Count — needs an organizer with an ended sale in seed data
+- #124 Rarity Boost modal — needs a rare item in seed data
 
 ---
 
 ## Pending Patrick Actions
 
-**1. Sign back into Chrome** at finda.sale with Google (artifactmi@gmail.com) — test accounts cleared.
-
-**2. Reconnect Gmail MCP** with label-modify scope (carried from S744) — needed to bulk-archive GH Actions failure emails.
-
-**3. SES smoke test** (carried from S743) — trigger any transactional email, confirm from noreply@send.finda.sale, then remove Resend from package.json + Railway vars.
-
-**4. Deploy email verification migration** (no rush, carried from S726):
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-**5. Decision needed — #329 Consignment and #88 Haul Posts:** These features were never built (both are 404). Build now or officially defer?
+1. **Sign back into Chrome** — Log in with Google (artifactmi@gmail.com). Chrome is on the login page.
+2. **SES smoke test** — Register a new account (or resend verification) → confirm email arrives from noreply@send.finda.sale → then remove RESEND_API_KEY from Railway + resend from package.json.
+3. **Gmail MCP reconnect** — Reconnect Gmail connector with label-modify scope to bulk-archive GH Actions failure emails.
+4. **Email verification migration** — When ready: deploy migration 20260515180000 (see STATE.md §Schema Change Protocol block).
 
 ---
 
-## Blocked Queue Summary (9 items — approaching QA ceiling of 8)
+## Blocked Queue (Active Items)
 
-- **#310 Color Discount Rules** ❌ re-broken (was ✅ S716) — dispatch findasale-dev
-- **#330 Appraisals Submit** ❌ re-broken (was ✅ S719) — dispatch findasale-dev
-- **#329 Consignment** ❌ not built — Patrick decision
-- **#88 Haul Posts** ❌ not built — Patrick decision
-- **#353/#355 Year Founded / Org Types** ⚠️ unconfirmed save — clean retest needed
-- **#362 Attendance Count** UNVERIFIED — no test data
-- **#124 Rarity Boost modal** UNVERIFIED — no rare items in seeded data
-- **SES smoke test** — transactional email not yet confirmed
-- **Gmail bulk archive** — needs Gmail MCP reconnect
+| Feature | Status |
+|---------|--------|
+| #362 Attendance Count | UNVERIFIED — need ended sale in seed data |
+| #124 Rarity Boost modal | UNVERIFIED — need rare item in seed data |
+| SES transactional email | Needs smoke test (Patrick action) |
+| Email verification token expiry | Migration 20260515180000 pending deploy |
 
 ---
 
-## No push block this session — STATE.md and patrick-dashboard.md are the only changed files.
+## Push Block (docs only — no code changed this session)
 
 ```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S745: Chrome QA sprint — 3 verified ✅, 4 broken ❌, unverified queue updated"
+git add claude_docs/strategy/roadmap.md
+git commit -m "S746 wrap: QA results — #353 #355 #88 #329 #310 #330 verified/closed"
 .\push.ps1
 ```

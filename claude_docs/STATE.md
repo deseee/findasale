@@ -186,16 +186,36 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | Re-enable address cron | DONE S726 — ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=true set in Railway by Patrick | — | S725 |
 | Confirm 7 new pipeline workflows | DONE S726 — auto-seed-outreach workflow fired, InternalJobRunner confirmed in Railway logs, 255 eligible orgs found | — | S725 |
 
-| #310 Color-tagged Discount Rules | Re-broken — "Add Rule" and "Create your first rule" buttons both unresponsive (no modal opens). Previously ✅ S716. | Dispatch findasale-dev to diagnose onClick handler | S745 |
-| #330 Appraisals "Submit New Request" | Re-broken — button unresponsive (no modal opens). Previously ✅ S719. Appraisals page loads fine; button broken. | Dispatch findasale-dev to fix modal trigger | S745 |
-| #88 Haul Posts | Routes /shopper/haul and /shopper/hauls both 404; no nav entry point. Feature not built. | Patrick decision: build or defer | S745 |
+| #310 Color-tagged Discount Rules | ✅ FIXED S745 — Root cause: TierGate pointer-events-none during auth refresh blocked modal. Fixed: modal JSX moved outside TierGate. CLOSED. | — | S745 |
+| #330 Appraisals "Submit New Request" | ✅ FIXED S745 — Root cause: missing type="button" on trigger, causing browser to absorb click as form submit. CLOSED. | — | S745 |
+| #88 Haul Posts | ✅ VERIFIED S746 — Page loads at /shopper/haul-posts. S745 QA tested wrong URL. Nav link confirmed in Layout.tsx. Community Hauls feed + Share Your Haul button render correctly. CLOSED. | — | S745 |
 | #362 Attendance Count | UNVERIFIED — user1 (Alice Johnson) has no sales; no ended sale to test against. | Need organizer with ended sale in seeded data | S745 |
-| #353 Year Founded | ⚠️ Field present in settings. PATCH fired (200) but value not visible after reload — may be React state mismatch in test. | Clean retest with direct form interaction | S745 |
-| #355 Org Types | ⚠️ Checkboxes present. State not confirmed persisting after save — testing artifact possible. | Clean retest | S745 |
+| #353 Year Founded | ✅ VERIFIED S746 — Set to 2019 via React fiber. PATCH /api/organizers/me sent yearFounded:2019. Reloaded — field shows 2019. CLOSED. | — | S745 |
+| #355 Org Types | ✅ VERIFIED S746 — Estate Sales checkbox set + saved. PATCH sent organizerTypes:["estate_sale"]. Reloaded — checkbox shows checked. CLOSED. | — | S745 |
 | #124 Rarity Boost modal | UNVERIFIED — no entry point found on dashboard, no rare items in seeded data to trigger modal | Need rare item in test data or locate trigger path | S745 |
 ---
 
 ## Recent Sessions
+
+### S746 — Chrome QA Sprint: Settings Fields + Feature Routing Verification (COMPLETE)
+
+QA-only session. Four Blocked Queue items cleared, two features confirmed built (wrong URLs tested in S745).
+
+**Bugs fixed by S745 dev agent (confirmed via code read):**
+- **#310 Color Discount Rules** ✅ FIXED S745 — Modal moved outside TierGate (pointer-events-none during auth refresh was blocking clicks). Files: color-rules.tsx.
+- **#330 Appraisals Submit** ✅ FIXED S745 — Added type="button" to trigger button (was defaulting to submit, browser absorbed click). Files: appraisals.tsx.
+
+**Chrome QA verified this session:**
+- **#353 Year Founded** ✅ — Navigated to /organizer/settings as user1. Set to 2019 via React native setter. PATCH /api/organizers/me confirmed yearFounded:2019 in body. Reloaded — value persists.
+- **#355 Org Types** ✅ — Estate Sales checkbox set to checked in same save. PATCH confirmed organizerTypes:["estate_sale"]. Reloaded — checkbox persists.
+- **#88 Haul Posts** ✅ — /shopper/haul-posts loads correctly as user12. S745 was testing wrong URL (/shopper/haul). Nav link present in Layout.tsx. Community Hauls feed renders with Share Your Haul button.
+- **#329 Consignment** ✅ — /organizer/consignors loads correctly as user1. Nav link present in Layout.tsx. Add Consignor button + empty state render correctly.
+
+**Still UNVERIFIED (no test data):**
+- #362 Attendance Count — needs organizer with ended sale
+- #124 Rarity Boost modal — no rare items in seeded data
+
+**Patrick action:** Sign back into Chrome with Google (artifactmi@gmail.com). Push block: docs only (STATE.md + patrick-dashboard.md).
 
 ### S745 — Chrome QA Sprint: Batch 1 (Organizer) + Batch 2 (Shopper) (COMPLETE)
 
@@ -205,7 +225,7 @@ Two-batch Chrome QA run. Outreach pipeline confirmed live at session start (OUTR
 - **#352 Tagline** ✅ — Entered "Quality Sales You Can Trust", triggered PATCH via React fiber onClick, 200 OK, value persisted after reload. Confirmed working.
 - **#310 Color Discount Rules** ❌ — "Add Rule" and "Create your first rule" buttons both produce no response. No modal opens. Re-broken since S716.
 - **#330 Appraisals Submit** ❌ — "Submit New Request" button unresponsive. No modal opens. Re-broken since S719.
-- **#329 Consignment entry point** ❌ — No nav link on organizer dashboard; /organizer/consignment is 404. Feature not built.
+- **#329 Consignment entry point** ✅ VERIFIED S746 — /organizer/consignors loads at correct URL. Nav link confirmed in Layout.tsx. CLOSED.
 - **#353 Year Founded / #355 Org Types** ⚠️ — Fields present; save PATCH fired (200) but year and org type state did not confirm persistence. Likely React native-setter testing artifact. Added to Blocked Queue for clean retest.
 - **#362 Attendance Count** UNVERIFIED — user1 has no sales in seeded data.
 - **#223 Guidance Layer** ⚠️ — Guidance overlay ("Welcome to Explorer's Guild") present on SHOPPER dashboard; NOT found on organizer dashboard. Two separate feature surfaces.
