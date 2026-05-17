@@ -8,7 +8,39 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S752 — Chrome QA Backlog Sprint + Outreach Fix (COMPLETE).**
+**Latest: S753 — Chrome QA Backlog Sprint Continued (COMPLETE).**
+
+Continued the S752 main-session Opus Chrome QA approach (~3-5k tokens/feature). Verified 13 Pending Chrome QA items across public, organizer (user2 PRO Bob Smith), and shopper (user12 Hunt Pass Leo Thomas) roles. Found 1 P1 (Hunt Pass cosmetics fully broken), 1 P2 (referral card not visible on dashboard), 1 P3 (Settlement sale message inconsistency). All S752 bugs (#306, #305 button, #307, subscription copy) remain unfixed — no dev work was dispatched this session, pure QA.
+
+**Chrome QA Verified ✅ (13 items):**
+- #259 Hunt Pass page accuracy (re-confirm, was S530)
+- #260 À La Carte $9.99 callout on /organizer/pricing
+- #271 TEAMS solo differentiator (webhooks copy)
+- #263 Insights nav route — `/organizer/insights` renders "Your Sales Analytics" (3 sales, $500 revenue, 11.1% conversion, per-sale breakdown)
+- #263 Brand Kit nav route — `/organizer/brand-kit` renders full page (Social Links, Logo, Storefront URL, Brand Colors, PRO Advanced)
+- #302 Email Verification Banner — amber "Check your inbox" banner on user2 organizer dashboard
+- #305 Share & Promote — promote page renders 8 platform Quick Share cards + EstateSales.NET/FB Marketplace/Craigslist + Flyer + Share Card; dashboard B1 teal "Your sale is live — spread the word!" banner with Copy Link + More Options
+- #297 eBay Policy Sync UI — disconnected-state Connect CTA correct (active state was S480)
+- #298 eBay Advanced Setup — disconnected-state Connect CTA correct (active state was S479)
+- #292 Post-Sale eBay Panel soft toast — "3 items didn't sell — ready to list on eBay?" toast renders on ENDED sale
+- #227 XP Profile API + Dashboard wiring — Leo Thomas dashboard shows guildXp=55, Initiate rank, 445 XP to Scout, next-rank perks listed (Scout Reveal, longer holds, 3 wishlist slots)
+- #265 Rank progress next-rank benefit + /shopper/referrals page (Share & Earn, REF-419CCE51, 5 share buttons, stats 0/0/0)
+- #266 Explorer Profile Rename — `/shopper/explorer-profile` renders correctly (Specialties, Categories, Keywords, Achievements 1/12)
+
+**Bugs found this session ⚠️ (NEW):**
+- **#275 Hunt Pass Cosmetic Add-ons — ENTIRE FEATURE BROKEN (P1).** Verified as logged-in user12 (huntPassActive=true confirmed via /auth/me, guildXp=55). (1) Avatar amber ring missing: DOM shows only `bg-amber-500`, no `ring-2 ring-amber-400` persistent ring class on the avatar element or its parents. (2) Leaderboard 🏆 badge missing: Leo Thomas appears at #1 (🥇) on Scout Leaderboard with 55 XP but page contains zero 🏆 emojis. The Hunt Pass page copy still promises "Golden Trophy Avatar Frame" + "Hunt Pass Leaderboard Badge — A 🏆 badge next to your name". Roadmap entry claims shipped S544. Either conditional rendering check broken, components weren't actually deployed, or loyaltyController doesn't return huntPassActive in leaderboard payload.
+- **#265 Share & Earn dashboard card not visible (P2).** Card not rendered on user12 shopper dashboard despite huntPassActive=true. Likely dismissible-state stuck (localStorage shows `onboardingModalDismissed=true` from 2026-05-08 — separate flag may apply to referral card). /shopper/referrals destination page works correctly.
+- **#292 ENDED-sale UX inconsistency (P3).** qa-settlement-001 page header shows "0 items / All items sold!" simultaneously with soft toast "3 items didn't sell — ready to list on eBay?". Two queries returning conflicting unsold counts.
+
+**Pending S752 bugs still unfixed (no dev dispatched S753):**
+- #306 Store Hours save persistence
+- #305 Social Posts dashboard button is no-op
+- #307 Shop Mode PRO visibility / TEAMS verification
+- Subscription copy mismatch ("Your TEAMS plan" on PRO account)
+
+**No code changes shipped S753.** Pure QA session — findings get routed to a dev batch next session.
+
+**Previous: S752 — Chrome QA Backlog Sprint + Outreach Fix (COMPLETE).**
 
 Token-efficient QA approach: main session Opus ran Chrome QA directly (~3-5k tokens/feature vs ~40-50k for Sonnet subagent dispatch). Verified 30+ features across shopper and organizer roles. Outreach query starvation bug fixed (CANDIDATE_MULTIPLIER=10, exhaustedFilter, nulls-first ordering, quota cap in send loop).
 
@@ -226,25 +258,30 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | #353 Year Founded | ✅ VERIFIED S746 — Set to 2019 via React fiber. PATCH /api/organizers/me sent yearFounded:2019. Reloaded — field shows 2019. CLOSED. | — | S745 |
 | #355 Org Types | ✅ VERIFIED S746 — Estate Sales checkbox set + saved. PATCH sent organizerTypes:["estate_sale"]. Reloaded — checkbox shows checked. CLOSED. | — | S745 |
 | #124 Rarity Boost modal | ✅ VERIFIED S750 — user12 (Leo Thomas) guildXp set to 55 via direct SQL. Button on /coupons enabled (spendableXp ≥ 50). Modal opens correctly. CLOSED. | — | S745 |
+| #275 Hunt Pass Cosmetic Add-ons | ❌ S753: Avatar amber ring missing from rendered DOM; leaderboard 🏆 badge missing despite user12 (Hunt Pass) at #1. Hunt Pass page copy still promises both. Conditional rendering check or loyaltyController payload broken. | Dev dispatch: audit AvatarDropdown.tsx ring conditional + loyaltyController leaderboard payload `huntPassActive` field + league.tsx 🏆 render | S753 |
+| #265 Share & Earn dashboard card | ⚠️ S753: Card not visible on user12 shopper dashboard despite huntPassActive=true. /shopper/referrals destination page works fine. Likely dismissal flag stuck. | Dev: check Share & Earn card render condition + dismissal logic in shopper/dashboard.tsx | S753 |
+| #292 ENDED-sale UX inconsistency | ⚠️ S753: qa-settlement-001 shows "0 items / All items sold!" header simultaneously with PostSaleEbayPanel soft toast "3 items didn't sell". Conflicting unsold counts. | Dev: align items query and unsold query on ENDED sale page | S753 |
 ---
 
 ## Next Session
 
-**Priority: Fix 4 bugs from S752 QA sprint + continue Chrome QA backlog.**
+**Priority: Fix bug batch from S752+S753 QA + continue Chrome QA backlog.**
 
 1. **Fix bugs found S752:** #306 Store Hours save persistence, #305 Social Posts no-op, #307 Shop Mode PRO visibility, Subscription copy mismatch (says TEAMS when PRO). All are dev dispatches.
 
-2. **Storefront past sales section** — `GET /organizers/:id` filters `status: 'PUBLISHED'` only. Ended sales never surface, so `attendanceCount` on historical sales is invisible to visitors. Backend needs a "Past Sales" section added to the storefront endpoint.
+2. **Fix bugs found S753:**
+   - **P1 #275 Hunt Pass Cosmetic Add-ons — full feature broken.** Audit (a) AvatarDropdown.tsx ring conditional on `huntPassActive`, (b) loyaltyController.ts leaderboard payload — does it include `huntPassActive` per row?, (c) league.tsx (or wherever /leaderboard renders) — does it read and render 🏆 when huntPassActive=true? user12 verified to have `huntPassActive: true` on /api/auth/me but rendered UI ignores it across avatar + leaderboard.
+   - **P2 #265 Share & Earn card** — not rendering on user12 dashboard. Investigate render condition + dismissal flag.
+   - **P3 #292** — "0 items / All items sold!" vs "3 items didn't sell" toast inconsistency on ENDED sale page. Align item-grid query with unsold-items query.
 
-3. **Continue Chrome QA backlog** — ~10 remaining Pending Chrome QA items in roadmap. Use main-session Opus approach (3-5k tokens/feature).
+3. **Storefront past sales section** — `GET /organizers/:id` filters `status: 'PUBLISHED'` only. Ended sales never surface, so `attendanceCount` on historical sales is invisible to visitors.
 
-4. **Smoke test remaining transactional emails** — Only claim verification confirmed delivered. Test one more flow (password reset or registration).
+4. **Continue Chrome QA backlog** — Remaining Pending items: #251 priceBeforeMarkdown (need item with markdown applied), #278 Treasure Hunt Pro scan cap (needs QR scan path), #289 Coupon Generation (3-tier XP→coupon), #294 Live eBay Category Picker (needs connected eBay org).
 
 **Patrick actions needed:**
-- Push the outreach fix (push block in patrick-dashboard.md)
-- Log back into Chrome as yourself (artifactmi@gmail.com) — QA left a test account active
-- Deploy email verification token migration (20260515180000)
-- Delete fix-attendance.sql from project root
+- Log back into Chrome as yourself (artifactmi@gmail.com) — S753 logged user12 out cleanly, no test account active, but you were on Google before
+- Deploy email verification token migration (20260515180000) — still pending from S726
+- Delete fix-attendance.sql from project root — still pending from S750
 
 ---
 
