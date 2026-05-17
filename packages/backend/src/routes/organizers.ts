@@ -1541,7 +1541,34 @@ router.get('/sales/:saleId/donations', authenticate, getDonations);
 // GET /api/organizer/donations/:donationId/receipt — generate tax receipt PDF
 router.get('/donations/:donationId/receipt', authenticate, generateReceipt);
 
-// Feature #354: OrganizerHours — GET /organizers/:id/hours
+// Feature #354: OrganizerHours — GET /organizers/me/hours (authenticated organizer's hours)
+router.get('/me/hours', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const hours = await prisma.organizerHours.findMany({
+      where: { organizerId: organizer.id },
+      orderBy: { dayOfWeek: 'asc' },
+    });
+    res.json(hours);
+  } catch (error) {
+    console.error('Error fetching organizer hours:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #354: OrganizerHours — GET /organizers/:id/hours (public, for storefront)
 router.get('/:id/hours', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1578,16 +1605,16 @@ router.put('/me/hours', authenticate, async (req: AuthRequest, res: Response) =>
       return res.status(400).json({ message: 'Hours must be an array' });
     }
 
-    // Validate each entry
+    // Validate each entry (empty strings mean "closed" for that day)
     for (const entry of hoursArray) {
       if (typeof entry.dayOfWeek !== 'number' || entry.dayOfWeek < 0 || entry.dayOfWeek > 6) {
         return res.status(400).json({ message: 'dayOfWeek must be 0-6' });
       }
-      if (typeof entry.openTime !== 'string' || !/^\d{2}:\d{2}$/.test(entry.openTime)) {
-        return res.status(400).json({ message: 'openTime must be HH:MM format' });
+      if (typeof entry.openTime !== 'string' || (entry.openTime !== '' && !/^\d{2}:\d{2}$/.test(entry.openTime))) {
+        return res.status(400).json({ message: 'openTime must be HH:MM format or empty (closed)' });
       }
-      if (typeof entry.closeTime !== 'string' || !/^\d{2}:\d{2}$/.test(entry.closeTime)) {
-        return res.status(400).json({ message: 'closeTime must be HH:MM format' });
+      if (typeof entry.closeTime !== 'string' || (entry.closeTime !== '' && !/^\d{2}:\d{2}$/.test(entry.closeTime))) {
+        return res.status(400).json({ message: 'closeTime must be HH:MM format or empty (closed)' });
       }
     }
 

@@ -16,6 +16,7 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
         name: true,
         guildXp: true,
         explorerRank: true,
+        huntPassActive: true,
         userBadges: {
           select: {
             id: true,
@@ -47,6 +48,7 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
       name: user.name.split(' ')[0] || 'Shopper',
       score: user.guildXp ?? 0,
       explorerRank: user.explorerRank,
+      huntPassActive: user.huntPassActive ?? false,
       badges: user.userBadges.map((ub) => ({
         id: ub.badge.id,
         name: ub.badge.name,

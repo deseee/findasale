@@ -203,11 +203,11 @@ export default function SubscriptionPage() {
               /* TEAMS users: show tier info even without Stripe subscription */
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                 <div className="p-8 border-b border-gray-200 dark:border-gray-700">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Your TEAMS Plan</h2>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Your {tier} Plan</h2>
 
                   <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-8">
                     <p className="text-green-900 dark:text-green-200">
-                      Your TEAMS plan was set up directly. For billing questions or changes, contact{' '}
+                      Your {tier} plan was set up directly. For billing questions or changes, contact{' '}
                       <a href="mailto:support@finda.sale" className="underline font-medium">support@finda.sale</a>.
                     </p>
                   </div>
@@ -215,7 +215,7 @@ export default function SubscriptionPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Plan Tier</p>
-                      <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">TEAMS</p>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{tier}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Status</p>
@@ -531,8 +531,8 @@ export default function SubscriptionPage() {
                     <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 capitalize">
                       {subscription.billingInterval
                         ? subscription.billingInterval
-                        : tier === 'TEAMS'
-                          ? <span className="text-gray-500 dark:text-gray-500 text-base">Organization billing</span>
+                        : (tier === 'TEAMS' || tier === 'PRO')
+                          ? <span className="text-gray-500 dark:text-gray-500 text-base">Direct billing</span>
                           : <span className="text-gray-500 dark:text-gray-500 text-base">Unavailable</span>}
                     </p>
                   </div>
@@ -543,11 +543,11 @@ export default function SubscriptionPage() {
                         subscription.status === 'active' ? 'bg-green-500' :
                         subscription.status === 'past_due' ? 'bg-yellow-500' :
                         subscription.status === 'canceled' ? 'bg-gray-400' :
-                        !subscription.status && tier === 'TEAMS' ? 'bg-green-500' :
+                        !subscription.status && (tier === 'TEAMS' || tier === 'PRO') ? 'bg-green-500' :
                         'bg-blue-500'
                       }`}></span>
                       <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 capitalize">
-                        {subscription.status || (tier === 'TEAMS' ? 'Active' : 'Unknown')}
+                        {subscription.status || ((tier === 'TEAMS' || tier === 'PRO') ? 'Active' : 'Unknown')}
                       </p>
                     </div>
                   </div>
@@ -560,7 +560,7 @@ export default function SubscriptionPage() {
                             month: 'long',
                             day: 'numeric',
                           })
-                        : tier === 'TEAMS'
+                        : (tier === 'TEAMS' || tier === 'PRO')
                           ? <span className="text-gray-500 dark:text-gray-500 text-base">Contact support</span>
                           : <span className="text-gray-500 dark:text-gray-500 text-base">Unavailable</span>}
                     </p>
@@ -635,7 +635,7 @@ export default function SubscriptionPage() {
                   ) : (
                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                       <p className="text-green-800 dark:text-green-200 text-sm">
-                        Your TEAMS plan was set up directly. For billing questions or changes, contact{' '}
+                        Your {tier} plan was set up directly. For billing questions or changes, contact{' '}
                         <a href="mailto:support@finda.sale" className="underline font-medium">support@finda.sale</a>.
                       </p>
                     </div>

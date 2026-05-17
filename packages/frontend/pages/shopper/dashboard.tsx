@@ -472,6 +472,43 @@ const ShopperDashboard = () => {
             </div>
           )}
 
+          {/* 5. Share & Earn Referral Card */}
+          {user && !isReferralDismissed && (
+            <div className="relative bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-5 mb-6">
+              <button
+                onClick={handleDismissReferral}
+                className="absolute top-3 right-3 text-warm-400 dark:text-warm-600 hover:text-warm-600 dark:hover:text-warm-400 transition-colors"
+                aria-label="Dismiss referral card"
+              >
+                ×
+              </button>
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">🎁</span>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-amber-900 dark:text-amber-200 mb-1">Share & Earn</h3>
+                  <p className="text-sm text-amber-800 dark:text-amber-300 mb-3">
+                    Invite friends to FindA.Sale and earn XP for every sign-up. Share your personal link and climb the ranks faster!
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href="/shopper/referrals"
+                      className="inline-block bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition-colors"
+                    >
+                      View Referral Page →
+                    </Link>
+                    {referralLink && (
+                      <button
+                        onClick={handleCopyReferralLink}
+                        className="inline-block border border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-sm font-semibold py-2 px-4 rounded-lg transition-colors"
+                      >
+                        Copy Link
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="flex gap-2 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">

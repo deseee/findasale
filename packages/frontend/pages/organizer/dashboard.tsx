@@ -25,7 +25,6 @@ import OrganizerTierBadge from '../../components/OrganizerTierBadge';
 import Tooltip from '../../components/Tooltip';
 import SaleQRCode from '../../components/SaleQRCode';
 import FlashDealForm from '../../components/FlashDealForm';
-import SocialPostGenerator from '../../components/SocialPostGenerator';
 import OnboardingWizard from '../../components/OnboardingWizard';
 import OrganizerOnboardingModal from '../../components/OrganizerOnboardingModal';
 import TeamsOnboardingWizard from '../../components/TeamsOnboardingWizard';
@@ -99,7 +98,6 @@ const OrganizerDashboard = () => {
     },
     enabled: !!flashDealSaleId,
   });
-  const [socialPostSale, setSocialPostSale] = useState<{ id: string; title: string } | null>(null);
   const [boostSaleId, setBoostSaleId] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [cloningId, setCloningId] = useState<string | null>(null);
@@ -534,14 +532,6 @@ const OrganizerDashboard = () => {
         />
       )}
 
-      {/* Social Post Generator modal */}
-      {socialPostSale && (
-        <SocialPostGenerator
-          saleId={socialPostSale.id}
-          saleTitle={socialPostSale.title}
-          onClose={() => setSocialPostSale(null)}
-        />
-      )}
 
       {/* Boost Sale modal */}
       {boostSaleId && (
@@ -1075,7 +1065,7 @@ const OrganizerDashboard = () => {
                   </Link>
 
                   {/* Consolidated Action Buttons Row */}
-                  <div className="flex flex-wrap gap-2 mt-2 border-t border-warm-200 dark:border-gray-700">
+                  <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-warm-200 dark:border-gray-700">
                     {activeSale.status === 'PUBLISHED' && (
                       <Link href={`/organizer/add-items/${activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add, edit, or remove items from this sale">
                         Items
@@ -1115,13 +1105,13 @@ const OrganizerDashboard = () => {
                       </button>
                     )}
                     {activeSale.status === 'PUBLISHED' && (
-                      <button
-                        onClick={() => setSocialPostSale({ id: activeSale.id, title: activeSale.title })}
-                        className="text-sm px-3 py-1 bg-pink-100 dark:bg-pink-900 text-pink-700 dark:text-pink-300 rounded-full hover:bg-pink-200 dark:hover:bg-pink-800 transition-colors"
+                      <Link
+                        href={`/organizer/promote/${activeSale.id}`}
+                        className="text-sm px-3 py-1 bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300 rounded-full hover:bg-teal-200 dark:hover:bg-teal-800 transition-colors"
                         title="Generate social media posts for this sale"
                       >
                         📱 Social Posts
-                      </button>
+                      </Link>
                     )}
                     {activeSale.status === 'PUBLISHED' && (
                       <button
