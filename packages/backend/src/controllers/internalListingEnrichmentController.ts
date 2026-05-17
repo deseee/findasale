@@ -8,7 +8,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { enrichScrapedListing } from '../services/listingEnrichmentService';
 
-const DEFAULT_BATCH_SIZE = 50;
+const DEFAULT_BATCH_SIZE = 35;
 
 export async function runListingEnrichmentBatch(req: Request, res: Response): Promise<void> {
   const batchSize = parseInt(process.env.AI_ENRICHMENT_BATCH_SIZE || String(DEFAULT_BATCH_SIZE), 10);
@@ -72,7 +72,7 @@ export async function runListingEnrichmentBatch(req: Request, res: Response): Pr
 
       // 300ms delay between calls to stay under Haiku rate limits
       if (processed < unenriched.length) {
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 1500));
       }
     }
 

@@ -30,6 +30,92 @@ export interface EnrichedListingData {
  *
  * Result is stored in Sale.scrapedMetadata.aiEnriched for persistence.
  */
+
+// ---------------------------------------------------------------------------
+// Free extraction — runs before Haiku to avoid unnecessary API calls (~70% hit rate)
+// ---------------------------------------------------------------------------
+
+const KEYWORD_CATEGORY_MAP: Array<{ keywords: string[]; category: string }> = [
+  { keywords: ['furniture'], category: 'Furniture' },
+  { keywords: ['jewelry', 'jewellery'], category: 'Jewelry' },
+  { keywords: ['art'], category: 'Art' },
+  { keywords: ['clothing', 'clothes', 'garments'], category: 'Clothing' },
+  { keywords: ['kitchenware', 'kitchen'], category: 'Kitchenware' },
+  { keywords: ['tools', 'tool'], category: 'Tools' },
+  { keywords: ['collectibles', 'collectible'], category: 'Collectibles' },
+  { keywords: ['electronics', 'electronic'], category: 'Electronics' },
+  { keywords: ['books', 'book'], category: 'Books' },
+  { keywords: ['linens', 'linen'], category: 'Linens' },
+  { keywords: ['antiques', 'antique'], category: 'Antiques' },
+  { keywords: ['vintage'], category: 'Vintage' },
+  { keywords: ['glassware', 'crystal'], category: 'Glassware' },
+  { keywords: ['silverware', 'silver'], category: 'Silverware' },
+  { keywords: ['coins', 'coin'], category: 'Coins' },
+  { keywords: ['records', 'vinyl'], category: 'Records' },
+  { keywords: ['toys', 'toy'], category: 'Toys & Games' },
+  { keywords: ['games', 'game'], category: 'Toys & Games' },
+  { keywords: ['rugs', 'rug'], category: 'Rugs' },
+  { keywords: ['lamps', 'lamp'], category: 'Lighting' },
+  { keywords: ['mirrors', 'mirror'], category: 'Mirrors' },
+  { keywords: ['clocks', 'clock'], category: 'Clocks' },
+  { keywords: ['china', 'pottery', 'ceramics'], category: 'Ceramics & China' },
+];
+
+function tryFreeExtraction(description: string, saleTitle: string): EnrichedListingData | null {
+  const haystack = `${description} ${saleTitle}`.toLowerCase();
+
+  // --- Categories ---
+  const seen = new Set<string>();
+  const categories: string[] = [];
+  for (const entry of KEYWORD_CATEGORY_MAP) {
+    if (categories.length >= 5) break;
+    if (entry.keywords.some((kw) => haystack.includes(kw))) {
+      if (!seen.has(entry.category)) {
+        seen.add(entry.category);
+        categories.push(entry.category);
+      }
+    }
+  }
+
+  // --- Price range ---
+  let priceRange = '';
+  const rangeMatch = description.match(
+    /\$(\d+(?:,\d{3})*(?:\.\d{2})?)\s*[-\u2013to]+\s*\$(\d+(?:,\d{3})*(?:\.\d{2})?)/i
+  );
+  if (rangeMatch) {
+    priceRange = `$${rangeMatch[1]}\u2013$${rangeMatch[2]}`;
+  } else {
+    const singleMatch = description.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)/);
+    if (singleMatch) {
+      priceRange = `from $${singleMatch[1]}`;
+    } else {
+      const centsMatch = description.match(/(\d+)\s*(?:cents?|¢)/i);
+      if (centsMatch) {
+        priceRange = 'under $5';
+      }
+    }
+  }
+
+  // --- Decision gate ---
+  if (categories.length < 2 && priceRange === '') {
+    return null; // Not enough signal — fall through to Haiku
+  }
+
+  // --- Summary (first sentence, max 150 chars) ---
+  let summary = '';
+  if (description.length <= 80) {
+    summary = description.trim();
+  } else {
+    const sentenceMatch = description.match(/^[^.!?]+[.!?]/);
+    summary = sentenceMatch ? sentenceMatch[0].trim() : description.slice(0, 150).trim();
+  }
+  if (summary.length > 150) {
+    summary = summary.slice(0, 150);
+  }
+
+  return { categories, priceRange, summary };
+}
+
 export async function enrichScrapedListing(
   description: string,
   saleTitle: string
@@ -49,6 +135,14 @@ export async function enrichScrapedListing(
     console.warn('[enrichment] AI cost ceiling exceeded, skipping enrichment');
     return null;
   }
+
+  // Try free extraction before paying for AI
+  const freeResult = tryFreeExtraction(description, saleTitle);
+  if (freeResult) {
+    return freeResult;
+  }
+
+  console.log('[enrichment] Free extraction insufficient — calling Haiku for:', saleTitle.slice(0, 50));
 
   try {
     const prompt = `You are analyzing a secondary market sale listing for ${regionConfig.city}, ${regionConfig.state}.

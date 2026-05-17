@@ -1,0 +1,22 @@
+name: Backfill Organizer Contact Data
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # Daily at 7am UTC (1 hour after AI enrichment job)
+  workflow_dispatch:
+
+concurrency:
+  group: backfill-organizer-contacts
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Trigger organizer contact backfill
+        run: |
+          curl -s -X POST \
+            -H "x-internal-secret: ${{ secrets.INTERNAL_SECRET }}" \
+            -H "Content-Type: application/json" \
+            https://backend-production-153c9.up.railway.app/api/internal/backfill-organizer-contacts
