@@ -507,6 +507,34 @@ export async function syncLeadTierGroups(): Promise<void> {
 }
 
 /**
+ * startupCatchUp — fires once on boot after a 30s delay.
+ * If the most recent send was >5 hours ago, immediately triggers one send window
+ * so Railway deploys/restarts don't leave the queue idle until the next GH Actions trigger.
+ */
+async function startupCatchUp(): Promise<void> {
+  try {
+    const lastSent = await prisma.directoryClaimEmail.findFirst({
+      where: { sentAt: { not: null } },
+      orderBy: { sentAt: 'desc' },
+      select: { sentAt: true },
+    });
+
+    const hoursSinceLast = lastSent?.sentAt
+      ? (Date.now() - new Date(lastSent.sentAt).getTime()) / (1000 * 60 * 60)
+      : Infinity;
+
+    if (hoursSinceLast > 5) {
+      console.log(`[OutreachEmails] Startup catch-up: last send was ${Math.round(hoursSinceLast)}h ago, firing immediate window`);
+      await sendOutreachEmails();
+    } else {
+      console.log(`[OutreachEmails] Startup catch-up: last send was ${Math.round(hoursSinceLast * 10) / 10}h ago, no catch-up needed`);
+    }
+  } catch (err: any) {
+    console.error('[OutreachEmails] Startup catch-up failed:', err.message);
+  }
+}
+
+/**
  * initOutreachEmailsCron — registers outreach email jobs in the cron scheduler.
  *
  * sendOutreachEmails: runs every 4 hours (6 windows/day) to distribute the daily quota.
@@ -530,4 +558,9 @@ export function initOutreachEmailsCron(): void {
     await syncLeadTierGroups();
   }), { timezone: 'UTC' });
   console.log('[OutreachCron] syncLeadTierGroups registered — runs Sundays 04:00 UTC');
+
+  // Startup catch-up: 30s after boot, check if a send window was missed and fire immediately
+  setTimeout(() => {
+    startupCatchUp();
+  }, 30_000);
 }
