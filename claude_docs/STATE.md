@@ -8,7 +8,24 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S751 — Camera Landscape Orientation Fix (COMPLETE).**
+**Latest: S752 — Chrome QA Backlog Sprint + Outreach Fix (COMPLETE).**
+
+Token-efficient QA approach: main session Opus ran Chrome QA directly (~3-5k tokens/feature vs ~40-50k for Sonnet subagent dispatch). Verified 30+ features across shopper and organizer roles. Outreach query starvation bug fixed (CANDIDATE_MULTIPLIER=10, exhaustedFilter, nulls-first ordering, quota cap in send loop).
+
+**Chrome QA Results — Verified ✅ (30+ features):**
+Shopper side: Homepage (hero, search, Treasure Hunt, Sale of Day, map, Featured Sales), Sale Detail (hero, badges, gallery, share sidebar), Favorites (heart toggle), Cart (drawer from nav icon + dropdown), Dashboard (rank, XP, perks, QR, Guild onboarding, Hunt Pass upsell), Explorer Profile (name, email, bids, Hunt Pass, rank), Settings (Display, Notifications), Map (200 sales, filters, Plan Route, Heatmap), Trending (Hot Sales, Most Wanted), Leaderboard (City tabs, XP, ranks, badges).
+Organizer side: Dashboard (quick actions, plan info, storefront URL, sale card action buttons, weather), POS (sale selector, search, camera scan, 6 payment methods, manual card), Print Kit (5 signs, 4 QR labels, Label Sheet Composer, 3 Interactive QR), Close Sale (confirmation modal), Holds (sale selector, sort, empty state), Subscription Settings (plan, limits, actions), Items (5 items, 4 input methods, inline editing, export), Appearance Settings (Mode, Color, Text, Accessibility, Low-Bandwidth, Watermark), eBay Settings (connect page, two-way sync), Pricing Page (hero, 6 feature cards, 3-tier pricing).
+Also verified: #288 Featured Boost/Sale Bump (dual-rail XP or $1.00), Flash Deal (form + item selector), #265, #227, #275, #278, #260, #271, #263.
+
+**Bugs found ⚠️:**
+- #306 Store Hours — save doesn't persist after reload
+- #305 Social Posts — button is no-op
+- #307 Shop Mode — not visible on PRO tier, needs TEAMS verification
+- Subscription copy mismatch — says "Your TEAMS plan" when user is on PRO
+
+**Outreach fix:** `packages/backend/src/jobs/outreachEmailsCron.ts` — query starvation bug. Prior: each batch re-fetched same candidates, quota check outside send loop. Fixed: 10x candidate pool, exhaustedFilter excludes already-processed, nulls-first ordering, quota cap inside send loop.
+
+**Previous: S751 — Camera Landscape Orientation Fix (COMPLETE).**
 
 Bug: RapidCapture (both rapidfire and regular mode) didn't adapt when phone held in landscape. Two-part fix: (1) Replaced `matchMedia('change')` listener with `resize` + `screen.orientation.change` events in RapidCapture.tsx for reliable cross-browser orientation detection. (2) Changed `"orientation": "portrait"` → `"orientation": "any"` in manifest.json — the PWA manifest was locking the app to portrait so the viewport never rotated and no resize event ever fired. Files: `packages/frontend/components/RapidCapture.tsx`, `packages/frontend/public/manifest.json`. Note: users with the PWA already installed on their home screen may need to remove and re-add it for the manifest change to take effect.
 
@@ -213,24 +230,39 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority: Outreach send rate investigation + storefront past-sales backend fix.**
+**Priority: Fix 4 bugs from S752 QA sprint + continue Chrome QA backlog.**
 
-1. **Outreach send rate** — S748 noted ~2/day vs expected 50/day at Day 11 warmup. Has startupCatchUp (added S749) improved this? Check Railway logs for `[OutreachCron]` entries and actual send counts.
+1. **Fix bugs found S752:** #306 Store Hours save persistence, #305 Social Posts no-op, #307 Shop Mode PRO visibility, Subscription copy mismatch (says TEAMS when PRO). All are dev dispatches.
 
 2. **Storefront past sales section** — `GET /organizers/:id` filters `status: 'PUBLISHED'` only. Ended sales never surface, so `attendanceCount` on historical sales is invisible to visitors. Backend needs a "Past Sales" section added to the storefront endpoint.
 
-3. **Email verification token migration** — Migration 20260515180000 still not deployed. Non-blocking but needed for new user registrations.
+3. **Continue Chrome QA backlog** — ~10 remaining Pending Chrome QA items in roadmap. Use main-session Opus approach (3-5k tokens/feature).
 
-4. **Smoke test remaining transactional emails** — Only claim verification confirmed delivered. Test one more flow (password reset or registration) to validate the full Gmail API surface.
+4. **Smoke test remaining transactional emails** — Only claim verification confirmed delivered. Test one more flow (password reset or registration).
 
 **Patrick actions needed:**
+- Push the outreach fix (push block in patrick-dashboard.md)
+- Log back into Chrome as yourself (artifactmi@gmail.com) — QA left a test account active
 - Deploy email verification token migration (20260515180000)
 - Delete fix-attendance.sql from project root
-- For camera landscape fix: users with the PWA installed to home screen need to remove + re-add it for the manifest change to apply
 
 ---
 
 ## Recent Sessions
+
+### S752 — Chrome QA Backlog Sprint + Outreach Fix (COMPLETE)
+
+**Trigger:** Patrick asked for a less token-wasteful QA approach (Sonnet subagents waste ~40-50k tokens per feature). Also investigated outreach send rate (~2/day vs expected 50/day).
+
+**Outreach fix:** Query starvation in `outreachEmailsCron.ts`. Each batch re-fetched same candidates, quota check was outside send loop. Fixed: CANDIDATE_MULTIPLIER=10, exhaustedFilter excludes already-processed, nulls-first ordering, quota cap inside send loop. Edit tool truncated file (567→526 lines) — recovered via Python splice from git original.
+
+**Chrome QA sprint (main session Opus, ~3-5k tokens/feature):** Verified 30+ features across shopper and organizer roles. Shopper: Homepage (hero, search, Treasure Hunt, Sale of Day, map, Featured Sales), Sale Detail (hero, badges, gallery, share), Favorites, Cart, Dashboard (rank, XP, perks, QR, Guild, Hunt Pass), Explorer Profile, Settings, Map (200 sales, filters, Plan Route, Heatmap), Trending, Leaderboard. Organizer: Dashboard (quick actions, plan info, storefront URL, sale cards, weather), POS (sale selector, search, camera scan, 6 payment methods, manual card), Print Kit (5 signs, 4 QR labels, Label Sheet Composer, 3 Interactive QR), Close Sale, Holds, Subscription Settings, Items (5 items, 4 input methods, inline editing, export), Appearance Settings, eBay Settings, Pricing Page. Also: Featured Boost/Sale Bump, Flash Deal, and several roadmap items.
+
+**Bugs found:** #306 Store Hours save persistence, #305 Social Posts no-op, #307 Shop Mode PRO visibility, Subscription copy mismatch (TEAMS label on PRO account).
+
+**Files changed:** `packages/backend/src/jobs/outreachEmailsCron.ts`
+
+**Google login restoration:** Failed after 5+ attempts — OAuth chooser kept selecting wrong account (Lorene Cook) despite precise element targeting. Patrick needs to log in manually.
 
 ### S751 — Camera Landscape Orientation Fix (COMPLETE)
 
@@ -291,174 +323,10 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 (Content moved from S748 IN-FLIGHT above.)
 
-### S747 — Haiku Rate Limit Root Cause + Enrichment Pipeline Fixes (COMPLETE)
-
-**Trigger:** 971 Haiku API hits in 24h notification. Root cause investigation + fixes.
-
-**Root causes found:**
-- `listingEnrichmentService.ts` was fire-and-forget on every `GET /organizers/:id` page load — simultaneous page loads burst through 50 RPM limit instantly
-- `aiCostTracker.ts` used in-memory `Map` for token counts — reset on every Railway restart (5+ restarts during S744 = 5 full ceiling resets = full burst capacity each time)
-- `redis.ts` was a fake in-memory stub despite real Redis being live on Railway
-
-**Fixes shipped (push block pending — previous session files + this session's files):**
-- `redis.ts` — real `createClient` from `redis` package, in-memory fallback when `REDIS_URL` absent
-- `aiCostTracker.ts` — token counts now persisted to Redis (`ai:tokens:YYYY-MM`, 35-day TTL), fail-open on Redis outage
-- `organizers.ts` — removed fire-and-forget enrichment forEach from `GET /organizers/:id` handler entirely
-- `socialPostController.ts` — added missing `await` for `isAICostCeilingExceeded()` check
-- `internalListingEnrichmentController.ts` — new batch endpoint for GH Actions; delay 300ms → 1500ms; batch size 50 → 35
-- `.github/workflows/enrich-ai-metadata.yml` — daily at 06:00 UTC
-- `listingEnrichmentService.ts` — regex pre-filter before Haiku (keyword categories + price range + first-sentence summary); only calls Haiku if < 2 categories AND no price detected (~70% call reduction)
-- `internalOrganizerContactBackfillController.ts` — new: free DB-only backfill of address/phone/website/contactEmail from scraped Sale records to Organizer profiles
-- `internal.ts` — wired new backfill endpoint
-- `.github/workflows/backfill-organizer-contacts.yml` — daily at 07:00 UTC
-
-**Railway env var set:** `AI_ENRICHMENT_BATCH_SIZE=300` (Patrick sets manually — overrides hardcoded 35 default for faster backlog clearance)
-
-**Investigations:**
-- `saleDetailEnrichment.ts` — clean, no Haiku calls, pure HTML scraper. No issues.
+(Sessions S747 and older archived — see Current Status section for summaries.)
 - Organizer profile UI — correctly renders address/phone/website/contactEmail. Data gap, not display bug.
 - ESN address situation confirmed: ESN does NOT provide street addresses at scrape time (city/state only). Organizer contact backfill will help Foursquare/HERE-sourced orgs but not ESN-only. Address enrichment for ESN requires organizerWebsite.ts visiting the organizer's own website.
 
 **Patrick's feedback:** Claude doing surface-level work without deep research into the full pipeline. Next session: Opus deep audit of entire scraping + enrichment workflow before touching anything.
 
-### S746 — Chrome QA Sprint: Settings Fields + Feature Routing Verification (COMPLETE)
-
-QA-only session. Four Blocked Queue items cleared, two features confirmed built (wrong URLs tested in S745).
-
-**Bugs fixed by S745 dev agent (confirmed via code read):**
-- **#310 Color Discount Rules** ✅ FIXED S745 — Modal moved outside TierGate (pointer-events-none during auth refresh was blocking clicks). Files: color-rules.tsx.
-- **#330 Appraisals Submit** ✅ FIXED S745 — Added type="button" to trigger button (was defaulting to submit, browser absorbed click). Files: appraisals.tsx.
-
-**Chrome QA verified this session:**
-- **#353 Year Founded** ✅ — Navigated to /organizer/settings as user1. Set to 2019 via React native setter. PATCH /api/organizers/me confirmed yearFounded:2019 in body. Reloaded — value persists.
-- **#355 Org Types** ✅ — Estate Sales checkbox set to checked in same save. PATCH confirmed organizerTypes:["estate_sale"]. Reloaded — checkbox persists.
-- **#88 Haul Posts** ✅ — /shopper/haul-posts loads correctly as user12. S745 was testing wrong URL (/shopper/haul). Nav link present in Layout.tsx. Community Hauls feed renders with Share Your Haul button.
-- **#329 Consignment** ✅ — /organizer/consignors loads correctly as user1. Nav link present in Layout.tsx. Add Consignor button + empty state render correctly.
-
-**Still UNVERIFIED (no test data):**
-- #362 Attendance Count — needs organizer with ended sale
-- #124 Rarity Boost modal — no rare items in seeded data
-
-**Patrick action:** Sign back into Chrome with Google (artifactmi@gmail.com). Push block: docs only (STATE.md + patrick-dashboard.md).
-
-### S745 — Chrome QA Sprint: Batch 1 (Organizer) + Batch 2 (Shopper) (COMPLETE)
-
-Two-batch Chrome QA run. Outreach pipeline confirmed live at session start (OUTREACH_TEST_EMAIL deleted, Day 11 warmup, 3,370 organizers queued). Roadmap #431 rate limiter updated FIXED.
-
-**Batch 1 — user1 (Alice Johnson, TEAMS organizer):**
-- **#352 Tagline** ✅ — Entered "Quality Sales You Can Trust", triggered PATCH via React fiber onClick, 200 OK, value persisted after reload. Confirmed working.
-- **#310 Color Discount Rules** ❌ — "Add Rule" and "Create your first rule" buttons both produce no response. No modal opens. Re-broken since S716.
-- **#330 Appraisals Submit** ❌ — "Submit New Request" button unresponsive. No modal opens. Re-broken since S719.
-- **#329 Consignment entry point** ✅ VERIFIED S746 — /organizer/consignors loads at correct URL. Nav link confirmed in Layout.tsx. CLOSED.
-- **#353 Year Founded / #355 Org Types** ⚠️ — Fields present; save PATCH fired (200) but year and org type state did not confirm persistence. Likely React native-setter testing artifact. Added to Blocked Queue for clean retest.
-- **#362 Attendance Count** UNVERIFIED — user1 has no sales in seeded data.
-- **#223 Guidance Layer** ⚠️ — Guidance overlay ("Welcome to Explorer's Guild") present on SHOPPER dashboard; NOT found on organizer dashboard. Two separate feature surfaces.
-
-**Batch 2 — user12 (Leo Thomas, shopper + Hunt Pass):**
-- **#227 XP Dashboard** ✅ — Shopper dashboard loaded with real data: 40/500 XP, Initiate Explorer rank, 460 XP to Scout, Hunt Pass Active (1.5x), 3 total purchases.
-- **#29 Loyalty Passport** ✅ — QR code present on shopper dashboard ("Show this to organizer at checkout"), "Display my QR code" button active, real user data shown.
-- **#199 Shopper Profile** ✅ — /shopper/explorer-profile loads: bio field, specialties (8 categories), keyword matching, 1/12 achievements unlocked (First Find), notification settings.
-- **#88 Haul Posts** ❌ — /shopper/haul and /shopper/hauls both 404; no nav entry point. Not built.
-- **#124 Rarity Boost modal** UNVERIFIED — no entry point found; no rare items in seeded data to trigger it.
-
-**Also confirmed:** #271 TEAMS copy ✅ (carried from pre-compression). Chrome restored to Patrick login page at session end.
-
-### S744 — CI Infrastructure Hardening: ESN Scraper Fix + Fleet Sweep (COMPLETE)
-
-Audit of 50+ "Run failed" Gmail notifications. Two failure classes, both resolved. **ESN scraper** required 4 sequential fixes in `scrape-estatesalesnet.yml` + `run-estatesalesnet.ts`: workflow-level concurrency referencing `matrix.chunk` (invalid context, caused "No jobs were run"); job-level concurrency serializing chunks (removed); pnpm/action-setup@v3 post-step deadlock (switched to `corepack enable`); main() never exiting due to undici keepalive holding event loop + buffered stdout (added `process.exit(0)`). Result: all 4 chunks parallel, ~3-4min each, green. **State licensing scrapers** (27+ states) — Agent B investigation of Railway logs found the gracefully-handled scraper code was on `main` since S715 but every May 14-16 Railway deploy failed with `Cannot find module '@findasale/database'` in organizerWebsiteAddressCron. Backend ran stale code while GH Actions hammered crashing endpoints. Commit 716414af today 22:52 UTC deployed clean — live-curl confirmed Wisconsin 200/0.3s, AZ 0.2s, WY 2.9s. Monitor next 7d. **Preventive sweep** — 2 parallel agents fixed 67 files: 57 workflow files migrated from pnpm/action-setup@v3 → corepack enable, 2 @v2 files also fixed inline (scrape-wy-phase2.yml, scrape-ok-phase2.yml), 8 fetch-using script entry points patched with process.exit(0). Gmail bulk archive blocked on connector lacking label-modify scope.
-
-### S743 — CategorySync Fix + Voice Strip QA + Wyoming Restoration (COMPLETE)
-
-Four fixes shipped. (1) **CategoryTopFinds Browse API fix** — `categorySyncCron.ts`: wrong API syntax (`filter=categoryIds:{3199}` → `category_ids=3199` as direct param); multi-ID limit (Browse API allows max 1 category per call — was passing comma-separated IDs); looped per ID, merged + deduplicated results. All 9 categories now live with real eBay data. Nightly cron at 05:00 UTC. (2) **Category sync trigger route** — `internal.ts`: `POST /api/internal/category-sync/trigger` was awaiting the 30s sync before responding, causing PowerShell timeout + socket-write crash on closed connection; flipped to fire-and-forget (respond immediately, run sync in background). (3) **Voice strip QA** ✅ PASS — JS console verification of exact deployed regex (sha 1fd4c07): "8 oz" → empty, "2 lb 4 oz" → empty, compound phrases stripped, control phrase preserved. (4) **Wyoming scraper restored** — agent had replaced active scraper logic with a disabled no-op stub and registered it in sourceRegistry; both reverted. Also fixed bad prisma import path in restored file (removed unused import — page is JS-rendered, upsert branch never reached). (5) **Outreach seeder image-filename validation** — `autoSeedOutreachCron.ts` + `seedDirectoryClaimEmails.ts`: blocks `.png`/`.jpg`/`.gif`/`.webp`/`.svg`/`.ico` filenames from being inserted as emailAddress. CLOSED Blocked Queue: voice strip, Wyoming scraper.
-
-### S742 — Help Library: 75 Guides + /guides Route (COMPLETE)
-
-Help Library shipped end-to-end. 75 markdown guide drafts written across 13 clusters, TypeScript entry files built, `/guides` route live with ISR, fabrication audit run, voice notes coverage added.
-
-**Route surface:** `packages/frontend/pages/guides/index.tsx` + `pages/guides/[slug].tsx`. ISR 24h revalidation. TypeScript array data source — no markdown libraries, no new npm deps. 76 entry files at `packages/frontend/data/guides/entries/<slug>.ts`. Custom `parseMarkdown()` function handles all heading/list/paragraph formatting. Index groups guides by audience (Organizer / Shopper / Both). Slug pages render title, audience badge, format label, optional video embed, parsed body, Related Guides footer.
-
-**Content (75 guides + 5 canonical slug files):** Clusters 1–13 in `claude_docs/strategy/guides-drafts/`. Audiences: 45 organizer, 25 shopper, 5 both. Formats: 52 written-only, 18 written+screen-capture VO, 5 written+explainer. Treatments: FRESH, THIN, WRAPPER.
-
-**Fabrication audit:** 16 files contained invented performance/time claims ("60 items in five minutes", "setup takes three minutes", etc.). All fixed — replaced with plain feature descriptions. eBay sync speed: "almost immediately" (not "60 seconds"). 53 of 75 files were clean.
-
-**Voice notes coverage:** 4 guides updated with accurate voice note feature description. Feature: Web Speech API (Chrome/Edge only), mic button per item in rapidfire session, transcript appended to description (never overwrites), keyword extraction (name/category/tags/weight/dims) via regex — no AI call, no audio stored. Also available from item detail/review view. No XP awarded.
-
-**Cluster 7 slug fix:** 5 stub entries ("Guide coming soon") replaced with real content from long-named draft files. Canonical slugs: run-the-pos, settlement-and-payouts, line-queue, message-templates, treasure-trails-organizer. TS: zero new errors.
-
-### S741 — SEO Content Moat: 116 Pages Generated, 500 Total (COMPLETE)
-
-116 guide pages generated in 3 batches and appended to `packages/frontend/data/seo-pages/index.json`. Session hit an API error mid-run; Batch 3 re-dispatched and completed successfully.
-
-**Batch 1b (16 pricing guides):** Vintage denim, first editions, vinyl records, Fenton glass, Rookwood pottery, Frankoma pottery, Chippendale furniture, Arts & Crafts furniture, Mission oak furniture, Daum glass, Gallé glass, slag glass, Heisey glass, Imperial glass, Cambridge glass, Burmese glass.
-
-**Batch 2 (50 identification guides):** How-to-identify and how-to-authenticate pages for Hummel, Royal Doulton, Tiffany, sterling silver, Roseville, Steuben, antique furniture, Rolex, Hermès, Cartier, Wedgwood, Meissen, Limoges, depression glass, carnival glass, and 35 more.
-
-**Batch 3 (50 buying guides):** Actionable how-to pages covering estate sale prep, negotiation, pricing, staging, reselling, jewelry/watch buying, consignment, and organizer operations.
-
-**Result:** 384 → 500 pages. Zero duplicate slugs. All entries: correct schema, type=how-to or pricing-guide, saleType=general, 4–7 sections, no "AI" language. ISR serves all at `/guide/[slug]` and auto-populates server-sitemap.xml.
-
-### S740 — Parallel Feature Batch: priceBeforeMarkdown + Linked OAuth UI + Roadmap Cleanup (COMPLETE)
-
-Three parallel dispatches shipped; Chrome QA attempted.
-
-**(1) #251 priceBeforeMarkdown FIXED** — `packages/frontend/pages/sales/[id].tsx` line 1492: removed `item.markdownApplied &&` guard from the crossed-out price conditional. `markdownApplied` is only set by the auto-markdown cron — manually discounted items always had `priceBeforeMarkdown` set but `markdownApplied=false`, so the ~~$X~~ display never fired. All other components (ItemCard.tsx, items/[id].tsx, InventoryItemCard.tsx) already used the correct check. TS: zero errors.
-
-**(2) Settings linked OAuth UI** — `packages/frontend/pages/organizer/settings.tsx`: added Linked Accounts card to Profile tab. Fetches `oauthProvider` from `/auth/me` (stale 60s); shows Google Connected green pill when `linkedProvider === 'google'`, otherwise shows "Link Google Account" anchor → `/api/auth/google`. Disconnect omitted (no backend unlink endpoint yet). Python/bash used for the edit (file is 2043 lines — Edit tool would truncate). TS: zero errors.
-
-**(3) Roadmap cleanup** — `claude_docs/strategy/roadmap.md`: #429 and #430 updated from BROKEN to FIXED S736 with 5 targeted edits. Last Updated header updated.
-
-**(4) Chrome QA — Review page eBay dims** — UNVERIFIABLE. user2/Maya Jackson is a SHOPPER in production despite seed marking them as organizer. Access-denied on /organizer/dashboard. Additionally, the correct review page route is `/organizer/add-items/[saleId]/review` not `/organizer/review` (which 404s). Code confirmed: all 9 missing fields present in getDraftItemsBySaleId at lines 2283–2292. Patrick's Google session restored after QA.
-
-### S739 — AWS SES Migration Infrastructure Setup (IN-FLIGHT)
-
-AWS-side setup completed; code migration dispatched but not yet returned.
-
-**(1) SES identity** — Created `send.finda.sale` in AWS SES us-east-1. Status: "Verification pending" (DNS CNAME propagation, up to 72h).
-
-**(2) DKIM DNS records** — All 3 CNAME records added to Vercel DNS for finda.sale domain: `gzd3woudjoavykvq7mzph5n3xdwxohng._domainkey.send`, `rlxrsyr3posfgqchqxain5wvjp7n2b5x._domainkey.send`, `4vzzlmhtdeyyz3gcsq2x7e327juexzke._domainkey.send`. All confirmed saved in Vercel dashboard.
-
-**(3) AWS production access** — Submitted Service Quota increase requests: sending quota 200/day → 50,000/day and sending rate 1/sec → 14/sec. Pending AWS approval (24–48h).
-
-**(4) Railway env vars** — Patrick confirmed added: SMTP_HOST, SMTP_PORT=587, SMTP_USERNAME, SMTP_PASSWORD (from CSV), SES_FROM_EMAIL=noreply@send.finda.sale.
-
-**(5) Code migration dispatched** — findasale-dev dispatched to: create `packages/backend/src/lib/emailService.ts` (nodemailer SMTP wrapper), update ~37 backend files to import emailService instead of Resend SDK, add suppression check to saleEndingSoonJob.ts, change all from addresses to @send.finda.sale. Results not yet returned — session ended before agent completed.
-
-### S738 — Bug Fix Session: 3 Production Crashes Fixed (COMPLETE) ✅ Pushed
-
-Three bugs diagnosed from Railway logs Patrick sent during session, all fixed and pushed.
-
-**(1) valuationService.ts** — `orderBy: { createdAt: 'desc' }` in `prisma.priceBenchmark.findMany()`. PriceBenchmark has no `createdAt` field (only `updatedAt`). Changed to `orderBy: { updatedAt: 'desc' }`. Fixes valuation 500 crash.
-
-**(2) appraisalService.ts** — `getOpenRequests()` / `getOpenAppraisalsForCommunity()` crashed (`Field submittedBy is required to return data, got null`) on orphaned AppraisalRequest rows where the linked user was deleted. Added `submittedBy: { isNot: null }` to the `where` clause.
-
-**(3) FavoriteButton + favoriteController + favorites routes** — Sale detail page rendered FavoriteButton with `itemId={sale.id}` but `POST /api/favorites/item/:id` only accepts Item FK. Favorite model already had `saleId String?` + `@@unique([userId, saleId])`. Added: `toggleSaleFavorite` + `getSaleFavoriteStatus` controllers; `POST /sale/:id` + `GET /sale/:id` routes; FavoriteButton updated to call `/sale/:id` when `itemId` prop absent; `pages/sales/[id].tsx` updated to pass no `itemId` (sale-level renders only).
-
-**Also confirmed + included in push:** organizers.ts returnWindowHours removal from Prisma update (P2025 fix coded prior session, never pushed) + index.ts authLimiter `/me` exemption (CRIT-1). All 8 files pushed green.
-
-**eBay 400 errors (observed):** Stale offer/inventory IDs returning 400 from eBay (listings removed from eBay since sync). Sync handles gracefully — logs and continues. Data issue, not code bug.
-
-### S737 — QA Session: Blocked Queue Burn-Down (COMPLETE)
-
-Chrome QA continuation from S736. Session started mid-task on Elektra Vintage organizer profile page; compaction had occurred.
-
-**Verified this session:**
-- **#326 eBay Comp Tiles** ✅ — 3-tile grid on edit-item page (Victorian Pocket Watch): $295/$450/$675 Pre-owned Good listings with photos. CLOSED.
-- **#322 EbayCategoryPicker** ✅ — Typed "pocket watch" → real eBay taxonomy dropdown populated. CLOSED.
-- **S733 Sales page desktop claim-listing CTA** ✅ — Guest view of /sales/cmoyqeblk035j8i79qtgjtt3m: "Is this your sale? Claim this listing..." + orange Claim button in aside. CLOSED.
-
-**UNVERIFIABLE (queued):**
-- S734 Voice strip weight/dims — VM has no microphone. Stays in Blocked Queue.
-- S734 Review page eBay card dims/weight — all user2 items are live/published, no draft queue to test. Stays in Blocked Queue.
-
-**Patrick confirmed done:** S736 push ✅, QA_RATE_LIMIT_BYPASS_SECRET added to Railway ✅, SES AWS console steps ✅, MAILERLITE_SHOPPERS_GROUP_ID set ✅. Email verification migration (20260515180000) — deploying next week.
-
-**CRIT-1 residual bug logged:** `authLimiter` in index.ts applies globally including `/api/auth/me` (fires on every page nav). QA bypass header not sent by browsers for page navigations. Needs scope fix.
-
-### S736 — QA/Fix Session: 3 BROKEN Bugs Fixed + Chrome QA Sprint (COMPLETE)
-
-QA ceiling rule fired (14 blocked items ≥8 threshold). Session: 3 BROKEN bugs fixed + Chrome QA on 3 blocked items.
-
-**Bugs fixed:**
-- **#430 Register form silent error** — `pages/register.tsx` catch block was calling `setError(msg)` only; added `showToast(msg, 'error')` so the error is always visible even if user has scrolled. Inline fix, <5 lines.
-- **#429 eBay review queue skips description template** — `review.tsx` `handleApproveItem` (line ~673) and `handleApproveAll` (lines ~863, ~922) were sending item updates to DB before eBay push but omitting `description` field. Added `description: editState.description` to both update payloads. No backend changes — `{{DESCRIPTION}}` substitution in ebayController.ts was already correct. The edit-item path and review queue path were separate code paths; review queue was the gap.
-- **#431 Rate limiters halting QA** — Two stacked rate limiters found: (1) `authLimiter` in `packages/backend/src/index.ts` — had IP whitelist that broke when VM IP rotated between sessions; (2) `loginLimiter` + `registerLimiter` in `packages/backend/
+(Sessions S746 and older archived — see Current Status section for summaries.)
