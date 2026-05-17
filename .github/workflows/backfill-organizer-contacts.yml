@@ -15,13 +15,17 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Trigger organizer contact backfill
+        env:
+          OUTREACH_SECRET: ${{ secrets.INTERNAL_API_TOKEN }}
+          RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
         run: |
           echo "Triggering organizer contact backfill..."
-          curl -sf -X POST \
+          curl -X POST \
+            -H "x-internal-secret: ${OUTREACH_SECRET}" \
             -H "Content-Type: application/json" \
-            -H "x-internal-secret: ${{ secrets.OUTREACH_SECRET }}" \
             -d '{}' \
-            ${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/backfill-organizer-contacts
+            "${RAILWAY_BACKEND_URL}/api/internal/backfill-organizer-contacts" \
+            --fail-with-body --connect-timeout 10 --max-time 120
 
       - name: Notify on failure
         if: failure()
