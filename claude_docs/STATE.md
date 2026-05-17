@@ -8,9 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S748 — Pipeline Deep Audit + Full Fix Batch (IN-FLIGHT).**
+**Latest: S749 — Claim Page QA + P0 emailService Rewrite (COMPLETE).**
 
-Opus deep audit of entire scraping + enrichment pipeline. DB-verified all numbers. Six fixes shipped: (1) `enrich-ai-metadata.yml` + `backfill-organizer-contacts.yml` created (P0 — untriggered endpoints), (2) `leadScoringService.ts` HOT OR-gate now requires email (P1 — tiers were 78% HOT), (3) `internalOrganizerContactBackfillController.ts` rewritten with cursor pagination + raw SQL eligibility (P0 — was reprocessing same 500 forever), (4) `organizerWebsiteAddressCron.ts` flipped to opt-out gate + broadened eligibility + rotation (P1 — never ran due to unset env var). Results after 3 backfill runs: addresses 46→2,919, phones +161, websites +222. Lead rescore: HOT 44,120→5,517, WARM 1,201→36,851, COLD 11,361→14,314, SUPPRESSED 5,538. Auto-seed ran green. Investigating: outreach send rate (~2/day vs expected 50/day). Claim page QA needed.
+Claim flow QA revealed P0: ALL transactional emails across the platform were broken (SES SMTP not approved by Amazon, Railway blocks SMTP ports). Fix: rewrote `emailService.ts` from nodemailer/SMTP to Gmail API (same transport outreach already uses). Fire-and-forget pattern applied to claim route so 201 returns instantly. 35 backend services that call `emailService.emails.send()` are now unblocked. Also fixed: ClaimListingModal dark mode (P2), created `/claim` landing page (P3). Verified end-to-end: claim submit → instant success toast → verification email received at deseee@yahoo.com from `find@outreach.finda.sale`. Outreach startup catch-up also wired into index.ts this session.
+
+**Previous: S748 — Pipeline Deep Audit + Full Fix Batch (COMPLETE).**
+
+Opus deep audit of entire scraping + enrichment pipeline. DB-verified all numbers. Six fixes shipped: (1) `enrich-ai-metadata.yml` + `backfill-organizer-contacts.yml` created (P0 — untriggered endpoints), (2) `leadScoringService.ts` HOT OR-gate now requires email (P1 — tiers were 78% HOT), (3) `internalOrganizerContactBackfillController.ts` rewritten with cursor pagination + raw SQL eligibility (P0 — was reprocessing same 500 forever), (4) `organizerWebsiteAddressCron.ts` flipped to opt-out gate + broadened eligibility + rotation (P1 — never ran due to unset env var). Results after 3 backfill runs: addresses 46→2,919, phones +161, websites +222. Lead rescore: HOT 44,120→5,517, WARM 1,201→36,851, COLD 11,361→14,314, SUPPRESSED 5,538. Auto-seed ran green. Investigating: outreach send rate (~2/day vs expected 50/day).
 
 **Previous: S744 — CI Infrastructure Hardening: ESN Scraper End-to-End Fix + Fleet Preventive Sweep (COMPLETE).**
 
@@ -173,7 +177,7 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | Voice strip — weight/dims (S734) | ✅ VERIFIED S743 — JS console test (exact deployed regex, V8 engine, sha 1fd4c07): "8 oz" → empty, "2 lb 4 oz" → empty, "weighs 3 pounds" → empty, "nice ceramic vase in good condition" → unchanged. CLOSED. | — | S734 |
 | Review page eBay card — dims/weight (S734) | ✅ VERIFIED S741 — Navigated to /organizer/add-items/qa-dims-test-sale-001/review as user2 (Bob Smith). Called GET /api/items/drafts?saleId=qa-dims-test-sale-001 (200 OK). All 9 previously-missing fields present: packageWeightOz=24, packageLengthIn=12, packageWidthIn=8, packageHeightIn=4, ebayShippingOverride=null, quantity=1, listingType=FIXED, reverseDailyDrop=null, reverseFloorPrice=null. eBay section not rendered in UI because user2 has no EbayConnection row — correct behavior, not a bug. Fix in getDraftItemsBySaleId confirmed working. CLOSED. | — | S734 |
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
-| #SES-MIGRATION — email provider move | S739 COMPLETE — code pushed, domain verified, production access approved. Outreach email (Gmail API, find@outreach.finda.sale) is separate and confirmed working S745. SES transactional path (noreply@send.finda.sale) still needs smoke test. | Trigger one transactional email (e.g. register a new account or resend verification) → confirm it arrives from noreply@send.finda.sale → then remove RESEND_API_KEY/RESEND_FROM_EMAIL from Railway + resend from package.json. | S739 |
+| #SES-MIGRATION — email provider move | ✅ RESOLVED S749 — SES SMTP never worked (Amazon hasn't approved + Railway blocks SMTP ports). emailService.ts rewritten to use Gmail API (same as outreach). All 35 services now send via Gmail API through `find@outreach.finda.sale`. Verified: claim verification email delivered. SES remains available as future scale path (50k/day) once approved — but Gmail API (2k/day) is sufficient for current volume. CLOSED. | — | S739 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
@@ -201,27 +205,44 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Use Claude Opus. Task: Deep audit of the entire scraping + enrichment workflow.**
+**Priority: Outreach send rate investigation + remaining QA.**
 
-S747 fixed symptoms (rate limits, fire-and-forget enrichment, fake Redis client) without understanding the full system. Opus should map the complete pipeline end-to-end before touching anything else:
+Pipeline deep audit complete (S748). Claim flow verified end-to-end (S749). Next priorities:
 
-1. **Map every data source** — ESN, Foursquare, HERE, Google Places, state licensing scrapers, GarageSaleFinder, Eventbrite, newspaper RSS, Facebook, OSM. What does each source provide? What fields are populated vs. null? What's the ESN address situation specifically (city/state only — confirmed this session)?
+1. **Outreach send rate** — S748 noted ~2/day vs expected 50/day at Day 11 warmup. Investigate: is the outreach cron firing? Is the startupCatchUp wiring (added S749) helping? Check Railway logs for `[OutreachCron]` entries and actual send counts.
 
-2. **Map every enrichment step** — `saleDetailEnrichment.ts` (HTML scraper, no AI), `listingEnrichmentService.ts` (AI categories/price/summary), `organizerWebsite.ts` (address extraction), `saleDetailEnrichmentCron.ts`, `organizerWebsiteAddressCron.ts`, email discovery, lead scoring. What runs when? What triggers what? What's the sequencing dependency?
+2. **Email verification token migration** — Migration 20260515180000 still not deployed. Patrick needs to run the powershell block (same as before). Non-blocking but needed for new user registrations.
 
-3. **Identify what's actually missing on organizer profiles** — For ESN-sourced organizers (the majority), what data do we realistically have vs. what does the profile page try to display? The Elektra Vintage example shows address missing — but is that because ESN doesn't provide street addresses at scrape time, or because the address enrichment pipeline (organizerWebsite.ts visiting organizer websites) isn't running/finding it?
+3. **Smoke test remaining transactional emails** — Gmail API emailService now powers everything, but only claim verification has been confirmed delivered. Test one more flow (e.g. password reset or registration verification) to confirm the full surface works.
 
-4. **Check if `organizerWebsite.ts` is actually working** — S725 built it. `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=true` was set S726. Is it producing results? Query the DB or check Railway logs. Does it actually extract addresses or is it hitting edge cases?
+4. **Blocked Queue items** — #362 Attendance Count (needs organizer with ended sale), #124 Rarity Boost (no entry point found). Low priority.
 
-5. **Rate limit math for the full pipeline** — Now that enrichment is in GH Actions daily at 06:00 UTC, what's the realistic throughput given Tier 1 limits (50 RPM)? How many unenriched records exist? How long until the backlog is cleared?
-
-6. **Propose concrete fixes**, not surface patches. Read the actual code before proposing anything.
-
-**Patrick's note:** Claude has been doing surface-level work without deep research. Opus must read everything before recommending anything.
+**Patrick action needed:** Deploy email verification token migration when ready.
 
 ---
 
 ## Recent Sessions
+
+### S749 — Claim Page QA + P0 emailService Rewrite (COMPLETE)
+
+**Trigger:** Patrick asked for claim page QA. Escalated to P0 when SMTP timeout revealed ALL transactional emails were dead.
+
+**Fixes shipped:**
+- **P0: emailService.ts rewrite** — SES SMTP → Gmail API. Same transport pattern as outreach (OAuth2 + `gmail.users.messages.send()`). 35 backend services unblocked. Fire-and-forget `.catch()` on claim route so 201 returns instantly.
+- **P1: Claim submit timeout** — `await emailService.send()` blocked HTTP response for 30s+ until SMTP timed out, then threw ERR_HTTP_HEADERS_SENT. Fixed by fire-and-forget pattern.
+- **P2: ClaimListingModal dark mode** — Form state had no dark classes. Added `dark:bg-gray-800`, `dark:text-gray-100`, `dark:text-gray-300/400`, `dark:bg-gray-700`, `dark:border-gray-600` to container, heading, labels, inputs, cancel button.
+- **P3: /claim landing page** — Created `pages/claim/index.tsx` with 3-step instructions + "Find Your Sale" CTA. Was returning 404.
+- **Outreach startup catch-up** — Wired `outreachStartupCatchUp()` into index.ts listen callback (30s delay).
+
+**Verified end-to-end:** Submitted claim for "From Trash To Treasure" organizer → instant success toast → verification email received at deseee@yahoo.com from `find@outreach.finda.sale` with valid verification link.
+
+**Key finding:** Railway Hobby plan blocks SMTP ports (25/465/587) at TCP level. SES SMTP was never going to work without upgrading to Railway Pro ($20/mo). Gmail API over HTTPS (port 443) is the correct bridge until SES approval + plan upgrade. Gmail cap: 2,000 emails/day — sufficient for current volume.
+
+**Files changed:** `packages/backend/src/lib/emailService.ts`, `packages/backend/src/routes/organizers.ts`, `packages/backend/src/index.ts`, `packages/frontend/components/ClaimListingModal.tsx`, `packages/frontend/pages/claim/index.tsx`.
+
+### S748 — Pipeline Deep Audit + Full Fix Batch (COMPLETE)
+
+(Content moved from S748 IN-FLIGHT above.)
 
 ### S747 — Haiku Rate Limit Root Cause + Enrichment Pipeline Fixes (COMPLETE)
 

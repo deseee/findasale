@@ -1,43 +1,36 @@
-# Patrick's Dashboard — S747 Wrap (Complete)
+# Patrick's Dashboard — S749 Wrap (Complete)
 
 ---
 
-## What Happened This Session — S747
+## What Happened This Session — S749
 
-Haiku rate limit investigation. 971 hits in 24h traced to fire-and-forget enrichment on organizer page loads + broken in-memory cost ceiling that reset on every Railway restart.
+Claim page QA escalated to a **P0 discovery: ALL transactional emails were broken.** SES SMTP never worked (Amazon hasn't approved it + Railway Hobby blocks SMTP ports). Fixed by rewriting emailService.ts to use the Gmail API — same transport outreach already uses successfully.
 
-**Root causes fixed:**
-- Enrichment removed from page load path entirely → moved to GH Actions daily cron
-- Redis client was a fake in-memory stub → now uses real Railway Redis (REDIS_URL already set)
-- Cost ceiling now persists to Redis → no longer resets on Railway restart
-- Regex pre-filter added → ~70% of descriptions never touch Haiku (keyword matching + price regex)
-- Batch delay fixed 300ms → 1500ms (was 4x over Tier 1 rate limit), batch size 50 → 35
+**What shipped:**
+- emailService.ts completely rewritten (nodemailer SMTP → Gmail API)
+- All 35 backend services that send email now work (claim verification, password reset, registration, notifications, etc.)
+- Claim submit returns instantly (was hanging 30s+ waiting for SMTP timeout)
+- ClaimListingModal dark mode fixed
+- `/claim` landing page created (was 404)
+- Outreach startup catch-up wired into index.ts
 
-**New jobs shipping with your push:**
-- `enrich-ai-metadata.yml` — runs daily at 06:00 UTC, processes 300 unenriched sales/day
-- `backfill-organizer-contacts.yml` — runs daily at 07:00 UTC, fills address/phone/website/email on organizer profiles from scraped sale data (free, no AI)
+**Verified:** Submitted a claim for "From Trash To Treasure" → success toast instant → verification email received at deseee@yahoo.com ✅
 
-**Investigations — both came back clean:**
-- `saleDetailEnrichment.ts` — no Haiku calls, not a rate limit contributor
-- Organizer profile page — already renders address/phone/website/email correctly; it's a data gap, not a UI bug
-
-**Key finding Patrick called out:** ESN doesn't give street addresses at scrape time (city/state only). The contact backfill will help organizers sourced from Foursquare/HERE but not ESN-only organizers like Elektra Vintage. Address enrichment for ESN requires the organizerWebsite.ts scraper to visit organizer websites — that pipeline needs a deep audit.
+**SES status:** No longer needed as immediate priority. Gmail API handles 2,000 emails/day which is plenty for current volume. SES remains a future scale option if/when Amazon approves it AND you upgrade to Railway Pro ($20/mo for SMTP port access).
 
 ---
 
 ## Pending Patrick Actions
 
-1. **Push the code** — Run the push block below. Includes files from S747 + the previous session's Redis/rate-limit fixes.
-2. **Set Railway env var** — `AI_ENRICHMENT_BATCH_SIZE = 300` in Railway backend service Variables (new variable — overrides the hardcoded 35 default).
-3. **SES smoke test** — Register a new account → confirm email from noreply@send.finda.sale → remove RESEND_API_KEY from Railway + resend from package.json.
-4. **Email verification migration** — Deploy migration 20260515180000 when ready.
-5. **Sign back into Chrome** — Log in with Google (artifactmi@gmail.com).
+1. **Push the code** — Run the push block below.
+2. **Email verification migration** — Deploy migration 20260515180000 when ready (same powershell block as before).
+3. **Optional cleanup** — Remove `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` from Railway env vars (dead code now). Keep `SES_FROM_EMAIL` (still used as the FROM address, reading from env var).
 
 ---
 
 ## Next Session
 
-**Use Claude Opus.** Deep audit of the entire scraping + enrichment workflow before any more changes. See STATE.md § Next Session for full brief.
+Outreach send rate investigation (~2/day vs expected 50/day). See STATE.md § Next Session.
 
 ---
 
