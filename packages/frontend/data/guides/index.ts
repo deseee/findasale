@@ -67,7 +67,7 @@ import create_your_first_sale from './entries/create-your-first-sale';
 import pick_the_right_sale_type from './entries/pick-the-right-sale-type';
 import schedule_and_visibility from './entries/schedule-and-visibility';
 import multi_location_hubs from './entries/multi-location-hubs';
-import shop_mode from './entries/shop-mode';
+import retail_mode from './entries/retail-mode';
 import set_up_your_account from './entries/set-up-your-account';
 import connect_stripe from './entries/connect-stripe';
 import choose_a_plan from './entries/choose-a-plan';
@@ -145,7 +145,7 @@ export const guides: GuideEntry[] = [
   pick_the_right_sale_type,
   schedule_and_visibility,
   multi_location_hubs,
-  shop_mode,
+  retail_mode,
   set_up_your_account,
   connect_stripe,
   choose_a_plan,
