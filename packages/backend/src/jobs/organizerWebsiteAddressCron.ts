@@ -4,11 +4,12 @@
  * Processes Organizers that have a website set but no street address by
  * scraping their public homepage / contact / about pages.
  *
- * Schedule: Tuesdays 04:00 UTC (weekly).
- * Gate: ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=true (default false).
+ * Schedule: Tuesdays + Fridays 04:00 UTC.
+ * Gate: DISABLE_ORGANIZER_WEBSITE_ENRICHMENT=true to stop (default: enabled).
  *
- * Per-run cap: 500 organizers. RateLimiter enforces per-host pacing and
- * the scraper sleeps 5–15s between page fetches.
+ * Per-run cap: 1000 organizers (configurable via WEBSITE_SCRAPE_BATCH_SIZE).
+ * RateLimiter enforces per-host pacing and the scraper sleeps 5-15s between
+ * page fetches.
  */
 
 import cron from 'node-cron';
@@ -31,7 +32,7 @@ interface EligibleOrganizerRow {
   address: string;
 }
 
-const PER_RUN_LIMIT = 500;
+const PER_RUN_LIMIT = parseInt(process.env.WEBSITE_SCRAPE_BATCH_SIZE || '1000', 10);
 const JOB_NAME = 'organizerWebsiteAddress';
 
 /**
@@ -43,24 +44,27 @@ export async function runOrganizerWebsiteAddressEnrichment(): Promise<{
   filled: number;
   missed: number;
 }> {
-  if (process.env.ENABLE_ORGANIZER_WEBSITE_ENRICHMENT !== 'true') {
-    console.log(`[${JOB_NAME}] Skipped — ENABLE_ORGANIZER_WEBSITE_ENRICHMENT != "true"`);
+  if (process.env.DISABLE_ORGANIZER_WEBSITE_ENRICHMENT === 'true') {
+    console.log(`[${JOB_NAME}] Skipped — DISABLE_ORGANIZER_WEBSITE_ENRICHMENT is set`);
     return { processed: 0, filled: 0, missed: 0 };
   }
 
-  // Pull organizers with a website set but only a "City, ST" address (no street
-  // component). In this database every scraped organizer has `address` populated
-  // as "City, ST" — none are empty — so the eligible set is rows whose address
-  // has NO leading street number. Postgres regex: starts with a non-digit and
-  // ends with ", XX" (two-letter state). Prisma's typed filters can't express
-  // this, so we use a raw query.
+  // Pull organizers with a website set but no street address.
+  // Eligible = has website AND address doesn't start with a digit (no street number).
+  // Order by updatedAt ASC so we process the least-recently-touched orgs first.
+  // After a miss, we touch updatedAt to push failed orgs to the back of the queue,
+  // preventing the same failing sites from blocking new candidates each run.
   const candidates = await prisma.$queryRaw<EligibleOrganizerRow[]>(Prisma.sql`
     SELECT "id", "businessName", "website", "address"
     FROM "Organizer"
     WHERE "website" IS NOT NULL
       AND "website" <> ''
-      AND "address" ~ '^[^0-9].*,\\s*[A-Z]{2}$'
-    ORDER BY "id" ASC
+      AND (
+        "address" IS NULL
+        OR "address" = ''
+        OR "address" !~ '^[0-9]'
+      )
+    ORDER BY "updatedAt" ASC
     LIMIT ${PER_RUN_LIMIT}
   `);
 
@@ -97,6 +101,12 @@ export async function runOrganizerWebsiteAddressEnrichment(): Promise<{
     }
 
     if (!extracted || !extracted.address) {
+      // Touch updatedAt to push this org to the back of the queue.
+      // Since we ORDER BY updatedAt ASC, this prevents re-scraping the same
+      // failing sites every week while the cap blocks new candidates.
+      try {
+        await prisma.$executeRaw`UPDATE "Organizer" SET "updatedAt" = NOW() WHERE "id" = ${org.id}`;
+      } catch (_e) { /* non-fatal */ }
       missed++;
       continue;
     }
@@ -134,14 +144,14 @@ export async function runOrganizerWebsiteAddressEnrichment(): Promise<{
 
 /**
  * Schedule the organizer-website address enrichment cron.
- * Tuesdays 04:00 UTC. Called from index.ts during boot.
+ * Tuesdays + Fridays 04:00 UTC. Called from index.ts during boot.
  */
 export function scheduleOrganizerWebsiteAddressCron(): void {
   cron.schedule(
-    '0 4 * * 2',
+    '0 4 * * 2,5',
     cronGuard({ jobName: JOB_NAME }, async () => {
       await runOrganizerWebsiteAddressEnrichment();
     })
   );
-  console.log(`[${JOB_NAME}] Scheduled for Tuesdays 04:00 UTC (weekly)`);
+  console.log(`[${JOB_NAME}] Scheduled for Tuesdays + Fridays 04:00 UTC`);
 }

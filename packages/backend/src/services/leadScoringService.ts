@@ -260,8 +260,13 @@ export function calculateLeadScore(org: ScoringInput): LeadScoreResult {
   //   seen this organizer. ≥3 means multiple independent platforms agree.
   const hotByCorroboration = (org.sourceCount ?? 1) >= 3;
 
+  // OR-gate now requires email (contactEmail OR scrapedEmail) as a gating signal.
+  // Without email the org is unreachable — state-licensed alone → WARM, not HOT.
+  const hasEmail = !!(org.contactEmail || org.scrapedEmail);
+
   const isHotQualified =
-    hotByLicense || hotByPlatformSales || hotByCustomDomainEmail || hotByCorroboration;
+    hasEmail &&
+    (hotByLicense || hotByPlatformSales || hotByCustomDomainEmail || hotByCorroboration);
 
   // Tier assignment:
   //   ENTERPRISE — score ≥ 75 (unchanged; high numeric score required)
