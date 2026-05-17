@@ -189,12 +189,16 @@ export async function runOrganizerContactBackfill(req: Request, res: Response): 
         `addressFilled=${addressFilled} phoneFilled=${phoneFilled} websiteFilled=${websiteFilled} emailFilled=${emailFilled} nextCursor=${lastOrgId}`,
     );
 
-    res.json({ processed, updated, addressFilled, phoneFilled, websiteFilled, emailFilled, nextCursor: lastOrgId });
+    if (!res.headersSent) {
+      res.json({ processed, updated, addressFilled, phoneFilled, websiteFilled, emailFilled, nextCursor: lastOrgId });
+    }
   } catch (err: any) {
     console.error('[OrganizerContactBackfill] Batch error:', err.message ?? err);
-    res.status(500).json({
-      error: 'Organizer contact backfill failed',
-      details: err.message ?? String(err),
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Organizer contact backfill failed',
+        details: err.message ?? String(err),
+      });
+    }
   }
 }
