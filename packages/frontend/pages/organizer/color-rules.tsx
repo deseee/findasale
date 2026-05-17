@@ -294,9 +294,11 @@ const ColorRulesPage = () => {
           </div>
         </div>
 
-        {/* Modal */}
-        {modalOpen && (
-          <div className="fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-center justify-center p-4">
+      </TierGate>
+
+      {/* Modal — rendered outside TierGate so pointer-events are never blocked */}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl dark:shadow-gray-900/50 max-w-md w-full">
               {/* Modal Header */}
               <div className="flex items-center justify-between p-6 border-b border-warm-200 dark:border-gray-700">
@@ -435,8 +437,7 @@ const ColorRulesPage = () => {
               </form>
             </div>
           </div>
-        )}
-      </TierGate>
+      )}
     </>
   );
 };
