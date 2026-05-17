@@ -1399,7 +1399,7 @@ const AddItemsDetailPage = () => {
         ...prev,
         title: name || prev.title,
         category: category || prev.category,
-        price: estimatedPrice ? estimatedPrice.toString() : prev.price,
+        price: estimatedPrice && !prev.price ? estimatedPrice.toString() : prev.price,
       }));
 
       showToast(`Heard: "${finalTranscript}"`, 'success');

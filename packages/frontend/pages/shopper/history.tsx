@@ -22,6 +22,7 @@ import { useLootLog, useLootLogStats } from '../../hooks/useLootLog';
 import HaulPostCard from '../../components/HaulPostCard';
 import UGCPhotoSubmitButton from '../../components/UGCPhotoSubmitButton';
 import { getItemImageUrl } from '../../lib/imageUtils';
+import { useToast } from '../../components/ToastContext';
 
 type ViewType = 'list' | 'gallery' | 'receipts' | 'disputes';
 
@@ -33,6 +34,7 @@ const PurchaseHistoryPage = () => {
   const [tab, setTab] = useState<'receipts' | 'returns'>('receipts');
   const [disputeFormOpen, setDisputeFormOpen] = useState<string | null>(null);
   const [likedHaulPosts, setLikedHaulPosts] = useState<Set<number>>(new Set());
+  const { showToast } = useToast();
 
   // Determine view from URL query param or default to 'list'
   const view = (router.query.view as ViewType) || 'list';
@@ -105,7 +107,7 @@ const PurchaseHistoryPage = () => {
   const handleShare = () => {
     const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/shopper/loot-log/public/${user?.id}`;
     navigator.clipboard.writeText(shareUrl);
-    alert('Collection link copied to clipboard!');
+    showToast('Collection link copied to clipboard!', 'success');
   };
 
   const handleLoadMore = () => {
@@ -184,7 +186,7 @@ const PurchaseHistoryPage = () => {
                   onClick={() => {
                     const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/shopper/loot-log/public/${user?.id}`;
                     navigator.clipboard.writeText(url).catch(() => {});
-                    alert('Collection link copied!');
+                    showToast('Collection link copied!', 'success');
                   }}
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-gray-800 hover:bg-green-100 dark:hover:bg-green-900/30 text-green-800 dark:text-green-200 border border-green-300 dark:border-green-700 text-sm font-semibold rounded-lg transition"
                 >
