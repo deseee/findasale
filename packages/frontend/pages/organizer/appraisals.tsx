@@ -11,7 +11,6 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
-import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import {
   useMyAppraisals,
   useAppraisalFeed,
@@ -27,7 +26,6 @@ type Tab = 'my-requests' | 'community-feed';
 const AppraisalsPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const { canAccess } = useOrganizerTier();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<Tab>('community-feed');
@@ -60,8 +58,6 @@ const AppraisalsPage = () => {
     }
   }, [router.query.open]);
 
-  // Not used anymore (a la carte model), but keeping import for future reference
-  // const { canAccess } = useOrganizerTier(); // Remove if no longer needed
 
   // Auth checks
   if (authLoading) {
@@ -278,6 +274,7 @@ const AppraisalsPage = () => {
           {/* Submit button (all organizers) */}
           <div className="mb-8">
             <button
+              type="button"
               onClick={() => setShowSubmitForm(!showSubmitForm)}
               className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors"
             >
