@@ -12,7 +12,7 @@ concurrency:
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - name: Trigger organizer contact backfill
         env:
@@ -25,7 +25,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{}' \
             "${RAILWAY_BACKEND_URL}/api/internal/backfill-organizer-contacts" \
-            --fail-with-body --connect-timeout 10 --max-time 120
+            --fail-with-body --connect-timeout 10 --max-time 300
 
       - name: Notify on failure
         if: failure()
