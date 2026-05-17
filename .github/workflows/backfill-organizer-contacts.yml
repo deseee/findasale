@@ -16,7 +16,16 @@ jobs:
     steps:
       - name: Trigger organizer contact backfill
         run: |
-          curl -s -X POST \
-            -H "x-internal-secret: ${{ secrets.INTERNAL_SECRET }}" \
+          echo "Triggering organizer contact backfill..."
+          curl -sf -X POST \
             -H "Content-Type: application/json" \
-            https://backend-production-153c9.up.railway.app/api/internal/backfill-organizer-contacts
+            -H "x-internal-secret: ${{ secrets.OUTREACH_SECRET }}" \
+            -d '{}' \
+            ${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/backfill-organizer-contacts
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.error('Organizer contact backfill workflow failed');

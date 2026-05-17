@@ -13,9 +13,10 @@
  */
 
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
-const DEFAULT_BATCH_SIZE = 500;
+const DEFAULT_BATCH_SIZE = 2000;
 
 function hasStreetNumber(address: string | null | undefined): boolean {
   if (!address) return false;
@@ -45,6 +46,10 @@ export async function runOrganizerContactBackfill(req: Request, res: Response): 
     10,
   );
 
+  // Support cursor-based pagination so each daily run processes a NEW batch.
+  // The caller (GitHub Actions) can pass ?cursor=<lastOrgId> from previous response.
+  const cursor = (req.query.cursor as string) || undefined;
+
   let processed = 0;
   let updated = 0;
   let addressFilled = 0;
@@ -53,12 +58,34 @@ export async function runOrganizerContactBackfill(req: Request, res: Response): 
   let emailFilled = 0;
 
   try {
+    // Use raw SQL to find orgs that NEED enrichment — the key criteria is:
+    // has scraped sales, AND (address lacks street number OR phone/website/email null).
+    // The address check uses regex which Prisma typed filters can't express.
+    // Cursor pagination ensures each daily run processes NEW orgs.
+    const eligibleIds = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT DISTINCT o."id"
+      FROM "Organizer" o
+      INNER JOIN "Sale" s ON s."organizerId" = o."id"
+      WHERE s."sourceUrl" IS NOT NULL
+        AND (
+          (o."address" !~ '^[0-9]' AND s."address" ~ '^[0-9]')
+          OR o."phone" IS NULL
+          OR o."website" IS NULL
+          OR o."contactEmail" IS NULL
+        )
+        ${cursor ? Prisma.sql`AND o."id" > ${cursor}` : Prisma.empty}
+      ORDER BY o."id" ASC
+      LIMIT ${batchSize}
+    `);
+
+    if (eligibleIds.length === 0) {
+      console.log(`[OrganizerContactBackfill] No eligible organizers found (cursor=${cursor || 'none'})`);
+      res.json({ processed: 0, updated: 0, addressFilled: 0, phoneFilled: 0, websiteFilled: 0, emailFilled: 0, nextCursor: null });
+      return;
+    }
+
     const organizers = await prisma.organizer.findMany({
-      where: {
-        sales: {
-          some: { sourceUrl: { not: null } },
-        },
-      },
+      where: { id: { in: eligibleIds.map((r) => r.id) } },
       select: {
         id: true,
         address: true,
@@ -78,7 +105,7 @@ export async function runOrganizerContactBackfill(req: Request, res: Response): 
           take: 5,
         },
       },
-      take: batchSize,
+      orderBy: { id: 'asc' },
     });
 
     console.log(
@@ -154,12 +181,15 @@ export async function runOrganizerContactBackfill(req: Request, res: Response): 
       }
     }
 
+    // Return the last processed org ID as cursor for the next run
+    const lastOrgId = organizers.length > 0 ? organizers[organizers.length - 1].id : null;
+
     console.log(
       `[OrganizerContactBackfill] Complete — processed=${processed} updated=${updated} ` +
-        `addressFilled=${addressFilled} phoneFilled=${phoneFilled} websiteFilled=${websiteFilled} emailFilled=${emailFilled}`,
+        `addressFilled=${addressFilled} phoneFilled=${phoneFilled} websiteFilled=${websiteFilled} emailFilled=${emailFilled} nextCursor=${lastOrgId}`,
     );
 
-    res.json({ processed, updated, addressFilled, phoneFilled, websiteFilled, emailFilled });
+    res.json({ processed, updated, addressFilled, phoneFilled, websiteFilled, emailFilled, nextCursor: lastOrgId });
   } catch (err: any) {
     console.error('[OrganizerContactBackfill] Batch error:', err.message ?? err);
     res.status(500).json({
