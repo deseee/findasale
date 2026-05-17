@@ -10,6 +10,7 @@ interface ShopperRank {
   name: string;
   score: number;
   explorerRank: string;
+  huntPassActive?: boolean;
   badges?: Array<{
     id: string;
     name: string;
@@ -199,7 +200,12 @@ const Leaderboard = () => {
                           {getMedalEmoji(shopper.rank)}
                         </div>
                         <div>
-                          <p className="text-warm-900 dark:text-warm-100 font-semibold text-lg">{shopper.name}</p>
+                          <p className="text-warm-900 dark:text-warm-100 font-semibold text-lg">
+                            {shopper.name}
+                            {shopper.huntPassActive && (
+                              <span className="ml-1.5" title="Hunt Pass subscriber">🏆</span>
+                            )}
+                          </p>
                           <p className="text-sm text-warm-600 dark:text-warm-400">{shopper.explorerRank}</p>
                         </div>
                       </div>

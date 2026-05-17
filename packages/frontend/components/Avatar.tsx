@@ -107,7 +107,7 @@ const Avatar: React.FC<AvatarProps> = ({
     >
       {/* Avatar circle with initials */}
       <div
-        className={`rounded-full flex items-center justify-center font-bold select-none ${bgColor} ${textColor} ${className}`}
+        className={`rounded-full flex items-center justify-center font-bold select-none ${bgColor} ${textColor} ${huntPassActive ? 'ring-2 ring-amber-400 dark:ring-amber-500' : ''} ${className}`}
         style={{
           width: `${size}px`,
           height: `${size}px`,

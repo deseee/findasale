@@ -712,7 +712,7 @@ const OrganizerSettingsPage = () => {
                   <div>
                     <p className="text-sm font-medium text-warm-600 dark:text-gray-400">Your subscription tier:</p>
                     <p className="text-2xl font-bold text-warm-900 dark:text-gray-100 mt-1">
-                      {tier === 'SIMPLE' ? 'SIMPLE (Free)' : tier === 'PRO' ? 'PRO ($29/mo)' : 'TEAMS (Enterprise)'}
+                      {tier === 'SIMPLE' ? 'SIMPLE (Free)' : tier === 'PRO' ? 'PRO ($29/mo)' : tier === 'TEAMS' ? 'TEAMS ($79/mo)' : 'Loading...'}
                     </p>
                   </div>
                 </div>

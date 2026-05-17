@@ -174,9 +174,9 @@ const SaleDetailPage = () => {
       const alreadyDismissed = typeof window !== 'undefined' && sessionStorage.getItem(toastKey) === 'true';
 
       if (!alreadyDismissed) {
-        const unsoldCount = items.filter((item) => item.status !== 'SOLD' && item.status !== 'RESERVED').length;
+        // Use same logic as PostSaleEbayPanel backend (status === 'AVAILABLE') for consistency
         const unsoldWithoutEbay = items.filter(
-          (item) => (item.status !== 'SOLD' && item.status !== 'RESERVED') && !item.ebayListingId
+          (item) => item.status === 'AVAILABLE' && !item.ebayListingId
         ).length;
 
         if (unsoldWithoutEbay > 0) {
@@ -267,7 +267,7 @@ const SaleDetailPage = () => {
             </Link>
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">{sale.title}</h1>
             <p className="text-warm-600 dark:text-warm-400 mt-2">
-              {sale.city && sale.state ? `${sale.city}, ${sale.state}` : 'Location TBA'} · {availableItems.length} items
+              {sale.city && sale.state ? `${sale.city}, ${sale.state}` : 'Location TBA'} · {sale.status === 'ENDED' ? `${items.length} items` : `${availableItems.length} items`}{sale.status === 'ENDED' && availableItems.length === 0 && items.length > 0 ? ' · All items sold!' : ''}
             </p>
           </div>
 
