@@ -255,6 +255,18 @@ export const sendOutreachEmails = async (): Promise<void> => {
     const coldQuota = Math.max(1, Math.floor(quotaPerWindow * 0.25));
     const untieredQuota = quotaPerWindow - (hotQuota + warmQuota + coldQuota);
 
+    // BUG FIX (S751): Previous queries used `take: tierQuota` which fetched only
+    // N records per tier. Records waiting between touches (e.g. touch1 sent yesterday,
+    // touch2 not due for 2 more days) consumed those N slots but got skipped by
+    // determineTouchToSend — starving the queue. Only ~2/day were sending instead of 50.
+    //
+    // Fix: Fetch a larger candidate pool (10x quota) per tier so waiting records don't
+    // block fresh ones. Exclude fully-exhausted records (touch4SentAt != null).
+    // Order by touch1SentAt asc (nulls first in Postgres) so untouched records get
+    // priority. The send loop enforces the actual quota cap.
+    const CANDIDATE_MULTIPLIER = 10;
+    const exhaustedFilter = { touch4SentAt: null }; // exclude records that finished all 4 touches
+
     // Three-pass query: HOT → WARM → COLD, then fallback to untiered/ENTERPRISE if quota remains
     const recordsToSend: any[] = [];
 
@@ -262,66 +274,75 @@ export const sendOutreachEmails = async (): Promise<void> => {
       const hotRecords = await prisma.directoryClaimEmail.findMany({
         where: {
           ...baseWhere,
+          ...exhaustedFilter,
           organizer: { ...baseWhere.organizer, leadTier: 'HOT' },
         },
         include: { organizer: true },
-        take: hotQuota,
-        orderBy: { createdAt: 'asc' },
+        take: hotQuota * CANDIDATE_MULTIPLIER,
+        orderBy: { touch1SentAt: 'asc' },
       });
       recordsToSend.push(...hotRecords);
     }
 
-    if (warmQuota > 0 && recordsToSend.length < quotaPerWindow) {
+    if (warmQuota > 0) {
       const warmRecords = await prisma.directoryClaimEmail.findMany({
         where: {
           ...baseWhere,
+          ...exhaustedFilter,
           organizer: { ...baseWhere.organizer, leadTier: 'WARM' },
         },
         include: { organizer: true },
-        take: warmQuota,
-        orderBy: { createdAt: 'asc' },
+        take: warmQuota * CANDIDATE_MULTIPLIER,
+        orderBy: { touch1SentAt: 'asc' },
       });
       recordsToSend.push(...warmRecords);
     }
 
-    if (coldQuota > 0 && recordsToSend.length < quotaPerWindow) {
+    if (coldQuota > 0) {
       const coldRecords = await prisma.directoryClaimEmail.findMany({
         where: {
           ...baseWhere,
+          ...exhaustedFilter,
           organizer: { ...baseWhere.organizer, leadTier: 'COLD' },
         },
         include: { organizer: true },
-        take: coldQuota,
-        orderBy: { createdAt: 'asc' },
+        take: coldQuota * CANDIDATE_MULTIPLIER,
+        orderBy: { touch1SentAt: 'asc' },
       });
       recordsToSend.push(...coldRecords);
     }
 
     // Fallback: fill remaining quota with ENTERPRISE or untiered (leadTier IS NULL)
-    if (untieredQuota > 0 && recordsToSend.length < quotaPerWindow) {
+    if (untieredQuota > 0) {
       // baseWhere.organizer already owns an `OR` (the businessCategory filter).
       // A second top-level `OR` here would silently overwrite it, so the leadTier
       // condition is combined via `AND` to preserve the category filter.
       const untieredRecords = await prisma.directoryClaimEmail.findMany({
         where: {
           ...baseWhere,
+          ...exhaustedFilter,
           organizer: {
             ...baseWhere.organizer,
             AND: [{ OR: [{ leadTier: 'ENTERPRISE' }, { leadTier: null }] }],
           },
         },
         include: { organizer: true },
-        take: untieredQuota,
-        orderBy: { createdAt: 'asc' },
+        take: untieredQuota * CANDIDATE_MULTIPLIER,
+        orderBy: { touch1SentAt: 'asc' },
       });
       recordsToSend.push(...untieredRecords);
     }
+
+    console.log(`[OutreachCron] Fetched ${recordsToSend.length} candidates across all tiers (quota: ${quotaPerWindow})`)
 
     const gmail = createGmailClient();
     let sent = 0;
     let failed = 0;
 
     for (const record of recordsToSend) {
+      // Stop once we've hit the per-window quota (candidates pool is larger than quota)
+      if (sent >= quotaPerWindow) break;
+
       try {
         const isSuppressed = await suppressionService.isSuppressed(record.emailAddress);
         if (isSuppressed) {
