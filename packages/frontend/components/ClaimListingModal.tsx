@@ -70,15 +70,15 @@ export default function ClaimListingModal({ organizerId, onClose }: ClaimListing
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-xl font-bold text-gray-900 mb-1">Claim This Listing</h2>
-        <p className="text-sm text-gray-600 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">Claim This Listing</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
           Verify that you own or manage this business to claim the listing.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Your Name
             </label>
             <input
@@ -86,13 +86,13 @@ export default function ClaimListingModal({ organizerId, onClose }: ClaimListing
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Full name"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
               required
              aria-label="Full name" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Email Address
             </label>
             <input
@@ -100,13 +100,13 @@ export default function ClaimListingModal({ organizerId, onClose }: ClaimListing
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
               required
              aria-label="your@email.com" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Message (optional)
             </label>
             <textarea
@@ -114,7 +114,7 @@ export default function ClaimListingModal({ organizerId, onClose }: ClaimListing
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Tell us how you're connected to this business..."
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
             />
           </div>
 
@@ -122,7 +122,7 @@ export default function ClaimListingModal({ organizerId, onClose }: ClaimListing
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Cancel
             </button>
