@@ -150,6 +150,26 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [pendingPhotoRole, setPendingPhotoRole] = useState<string | null>(null);
   const [firstPhotoTaken, setFirstPhotoTaken] = useState(false);
 
+  // Landscape orientation detection — uses matchMedia for initial state + resize listener
+  const [isLandscape, setIsLandscape] = useState(false);
+
+  useEffect(() => {
+    // Use window.innerWidth > innerHeight via resize event — fires reliably on all
+    // mobile browsers (iOS Safari, Android Chrome) when orientation changes.
+    // matchMedia 'change' is less reliable on some mobile WebKit versions.
+    const update = () => setIsLandscape(window.innerWidth > window.innerHeight);
+    update(); // set on mount
+
+    window.addEventListener('resize', update);
+    // Also subscribe to screen.orientation if available (fires before resize on some devices)
+    screen.orientation?.addEventListener?.('change', update);
+
+    return () => {
+      window.removeEventListener('resize', update);
+      screen.orientation?.removeEventListener?.('change', update);
+    };
+  }, []);
+
   const isRapidfire = mode === 'rapidfire';
   const inAddMode = addingToItemId !== null;
   const addingItem = inAddMode ? rapidItems.find((i) => i.id === addingToItemId) : null;
@@ -543,13 +563,19 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black lg:bg-black/70 lg:p-8">
-      {/* Inner container: fullscreen mobile, modal desktop */}
-      <div className="w-full h-full lg:max-w-2xl lg:max-h-[85vh] lg:rounded-2xl lg:overflow-hidden lg:shadow-2xl bg-black flex flex-col relative">
+      {/* Inner container: fullscreen mobile, modal desktop.
+          In landscape on mobile the layout flips to flex-row so controls sit on the right
+          instead of collapsing below the viewfinder. */}
+      <div className={`w-full h-full lg:max-w-2xl lg:max-h-[85vh] lg:rounded-2xl lg:overflow-hidden lg:shadow-2xl bg-black relative ${isLandscape ? 'flex flex-row' : 'flex flex-col'}`}>
         {/* Hidden canvas for frame capture */}
         <canvas ref={canvasRef} className="hidden" />
 
-        {/* Top bar: X left (always visible), Settings & Done right, Mode toggle at center */}
-        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 gap-2 bg-gradient-to-b from-black/60 to-transparent min-h-16">
+        {/* Top bar: X left (always visible), Settings & Done right, Mode toggle at center.
+            In landscape the right boundary stops before the controls column (88px wide). */}
+        <div
+          className="absolute top-0 left-0 z-20 flex items-center justify-between px-4 py-3 gap-2 bg-gradient-to-b from-black/60 to-transparent min-h-16"
+          style={{ right: isLandscape ? '88px' : '0' }}
+        >
           {/* Left: Close button (always visible, z-20 to never be covered) */}
           <button
             onClick={handleCancel}
@@ -625,10 +651,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               }}
             />
 
-            {/* Main settings pill (vertical column) */}
+            {/* Main settings pill (vertical column) — in landscape offset by controls column width */}
             <div
-              className="absolute right-4 z-30 bg-black/75 backdrop-blur-md rounded-2xl flex flex-col items-center gap-1 px-2 py-2 shadow-lg transition-all duration-150"
-              style={{ top: '68px' }}
+              className="absolute z-30 bg-black/75 backdrop-blur-md rounded-2xl flex flex-col items-center gap-1 px-2 py-2 shadow-lg transition-all duration-150"
+              style={{ top: '68px', right: isLandscape ? '96px' : '16px' }}
             >
               {/* Flash/Torch button — cycles: Off → On → Auto → Torch */}
               <button
@@ -771,8 +797,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           </>
         )}
 
-        {/* Mode hint text */}
-        <div className="absolute left-0 right-0 z-10 flex justify-center pointer-events-none" style={{ top: '54px' }}>
+        {/* Mode hint text — in landscape, constrain right edge so it doesn't overlap the controls column */}
+        <div
+          className="absolute left-0 z-10 flex justify-center pointer-events-none"
+          style={{ top: '54px', right: isLandscape ? '88px' : '0' }}
+        >
           <span className="text-xs text-white/50 bg-black/30 rounded-full px-3 py-1.5">
             {isRapidfire
               ? inAddMode
@@ -783,7 +812,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         </div>
 
 
-        {/* Camera viewfinder */}
+        {/* Camera viewfinder — flex-1 so it fills remaining space in both portrait (col) and landscape (row) */}
         <div
           className="flex-1 relative overflow-hidden z-0 touch-none"
           onTouchStart={(e) => {
@@ -1106,11 +1135,31 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           )}
         </div>
 
-        {/* Bottom section: compact single row with stats line above */}
-        <div className="bg-black/90 pb-safe flex flex-col">
-          {/* Stats line (compact, text-xs) */}
+        {/* Bottom section: compact single row with stats line above.
+            In landscape: becomes a fixed-width right column running full height,
+            with a vertical layout — shutter centered, thumbnail strip scrolling upward. */}
+        <div className={`bg-black/90 pb-safe flex flex-col ${isLandscape ? 'w-22 min-w-[88px] max-w-[88px] h-full overflow-y-auto overflow-x-hidden' : ''}`}
+          style={isLandscape ? { width: '88px' } : undefined}
+        >
+          {/* Landscape-only top strip: close button + mode badge */}
+          {isLandscape && (
+            <div className="flex flex-col items-center gap-2 pt-3 pb-1 border-b border-white/10">
+              <button
+                onClick={handleCancel}
+                className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors text-sm"
+                aria-label="Cancel capture"
+              >
+                ✕
+              </button>
+              <div className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${isRapidfire ? 'bg-amber-500 text-white' : 'bg-white text-black'}`}>
+                {isRapidfire ? '⚡' : '📷'}
+              </div>
+            </div>
+          )}
+
+          {/* Stats line (compact, text-xs) — hidden in landscape (column is too narrow) */}
           {/* Stats line — single unified row for both modes */}
-          {(rapidItems.length > 0 || (!isRapidfire && photosThisItem > 0)) && (
+          {!isLandscape && (rapidItems.length > 0 || (!isRapidfire && photosThisItem > 0)) && (
             <div className="text-center text-xs text-white/60 px-4 py-1 flex items-center justify-center gap-2 h-6">
               {/* Pending photos + Analyze (regular mode only) */}
               {!isRapidfire && photosThisItem > 0 && (
@@ -1158,8 +1207,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </div>
           )}
 
-          {/* Adding-to banner (shown when in add-mode) */}
-          {isRapidfire && inAddMode && addingItem && (
+          {/* Adding-to banner (shown when in add-mode, portrait only) */}
+          {!isLandscape && isRapidfire && inAddMode && addingItem && (
             <div className="bg-amber-500/20 border-t border-amber-500/30 px-4 py-1 flex items-center justify-between text-xs h-8">
               <div className="flex items-center gap-1.5">
                 {addingItem.thumbnailUrl && (
@@ -1184,8 +1233,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </div>
           )}
 
-          {/* Coaching banner (regular mode only) */}
-          {!isRapidfire && !coachingBannerDismissed && (
+          {/* Coaching banner (regular mode only, portrait only) */}
+          {!isLandscape && !isRapidfire && !coachingBannerDismissed && (
             <div className="bg-black/60 border-t border-white/10 px-4 py-1.5 flex items-center justify-between text-xs h-10">
               <div className="flex-1">
                 <span className="text-white text-sm">
@@ -1207,18 +1256,47 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </div>
           )}
 
-          {/* Bottom control: shutter floats above a scrollable thumbnail strip */}
-          <div className="relative min-h-[76px]">
-            {/* Scroll strip — photos start to the right of the shutter and grow leftward.
-                paddingLeft pushes content past the shutter. Auto-scroll keeps newest visible. */}
+          {/* Bottom control: shutter + thumbnail strip.
+              Portrait: shutter floats above a horizontal scroll strip.
+              Landscape: shutter at top of column, thumbnails scroll vertically below. */}
+          <div className={isLandscape ? 'flex flex-col items-center flex-1 overflow-hidden' : 'relative min-h-[76px]'}>
+            {/* Landscape shutter button — positioned at top of the right column */}
+            {isLandscape && (
+              <button
+                onClick={capturePhoto}
+                disabled={!cameraReady || (isRapidfire ? photos.length >= maxPhotos : photosThisItem >= MAX_REGULAR)}
+                className={`my-3 flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center transition-transform active:scale-90 z-10 ${
+                  isRapidfire
+                    ? inAddMode
+                      ? 'bg-gradient-to-br from-amber-600 to-amber-700 shadow-lg shadow-amber-600/50'
+                      : 'bg-gradient-to-br from-amber-500 to-red-500 shadow-lg shadow-amber-500/50'
+                    : 'border-4 border-white bg-white/20'
+                }`}
+                style={{
+                  opacity: cameraReady && (isRapidfire ? photos.length < maxPhotos : photosThisItem < MAX_REGULAR) ? 1 : 0.5,
+                }}
+                aria-label="Capture photo"
+              >
+                {isRapidfire ? (
+                  <span className="text-xl font-bold text-white">{inAddMode ? '+' : '⚡'}</span>
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-white" />
+                )}
+              </button>
+            )}
+
+            {/* Scroll strip — portrait: horizontal; landscape: vertical */}
             <div
               ref={carouselRef}
-              className="absolute inset-0 overflow-x-auto scrollbar-hide flex items-center"
+              className={isLandscape
+                ? 'flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide flex flex-col items-center w-full'
+                : 'absolute inset-0 overflow-x-auto scrollbar-hide flex items-center'
+              }
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
             <div
-              className="flex items-center gap-2"
-              style={{ paddingLeft: 'calc(50% + 40px)', paddingRight: '16px' }}
+              className={isLandscape ? 'flex flex-col items-center gap-2 py-2 w-full' : 'flex items-center gap-2'}
+              style={isLandscape ? undefined : { paddingLeft: 'calc(50% + 40px)', paddingRight: '16px' }}
             >
               {/* Thumbnail carousel — all analyzed items (both modes) */}
               {rapidItems.length > 0 && rapidItems.map((item) => {
@@ -1350,8 +1428,9 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </div>{/* end inner flex */}
             </div>{/* end outer RTL scroll */}
 
-            {/* Shutter: floats above the scroll strip, always centered */}
-            <button
+            {/* Shutter: floats above the scroll strip in portrait mode.
+                In landscape mode this is hidden — the landscape shutter is rendered above. */}
+            {!isLandscape && <button
               onClick={capturePhoto}
               disabled={!cameraReady || (isRapidfire ? photos.length >= maxPhotos : photosThisItem >= MAX_REGULAR)}
               className={`absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 w-16 h-16 rounded-full flex items-center justify-center transition-transform active:scale-90 ${
@@ -1371,10 +1450,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               ) : (
                 <div className="w-12 h-12 rounded-full bg-white" />
               )}
-            </button>
+            </button>}
 
-            {/* Feature #341: Multi-angle role prompt (after first photo in rapidfire mode) */}
-            {isRapidfire && showMultiAnglePrompt && (
+            {/* Feature #341: Multi-angle role prompt (after first photo in rapidfire mode, portrait only) */}
+            {!isLandscape && isRapidfire && showMultiAnglePrompt && (
               <div className="absolute bottom-24 left-0 right-0 mx-auto max-w-xs px-4">
                 <div className="bg-black/80 backdrop-blur rounded-lg p-4 border border-white/10">
                   <div className="text-white text-sm font-medium mb-3 text-center">
