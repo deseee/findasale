@@ -195,7 +195,59 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | #124 Rarity Boost modal | UNVERIFIED — no entry point found on dashboard, no rare items in seeded data to trigger modal | Need rare item in test data or locate trigger path | S745 |
 ---
 
+## Next Session
+
+**Use Claude Opus. Task: Deep audit of the entire scraping + enrichment workflow.**
+
+S747 fixed symptoms (rate limits, fire-and-forget enrichment, fake Redis client) without understanding the full system. Opus should map the complete pipeline end-to-end before touching anything else:
+
+1. **Map every data source** — ESN, Foursquare, HERE, Google Places, state licensing scrapers, GarageSaleFinder, Eventbrite, newspaper RSS, Facebook, OSM. What does each source provide? What fields are populated vs. null? What's the ESN address situation specifically (city/state only — confirmed this session)?
+
+2. **Map every enrichment step** — `saleDetailEnrichment.ts` (HTML scraper, no AI), `listingEnrichmentService.ts` (AI categories/price/summary), `organizerWebsite.ts` (address extraction), `saleDetailEnrichmentCron.ts`, `organizerWebsiteAddressCron.ts`, email discovery, lead scoring. What runs when? What triggers what? What's the sequencing dependency?
+
+3. **Identify what's actually missing on organizer profiles** — For ESN-sourced organizers (the majority), what data do we realistically have vs. what does the profile page try to display? The Elektra Vintage example shows address missing — but is that because ESN doesn't provide street addresses at scrape time, or because the address enrichment pipeline (organizerWebsite.ts visiting organizer websites) isn't running/finding it?
+
+4. **Check if `organizerWebsite.ts` is actually working** — S725 built it. `ENABLE_ORGANIZER_WEBSITE_ENRICHMENT=true` was set S726. Is it producing results? Query the DB or check Railway logs. Does it actually extract addresses or is it hitting edge cases?
+
+5. **Rate limit math for the full pipeline** — Now that enrichment is in GH Actions daily at 06:00 UTC, what's the realistic throughput given Tier 1 limits (50 RPM)? How many unenriched records exist? How long until the backlog is cleared?
+
+6. **Propose concrete fixes**, not surface patches. Read the actual code before proposing anything.
+
+**Patrick's note:** Claude has been doing surface-level work without deep research. Opus must read everything before recommending anything.
+
+---
+
 ## Recent Sessions
+
+### S747 — Haiku Rate Limit Root Cause + Enrichment Pipeline Fixes (COMPLETE)
+
+**Trigger:** 971 Haiku API hits in 24h notification. Root cause investigation + fixes.
+
+**Root causes found:**
+- `listingEnrichmentService.ts` was fire-and-forget on every `GET /organizers/:id` page load — simultaneous page loads burst through 50 RPM limit instantly
+- `aiCostTracker.ts` used in-memory `Map` for token counts — reset on every Railway restart (5+ restarts during S744 = 5 full ceiling resets = full burst capacity each time)
+- `redis.ts` was a fake in-memory stub despite real Redis being live on Railway
+
+**Fixes shipped (push block pending — previous session files + this session's files):**
+- `redis.ts` — real `createClient` from `redis` package, in-memory fallback when `REDIS_URL` absent
+- `aiCostTracker.ts` — token counts now persisted to Redis (`ai:tokens:YYYY-MM`, 35-day TTL), fail-open on Redis outage
+- `organizers.ts` — removed fire-and-forget enrichment forEach from `GET /organizers/:id` handler entirely
+- `socialPostController.ts` — added missing `await` for `isAICostCeilingExceeded()` check
+- `internalListingEnrichmentController.ts` — new batch endpoint for GH Actions; delay 300ms → 1500ms; batch size 50 → 35
+- `.github/workflows/enrich-ai-metadata.yml` — daily at 06:00 UTC
+- `listingEnrichmentService.ts` — regex pre-filter before Haiku (keyword categories + price range + first-sentence summary); only calls Haiku if < 2 categories AND no price detected (~70% call reduction)
+- `internalOrganizerContactBackfillController.ts` — new: free DB-only backfill of address/phone/website/contactEmail from scraped Sale records to Organizer profiles
+- `internal.ts` — wired new backfill endpoint
+- `.github/workflows/backfill-organizer-contacts.yml` — daily at 07:00 UTC
+
+**Railway env var set:** `AI_ENRICHMENT_BATCH_SIZE=300` (Patrick sets manually — overrides hardcoded 35 default for faster backlog clearance)
+
+**Investigations:**
+- `saleDetailEnrichment.ts` — clean, no Haiku calls, pure HTML scraper. No issues.
+- Organizer profile UI — correctly renders address/phone/website/contactEmail. Data gap, not display bug.
+- ESN address situation confirmed: ESN does NOT provide street addresses at scrape time (city/state only). Organizer contact backfill will help Foursquare/HERE-sourced orgs but not ESN-only. Address enrichment for ESN requires organizerWebsite.ts visiting the organizer's own website.
+
+**Patrick's feedback:** Claude doing surface-level work without deep research into the full pipeline. Next session: Opus deep audit of entire scraping + enrichment workflow before touching anything.
 
 ### S746 — Chrome QA Sprint: Settings Fields + Feature Routing Verification (COMPLETE)
 
