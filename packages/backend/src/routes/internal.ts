@@ -17,6 +17,7 @@ import { sendOutreachEmails } from '../jobs/outreachEmailsCron';
 import { runWebsiteEnrichmentBackfill } from '../jobs/websiteEnrichmentJob';
 import { runInternalJob } from '../controllers/internalJobRunnerController';
 import { runListingEnrichmentBatch } from '../controllers/internalListingEnrichmentController';
+import { runOrganizerContactBackfill } from '../controllers/internalOrganizerContactBackfillController';
 import { runCategorySync } from '../jobs/categorySyncCron';
 import { runLeadScoringBackfill } from '../services/leadScoringService';
 import { runScrapeRun } from '../services/scraper/index';
@@ -938,6 +939,9 @@ router.post('/scraper/run-virginia-general-phase2', requireSecret, async (req: e
 
 // POST /api/internal/enrich-listing-metadata — batch AI enrichment for scraped sales (GitHub Actions daily)
 router.post('/enrich-listing-metadata', requireSecret, runListingEnrichmentBatch);
+
+// POST /api/internal/backfill-organizer-contacts — free backfill: propagate contact data from scraped sales to organizers (GitHub Actions daily)
+router.post('/backfill-organizer-contacts', requireSecret, runOrganizerContactBackfill);
 
 // POST /api/internal/jobs/run — single dispatcher for background pipeline jobs (GitHub Actions cron)
 router.post('/jobs/run', requireSecret, runInternalJob);
