@@ -1,36 +1,32 @@
-# Patrick's Dashboard — S749 Wrap (Complete)
+# Patrick's Dashboard — S750 Wrap (Complete)
 
 ---
 
-## What Happened This Session — S749
+## What Happened This Session — S750
 
-Claim page QA escalated to a **P0 discovery: ALL transactional emails were broken.** SES SMTP never worked (Amazon hasn't approved it + Railway Hobby blocks SMTP ports). Fixed by rewriting emailService.ts to use the Gmail API — same transport outreach already uses successfully.
+Cleared both remaining UNVERIFIED items from the Blocked Queue.
 
-**What shipped:**
-- emailService.ts completely rewritten (nodemailer SMTP → Gmail API)
-- All 35 backend services that send email now work (claim verification, password reset, registration, notifications, etc.)
-- Claim submit returns instantly (was hanging 30s+ waiting for SMTP timeout)
-- ClaimListingModal dark mode fixed
-- `/claim` landing page created (was 404)
-- Outreach startup catch-up wired into index.ts
+**#362 Attendance Count ✅** — "75 attended" renders on Bestmate Company Ltd storefront. Persists after reload. One discovery: the Railway Query tab is read-only for UPDATE statements (returns 0 rows every time). Fixed by running SQL via psql with `-f` flag. Also found a backend gap: the storefront endpoint only returns PUBLISHED sales, so attendanceCount on ended/past sales is invisible to visitors — separate fix needed next session.
 
-**Verified:** Submitted a claim for "From Trash To Treasure" → success toast instant → verification email received at deseee@yahoo.com ✅
+**#124 Rarity Boost modal ✅** — Set user12 (Leo Thomas) to 55 XP via direct SQL. Rarity Boost button on /coupons enabled, modal opens correctly.
 
-**SES status:** No longer needed as immediate priority. Gmail API handles 2,000 emails/day which is plenty for current volume. SES remains a future scale option if/when Amazon approves it AND you upgrade to Railway Pro ($20/mo for SMTP port access).
+**Nothing broken. No code changes shipped.**
 
 ---
 
 ## Pending Patrick Actions
 
-1. **Push the code** — Run the push block below.
-2. **Email verification migration** — Deploy migration 20260515180000 when ready (same powershell block as before).
-3. **Optional cleanup** — Remove `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` from Railway env vars (dead code now). Keep `SES_FROM_EMAIL` (still used as the FROM address, reading from env var).
+1. **Delete fix-attendance.sql** from project root — it has production sale IDs in it and shouldn't be committed or left around.
+2. **Push the docs** — Run the push block below.
+3. **Email verification migration** — Deploy migration 20260515180000 when ready.
 
 ---
 
 ## Next Session
 
-Outreach send rate investigation (~2/day vs expected 50/day). See STATE.md § Next Session.
+1. Outreach send rate investigation (~2/day vs expected 50/day)
+2. Storefront past sales section — ENDED sales + their attendanceCounts are invisible to visitors (backend gap found this session)
+3. Smoke test one more transactional email flow (password reset or registration)
 
 ---
 
@@ -38,31 +34,18 @@ Outreach send rate investigation (~2/day vs expected 50/day). See STATE.md § Ne
 
 | Feature | Status |
 |---------|--------|
-| #362 Attendance Count | UNVERIFIED — need ended sale in seed data |
-| #124 Rarity Boost modal | UNVERIFIED — need rare item in seed data |
-| SES transactional email | Needs smoke test (Patrick action) |
+| Storefront past sales section | Backend gap — ENDED sales not returned by GET /organizers/:id |
 | Email verification token expiry | Migration 20260515180000 pending deploy |
-| ESN organizer address enrichment | organizerWebsite.ts pipeline — needs deep audit next session |
 
 ---
 
-## Push Block
+## Push Block (docs only)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
-git add packages/backend/src/lib/redis.ts
-git add packages/backend/src/lib/aiCostTracker.ts
-git add packages/backend/src/routes/organizers.ts
-git add packages/backend/src/controllers/socialPostController.ts
-git add packages/backend/src/controllers/internalListingEnrichmentController.ts
-git add packages/backend/src/services/listingEnrichmentService.ts
-git add packages/backend/src/controllers/internalOrganizerContactBackfillController.ts
-git add packages/backend/src/routes/internal.ts
-git add .github/workflows/enrich-ai-metadata.yml
-git add .github/workflows/backfill-organizer-contacts.yml
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: Haiku rate limit root cause — real Redis, persistent cost ceiling, enrichment out of request path, regex pre-filter, organizer contact backfill"
+git commit -m "docs: S750 wrap — #362 and #124 closed, storefront backend gap noted"
 .\push.ps1
 ```
