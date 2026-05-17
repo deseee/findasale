@@ -511,7 +511,7 @@ export async function syncLeadTierGroups(): Promise<void> {
  * If the most recent send was >5 hours ago, immediately triggers one send window
  * so Railway deploys/restarts don't leave the queue idle until the next GH Actions trigger.
  */
-async function startupCatchUp(): Promise<void> {
+export async function startupCatchUp(): Promise<void> {
   try {
     const lastSent = await prisma.directoryClaimEmail.findFirst({
       where: { sentAt: { not: null } },
