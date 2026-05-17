@@ -44,7 +44,7 @@ export async function generateDailyClue(date: string): Promise<GeneratedClue> {
   }
 
   // Feature #104: Cost ceiling check
-  if (isAICostCeilingExceeded()) {
+  if (await isAICostCeilingExceeded()) {
     console.warn('[treasure-hunt] AI cost ceiling exceeded, returning fallback clue');
     return {
       clue: 'Search for something colorful and decorative from a past era...',

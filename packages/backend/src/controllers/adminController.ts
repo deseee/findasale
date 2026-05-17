@@ -621,7 +621,7 @@ export const updateOrganizerTier = async (req: AuthRequest, res: Response) => {
 // GET /api/admin/ai-usage — #104 AI Cost Ceiling + Usage Tracking
 export const getAIUsage = async (req: AuthRequest, res: Response) => {
   try {
-    const usage = getMonthlyAICost();
+    const usage = await getMonthlyAICost();
     const costPercentage = (usage.estimatedCost / usage.ceiling) * 100;
 
     res.json({
@@ -641,7 +641,7 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
 // POST /api/admin/ai-usage/reset — #104 Reset monthly AI cost counter (admin only)
 export const resetAIUsage = async (req: AuthRequest, res: Response) => {
   try {
-    resetMonthlyAICost();
+    await resetMonthlyAICost();
     res.json({ message: 'AI usage counter reset successfully' });
   } catch (error) {
     console.error('Error resetting AI usage:', error);

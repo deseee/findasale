@@ -96,7 +96,7 @@ export const postSupportChat = async (req: AuthRequest, res: Response) => {
     const remaining = DAILY_LIMIT - (chatRateLimitMap.get(user.id)?.count || 0);
 
     // Feature #104: Check AI cost ceiling before proceeding
-    if (isAICostCeilingExceeded()) {
+    if (await isAICostCeilingExceeded()) {
       console.warn('[support-chat] AI cost ceiling exceeded, returning fallback response');
       return res.status(503).json({
         message: 'Support chat is temporarily unavailable due to service maintenance. Please try again later.',
