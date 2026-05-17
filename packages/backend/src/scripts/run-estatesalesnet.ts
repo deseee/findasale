@@ -205,7 +205,13 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error('[run-estatesalesnet] Fatal error:', error);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    // Force exit so undici keepalive sockets don't keep the event loop alive
+    // and the final "Ingest complete" log line gets flushed from stdout buffer.
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('[run-estatesalesnet] Fatal error:', error);
+    process.exit(1);
+  });
