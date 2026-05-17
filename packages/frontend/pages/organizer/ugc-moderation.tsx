@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
 import { usePendingModerationPhotos, useModeratePhoto } from '../../hooks/useUGCPhotos';
+import { useToast } from '../../components/ToastContext';
 
 export default function UGCModerationPage() {
   const router = useRouter();
@@ -11,6 +12,7 @@ export default function UGCModerationPage() {
   const { data: photos = [], isLoading, error } = usePendingModerationPhotos();
   const moderateMutation = useModeratePhoto();
   const [actionPhotoId, setActionPhotoId] = useState<number | null>(null);
+  const { showToast } = useToast();
 
   if (authLoading) return null;
   if (!user || !user.roles?.includes('ORGANIZER')) {
@@ -26,7 +28,7 @@ export default function UGCModerationPage() {
       });
       setActionPhotoId(null);
     } catch (err) {
-      alert('Failed to approve photo');
+      showToast('Failed to approve photo', 'error');
       console.error(err);
     }
   };
@@ -39,7 +41,7 @@ export default function UGCModerationPage() {
       });
       setActionPhotoId(null);
     } catch (err) {
-      alert('Failed to reject photo');
+      showToast('Failed to reject photo', 'error');
       console.error(err);
     }
   };

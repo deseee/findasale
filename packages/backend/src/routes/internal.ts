@@ -851,7 +851,7 @@ router.get('/enrich-sale-details/batch', getBatchOfUnenrichedSales);
 router.post('/enrich-sale-details/bulk', bulkUpsertEnrichedSales);
 
 // POST /api/internal/category-sync/trigger
-router.post('/category-sync/trigger', async (req: express.Request, res: express.Response) => {
+router.post('/category-sync/trigger', requireSecret, async (req: express.Request, res: express.Response) => {
   res.json({ ok: true, message: 'Category sync started — check Railway logs for results' });
   try {
     await runCategorySync();
