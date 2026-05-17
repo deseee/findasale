@@ -1,23 +1,25 @@
-# Patrick's Dashboard — S750 Wrap (Complete)
+# Patrick's Dashboard — S751 Wrap (Complete)
 
 ---
 
-## What Happened This Session — S750
+## What Happened This Session — S751
 
-Cleared both remaining UNVERIFIED items from the Blocked Queue.
+Fixed the camera orientation bug — both rapidfire and regular mode now adapt when you hold the phone in landscape.
 
-**#362 Attendance Count ✅** — "75 attended" renders on Bestmate Company Ltd storefront. Persists after reload. One discovery: the Railway Query tab is read-only for UPDATE statements (returns 0 rows every time). Fixed by running SQL via psql with `-f` flag. Also found a backend gap: the storefront endpoint only returns PUBLISHED sales, so attendanceCount on ended/past sales is invisible to visitors — separate fix needed next session.
+**Two-part fix:**
 
-**#124 Rarity Boost modal ✅** — Set user12 (Leo Thomas) to 55 XP via direct SQL. Rarity Boost button on /coupons enabled, modal opens correctly.
+The landscape layout code was already in the app from a prior session. The detection was just unreliable.
 
-**Nothing broken. No code changes shipped.**
+1. **RapidCapture.tsx** — Replaced `matchMedia('change')` with `window.resize` + `screen.orientation.change` event listeners. The old approach doesn't fire consistently on mobile WebKit. `resize` fires universally on every orientation change.
+
+2. **manifest.json** — This was the reason it didn't work in the app but worked in Chrome. The PWA manifest had `"orientation": "portrait"` which tells the OS to lock the app to portrait permanently. Changed to `"orientation": "any"` so the OS allows rotation and the layout code can do its job.
 
 ---
 
 ## Pending Patrick Actions
 
-1. **Delete fix-attendance.sql** from project root — it has production sale IDs in it and shouldn't be committed or left around.
-2. **Push the docs** — Run the push block below.
+1. **Camera landscape — PWA users:** Anyone who already has FindA.Sale installed to their home screen needs to remove it and re-add it from the browser for the manifest change to apply. Browser-only users get the fix automatically on deploy.
+2. **Delete fix-attendance.sql** from project root — has production sale IDs in it.
 3. **Email verification migration** — Deploy migration 20260515180000 when ready.
 
 ---
@@ -25,7 +27,7 @@ Cleared both remaining UNVERIFIED items from the Blocked Queue.
 ## Next Session
 
 1. Outreach send rate investigation (~2/day vs expected 50/day)
-2. Storefront past sales section — ENDED sales + their attendanceCounts are invisible to visitors (backend gap found this session)
+2. Storefront past sales section — ENDED sales + their attendanceCounts are invisible to visitors (backend gap found S750)
 3. Smoke test one more transactional email flow (password reset or registration)
 
 ---
@@ -39,13 +41,15 @@ Cleared both remaining UNVERIFIED items from the Blocked Queue.
 
 ---
 
-## Push Block (docs only)
+## Push Block
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
+git add packages/frontend/components/RapidCapture.tsx
+git add packages/frontend/public/manifest.json
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S750 wrap — #362 and #124 closed, storefront backend gap noted"
+git commit -m "fix: camera landscape orientation — resize listener + PWA manifest unlocked"
 .\push.ps1
 ```

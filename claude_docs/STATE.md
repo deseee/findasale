@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S750 — Blocked Queue QA: #362 Attendance Count + #124 Rarity Boost (COMPLETE).**
+**Latest: S751 — Camera Landscape Orientation Fix (COMPLETE).**
+
+Bug: RapidCapture (both rapidfire and regular mode) didn't adapt when phone held in landscape. Two-part fix: (1) Replaced `matchMedia('change')` listener with `resize` + `screen.orientation.change` events in RapidCapture.tsx for reliable cross-browser orientation detection. (2) Changed `"orientation": "portrait"` → `"orientation": "any"` in manifest.json — the PWA manifest was locking the app to portrait so the viewport never rotated and no resize event ever fired. Files: `packages/frontend/components/RapidCapture.tsx`, `packages/frontend/public/manifest.json`. Note: users with the PWA already installed on their home screen may need to remove and re-add it for the manifest change to take effect.
+
+**Previous: S750 — Blocked Queue QA: #362 Attendance Count + #124 Rarity Boost (COMPLETE).**
 
 Both long-standing UNVERIFIED items closed. Migration 20260515180000 confirmed already deployed (264 migrations, none pending). Attendance count data seeded directly via psql (Railway Query tab is read-only for DML — uses psql -f flag workaround). "75 attended" verified rendering on storefront. Rarity Boost: user12 guildXp=55 via direct SQL, button enabled, modal confirmed open. Backend gap found: storefront endpoint filters to PUBLISHED sales only — attendanceCount on ENDED sales never surfaces (separate fix needed). seed.ts edits pushed but seed not re-run in production; data patched directly via SQL instead. fix-attendance.sql left in project root — delete it.
 
@@ -211,8 +215,6 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 **Priority: Outreach send rate investigation + storefront past-sales backend fix.**
 
-Blocked Queue now clear (#362 and #124 both closed S750). Next priorities:
-
 1. **Outreach send rate** — S748 noted ~2/day vs expected 50/day at Day 11 warmup. Has startupCatchUp (added S749) improved this? Check Railway logs for `[OutreachCron]` entries and actual send counts.
 
 2. **Storefront past sales section** — `GET /organizers/:id` filters `status: 'PUBLISHED'` only. Ended sales never surface, so `attendanceCount` on historical sales is invisible to visitors. Backend needs a "Past Sales" section added to the storefront endpoint.
@@ -221,11 +223,30 @@ Blocked Queue now clear (#362 and #124 both closed S750). Next priorities:
 
 4. **Smoke test remaining transactional emails** — Only claim verification confirmed delivered. Test one more flow (password reset or registration) to validate the full Gmail API surface.
 
-**Patrick action needed:** Deploy email verification token migration + delete fix-attendance.sql from project root.
+**Patrick actions needed:**
+- Deploy email verification token migration (20260515180000)
+- Delete fix-attendance.sql from project root
+- For camera landscape fix: users with the PWA installed to home screen need to remove + re-add it for the manifest change to apply
 
 ---
 
 ## Recent Sessions
+
+### S751 — Camera Landscape Orientation Fix (COMPLETE)
+
+**Trigger:** Patrick reported camera (rapidfire + regular mode) doesn't shift to landscape layout when phone held horizontally.
+
+**Discovery:** `isLandscape` state and all landscape layout code was already present in RapidCapture.tsx from a prior session. The detection used `matchMedia('(orientation: landscape)')` change events, which don't fire reliably on all mobile WebKit versions.
+
+**Fix 1 — RapidCapture.tsx:** Swapped `matchMedia('change')` listener to `window.addEventListener('resize', ...)` + `screen.orientation?.addEventListener('change', ...)`. `resize` fires universally on orientation change across all mobile browsers.
+
+**Fix 2 — manifest.json:** Patrick reported fix worked in Chrome browser but not the installed PWA. Root cause: `"orientation": "portrait"` in the PWA manifest locked the app to portrait at the OS level — the viewport never rotated, so no `resize` event ever fired. Changed to `"orientation": "any"`.
+
+**Files changed:**
+- `packages/frontend/components/RapidCapture.tsx` — orientation detection useEffect rewritten
+- `packages/frontend/public/manifest.json` — orientation: portrait → any
+
+**Note for users:** PWA already installed to home screen requires remove + re-add for manifest change to apply. Browser-only users get the fix immediately on deploy.
 
 ### S750 — Blocked Queue QA: #362 Attendance Count + #124 Rarity Boost (COMPLETE)
 
