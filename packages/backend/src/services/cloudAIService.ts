@@ -211,7 +211,7 @@ Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0
 
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(content.length / 4) + 50; // rough estimate
-    trackAITokens(estimatedTokens + responseTokens);
+    await trackAITokens(estimatedTokens + responseTokens);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as AITagResult;
@@ -309,7 +309,7 @@ Return ONLY a JSON array of tags, no explanation. Example: ["mid-century-modern"
 
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(content.length / 4) + 25;
-    trackAITokens(estimatedTokens + responseTokens);
+    await trackAITokens(estimatedTokens + responseTokens);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as string[];
@@ -401,7 +401,7 @@ If the image is unclear or the item is partially obscured, default to B. Return 
 
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(content.length / 4) + 20;
-    trackAITokens(estimatedTokens + responseTokens);
+    await trackAITokens(estimatedTokens + responseTokens);
 
     const grade = content.trim().toUpperCase().charAt(0);
 
@@ -437,7 +437,7 @@ export async function analyzeItemImage(
   if (!isCloudAIAvailable()) return null;
 
   // Feature #104: Cost ceiling check — graceful degradation
-  if (isAICostCeilingExceeded()) {
+  if (await isAICostCeilingExceeded()) {
     console.warn('[cloudAI] AI cost ceiling exceeded, returning null for fallback');
     return null;
   }
@@ -537,7 +537,7 @@ export async function analyzeItemImages(
   if (!isCloudAIAvailable()) return null;
 
   // Feature #104: Cost ceiling check — graceful degradation
-  if (isAICostCeilingExceeded()) {
+  if (await isAICostCeilingExceeded()) {
     console.warn('[cloudAI] AI cost ceiling exceeded, returning null for fallback');
     return null;
   }
@@ -771,7 +771,7 @@ Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0
 
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(content.length / 4) + 50;
-    trackAITokens(estimatedTokens + responseTokens);
+    await trackAITokens(estimatedTokens + responseTokens);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as AITagResult;
@@ -843,7 +843,7 @@ export async function generateSaleDescription(input: SaleDescriptionInput): Prom
   if (!ANTHROPIC_API_KEY) return null;
 
   // Feature #104: Cost ceiling check
-  if (isAICostCeilingExceeded()) {
+  if (await isAICostCeilingExceeded()) {
     console.warn('[cloudAI] AI cost ceiling exceeded, returning null for sale description');
     return null;
   }
@@ -907,7 +907,7 @@ Write a friendly, inviting description that shoppers will see on the listing. Us
 
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(text.length / 4) + 100;
-    trackAITokens(estimatedTokens + responseTokens);
+    await trackAITokens(estimatedTokens + responseTokens);
 
     return text.trim() || null;
   } catch (error: any) {
@@ -956,7 +956,7 @@ export async function suggestPrice(
   }
 
   // Feature #104: Cost ceiling check
-  if (isAICostCeilingExceeded()) {
+  if (await isAICostCeilingExceeded()) {
     console.warn('[cloudAI] AI cost ceiling exceeded, returning fallback price');
     return {
       low: 5,
@@ -1012,7 +1012,7 @@ Base your price on actual secondary market demand, not retail pricing. Do not an
 
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(content.length / 4) + 75;
-    trackAITokens(estimatedTokens + responseTokens);
+    await trackAITokens(estimatedTokens + responseTokens);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as PriceSuggestion;
@@ -1259,7 +1259,7 @@ Confidence threshold: only cluster at >= 0.75. When in doubt, leave ungrouped.`;
 
     // Track token usage
     const responseTokens = Math.ceil(content.length / 4) + 50;
-    trackAITokens(estimatedTokens + responseTokens);
+    await trackAITokens(estimatedTokens + responseTokens);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as ClusterResult;

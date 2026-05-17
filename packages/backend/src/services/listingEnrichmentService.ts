@@ -45,7 +45,7 @@ export async function enrichScrapedListing(
   }
 
   // Cost ceiling check
-  if (isAICostCeilingExceeded()) {
+  if (await isAICostCeilingExceeded()) {
     console.warn('[enrichment] AI cost ceiling exceeded, skipping enrichment');
     return null;
   }
@@ -98,7 +98,7 @@ Return ONLY JSON, no explanation.`;
 
     // Track token usage for cost ceiling
     const responseTokens = Math.ceil(content.length / 4) + 50;
-    trackAITokens(estimatedTokens + responseTokens);
+    await trackAITokens(estimatedTokens + responseTokens);
 
     // Parse JSON response
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();

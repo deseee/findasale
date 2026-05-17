@@ -68,7 +68,7 @@ export const generateSocialPost = async (req: AuthRequest, res: Response) => {
     }
 
     // Feature #104: Check AI cost ceiling
-    if (isAICostCeilingExceeded()) {
+    if (await isAICostCeilingExceeded()) {
       return res.status(503).json({ message: 'AI service temporarily unavailable due to resource limits. Please try again later.' });
     }
 

@@ -65,7 +65,7 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
     }
 
     // Feature #104: Check AI cost ceiling
-    if (isAICostCeilingExceeded()) {
+    if (await isAICostCeilingExceeded()) {
       console.warn('[planner-chat] AI cost ceiling exceeded');
       res.status(503).json({ message: 'AI service temporarily unavailable due to resource limits. Please try again later.' });
       return;
