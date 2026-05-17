@@ -5,7 +5,7 @@
   "theme_color": "#F97316",
   "background_color": "#F9F7F4",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "scope": "/",
   "start_url": "/?source=pwa",
   "categories": ["shopping", "lifestyle"],
