@@ -6,7 +6,7 @@ const entry: GuideEntry = {
   audience: 'organizer',
   format: 'written',
   priority: 1,
-  relatedGuides: ['create-your-first-sale', 'schedule-and-visibility', 'shop-mode'],
+  relatedGuides: ['create-your-first-sale', 'schedule-and-visibility', 'retail-mode'],
   videoUrl: undefined,
   body: `Choosing the right sale type matters before you publish.
 It controls which features are available and how your sale appears in search.
@@ -125,7 +125,7 @@ Estate Sale items have a fixed asking price. Auction items go to the highest bid
 
 - [Create your first sale, step by step](create-your-first-sale.md)
 - [Schedule a sale and set your visibility window](schedule-and-visibility.md)
-- [Run a permanent storefront with Shop Mode](shop-mode.md)`,
+- [Run a permanent storefront with Retail Mode](retail-mode.md)`,
 };
 
 export default entry;

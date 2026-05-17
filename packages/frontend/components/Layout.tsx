@@ -448,24 +448,28 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <Users size={16} className="text-gray-500" />
                   <span>Workspace</span>
                 </Link>
+              </>
+            )}
+            {canAccess('PRO') && (
+              <>
                 <SectionHeader icon={Store} label="Retail" />
-                <Link href="/organizer/consignors" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Consignor portal and payouts management — TEAMS">
+                <Link href="/organizer/consignors" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Consignor portal and payouts management — PRO">
                   <Users size={16} className="text-teal-500" />
                   <span>Consignors</span>
                 </Link>
-                <Link href="/organizer/color-rules" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Color-tagged discount rules — TEAMS">
+                <Link href="/organizer/color-rules" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Color-tagged discount rules — PRO">
                   <Tag size={16} className="text-teal-500" />
                   <span>Color Rules</span>
                 </Link>
-                <Link href="/organizer/locations" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-location inventory view — TEAMS">
+                <Link href="/organizer/locations" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-location inventory view — PRO">
                   <MapPin size={16} className="text-teal-500" />
                   <span>Locations</span>
                 </Link>
-                <Link href="/organizer/shopify" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Cross-list items to your Shopify store — TEAMS">
+                <Link href="/organizer/shopify" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Cross-list items to your Shopify store — PRO">
                   <ShoppingBag size={16} className="text-teal-500" />
                   <span>Shopify</span>
                 </Link>
-                <Link href="/organizer/stripe-connect" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Send payouts to consignors — TEAMS">
+                <Link href="/organizer/stripe-connect" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Send payouts to consignors — PRO">
                   <CreditCard size={16} className="text-teal-500" />
                   <span>Consignor Payouts</span>
                 </Link>
