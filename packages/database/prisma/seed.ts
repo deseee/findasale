@@ -486,7 +486,7 @@ async function main() {
     const titlePool = saleTitlesByType[saleType];
     const saleTitle = titlePool[i % titlePool.length];
 
-    let startDate: Date, endDate: Date, status: string;
+    let startDate: Date, endDate: Date, status: string, attendanceCount: number | null = null;
     if (i < 8) {
       // Future upcoming
       startDate = new Date(now); startDate.setDate(startDate.getDate() + (i + 2) * 7);
@@ -502,6 +502,7 @@ async function main() {
       endDate   = new Date(now); endDate.setMonth(endDate.getMonth() - (i - 15));
       startDate = new Date(endDate); startDate.setDate(startDate.getDate() - 1);
       status    = 'ENDED';
+      attendanceCount = 50 + (i - 16) * 23; // #362: 50, 73, 96, 119, 142 — QA attendance count display
     } else {
       // Draft
       startDate = new Date(now); startDate.setDate(startDate.getDate() + Math.floor(Math.random() * 30) + 1);
@@ -536,6 +537,7 @@ async function main() {
         photoUrls: [salePhotoUrls[i % salePhotoUrls.length]],
         tags,
         saleType,
+        ...(attendanceCount !== null && { attendanceCount }), // #362: QA attendance count display
       },
     });
     sales.push(sale);
@@ -695,6 +697,10 @@ async function main() {
     });
   }
   console.log(`✅ Created ${purchasesCreated.length + 6} purchases (user12 has 6+)`);
+
+  // #124: Give user12 enough guildXp to enable Rarity Boost button (requires 50 XP)
+  await prisma.user.update({ where: { id: user12.id }, data: { guildXp: 55 } });
+  console.log('✅ Set user12 guildXp to 55 (#124 Rarity Boost QA gate)');
 
   // ── Bids on auction items ─────────────────────────────────────────────────
   console.log('🔨 Creating bids...');
