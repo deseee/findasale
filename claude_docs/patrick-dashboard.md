@@ -1,31 +1,37 @@
-# Patrick's Dashboard — S743 Wrap (Complete)
+# Patrick's Dashboard — S745 Wrap (Complete)
 
 ---
 
-## What Happened This Session — S743
+## What Happened This Session — S745
 
-Four areas fixed and closed.
+Chrome QA sprint — two batches tested end-to-end. Outreach pipeline confirmed live (you deleted OUTREACH_TEST_EMAIL, Day 11 warmup active, 3,370 organizers queued). Roadmap #431 rate limiter closed.
 
-**CategoryTopFinds** — The eBay Browse API was being called with wrong syntax. Two bugs: `filter=categoryIds:{3199}` should be `category_ids=3199` (direct query param), and the API only allows 1 category per call (we were passing comma-separated IDs). Fixed to loop per category ID and merge. All 9 categories now have live data: furniture 12 items, jewelry 24, art-decor 24, clothing 20, kitchenware 22, tools-hardware 23, collectibles 12, electronics 24, books-media 24. Nightly cron at 05:00 UTC keeps it fresh.
+**Batch 1 — Organizer (user1 / Alice Johnson, TEAMS):**
+- **#352 Tagline** ✅ — Saves and persists. Confirmed via PATCH 200 + reload.
+- **#310 Color Discount Rules** ❌ — "Add Rule" button broken again. No modal opens. Was ✅ in S716 — something re-broke it.
+- **#330 Appraisals** ❌ — "Submit New Request" button broken. No modal opens. Was ✅ in S719 — re-broken.
+- **#329 Consignment** ❌ — No nav link. /organizer/consignment is 404. Feature never built.
+- **#88 Haul Posts** ❌ — /shopper/haul and /shopper/hauls are 404. Not built.
+- **#353 Year Founded / #355 Org Types** ⚠️ — Fields exist, save uncertain (testing artifact possible, needs clean retest).
+- **#362 Attendance Count** UNVERIFIED — user1 has no seeded sales to test against.
 
-**Category sync trigger** — The `/trigger` endpoint was waiting for the full 30-second sync before responding, which caused PowerShell to time out and crash the connection. Flipped to fire-and-forget: responds immediately, runs sync in background.
-
-**Voice strip QA** — ✅ PASS. Confirmed in Chrome JS console using the exact deployed code: "8 oz" → empty, "2 lb 4 oz" → empty, normal description phrases untouched. Fix is good.
-
-**Wyoming scraper** — An agent had replaced the active scraper with a disabled stub and registered it in sourceRegistry. Both reverted. Scraper now attempts to fetch the page (returns 0 results, as expected — the page is JS-rendered and won't have data until headless browser support is added). No longer in sourceRegistry.
-
-**Outreach seeder** — Fixed false-positive image filenames (`.png`, `.jpg`, etc.) being inserted as email addresses in the outreach queue.
+**Batch 2 — Shopper (user12 / Leo Thomas, Hunt Pass):**
+- **#227 XP Dashboard** ✅ — Real data: 40/500 XP, Initiate rank, Hunt Pass 1.5x active.
+- **#29 Loyalty Passport** ✅ — QR code present on dashboard, button active.
+- **#199 Shopper Profile** ✅ — Explorer Profile loads with achievements, specialties, keyword matching.
+- **#124 Rarity Boost modal** UNVERIFIED — No rare items in seeded data to trigger it.
 
 ---
 
 ## Pending Patrick Actions
 
-**1. SES smoke test** (highest priority — from S739):
-- Trigger any transactional email in the app (publish a sale, send a notification, etc.)
-- Confirm it hits your inbox from noreply@send.finda.sale
-- Then: remove `resend` from `packages/backend/package.json` + pull `RESEND_API_KEY` and `RESEND_FROM_EMAIL` from Railway env vars
+**1. Sign back into Chrome** at finda.sale with Google (artifactmi@gmail.com) — test accounts cleared.
 
-**2. Deploy email verification migration** (no rush — from S726):
+**2. Reconnect Gmail MCP** with label-modify scope (carried from S744) — needed to bulk-archive GH Actions failure emails.
+
+**3. SES smoke test** (carried from S743) — trigger any transactional email, confirm from noreply@send.finda.sale, then remove Resend from package.json + Railway vars.
+
+**4. Deploy email verification migration** (no rush, carried from S726):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -33,30 +39,29 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**3. Clear the stray voice note on the Art Deco Brooch item** — QA agent accidentally appended "my plans for dinner not existent totally I'm just like" to item cf3io6c1o685f4bk0ltbxs3b2. Description should be: "Sterling silver and enamel, 1920s, excellent condition." Fix via the item's Full Edit page.
+**5. Decision needed — #329 Consignment and #88 Haul Posts:** These features were never built (both are 404). Build now or officially defer?
 
 ---
 
-## Blocked Queue Summary
+## Blocked Queue Summary (9 items — approaching QA ceiling of 8)
 
-5 active items — below the 8-item QA ceiling. Feature work remains unblocked.
-
-- **SES smoke test** — Patrick action above
-- **CategoryTopFinds TrendingSection** — data confirmed live, UI needs Chrome QA (`/categories/furniture`)
-- **AuctionNinja + NAA scrapers** — decision: enable or leave disabled
-- **AI listing enrichment** — Railway log check needed
-- **Outreach pipeline open/click tracking** — check Railway logs after next cron window
+- **#310 Color Discount Rules** ❌ re-broken (was ✅ S716) — dispatch findasale-dev
+- **#330 Appraisals Submit** ❌ re-broken (was ✅ S719) — dispatch findasale-dev
+- **#329 Consignment** ❌ not built — Patrick decision
+- **#88 Haul Posts** ❌ not built — Patrick decision
+- **#353/#355 Year Founded / Org Types** ⚠️ unconfirmed save — clean retest needed
+- **#362 Attendance Count** UNVERIFIED — no test data
+- **#124 Rarity Boost modal** UNVERIFIED — no rare items in seeded data
+- **SES smoke test** — transactional email not yet confirmed
+- **Gmail bulk archive** — needs Gmail MCP reconnect
 
 ---
 
-## Push Block — S743
+## No push block this session — STATE.md and patrick-dashboard.md are the only changed files.
 
 ```powershell
-git add packages/backend/src/routes/internal.ts
-git add packages/backend/src/services/scraper/sources/wyomingPhase2Scraper.ts
-git add packages/backend/src/services/scraper/sourceRegistry.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S743: CategorySync Browse API fix, fire-and-forget trigger, Wyoming scraper restore, outreach image filter"
+git commit -m "S745: Chrome QA sprint — 3 verified ✅, 4 broken ❌, unverified queue updated"
 .\push.ps1
 ```
