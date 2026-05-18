@@ -8,43 +8,42 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S759 — GEO/AI Discoverability Build — Phases 1-11 (COMPLETE).**
+**Latest: S760 — GEO Phase 2 Complete + Admin Dashboards + OAuth Claim.**
 
-Dispatched 12 parallel agents across 3 batches. 21 files shipped. 15 GEO roadmap entries (#432–#438, #440, #441, #446, #447, #449, #451, #452, #457) moved from Queued → SHIPPED S759 Pending Chrome QA.
+17 features shipped. 44 files. 4 parallel agent batches. GEO roadmap fully complete (all phases 1-12 shipped across S759-S760). SEO Content Moat confirmed closed — ISR city×category pages ARE the generator. #377 Help Library and #378 /guides confirmed COMPLETE S742.
 
-**What was built:**
-- **City landing pages**: /city/[slug] (all types) + /city/[slug]/[category] (estate-sales, yard-sales, auctions, flea-markets, consignment) — ISR, ItemList JSON-LD, BreadcrumbList JSON-LD, dark mode, claim CTA
-- **Cities index**: /cities — state-grouped city browser with counts, links to city pages — ISR
-- **"This Weekend" pages**: /this-weekend/[city] — temporal ISR pages, Friday–Sunday window, revalidate 4h
-- **Sale page JSON-LD enrichment**: Real AggregateOffer (actual min/max prices), Speakable schema (h1/.sale-description/.sale-dates), paymentAccepted (CreditCard/Cash/PaymentService), SoldOut availability for ENDED sales, machine-readable sr-only block on claimed pages
-- **Claim banner**: ClaimListingBanner component on unclaimed sale pages — client-side crawler visit count + CTA to /claim with city pre-fill
-- **AI Score tool**: /ai-score — public URL analyzer, scores 0-100 against 10 GEO signals, letter grade, breakdown
-- **Crawler tracking**: CrawlerVisit model (schema change, migration needed), middleware detecting GPTBot/ClaudeBot/Perplexity/Bing/Google, fire-and-forget logging
-- **Crawler stats**: /api/crawler-stats/sale/:saleId + /api/crawler-stats/organizer endpoints
-- **Smart Search Views card**: SmartSearchViewsCard on organizer dashboard — "Search Engine Visibility", 7-day crawler count with friendly bot names
-- **First-crawl notification**: Email sent to organizer on first crawler visit per sale
-- **Stale data protection**: ENDED+scraped sales get noindex; excluded from search/MCP results (saleController filter)
-- **ChatGPT plugin manifest**: /.well-known/ai-plugin.json pointing to MCP server
-- **Sitemap enrichment**: City + city×category entries in server-sitemap.xml + next-sitemap additionalPaths
-- **llms.txt**: MCP status → Live, national scope, structured data section added
+**What shipped:**
+- **#382** Sale type ordering fixed in 3 files (SearchFilterPanel, index.tsx, edit-sale)
+- **#439** Per-item Product schema JSON-LD on claimed sale pages (up to 20 items)
+- **#448** MCP tool wrappers: get_trending_sales, get_sales_starting_soon, find_item_for_sale
+- **#442** Monthly Trend Reports cron (1st of month, GitHub Actions, emailService)
+- **#450** EventSeries JSON-LD for recurring organizers (≥3 sales same type)
+- **#459** Platform Syndication Formatter + public /api/syndication/sale/:saleId endpoint
+- **#460** End-of-Sale Auto-Liquidation trigger (fire-and-forget, no schema needed)
+- **#453** Unmet Demand Signal Capture (new schema + search.ts integration)
+- **#455** Shopper Notify Me Waitlist (new schema + POST/GET/DELETE API)
+- **#458** Directory Confidence Score (schema fields + directoryConfidenceService.ts)
+- **#454** Organizer Demand Dashboard card (DemandSignalsCard + /api/organizer/demand-signals)
+- **Clearance page** /clearance — post-sale AVAILABLE items, SSR, nav link in Layout.tsx
+- **Admin dashboards** — /admin/demand-signals, /admin/waitlist, /admin/organizer-confidence
+- **#443** 1-Click OAuth Claim — Architect-approved (ADR-443), no migration, OAuthBridge → claim-oauth endpoint → dashboard redirect with toast
+- **4 truncated files restored** — saleController.ts, saleAutoCloseCron.ts, internalJobRunnerController.ts, index.ts (Edit-tool truncation from prior sessions)
 
-**Pre-existing broken files fixed (build crashers):**
-- pages/city/[slug].tsx — had 5+ non-existent lib imports, would cause Vercel build failure. Rewritten clean.
-- pages/cities/index.tsx — was client-side with no ISR. Rewritten with getStaticProps.
-
-**Migration needed (Patrick action):**
-CrawlerVisit schema change requires:
+**New migration (Patrick action):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
-Migration file: `packages/database/prisma/migrations/20260519000000_add_crawler_visit/migration.sql`
+Covers BOTH CrawlerVisit (S759) and geo_demand_waitlist_confidence (S760) in one run.
 
-**Previous: S758 — GEO & Discoverability Implementation Plan (COMPLETE).**
+**⚠️ Verify before pushing:**
+- `packages/backend/src/index.ts` — confirm all 4 route mounts: syndication, shopperWaitlist, demandSignals, clearance
+- `packages/frontend/pages/sales/[id].tsx` — confirm Product schema + EventSeries + OAuth claim buttons all coexist
 
-Analyzed cross-session GEO/AI Discoverability strategy prompt against existing codebase. Found significant infrastructure already built (JSON-LD on 22 files, robots.txt, llms.txt, MCP server with 7 tools, city landing pages with SSR). Created 12-phase implementation plan + 5-item research queue + 4 GTM strategy notes (`claude_docs/strategy/geo-implementation-plan.md`). Added 29 roadmap entries #432–#460 covering the complete GEO stack. No code changes this session — planning only.
+**New scheduled task:** `findasale-seo-geo-monitor` — Tuesdays 7am, checks GSC URL, GEO pages, crawler stats, structured data.
+
 ## Pool Audit Findings
 
 Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
@@ -128,15 +127,13 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**⚠️ QA CEILING TRIGGERED — 11 items in Blocked Queue. NEXT SESSION MUST BE QA-FIRST.**
+**⚠️ QA CEILING TRIGGERED — 18 items in Blocked Queue. NEXT SESSION = QA ONLY.**
 
-CLAUDE.md §4: "If the Blocked/Unverified Queue has ≥8 items, the next session MUST be a dedicated QA session. No new feature dev without Patrick explicit sign-off."
+CLAUDE.md §4: ≥8 items = dedicated QA session. No new feature dev without Patrick sign-off.
 
-**Priority 0 — PUSH S759 (Patrick action — 21 files).**
+**Priority 0 — PUSH S760 (Patrick action — 44 files). Verify index.ts + sales/[id].tsx first.**
 
-This is the largest push block in recent sessions. Push ALL files in the pushblock below.
-
-**Priority 1 — Run CrawlerVisit migration (Patrick action):**
+**Priority 1 — Run migrations (covers S759 CrawlerVisit + S760 schema batch):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -144,44 +141,52 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**Priority 2 — Chrome QA session (11 Blocked Queue items).**
+**Priority 2 — Chrome QA (18 items, one per dispatch):**
 
-Run QA one per dispatch (§10c micro-dispatch rule):
-- #275 Hunt Pass ring+badge (FIXED S755)
-- #265 Share & Earn card (FIXED S755)
-- #292 ENDED-sale counts (FIXED S755)
-- #305 Social Posts modal (FIXED S755)
-- #306 Store Hours persistence (FIXED S755)
-- #307 Retail Mode on TEAMS account
-- GEO city pages — city/grand-rapids-mi and city/grand-rapids-mi/estate-sales load with real data
-- GEO claim banner — unclaimed sale page shows ClaimListingBanner
-- GEO AI Score — /ai-score returns real score for a finda.sale URL
-- GEO Smart Search Views — organizer dashboard has "Search Engine Visibility" card
-- GEO this-weekend — /this-weekend/grand-rapids-mi page loads
+S755 fixes (still unverified):
+- #275 Hunt Pass ring+badge
+- #265 Share & Earn card (7-day dismissal)
+- #292 ENDED-sale counts
+- #305 Social Posts modal
+- #306 Store Hours persistence
+- #307 Retail Mode — needs TEAMS account
 
-**Priority 3 — Remaining GEO items after QA pass (pending Patrick sign-off to continue):**
-- #439 Per-item Product Schema on claimed sale pages
-- #442 Automated Monthly Trend Reports
-- #443 1-Click OAuth Claim
-- #448 MCP Tool Wrappers (get_trending_sales, get_sales_starting_soon, find_item_for_sale)
-- #450 EventSeries Schema for recurring sales
-- #453 Unmet Demand Signal Capture (schema change)
-- #454 Organizer Demand Dashboard
-- #455 Shopper Notify Me Waitlist (schema change)
-- #458 Confidence Score on Directory Entries (schema change)
-- #459 Platform Syndication Formatter
-- #460 End-of-Sale Auto-Liquidation
+S759 GEO features:
+- City page /city/grand-rapids-mi loads with real sale data
+- City×category /city/grand-rapids-mi/estate-sales
+- This Weekend /this-weekend/grand-rapids-mi
+- GEO claim banner — unclaimed sale shows banner
+- AI Score /ai-score — returns real score
+- Smart Search Views card on organizer dashboard
 
-**Previously pending Patrick actions (still needed):**
-- PUSH S755 block (10 code files) — if not yet done
-- PUSH S756 block (2 files) — if not yet done
-- PUSH S758 block (roadmap + STATE + dashboard + strategy doc)
-- Deploy email verification token migration (20260515180000) — pending from S726
-- Delete fix-attendance.sql from project root — pending from S750
+S760 new surfaces:
+- #443 OAuth claim — unclaimed sale page shows "Claim with Google/Facebook" buttons
+- #454 Demand dashboard — organizer dashboard shows DemandSignalsCard
+- Clearance page /clearance — items render with city filter
+- Admin /admin/demand-signals — table loads
+- Admin /admin/waitlist — table loads
+- Admin /admin/organizer-confidence — table with color-coded scores
+
+**Previously pending Patrick actions:**
+- Deploy email verification migration (20260515180000) — pending S726
+- Delete fix-attendance.sql from project root — pending S750
 - Log back into Chrome as yourself (artifactmi@gmail.com) after any QA
 
-
 ## Recent Sessions
+
+### S760 — GEO Phase 2 Complete + Admin Dashboards + OAuth Claim
+
+**Trigger:** Patrick signed off on continuing GEO phases after S759 push confirmed green.
+
+**What shipped:** 17 features, 44 files, 4 parallel batches. GEO roadmap phases 2-12 complete. #382 sale type ordering, #439 Product schema, #448 MCP tools, #442 monthly trend reports, #450 EventSeries, #459 syndication formatter, #460 auto-liquidation trigger, #453/#455/#458 schema batch (unmet demand + shopper waitlist + confidence score), #454 demand dashboard, clearance page, 3 admin dashboards, #443 1-click OAuth claim. Also restored 4 Edit-tool-truncated files from prior sessions.
+
+**Confirmed closed:** #377 Help Library (COMPLETE S742), #378 /guides (SHIPPED S742), SEO Content Moat (ISR pages = generator — 75 guides + city/category pages = 500+ indexed pages).
+
+**Migration created:** 20260519100000_geo_demand_waitlist_confidence (UnmetDemandSignal + ShopperWaitlistEntry + Organizer confidence fields). Run with `prisma migrate deploy` — covers both S759 CrawlerVisit and S760 in one pass.
+
+**New scheduled task:** findasale-seo-geo-monitor, Tuesdays 7am — GSC URL check, GEO page spot-checks, crawler stats, structured data audit, open roadmap items.
+
+**Push:** 44 files (see S760 pushblock in Next Session).
 
 ### S759 — GEO/AI Discoverability Build — Phases 1-11 (COMPLETE)
 
@@ -230,44 +235,3 @@ Removed 5 test/QA sales + 13 items from Railway production DB. Cascading FK reco
 - `.github/workflows/pipeline-website-enrichment.yml` — cron weekly → daily
 - `claude_docs/strategy/roadmap.md` — #336 and #339 status updated
 
-### S754 — Scraper/Enrichment Pipeline Audit + Gmail Rate Limit Fix (COMPLETE)
-
-**Trigger:** Outreach pipeline showing "0 sent, 21 failed" with "User-rate limit exceeded" errors on every send attempt. Patrick asked for full audit.
-
-**Root causes found:** (1) `organizerWeeklyDigestJob` was firing to all unmanaged scraped orgs — most have `@system.finda.sale` placeholder emails. Was burning the entire daily Gmail API quota before real outreach ran. (2) Send loop in `outreachEmailsCron.ts` fired all emails ~300ms apart with no inter-send delay, hitting Gmail's 1/sec rate limit even when quota remained.
-
-**Fixes shipped:**
-- `outreachEmailsCron.ts` — `sleep(1100)` between sends; spaces to ~1/second
-- `organizerAnalyticsService.ts` — digest suppression: `isUnmanagedListing: { not: true }` in findMany + early return guard on `@system.finda.sale` email domain
-- `organizers.ts` — storefront ENDED-sale gap: `status: { in: ['PUBLISHED', 'ENDED'] }` at two query sites
-- `enrichContactEmails.ts` — HOT/WARM two-pass query (HOT/WARM take:150 → COLD fills to 200); DuckDuckGo free-search fallback for Pass 2/3 before Google Places
-- `scraper/index.ts` — `directoryMostRecentSource` fallback now writes `sourceName` (all 77 Phase 2 scrapers covered without touching individual files)
-- `backfillDirectoryMostRecentSource.py` *(new)* — ran live: 46,333 records updated
-- `foursquarePlaces.ts` — category allowlist (19 entry substrings); skips off-target businesses
-- `googlePlaces.ts` — extended business name blocklist
-
-**GSalr.com:** Closed. $10k/day ToS clause for competitor use. Data from estatesales.org anyway.
-
-**Push block has 8 files — see Current Status push block above.**
-
-### S753 — Chrome QA Backlog Sprint Continued (COMPLETE)
-
-**Trigger:** Patrick asked for a less token-wasteful QA approach (Sonnet subagents waste ~40-50k tokens per feature). Also investigated outreach send rate (~2/day vs expected 50/day).
-
-**Outreach fix:** Query starvation in `outreachEmailsCron.ts`. Each batch re-fetched same candidates, quota check was outside send loop. Fixed: CANDIDATE_MULTIPLIER=10, exhaustedFilter excludes already-processed, nulls-first ordering, quota cap inside send loop. Edit tool truncated file (567→526 lines) — recovered via Python splice from git original.
-
-**Chrome QA sprint (main session Opus, ~3-5k tokens/feature):** Verified 30+ features across shopper and organizer roles. Shopper: Homepage (hero, search, Treasure Hunt, Sale of Day, map, Featured Sales), Sale Detail (hero, badges, gallery, share), Favorites, Cart, Dashboard (rank, XP, perks, QR, Guild, Hunt Pass), Explorer Profile, Settings, Map (200 sales, filters, Plan Route, Heatmap), Trending, Leaderboard. Organizer: Dashboard (quick actions, plan info, storefront URL, sale cards, weather), POS (sale selector, search, camera scan, 6 payment methods, manual card), Print Kit (5 signs, 4 QR labels, Label Sheet Composer, 3 Interactive QR), Close Sale, Holds, Subscription Settings, Items (5 items, 4 input methods, inline editing, export), Appearance Settings, eBay Settings, Pricing Page. Also: Featured Boost/Sale Bump, Flash Deal, and several roadmap items.
-
-**Bugs found:** #306 Store Hours save persistence, #305 Social Posts no-op, #307 Shop Mode PRO visibility, Subscription copy mismatch (TEAMS label on PRO account).
-
-**Files changed:** `packages/backend/src/jobs/outreachEmailsCron.ts`
-
-**Google login restoration:** Failed after 5+ attempts — OAuth chooser kept selecting wrong account (Lorene Cook) despite precise element targeting. Patrick needs to log in manually.
-
-### S751 — Camera Landscape Orientation Fix (COMPLETE)
-
-**Trigger:** Patrick reported camera (rapidfire + regular mode) doesn't shift to landscape layout when phone held horizontally.
-
-**Discovery:** `isLandscape` state and all landscape layout code was already present in RapidCapture.tsx from a prior session. The detection used `matchMedia('(orientation: landscape)')` change events, which don't fire reliably on all mobile WebKit versions.
-
-**Fix 1 — RapidCapture.tsx:** Swapped `matchMedia('change')` listener to `window.addEventListener('resize', ...)` + `screen.or

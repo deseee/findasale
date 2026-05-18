@@ -121,7 +121,7 @@ export default function AiScorePage() {
 
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '';
-      const res = await fetch(`${apiBase}/api/ai-score?url=${encodeURIComponent(inputUrl)}`);
+      const res = await fetch(`${apiBase}/ai-score?url=${encodeURIComponent(inputUrl)}`);
       const data: AiScoreResult = await res.json();
       if (data.error) {
         setFetchError(data.error);
