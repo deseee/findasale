@@ -194,6 +194,16 @@ interface InitialSaleData {
   organizer: {
     businessName: string;
   };
+  // #439: Per-item Product schema — only populated for claimed sales
+  isClaimed: boolean;
+  items: Array<{
+    title: string;
+    description?: string;
+    price?: number;
+    photoUrls: string[];
+    category?: string;
+    condition?: string;
+  }>;
 }
 
 interface SaleDetailPageProps {
@@ -796,6 +806,50 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 }
               ]
             })
+          }} />
+        </Head>
+      )}
+
+      {/* #439: Per-item Product schema — only for claimed sales with server-side items */}
+      {initialData && initialData.isClaimed && initialData.items.length > 0 && (
+        <Head>
+          <script type="application/ld+json" dangerouslySetInnerHTML={{
+            __html: JSON.stringify(
+              initialData.items.map((item) => {
+                const conditionMap: Record<string, string> = {
+                  NEW: 'https://schema.org/NewCondition',
+                  LIKE_NEW: 'https://schema.org/RefurbishedCondition',
+                  EXCELLENT: 'https://schema.org/RefurbishedCondition',
+                  GOOD: 'https://schema.org/UsedCondition',
+                  FAIR: 'https://schema.org/UsedCondition',
+                  POOR: 'https://schema.org/UsedCondition',
+                  USED: 'https://schema.org/UsedCondition',
+                  REFURBISHED: 'https://schema.org/RefurbishedCondition',
+                };
+                const schemaCondition = item.condition
+                  ? (conditionMap[item.condition.toUpperCase()] || 'https://schema.org/UsedCondition')
+                  : undefined;
+                return {
+                  '@context': 'https://schema.org',
+                  '@type': 'Product',
+                  'name': item.title,
+                  ...(item.description ? { 'description': item.description } : {}),
+                  ...(item.photoUrls[0] ? { 'image': item.photoUrls[0] } : {}),
+                  ...(item.category ? { 'category': item.category } : {}),
+                  ...(schemaCondition ? { 'itemCondition': schemaCondition } : {}),
+                  'offers': {
+                    '@type': 'Offer',
+                    'priceCurrency': 'USD',
+                    ...(item.price != null ? { 'price': item.price.toFixed(2) } : {}),
+                    'availability': 'https://schema.org/InStock',
+                    'seller': {
+                      '@type': 'Organization',
+                      'name': initialData.organizer.businessName || initialData.title,
+                    },
+                  },
+                };
+              })
+            )
           }} />
         </Head>
       )}
@@ -1963,6 +2017,8 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     };
 
     // JSON-LD: Extract full sale data for structured data injection
+    // #439: isClaimed = sale has an organizer who is not an unmanaged/scraped listing
+    const saleIsClaimed = Boolean(sale.organizer) && !sale.organizer?.isUnmanagedListing;
     const initialData: InitialSaleData = {
       id: sale.id,
       title: sale.title || '',
@@ -1977,6 +2033,18 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       organizer: {
         businessName: sale.organizer?.businessName || '',
       },
+      isClaimed: saleIsClaimed,
+      // Cap at 20 items to keep JSON-LD payload reasonable
+      items: saleIsClaimed && Array.isArray(sale.items)
+        ? sale.items.slice(0, 20).map((item: any) => ({
+            title: item.title || '',
+            description: item.description || undefined,
+            price: item.price ?? undefined,
+            photoUrls: item.photoUrls || [],
+            category: item.category || undefined,
+            condition: item.condition || undefined,
+          }))
+        : [],
     };
 
     // GEO Phase 11a: suppress indexing of ENDED scraped (unclaimed) sale pages

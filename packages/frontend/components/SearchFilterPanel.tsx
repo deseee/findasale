@@ -46,8 +46,8 @@ const DEFAULT_CATEGORIES = [
 
 const SALE_TYPE_OPTIONS = [
   { value: '', label: 'All Types' },
-  { value: 'YARD', label: 'Yard Sale' },
   { value: 'ESTATE', label: 'Estate Sale' },
+  { value: 'YARD', label: 'Yard Sale' },
   { value: 'AUCTION', label: 'Auction' },
   { value: 'FLEA_MARKET', label: 'Flea Market' },
   { value: 'CONSIGNMENT', label: 'Consignment' },

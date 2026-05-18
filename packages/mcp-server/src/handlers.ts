@@ -17,6 +17,12 @@ import {
   ListCitiesResponse,
   ListSaleTypesResponse,
   ListCategoriesResponse,
+  GetTrendingSalesInput,
+  GetTrendingSalesResponse,
+  GetSalesStartingSoonInput,
+  GetSalesStartingSoonResponse,
+  FindItemForSaleInput,
+  FindItemForSaleResponse,
 } from './types';
 
 // ──────────────────────────────────────────────────────────────
@@ -153,41 +159,162 @@ export async function handleListCities(): Promise<ListCitiesResponse> {
 // ──────────────────────────────────────────────────────────────
 
 export async function handleListSaleTypes(): Promise<ListSaleTypesResponse> {
-  // Hardcoded per spec — no backend call needed
+  // Hardcoded per spec -- no backend call needed
   return {
     types: [
       {
         id: 'ESTATE',
         displayName: 'Estate Sale',
         description: 'Liquidation of personal property from an estate',
-        icon: '🏛️',
+        icon: 'estate',
       },
       {
         id: 'YARD',
         displayName: 'Yard Sale',
         description: 'Casual outdoor sale of household items',
-        icon: '🏠',
+        icon: 'yard',
       },
       {
         id: 'AUCTION',
         displayName: 'Auction',
         description: 'Competitive bidding sale with hammer price',
-        icon: '🔨',
+        icon: 'auction',
       },
       {
         id: 'FLEA_MARKET',
         displayName: 'Flea Market',
         description: 'Multi-vendor marketplace event',
-        icon: '🎪',
+        icon: 'flea_market',
       },
       {
         id: 'CONSIGNMENT',
         displayName: 'Consignment',
         description: 'Items sold on behalf of consignors',
-        icon: '🤝',
+        icon: 'consignment',
       },
     ],
   };
+}
+
+// ──────────────────────────────────────────────────────────────
+// get_trending_sales Handler
+// ──────────────────────────────────────────────────────────────
+
+const SITE_BASE = 'https://finda.sale';
+
+export async function handleGetTrendingSales(
+  input: Record<string, any>
+): Promise<GetTrendingSalesResponse> {
+  const { city, saleType, limit = 10 } = input as GetTrendingSalesInput;
+
+  const clampedLimit = Math.min(Math.max(1, limit), 25);
+
+  const params: Record<string, any> = {
+    status: 'PUBLISHED',
+    orderBy: 'updatedAt',
+    limit: clampedLimit,
+  };
+  if (city) params.city = city;
+  if (saleType) params.saleType = saleType;
+
+  // Call listSales endpoint which accepts these params
+  const raw = await fetchJSON<any>('get', '/api/sales', params);
+
+  const sales = (raw.sales || []).map((s: any) => ({
+    id: s.id,
+    title: s.title,
+    city: s.city,
+    state: s.state,
+    saleType: s.saleType || s.type || 'UNKNOWN',
+    startDate: s.startDate,
+    endDate: s.endDate,
+    itemCount: s._count?.items ?? s.itemCount ?? 0,
+    url: SITE_BASE + '/sales/' + s.id,
+  }));
+
+  return { sales, total: raw.total ?? sales.length };
+}
+
+// ──────────────────────────────────────────────────────────────
+// get_sales_starting_soon Handler
+// ──────────────────────────────────────────────────────────────
+
+export async function handleGetSalesStartingSoon(
+  input: Record<string, any>
+): Promise<GetSalesStartingSoonResponse> {
+  const { city, saleType, daysAhead = 7 } = input as GetSalesStartingSoonInput;
+
+  const clampedDays = Math.min(Math.max(1, daysAhead), 14);
+
+  const today = new Date();
+  const future = new Date(today.getTime() + clampedDays * 24 * 60 * 60 * 1000);
+  const todayStr = today.toISOString().split('T')[0];
+  const futureStr = future.toISOString().split('T')[0];
+
+  const params: Record<string, any> = {
+    status: 'PUBLISHED',
+    startDate: todayStr,
+    endDate: futureStr,
+    limit: 25,
+  };
+  if (city) params.city = city;
+  if (saleType) params.saleType = saleType;
+
+  const raw = await fetchJSON<any>('get', '/api/sales', params);
+
+  const sales = (raw.sales || []).map((s: any) => ({
+    id: s.id,
+    title: s.title,
+    city: s.city,
+    state: s.state,
+    saleType: s.saleType || s.type || 'UNKNOWN',
+    startDate: s.startDate,
+    endDate: s.endDate,
+    url: SITE_BASE + '/sales/' + s.id,
+  }));
+
+  return { sales, total: raw.total ?? sales.length };
+}
+
+// ──────────────────────────────────────────────────────────────
+// find_item_for_sale Handler
+// ──────────────────────────────────────────────────────────────
+
+export async function handleFindItemForSale(
+  input: Record<string, any>
+): Promise<FindItemForSaleResponse> {
+  const { query, city, maxPrice, minPrice } = input as FindItemForSaleInput;
+
+  if (!query || typeof query !== 'string' || query.trim().length === 0) {
+    throw new Error('query is required');
+  }
+
+  const params: Record<string, any> = { q: query.trim() };
+  if (city) params.city = city;
+  if (maxPrice !== undefined) params.priceMax = maxPrice;
+  if (minPrice !== undefined) params.priceMin = minPrice;
+
+  const raw = await fetchJSON<any>('get', '/api/items/search', params);
+
+  const rawItems = raw.items || raw.data || [];
+
+  const items = rawItems.map((item: any) => ({
+    itemName: item.title,
+    description: item.description ?? null,
+    price: item.price != null ? Number(item.price) : null,
+    condition: item.condition ?? null,
+    saleTitle: item.sale?.title ?? item.saleName ?? '',
+    saleCity: item.sale?.city ?? item.saleCity ?? '',
+    saleState: item.sale?.state ?? item.saleState ?? '',
+    saleEndDate: item.sale?.endDate ?? item.saleEndDate ?? '',
+    saleUrl: item.sale?.id
+      ? SITE_BASE + '/sales/' + item.sale.id
+      : item.saleId
+      ? SITE_BASE + '/sales/' + item.saleId
+      : '',
+  }));
+
+  return { items, total: raw.total ?? items.length };
 }
 
 // ──────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
  * FindA.Sale MCP Server — Phase 1 MVP
  *
  * Express HTTP server with MCP SSE transport.
- * Exposes 7 tools for AI agents to search sales and items.
+ * Exposes 10 tools for AI agents to search sales and items.
  *
  * Endpoints:
  * - GET  /health        → Server health check
@@ -22,6 +22,9 @@ import { getItemTool } from './tools/getItem';
 import { listCitiesTool } from './tools/listCities';
 import { listSaleTypesTool } from './tools/listSaleTypes';
 import { listCategoriesTool } from './tools/listCategories';
+import { getTrendingSalesTool } from './tools/getTrendingSales';
+import { getSalesStartingSoonTool } from './tools/getSalesStartingSoon';
+import { findItemForSaleTool } from './tools/findItemForSale';
 
 import {
   handleSearchSales,
@@ -31,6 +34,9 @@ import {
   handleListCities,
   handleListSaleTypes,
   handleListCategories,
+  handleGetTrendingSales,
+  handleGetSalesStartingSoon,
+  handleFindItemForSale,
 } from './handlers';
 import { MCPToolDefinition } from './types';
 
@@ -50,6 +56,9 @@ const TOOLS: Record<string, { definition: MCPToolDefinition; handler: Function }
   list_cities: { definition: listCitiesTool, handler: handleListCities },
   list_sale_types: { definition: listSaleTypesTool, handler: handleListSaleTypes },
   list_categories: { definition: listCategoriesTool, handler: handleListCategories },
+  get_trending_sales: { definition: getTrendingSalesTool, handler: handleGetTrendingSales },
+  get_sales_starting_soon: { definition: getSalesStartingSoonTool, handler: handleGetSalesStartingSoon },
+  find_item_for_sale: { definition: findItemForSaleTool, handler: handleFindItemForSale },
 };
 
 // ──────────────────────────────────────────────────────────────
