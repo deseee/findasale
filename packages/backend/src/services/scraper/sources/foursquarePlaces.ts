@@ -18,6 +18,32 @@ import { ScrapedItem } from '../index';
 import { PLACES_QUERIES, GOOGLE_PLACES_METROS, BUSINESS_NAME_BLOCKLIST } from './googlePlaces';
 
 const FOURSQUARE_API_BASE = 'https://places-api.foursquare.com/places/search';
+
+/**
+ * Foursquare category name substrings that indicate a valid secondary-sale business.
+ * Case-insensitive match against categories[].name from the API response.
+ * If a place has NO categories OR none match this list → skip it.
+ */
+const ACCEPTABLE_FOURSQUARE_CATEGORY_SUBSTRINGS = [
+  'thrift',
+  'antique',
+  'consignment',
+  'auction',
+  'estate sale',
+  'flea market',
+  'flea & outdoor',
+  'pawn',
+  'secondhand',
+  'second-hand',
+  'second hand',
+  'vintage',
+  'resale',
+  'liquidat',
+  'salvage',
+  'used',
+  'swap meet',
+  'bazaar',
+];
 const FOURSQUARE_API_VERSION = '2025-06-17';
 const REQUEST_DELAY_MS = 300;
 
@@ -73,6 +99,17 @@ interface FoursquarePlacesResponse {
   context?: {
     geo_bounds?: any;
   };
+}
+
+function hasFoursquareAcceptableCategory(place: FoursquarePlace): boolean {
+  if (!place.categories || place.categories.length === 0) {
+    // No category data — allow through (older API responses may omit this)
+    return true;
+  }
+  const lowerNames = place.categories.map((c) => c.name.toLowerCase());
+  return lowerNames.some((name) =>
+    ACCEPTABLE_FOURSQUARE_CATEGORY_SUBSTRINGS.some((sub) => name.includes(sub))
+  );
 }
 
 /**
@@ -225,6 +262,12 @@ export async function scrapeFoursquareQuery(
     // Apply per-query blocklist
     if (queryConfig.blocklist) {
       if (queryConfig.blocklist.some((block: string) => nameLower.includes(block))) continue;
+    }
+
+    // Apply Foursquare category allowlist — skip businesses with no matching category
+    if (!hasFoursquareAcceptableCategory(place)) {
+      console.log(`[Foursquare] Skipping "${place.name}" — no acceptable category (${place.categories?.map((c) => c.name).join(', ') || 'none'})`);
+      continue;
     }
 
     const { city: placeCity, state: placeState } = parseCityState(place, metro);
