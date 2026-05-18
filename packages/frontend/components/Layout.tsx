@@ -671,6 +671,14 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <MessageSquare size={16} className="text-red-500" />
               <span>Bid Review</span>
             </Link>
+            <Link href="/admin/scraper" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Activity size={16} className="text-red-500" />
+              <span>Scraper Management</span>
+            </Link>
+            <Link href="/admin/scrape-pool" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Activity size={16} className="text-red-500" />
+              <span>Scrape Pool</span>
+            </Link>
 
             <Link href="/admin/disputes" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <MessageSquare size={16} className="text-red-500" />
@@ -1041,6 +1049,12 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         </Link>
                         <Link href="/admin/bid-review" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <MessageSquare size={14} className="inline mr-2" /> Bid Review
+                        </Link>
+                        <Link href="/admin/scraper" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Activity size={14} className="inline mr-2" /> Scraper Management
+                        </Link>
+                        <Link href="/admin/scrape-pool" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Activity size={14} className="inline mr-2" /> Scrape Pool
                         </Link>
 
                         <Link href="/admin/disputes" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
