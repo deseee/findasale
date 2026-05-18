@@ -336,6 +336,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
     console.log(`[OutreachCron] Fetched ${recordsToSend.length} candidates across all tiers (quota: ${quotaPerWindow})`)
 
     const gmail = createGmailClient();
+    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
     let sent = 0;
     let failed = 0;
 
@@ -475,6 +476,11 @@ export const sendOutreachEmails = async (): Promise<void> => {
 
         sent++;
         console.log(`[OutreachCron] Sent Touch ${touchNum} to ${record.organizerId}`);
+
+        // Rate-limit guard: Gmail allows ~1 send/second per user; without this
+        // delay the loop fires 21 sends in ~300ms and every one hits
+        // "User-rate limit exceeded". 1100ms gives ~10% headroom.
+        await sleep(1100);
       } catch (err: any) {
         failed++;
         // SECURITY FIX P3: Only log the error message, not the full error object which may contain transport config with credentials
