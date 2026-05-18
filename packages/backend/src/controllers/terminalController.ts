@@ -372,7 +372,7 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
     // Send receipt to buyer if email was provided
     let receiptSent = false;
     const buyerEmail = purchases[0]?.buyerEmail;
-    if (true) {
+    if (buyerEmail) {
       try {
         const { buildEmail } = await import('../services/emailTemplateService');
         
@@ -611,7 +611,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
 
     // Optionally send receipt email
     let receiptSent = false;
-    if (true) {
+    if (buyerEmail) {
       try {
         const { buildEmail } = await import('../services/emailTemplateService');
         
