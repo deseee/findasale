@@ -138,7 +138,7 @@ function OAuthBridge() {
           const data = await res.json().catch(() => ({}));
           return { ok: res.ok, status: res.status, data };
         })
-        .then(({ ok, status, data }) => {
+        .then(async ({ ok, status, data }) => {
           // Roadmap #422 (Option B): Backend now refuses to silently link a Google
           // identity to an existing email account. Redirect to login with a clear
           // message so the user can sign in with their password, then link from
