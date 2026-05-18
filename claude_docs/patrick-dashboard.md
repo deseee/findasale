@@ -1,60 +1,77 @@
-# Patrick's Dashboard — S753 Wrap (Complete)
+# Patrick's Dashboard — S754 Wrap (Complete)
 
 ---
 
-## What Happened This Session — S753
+## What Happened This Session — S754
 
-Pure QA session. Continued the main-session Opus Chrome QA approach from S752 (~3-5k tokens per feature). Verified 13 Pending Chrome QA items across public, organizer (user2 Bob Smith / PRO), and shopper (user12 Leo Thomas / Hunt Pass) roles. Found 1 P1, 1 P2, 1 P3. No code shipped — pure verification.
+Outreach pipeline was sending 0 emails — every attempt hitting "User-rate limit exceeded." Two root causes found and fixed, plus 6 additional pipeline improvements.
 
-**Verified ✅ (13 items):**
+**What was broken:**
+1. The weekly digest job was emailing thousands of scraped organizers with `@system.finda.sale` placeholder addresses — burning the entire daily Gmail API quota before real outreach ever ran.
+2. The send loop fired all 20+ emails in ~300ms with no delay between sends — hitting Gmail's 1-per-second rate limit even when quota was available.
 
-- **#259** Hunt Pass page accuracy — 1.5x XP, scan cap 100→150, Golden Trophy + Leaderboard Badge benefits + 3/3/2 coupon slots in copy
-- **#260** À La Carte $9.99 pay-as-you-go callout on /organizer/pricing
-- **#271** TEAMS solo organizer differentiator (webhooks copy)
-- **#263** Insights nav route — `/organizer/insights` renders "Your Sales Analytics" with full data
-- **#263** Brand Kit route — `/organizer/brand-kit` full Brand Kit page
-- **#302** Email Verification Banner — amber "Check your inbox" renders on user2 organizer dashboard
-- **#305** Share & Promote — promote page (8 platform cards + Other Sites + Flyer + Share Card); dashboard B1 teal "Your sale is live" banner with Copy Link + More Options
-- **#297** eBay Policy Sync UI disconnected-state CTA correct
-- **#298** eBay Advanced Setup disconnected-state CTA correct
-- **#292** Post-Sale eBay Panel soft toast renders on ENDED sale
-- **#227** XP Profile API + Shopper Dashboard — user12 dashboard shows guildXp=55, Initiate, 445 XP to Scout, perks listed
-- **#265** Rank progress next-rank benefit text + /shopper/referrals page (REF link, share buttons, stats)
-- **#266** Explorer Profile rename — /shopper/explorer-profile renders correctly
+**What was fixed (8 files):**
+- Gmail rate limiting — 1100ms sleep between sends
+- Digest email suppression — unmanaged scraped orgs blocked from digest entirely
+- Storefront now shows your ENDED past sales (was only showing PUBLISHED)
+- HOT/WARM organizers now get enriched first in contact email discovery
+- `directoryMostRecentSource` now correctly records which scraper found each organizer (was writing 'StateLicensing' for everything). 46,333 existing records backfilled.
+- Foursquare scraper now filters out off-target businesses (optical chains, legal firms, department stores, etc.)
+- DuckDuckGo used as free search fallback before Google Places in email enrichment
 
-**3 new bugs found ⚠️:**
+---
 
-- **P1 #275 Hunt Pass Cosmetic Add-ons — ENTIRE FEATURE BROKEN.** As user12 (huntPassActive=true verified via /auth/me), neither the avatar amber ring NOR the leaderboard 🏆 badge renders. Avatar DOM has only `bg-amber-500`, no `ring-2 ring-amber-400`. Leaderboard page contains zero 🏆 emojis despite Leo at #1 (🥇) with 55 XP. The Hunt Pass page copy still promises both. Likely cause: conditional render check broken in AvatarDropdown.tsx and/or loyaltyController.ts not including `huntPassActive` in leaderboard payload.
+## ⚠️ Action Required
 
-- **P2 #265 Share & Earn dashboard card** — not visible on user12 shopper dashboard despite Hunt Pass active. /shopper/referrals destination page works correctly. Likely dismissal flag stuck.
+**Push the S754 fixes if you haven't already:**
 
-- **P3 #292** — qa-settlement-001 sale page shows "0 items / All items sold!" in header simultaneously with PostSaleEbayPanel soft toast saying "3 items didn't sell". Conflicting unsold-item queries.
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+
+git add packages/backend/src/routes/organizers.ts
+git add packages/backend/scripts/enrichContactEmails.ts
+git add packages/backend/src/services/scraper/index.ts
+git add packages/backend/scripts/backfillDirectoryMostRecentSource.py
+git add packages/backend/src/services/organizerAnalyticsService.ts
+git add packages/backend/src/services/scraper/sources/googlePlaces.ts
+git add packages/backend/src/services/scraper/sources/foursquarePlaces.ts
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "Fix outreach pipeline: rate limit, digest bleed, storefront ENDED sales, HOT-first enrichment, directoryMostRecentSource, Foursquare category filter, DuckDuckGo fallback"
+.\push.ps1
+```
+
+---
+
+## Next Session — What Claude Will Do First
+
+Next session starts with a **live pipeline audit** before any new work:
+1. Trigger the outreach workflow manually and check Railway logs — confirm sends are going through (not rate-limiting)
+2. Verify digest emails are no longer hitting `@system.finda.sale` addresses
+3. Spot-check `directoryMostRecentSource` distribution in DB
+4. Confirm a known organizer's storefront now shows their ENDED past sales
+
+Then: fix the bug backlog from S752/S753.
 
 ---
 
 ## Pending Patrick Actions
 
-1. **Log back into Chrome as yourself** — Session was logged in as user2 then user12 (both signed out cleanly at session end). You were on Google before — re-sign in with artifactmi@gmail.com.
-2. **Delete fix-attendance.sql** from project root — still has production sale IDs (carryover from S750).
-3. **Email verification migration** — Deploy migration 20260515180000 when ready (carryover from S726).
+1. **Push the S754 block above** (if not done).
+2. **Log back into Chrome as yourself** — re-sign in with artifactmi@gmail.com after any QA.
+3. **Delete fix-attendance.sql** from project root — still has production sale IDs (carryover S750).
+4. **Email verification migration** — Deploy migration 20260515180000 when ready (carryover S726).
 
 ---
 
-## Next Session
-
-1. **Fix the 4 bugs from S752** still unfixed: #306 Store Hours, #305 Social Posts button, #307 Shop Mode, subscription copy mismatch.
-2. **Fix the 3 new bugs from S753:** #275 Hunt Pass cosmetics (P1), #265 Share & Earn card (P2), #292 ENDED-sale message mismatch (P3).
-3. **Storefront past sales section** — ENDED sales still invisible to visitors (carryover).
-4. **Continue Chrome QA backlog** — remaining items need specific test data (priceBeforeMarkdown item, eBay-connected org, QR scan flow, 3-tier coupon redeem).
-
----
-
-## Blocked Queue (Active Items)
+## Blocked Queue (Active)
 
 | Feature | Status |
 |---------|--------|
-| Storefront past sales section | Backend gap — ENDED sales not returned by GET /organizers/:id |
-| Email verification token expiry | Migration 20260515180000 pending deploy |
+| Outreach pipeline sends | FIXED S754 — rate limit + digest quota burn fixed. Verify in Railway logs next session. |
+| Storefront ENDED past sales | FIXED S754 — `organizers.ts` now returns PUBLISHED + ENDED |
+| Email verification token expiry | Migration 20260515180000 pending deploy (Patrick action) |
 | #306 Store Hours | Save doesn't persist after reload — found S752 |
 | #305 Social Posts button | No-op — found S752 |
 | #307 Shop Mode | Not visible on PRO tier — found S752 |
@@ -62,16 +79,3 @@ Pure QA session. Continued the main-session Opus Chrome QA approach from S752 (~
 | #275 Hunt Pass Cosmetics | Avatar ring + leaderboard badge both broken — found S753 |
 | #265 Share & Earn card | Not rendering on dashboard — found S753 |
 | #292 ENDED-sale message | "0 items" + "3 unsold" conflict — found S753 |
-
----
-
-## Push Block
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S753 wrap — 13 Pending Chrome QA items verified + 3 new bugs found"
-.\push.ps1
-```

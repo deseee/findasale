@@ -8,7 +8,38 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S753 — Chrome QA Backlog Sprint Continued (COMPLETE).**
+**Latest: S754 — Scraper/Enrichment Pipeline Audit + Gmail Rate Limit Fix (COMPLETE).**
+
+Comprehensive audit and fix of the scrape→enrich→score→outreach pipeline. Root cause of "0 sent, 21 failed" outreach confirmed: two compounding issues — (1) digest emails firing to @system.finda.sale placeholder addresses burning daily Gmail quota before real outreach ran, and (2) send loop firing all emails ~300ms apart hitting Gmail's per-second rate limit. Both fixed. Six additional pipeline improvements shipped.
+
+**Fixes shipped (8 files):**
+
+- **`packages/backend/src/jobs/outreachEmailsCron.ts`** — Gmail rate limit fix: `sleep(1100)` between `gmail.users.messages.send()` calls. Spaces sends to ~1/second, under Gmail's hard limit. Also: `const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))` declared inline.
+- **`packages/backend/src/services/organizerAnalyticsService.ts`** — Digest email suppression: `isUnmanagedListing: { not: true }` added to `sendOrganizerWeeklyDigest` findMany. Guard in `sendOrganizerDigestEmail`: early return if email ends with `@system.finda.sale`. Prevents quota burn by scraped org placeholders.
+- **`packages/backend/src/routes/organizers.ts`** — Storefront ENDED-sale gap: `status: 'PUBLISHED'` → `status: { in: ['PUBLISHED', 'ENDED'] }` at two query sites (ID lookup + slug lookup). Ended sales now surface to visitors.
+- **`packages/backend/scripts/enrichContactEmails.ts`** — HOT-first two-pass query (HOT/WARM take:150, then COLD fills to 200). DuckDuckGo free-search fallback added (`queryDuckDuckGo()`) for Pass 2/3 — runs before Google Places; Places only fires if `GOOGLE_PLACES_API_KEY` set.
+- **`packages/backend/src/services/scraper/index.ts`** — `directoryMostRecentSource` fix: fallback chain changed from `sourceLabel ?? (isStateLicensed ? 'StateLicensing' : undefined)` to `sourceLabel ?? sourceName ?? (isStateLicensed ? 'StateLicensing' : undefined)`. All 77 Phase 2 scrapers now write their real sourceName without touching individual files.
+- **`packages/backend/scripts/backfillDirectoryMostRecentSource.py`** *(new)* — Backfill script using psycopg2. Ran live: updated 46,333 records (0 errors) setting `directoryMostRecentSource` from `sourcesJson[].sourceName` (most recent by `lastSeen`).
+- **`packages/backend/src/services/scraper/sources/foursquarePlaces.ts`** — Category allowlist: `ACCEPTABLE_FOURSQUARE_CATEGORY_SUBSTRINGS` (19 entries), `hasFoursquareAcceptableCategory()` helper, category check in processing loop. Stops off-target businesses (optical, legal, department stores, luxury beauty) from entering the pipeline.
+- **`packages/backend/src/services/scraper/sources/googlePlaces.ts`** — Extended `BUSINESS_NAME_BLOCKLIST` with optical chains, legal terms, shopping mall patterns, department stores, luxury beauty brands, jewelry repair.
+
+**Investigation closed — GSalr.com:** Hard no. ToS has explicit $10k/day penalty for data use by competitor services. Data is syndicated from estatesales.org anyway — no unique value.
+
+**Push block (8 files — NOT YET PUSHED if Patrick hasn't run it):**
+```powershell
+git add packages/backend/src/routes/organizers.ts
+git add packages/backend/scripts/enrichContactEmails.ts
+git add packages/backend/src/services/scraper/index.ts
+git add packages/backend/scripts/backfillDirectoryMostRecentSource.py
+git add packages/backend/src/services/organizerAnalyticsService.ts
+git add packages/backend/src/services/scraper/sources/googlePlaces.ts
+git add packages/backend/src/services/scraper/sources/foursquarePlaces.ts
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git commit -m "Fix outreach pipeline: rate limit, digest bleed, storefront ENDED sales, HOT-first enrichment, directoryMostRecentSource, Foursquare category filter, DuckDuckGo fallback"
+.\push.ps1
+```
+
+**Previous: S753 — Chrome QA Backlog Sprint Continued (COMPLETE).**
 
 Continued the S752 main-session Opus Chrome QA approach (~3-5k tokens/feature). Verified 13 Pending Chrome QA items across public, organizer (user2 PRO Bob Smith), and shopper (user12 Hunt Pass Leo Thomas) roles. Found 1 P1 (Hunt Pass cosmetics fully broken), 1 P2 (referral card not visible on dashboard), 1 P3 (Settlement sale message inconsistency). All S752 bugs (#306, #305 button, #307, subscription copy) remain unfixed — no dev work was dispatched this session, pure QA.
 
@@ -265,21 +296,26 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority: Fix bug batch from S752+S753 QA + continue Chrome QA backlog.**
+**Priority 0 — Pipeline live audit (mandatory first task S755).**
 
-1. **Fix bugs found S752:** #306 Store Hours save persistence, #305 Social Posts no-op, #307 Shop Mode PRO visibility, Subscription copy mismatch (says TEAMS when PRO). All are dev dispatches.
+S754 shipped 8 pipeline fixes. Before ANY new feature work, audit that they actually landed correctly:
 
-2. **Fix bugs found S753:**
-   - **P1 #275 Hunt Pass Cosmetic Add-ons — full feature broken.** Audit (a) AvatarDropdown.tsx ring conditional on `huntPassActive`, (b) loyaltyController.ts leaderboard payload — does it include `huntPassActive` per row?, (c) league.tsx (or wherever /leaderboard renders) — does it read and render 🏆 when huntPassActive=true? user12 verified to have `huntPassActive: true` on /api/auth/me but rendered UI ignores it across avatar + leaderboard.
-   - **P2 #265 Share & Earn card** — not rendering on user12 dashboard. Investigate render condition + dismissal flag.
-   - **P3 #292** — "0 items / All items sold!" vs "3 items didn't sell" toast inconsistency on ENDED sale page. Align item-grid query with unsold-items query.
+1. **Outreach send rate** — Trigger a `workflow_dispatch` on `pipeline-outreach-emails.yml`. Wait for it to complete. Check Railway backend logs for `[OutreachCron]`. Confirm: (a) sends now show `Sent Touch N to [orgId]` lines (not all failing), (b) inter-send timing is ~1100ms between sends, (c) no "User-rate limit exceeded" errors. If still failing, read `outreachEmailsCron.ts` send loop before doing anything else.
 
-3. **Storefront past sales section** — `GET /organizers/:id` filters `status: 'PUBLISHED'` only. Ended sales never surface, so `attendanceCount` on historical sales is invisible to visitors.
+2. **Digest suppression** — Query Railway DB via psycopg2: `SELECT COUNT(*) FROM "Organizer" WHERE "isUnmanagedListing" = true AND "contactEmail" LIKE '%@system.finda.sale%'` — these are the addresses that were burning quota. Confirm the digest cron is no longer sending to them. If any are still in the weekly digest send queue, they'll show as logs in Railway.
 
-4. **Continue Chrome QA backlog** — Remaining Pending items: #251 priceBeforeMarkdown (need item with markdown applied), #278 Treasure Hunt Pro scan cap (needs QR scan path), #289 Coupon Generation (3-tier XP→coupon), #294 Live eBay Category Picker (needs connected eBay org).
+3. **directoryMostRecentSource quality** — `SELECT "directoryMostRecentSource", COUNT(*) FROM "Organizer" WHERE "directoryMostRecentSource" IS NOT NULL GROUP BY 1 ORDER BY 2 DESC` — should show specific scraper names (FloridaPhase2, etc.) instead of just 'StateLicensing'. If 46,333 backfill ran correctly, distribution should be wide.
+
+4. **Storefront ENDED sales** — Navigate to a known organizer profile that has past ENDED sales. Confirm they now appear in the past sales section (before S754, only PUBLISHED sales showed).
+
+After pipeline audit passes, continue the bug batch:
+
+5. **Fix bugs S752:** #306 Store Hours, #305 Social Posts no-op, #307 Shop Mode PRO visibility, subscription copy mismatch.
+6. **Fix bugs S753:** P1 #275 Hunt Pass cosmetics (avatar ring + leaderboard badge), P2 #265 Share & Earn card, P3 #292 ENDED-sale message conflict.
 
 **Patrick actions needed:**
-- Log back into Chrome as yourself (artifactmi@gmail.com) — S753 logged user12 out cleanly, no test account active, but you were on Google before
+- **PUSH S754 block if not yet done** (8 files — block is in Current Status above and in the dashboard)
+- Log back into Chrome as yourself (artifactmi@gmail.com) after any QA
 - Deploy email verification token migration (20260515180000) — still pending from S726
 - Delete fix-attendance.sql from project root — still pending from S750
 
@@ -287,7 +323,27 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 
 ## Recent Sessions
 
-### S752 — Chrome QA Backlog Sprint + Outreach Fix (COMPLETE)
+### S754 — Scraper/Enrichment Pipeline Audit + Gmail Rate Limit Fix (COMPLETE)
+
+**Trigger:** Outreach pipeline showing "0 sent, 21 failed" with "User-rate limit exceeded" errors on every send attempt. Patrick asked for full audit.
+
+**Root causes found:** (1) `organizerWeeklyDigestJob` was firing to all unmanaged scraped orgs — most have `@system.finda.sale` placeholder emails. Was burning the entire daily Gmail API quota before real outreach ran. (2) Send loop in `outreachEmailsCron.ts` fired all emails ~300ms apart with no inter-send delay, hitting Gmail's 1/sec rate limit even when quota remained.
+
+**Fixes shipped:**
+- `outreachEmailsCron.ts` — `sleep(1100)` between sends; spaces to ~1/second
+- `organizerAnalyticsService.ts` — digest suppression: `isUnmanagedListing: { not: true }` in findMany + early return guard on `@system.finda.sale` email domain
+- `organizers.ts` — storefront ENDED-sale gap: `status: { in: ['PUBLISHED', 'ENDED'] }` at two query sites
+- `enrichContactEmails.ts` — HOT/WARM two-pass query (HOT/WARM take:150 → COLD fills to 200); DuckDuckGo free-search fallback for Pass 2/3 before Google Places
+- `scraper/index.ts` — `directoryMostRecentSource` fallback now writes `sourceName` (all 77 Phase 2 scrapers covered without touching individual files)
+- `backfillDirectoryMostRecentSource.py` *(new)* — ran live: 46,333 records updated
+- `foursquarePlaces.ts` — category allowlist (19 entry substrings); skips off-target businesses
+- `googlePlaces.ts` — extended business name blocklist
+
+**GSalr.com:** Closed. $10k/day ToS clause for competitor use. Data from estatesales.org anyway.
+
+**Push block has 8 files — see Current Status push block above.**
+
+### S753 — Chrome QA Backlog Sprint Continued (COMPLETE)
 
 **Trigger:** Patrick asked for a less token-wasteful QA approach (Sonnet subagents waste ~40-50k tokens per feature). Also investigated outreach send rate (~2/day vs expected 50/day).
 
