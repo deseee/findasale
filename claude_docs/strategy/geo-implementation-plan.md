@@ -331,6 +331,64 @@ These ideas have high potential but need research to validate feasibility, scope
 
 ---
 
+## Phase 11: Data Trust — Stale Data Protection & Confidence Scoring (1 dev session)
+
+**Goal:** Protect the entire GEO investment from the one thing that kills AI trust — stale data. If a smart assistant serves a user a sale from 2023 because we scraped an old permit, every model deprioritizes us. This is defensive infrastructure that guards everything above.
+
+### 11a. Auto-Expire Logic for Scraped Data
+- **Work:** Every scraped directory entry must have expiration logic. If the sale's end date has passed, auto-set `noindex` meta tag and remove from MCP results. Pages stay live (for pricing history per Phase 9a) but are excluded from active search results and MCP queries.
+- **Implementation:** Add `isExpired` computed field or cron job that flips a `status` flag. MCP tools filter on `status !== 'EXPIRED'`. Sitemap excludes expired entries. Sale detail page adds `<meta name="robots" content="noindex">` when expired.
+- **Size:** ~80 lines (cron + filter logic + meta tag conditional)
+- **Priority:** CRITICAL — this is the single biggest risk to the entire GEO strategy
+
+### 11b. Confidence Score on Directory Entries
+- **Work:** Add a `confidenceScore` field (0-100) to scraped directory entries based on data source quality and freshness. Claimed organizer pages = 100%. Government licensing DB with current date = 85%. Foursquare venue with recent tips = 60%. Stale Foursquare tip from 2+ years ago = 30%.
+- **Scoring factors:** Source authority (gov > Foursquare > social), data freshness (current year > last year > older), verification level (claimed > enriched > raw scrape), field completeness (has address + date + description > address only).
+- **MCP integration:** Add optional `minConfidence` parameter to MCP search tools. Smart assistants can request `"Only return sales with confidence > 80%"` to self-filter for accuracy.
+- **Schema output:** Include confidence in JSON-LD as a custom property or in the machine-readable instructions block.
+- **Size:** ~120 lines (scoring service + schema field + MCP filter parameter)
+- **Priority:** HIGH — differentiator that no competitor offers. Smart assistants will prefer a source that lets them control their own accuracy.
+
+---
+
+## Phase 12: Syndication & Liquidation — Product Upgrades (1-2 dev sessions)
+
+**Goal:** Make FindA.Sale the command center, not a destination. Organizers create here, distribute everywhere.
+
+### 12a. Platform-Specific Post Generator (Syndicate Upgrade)
+- **Work:** Upgrade existing Share & Promote (#305) with auto-formatted, platform-specific post generation. When an organizer clicks "Share to Facebook," generate a Facebook Event-formatted post with optimal image size, hashtags, and copy. Same for Craigslist HTML, X/Twitter thread format, Nextdoor post format.
+- **Existing infrastructure:** We already have Share & Promote with 8 platform Quick Share cards, social post generator modal (#27a), flyer generation, and share card builder. This upgrades from "here's a link to share" to "here's the perfect formatted post for each platform, ready to paste."
+- **Copy framing:** "Create your sale here. We format the perfect post for every platform — with links back to your FindA.Sale checkout. One listing, everywhere." (No "AI" per D-006)
+- **Size:** ~200 lines (platform-specific formatters + template system)
+- **Priority:** MEDIUM — strong value prop but depends on organizer adoption first
+
+### 12b. End-of-Sale Auto-Liquidation
+- **Work:** In the final hours of a sale, organizer can toggle "Last Call" mode. Automatically applies a configurable markdown (default 50%) to remaining unsold items and blasts a push notification to nearby waitlisted shoppers (Phase 10c) and favorited shoppers.
+- **Tie-in:** Extends existing markdown cycles (#334), flash deals, and the shopper waitlist. The notification blast uses existing VAPID push infrastructure.
+- **Organizer control:** Organizer sets the markdown percentage and the trigger time (e.g., "2 hours before sale ends"). Not fully automatic — organizer opts in per sale.
+- **Size:** ~150 lines (toggle UI + cron trigger + notification blast)
+- **Priority:** MEDIUM — solves a real pain point but needs active sales to be useful
+
+---
+
+## Go-to-Market Strategy Notes (Not Dev Work — Patrick Reference)
+
+These are strategic recommendations from the GEO analysis session. Not roadmap items — captured here for Patrick's reference when the technical foundation is in place.
+
+### GTM-1. "Build in Public" — Content Topics for Existing Channels
+Not a separate initiative — these are blog post and social media topics for our existing content pipeline. Document the GEO journey as content: "How we got smart assistants to recommend our marketplace over Craigslist." Post on Hacker News, Indie Hackers, X. The tech press is obsessed with this space and nobody has a real playbook yet. Feeds into our existing marketing/blogging workflow — just new subject matter.
+
+### GTM-2. Product Hunt Launch as Infrastructure, Not Marketplace
+Launch angle: "FindA.Sale: The first MCP-powered commerce directory for smart assistants" — not "another marketplace." Lead with the technical infrastructure (MCP endpoint, structured data, programmatic SEO). The marketplace is the proof-of-concept for the API. Tech community upvotes ingenuity; some will list their stuff while they're there.
+
+### GTM-3. Developer Bounty Program
+Offer a bounty (fee waiver or cash) to the first developer whose agent successfully navigates our MCP, finds an item, and completes a purchase. Post in LangChain Discords, Hugging Face, agent-building communities. The GitHub repos and demos that result are free advertising for FindA.Sale's capabilities.
+
+### GTM-4. Weekly "Wrangler" Audit (Scheduled Task)
+Scheduled Claude task, not a human role. Weekly automated audit: query ChatGPT, Claude, and Perplexity for sale searches in random cities. If FindA.Sale isn't surfaced, diagnose why (broken schema? stale MCP data? unclear llms.txt?). Reports findings to Patrick. Implement as a Cowork scheduled task once crawler tracking (Phase 1d) is live.
+
+---
+
 ## Phasing Summary
 
 | Phase | Sessions | Delivers | Organizer Impact |
@@ -345,10 +403,12 @@ These ideas have high potential but need research to validate feasibility, scope
 | 8 | 1 | High-intent MCP tools, enriched payloads, llms.txt update | Smart assistant integration |
 | 9 | 1-2 | Post-sale pricing records, EventSeries, speakable, "This Weekend" pages | Compounding data assets |
 | 10 | 1 | Unmet demand capture, organizer demand dashboard, shopper waitlist | Demand intelligence loop |
+| 11 | 1 | Auto-expire stale data, confidence scoring, MCP confidence filter | Data trust protection |
+| 12 | 1-2 | Platform syndication formatter, end-of-sale auto-liquidation | Command center positioning |
 
-**Total estimate:** 12-20 dev sessions for Phases 1-10, plus ongoing monthly for Phase 5 reports. Research queue items (R1-R5) activate as research validates them.
+**Total estimate:** 14-22 dev sessions for Phases 1-12, plus ongoing monthly for Phase 5 reports. Research queue (R1-R5) activates as research validates. GTM strategy (GTM-1 through GTM-4) executes when technical foundation is live.
 
-**The complete funnel:** Search engine/smart assistant finds our pages (Phase 1-2, 9d) or queries MCP (Phase 8) → organizer sees unclaimed page ranking or uses Visibility Score tool (Phase 3) → organizer 1-click claims (Phase 2d) → organizer sees crawler alerts + unmet demand signals proving it works (Phase 7, 10) → organizer toggles on referral bounty (Phase 6) → buyers recruit more organizers → loop repeats. Post-sale data (Phase 9a) and trend reports (Phase 5c) compound authority over time.
+**The complete funnel:** Search engine/smart assistant finds our pages (Phase 1-2, 9d) or queries MCP (Phase 8) with confidence filtering (Phase 11) → organizer sees unclaimed page or uses Visibility Score tool (Phase 3) → organizer 1-click claims (Phase 2d) → organizer sees crawler alerts + demand signals (Phase 7, 10) → organizer syndicates to all platforms from FindA.Sale (Phase 12a) → organizer toggles on referral bounty (Phase 6) → buyers recruit more organizers → unsold items auto-liquidate to waitlisted shoppers (Phase 12b) → post-sale data becomes permanent pricing reference (Phase 9a) → trend reports compound authority (Phase 5c) → loop repeats.
 
 ---
 

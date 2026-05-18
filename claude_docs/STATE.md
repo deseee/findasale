@@ -10,7 +10,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **Latest: S758 — GEO & Discoverability Implementation Plan (COMPLETE).**
 
-Analyzed cross-session GEO/AI Discoverability strategy prompt against existing codebase. Found significant infrastructure already built (JSON-LD on 22 files, robots.txt, llms.txt, MCP server with 7 tools, city landing pages with SSR). Created 10-phase implementation plan + 5-item research queue (`claude_docs/strategy/geo-implementation-plan.md`). Added 25 roadmap entries #432–#456 covering: Phases 1-8 (data foundation → acquisition → conversion → premium schema → content moat → viral loop → retention → MCP optimization), Phase 9 (compounding data assets: post-sale pricing records, EventSeries for recurring sales, speakable voice search, "This Weekend" auto-pages), Phase 10 (demand intelligence: unmet demand capture, organizer demand dashboard, shopper waitlist). Research queue R1-R5: embeddable widget, Price Oracle API, sale density economic signals, Spanish structured data, real-time agent subscriptions. No code changes this session — planning only.
+Analyzed cross-session GEO/AI Discoverability strategy prompt against existing codebase. Found significant infrastructure already built (JSON-LD on 22 files, robots.txt, llms.txt, MCP server with 7 tools, city landing pages with SSR). Created 12-phase implementation plan + 5-item research queue + 4 GTM strategy notes (`claude_docs/strategy/geo-implementation-plan.md`). Added 29 roadmap entries #432–#460 covering the complete GEO stack: Phases 1-8 (core funnel), Phase 9 (compounding data assets), Phase 10 (demand intelligence), Phase 11 (data trust: auto-expire stale scrapes + confidence scoring with MCP filter — CRITICAL defensive infrastructure), Phase 12 (platform syndication formatter + end-of-sale auto-liquidation). Research queue R1-R5. GTM notes: build-in-public case study, Product Hunt as infrastructure launch, developer bounty program, weekly wrangler audit. No code changes this session — planning only.
 
 **Previous: S757 — Production DB Cleanup (COMPLETE).**
 
@@ -318,7 +318,7 @@ All 6 S755 bug fixes need browser verification: #275 Hunt Pass ring+badge, #265 
 
 **Priority 2 — Begin GEO Phase 1 (#432–#435).**
 
-After QA ceiling is cleared, dispatch GEO Phase 1: enrich sale page JSON-LD (#432), create ai-plugin.json (#433), update llms.txt (#434), add bot/crawler visit tracking middleware + CrawlerVisit schema (#435). Full 8-phase plan in `claude_docs/strategy/geo-implementation-plan.md` — 17 roadmap entries total (#432–#448). Phase sequence: data foundation → acquisition funnel → conversion engine → premium schema → content moat → viral loop → retention hook → MCP optimization.
+After QA ceiling is cleared, dispatch GEO Phase 1: enrich sale page JSON-LD (#432), create ai-plugin.json (#433), update llms.txt (#434), add bot/crawler visit tracking middleware + CrawlerVisit schema (#435). Also consider Phase 11 (auto-expire stale data #457 + confidence scoring #458) early in the sequence — it's defensive infrastructure that protects everything else. Full 12-phase plan in `claude_docs/strategy/geo-implementation-plan.md` — 29 roadmap entries (#432–#460) + 5 research items + 4 GTM plays.
 
 **Priority 3 — Continue roadmap BROKEN items.**
 
@@ -340,7 +340,7 @@ After GEO Phase 1 ships, resume BROKEN items from roadmap.
 
 **Trigger:** Patrick shared cross-session GEO strategy prompt for analysis.
 
-Analyzed GEO strategy + added original innovations. Created 10-phase plan + 5-item research queue. 25 roadmap entries #432–#456. Phases 1-8: core funnel (data foundation → acquisition → conversion → premium schema → content moat → viral loop → retention → MCP). Phase 9: compounding data assets (post-sale pricing records, EventSeries, speakable, "This Weekend" auto-pages). Phase 10: demand intelligence (unmet demand capture, organizer dashboard, shopper waitlist). Research queue: embeddable widget, Price Oracle, economic signals, Spanish data, agent subscriptions. No code changes. Strategy doc: `claude_docs/strategy/geo-implementation-plan.md`.
+Complete GEO strategy session. 12-phase plan + 5 research items + 4 GTM plays. 29 roadmap entries #432–#460. Phases 1-8: core funnel. Phase 9: compounding data assets. Phase 10: demand intelligence. Phase 11: data trust (auto-expire + confidence scoring — CRITICAL). Phase 12: syndication + auto-liquidation. Research queue: embeddable widget, Price Oracle, economic signals, Spanish data, agent subscriptions. GTM: build-in-public, Product Hunt infra launch, dev bounty, weekly wrangler audit. No code changes. Strategy doc: `claude_docs/strategy/geo-implementation-plan.md`.
 
 ### S757 — Production DB Cleanup (COMPLETE)
 
