@@ -136,6 +136,11 @@ const OrganizerDashboard = () => {
 
   useEffect(() => {
     setIsClient(true);
+    // Feature #443: 1-click OAuth claim — show success toast on redirect
+    if (router.isReady && router.query.claimed === 'true') {
+      showToast('Listing claimed successfully! This is now your dashboard.', 'success');
+      router.replace('/organizer/dashboard', undefined, { shallow: true });
+    }
     // Handle welcomed=workspace query param for workspace invite acceptance
     if (router.isReady && router.query.welcomed === 'workspace') {
       const workspaceName = router.query.workspaceName as string;
@@ -1747,12 +1752,4 @@ const OrganizerDashboard = () => {
         message={confirmState.message}
         onConfirm={() => {
           confirmState.onConfirm();
-          setConfirmState(s => ({ ...s, open: false }));
-        }}
-        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
-      />
-    </>
-  );
-};
-
-export default OrganizerDashboard;
+          setConf

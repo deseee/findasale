@@ -2043,4 +2043,63 @@ router.get('/claim/verify/:token', async (req: Request, res: Response) => {
   }
 });
 
+
+// Feature #443: POST /organizers/:id/claim-oauth — 1-click OAuth claim for ghost listings
+router.post('/:id/claim-oauth', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id;
+
+    if (!req.user) {
+      return res.status(401).json({ error: 'UNAUTHORIZED' });
+    }
+
+    // Verify organizer exists and is unclaimed
+    const organizer = await prisma.organizer.findUnique({ where: { id } });
+    if (!organizer) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    if (organizer.isClaimed) {
+      return res.status(409).json({ error: 'ALREADY_CLAIMED' });
+    }
+
+    // Check user doesn't already have a different organizer profile
+    const existingOrg = await prisma.organizer.findFirst({
+      where: { userId: req.user.id, id: { not: id } },
+    });
+    if (existingOrg) {
+      return res.status(409).json({ error: 'ALREADY_ORGANIZER' });
+    }
+
+    // Build updated roles array — match pattern from users.ts organizer creation
+    const currentRoles = req.user.roles || ['USER'];
+    const newRoles = [...new Set([...currentRoles, 'ORGANIZER'])];
+
+    // Atomic claim transaction with optimistic lock (where: { id, isClaimed: false })
+    await prisma.$transaction([
+      prisma.organizer.update({
+        where: { id, isClaimed: false }, // optimistic lock — prevents double-claim
+        data: {
+          isClaimed: true,
+          isUnmanagedListing: false,
+          claimStatus: 'CLAIMED',
+          userId: req.user.id,
+        },
+      }),
+      prisma.user.update({
+        where: { id: req.user.id },
+        data: { roles: newRoles },
+      }),
+    ]);
+
+    return res.json({ success: true, organizerId: id });
+  } catch (error: any) {
+    // P2025 = Prisma record not found (optimistic lock failed — race condition)
+    if (error?.code === 'P2025') {
+      return res.status(409).json({ error: 'ALREADY_CLAIMED' });
+    }
+    console.error('[claim-oauth] Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 export default router;

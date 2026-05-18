@@ -156,6 +156,26 @@ function OAuthBridge() {
           }
           if (ok && data?.token) {
             login(data.token);
+            // Feature #443: 1-click OAuth claim — attempt claim before redirect
+            const claimOrganizerId = typeof window !== 'undefined'
+              ? sessionStorage.getItem('claimOrganizerId')
+              : null;
+            if (claimOrganizerId) {
+              sessionStorage.removeItem('claimOrganizerId');
+              try {
+                await fetch(`/api/organizers/${claimOrganizerId}/claim-oauth`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${data.token}` },
+                  credentials: 'include',
+                });
+              } catch (e) {
+                // Non-fatal — user is logged in, claim failed silently
+                console.error('[claim-oauth] failed:', e);
+              }
+              router.replace('/organizer/dashboard?claimed=true');
+              signOut({ redirect: false });
+              return;
+            }
             // Redirect to role-based dashboard after OAuth login
             try {
               const payload = JSON.parse(atob(data.token.split('.')[1]));
