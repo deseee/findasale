@@ -6,7 +6,7 @@
  */
 
 // ──────────────────────────────────────────────────────────────
-// Response Shapes — match spec exactly
+// Response Shapes -- match spec exactly
 // ──────────────────────────────────────────────────────────────
 
 export interface ImageData {
@@ -196,6 +196,79 @@ export interface SearchItemsInput {
 
 export interface GetItemInput {
   itemId: string;
+}
+
+export interface GetTrendingSalesInput {
+  city?: string;
+  saleType?: string;
+  limit?: number;
+}
+
+export interface GetSalesStartingSoonInput {
+  city?: string;
+  saleType?: string;
+  daysAhead?: number;
+}
+
+export interface FindItemForSaleInput {
+  query: string;
+  city?: string;
+  maxPrice?: number;
+  minPrice?: number;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Response shapes for new high-intent tools
+// ──────────────────────────────────────────────────────────────
+
+export interface TrendingSaleItem {
+  id: string;
+  title: string;
+  city: string;
+  state: string;
+  saleType: string;
+  startDate: string;
+  endDate: string;
+  itemCount: number;
+  url: string;
+}
+
+export interface GetTrendingSalesResponse {
+  sales: TrendingSaleItem[];
+  total: number;
+}
+
+export interface StartingSoonSaleItem {
+  id: string;
+  title: string;
+  city: string;
+  state: string;
+  saleType: string;
+  startDate: string;
+  endDate: string;
+  url: string;
+}
+
+export interface GetSalesStartingSoonResponse {
+  sales: StartingSoonSaleItem[];
+  total: number;
+}
+
+export interface FoundItemForSale {
+  itemName: string;
+  description: string | null;
+  price: number | null;
+  condition: string | null;
+  saleTitle: string;
+  saleCity: string;
+  saleState: string;
+  saleEndDate: string;
+  saleUrl: string;
+}
+
+export interface FindItemForSaleResponse {
+  items: FoundItemForSale[];
+  total: number;
 }
 
 // ──────────────────────────────────────────────────────────────
