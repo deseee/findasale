@@ -318,6 +318,66 @@ router.delete('/:saleId/bundles/:bundleId', authenticate, requireOrganizer, asyn
   }
 });
 
+// #450: EventSeries — public endpoint for recurring organizer sales (used by SSR JSON-LD)
+// GET /sales/organizer/:organizerId/recurring?saleType=ESTATE
+router.get('/organizer/:organizerId/recurring', async (req, res) => {
+  try {
+    const { organizerId } = req.params;
+    const { saleType } = req.query as { saleType?: string };
+
+    if (!organizerId || typeof organizerId !== 'string') {
+      return res.status(400).json({ error: 'organizerId is required' });
+    }
+
+    const where: Record<string, unknown> = {
+      organizerId,
+      status: { in: ['PUBLISHED', 'ENDED'] },
+    };
+    if (saleType && typeof saleType === 'string') {
+      where.saleType = saleType;
+    }
+
+    const sales = await prisma.sale.findMany({
+      where,
+      orderBy: { startDate: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        title: true,
+        startDate: true,
+        endDate: true,
+        city: true,
+        state: true,
+        saleType: true,
+        organizer: {
+          select: { id: true, businessName: true },
+        },
+      },
+    });
+
+    const isRecurring = sales.length >= 3;
+    const organizerName = sales[0]?.organizer?.businessName || null;
+    const resolvedSaleType = saleType || (sales[0]?.saleType ?? null);
+
+    return res.json({
+      isRecurring,
+      organizerName,
+      saleType: resolvedSaleType,
+      sales: sales.map((s) => ({
+        id: s.id,
+        title: s.title,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        city: s.city,
+        state: s.state,
+      })),
+    });
+  } catch (err) {
+    console.error('[recurring] error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Generic /:id routes (last so they don't intercept specific subroutes)
 router.get('/:id', getSale);
 router.put('/:id', authenticate, updateSale);

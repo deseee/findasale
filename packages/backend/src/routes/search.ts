@@ -7,6 +7,7 @@ import { upload } from '../controllers/uploadController';
 import { searchItems } from '../services/itemSearchService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { searchLimiter } from '../middleware/rateLimiter';
+import { captureUnmetDemand } from '../services/unmetDemandService';
 
 const router = Router();
 
@@ -231,6 +232,13 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
         const newSales = salesFromMatches.filter((s: any) => !saleIdSet.has(s.id));
         finalSalesResult = [...finalSalesResult, ...newSales].slice(0, limit);
       }
+    }
+
+    // Feature #453: Capture unmet demand signals for low-result queries
+    const totalResults = finalSalesResult.length + itemsResult.length;
+    if (totalResults <= 2 && q && q.length >= 2 && q.length <= 100) {
+      // fire-and-forget — do not await
+      captureUnmetDemand(q, cityQuery || null, null, totalResults).catch(() => {});
     }
 
     res.json({

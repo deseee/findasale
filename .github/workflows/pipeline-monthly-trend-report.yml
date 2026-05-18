@@ -1,0 +1,28 @@
+name: Pipeline — Monthly Trend Report
+
+on:
+  schedule:
+    # 1st of each month at 9:00 AM UTC
+    - cron: '0 9 1 * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Trigger monthly-trend-report job
+        env:
+          OUTREACH_SECRET: ${{ secrets.INTERNAL_API_TOKEN }}
+          RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
+        run: |
+          curl -X POST \
+            -H "x-internal-secret: ${OUTREACH_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d '{"job":"monthly-trend-report"}' \
+            "${RAILWAY_BACKEND_URL}/api/internal/jobs/run" \
+            --fail-with-body --connect-timeout 10 --max-time 120

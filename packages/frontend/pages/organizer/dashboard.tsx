@@ -51,6 +51,7 @@ import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Copy, Store } from 'lucide
 import ConfirmDialog from '../../components/ConfirmDialog';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
 import SmartSearchViewsCard from '../../components/SmartSearchViewsCard';
+import DemandSignalsCard from '../../components/DemandSignalsCard';
 
 // Selling Tools grid configuration (6 tools, tier-gated)
 const SELLING_TOOLS = [
@@ -1625,6 +1626,9 @@ const OrganizerDashboard = () => {
 
               {/* Search Engine Visibility card — #446 GEO Phase 7 */}
               <SmartSearchViewsCard />
+
+              {/* Demand Signals card — #454 Organizer Demand Dashboard */}
+              <DemandSignalsCard />
 
               {/* My Teams Card — show team workspaces user is a member of */}
               <div className="mt-8 pt-8 border-t border-warm-200 dark:border-gray-700">

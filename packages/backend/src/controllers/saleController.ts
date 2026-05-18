@@ -950,6 +950,26 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     if (status === 'ENDED') {
       syncOrganizerTier(updated.organizerId).catch((err) => {
         console.error('[tierService] Failed to sync tier for organizer:', updated.organizerId, err);
+
+      // Roadmap #460: End-of-Sale Auto-Liquidation
+      // Fire-and-forget: count AVAILABLE items and log them as queued for liquidation.
+      // Items retain status='AVAILABLE' and isActive=true after the sale ends — this is the
+      // liquidation queue. Phase 2 clearance UI can query:
+      //   items WHERE status='AVAILABLE' AND isActive=true AND sale.status='ENDED'
+      // No schema change required — existing fields support the full liquidation surface.
+      prisma.item.count({
+        where: {
+          saleId: updated.id,
+          status: 'AVAILABLE',
+          isActive: true,
+        },
+      }).then((count) => {
+        console.log(`[liquidation] Sale ${updated.id}: ${count} items queued for liquidation`);
+        // Phase 2: build clearance UI — surface these items on /clearance discovery page.
+        // Query: items WHERE status='AVAILABLE' AND isActive=true AND sale.status='ENDED'
+      }).catch((err) => {
+        console.error('[liquidation] Failed to count liquidation items for sale:', updated.id, err);
+      });
       });
     }
 
