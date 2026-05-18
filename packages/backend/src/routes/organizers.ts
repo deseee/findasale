@@ -932,7 +932,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
         },
         sales: {
           where: {
-            status: 'PUBLISHED',
+            status: { in: ['PUBLISHED', 'ENDED'] },
             isInventoryContainer: false,
             deletedAt: null,
           },
@@ -996,7 +996,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
           },
           sales: {
             where: {
-              status: 'PUBLISHED',
+              status: { in: ['PUBLISHED', 'ENDED'] },
               isInventoryContainer: false,
               deletedAt: null,
             },

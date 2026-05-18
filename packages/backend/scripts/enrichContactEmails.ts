@@ -247,6 +247,64 @@ async function queryGooglePlaces(
   }
 }
 
+/**
+ * Free fallback: search DuckDuckGo HTML for a business website.
+ * Returns the first organic result URL that is not a directory/social media site.
+ */
+async function queryDuckDuckGo(
+  businessName: string,
+  city: string
+): Promise<string | null> {
+  const BLOCKED_DOMAINS = [
+    'facebook.com', 'yelp.com', 'google.com', 'yellowpages.com',
+    'bbb.org', 'manta.com', 'linkedin.com', 'twitter.com',
+    'instagram.com', 'estatesales.net', 'estatesales.org',
+    'nextdoor.com', 'mapquest.com', 'tripadvisor.com',
+    'white-pages.com', 'whitepages.com', 'spokeo.com',
+    'finda.sale', 'craigslist.org', 'ebay.com',
+  ];
+
+  const query = encodeURIComponent(`"${businessName}" ${city}`);
+  const url = `https://html.duckduckgo.com/html/?q=${query}`;
+
+  try {
+    const html = await fetchWithTimeout(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+    });
+    if (!html) return null;
+
+    // DuckDuckGo HTML result links appear as: class="result__url" href="https://..."
+    // or as data-href inside result__a elements
+    const hrefMatches = html.match(/result__a[^>]+href="([^"]+)"/gi) || [];
+    for (const match of hrefMatches) {
+      const urlMatch = match.match(/href="([^"]+)"/);
+      if (!urlMatch) continue;
+      let resultUrl = urlMatch[1];
+      // DuckDuckGo may use redirect URLs — extract the actual URL from uddg= param
+      try {
+        const parsed = new URL(resultUrl);
+        const uddg = parsed.searchParams.get('uddg');
+        if (uddg) resultUrl = decodeURIComponent(uddg);
+      } catch { /* not a redirect URL */ }
+
+      // Skip blocked domains
+      try {
+        const resultDomain = new URL(resultUrl).hostname.replace(/^www\./, '');
+        if (BLOCKED_DOMAINS.some(d => resultDomain.includes(d))) continue;
+        if (!resultUrl.startsWith('http')) continue;
+        return resultUrl;
+      } catch { continue; }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Fetch sitemap and extract contact-related URLs
 async function fetchSitemapUrls(baseDomain: string): Promise<string[]> {
   const candidateUrls: string[] = [];
@@ -295,7 +353,7 @@ async function main() {
   console.log('[Enrich] Starting contact email enrichment...\n');
 
   if (!GOOGLE_PLACES_API_KEY) {
-    console.log('[Enrich] WARNING: GOOGLE_PLACES_API_KEY not set — Pass 2/3 Places queries will be skipped');
+    console.log('[Enrich] INFO: GOOGLE_PLACES_API_KEY not set — using DuckDuckGo as free website discovery source');
   }
   console.log('');
 
@@ -314,21 +372,22 @@ async function main() {
     // ===== PASS 1: Organizers with website =====
     console.log('[Enrich] === PASS 1: Organizers with website ===\n');
 
-    const pass1Organizers = await prisma.organizer.findMany({
-      where: {
-        website: {
-          not: null,
-        },
-        contactEmail: null,
-        isUnmanagedListing: true,
-      },
-      select: {
-        id: true,
-        businessName: true,
-        website: true,
-      },
-      take: 200,
+    const pass1BaseWhere = {
+      website: { not: null },
+      contactEmail: null,
+      isUnmanagedListing: true,
+    };
+    const hotWarm = await prisma.organizer.findMany({
+      where: { ...pass1BaseWhere, leadTier: { in: ['HOT', 'WARM'] } },
+      select: { id: true, businessName: true, website: true },
+      take: 150,
     });
+    const cold = await prisma.organizer.findMany({
+      where: { ...pass1BaseWhere, leadTier: { notIn: ['HOT', 'WARM'] } },
+      select: { id: true, businessName: true, website: true },
+      take: 200 - hotWarm.length,
+    });
+    const pass1Organizers = [...hotWarm, ...cold];
 
     const pass1Total = pass1Organizers.length;
     console.log(`[Enrich] Found ${pass1Total} organizers with website to process\n`);
@@ -448,69 +507,69 @@ async function main() {
       try {
         const city = extractCityFromAddress(org.address);
 
-        // Try Google Places first
-        const website = await queryGooglePlaces(org.businessName, city);
+        // Free sources first, Places only as last resort
+        let website = await queryDuckDuckGo(org.businessName, city);
         if (website) {
           foundWebsite = website;
-          source = 'Places';
-        } else if (GOOGLE_PLACES_API_KEY === '') {
-          console.log(
-            `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: GOOGLE_PLACES_API_KEY not set — skipping Places`
-          );
+          source = 'DuckDuckGo';
+        } else if (GOOGLE_PLACES_API_KEY) {
+          const placesResult = await queryGooglePlaces(org.businessName, city);
+          if (placesResult) {
+            foundWebsite = placesResult;
+            source = 'Places';
+          }
+        }
+        if (!foundWebsite) {
+          console.log(`[Enrich] (${processed}/${pass2Total}) ${org.businessName}: no website found via free search or Places`);
           pass2NotFound++;
           return;
         }
 
-        // If website found, scrape for email and update DB
-        if (foundWebsite) {
-          await prisma.organizer.update({
-            where: { id: org.id },
-            data: { website: foundWebsite },
-          });
+        // Scrape the discovered website for email and update DB
+        await prisma.organizer.update({
+          where: { id: org.id },
+          data: { website: foundWebsite },
+        });
 
-          const baseDomain = getBaseDomain(foundWebsite);
-          if (baseDomain) {
-            // Try homepage
-            let html = await fetchWithTimeout(foundWebsite);
+        const baseDomain = getBaseDomain(foundWebsite);
+        if (baseDomain) {
+          // Try homepage
+          let html = await fetchWithTimeout(foundWebsite);
+          if (html) {
+            email = findFirstValidEmail(html);
+          }
+
+          // Try /contact if homepage failed
+          if (!email) {
+            await sleep(400);
+            const contactUrl = `${baseDomain}/contact`;
+            html = await fetchWithTimeout(contactUrl);
             if (html) {
               email = findFirstValidEmail(html);
             }
+          }
 
-            // Try /contact if homepage failed
-            if (!email) {
-              await sleep(400);
-              const contactUrl = `${baseDomain}/contact`;
-              html = await fetchWithTimeout(contactUrl);
-              if (html) {
-                email = findFirstValidEmail(html);
-              }
-            }
-
-            if (email) {
-              await prisma.organizer.update({
-                where: { id: org.id },
-                data: { contactEmail: email },
-              });
-              await queueForOutreach(org.id, email);
-              console.log(
-                `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: found ${email} (from ${source}→website scrape)`
-              );
-              pass2Found++;
-            } else {
-              console.log(
-                `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: found website ${foundWebsite} via ${source}, wrote to DB (no email yet)`
-              );
-              pass2NotFound++;
-            }
+          if (email) {
+            await prisma.organizer.update({
+              where: { id: org.id },
+              data: { contactEmail: email },
+            });
+            await queueForOutreach(org.id, email);
+            console.log(
+              `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: found ${email} (from ${source}→website scrape)`
+            );
+            pass2Found++;
           } else {
             console.log(
-              `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: invalid website URL from ${source}`
+              `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: found website ${foundWebsite} via ${source}, wrote to DB (no email yet)`
             );
-            pass2Errors++;
+            pass2NotFound++;
           }
         } else {
-          console.log(`[Enrich] (${processed}/${pass2Total}) ${org.businessName}: Places: no result`);
-          pass2NotFound++;
+          console.log(
+            `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: invalid website URL from ${source}`
+          );
+          pass2Errors++;
         }
       } catch (fetchError) {
         const message = fetchError instanceof Error ? fetchError.message : String(fetchError);
@@ -525,10 +584,8 @@ async function main() {
     console.log(`  Errors: ${pass2Errors}\n`);
 
     // ===== PASS 3: Enhanced fallback for Pass 1 misses =====
-    if (!GOOGLE_PLACES_API_KEY) {
-      console.log('[Enrich] Skipping Pass 3 (GOOGLE_PLACES_API_KEY not set)\n');
-    } else {
-      console.log('[Enrich] === PASS 3: Enhanced fallback (Places for Pass 1 misses) ===\n');
+    {
+      console.log('[Enrich] === PASS 3: Enhanced fallback (free search + Places for Pass 1 misses) ===\n');
 
       const pass3Organizers = await prisma.organizer.findMany({
         where: {
@@ -564,8 +621,9 @@ async function main() {
             return;
           }
 
-          // Query Places for alternate website
-          const altWebsite = await queryGooglePlaces(org.businessName, city);
+          // Query free sources then Places for alternate website
+          const altWebsite = await queryDuckDuckGo(org.businessName, city)
+            ?? (GOOGLE_PLACES_API_KEY ? await queryGooglePlaces(org.businessName, city) : null);
           if (altWebsite && altWebsite !== org.website) {
             const baseDomain = getBaseDomain(altWebsite);
             if (baseDomain) {
@@ -629,9 +687,7 @@ async function main() {
     console.log('[Enrich] === FINAL SUMMARY ===');
     console.log(`  Pass 1: ${pass1Found} found, ${pass1NotFound} not found, ${pass1Errors} errors`);
     console.log(`  Pass 2: ${pass2Found} found, ${pass2NotFound} not found, ${pass2Errors} errors`);
-    if (GOOGLE_PLACES_API_KEY) {
-      console.log(`  Pass 3: ${pass3Found} found, ${pass3NotFound} not found, ${pass3Errors} errors`);
-    }
+    console.log(`  Pass 3: ${pass3Found} found, ${pass3NotFound} not found, ${pass3Errors} errors`);
     console.log(`  Total found: ${pass1Found + pass2Found + pass3Found}`);
     console.log(`  Duration: ${elapsedSecs}s\n`);
   } finally {
