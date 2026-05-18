@@ -245,6 +245,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const staticNavLinks = [
     { href: '/map', label: 'Map' },
     { href: '/trending', label: 'Trending' },
+    { href: '/clearance', label: 'Clearance' },
   ];
 
   const authLinks = isClient ? (

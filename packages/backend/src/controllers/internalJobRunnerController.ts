@@ -28,6 +28,7 @@ import { runWebsiteEnrichmentJob } from '../jobs/websiteEnrichmentJob';
 import { emailDiscoveryJob } from '../jobs/emailDiscoveryJob';
 import { runOrganizerWebsiteAddressEnrichment } from '../jobs/organizerWebsiteAddressCron';
 import { runAutoSeedOutreach } from '../jobs/autoSeedOutreachCron';
+import { runMonthlyTrendReport } from '../jobs/monthlyTrendReportJob';
 
 /**
  * Allowlisted job-name → job logic function.
@@ -42,6 +43,7 @@ const JOB_MAP: Record<string, () => Promise<unknown>> = {
   'email-discovery': emailDiscoveryJob,
   'organizer-website-address': runOrganizerWebsiteAddressEnrichment,
   'auto-seed-outreach': runAutoSeedOutreach,
+  'monthly-trend-report': runMonthlyTrendReport,
 };
 
 /**

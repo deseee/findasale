@@ -14,6 +14,7 @@
 import * as cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 import { discoverEmail } from '../services/emailDiscoveryService';
+import { updateDirectoryConfidenceScore } from '../services/directoryConfidenceService';
 
 const BATCH_SIZE = 50;
 const BATCH_DELAY_MS = 2000;
@@ -146,6 +147,13 @@ async function enrichBatch(skip: number): Promise<number> {
             err instanceof Error ? err.message : String(err)
           );
         }
+      }
+
+      // Feature #458: Recalculate directory confidence score after enrichment
+      try {
+        await updateDirectoryConfidenceScore(org.id);
+      } catch (err) {
+        console.warn(`[WebsiteEnrichment] Confidence score update failed for "${org.businessName}":`, err instanceof Error ? err.message : String(err));
       }
     }
 

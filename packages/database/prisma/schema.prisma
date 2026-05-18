@@ -255,6 +255,8 @@ model User {
   saleShareLinkClicks   SaleShareLinkClick[]     @relation("SaleShareLinkClicks")
   // Feature: Shopper Organizer Introductions — organizers this shopper has introduced to FindA.Sale
   shopperIntroductions  ShopperOrganizerIntroduction[] @relation("ShopperIntroductions")
+  // Feature #455: Shopper Notify Me Waitlist
+  shopperWaitlistEntries ShopperWaitlistEntry[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -483,6 +485,10 @@ model Organizer {
 
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
+
+  // Feature #458: Confidence Score on Directory Entries
+  directoryConfidenceScore  Float?    // 0.0–1.0, calculated from data completeness
+  confidenceLastCalculated  DateTime?
 
   @@index([directoryStatus])
   @@index([directoryNextCheckAt])
@@ -4656,4 +4662,39 @@ model CrawlerVisit {
   @@index([crawlerName])
   @@index([saleId])
   @@index([createdAt])
+}
+
+// Feature #453: Unmet Demand Signal Capture
+// Captures search queries that return zero or few results — signals what shoppers want but can't find.
+model UnmetDemandSignal {
+  id          String   @id @default(cuid())
+  query       String   // normalized search query
+  city        String?  // city slug if search was city-filtered
+  state       String?
+  resultCount Int      @default(0) // how many results were returned
+  createdAt   DateTime @default(now())
+
+  @@index([query])
+  @@index([city])
+  @@index([createdAt])
+}
+
+// Feature #455: Shopper Notify Me Waitlist
+// Shoppers request notification when a specific item type goes on sale in their city.
+model ShopperWaitlistEntry {
+  id         String    @id @default(cuid())
+  userId     String
+  itemType   String    // normalized item description ("vintage lamp", "mid-century dresser", etc.)
+  city       String?
+  state      String?
+  isActive   Boolean   @default(true)
+  notifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([itemType])
+  @@index([city, isActive])
 }

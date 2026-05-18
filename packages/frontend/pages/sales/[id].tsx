@@ -191,6 +191,7 @@ interface InitialSaleData {
   startDate: string;
   endDate: string;
   photoUrls: string[];
+  organizerId: string | null;
   organizer: {
     businessName: string;
   };
@@ -206,12 +207,28 @@ interface InitialSaleData {
   }>;
 }
 
+// #450: EventSeries schema data — fetched server-side when organizer has ≥3 recurring sales
+interface EventSeriesData {
+  isRecurring: boolean;
+  organizerName: string | null;
+  saleType: string | null;
+  sales: Array<{
+    id: string;
+    title: string;
+    startDate: string;
+    endDate: string;
+    city: string;
+    state: string;
+  }>;
+}
+
 interface SaleDetailPageProps {
   ogData?: OGSaleData | null;
   initialData?: InitialSaleData | null;
+  eventSeriesData?: EventSeriesData | null;
 }
 
-const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) => {
+const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, eventSeriesData }) => {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
@@ -850,6 +867,46 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 };
               })
             )
+          }} />
+        </Head>
+      )}
+
+      {/* #450: EventSeries JSON-LD — only when organizer has ≥3 recurring sales of the same type */}
+      {eventSeriesData && eventSeriesData.isRecurring && eventSeriesData.organizerName && initialData && (
+        <Head>
+          <script type="application/ld+json" dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'EventSeries',
+              'name': `${eventSeriesData.organizerName}'s ${
+                eventSeriesData.saleType
+                  ? eventSeriesData.saleType.charAt(0) + eventSeriesData.saleType.slice(1).toLowerCase().replace(/_/g, ' ')
+                  : 'Sale'
+              } Sales`,
+              'organizer': {
+                '@type': 'Organization',
+                'name': eventSeriesData.organizerName,
+                ...(initialData.organizerId
+                  ? { 'url': `https://finda.sale/organizer/storefront/${initialData.organizerId}` }
+                  : {}),
+              },
+              'location': {
+                '@type': 'Place',
+                'address': {
+                  '@type': 'PostalAddress',
+                  'addressLocality': initialData.city,
+                  'addressRegion': initialData.state,
+                  'addressCountry': 'US',
+                },
+              },
+              'subEvent': eventSeriesData.sales.map((s) => ({
+                '@type': 'Event',
+                'name': s.title,
+                'startDate': s.startDate,
+                'endDate': s.endDate,
+                'url': `https://finda.sale/sales/${s.id}`,
+              })),
+            })
           }} />
         </Head>
       )}
@@ -2030,6 +2087,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       startDate: sale.startDate || '',
       endDate: sale.endDate || '',
       photoUrls: sale.photoUrls || [],
+      organizerId: sale.organizerId || null,
       organizer: {
         businessName: sale.organizer?.businessName || '',
       },
@@ -2052,8 +2110,32 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     const isEnded = sale.status === 'ENDED';
     const noindex = isScrapedSale && isEnded;
 
-    return { props: { ogData, initialData, noindex } };
+    // #450: EventSeries — fetch recurring sales for this organizer+saleType
+    let eventSeriesData: EventSeriesData | null = null;
+    const organizerId = sale.organizerId;
+    const saleType = sale.saleType;
+    if (organizerId && saleType) {
+      try {
+        const esController = new AbortController();
+        const esTimeout = setTimeout(() => esController.abort(), 2000);
+        const esRes = await fetch(
+          `${apiUrl}/sales/organizer/${encodeURIComponent(organizerId)}/recurring?saleType=${encodeURIComponent(saleType)}`,
+          { signal: esController.signal }
+        );
+        clearTimeout(esTimeout);
+        if (esRes.ok) {
+          const esJson = await esRes.json();
+          if (esJson.isRecurring) {
+            eventSeriesData = esJson as EventSeriesData;
+          }
+        }
+      } catch {
+        // Non-fatal — EventSeries is enhancement only
+      }
+    }
+
+    return { props: { ogData, initialData, noindex, eventSeriesData } };
   } catch {
-    return { props: { ogData: null, initialData: null, noindex: false } };
+    return { props: { ogData: null, initialData: null, noindex: false, eventSeriesData: null } };
   }
 }
