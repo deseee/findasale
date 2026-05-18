@@ -29,6 +29,8 @@ import {
   updateCuratorEntry,
   getScrapePoolStats,
   getScrapeMetros,
+  getOutreachStats,
+  getDrilldown,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -123,6 +125,10 @@ router.post('/scraper/takedown', emergencyTakedown);
 
 // Scrape pool analytics dashboard
 router.get('/scrape-pool-stats', getScrapePoolStats);
+
+// Outreach funnel stats and KPI drilldowns
+router.get('/outreach-stats', getOutreachStats);
+router.get('/drilldown/:metric', getDrilldown);
 
 // Feature #362: GET /api/admin/xp-velocity — XP exploit detection
 router.get('/xp-velocity', authenticate, requireAdmin, async (req: any, res: any) => {
