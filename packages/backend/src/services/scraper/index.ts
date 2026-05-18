@@ -212,8 +212,8 @@ export async function getOrCreateScrapedOrganizer(
     return null;
   }
 
-  // Resolve effective source label: explicit param wins; fall back to 'StateLicensing' when isStateLicensed
-  const effectiveSourceLabel = sourceLabel ?? (isStateLicensed ? 'StateLicensing' : undefined);
+  // Resolve effective source label: explicit param wins; then sourceName (always present); then 'StateLicensing' for licensed orgs
+  const effectiveSourceLabel = sourceLabel ?? sourceName ?? (isStateLicensed ? 'StateLicensing' : undefined);
 
   // ADR-077 Phase 2: Multi-source dedup + corroboration merge
   // Check by googlePlaceId first — strongest dedup signal.
