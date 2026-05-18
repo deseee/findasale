@@ -17,6 +17,7 @@ import { sendOutreachEmails } from '../jobs/outreachEmailsCron';
 import { runWebsiteEnrichmentBackfill } from '../jobs/websiteEnrichmentJob';
 import { runInternalJob } from '../controllers/internalJobRunnerController';
 import { runListingEnrichmentBatch } from '../controllers/internalListingEnrichmentController';
+import { getBatchOfUngeocodedSales, bulkUpdateGeocodedSales } from '../controllers/internalGeocodingController';
 import { runOrganizerContactBackfill } from '../controllers/internalOrganizerContactBackfillController';
 import { runCategorySync } from '../jobs/categorySyncCron';
 import { runLeadScoringBackfill } from '../services/leadScoringService';
@@ -937,13 +938,18 @@ router.post('/scraper/run-west-virginia-phase2', requireSecret, async (req: expr
 router.post('/scraper/run-virginia-general-phase2', requireSecret, async (req: express.Request, res: express.Response) => { try { await runVirginiaGeneralPhase2Scraper(); res.json({ success: true, message: 'Virginia General Phase 2 scraper completed' }); } catch (error: any) { res.status(500).json({ error: error.message }); } });
 
 
-// POST /api/internal/enrich-listing-metadata — batch AI enrichment for scraped sales (GitHub Actions daily)
+// GET  /api/internal/geocode-ungeocoded-sales/batch — fetch sales missing lat/lng for GitHub Actions geocoding workflow
+// POST /api/internal/geocode-ungeocoded-sales/bulk  — accept geocoded lat/lng results from GitHub Actions
+router.get('/geocode-ungeocoded-sales/batch', getBatchOfUngeocodedSales);
+router.post('/geocode-ungeocoded-sales/bulk', bulkUpdateGeocodedSales);
+
+// POST /api/internal/enrich-listing-metadata - batch AI enrichment for scraped sales (GitHub Actions daily)
 router.post('/enrich-listing-metadata', requireSecret, runListingEnrichmentBatch);
 
-// POST /api/internal/backfill-organizer-contacts — free backfill: propagate contact data from scraped sales to organizers (GitHub Actions daily)
+// POST /api/internal/backfill-organizer-contacts - free backfill: propagate contact data from scraped sales to organizers (GitHub Actions daily)
 router.post('/backfill-organizer-contacts', requireSecret, runOrganizerContactBackfill);
 
-// POST /api/internal/jobs/run — single dispatcher for background pipeline jobs (GitHub Actions cron)
+// POST /api/internal/jobs/run - single dispatcher for background pipeline jobs (GitHub Actions cron)
 router.post('/jobs/run', requireSecret, runInternalJob);
 
 export default router;
