@@ -1752,4 +1752,13 @@ const OrganizerDashboard = () => {
         message={confirmState.message}
         onConfirm={() => {
           confirmState.onConfirm();
-          setConf
+          setConfirmState(s => ({ ...s, open: false }));
+        }}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
+
+    </>
+  );
+}
+
+export default OrganizerDashboard;
