@@ -49,9 +49,9 @@ const ClaimListingBanner: React.FC<ClaimListingBannerProps> = ({ saleId, cityNam
     signIn(provider);
   };
 
-  const totalLabel = loading
+  const totalLabel = loading || stats === null
     ? 'Smart search assistants have visited'
-    : `${stats!.total} smart search assistant visit${stats!.total === 1 ? '' : 's'}`;
+    : `${stats.total} smart search assistant visit${stats.total === 1 ? '' : 's'}`;
 
   return (
     <div className="rounded-xl border border-amber-200 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/20 p-4">
