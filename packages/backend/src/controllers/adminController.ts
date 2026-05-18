@@ -26,6 +26,12 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       _count: true,
     });
 
+    // Real vs scraped sale counts for Data Integrity section
+    const [realSalesCount, scrapedSalesCount] = await Promise.all([
+      prisma.sale.count({ where: { organizer: { isUnmanagedListing: false } } }),
+      prisma.sale.count({ where: { organizer: { isUnmanagedListing: true } } }),
+    ]);
+
     const totalPurchases = await prisma.purchase.aggregate({
       _sum: { amount: true },
       _count: true,
@@ -283,6 +289,8 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       },
       sparklines,
       ebayRateLimit: getEbayRateLimitStatus(),
+      realSalesCount,
+      scrapedSalesCount,
     };
 
     // #370 Canada Admin Analytics — compute canadaStats when country=CA
@@ -1245,3 +1253,113 @@ export async function getScrapeMetros(req: Request, res: Response): Promise<void
     res.json({ metros: [] });
   }
 }
+// GET /api/admin/outreach-stats — Outreach email funnel metrics
+export const getOutreachStats = async (req: AuthRequest, res: Response) => {
+  try {
+    const [
+      totalInQueue,
+      totalSent,
+      totalClaimed,
+      totalBounced,
+      totalOptedOut,
+      touch1Sent,
+      touch1Opened,
+      touch1Clicked,
+      touch2Sent,
+      touch2Opened,
+      touch2Clicked,
+      touch3Sent,
+      touch3Opened,
+      touch3Clicked,
+      touch4Sent,
+      touch4Opened,
+      touch4Clicked,
+    ] = await Promise.all([
+      prisma.directoryClaimEmail.count(),
+      prisma.directoryClaimEmail.count({ where: { OR: [{ status: 'SENT' }, { sentAt: { not: null } }] } }),
+      prisma.directoryClaimEmail.count({ where: { status: 'CLAIMED' } }),
+      prisma.directoryClaimEmail.count({ where: { status: 'BOUNCED' } }),
+      prisma.directoryClaimEmail.count({ where: { status: 'OPTED_OUT' } }),
+      prisma.directoryClaimEmail.count({ where: { touch1SentAt: { not: null } } }),
+      prisma.directoryClaimEmail.count({ where: { touch1Opened: true } }),
+      prisma.directoryClaimEmail.count({ where: { touch1Clicked: true } }),
+      prisma.directoryClaimEmail.count({ where: { touch2SentAt: { not: null } } }),
+      prisma.directoryClaimEmail.count({ where: { touch2Opened: true } }),
+      prisma.directoryClaimEmail.count({ where: { touch2Clicked: true } }),
+      prisma.directoryClaimEmail.count({ where: { touch3SentAt: { not: null } } }),
+      prisma.directoryClaimEmail.count({ where: { touch3Opened: true } }),
+      prisma.directoryClaimEmail.count({ where: { touch3Clicked: true } }),
+      prisma.directoryClaimEmail.count({ where: { touch4SentAt: { not: null } } }),
+      prisma.directoryClaimEmail.count({ where: { touch4Opened: true } }),
+      prisma.directoryClaimEmail.count({ where: { touch4Clicked: true } }),
+    ]);
+
+    const pctStr = (num: number, den: number) =>
+      den > 0 ? `${((num / den) * 100).toFixed(1)}%` : '0.0%';
+
+    res.json({
+      totalInQueue,
+      totalSent,
+      totalClaimed,
+      totalBounced,
+      totalOptedOut,
+      touch1: { sent: touch1Sent, opened: touch1Opened, clicked: touch1Clicked, openRate: pctStr(touch1Opened, touch1Sent), clickRate: pctStr(touch1Clicked, touch1Sent) },
+      touch2: { sent: touch2Sent, opened: touch2Opened, clicked: touch2Clicked, openRate: pctStr(touch2Opened, touch2Sent), clickRate: pctStr(touch2Clicked, touch2Sent) },
+      touch3: { sent: touch3Sent, opened: touch3Opened, clicked: touch3Clicked, openRate: pctStr(touch3Opened, touch3Sent), clickRate: pctStr(touch3Clicked, touch3Sent) },
+      touch4: { sent: touch4Sent, opened: touch4Opened, clicked: touch4Clicked, openRate: pctStr(touch4Opened, touch4Sent), clickRate: pctStr(touch4Clicked, touch4Sent) },
+      conversionRate: pctStr(totalClaimed, totalSent),
+    });
+  } catch (error) {
+    console.error('Error fetching outreach stats:', error);
+    res.status(500).json({ message: 'Failed to fetch outreach stats' });
+  }
+};
+
+// GET /api/admin/drilldown/:metric — drill-down data for KPI cards
+export const getDrilldown = async (req: AuthRequest, res: Response) => {
+  try {
+    const { metric } = req.params;
+
+    if (metric === 'signups') {
+      const users = await prisma.user.findMany({
+        where: { email: { not: { endsWith: '@system.finda.sale' } } },
+        select: { id: true, name: true, email: true, createdAt: true, roles: true },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+      return res.json({ users });
+    }
+
+    if (metric === 'sales') {
+      const [realSalesCount, scrapedSalesCount, claimedCount, publishedCount, endedCount, recentReal] = await Promise.all([
+        prisma.sale.count({ where: { organizer: { isUnmanagedListing: false } } }),
+        prisma.sale.count({ where: { organizer: { isUnmanagedListing: true } } }),
+        prisma.sale.count({ where: { organizer: { isUnmanagedListing: false }, isClaimed: true } }),
+        prisma.sale.count({ where: { organizer: { isUnmanagedListing: false }, status: 'PUBLISHED' } }),
+        prisma.sale.count({ where: { organizer: { isUnmanagedListing: false }, status: 'ENDED' } }),
+        prisma.sale.findMany({
+          where: { organizer: { isUnmanagedListing: false } },
+          select: { id: true, title: true, status: true, createdAt: true, organizer: { select: { businessName: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        }),
+      ]);
+      return res.json({ real: realSalesCount, scraped: scrapedSalesCount, claimed: claimedCount, published: publishedCount, ended: endedCount, recentReal });
+    }
+
+    if (metric === 'scrapedsales') {
+      const sales = await prisma.sale.findMany({
+        where: { organizer: { isUnmanagedListing: true } },
+        select: { id: true, title: true, status: true, createdAt: true, organizer: { select: { businessName: true, isClaimed: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+      return res.json({ sales });
+    }
+
+    return res.status(400).json({ message: 'Unknown metric. Use: signups, sales, scrapedsales' });
+  } catch (error) {
+    console.error('Error fetching drilldown:', error);
+    res.status(500).json({ message: 'Failed to fetch drilldown data' });
+  }
+};
