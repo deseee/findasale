@@ -4643,3 +4643,17 @@ enum OutreachAuditEvent {
   OPTED_OUT
   SUPPRESSED
 }
+
+model CrawlerVisit {
+  id          String   @id @default(cuid())
+  userAgent   String
+  crawlerName String   // "GPTBot" | "ClaudeBot" | "PerplexityBot" | "OAI-SearchBot" | "Bytespider" | "GoogleBot" | "BingBot" | "Other"
+  path        String
+  saleId      String?
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  @@index([crawlerName])
+  @@index([saleId])
+  @@index([createdAt])
+}

@@ -1,138 +1,215 @@
 /**
- * Cities Index Page — SEO Landing Pages
- * Displays all cities with active estate sales.
- * Each city card shows: city name, state, active sales count, last sale date.
+ * Cities Index Page — ISR SEO Landing Page
  * Route: /cities
+ * Lists all cities where FindA.Sale has sales, grouped by state.
+ * Revalidates every hour via ISR.
  */
 
-import React from 'react';
+import { GetStaticProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import api from '../../lib/api';
 
-interface CityStats {
-  city: string;
-  state: string;
-  activeSales: number;
-  totalSales: number;
-  lastSaleDate?: string;
+// US state code → full state name
+const STATE_NAMES: Record<string, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+  MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+  NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+  OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+  SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+  VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+  DC: 'Washington D.C.',
+};
+
+interface CityEntry {
+  name: string;    // "Grand Rapids"
+  slug: string;    // "grand-rapids-mi"
+  count: number;
 }
 
-const CitiesPage = () => {
-  const { data, isLoading } = useQuery({
-    queryKey: ['cities'],
-    queryFn: async () => {
-      const response = await api.get('/sales/cities');
-      return response.data;
-    },
-  });
+interface StateGroup {
+  state: string;      // "Michigan"
+  stateCode: string;  // "MI"
+  cities: CityEntry[];
+}
 
-  const cities: CityStats[] = data?.cities || [];
-  const sortedCities = cities.sort((a, b) => b.activeSales - a.activeSales);
+interface CitiesPageProps {
+  stateGroups: StateGroup[];
+  totalCities: number;
+}
+
+export default function CitiesPage({ stateGroups, totalCities }: CitiesPageProps) {
+  const title = 'Browse Sales by City | FindA.Sale';
+  const description =
+    'Find estate sales, yard sales, auctions and more near you. Browse sales in cities across the US on FindA.Sale.';
+  const canonicalUrl = 'https://finda.sale/cities';
+
+  const collectionPageJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: title,
+    description,
+    url: canonicalUrl,
+  };
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home',   item: 'https://finda.sale' },
+      { '@type': 'ListItem', position: 2, name: 'Cities', item: canonicalUrl },
+    ],
+  };
 
   return (
     <>
       <Head>
-        <title>Sales by City | FindA.Sale</title>
-        <meta
-          name="description"
-          content="Browse upcoming sales by city near you. Find furniture, antiques, and collectibles at estate sales, yard sales, garage sales, and more on FindA.Sale."
-        />
-        <link rel="canonical" href="https://finda.sale/cities" />
-        <meta property="og:title" content="Sales by City | FindA.Sale" />
-        <meta
-          property="og:description"
-          content="Find local sales near you. Browse by city and discover furniture, antiques, and more at estate sales, yard sales, and garage sales."
-        />
+        <title>{title}</title>
+        <meta name="description" content={description} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta name="robots" content="index, follow" />
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:url" content={canonicalUrl} />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://finda.sale/cities" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content={title} />
+        <meta name="twitter:description" content={description} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionPageJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        />
       </Head>
 
-      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
-        <div className="max-w-4xl mx-auto px-4 pt-8 pb-24">
+      <main className="min-h-screen bg-white dark:bg-slate-900">
+        {/* Breadcrumb */}
+        <nav className="max-w-5xl mx-auto px-4 pt-4 pb-2 text-sm text-warm-500 dark:text-warm-400">
+          <ol className="flex flex-wrap items-center gap-1">
+            <li><Link href="/" className="hover:text-amber-600">Home</Link></li>
+            <li aria-hidden="true">/</li>
+            <li className="text-warm-800 dark:text-warm-200 font-medium">Cities</li>
+          </ol>
+        </nav>
 
-          {/* Header */}
-          <div className="mb-8 text-center">
-            <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-3">
-              Sales by City
-            </h1>
-            <p className="text-warm-600 dark:text-warm-400 text-lg">
-              Browse sales in your area
-            </p>
-          </div>
+        {/* Hero */}
+        <div className="max-w-5xl mx-auto px-4 pt-6 pb-8">
+          <h1 className="text-3xl md:text-4xl font-bold text-warm-900 dark:text-warm-100">
+            Browse Sales by City
+          </h1>
+          <p className="mt-2 text-warm-600 dark:text-warm-400 text-lg">
+            Find sales near you across {totalCities} {totalCities === 1 ? 'city' : 'cities'}
+          </p>
+        </div>
 
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="h-32 bg-warm-100 dark:bg-gray-700 rounded-lg animate-pulse" />
-              ))}
-            </div>
-          ) : sortedCities.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-warm-500 dark:text-warm-400 text-lg">No cities with sales yet</p>
+        {/* State-grouped city list */}
+        <div className="max-w-5xl mx-auto px-4 pb-16 space-y-10">
+          {stateGroups.length === 0 ? (
+            <div className="py-16 text-center">
+              <p className="text-warm-500 dark:text-warm-400 text-lg">No cities with sales yet.</p>
+              <Link href="/" className="mt-4 inline-block text-amber-600 hover:text-amber-700 font-medium">
+                ← Back to home
+              </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {sortedCities.map((cityData) => {
-                const lastSaleDate = cityData.lastSaleDate
-                  ? new Date(cityData.lastSaleDate).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })
-                  : null;
-
-                return (
-                  <Link
-                    key={`${cityData.city}-${cityData.state}`}
-                    href={`/city/${encodeURIComponent(`${cityData.city.toLowerCase().replace(/\s+/g, '-')}-${cityData.state.toLowerCase()}`)}`}
-                    className="card p-6 hover:shadow-lg transition-shadow"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">
-                          {cityData.city}
-                        </h2>
-                        <p className="text-sm text-warm-500 dark:text-warm-400 mt-1">
-                          {cityData.state}
-                        </p>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        <div className="text-3xl font-bold text-amber-600">
-                          {cityData.activeSales}
-                        </div>
-                        <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
-                          active sale{cityData.activeSales !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700 flex items-center justify-between text-xs text-warm-500 dark:text-warm-400">
-                      <span>{cityData.totalSales} total sale{cityData.totalSales !== 1 ? 's' : ''}</span>
-                      {lastSaleDate && (
-                        <span>Last: {lastSaleDate}</span>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+            stateGroups.map((group) => (
+              <section key={group.stateCode}>
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-3 pb-2 border-b border-warm-200 dark:border-gray-700">
+                  {group.state}
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  {group.cities.map((city) => (
+                    <Link
+                      key={city.slug}
+                      href={`/city/${city.slug}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:border-amber-500 hover:text-amber-600 dark:hover:border-amber-500 dark:hover:text-amber-400 transition-colors bg-white dark:bg-slate-800"
+                    >
+                      {city.name}
+                      <span className="text-warm-400 dark:text-gray-500 text-xs">({city.count})</span>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            ))
           )}
-
-          {/* Back to Home */}
-          <div className="mt-10 text-center">
-            <Link
-              href="/"
-              className="text-amber-600 hover:text-amber-700 font-medium text-sm"
-            >
-              ← Back to home
-            </Link>
-          </div>
-
         </div>
-      </div>
+
+        {/* Back link */}
+        <div className="max-w-5xl mx-auto px-4 pb-12 text-center">
+          <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium text-sm">
+            ← Back to home
+          </Link>
+        </div>
+      </main>
     </>
   );
-};
+}
 
-export default CitiesPage;
+export const getStaticProps: GetStaticProps<CitiesPageProps> = async () => {
+  let stateGroups: StateGroup[] = [];
+  let totalCities = 0;
+
+  try {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+    const res = await fetch(`${apiBaseUrl}/sales/city-slugs`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const rawSlugs: Array<{ slug: string; count: number }> =
+        Array.isArray(data) ? data : data.slugs ?? [];
+
+      // Parse each slug → city name + state code
+      const parsed = rawSlugs.map(({ slug, count }) => {
+        const parts = slug.split('-');
+        const stateCode = parts[parts.length - 1].toUpperCase();
+        const cityName = parts
+          .slice(0, -1)
+          .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+        return { name: cityName, slug, count, stateCode };
+      });
+
+      totalCities = parsed.length;
+
+      // Group by state
+      const byState: Record<string, CityEntry[]> = {};
+      for (const city of parsed) {
+        if (!byState[city.stateCode]) byState[city.stateCode] = [];
+        byState[city.stateCode].push({ name: city.name, slug: city.slug, count: city.count });
+      }
+
+      // Sort cities within each state by count descending
+      for (const code of Object.keys(byState)) {
+        byState[code].sort((a, b) => b.count - a.count);
+      }
+
+      // Build state groups sorted alphabetically by state name
+      stateGroups = Object.keys(byState)
+        .sort((a, b) => {
+          const nameA = STATE_NAMES[a] ?? a;
+          const nameB = STATE_NAMES[b] ?? b;
+          return nameA.localeCompare(nameB);
+        })
+        .map((code) => ({
+          state: STATE_NAMES[code] ?? code,
+          stateCode: code,
+          cities: byState[code],
+        }));
+    }
+  } catch (err) {
+    console.error('[cities/index] getStaticProps fetch error:', err);
+  }
+
+  return {
+    props: { stateGroups, totalCities },
+    revalidate: 3600, // ISR: 1 hour
+  };
+};

@@ -71,7 +71,44 @@ export async function getServerSideProps() {
           }))
       : [];
 
-    // Generate city URLs
+    // Fetch canonical city slugs (e.g. "grand-rapids-mi") from dedicated endpoint.
+    // Falls back to empty array if the endpoint isn't available yet.
+    let canonicalCitySlugs: string[] = [];
+    try {
+      const citySlugsResponse = await api.get('/sales/city-slugs');
+      canonicalCitySlugs = citySlugsResponse.data.slugs || citySlugsResponse.data || [];
+    } catch {
+      // Endpoint may not exist yet — skip canonical city+category URLs gracefully
+    }
+
+    const SALE_CATEGORIES = [
+      'estate-sales',
+      'yard-sales',
+      'auctions',
+      'flea-markets',
+      'consignment',
+    ];
+
+    // City+category URLs from canonical slugs (proper city-state format)
+    const cityCategoryUrls: any[] = [];
+    for (const slug of canonicalCitySlugs) {
+      cityCategoryUrls.push({
+        loc: `${baseUrl}/city/${slug}`,
+        lastmod: new Date().toISOString(),
+        changefreq: 'daily',
+        priority: 0.8,
+      });
+      for (const category of SALE_CATEGORIES) {
+        cityCategoryUrls.push({
+          loc: `${baseUrl}/city/${slug}/${category}`,
+          lastmod: new Date().toISOString(),
+          changefreq: 'daily',
+          priority: 0.7,
+        });
+      }
+    }
+
+    // Generate city URLs from sale data (legacy — city name only, no state code)
     const cityUrls = cities.map((city: string) => ({
       loc: `${baseUrl}/city/${city}`,
       lastmod: new Date().toISOString(),
@@ -121,6 +158,7 @@ export async function getServerSideProps() {
     const fields = [
       ...staticUrls,
       ...saleUrls,
+      ...cityCategoryUrls,
       ...cityUrls,
       ...neighborhoodUrls,
       ...zipUrls,

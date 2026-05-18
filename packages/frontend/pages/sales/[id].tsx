@@ -755,6 +755,19 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                   'lowPrice': '0',
                   'offerCount': (sale as any)._count?.items || sale.items.length || 0
                 }
+              } : {}),
+              'speakable': {
+                '@type': 'SpeakableSpecification',
+                'cssSelector': ['h1', '.sale-description', '.sale-dates']
+              },
+              'paymentAccepted': ['CreditCard', 'Cash', 'PaymentService'],
+              ...(sale.status?.toUpperCase() === 'ENDED' ? {
+                'eventStatus': 'https://schema.org/EventRescheduled',
+                'offers': {
+                  '@type': 'AggregateOffer',
+                  'availability': 'https://schema.org/SoldOut',
+                  'priceCurrency': 'USD',
+                }
               } : {})
             })
           }} />
@@ -814,6 +827,15 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
 
       {!isSaleLocked && sale && (
       <main className="min-h-screen bg-[#F4EFE7] dark:bg-[#0B0F17] text-[#1A1814] dark:text-[#F2F0EA]">
+
+        {/* Machine-readable context for AI crawlers — sr-only, not display:none (cloaking-safe) */}
+        {sale.organizer && (
+          <div className="sr-only" aria-hidden="true">
+            <p>Sale listing managed by {sale.organizer.businessName} on FindA.Sale.</p>
+            <p>Browse items, check availability, and get directions at finda.sale/sales/{sale.id}.</p>
+            <p>Real-time inventory and pricing available via FindA.Sale API at api.finda.sale.</p>
+          </div>
+        )}
 
         {/* ── HERO ── full-bleed photo with gradient overlay */}
         <div className="relative">
@@ -1957,8 +1979,13 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       },
     };
 
-    return { props: { ogData, initialData } };
+    // GEO Phase 11a: suppress indexing of ENDED scraped (unclaimed) sale pages
+    const isScrapedSale = Boolean(sale.sourceUrl);
+    const isEnded = sale.status === 'ENDED';
+    const noindex = isScrapedSale && isEnded;
+
+    return { props: { ogData, initialData, noindex } };
   } catch {
-    return { props: { ogData: null, initialData: null } };
+    return { props: { ogData: null, initialData: null, noindex: false } };
   }
 }

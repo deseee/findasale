@@ -42,6 +42,13 @@ Shoppers use FindA.Sale to:
 - **Community Appraisals:** Scout-ranked community members appraise items; community votes on best valuations
 - **Crew Features:** Group buying, shared lists, and collective haul tracking
 
+## Structured Data
+All sale pages include Schema.org JSON-LD:
+- Event schema with startDate, endDate, location (PostalAddress), organizer
+- AggregateOffer with item count, price range
+- BreadcrumbList for navigation context
+City landing pages at /city/{slug} and /city/{slug}/{category} include ItemList schema.
+
 ## Key Pages
 
 - **Homepage** (`/`) — Discover featured sales near you; search by title, location, or keyword
@@ -52,6 +59,10 @@ Shoppers use FindA.Sale to:
 - **Shopper Features** (`/shopper`) — Guild primer, Hunt Pass info, seasonal challenges
 - **Organizer Guide** (`/guide`) — Comprehensive walkthrough for creating and running sales
 - **Contact** (`/contact`) — Support and general inquiries
+- **City Sales** (`/city/{slug}`) — All sales in a specific city (e.g., /city/grand-rapids-mi)
+- **City + Category** (`/city/{slug}/{category}`) — Filtered by sale type (e.g., /city/chicago-il/estate-sales)
+- **AI Score Tool** (`/ai-score`) — Check how discoverable any sale page is to AI crawlers
+- **Cities Index** (`/cities`) — Browse all cities with active sales
 
 ## API & Integrations
 
@@ -62,12 +73,12 @@ FindA.Sale offers:
 - **Webhooks** — TEAMS tier access; trigger integrations on purchase, auction win, sale publish
 - **Zapier** — Connect FindA.Sale to thousands of apps for custom workflows
 
-**MCP Server (Coming Soon):**
-An MCP (Model Context Protocol) server will allow AI agents to:
-- Search sales by location, category, date
-- Look up item details and pricing
-- Check organizer information and availability
-- Access public sale calendars
+## MCP Server (Live)
+FindA.Sale provides a Model Context Protocol (MCP) server that allows AI agents to directly interact with our data:
+- **Endpoint:** mcp.finda.sale (Railway-hosted)
+- **Tools:** search_sales, get_sale, search_items, get_organizer, get_trending_sales, get_city_sales, get_categories
+- **Use:** AI assistants can query live sale inventory, item details, organizer profiles, and geographic sale density
+- **Protocol:** MCP (streamable HTTP transport)
 
 ## Audience & Use Cases
 
@@ -79,7 +90,7 @@ An MCP (Model Context Protocol) server will allow AI agents to:
 - Shoppers hunting for vintage, collectibles, and bargains in their local community
 
 **Geographic Focus:**
-FindA.Sale operates nationwide (US) with initial concentration in Michigan and surrounding Midwest regions.
+FindA.Sale operates nationally with strongest density in Michigan, Illinois, Ohio, Texas, and California.
 
 ## Business Model
 

@@ -1,16 +1,16 @@
-# Patrick's Dashboard — Week of May 18, 2026
+# Patrick's Dashboard — Week of May 19, 2026
 
 ---
 
 ## What Happened This Week
 
-**S758:** Complete GEO & Discoverability plan — 10 phases + research queue, 25 roadmap entries (#432–#456). Phases 1-8: core funnel (data foundation → acquisition → conversion → premium schema → content moat → viral referral loop → retention hooks → MCP optimization). Phase 9: compounding data assets (post-sale pricing records stay live forever, EventSeries for recurring sales, voice search schema, "This Weekend" auto-pages). Phase 10: demand intelligence (capture unmet search demand, show organizers what buyers are looking for, shopper waitlist). Plus 5 research items needing investigation (embeddable widget, Price Oracle API, economic signal data, Spanish structured data, real-time agent subscriptions). No code changes — planning session. Strategy doc: `claude_docs/strategy/geo-implementation-plan.md`.
+**S759:** GEO/AI Discoverability build — 15 features shipped across Phases 1-11. 12 parallel agents, 21 files, 3 batches. City landing pages, claim banner, AI score tool, crawler tracking, Smart Search Views dashboard card, first-crawl email, stale data protection, ChatGPT plugin manifest, sitemap enrichment, llms.txt update. Plus two pre-existing Vercel build crashers fixed (city/[slug].tsx, cities/index.tsx). **Migration required** before Railway will use CrawlerVisit tracking — see action items.
 
-**S757:** Production DB cleanup. Removed 5 test/QA sales and 13 items. Nintendo Power mag moved into the live Artifact Downtown sale (now 100 items). Scraped directory (26,189 sales) untouched. No code changes.
+**S758:** Complete GEO & Discoverability plan — 12 phases, 29 roadmap entries (#432–#460). Research queue + GTM plays. No code changes — planning session.
 
-**S756:** Pipeline DB verification completed. Outreach confirmed healthy at ~48 emails/day. Deleted 31 junk rows. WARM email gap root cause fixed (daily website enrichment instead of weekly). Confirmed #336 and #339 were already built.
+**S757:** Production DB cleanup. Removed 5 test/QA sales and 13 items. Nintendo Power mag moved into live Artifact Downtown sale (now 100 items). No code changes.
 
-**S755:** Mandatory QA ceiling session — fixed 6 bugs: Hunt Pass cosmetics (#275), Share & Earn card (#265), ENDED sale counts (#292), Social Posts button (#305), Store Hours persistence (#306), seed log labels. Patrick clarified #307 Retail Mode is TEAMS-only by design.
+**S756:** Pipeline DB verification. Outreach healthy at ~48/day. WARM email gap root cause fixed (website enrichment now daily).
 
 ---
 
@@ -19,18 +19,30 @@
 - **Outreach:** 29 emails sent since May 17 deploy. ~48/day. On warmup pace. ✅
 - **Queue:** 3,319 PENDING, 29 SENT. 31 junk rows cleaned out.
 - **Source attribution:** 87.7% of organizers tagged with data source. ✅
-- **WARM email gap:** Root cause found. Only 3.3% of WARM orgs have a website (email discovery requires a website). Fix: website enrichment cron now runs daily instead of weekly. Addressable WARM pool is 208 orgs — pipeline will naturally grow this as new state-licensed orgs come in.
+- **WARM email gap:** Root cause found and fixed. Website enrichment now runs daily.
 
 ---
 
-## What's Fixed (Needs Chrome QA)
+## What's New — Pending Chrome QA (S759)
 
-- #275 Hunt Pass ring + badge — Tailwind safelist, inline boxShadow fallback, leaderboard query fixed
-- #265 Share & Earn card — 7-day dismissal expiry instead of permanent
-- #292 ENDED sale counts — accurate breakdown replaces misleading "All items sold"
-- #305 Social Posts — button now opens SocialPostGenerator modal
-- #306 Store Hours — refetches from server after save
-- #307 Retail Mode — needs TEAMS account QA (not a bug for PRO, just unverified on TEAMS)
+- City landing pages: /city/grand-rapids-mi and /city/grand-rapids-mi/estate-sales
+- Cities browse index: /cities
+- This Weekend pages: /this-weekend/grand-rapids-mi
+- Claim This Listing banner: on unclaimed scraped sale pages
+- AI Score tool: /ai-score (enter any finda.sale URL)
+- Smart Search Views card: on organizer dashboard
+- Crawler tracking + first-crawl email: live once migration runs
+
+## What's Fixed (Needs Chrome QA — from S755)
+
+- #275 Hunt Pass ring + badge
+- #265 Share & Earn card (7-day dismissal)
+- #292 ENDED sale counts (accurate breakdown)
+- #305 Social Posts button (opens modal)
+- #306 Store Hours (persists after reload)
+- #307 Retail Mode — needs TEAMS account test
+
+**⚠️ QA CEILING: 11 items in Blocked Queue. Next session = QA before new features.**
 
 ---
 
@@ -42,49 +54,66 @@ No PENDING items in DECISIONS.md this week. All standing decisions are active.
 
 ## Action Items for Patrick
 
-- [ ] **Run the S755 push block** (10 code files — see below)
-- [ ] **Run the S756 push block** (2 code files + 2 doc files — see below)
-- [ ] **Run the S758 push block** (4 doc files — see below)
-- [ ] **Deploy email verification migration** — `npx prisma migrate deploy` with Railway DATABASE_URL (pending since S726)
+- [ ] **Run the S759 push block** (21 files — largest push block in recent sessions)
+- [ ] **Run CrawlerVisit migration** (enables bot tracking + Smart Search Views card):
+  ```powershell
+  cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+  $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+  npx prisma migrate deploy
+  npx prisma generate
+  ```
+- [ ] **Run S755 push block** (10 code files) — if not yet done
+- [ ] **Run S756 push block** (2 code files + 2 doc files) — if not yet done
+- [ ] **Run S758 push block** (4 doc files) — if not yet done
+- [ ] **Deploy email verification migration** (20260515180000) — pending since S726
 - [ ] **Delete fix-attendance.sql** from project root — has production IDs (pending since S750)
 - [ ] **Log back into Chrome as yourself** (artifactmi@gmail.com) after any QA session
 
 ---
 
-## S755 Push Block
+## S759 Push Block
 
 ```powershell
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
-git add packages/frontend/tailwind.config.js
-git add packages/frontend/components/Avatar.tsx
-git add packages/backend/src/controllers/leaderboardController.ts
-git add packages/frontend/pages/shopper/league.tsx
 git add packages/frontend/pages/sales/[id].tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/database/prisma/seed.ts
-git commit -m "Fix 6 bugs: Hunt Pass cosmetics, Share&Earn expiry, ENDED sale counts, Social Posts modal, Store Hours persistence, seed log labels"
-.\push.ps1
-```
-
-## S756 Push Block
-
-```powershell
-git add .github/workflows/pipeline-website-enrichment.yml
-git add claude_docs/strategy/roadmap.md
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260519000000_add_crawler_visit/migration.sql
+git add packages/backend/src/middleware/crawlerAnalytics.ts
+git add packages/backend/src/routes/crawlerStats.ts
+git add packages/backend/src/index.ts
+git add packages/backend/src/routes/sales.ts
+git add packages/frontend/pages/city/[slug]/[category].tsx
+git add packages/frontend/public/llms.txt
+git add packages/frontend/public/.well-known/ai-plugin.json
+git add packages/frontend/next-sitemap.config.js
+git add packages/frontend/pages/server-sitemap.xml.tsx
+git add packages/frontend/pages/city/[slug].tsx
+git add packages/frontend/components/ClaimListingBanner.tsx
+git add packages/backend/src/routes/aiScore.ts
+git add packages/frontend/pages/ai-score.tsx
+git add packages/frontend/pages/cities/index.tsx
+git add packages/frontend/pages/this-weekend/[city].tsx
+git add packages/frontend/components/SmartSearchViewsCard.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/backend/src/controllers/saleController.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "chore: website enrichment daily cron; roadmap #336/#339 confirmed shipped"
-.\push.ps1
-```
-
-## S758 Push Block
-
-```powershell
-git add claude_docs/strategy/geo-implementation-plan.md
 git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "plan: GEO discoverability 3-phase plan, roadmap #432-#438"
+git commit -m "S759: GEO/AI Discoverability Phases 1-11 — 21 files, 15 features
+
+- City×category ISR pages (/city/[slug]/[category])
+- Cities browse index (/cities)
+- This Weekend pages (/this-weekend/[city])
+- Sale page JSON-LD enrichment (Speakable, PaymentMethod, SoldOut, AggregateOffer, sr-only block)
+- ClaimListingBanner on unclaimed sale pages
+- AI Score tool at /ai-score
+- CrawlerVisit schema + middleware + stats endpoints
+- Smart Search Views card on organizer dashboard
+- First-crawl email notification
+- ChatGPT plugin manifest (/.well-known/ai-plugin.json)
+- Sitemap enrichment (city + city×category entries)
+- llms.txt updated (MCP live, national scope)
+- Stale scraped ENDED sales: noindex + search exclusion
+- Fixed pre-existing build crashers: city/[slug].tsx, cities/index.tsx
+- Wrap docs: STATE.md, patrick-dashboard.md, roadmap.md"
 .\push.ps1
 ```
