@@ -1,7 +1,7 @@
 name: Pipeline — Website Enrichment
 on:
   schedule:
-    - cron: '0 1 * * 0'
+    - cron: '0 1 * * *'
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}
