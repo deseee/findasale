@@ -301,7 +301,11 @@ export const getStaticPaths: GetStaticPaths = async () => {
     const res = await fetch(`${apiBaseUrl}/sales/city-slugs`);
     if (res.ok) {
       const data = await res.json();
-      const fetched: string[] = Array.isArray(data) ? data : data.slugs ?? [];
+      const raw: any[] = Array.isArray(data) ? data : data.slugs ?? [];
+      // API returns objects { slug, city, state, count } — extract the string
+      const fetched: string[] = raw.map((item) =>
+        typeof item === 'string' ? item : item.slug
+      ).filter(Boolean);
       if (fetched.length > 0) {
         slugs = fetched.slice(0, 50);
       }
