@@ -1956,26 +1956,30 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
     const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://finda.sale';
     const verificationUrl = `${frontendUrl}/claim/verify/${verificationToken}`;
 
-    // Fire-and-forget: don't block the HTTP response on SMTP send
-    emailService.emails.send({
-      from: process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale',
-      to: claimantEmail,
-      subject: `Verify your claim request for ${foundOrganizer.businessName}`,
-      html: `
-        <p>Hi ${claimantName},</p>
-        <p>Thank you for submitting a claim request for <strong>${foundOrganizer.businessName}</strong>.</p>
-        <p>To verify your email address and confirm your claim request, click the link below:</p>
-        <p><a href="${verificationUrl}" style="background-color: #b45309; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Verify Email Address</a></p>
-        <p>Or copy and paste this link in your browser: ${verificationUrl}</p>
-        <p>This link expires in 72 hours.</p>
-        <p>Once verified, we'll review your claim request within 2-3 business days.</p>
-        <p>If you didn't submit this request, you can safely ignore this email.</p>
-      `,
-    }).catch(emailError => {
-      console.error('Failed to send claim verification email:', emailError);
-    });
+    // Fire-and-forget — errors must never reach outer catch
+    try {
+      emailService.emails.send({
+        from: process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale',
+        to: claimantEmail,
+        subject: `Verify your claim request for ${foundOrganizer.businessName}`,
+        html: `
+          <p>Hi ${claimantName},</p>
+          <p>Thank you for submitting a claim request for <strong>${foundOrganizer.businessName}</strong>.</p>
+          <p>To verify your email address and confirm your claim request, click the link below:</p>
+          <p><a href="${verificationUrl}" style="background-color: #b45309; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Verify Email Address</a></p>
+          <p>Or copy and paste this link in your browser: ${verificationUrl}</p>
+          <p>This link expires in 72 hours.</p>
+          <p>Once verified, we'll review your claim request within 2-3 business days.</p>
+          <p>If you didn't submit this request, you can safely ignore this email.</p>
+        `,
+      }).catch(emailError => {
+        console.error('Failed to send claim verification email:', emailError);
+      });
+    } catch (emailError) {
+      console.error('Failed to send claim verification email (sync):', emailError);
+    }
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: `Verification email sent to ${claimantEmail}. Please check your email and click the verification link to confirm your claim request.`,
     });
