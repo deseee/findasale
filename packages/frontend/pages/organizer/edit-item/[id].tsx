@@ -356,11 +356,6 @@ const EditItemPage = () => {
     };
   }, [inlineCameraOpen]);
 
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   const { data: item, isLoading } = useQuery({
     queryKey: ['item', id],
     queryFn: async () => {
@@ -597,6 +592,12 @@ const EditItemPage = () => {
       showToast(message, 'error');
     },
   });
+
+  // Auth guard — placed after all hooks to comply with Rules of Hooks
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   if (authLoading || isLoading) {
     return (

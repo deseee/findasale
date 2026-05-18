@@ -20,8 +20,9 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
 const DEBUG = process.env.LOG_LEVEL === 'debug';
 
-// Register stealth plugin
-chromium.use(StealthPlugin());
+// Stealth plugin registration — deferred to first browser launch to avoid
+// crashing at module import time if playwright-extra isn't fully initialised.
+let stealthRegistered = false;
 
 // Rotating referers to avoid fingerprinting
 const REFERRERS = [
@@ -182,7 +183,11 @@ let playwrightBrowser: Awaited<ReturnType<typeof chromium.launch>> | null = null
 
 async function getPlaywrightBrowser() {
   if (!playwrightBrowser) {
-    // Launch Chromium with stealth plugin already registered
+    // Register stealth plugin once before first launch
+    if (!stealthRegistered) {
+      chromium.use(StealthPlugin());
+      stealthRegistered = true;
+    }
     playwrightBrowser = await chromium.launch({
       headless: true,
       args: [
