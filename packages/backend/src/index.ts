@@ -182,6 +182,9 @@ import markdownCycleRoutes from './routes/markdownCycles';       // Feature #XXX
 import locationRoutes from './routes/locations';                 // #311: Multi-Location Inventory View
 import qrScannerRoutes from './routes/qrScanner';                // QR Scanner Phase 2: scan analytics
 import imageProxyRoutes from './routes/imageProxy';              // Image proxy for eBay CDN images
+import { crawlerAnalyticsMiddleware } from './middleware/crawlerAnalytics'; // AI Crawler Analytics
+import crawlerStatsRouter from './routes/crawlerStats';           // AI Crawler Stats endpoint
+import aiScoreRouter from './routes/aiScore';                       // GEO Phase 3: Search Visibility Score
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -590,6 +593,9 @@ app.use('/api/markdown-cycles', markdownCycleRoutes);                       // F
 app.use('/api/locations', locationRoutes);                                   // #311: Multi-Location Inventory View
 app.use('/api/qr-scanner', qrScannerRoutes);                                 // QR Scanner Phase 2: scan analytics
 app.use('/api', imageProxyRoutes);                                              // Image proxy for eBay CDN images
+app.use(crawlerAnalyticsMiddleware);                                             // AI Crawler Analytics — fire-and-forget, never blocks
+app.use('/api/crawler-stats', crawlerStatsRouter);                              // AI Crawler Stats
+app.use('/api', aiScoreRouter);                                           // GEO Phase 3: Search Visibility Score
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

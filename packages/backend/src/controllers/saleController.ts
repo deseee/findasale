@@ -711,8 +711,25 @@ export const searchSales = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Search query is required' });
     }
 
+    // GEO Phase 11a: Exclude ENDED scraped sales from MCP/public search results by default.
+    // Scraped sales that have ended are stale event pages — they should not appear in AI tool
+    // results or general search. Claimed organizer ENDED sales are kept (pricing history #449).
+    // Pass ?includeEndedScraped=true to bypass (admin/internal use only).
+    const includeEndedScraped = req.query.includeEndedScraped === 'true';
+    const scrapedEndedExclusion = includeEndedScraped
+      ? {}
+      : {
+          NOT: {
+            AND: [
+              { status: 'ENDED' },
+              { sourceUrl: { not: null } },
+            ],
+          },
+        };
+
     const sales = await prisma.sale.findMany({
       where: {
+        ...scrapedEndedExclusion,
         OR: [
           { title: { contains: q, mode: 'insensitive' } },
           { description: { contains: q, mode: 'insensitive' } },

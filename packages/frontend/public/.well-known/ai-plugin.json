@@ -1,0 +1,18 @@
+{
+  "schema_version": "v1",
+  "name_for_model": "findasale",
+  "name_for_human": "FindA.Sale",
+  "description_for_model": "Search active secondary sales (estate sales, yard sales, auctions, flea markets, consignment) across the United States. Find sales by location, browse items with prices and photos, check organizer profiles, and discover trending sales near any city.",
+  "description_for_human": "Discover estate sales, yard sales, auctions, and more near you. Browse items, check prices, and find sales happening this weekend.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://api.finda.sale/api/openapi.json",
+    "is_user_authenticated": false
+  },
+  "logo_url": "https://finda.sale/icon-192x192.png",
+  "contact_email": "support@finda.sale",
+  "legal_info_url": "https://finda.sale/privacy"
+}

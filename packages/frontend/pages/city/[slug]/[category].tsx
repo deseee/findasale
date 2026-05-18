@@ -1,10 +1,10 @@
 /**
- * City SEO Landing Page
- * URL: /city/grand-rapids-mi
- *      /city/chicago-il
+ * City + Category SEO Landing Page
+ * URL: /city/grand-rapids-mi/estate-sales
+ *      /city/chicago-il/auctions
  *
- * All-types view of a city. Links to per-category filtered pages.
- * Uses getStaticProps (ISR) — consistent with [slug]/[category].tsx.
+ * Filtered view of city page by sale type.
+ * Uses getStaticProps (ISR) — consistent with [slug].tsx.
  */
 
 import { GetStaticProps, GetStaticPaths } from 'next';
@@ -20,11 +20,7 @@ const CATEGORY_META: Record<string, { label: string; plural: string; saleType: s
   'consignment':   { label: 'Consignment',   plural: 'Consignment',   saleType: 'RETAIL'      },
 };
 
-// Hardcoded fallback slugs when API is unavailable
-const FALLBACK_CITY_SLUGS = [
-  'grand-rapids-mi', 'chicago-il', 'detroit-mi', 'phoenix-az', 'dallas-tx',
-  'los-angeles-ca', 'new-york-ny', 'houston-tx', 'san-antonio-tx', 'philadelphia-pa',
-];
+export const VALID_CATEGORIES = Object.keys(CATEGORY_META);
 
 interface SaleListing {
   id: string;
@@ -40,41 +36,37 @@ interface SaleListing {
   organizer: { id: string; businessName: string } | null;
 }
 
-interface CityPageProps {
+interface CityCategoryPageProps {
   citySlug: string;
+  categorySlug: string;
   cityName: string;
   cityState: string;
+  categoryLabel: string;
+  categoryPlural: string;
   sales: SaleListing[];
   totalCount: number;
   allCategories: string[];
 }
 
-export default function CityPage({
+export default function CityCategoryPage({
   citySlug,
+  categorySlug,
   cityName,
   cityState,
+  categoryLabel,
+  categoryPlural,
   sales,
   totalCount,
   allCategories,
-}: CityPageProps) {
-  const title = `Estate Sales & Yard Sales in ${cityName}, ${cityState} | FindA.Sale`;
-  const description = `Browse ${totalCount} sales in ${cityName}, ${cityState}. Find estate sales, yard sales, auctions, flea markets and more on FindA.Sale.`;
-  const canonicalUrl = `https://finda.sale/city/${citySlug}`;
-
-  const breadcrumbJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home',   item: 'https://finda.sale' },
-      { '@type': 'ListItem', position: 2, name: 'Cities', item: 'https://finda.sale/cities' },
-      { '@type': 'ListItem', position: 3, name: `${cityName}, ${cityState}`, item: canonicalUrl },
-    ],
-  };
+}: CityCategoryPageProps) {
+  const title = `${categoryPlural} in ${cityName}, ${cityState} | FindA.Sale`;
+  const description = `Browse ${totalCount} ${categoryPlural.toLowerCase()} in ${cityName}, ${cityState}. Find furniture, antiques, collectibles, and more on FindA.Sale.`;
+  const canonicalUrl = `https://finda.sale/city/${citySlug}/${categorySlug}`;
 
   const itemListJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
-    name: `Sales in ${cityName}, ${cityState}`,
+    name: `${categoryPlural} in ${cityName}, ${cityState}`,
     description,
     numberOfItems: sales.length,
     itemListElement: sales.slice(0, 20).map((sale, idx) => ({
@@ -109,11 +101,23 @@ export default function CityPage({
     })),
   };
 
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home',       item: 'https://finda.sale' },
+      { '@type': 'ListItem', position: 2, name: 'Cities',     item: 'https://finda.sale/cities' },
+      { '@type': 'ListItem', position: 3, name: `${cityName}, ${cityState}`, item: `https://finda.sale/city/${citySlug}` },
+      { '@type': 'ListItem', position: 4, name: categoryPlural, item: canonicalUrl },
+    ],
+  };
+
   return (
     <>
       <Head>
         <title>{title}</title>
         <meta name="description" content={description} />
+        <meta name="keywords" content={`${categoryPlural.toLowerCase()} ${cityName} ${cityState}, antiques, furniture, vintage, collectibles`} />
         <link rel="canonical" href={canonicalUrl} />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
@@ -125,11 +129,11 @@ export default function CityPage({
         <meta name="robots" content="index, follow" />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
         />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
         />
       </Head>
 
@@ -141,41 +145,55 @@ export default function CityPage({
             <li aria-hidden="true">/</li>
             <li><Link href="/cities" className="hover:text-amber-600">Cities</Link></li>
             <li aria-hidden="true">/</li>
-            <li className="text-warm-800 dark:text-warm-200 font-medium">{cityName}, {cityState}</li>
+            <li><Link href={`/city/${citySlug}`} className="hover:text-amber-600">{cityName}, {cityState}</Link></li>
+            <li aria-hidden="true">/</li>
+            <li className="text-warm-800 dark:text-warm-200 font-medium">{categoryPlural}</li>
           </ol>
         </nav>
 
         {/* Hero */}
         <div className="max-w-5xl mx-auto px-4 pt-6 pb-4">
           <h1 className="text-3xl md:text-4xl font-bold text-warm-900 dark:text-warm-100">
-            Sales in {cityName}, {cityState}
+            {categoryPlural} in {cityName}, {cityState}
           </h1>
           <p className="mt-2 text-warm-600 dark:text-warm-400">
             {totalCount > 0
-              ? `${totalCount} sale${totalCount !== 1 ? 's' : ''} listed`
-              : 'No sales currently listed'}
+              ? `${totalCount} ${categoryLabel.toLowerCase()}${totalCount !== 1 ? 's' : ''} listed`
+              : `No ${categoryPlural.toLowerCase()} currently listed`}
           </p>
         </div>
 
         {/* Category filter tabs */}
-        {allCategories.length > 0 && (
+        {allCategories.length > 1 && (
           <div className="max-w-5xl mx-auto px-4 pb-4">
             <div className="flex flex-wrap gap-2">
-              {/* "All sales" is the active tab on this page */}
-              <span className="px-3 py-1.5 rounded-full text-sm border bg-amber-500 border-amber-500 text-white font-medium">
+              <Link
+                href={`/city/${citySlug}`}
+                className="px-3 py-1.5 rounded-full text-sm border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:border-amber-500 hover:text-amber-600 transition-colors"
+              >
                 All sales
-              </span>
-              {allCategories.map((saleType) => {
+              </Link>
+              {allCategories.map((cat) => {
+                const meta = CATEGORY_META[
+                  Object.keys(CATEGORY_META).find(
+                    (k) => CATEGORY_META[k].saleType === cat
+                  ) ?? ''
+                ];
+                if (!meta) return null;
                 const catSlug = Object.keys(CATEGORY_META).find(
-                  (k) => CATEGORY_META[k].saleType === saleType
-                );
-                if (!catSlug) return null;
-                const meta = CATEGORY_META[catSlug];
+                  (k) => CATEGORY_META[k].saleType === cat
+                )!;
+                const isActive = catSlug === categorySlug;
                 return (
                   <Link
                     key={catSlug}
                     href={`/city/${citySlug}/${catSlug}`}
-                    className="px-3 py-1.5 rounded-full text-sm border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:border-amber-500 hover:text-amber-600 transition-colors"
+                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                      isActive
+                        ? 'bg-amber-500 border-amber-500 text-white font-medium'
+                        : 'border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:border-amber-500 hover:text-amber-600'
+                    }`}
+                    aria-current={isActive ? 'page' : undefined}
                   >
                     {meta.plural}
                   </Link>
@@ -190,13 +208,13 @@ export default function CityPage({
           {sales.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-warm-500 dark:text-warm-400 text-lg mb-4">
-                No sales currently listed in {cityName}.
+                No {categoryPlural.toLowerCase()} currently listed in {cityName}.
               </p>
               <Link
-                href="/cities"
+                href={`/city/${citySlug}`}
                 className="text-amber-600 hover:text-amber-700 font-medium"
               >
-                Browse other cities →
+                View all sales in {cityName} →
               </Link>
             </div>
           ) : (
@@ -278,7 +296,7 @@ export default function CityPage({
               Are you an organizer in {cityName}?
             </h2>
             <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">
-              List your sales on FindA.Sale and reach local shoppers.
+              List your {categoryLabel.toLowerCase()}s on FindA.Sale and reach local shoppers.
             </p>
             <Link
               href="/register"
@@ -294,39 +312,31 @@ export default function CityPage({
 }
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  let slugs: string[] = FALLBACK_CITY_SLUGS;
+  // Prerender top cities × all categories — rest use blocking fallback
+  const TOP_CITY_SLUGS = [
+    'grand-rapids-mi', 'chicago-il', 'detroit-mi', 'phoenix-az', 'dallas-tx',
+    'los-angeles-ca', 'new-york-ny', 'houston-tx', 'san-antonio-tx', 'philadelphia-pa',
+  ];
 
-  try {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    const res = await fetch(`${apiBaseUrl}/sales/city-slugs`);
-    if (res.ok) {
-      const data = await res.json();
-      const fetched: string[] = Array.isArray(data) ? data : data.slugs ?? [];
-      if (fetched.length > 0) {
-        slugs = fetched.slice(0, 50);
-      }
-    }
-  } catch (err) {
-    console.error('[city/[slug]] getStaticPaths fetch error — using fallback slugs:', err);
-  }
+  const paths = TOP_CITY_SLUGS.flatMap((citySlug) =>
+    VALID_CATEGORIES.map((category) => ({ params: { slug: citySlug, category } }))
+  );
 
-  return {
-    paths: slugs.map((slug) => ({ params: { slug } })),
-    fallback: 'blocking',
-  };
+  return { paths, fallback: 'blocking' };
 };
 
-export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) => {
+export const getStaticProps: GetStaticProps<CityCategoryPageProps> = async ({ params }) => {
   const citySlug = params?.slug as string;
+  const categorySlug = params?.category as string;
 
-  // Parse display name + state from slug
-  const parts = citySlug.split('-');
-  const stateCode = parts[parts.length - 1].toUpperCase();
-  const cityName = parts
-    .slice(0, -1)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+  // Validate category
+  if (!VALID_CATEGORIES.includes(categorySlug)) {
+    return { notFound: true };
+  }
 
+  const meta = CATEGORY_META[categorySlug];
+
+  // Fetch sales for this city + category
   let sales: SaleListing[] = [];
   let totalCount = 0;
   let allCategories: string[] = [];
@@ -334,7 +344,7 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) 
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
     const res = await fetch(
-      `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}`,
+      `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}?category=${categorySlug}`,
       { headers: { 'Content-Type': 'application/json' } }
     );
 
@@ -345,14 +355,25 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) 
       allCategories = data.categories ?? [];
     }
   } catch (err) {
-    console.error(`[city/[slug]] getStaticProps fetch error for ${citySlug}:`, err);
+    console.error(`[city/category] fetch error for ${citySlug}/${categorySlug}:`, err);
   }
+
+  // Parse display city name + state from slug
+  const parts = citySlug.split('-');
+  const stateCode = parts[parts.length - 1].toUpperCase();
+  const cityName = parts
+    .slice(0, -1)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 
   return {
     props: {
       citySlug,
+      categorySlug,
       cityName,
       cityState: stateCode,
+      categoryLabel: meta.label,
+      categoryPlural: meta.plural,
       sales,
       totalCount,
       allCategories,

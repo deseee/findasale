@@ -50,6 +50,140 @@ router.get('/heatmap', getHeatmapHandler); // Feature #28: Neighborhood heatmap
 router.get('/neighborhood/:slug', getSalesByNeighborhood); // U2: SEO landing pages
 router.get('/city/:city', getSalesByCity); // Bug fix: City page route
 
+
+// SEO: GET /sales/by-city/:citySlug — city landing page data
+// citySlug format: "grand-rapids-mi", "chicago-il", etc.
+router.get('/by-city/:citySlug', async (req, res) => {
+  try {
+    const { citySlug } = req.params;
+    const { category } = req.query as { category?: string };
+
+    // Validate slug format: word-chars-state e.g. "grand-rapids-mi"
+    if (!/^[a-z0-9-]+-[a-z]{2}$/.test(citySlug)) {
+      return res.status(400).json({ error: 'Invalid city slug format' });
+    }
+
+    // Parse city + state from slug: last 2-char segment is state
+    const parts = citySlug.split('-');
+    const stateCode = parts[parts.length - 1].toUpperCase();
+    const cityName = parts
+      .slice(0, -1)
+      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+
+    // Map category slug → saleType enum
+    const categoryMap: Record<string, string> = {
+      'estate-sales': 'ESTATE',
+      'yard-sales': 'YARD',
+      'auctions': 'AUCTION',
+      'flea-markets': 'FLEA_MARKET',
+      'consignment': 'RETAIL',
+    };
+    const saleTypeFilter = category ? categoryMap[category] : undefined;
+
+    const whereClause: any = {
+      status: { in: ['PUBLISHED', 'ENDED'] },
+      city: { equals: cityName, mode: 'insensitive' },
+      state: { equals: stateCode, mode: 'insensitive' },
+    };
+    if (saleTypeFilter) {
+      whereClause.saleType = saleTypeFilter;
+    }
+
+    const sales = await prisma.sale.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        title: true,
+        saleType: true,
+        startDate: true,
+        endDate: true,
+        city: true,
+        state: true,
+        address: true,
+        photoUrls: true,
+        status: true,
+        sourceUrl: true,
+        sourceName: true,
+        organizer: {
+          select: {
+            id: true,
+            businessName: true,
+          },
+        },
+      },
+      orderBy: { startDate: 'asc' },
+      take: 50,
+    });
+
+    // Derive available categories from all sales (ignoring category filter for sidebar)
+    const allSalesForCategories = saleTypeFilter
+      ? await prisma.sale.findMany({
+          where: {
+            status: { in: ['PUBLISHED', 'ENDED'] },
+            city: { equals: cityName, mode: 'insensitive' },
+            state: { equals: stateCode, mode: 'insensitive' },
+          },
+          select: { saleType: true },
+        })
+      : sales;
+
+    const categorySet = new Set<string>(allSalesForCategories.map((s: any) => s.saleType));
+    const categories = Array.from(categorySet);
+
+    const serialized = sales.map((s: any) => ({
+      ...s,
+      startDate: s.startDate instanceof Date ? s.startDate.toISOString() : s.startDate,
+      endDate: s.endDate instanceof Date ? s.endDate.toISOString() : s.endDate,
+      photoUrl: s.photoUrls?.[0] ?? null,
+    }));
+
+    return res.json({
+      city: cityName,
+      state: stateCode,
+      slug: citySlug,
+      sales: serialized,
+      totalCount: serialized.length,
+      categories,
+    });
+  } catch (err) {
+    console.error('[sales/by-city] error:', err);
+    return res.status(500).json({ error: 'Failed to fetch city sales' });
+  }
+});
+
+// SEO: GET /sales/city-slugs — returns all available city slugs for sitemaps/getStaticPaths
+router.get('/city-slugs', async (req, res) => {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ slug: string; city: string; state: string; count: bigint }>>`
+      SELECT
+        LOWER(REPLACE(city, ' ', '-')) || '-' || LOWER(state) AS slug,
+        city,
+        state,
+        COUNT(*) AS count
+      FROM "Sale"
+      WHERE status IN ('PUBLISHED', 'ENDED')
+        AND city IS NOT NULL
+        AND state IS NOT NULL
+      GROUP BY city, state
+      ORDER BY count DESC
+      LIMIT 200
+    `;
+
+    const slugs = rows.map((r) => ({
+      slug: r.slug,
+      city: r.city,
+      state: r.state,
+      count: Number(r.count),
+    }));
+
+    return res.json({ slugs, total: slugs.length });
+  } catch (err) {
+    console.error('[sales/city-slugs] error:', err);
+    return res.status(500).json({ error: 'Failed to fetch city slugs' });
+  }
+});
+
 // /mine must be registered before /:id so Express doesn't treat "mine" as an ID
 router.get('/mine', authenticate, getMySales);
 
