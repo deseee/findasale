@@ -1,0 +1,154 @@
+/**
+ * Internal Geocoding Controller
+ * Provides batch-fetch and bulk-update endpoints for the GitHub Actions
+ * geocode-ungeocoded-sales workflow.
+ *
+ * Endpoints:
+ *   GET  /api/internal/geocode-ungeocoded-sales/batch  — fetch ungeocoded sale address data
+ *   POST /api/internal/geocode-ungeocoded-sales/bulk   — accept geocoded lat/lng results
+ */
+
+import { Request, Response } from 'express';
+import { prisma } from '../lib/prisma';
+
+interface GeocodedResult {
+  id: string;
+  lat: number;
+  lng: number;
+}
+
+/**
+ * GET /api/internal/geocode-ungeocoded-sales/batch
+ * Returns a paginated list of sales missing lat/lng, with their address fields.
+ * Filtered to sources that never provide coordinates (GarageSaleFinder, FacebookEvents).
+ * Protected by x-scraper-key header.
+ */
+export async function getBatchOfUngeocodedSales(req: Request, res: Response): Promise<void> {
+  try {
+    const key = req.headers['x-scraper-key'];
+    if (key !== process.env.INTERNAL_SCRAPER_KEY) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const sourceName = req.query.source as string | undefined;
+
+    const whereClause = {
+      lat: null,
+      address: { not: '' },
+      city: { not: '' },
+      state: { not: '' },
+      ...(sourceName
+        ? { sourceName }
+        : {
+            sourceName: {
+              in: ['GarageSaleFinder', 'FacebookEvents'],
+            },
+          }),
+    };
+
+    const [sales, total] = await Promise.all([
+      prisma.sale.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          address: true,
+          city: true,
+          state: true,
+          zip: true,
+          sourceName: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.sale.count({ where: whereClause }),
+    ]);
+
+    res.status(200).json({
+      sales,
+      total,
+      hasMore: offset + limit < total,
+      limit,
+      offset,
+    });
+  } catch (error) {
+    console.error('[GeocodingBatch] Request error:', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * POST /api/internal/geocode-ungeocoded-sales/bulk
+ * Accepts an array of { id, lat, lng } objects from the GitHub Actions workflow.
+ * Only writes lat/lng if the sale still has null lat (prevents overwriting real data).
+ * Protected by x-scraper-key header.
+ */
+export async function bulkUpdateGeocodedSales(req: Request, res: Response): Promise<void> {
+  try {
+    const key = req.headers['x-scraper-key'];
+    if (key !== process.env.INTERNAL_SCRAPER_KEY) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const results: GeocodedResult[] = req.body?.results;
+
+    if (!Array.isArray(results) || results.length === 0) {
+      res.status(400).json({ error: 'results array is required and must be non-empty' });
+      return;
+    }
+
+    // Validate each result has required fields
+    const valid = results.filter(
+      (r) =>
+        typeof r.id === 'string' &&
+        typeof r.lat === 'number' &&
+        typeof r.lng === 'number' &&
+        !isNaN(r.lat) &&
+        !isNaN(r.lng)
+    );
+
+    if (valid.length === 0) {
+      res.status(400).json({ error: 'No valid results in payload (each must have id, lat, lng as number)' });
+      return;
+    }
+
+    // Update each sale individually — only if lat is still null (safety check)
+    let updated = 0;
+    let skipped = 0;
+
+    for (const result of valid) {
+      const count = await prisma.sale.updateMany({
+        where: {
+          id: result.id,
+          lat: null, // Only update if still ungeocoded — prevents overwriting real data
+        },
+        data: {
+          lat: result.lat,
+          lng: result.lng,
+        },
+      });
+
+      if (count.count > 0) {
+        updated++;
+      } else {
+        skipped++;
+      }
+    }
+
+    console.log(`[GeocodingBulk] Updated ${updated} sales, skipped ${skipped} (already had lat/lng or not found)`);
+
+    res.status(200).json({
+      received: results.length,
+      valid: valid.length,
+      updated,
+      skipped,
+    });
+  } catch (error) {
+    console.error('[GeocodingBulk] Request error:', error instanceof Error ? error.message : String(error));
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
