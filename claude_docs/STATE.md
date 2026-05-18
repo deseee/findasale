@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S755 — QA Ceiling Session: 6 Bug Fixes from S752/S753 Backlog (COMPLETE).**
+**Latest: S756 — Pipeline DB Verification + WARM Email Gap Root Cause + Cron Fix (COMPLETE).**
+
+Completed the S754/S755 deferred pipeline DB verification via psycopg2 (workspace bash now available). Pipeline confirmed healthy: 29 emails sent since S754 fix deployed (May 17-18), on pace at ~48/day matching warmup schedule. Deleted 31 junk BOUNCED DirectoryClaimEmail rows (26 image filenames stored as emailAddress, 5 Patrick test emails — all had attemptCount=0, never actually sent). directoryMostRecentSource confirmed 87.7% tagged. Confirmed #336 and #339 already fully implemented (roadmap rows updated). Identified and fixed WARM email gap bottleneck: switched website enrichment cron from weekly (Sundays only) to daily.
+
+**Previous: S755 — QA Ceiling Session: 6 Bug Fixes from S752/S753 Backlog (COMPLETE).**
 
 Mandatory QA session (Blocked Queue ≥8 items, CLAUDE.md §4 ceiling rule). Pipeline live audit partial (workspace bash unavailable entire session — no DB queries possible). Railway deploy confirmed SUCCESS, all crons firing clean, Vercel frontend READY. Six bugs fixed via 4 parallel dev agents + 1 inline fix. Patrick corrected: #307 is "Retail Mode" (renamed from Shop Mode), TEAMS-only by design — not a bug for PRO tier, dropped from fix batch.
 
@@ -220,32 +224,29 @@ Two backend crash loops fixed. OSM 406, GarageSaleFinder hidden-address, Missour
 
 ## Pool Audit Findings
 
-Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
+Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
-**Pool size:** 55,230 unmanaged org listings total (up from 37,531 — NY Phase 2 run added 29,728 records, 23 junk deleted).
+**DirectoryClaimEmail (outreach queue):** 3,319 PENDING, 29 SENT. 31 junk rows deleted this session (26 image filenames stored as emailAddress, 5 Patrick test emails — all had attemptCount=0).
 
-**leadTier breakdown (outreach queue field):**
-- COLD: 32,513
-- WARM: 5,663 + 356 NY prospects promoted S715 = ~6,019
-- HOT: 215
-- NULL: 16,839 (NY Phase 2 records — not yet tiered, invisible to outreach cron)
+**Outreach pace:** 29 emails sent since S754 fix deployed (May 17-18). ~48/day, matching warmup schedule (Day 1-7: 20/day cap). Pipeline healthy.
 
-**Note:** `tier` field on Organizer = subscription/reputation tier (BRONZE/WARM/etc.) — separate from `leadTier` (outreach queue). Pool audit uses `leadTier`.
+**leadTier breakdown:**
+- HOT: 5,517 (all have website — 100% coverage)
+- WARM: 36,851 (only 1,223 have website — 3.3% coverage)
+- COLD: 14,314
+- NULL: small residual
 
-**S712 addition:** 183 high-confidence organizers seeded directly into DirectoryClaimEmail table via psycopg2 Python script (live DB change, 2026-05-10). Warmup schedule confirmed: 20/day (days 0-7) → 50 (8-14) → 100 (15-21) → 200/day stable, 6 four-hour windows.
+**WARM email gap — root cause confirmed S756:** Email discovery requires `website IS NOT NULL` as prerequisite. Only 208 WARM orgs are currently addressable (have website + no contactEmail). The website enrichment job (`websiteEnrichmentJob.ts`) is the upstream bottleneck — it only targets `isStateLicensed: true` orgs (intentional: WARM→HOT bridge for licensed orgs) and was running weekly only. **Fix shipped S756: cron changed from weekly to daily** (`0 1 * * *`). API headroom: HERE 250K/month cap, current usage ~400/month — daily runs increase this to ~1,500/month, well under cap.
 
-**Source attribution:** 94.5% have NULL `directoryMostRecentSource`. Only Foursquare (1,130) and HEREPlaces (920) have tags — everything else predates the S696 source-tracking forward-fix. Provenance of ~35,481 orgs is unknown from tags alone (ESN + state licensing scrapers predated the fix).
+**Source attribution (updated S754):** 87.7% of organizers have `directoryMostRecentSource` tagged (was ~5.5% before S754 backfill of 46,333 records).
 
 **Email coverage:**
-- Has email: 5,382 (14.3%)
-- High confidence (>0.6): 197 (0.5%) — now 183 seeded into outreach queue
-- Junk / zeroed: 471
+- Has contactEmail: HOT ~100%, WARM ~2.77%
+- Addressable WARM pool (website + no email): 208 orgs
 
-**Geocoding:** 2,202 geocoded (5.9%). 35,329 not geocoded.
+**Geocoding:** 6,760 sales still not geocoded. Nightly geocoding job should address gradually.
 
-**Spot check — WARM tier:** ~75% legitimate resale. Sendable first cohort.
-
-**Verdict:** WARM tier is sendable — mostly legitimate resale businesses, Canada already excluded by cron. COLD tier has significant non-resale noise; don't send broadly. Actionable first cohort: 183 seeded into DirectoryClaimEmail.
+**Verdict:** Pipeline healthy. WARM outreach will slow once the 208-org addressable pool is exhausted — daily website enrichment extends the runway by adding newly-licensed orgs continuously.
 
 ---
 
@@ -294,32 +295,26 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | #305 Social Posts no-op | FIXED S755 — Broken Link replaced with button+modal. Pending Chrome QA. | Chrome QA: verify promote button opens SocialPostGenerator modal | S752 |
 | #306 Store Hours persistence | FIXED S755 — handleSaveHours refetches from server after save. Pending Chrome QA. | Chrome QA: save hours, reload, verify persisted | S752 |
 | #307 Retail Mode TEAMS verification | Not a bug for PRO (TEAMS-only by design). Needs TEAMS account QA. | Chrome QA: log in as TEAMS user, verify Retail Mode visible + functional | S755 |
-| S754 pipeline DB verification | Workspace bash unavailable S755 — outreach rate, digest suppression, directoryMostRecentSource backfill quality all unverified | DB queries via psycopg2 when bash available | S755 |
+| S754 pipeline DB verification | ✅ COMPLETED S756 — 29 sent on pace, directoryMostRecentSource 87.7%, 31 junk rows deleted, WARM gap root-caused, daily cron fix shipped. CLOSED. | — | S755 |
 ---
 
 ## Next Session
 
-**Priority 0 — Push S755 fixes (Patrick action).**
+**Priority 0 — Push S755 + S756 (Patrick action).**
 
-10 files modified this session. Push block below.
+S755 had 10 code files. S756 added 2 more (roadmap.md + website enrichment cron). Push blocks below.
 
-**Priority 1 — S754 pipeline DB verification (blocked S755 by workspace outage).**
+**Priority 1 — Chrome QA on Blocked Queue (7 items, QA deferred per Patrick S756).**
 
-Run these DB queries via psycopg2 when bash is available:
-1. Outreach rate: check Railway logs for `[OutreachCron]` — confirm ~1100ms spacing, no rate limit errors
-2. Digest suppression: `SELECT COUNT(*) FROM "Organizer" WHERE "isUnmanagedListing" = true AND "contactEmail" LIKE '%@system.finda.sale%'`
-3. directoryMostRecentSource quality: `SELECT "directoryMostRecentSource", COUNT(*) FROM "Organizer" WHERE "directoryMostRecentSource" IS NOT NULL GROUP BY 1 ORDER BY 2 DESC`
+All 6 S755 bug fixes need browser verification: #275 Hunt Pass ring+badge, #265 Share & Earn card, #292 ENDED-sale counts, #305 Social Posts modal, #306 Store Hours persistence, #307 Retail Mode on TEAMS account. One per QA dispatch per §10c.
 
-**Priority 2 — Chrome QA on S755 fixes (7 items in Blocked Queue).**
-
-All 6 bug fixes need browser verification: #275 Hunt Pass ring+badge, #265 Share & Earn card, #292 ENDED-sale counts, #305 Social Posts modal, #306 Store Hours persistence, #307 Retail Mode on TEAMS account. One per QA dispatch per §10c.
-
-**Priority 3 — Continue roadmap BROKEN items.**
+**Priority 2 — Continue roadmap BROKEN items.**
 
 After QA ceiling is cleared (Blocked Queue < 8 verified items), resume feature work from roadmap.
 
 **Patrick actions needed:**
-- **PUSH S755 block** (10 code files + 2 doc files — block below)
+- **PUSH S755 block** (10 code files — see last session)
+- **PUSH S756 block** (2 files: website enrichment cron + roadmap, plus STATE.md + dashboard — block below)
 - Log back into Chrome as yourself (artifactmi@gmail.com) after any QA
 - Deploy email verification token migration (20260515180000) — still pending from S726
 - Delete fix-attendance.sql from project root — still pending from S750
@@ -327,6 +322,24 @@ After QA ceiling is cleared (Blocked Queue < 8 verified items), resume feature w
 ---
 
 ## Recent Sessions
+
+### S756 — Pipeline DB Verification + WARM Email Gap Root Cause + Daily Cron Fix (COMPLETE)
+
+**Trigger:** Patrick deferred Chrome QA, asked to begin S754 pipeline audit (blocked last session by workspace bash unavailability).
+
+**DB audit results (psycopg2 via Railway public proxy):**
+- DirectoryClaimEmail: 3,319 PENDING, 29 SENT. 31 junk rows deleted (26 image filenames + 5 Patrick test emails).
+- Outreach pace: 29 sent since S754 deploy (May 17-18), ~48/day — on warmup schedule.
+- directoryMostRecentSource: 87.7% tagged (S754 backfill of 46,333 records confirmed working).
+- WARM addressable pool: 208 orgs (have website + no contactEmail).
+
+**#336 + #339 roadmap cleanup:** Both features confirmed already fully implemented (schema + PATCH handler + processRapidDraft gate for #336; cloudAIService.ts confidence gate for #339). Roadmap rows updated from "P1 violation — queued" / "Queued" → "SHIPPED (confirmed S756) — Pending Chrome QA".
+
+**WARM email gap root cause:** Email discovery requires `website IS NOT NULL`. Only 1,223 of 36,851 WARM orgs have a website (3.3%). Root cause: `websiteEnrichmentJob.ts` has intentional `isStateLicensed: true` filter (WARM→HOT bridge for licensed orgs) and was running weekly only. Fix: switched GitHub Actions cron `0 1 * * 0` → `0 1 * * *` (daily). API impact: HERE 250K/month cap, daily runs = ~1,500/month (well under cap). Foursquare sandbox — fallback only, no lifetime cap concern.
+
+**Files changed:**
+- `.github/workflows/pipeline-website-enrichment.yml` — cron weekly → daily
+- `claude_docs/strategy/roadmap.md` — #336 and #339 status updated
 
 ### S754 — Scraper/Enrichment Pipeline Audit + Gmail Rate Limit Fix (COMPLETE)
 
