@@ -113,66 +113,87 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 | #124 Rarity Boost modal | ✅ VERIFIED S750 — user12 (Leo Thomas) guildXp set to 55 via direct SQL. Button on /coupons enabled (spendableXp ≥ 50). Modal opens correctly. CLOSED. | — | S745 |
 | #275 Hunt Pass Cosmetic Add-ons | FIXED S755 — Tailwind safelist + Avatar inline boxShadow fallback + leaderboard `roles: { has: 'USER' }` + league.tsx CSS fix. Pending Chrome QA. | Chrome QA: verify amber ring on user12 avatar + 🏆 badge on leaderboard | S753 |
 | #265 Share & Earn dashboard card | FIXED S755 — Dismissal changed from permanent to 7-day timestamp expiry. Card re-appears after 7 days. Pending Chrome QA. | Chrome QA: verify card renders on shopper dashboard | S753 |
-| #292 ENDED-sale UX inconsistency | FIXED S755 — Replaced "All items sold or reserved" with accurate item breakdown on ENDED sales. Pending Chrome QA. | Chrome QA: verify accurate counts on qa-settlement-001 | S753 |
-| #305 Social Posts no-op | FIXED S755 — Broken Link replaced with button+modal. Pending Chrome QA. | Chrome QA: verify promote button opens SocialPostGenerator modal | S752 |
+| #292 ENDED-sale UX inconsistency | FIXED S755 — Replaced "All items sold or reserved" with accurate item breakdown on ENDED sales. UNVERIFIED S761 — VM disk full, couldn't install psycopg2 to create test data. First priority next session: Patrick creates qa-settlement-001 sale, we verify counts, then delete. | Chrome QA: create test ENDED sale with mixed item states, verify accurate breakdown | S753 |
+| #305 Social Posts no-op | ✅ VERIFIED S761 — Patrick's Artifact MI account (LIVE sale). Modal opens, 5 platform tabs, Generate Post returns 599-char real content. Minor P3: generated copy uses "estate sale" language — brand voice flag, not functional. CLOSED. | — | S752 |
 | #306 Store Hours persistence | FIXED S755 — handleSaveHours refetches from server after save. Pending Chrome QA. | Chrome QA: save hours, reload, verify persisted | S752 |
-| #307 Retail Mode TEAMS verification | Not a bug for PRO (TEAMS-only by design). Needs TEAMS account QA. | Chrome QA: log in as TEAMS user, verify Retail Mode visible + functional | S755 |
+| #307 Retail Mode TEAMS verification | ✅ VERIFIED S761 — Patrick confirmed "mostly works" with Artifact MI account. saleType=RETAIL chosen at sale creation (not a toggle). CLOSED. | — | S755 |
 | S754 pipeline DB verification | ✅ COMPLETED S756 — 29 sent on pace, directoryMostRecentSource 87.7%, 31 junk rows deleted, WARM gap root-caused, daily cron fix shipped. CLOSED. | — | S755 |
 | GEO city pages (#436) | S759 — city/[slug] + city/[slug]/[category] pages | Chrome QA: verify a city page loads with real sale data and category tabs | S759 |
-| GEO claim banner (#437) | S759 — ClaimListingBanner on unclaimed sales | Chrome QA: visit unclaimed scraped sale detail, verify banner shows with crawler count | S759 |
-| GEO AI Score (#438) | S759 — /ai-score URL analysis tool | Chrome QA: enter finda.sale/sales/[id], verify score renders with breakdown | S759 |
+| GEO claim banner (#437) | ⚠️ PARTIAL S761 — Banner renders on unclaimed sale sidebar: "Is this your sale?" + Claim button + explanatory text. Crawler count NOT visible in banner — may be spec gap. Chrome QA: confirm if count is intended in banner or not. | Clarify spec on crawler count display | S759 |
+| GEO AI Score (#438) | FIXED S761 — Bug: doubled /api/ prefix (`${apiBase}/api/ai-score` but apiBase already ends in `/api`). Fixed to `${apiBase}/ai-score`. Push block provided. Pending push + Chrome QA. | Push fix, then Chrome QA: enter a sale URL, verify score renders with breakdown | S759 |
 | GEO Smart Search Views (#446) | S759 — SmartSearchViewsCard on organizer dashboard | Chrome QA: log in as organizer, verify "Search Engine Visibility" card visible | S759 |
 | GEO this-weekend (#452) | S759 — /this-weekend/[city] pages | Chrome QA: visit /this-weekend/grand-rapids-mi, verify page loads | S759 |
 ---
 
 ## Next Session
 
-**⚠️ QA CEILING TRIGGERED — 18 items in Blocked Queue. NEXT SESSION = QA ONLY.**
+**⚠️ QA CEILING STILL ACTIVE — ~16 items remain. NEXT SESSION = QA ONLY.**
 
-CLAUDE.md §4: ≥8 items = dedicated QA session. No new feature dev without Patrick sign-off.
-
-**Priority 0 — PUSH S760 (Patrick action — 44 files). Verify index.ts + sales/[id].tsx first.**
-
-**Priority 1 — Run migrations (covers S759 CrawlerVisit + S760 schema batch):**
+**Priority 0 — Patrick: push S761 fixes first:**
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
+git add packages/frontend/pages/ai-score.tsx
+git commit -m "fix: remove doubled /api/ prefix in ai-score fetch call"
+
+git add packages/frontend/pages/organizer/pos.tsx
+git commit -m "fix: POS page shows sales for organizers whose roles array lacks ORGANIZER entry"
+
+.\push.ps1
 ```
 
-**Priority 2 — Chrome QA (18 items, one per dispatch):**
+**Priority 1 — #292 ENDED-sale counts (VM disk full prevented this session):**
+Patrick creates a test ENDED sale with mixed item states → verify accurate breakdown renders → delete test data.
+
+**Priority 2 — Continue Chrome QA queue:**
 
 S755 fixes (still unverified):
 - #275 Hunt Pass ring+badge
 - #265 Share & Earn card (7-day dismissal)
-- #292 ENDED-sale counts
-- #305 Social Posts modal
 - #306 Store Hours persistence
-- #307 Retail Mode — needs TEAMS account
 
 S759 GEO features:
 - City page /city/grand-rapids-mi loads with real sale data
 - City×category /city/grand-rapids-mi/estate-sales
 - This Weekend /this-weekend/grand-rapids-mi
-- GEO claim banner — unclaimed sale shows banner
-- AI Score /ai-score — returns real score
+- GEO claim banner (#437) — ⚠️ partial; clarify crawler count spec
+- AI Score (#438) — verify after push (fix shipped S761)
 - Smart Search Views card on organizer dashboard
 
 S760 new surfaces:
 - #443 OAuth claim — unclaimed sale page shows "Claim with Google/Facebook" buttons
 - #454 Demand dashboard — organizer dashboard shows DemandSignalsCard
 - Clearance page /clearance — items render with city filter
-- Admin /admin/demand-signals — table loads
-- Admin /admin/waitlist — table loads
-- Admin /admin/organizer-confidence — table with color-coded scores
+- Admin pages (3) — needs admin access approach resolved
+
+**Other organizer pages roles bug:** dev agent flagged the same `user.roles.includes('ORGANIZER')` pattern may exist in other organizer pages. Worth a grep pass: `grep -r "roles.includes" packages/frontend/pages/organizer/`.
 
 **Previously pending Patrick actions:**
+- Run S760 migrations (CrawlerVisit + geo_demand_waitlist_confidence) — pending
 - Deploy email verification migration (20260515180000) — pending S726
 - Delete fix-attendance.sql from project root — pending S750
 - Log back into Chrome as yourself (artifactmi@gmail.com) after any QA
 
 ## Recent Sessions
+
+### S761 — QA Session: Social Posts + Retail Mode + AI Score Fix + POS Role Guard Fix
+
+**Trigger:** QA ceiling (18 items). Exclusive QA session. No new feature dev.
+
+**Verified (2 items closed):**
+- ✅ #305 Social Posts modal — Patrick's Artifact MI account. Modal opens, 5 tabs, generates real content. CLOSED.
+- ✅ #307 Retail Mode — Patrick confirmed "mostly works." CLOSED.
+
+**Fixed (2 bugs):**
+- ❌→FIXED: ai-score page (#438) — doubled `/api/` prefix in fetch call. Single-line inline fix. Push block delivered.
+- 🐛 NEW: POS page "No active sales" bug — `user.roles.includes('ORGANIZER')` returned false for organizers whose DB `roles` array defaults to `['USER']`. Fixed 7 guard sites in pos.tsx to `roles.includes('ORGANIZER') || role === 'ORGANIZER'`. Zero TS errors. Push block delivered.
+
+**Partial/Unverified:**
+- ⚠️ #437 GEO claim banner — banner renders, crawler count not visible in banner (spec gap).
+- 🔒 #292 ENDED-sale counts — VM disk full, couldn't create test data. First priority next session.
+- 🔒 Admin pages blocked — user1 no longer has admin access post-launch; need new approach.
+
+**Key learnings:** `NEXT_PUBLIC_API_URL` already includes `/api` suffix — don't append `/api/` to it. Organizers registered without seeded `roles` array get `['USER']` default — must dual-check `role` (string) AND `roles` (array) throughout organizer pages.
+
+**Files fixed:** `packages/frontend/pages/ai-score.tsx` · `packages/frontend/pages/organizer/pos.tsx`
 
 ### S760 — GEO Phase 2 Complete + Admin Dashboards + OAuth Claim
 

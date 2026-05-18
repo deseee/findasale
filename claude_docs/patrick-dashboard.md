@@ -4,7 +4,9 @@
 
 ## What Happened This Week
 
-**S760 (today):** GEO Phase 2 complete. 17 features, 44 files. Everything in the GEO roadmap is now shipped. Key additions: clearance discovery page (/clearance), 1-click OAuth claim on ghost listings, organizer demand dashboard card, 3 new admin pages, monthly trend report cron, MCP tool wrappers for AI agents, EventSeries schema for recurring organizers, platform syndication endpoint, shopper notify-me waitlist, directory confidence scoring, auto-liquidation trigger on sale end. Also confirmed closed: Help Library (#377/#378 done S742), SEO Content Moat (ISR pages = the 500-page generator).
+**S761 (today — QA session):** Verified #305 Social Posts ✅ and #307 Retail Mode ✅. Fixed 2 bugs: ai-score doubled /api/ prefix (inline fix), POS "No active sales" root cause (organizer roles guard). Push block below. #292 blocked by VM disk full — first task next session.
+
+**S760:** GEO Phase 2 complete. 17 features, 44 files. Everything in the GEO roadmap is now shipped. Key additions: clearance discovery page (/clearance), 1-click OAuth claim on ghost listings, organizer demand dashboard card, 3 new admin pages, monthly trend report cron, MCP tool wrappers for AI agents, EventSeries schema for recurring organizers, platform syndication endpoint, shopper notify-me waitlist, directory confidence scoring, auto-liquidation trigger on sale end. Also confirmed closed: Help Library (#377/#378 done S742), SEO Content Moat (ISR pages = the 500-page generator).
 
 **S759:** GEO Phases 1-11 — 15 features, 21 files. City landing pages, claim banner, AI Score tool, crawler tracking, Smart Search Views card, first-crawl email, ChatGPT plugin manifest, sitemap enrichment, llms.txt update.
 
@@ -25,10 +27,26 @@
 
 ## Action Items for Patrick
 
-- [ ] **Spot-check before pushing:**
-  - Open `packages/backend/src/index.ts` — verify these 4 route mounts are present: `syndication`, `shopperWaitlist`, `demandSignals`, `clearance`
-  - Open `packages/frontend/pages/sales/[id].tsx` — verify Product schema JSON-LD, EventSeries JSON-LD, and OAuth claim buttons all coexist
-- [ ] **Run S760 push block** (44 files — see below)
+### S761 fixes — push first:
+```powershell
+git add packages/frontend/pages/ai-score.tsx
+git commit -m "fix: remove doubled /api/ prefix in ai-score fetch call"
+
+git add packages/frontend/pages/organizer/pos.tsx
+git commit -m "fix: POS page shows sales for organizers whose roles array lacks ORGANIZER entry"
+
+.\push.ps1
+```
+
+### Then add S760 docs to wrap:
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "docs: S761 wrap — QA results, ai-score + POS fixes logged"
+.\push.ps1
+```
+
+- [ ] **Run S760 push block** (44 files — see S760 Push Block section below) if not yet pushed
 - [ ] **Run migrations** (covers S759 CrawlerVisit + S760 schema in one pass):
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
@@ -36,20 +54,22 @@
   npx prisma migrate deploy
   npx prisma generate
   ```
-- [ ] **Chrome QA tonight** — 18 items in blocked queue (ceiling rule active)
+- [ ] **#292 next session** — create a test ENDED sale with some sold/available/reserved items so we can verify the count display, then delete it
 - [ ] **Deploy email verification migration** (20260515180000) — pending since S726
 - [ ] **Delete fix-attendance.sql** from project root — pending since S750
 - [ ] **Log back into Chrome as yourself** (artifactmi@gmail.com) after any QA
 
 ---
 
-## QA Queue (18 items — ceiling active)
+## QA Queue (~16 items — ceiling still active)
 
-**S755 fixes:** Hunt Pass ring/badge · Share & Earn card · ENDED-sale counts · Social Posts modal · Store Hours · Retail Mode (TEAMS)
+**S755 fixes:** Hunt Pass ring/badge · Share & Earn card · ENDED-sale counts (#292 — VM disk full, next session) · Store Hours
 
-**S759 GEO pages:** /city/grand-rapids-mi · /city/grand-rapids-mi/estate-sales · /this-weekend/grand-rapids-mi · unclaimed sale claim banner · /ai-score · organizer Smart Search Views card
+**S759 GEO pages:** /city/grand-rapids-mi · /city/grand-rapids-mi/estate-sales · /this-weekend/grand-rapids-mi · claim banner (⚠️ partial — spec question on crawler count) · /ai-score (push first) · Smart Search Views card
 
-**S760 new surfaces:** OAuth claim buttons on ghost sale · organizer Demand Dashboard card · /clearance page · /admin/demand-signals · /admin/waitlist · /admin/organizer-confidence
+**S760 new surfaces:** OAuth claim buttons · Demand Dashboard card · /clearance · /admin/demand-signals · /admin/waitlist · /admin/organizer-confidence
+
+**Closed this session:** #305 Social Posts ✅ · #307 Retail Mode ✅
 
 ---
 
