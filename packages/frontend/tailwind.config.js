@@ -111,5 +111,11 @@ module.exports = {
       },
     },
   },
+  safelist: [
+    'ring-2',
+    'ring-amber-400',
+    'ring-amber-500',
+    'dark:ring-amber-500',
+  ],
   plugins: [],
 }

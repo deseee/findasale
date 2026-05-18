@@ -49,6 +49,7 @@ import MyTeamsCard from '../../components/MyTeamsCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
 import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Copy, Store } from 'lucide-react';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import SocialPostGenerator from '../../components/SocialPostGenerator';
 
 // Selling Tools grid configuration (6 tools, tier-gated)
 const SELLING_TOOLS = [
@@ -86,6 +87,7 @@ const OrganizerDashboard = () => {
   const [isClient, setIsClient] = useState(false);
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
+  const [socialPostSale, setSocialPostSale] = useState<{ id: string; title: string } | null>(null);
   const { data: flashDealItems = [] } = useQuery<Array<{ id: string; title: string; price: number }>>({
     queryKey: ['flash-deal-items', flashDealSaleId],
     queryFn: async () => {
@@ -541,6 +543,15 @@ const OrganizerDashboard = () => {
           targetId={boostSaleId}
           onClose={() => setBoostSaleId(null)}
           onSuccess={() => { setBoostSaleId(null); }}
+        />
+      )}
+
+      {/* Social Post Generator modal */}
+      {socialPostSale && (
+        <SocialPostGenerator
+          saleId={socialPostSale.id}
+          saleTitle={socialPostSale.title}
+          onClose={() => setSocialPostSale(null)}
         />
       )}
 
@@ -1105,13 +1116,13 @@ const OrganizerDashboard = () => {
                       </button>
                     )}
                     {activeSale.status === 'PUBLISHED' && (
-                      <Link
-                        href={`/organizer/promote/${activeSale.id}`}
+                      <button
+                        onClick={() => setSocialPostSale({ id: activeSale.id, title: activeSale.title })}
                         className="text-sm px-3 py-1 bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300 rounded-full hover:bg-teal-200 dark:hover:bg-teal-800 transition-colors"
                         title="Generate social media posts for this sale"
                       >
                         📱 Social Posts
-                      </Link>
+                      </button>
                     )}
                     {activeSale.status === 'PUBLISHED' && (
                       <button

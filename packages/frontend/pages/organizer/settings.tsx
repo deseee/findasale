@@ -613,6 +613,22 @@ const OrganizerSettingsPage = () => {
         api.put('/organizers/me/hours', hoursToSave),
         api.patch('/organizers/me', { timezone, byAppointment }),
       ]);
+      // Refetch hours from server to ensure UI reflects persisted state
+      try {
+        const hoursRes = await api.get('/organizers/me/hours');
+        if (hoursRes.data && Array.isArray(hoursRes.data) && hoursRes.data.length > 0) {
+          setHours(hoursRes.data);
+        } else if (!byAppointment) {
+          const defaultHours = Array.from({ length: 7 }, (_, i) => ({
+            dayOfWeek: i,
+            openTime: '09:00',
+            closeTime: '17:00',
+          }));
+          setHours(defaultHours);
+        }
+      } catch {
+        // Refetch failed — local state is still valid from user edits
+      }
       showToast('Business hours updated', 'success');
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to update business hours', 'error');

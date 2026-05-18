@@ -170,7 +170,7 @@ function LeaguePage() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900 dark:text-white">{entry.name}</span>
                           {entry.huntPassActive && (
-                            <span className="inline-block px-2 py-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold rounded flex items-center gap-1">
+                            <span className="inline-flex px-2 py-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold rounded items-center gap-1">
                               🏆 Hunt Pass
                             </span>
                           )}

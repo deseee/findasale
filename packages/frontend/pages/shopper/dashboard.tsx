@@ -77,11 +77,16 @@ const ShopperDashboard = () => {
     }
   }, []);
 
-  // Load Referral dismissal state from localStorage
+  // Load Referral dismissal state from localStorage (7-day expiry)
   useEffect(() => {
-    const dismissed = localStorage.getItem('referral_cta_dismissed');
-    if (dismissed) {
-      setIsReferralDismissed(true);
+    const dismissedAt = localStorage.getItem('referral_cta_dismissed');
+    if (dismissedAt) {
+      const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+      if (Date.now() - parseInt(dismissedAt, 10) < SEVEN_DAYS_MS) {
+        setIsReferralDismissed(true);
+      } else {
+        localStorage.removeItem('referral_cta_dismissed');
+      }
     }
   }, []);
 
@@ -142,7 +147,7 @@ const ShopperDashboard = () => {
   };
 
   const handleDismissReferral = () => {
-    localStorage.setItem('referral_cta_dismissed', 'true');
+    localStorage.setItem('referral_cta_dismissed', Date.now().toString());
     setIsReferralDismissed(true);
   };
 
