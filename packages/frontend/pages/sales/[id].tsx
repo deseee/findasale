@@ -1998,3 +1998,152 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
       <ShopperCartFAB onClick={openCart} />
 
       {/* Phase 1: Smart Cart — switch sale confirmation modal */}
+      {showSwitchSaleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-sm p-6">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-gray-50 mb-4">
+              Switch Sale?
+            </h3>
+            <p className="text-warm-700 dark:text-gray-300 mb-6">
+              Your cart has items from a different sale. Would you like to clear your cart and start with this sale?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowSwitchSaleModal(false)}
+                className="px-4 py-2 rounded-lg border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-50 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                Keep Current Cart
+              </button>
+              <button
+                onClick={handleConfirmSwitchSale}
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
+              >
+                Start New Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={() => confirmState.onConfirm()}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
+    </div>
+  );
+};
+
+export default SaleDetailPage;
+
+/**
+ * Feature #33 — Share Card Factory
+ * Fetch sale data server-side so OG meta tags are present in the initial HTML
+ * before client-side React hydration. This is required for Facebook/Twitter bots
+ * which do not execute JavaScript when scraping pages.
+ */
+export async function getServerSideProps(context: GetServerSidePropsContext) {
+  const { id } = context.params as { id: string };
+  const apiUrl =
+    process.env.INTERNAL_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    null;
+
+  if (!apiUrl) {
+    return { props: { ogData: null, initialData: null, eventSeriesData: null } };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${apiUrl}/sales/${id}`, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        return { notFound: true };
+      }
+      return { props: { ogData: null, initialData: null, eventSeriesData: null } };
+    }
+    const sale = await res.json();
+
+    if (!sale?.id || !sale?.title) {
+      return { props: { ogData: null, initialData: null, eventSeriesData: null } };
+    }
+
+    const ogData: OGSaleData = {
+      id: sale.id,
+      title: sale.title || '',
+      description: sale.description || null,
+      city: sale.city || '',
+      state: sale.state || '',
+      startDate: sale.startDate || '',
+      photoUrl: sale.photoUrls?.[0] || null,
+      itemCount: sale.items?.length || 0,
+      organizer: sale.organizer ? {
+        subscriptionTier: sale.organizer.subscriptionTier,
+        removeWatermarkEnabled: sale.organizer.removeWatermarkEnabled,
+        businessName: sale.organizer.businessName,
+      } : undefined,
+    };
+
+    // #439: Include isClaimed, items, and organizerId for Product schema JSON-LD
+    const initialData: InitialSaleData = {
+      id: sale.id,
+      title: sale.title || '',
+      description: sale.description || '',
+      address: sale.address || '',
+      city: sale.city || '',
+      state: sale.state || '',
+      zip: sale.zip || '',
+      startDate: sale.startDate || '',
+      endDate: sale.endDate || '',
+      photoUrls: sale.photoUrls || [],
+      organizerId: sale.organizer?.id || null,
+      isClaimed: sale.organizer?.isClaimed ?? false,
+      items: (sale.items || []).slice(0, 20).map((item: any) => ({
+        title: item.title || '',
+        description: item.description || undefined,
+        price: item.price || undefined,
+        condition: item.condition || undefined,
+        status: item.status || 'AVAILABLE',
+      })),
+      organizer: {
+        businessName: sale.organizer?.businessName || '',
+      },
+    };
+
+    // GEO Phase 11a: suppress indexing of ENDED scraped (unclaimed) sale pages
+    const isScrapedSale = Boolean(sale.sourceUrl);
+    const isEnded = sale.status === 'ENDED';
+    const noindex = isScrapedSale && isEnded;
+
+    // #450: Fetch EventSeries data for recurring organizers
+    let eventSeriesData: EventSeriesData | null = null;
+    if (sale.organizer?.id) {
+      try {
+        const seriesController = new AbortController();
+        const seriesTimeout = setTimeout(() => seriesController.abort(), 2000);
+        const seriesRes = await fetch(
+          `${apiUrl}/sales/organizer/${sale.organizer.id}/recurring`,
+          { signal: seriesController.signal }
+        );
+        clearTimeout(seriesTimeout);
+        if (seriesRes.ok) {
+          const seriesData = await seriesRes.json();
+          if (seriesData?.isRecurring) {
+            eventSeriesData = seriesData;
+          }
+        }
+      } catch {
+        // Non-fatal — EventSeries JSON-LD is a GEO enhancement, not critical
+      }
+    }
+
+    return { props: { ogData, initialData, noindex, eventSeriesData } };
+  } catch {
+    return { props: { ogData: null, initialData: null, noindex: false, eventSeriesData: null } };
+  }
+}
