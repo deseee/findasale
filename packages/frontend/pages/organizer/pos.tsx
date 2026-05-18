@@ -246,13 +246,13 @@ export default function POSPage() {
       const res = await api.get<PosTierStatus>('/organizer/pos-tiers');
       return res.data;
     },
-    enabled: !!user && user.roles?.includes('ORGANIZER'),
+    enabled: !!user && (user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER'),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Fetch organizer profile for venmo/zelle handles (#412)
   useEffect(() => {
-    if (!user?.roles?.includes('ORGANIZER')) return;
+    if (!user?.roles?.includes('ORGANIZER') && user?.role !== 'ORGANIZER') return;
     api.get<{ venmoHandle?: string | null; zelleHandle?: string | null }>('/organizers/me')
       .then(r => {
         setOrganizerVenmo(r.data.venmoHandle || null);
@@ -268,7 +268,7 @@ export default function POSPage() {
       const res = await api.get<PendingPayment[]>('/pos/payment-requests/active');
       return res.data;
     },
-    enabled: !!user && user.roles?.includes('ORGANIZER'),
+    enabled: !!user && (user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER'),
     refetchInterval: (query) => {
       // Socket handles real-time updates — poll only as a fallback every 5s
       const d = (query as any).state?.data as PendingPayment[] | undefined;
@@ -353,7 +353,7 @@ export default function POSPage() {
   // ─── Auth guard ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!loading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    if (!loading && (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER'))) {
       router.replace('/login');
     }
   }, [user, loading, router]);
@@ -361,7 +361,7 @@ export default function POSPage() {
   // ─── Load sales ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!user || !user.roles?.includes('ORGANIZER')) return;
+    if (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER')) return;
     api
       .get<{ sales?: Sale[]; data?: Sale[] }>('/sales/mine')
       .then(res => {
@@ -619,7 +619,7 @@ export default function POSPage() {
   // ─── Socket listener for payment status updates ────────────────────────────────────────
 
   useEffect(() => {
-    if (!user || !user.roles?.includes('ORGANIZER')) return;
+    if (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER')) return;
 
     let isMounted = true;
     let socketInstance: any = null;
@@ -706,7 +706,7 @@ export default function POSPage() {
       const res = await api.get<{ totalAmountCents: number; transactionCount: number }>('/pos/transactions/today-summary');
       return res.data;
     },
-    enabled: !!user && user.roles?.includes('ORGANIZER'),
+    enabled: !!user && (user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER'),
     refetchInterval: 30000,
     staleTime: 0,
   });
