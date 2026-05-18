@@ -58,6 +58,7 @@ import { useSaleSocialProof } from '../../hooks/useSocialProof';
 import ColorKeyLegend from '../../components/ColorKeyLegend'; // Feature #310: Color-tagged discount rules
 import useXpProfile from '../../hooks/useXpProfile'; // Rank-Based Early Access: fresh rank (explorerRank no longer on AuthContext User)
 import ClaimListingModal from '../../components/ClaimListingModal'; // Feature #361: Claim-This-Listing
+import ClaimListingBanner from '../../components/ClaimListingBanner'; // Feature #443: 1-Click OAuth Claim
 import SaleFloorMap from '../../components/SaleFloorMap'; // #416: Floor Map
 
 
@@ -1762,8 +1763,18 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               </div>
               <BadgeDisplay badges={sale.organizer.badges || []} />
 
-              {/* Feature #361: Claim-This-Listing Banner */}
-              {!sale.organizer.isClaimed && (
+              {/* Feature #443: 1-Click OAuth Claim Banner */}
+              {!sale.organizer.isClaimed && sale.organizer.isUnmanagedListing && (
+                <div className="mt-4">
+                  <ClaimListingBanner
+                    saleId={sale.id}
+                    cityName={sale.city}
+                    organizerId={sale.organizer.id}
+                    isUnmanagedListing={sale.organizer.isUnmanagedListing ?? true}
+                  />
+                </div>
+              )}
+              {!sale.organizer.isClaimed && !sale.organizer.isUnmanagedListing && (
                 <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-medium text-amber-800 dark:text-amber-300">Is this your sale?</p>
@@ -1869,7 +1880,17 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 <Link href={`/organizers/${sale.organizer.id}`} className="flex-1 text-center text-xs px-3 py-1.5 rounded-lg border border-black/18 dark:border-white/14 font-medium hover:bg-black/5 dark:hover:bg-white/5 transition-colors">Storefront</Link>
                 {!isOrganizer && <FollowOrganizerButton organizerId={sale.organizer.id} organizerName={sale.organizer.businessName} />}
               </div>
-              {!sale.organizer.isClaimed && (
+              {!sale.organizer.isClaimed && sale.organizer.isUnmanagedListing && (
+                <div className="mt-3">
+                  <ClaimListingBanner
+                    saleId={sale.id}
+                    cityName={sale.city}
+                    organizerId={sale.organizer.id}
+                    isUnmanagedListing={sale.organizer.isUnmanagedListing ?? true}
+                  />
+                </div>
+              )}
+              {!sale.organizer.isClaimed && !sale.organizer.isUnmanagedListing && (
                 <div className="mt-3 pt-3 border-t border-black/8 dark:border-white/8 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-medium text-amber-800 dark:text-amber-300">Is this your sale?</p>
@@ -1977,165 +1998,3 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
       <ShopperCartFAB onClick={openCart} />
 
       {/* Phase 1: Smart Cart — switch sale confirmation modal */}
-      {showSwitchSaleModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-sm p-6">
-            <h3 className="text-lg font-bold text-warm-900 dark:text-gray-50 mb-4">
-              Switch Sale?
-            </h3>
-            <p className="text-warm-700 dark:text-gray-300 mb-6">
-              Your cart has items from a different sale. Would you like to clear your cart and start with this sale?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowSwitchSaleModal(false)}
-                className="px-4 py-2 rounded-lg border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-50 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                Keep Current Cart
-              </button>
-              <button
-                onClick={handleConfirmSwitchSale}
-                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
-              >
-                Start New Cart
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <ConfirmDialog
-        isOpen={confirmState.open}
-        title={confirmState.title}
-        message={confirmState.message}
-        onConfirm={() => confirmState.onConfirm()}
-        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
-      />
-    </div>
-  );
-};
-
-export default SaleDetailPage;
-
-/**
- * Feature #33 — Share Card Factory
- * Fetch sale data server-side so OG meta tags are present in the initial HTML
- * before client-side React hydration. This is required for Facebook/Twitter bots
- * which do not execute JavaScript when scraping pages.
- */
-export async function getServerSideProps(context: GetServerSidePropsContext) {
-  const { id } = context.params as { id: string };
-  // Use INTERNAL_API_URL (server-only) if set; fall back to NEXT_PUBLIC_API_URL.
-  // Never falls back to localhost — that hangs and kills the Vercel function timeout.
-  const apiUrl =
-    process.env.INTERNAL_API_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    null;
-
-  if (!apiUrl) {
-    return { props: { ogData: null, initialData: null } };
-  }
-
-  try {
-    // 3s timeout — fail fast so Vercel function never hangs waiting for localhost
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${apiUrl}/sales/${id}`, { signal: controller.signal });
-    clearTimeout(timeout);
-
-    if (!res.ok) {
-      // Return proper 404 so Google doesn't flag as Soft 404
-      if (res.status === 404) {
-        return { notFound: true };
-      }
-      return { props: { ogData: null, initialData: null } };
-    }
-    const sale = await res.json();
-
-    // Safeguard: check that sale has required fields for OG data
-    if (!sale?.id || !sale?.title) {
-      return { props: { ogData: null, initialData: null } };
-    }
-
-    const ogData: OGSaleData = {
-      id: sale.id,
-      title: sale.title || '',
-      description: sale.description || null,
-      city: sale.city || '',
-      state: sale.state || '',
-      startDate: sale.startDate || '',
-      photoUrl: sale.photoUrls?.[0] || null,
-      itemCount: sale.items?.length || 0,
-      organizer: sale.organizer ? {
-        subscriptionTier: sale.organizer.subscriptionTier,
-        removeWatermarkEnabled: sale.organizer.removeWatermarkEnabled,
-        businessName: sale.organizer.businessName,
-      } : undefined,
-    };
-
-    // JSON-LD: Extract full sale data for structured data injection
-    // #439: isClaimed = sale has an organizer who is not an unmanaged/scraped listing
-    const saleIsClaimed = Boolean(sale.organizer) && !sale.organizer?.isUnmanagedListing;
-    const initialData: InitialSaleData = {
-      id: sale.id,
-      title: sale.title || '',
-      description: sale.description || '',
-      address: sale.address || '',
-      city: sale.city || '',
-      state: sale.state || '',
-      zip: sale.zip || '',
-      startDate: sale.startDate || '',
-      endDate: sale.endDate || '',
-      photoUrls: sale.photoUrls || [],
-      organizerId: sale.organizerId || null,
-      organizer: {
-        businessName: sale.organizer?.businessName || '',
-      },
-      isClaimed: saleIsClaimed,
-      // Cap at 20 items to keep JSON-LD payload reasonable
-      items: saleIsClaimed && Array.isArray(sale.items)
-        ? sale.items.slice(0, 20).map((item: any) => ({
-            title: item.title || '',
-            description: item.description || undefined,
-            price: item.price ?? undefined,
-            photoUrls: item.photoUrls || [],
-            category: item.category || undefined,
-            condition: item.condition || undefined,
-          }))
-        : [],
-    };
-
-    // GEO Phase 11a: suppress indexing of ENDED scraped (unclaimed) sale pages
-    const isScrapedSale = Boolean(sale.sourceUrl);
-    const isEnded = sale.status === 'ENDED';
-    const noindex = isScrapedSale && isEnded;
-
-    // #450: EventSeries — fetch recurring sales for this organizer+saleType
-    let eventSeriesData: EventSeriesData | null = null;
-    const organizerId = sale.organizerId;
-    const saleType = sale.saleType;
-    if (organizerId && saleType) {
-      try {
-        const esController = new AbortController();
-        const esTimeout = setTimeout(() => esController.abort(), 2000);
-        const esRes = await fetch(
-          `${apiUrl}/sales/organizer/${encodeURIComponent(organizerId)}/recurring?saleType=${encodeURIComponent(saleType)}`,
-          { signal: esController.signal }
-        );
-        clearTimeout(esTimeout);
-        if (esRes.ok) {
-          const esJson = await esRes.json();
-          if (esJson.isRecurring) {
-            eventSeriesData = esJson as EventSeriesData;
-          }
-        }
-      } catch {
-        // Non-fatal — EventSeries is enhancement only
-      }
-    }
-
-    return { props: { ogData, initialData, noindex, eventSeriesData } };
-  } catch {
-    return { props: { ogData: null, initialData: null, noindex: false, eventSeriesData: null } };
-  }
-}

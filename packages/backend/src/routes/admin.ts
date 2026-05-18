@@ -222,4 +222,125 @@ router.get('/xp-velocity', authenticate, requireAdmin, async (req: any, res: any
   }
 });
 
+// Feature #453: Unmet Demand Signals — paginated, grouped by query
+router.get('/demand-signals', async (req: any, res: any) => {
+  try {
+    const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
+    const limit = 50;
+    const offset = (page - 1) * limit;
+    const city = (req.query.city as string) || null;
+    const minCount = Math.max(1, parseInt((req.query.minCount as string) || '2', 10));
+
+    const whereCity = city ? `AND city = '${city.replace(/'/g, "''")}'` : '';
+
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(`
+      SELECT
+        query,
+        city,
+        COUNT(*)::int AS "searchCount",
+        MAX("createdAt") AS "lastSearched"
+      FROM "UnmetDemandSignal"
+      WHERE 1=1 ${whereCity}
+      GROUP BY query, city
+      HAVING COUNT(*) >= ${minCount}
+      ORDER BY "searchCount" DESC, "lastSearched" DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+
+    const totalRow: any[] = await (prisma as any).$queryRawUnsafe(`
+      SELECT COUNT(*)::int AS total FROM (
+        SELECT query, city
+        FROM "UnmetDemandSignal"
+        WHERE 1=1 ${whereCity}
+        GROUP BY query, city
+        HAVING COUNT(*) >= ${minCount}
+      ) sub
+    `);
+
+    const cities: any[] = await (prisma as any).$queryRaw`
+      SELECT DISTINCT city FROM "UnmetDemandSignal" WHERE city IS NOT NULL ORDER BY city
+    `;
+
+    res.json({
+      signals: rows,
+      total: totalRow[0]?.total ?? 0,
+      page,
+      pages: Math.ceil((totalRow[0]?.total ?? 0) / limit),
+      cities: cities.map((c: any) => c.city),
+    });
+  } catch (error) {
+    console.error('Error fetching demand signals:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #455: Shopper Notify Me Waitlist
+router.get('/waitlist', async (req: any, res: any) => {
+  try {
+    const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
+    const limit = 50;
+    const activeOnly = req.query.activeOnly !== 'false';
+
+    const where: any = {};
+    if (activeOnly) where.isActive = true;
+
+    const [entries, total] = await Promise.all([
+      (prisma as any).shopperWaitlistEntry.findMany({
+        where,
+        include: { user: { select: { email: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      (prisma as any).shopperWaitlistEntry.count({ where }),
+    ]);
+
+    res.json({
+      entries,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    console.error('Error fetching waitlist:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #458: Directory Confidence Scores — sorted lowest first
+router.get('/organizers/confidence', async (req: any, res: any) => {
+  try {
+    const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
+    const limit = 50;
+
+    const [organizers, total] = await Promise.all([
+      (prisma as any).organizer.findMany({
+        where: { isUnmanagedListing: false },
+        select: {
+          id: true,
+          businessName: true,
+          city: true,
+          state: true,
+          directoryConfidenceScore: true,
+          confidenceLastCalculated: true,
+        },
+        orderBy: { directoryConfidenceScore: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      (prisma as any).organizer.count({ where: { isUnmanagedListing: false } }),
+    ]);
+
+    res.json({
+      organizers,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    console.error('Error fetching organizer confidence scores:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 export default router;
