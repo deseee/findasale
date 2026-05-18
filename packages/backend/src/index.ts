@@ -604,6 +604,12 @@ Sentry.setupExpressErrorHandler(app);
 // Must be defined AFTER all routes and BEFORE app.listen
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err.message, err.stack);
+  // Guard: if a handler already sent a response (e.g. scraper/ingest, ebay/account-deletion)
+  // attempting to send again causes "Cannot set headers after they are sent". Log and bail.
+  if (res.headersSent) {
+    console.error('Global error handler: response already sent, suppressing duplicate response');
+    return;
+  }
   const status = (err as any).status || (err as any).statusCode || 500;
   res.status(status).json({ message: err.message || 'Internal server error' });
 });
