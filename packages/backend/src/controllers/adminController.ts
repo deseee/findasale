@@ -1334,7 +1334,7 @@ export const getDrilldown = async (req: AuthRequest, res: Response) => {
       const [realSalesCount, scrapedSalesCount, claimedCount, publishedCount, endedCount, recentReal] = await Promise.all([
         prisma.sale.count({ where: { organizer: { isUnmanagedListing: false } } }),
         prisma.sale.count({ where: { organizer: { isUnmanagedListing: true } } }),
-        prisma.sale.count({ where: { organizer: { isUnmanagedListing: false }, isClaimed: true } }),
+        prisma.sale.count({ where: { organizer: { isUnmanagedListing: false, isClaimed: true } } }),
         prisma.sale.count({ where: { organizer: { isUnmanagedListing: false }, status: 'PUBLISHED' } }),
         prisma.sale.count({ where: { organizer: { isUnmanagedListing: false }, status: 'ENDED' } }),
         prisma.sale.findMany({
