@@ -420,6 +420,7 @@ async function main() {
         phone: `616-555-${String(i).padStart(4, '0')}`,
         referralCode: `REF-${uuidv4().substring(0, 8).toUpperCase()}`,
         huntPassActive: i === 11, // user12 has Hunt Pass
+        emailVerified: true, // seed accounts skip email verification banner
       },
     });
     users.push(user);

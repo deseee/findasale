@@ -84,13 +84,20 @@ api.interceptors.response.use(
 
       console.warn(`[429 Rate Limit] ${message}`, { retryAfter, error });
 
-      // Store notification in sessionStorage so components can access it (works without React context)
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('rateLimit429', JSON.stringify({ message, timestamp: Date.now() }));
-      }
+      // HIGH-2 fix: Only show the toast for explicit user-action requests (POST, PUT, PATCH, DELETE)
+      // or requests that opt-in via _showRateLimit429Toast: true.
+      // GET requests (page-load data fetches, background polls, auth checks) fire silently —
+      // surfacing a toast on every page load when the rate limiter is active is disruptive and
+      // confusing for users who haven't done anything wrong.
+      const method = (originalRequest.method || '').toUpperCase();
+      const isUserAction = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
+        || (originalRequest as any)._showRateLimit429Toast === true;
 
-      // Dispatch custom event for toast notification (captured by app root or layout)
-      if (typeof window !== 'undefined') {
+      if (isUserAction && typeof window !== 'undefined') {
+        // Store notification in sessionStorage so components can access it (works without React context)
+        sessionStorage.setItem('rateLimit429', JSON.stringify({ message, timestamp: Date.now() }));
+
+        // Dispatch custom event for toast notification (captured by app root or layout)
         window.dispatchEvent(
           new CustomEvent('rateLimit429', {
             detail: { message, retryAfterMs },

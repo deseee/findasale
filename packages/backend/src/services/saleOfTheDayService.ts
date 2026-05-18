@@ -38,6 +38,9 @@ export async function selectSaleOfTheDay(): Promise<SaleOfTheDayResult | null> {
         gte: now,
         lte: sevenDaysFromNow,
       },
+      items: {
+        some: {},
+      },
     },
     select: {
       id: true,

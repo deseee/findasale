@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -32,6 +32,7 @@ const RegisterPage = () => {
   const [shopperEmailConsent, setShopperEmailConsent] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
 
   // Pre-fill referral codes from URL params
   // ?ref= for shopper-to-shopper referral rewards (existing system)
@@ -191,9 +192,13 @@ const RegisterPage = () => {
         router.push('/');
       }
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'An error occurred during registration';
+      const msg = err.response?.data?.message || 'An error occurred during registration. Please try again.';
       setError(msg);
       showToast(msg, 'error');
+      // Scroll the error into view so users don't miss it after submitting from the bottom of the form
+      setTimeout(() => {
+        errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
     } finally {
       setLoading(false);
     }
@@ -226,9 +231,17 @@ const RegisterPage = () => {
             </div>
           )}
           {error && (
-            <div id="register-error" role="alert" className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+            <div id="register-error" role="alert" ref={errorRef} className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
               <div className="text-sm text-red-700 dark:text-red-300">
                 {error}
+                {error.includes('already exists') && (
+                  <span>
+                    {' '}
+                    <Link href="/login" className="font-medium underline hover:text-red-900 dark:hover:text-red-100">
+                      Sign in instead?
+                    </Link>
+                  </span>
+                )}
               </div>
             </div>
           )}

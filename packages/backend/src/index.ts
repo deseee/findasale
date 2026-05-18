@@ -402,8 +402,10 @@ const authLimiter = rateLimit({
     if (email && email.endsWith('@example.com')) return true;
 
     // Bypass rate limit for session check — auth/me fires on every SSR page navigation
-    // and should never be subject to login-attempt throttling
-    if (req.path === '/me') return true;
+    // and should never be subject to login-attempt throttling.
+    // Also skip auth/refresh — token refresh failures are not auth attacks; counting them
+    // burns the IP's budget and causes authenticated users to see 429 on page transitions.
+    if (req.path === '/me' || req.path === '/refresh') return true;
 
     return false;
   },

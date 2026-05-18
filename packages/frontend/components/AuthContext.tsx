@@ -81,6 +81,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
       } catch (err: any) {
+        if (err.response?.status === 429) {
+          // CRIT-1 fix: Rate limiter fired on /auth/me (e.g. after failed login/register attempts
+          // from the same IP). A 429 does NOT mean the user is logged out — it means the backend
+          // is temporarily throttling. Keep isLoading=false and leave user as null (not logged in
+          // from React's perspective), but do NOT redirect or clear cookies. The user can refresh
+          // manually or navigate again once the window expires.
+          console.warn('[AuthContext] /auth/me rate-limited (429). Treating as temporarily unavailable, not logged-out.');
+          setIsLoading(false);
+          return;
+        }
         if (err.response?.status === 401) {
           // S708 sign-off fix: access token may have expired while refresh token is still valid.
           // Try POST /auth/refresh once — if successful, retry /auth/me. Only treat as logged-out
