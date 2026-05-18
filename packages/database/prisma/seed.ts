@@ -1272,7 +1272,7 @@ async function main() {
 
   console.log('\n✨ Seed complete!');
   console.log('\n📋 Data Summary:');
-  console.log(`  • Users:            23 (user1=ADMIN+organizer, user2=PRO organizer, user3=TEAMS organizer, user11=unclaimed organizer, user12=primary shopper)`);
+  console.log(`  • Users:            23 (user1=ADMIN+TEAMS organizer, user2=PRO organizer, user3=SIMPLE organizer, user11=unclaimed organizer, user12=primary shopper)`);
   console.log(`  • Organizers:       11 (tiers: 1×TEAMS, 1×PRO, 9×SIMPLE; user11=unclaimed w/ isClaimed=false) [#361 test]`);
   console.log(`  • Sales:            ${sales.length} (8 upcoming, 8 active, 5 ended, 4 draft)`);
   console.log(`  • Items:            ${items.length} + ${auctionItems.length} auction items [TD-04: stable picsum.photos URLs]`);
@@ -1292,9 +1292,9 @@ async function main() {
   console.log(`  • Points tx:        6`);
   console.log(`  • Conversations:    up to 2 | Messages: up to 5`);
   console.log('\n🔑 Test accounts (all passwords: Seedy2025!):');
-  console.log('   user1@example.com     — ADMIN + SIMPLE organizer');
+  console.log('   user1@example.com     — ADMIN + TEAMS organizer');
   console.log('   user2@example.com     — PRO organizer [TD-01: Stripe acct_test_user2]');
-  console.log('   user3@example.com     — TEAMS organizer [TD-01: Stripe acct_test_user3]');
+  console.log('   user3@example.com     — SIMPLE organizer [TD-01: Stripe acct_test_user3]');
   console.log('   user11@example.com    — Unclaimed organizer [#361 test: isClaimed=false, isUnmanagedListing=true]');
   console.log('   user12@example.com    — Shopper [TD-02: 6+ purchases, 10+ likes, badges, trail, reviews, holds]');
   console.log('\n🔑 Real accounts (password: Seedy2025! locally):');

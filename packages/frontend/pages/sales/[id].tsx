@@ -1346,13 +1346,18 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData }) 
                 const reservedCount = sale.items.filter(i => i.status === 'RESERVED').length;
                 const isLowStock = availableCount > 0 && availableCount <= Math.max(3, Math.floor(sale.items.length * 0.2));
                 const isSoldOut = availableCount === 0;
+                const saleIsEnded = sale.status?.toUpperCase() === 'ENDED' || saleHasEnded;
                 return (
                   <div className="flex flex-wrap items-center gap-3 mb-4">
-                    {isSoldOut ? <span className="inline-flex items-center gap-1 bg-warm-100 text-warm-600 text-xs font-semibold px-3 py-1.5 rounded-full">All items sold or reserved</span>
+                    {saleIsEnded ? (
+                      <span className="inline-flex items-center gap-1 bg-warm-100 dark:bg-gray-700 text-warm-600 dark:text-gray-300 text-xs font-semibold px-3 py-1.5 rounded-full">
+                        {sale.items.length} item{sale.items.length !== 1 ? 's' : ''}{soldCount > 0 ? ` · ${soldCount} sold` : ''}{availableCount > 0 ? ` · ${availableCount} available` : ''}{reservedCount > 0 ? ` · ${reservedCount} on hold` : ''}
+                      </span>
+                    ) : isSoldOut ? <span className="inline-flex items-center gap-1 bg-warm-100 text-warm-600 text-xs font-semibold px-3 py-1.5 rounded-full">All items sold or reserved</span>
                       : isLowStock ? <span className="inline-flex items-center gap-1 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 text-xs font-bold px-3 py-1.5 rounded-full ring-1 ring-red-200 animate-pulse">🔥 Only {availableCount} left!</span>
                       : <span className="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-xs font-semibold px-3 py-1.5 rounded-full">✓ {availableCount} available</span>}
-                    {soldCount > 0 && <span className="text-xs text-warm-500 dark:text-gray-300">{soldCount} sold</span>}
-                    {reservedCount > 0 && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">{reservedCount} on hold</span>}
+                    {!saleIsEnded && soldCount > 0 && <span className="text-xs text-warm-500 dark:text-gray-300">{soldCount} sold</span>}
+                    {!saleIsEnded && reservedCount > 0 && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">{reservedCount} on hold</span>}
                   </div>
                 );
               })()}

@@ -8,36 +8,35 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S754 — Scraper/Enrichment Pipeline Audit + Gmail Rate Limit Fix (COMPLETE).**
+**Latest: S755 — QA Ceiling Session: 6 Bug Fixes from S752/S753 Backlog (COMPLETE).**
 
-Comprehensive audit and fix of the scrape→enrich→score→outreach pipeline. Root cause of "0 sent, 21 failed" outreach confirmed: two compounding issues — (1) digest emails firing to @system.finda.sale placeholder addresses burning daily Gmail quota before real outreach ran, and (2) send loop firing all emails ~300ms apart hitting Gmail's per-second rate limit. Both fixed. Six additional pipeline improvements shipped.
+Mandatory QA session (Blocked Queue ≥8 items, CLAUDE.md §4 ceiling rule). Pipeline live audit partial (workspace bash unavailable entire session — no DB queries possible). Railway deploy confirmed SUCCESS, all crons firing clean, Vercel frontend READY. Six bugs fixed via 4 parallel dev agents + 1 inline fix. Patrick corrected: #307 is "Retail Mode" (renamed from Shop Mode), TEAMS-only by design — not a bug for PRO tier, dropped from fix batch.
 
-**Fixes shipped (8 files):**
+**Fixes shipped (10 files):**
 
-- **`packages/backend/src/jobs/outreachEmailsCron.ts`** — Gmail rate limit fix: `sleep(1100)` between `gmail.users.messages.send()` calls. Spaces sends to ~1/second, under Gmail's hard limit. Also: `const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))` declared inline.
-- **`packages/backend/src/services/organizerAnalyticsService.ts`** — Digest email suppression: `isUnmanagedListing: { not: true }` added to `sendOrganizerWeeklyDigest` findMany. Guard in `sendOrganizerDigestEmail`: early return if email ends with `@system.finda.sale`. Prevents quota burn by scraped org placeholders.
-- **`packages/backend/src/routes/organizers.ts`** — Storefront ENDED-sale gap: `status: 'PUBLISHED'` → `status: { in: ['PUBLISHED', 'ENDED'] }` at two query sites (ID lookup + slug lookup). Ended sales now surface to visitors.
-- **`packages/backend/scripts/enrichContactEmails.ts`** — HOT-first two-pass query (HOT/WARM take:150, then COLD fills to 200). DuckDuckGo free-search fallback added (`queryDuckDuckGo()`) for Pass 2/3 — runs before Google Places; Places only fires if `GOOGLE_PLACES_API_KEY` set.
-- **`packages/backend/src/services/scraper/index.ts`** — `directoryMostRecentSource` fix: fallback chain changed from `sourceLabel ?? (isStateLicensed ? 'StateLicensing' : undefined)` to `sourceLabel ?? sourceName ?? (isStateLicensed ? 'StateLicensing' : undefined)`. All 77 Phase 2 scrapers now write their real sourceName without touching individual files.
-- **`packages/backend/scripts/backfillDirectoryMostRecentSource.py`** *(new)* — Backfill script using psycopg2. Ran live: updated 46,333 records (0 errors) setting `directoryMostRecentSource` from `sourcesJson[].sourceName` (most recent by `lastSeen`).
-- **`packages/backend/src/services/scraper/sources/foursquarePlaces.ts`** — Category allowlist: `ACCEPTABLE_FOURSQUARE_CATEGORY_SUBSTRINGS` (19 entries), `hasFoursquareAcceptableCategory()` helper, category check in processing loop. Stops off-target businesses (optical, legal, department stores, luxury beauty) from entering the pipeline.
-- **`packages/backend/src/services/scraper/sources/googlePlaces.ts`** — Extended `BUSINESS_NAME_BLOCKLIST` with optical chains, legal terms, shopping mall patterns, department stores, luxury beauty brands, jewelry repair.
+- **`packages/frontend/pages/organizer/dashboard.tsx`** — #305 Social Posts no-op: replaced broken `<Link>` to `/organizer/promote/` with `<button onClick>` that opens SocialPostGenerator modal inline. Import + state + modal rendering added.
+- **`packages/frontend/pages/shopper/dashboard.tsx`** — #265 Share & Earn card: referral CTA dismissal changed from permanent (`'true'`) to 7-day timestamp expiry. Card re-appears after 7 days.
+- **`packages/frontend/tailwind.config.js`** — #275 Hunt Pass ring: added `safelist` with `ring-2`, `ring-amber-400`, `ring-amber-500`, `dark:ring-amber-500` to prevent Tailwind purging dynamic classes.
+- **`packages/frontend/components/Avatar.tsx`** — #275 Hunt Pass ring: added inline `boxShadow` fallback when `huntPassActive` is true, ensuring amber ring renders even if Tailwind classes purged.
+- **`packages/backend/src/controllers/leaderboardController.ts`** — #275 Hunt Pass leaderboard: changed `where: { role: 'USER' }` to `where: { roles: { has: 'USER' } }` so dual-role users appear on shopper leaderboard.
+- **`packages/frontend/pages/shopper/league.tsx`** — #275 Hunt Pass badge: fixed CSS conflict on badge span (`inline-block flex` → `inline-flex`).
+- **`packages/frontend/pages/sales/[id].tsx`** — #292 ENDED-sale UX: replaced misleading "All items sold or reserved" with accurate item breakdown ("5 items · 2 sold · 3 available").
+- **`packages/frontend/pages/organizer/settings.tsx`** — #306 Store Hours persistence: `handleSaveHours` now refetches hours from server via `GET /organizers/me/hours` after successful save.
+- **`packages/database/prisma/seed.ts`** — Subscription copy: fixed misleading console.log labels for orgTiers (actual data was correct, only log output was wrong).
 
-**Investigation closed — GSalr.com:** Hard no. ToS has explicit $10k/day penalty for data use by competitor services. Data is syndicated from estatesales.org anyway — no unique value.
+**Note:** TypeScript checks could not run (workspace bash unavailable). Vercel/Railway builds will be the TS gate.
 
-**Push block (8 files — NOT YET PUSHED if Patrick hasn't run it):**
-```powershell
-git add packages/backend/src/routes/organizers.ts
-git add packages/backend/scripts/enrichContactEmails.ts
-git add packages/backend/src/services/scraper/index.ts
-git add packages/backend/scripts/backfillDirectoryMostRecentSource.py
-git add packages/backend/src/services/organizerAnalyticsService.ts
-git add packages/backend/src/services/scraper/sources/googlePlaces.ts
-git add packages/backend/src/services/scraper/sources/foursquarePlaces.ts
-git add packages/backend/src/jobs/outreachEmailsCron.ts
-git commit -m "Fix outreach pipeline: rate limit, digest bleed, storefront ENDED sales, HOT-first enrichment, directoryMostRecentSource, Foursquare category filter, DuckDuckGo fallback"
-.\push.ps1
-```
+**#307 Retail Mode:** Patrick confirmed this is TEAMS-only by design. PRO users correctly see it disabled. Needs Chrome QA on a TEAMS account to verify it works there — added to Blocked Queue.
+
+**Pipeline audit status (S754 verification — PARTIAL):**
+- ✅ Railway backend deploy SUCCESS, crons firing clean
+- ✅ Vercel frontend READY
+- ⚠️ DB queries blocked (workspace bash unavailable) — outreach rate limit, digest suppression, directoryMostRecentSource backfill quality all UNVERIFIED
+- ⚠️ Storefront ENDED sales — code deployed but no organizer with actual ENDED sales found to visually confirm
+
+**Previous: S754 — Scraper/Enrichment Pipeline Audit + Gmail Rate Limit Fix (COMPLETE).**
+
+S754 shipped 8 pipeline fixes: outreach rate limit (sleep 1100ms), digest suppression for @system.finda.sale, storefront ENDED sales visibility, HOT-first enrichment, directoryMostRecentSource backfill, Foursquare category filter, DuckDuckGo fallback. Investigation closed: GSalr.com (ToS $10k/day penalty, syndicated from estatesales.org).
 
 **Previous: S753 — Chrome QA Backlog Sprint Continued (COMPLETE).**
 
@@ -289,32 +288,38 @@ Run: 2026-05-11 (updated S715). Railway DB queried directly via psycopg2.
 | #353 Year Founded | ✅ VERIFIED S746 — Set to 2019 via React fiber. PATCH /api/organizers/me sent yearFounded:2019. Reloaded — field shows 2019. CLOSED. | — | S745 |
 | #355 Org Types | ✅ VERIFIED S746 — Estate Sales checkbox set + saved. PATCH sent organizerTypes:["estate_sale"]. Reloaded — checkbox shows checked. CLOSED. | — | S745 |
 | #124 Rarity Boost modal | ✅ VERIFIED S750 — user12 (Leo Thomas) guildXp set to 55 via direct SQL. Button on /coupons enabled (spendableXp ≥ 50). Modal opens correctly. CLOSED. | — | S745 |
-| #275 Hunt Pass Cosmetic Add-ons | ❌ S753: Avatar amber ring missing from rendered DOM; leaderboard 🏆 badge missing despite user12 (Hunt Pass) at #1. Hunt Pass page copy still promises both. Conditional rendering check or loyaltyController payload broken. | Dev dispatch: audit AvatarDropdown.tsx ring conditional + loyaltyController leaderboard payload `huntPassActive` field + league.tsx 🏆 render | S753 |
-| #265 Share & Earn dashboard card | ⚠️ S753: Card not visible on user12 shopper dashboard despite huntPassActive=true. /shopper/referrals destination page works fine. Likely dismissal flag stuck. | Dev: check Share & Earn card render condition + dismissal logic in shopper/dashboard.tsx | S753 |
-| #292 ENDED-sale UX inconsistency | ⚠️ S753: qa-settlement-001 shows "0 items / All items sold!" header simultaneously with PostSaleEbayPanel soft toast "3 items didn't sell". Conflicting unsold counts. | Dev: align items query and unsold query on ENDED sale page | S753 |
+| #275 Hunt Pass Cosmetic Add-ons | FIXED S755 — Tailwind safelist + Avatar inline boxShadow fallback + leaderboard `roles: { has: 'USER' }` + league.tsx CSS fix. Pending Chrome QA. | Chrome QA: verify amber ring on user12 avatar + 🏆 badge on leaderboard | S753 |
+| #265 Share & Earn dashboard card | FIXED S755 — Dismissal changed from permanent to 7-day timestamp expiry. Card re-appears after 7 days. Pending Chrome QA. | Chrome QA: verify card renders on shopper dashboard | S753 |
+| #292 ENDED-sale UX inconsistency | FIXED S755 — Replaced "All items sold or reserved" with accurate item breakdown on ENDED sales. Pending Chrome QA. | Chrome QA: verify accurate counts on qa-settlement-001 | S753 |
+| #305 Social Posts no-op | FIXED S755 — Broken Link replaced with button+modal. Pending Chrome QA. | Chrome QA: verify promote button opens SocialPostGenerator modal | S752 |
+| #306 Store Hours persistence | FIXED S755 — handleSaveHours refetches from server after save. Pending Chrome QA. | Chrome QA: save hours, reload, verify persisted | S752 |
+| #307 Retail Mode TEAMS verification | Not a bug for PRO (TEAMS-only by design). Needs TEAMS account QA. | Chrome QA: log in as TEAMS user, verify Retail Mode visible + functional | S755 |
+| S754 pipeline DB verification | Workspace bash unavailable S755 — outreach rate, digest suppression, directoryMostRecentSource backfill quality all unverified | DB queries via psycopg2 when bash available | S755 |
 ---
 
 ## Next Session
 
-**Priority 0 — Pipeline live audit (mandatory first task S755).**
+**Priority 0 — Push S755 fixes (Patrick action).**
 
-S754 shipped 8 pipeline fixes. Before ANY new feature work, audit that they actually landed correctly:
+10 files modified this session. Push block below.
 
-1. **Outreach send rate** — Trigger a `workflow_dispatch` on `pipeline-outreach-emails.yml`. Wait for it to complete. Check Railway backend logs for `[OutreachCron]`. Confirm: (a) sends now show `Sent Touch N to [orgId]` lines (not all failing), (b) inter-send timing is ~1100ms between sends, (c) no "User-rate limit exceeded" errors. If still failing, read `outreachEmailsCron.ts` send loop before doing anything else.
+**Priority 1 — S754 pipeline DB verification (blocked S755 by workspace outage).**
 
-2. **Digest suppression** — Query Railway DB via psycopg2: `SELECT COUNT(*) FROM "Organizer" WHERE "isUnmanagedListing" = true AND "contactEmail" LIKE '%@system.finda.sale%'` — these are the addresses that were burning quota. Confirm the digest cron is no longer sending to them. If any are still in the weekly digest send queue, they'll show as logs in Railway.
+Run these DB queries via psycopg2 when bash is available:
+1. Outreach rate: check Railway logs for `[OutreachCron]` — confirm ~1100ms spacing, no rate limit errors
+2. Digest suppression: `SELECT COUNT(*) FROM "Organizer" WHERE "isUnmanagedListing" = true AND "contactEmail" LIKE '%@system.finda.sale%'`
+3. directoryMostRecentSource quality: `SELECT "directoryMostRecentSource", COUNT(*) FROM "Organizer" WHERE "directoryMostRecentSource" IS NOT NULL GROUP BY 1 ORDER BY 2 DESC`
 
-3. **directoryMostRecentSource quality** — `SELECT "directoryMostRecentSource", COUNT(*) FROM "Organizer" WHERE "directoryMostRecentSource" IS NOT NULL GROUP BY 1 ORDER BY 2 DESC` — should show specific scraper names (FloridaPhase2, etc.) instead of just 'StateLicensing'. If 46,333 backfill ran correctly, distribution should be wide.
+**Priority 2 — Chrome QA on S755 fixes (7 items in Blocked Queue).**
 
-4. **Storefront ENDED sales** — Navigate to a known organizer profile that has past ENDED sales. Confirm they now appear in the past sales section (before S754, only PUBLISHED sales showed).
+All 6 bug fixes need browser verification: #275 Hunt Pass ring+badge, #265 Share & Earn card, #292 ENDED-sale counts, #305 Social Posts modal, #306 Store Hours persistence, #307 Retail Mode on TEAMS account. One per QA dispatch per §10c.
 
-After pipeline audit passes, continue the bug batch:
+**Priority 3 — Continue roadmap BROKEN items.**
 
-5. **Fix bugs S752:** #306 Store Hours, #305 Social Posts no-op, #307 Shop Mode PRO visibility, subscription copy mismatch.
-6. **Fix bugs S753:** P1 #275 Hunt Pass cosmetics (avatar ring + leaderboard badge), P2 #265 Share & Earn card, P3 #292 ENDED-sale message conflict.
+After QA ceiling is cleared (Blocked Queue < 8 verified items), resume feature work from roadmap.
 
 **Patrick actions needed:**
-- **PUSH S754 block if not yet done** (8 files — block is in Current Status above and in the dashboard)
+- **PUSH S755 block** (10 code files + 2 doc files — block below)
 - Log back into Chrome as yourself (artifactmi@gmail.com) after any QA
 - Deploy email verification token migration (20260515180000) — still pending from S726
 - Delete fix-attendance.sql from project root — still pending from S750

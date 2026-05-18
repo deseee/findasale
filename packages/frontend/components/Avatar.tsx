@@ -113,6 +113,7 @@ const Avatar: React.FC<AvatarProps> = ({
           height: `${size}px`,
           fontSize: `${fontSize}px`,
           lineHeight: '1',
+          ...(huntPassActive ? { boxShadow: '0 0 0 2px #FBBF24' } : {}),
         }}
         role="img"
         aria-label={`Avatar for ${name || identifier}`}

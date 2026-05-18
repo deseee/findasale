@@ -1,81 +1,84 @@
-# Patrick's Dashboard — S754 Wrap (Complete)
+# Patrick's Dashboard — Week of May 18, 2026
 
 ---
 
-## What Happened This Session — S754
+## What Happened This Week
 
-Outreach pipeline was sending 0 emails — every attempt hitting "User-rate limit exceeded." Two root causes found and fixed, plus 6 additional pipeline improvements.
+S755 was a mandatory QA ceiling session — the Blocked Queue had 8+ items so no new feature work was allowed. Six bugs from S752/S753 were fixed: Hunt Pass cosmetics (#275 — avatar ring + leaderboard query), Share & Earn card (#265 — permanent dismissal → 7-day expiry), ENDED sale counts (#292 — accurate item breakdown), Social Posts button (#305 — wired to modal), Store Hours persistence (#306 — refetches after save), and seed log labels (subscription copy). Patrick also clarified that #307 "Retail Mode" is TEAMS-only by design — PRO not seeing it is correct behavior, not a bug.
 
-**What was broken:**
-1. The weekly digest job was emailing thousands of scraped organizers with `@system.finda.sale` placeholder addresses — burning the entire daily Gmail API quota before real outreach ever ran.
-2. The send loop fired all 20+ emails in ~300ms with no delay between sends — hitting Gmail's 1-per-second rate limit even when quota was available.
-
-**What was fixed (8 files):**
-- Gmail rate limiting — 1100ms sleep between sends
-- Digest email suppression — unmanaged scraped orgs blocked from digest entirely
-- Storefront now shows your ENDED past sales (was only showing PUBLISHED)
-- HOT/WARM organizers now get enriched first in contact email discovery
-- `directoryMostRecentSource` now correctly records which scraper found each organizer (was writing 'StateLicensing' for everything). 46,333 existing records backfilled.
-- Foursquare scraper now filters out off-target businesses (optical chains, legal firms, department stores, etc.)
-- DuckDuckGo used as free search fallback before Google Places in email enrichment
+Pipeline audit from S754 was partially completed — Railway and Vercel confirmed healthy — but DB-level verification was blocked by workspace outage (bash unavailable all session).
 
 ---
 
-## ⚠️ Action Required
+## Audit Results
 
-**Push the S754 fixes if you haven't already:**
+**6 bugs FIXED this session — all need Chrome QA before closing:**
+- #275 Hunt Pass ring + badge — Tailwind safelist, inline boxShadow fallback, leaderboard query fixed
+- #265 Share & Earn card — 7-day dismissal expiry instead of permanent
+- #292 ENDED sale counts — accurate breakdown replaces misleading "All items sold"
+- #305 Social Posts — button now opens SocialPostGenerator modal
+- #306 Store Hours — refetches from server after save
+- Subscription copy — seed.ts log labels fixed (actual data was already correct)
+
+**Still open:**
+- #307 Retail Mode — needs TEAMS account QA (not a bug, just unverified on TEAMS tier)
+- S754 pipeline DB queries — blocked by workspace outage, carry to next session
+
+---
+
+## Pending Decisions
+
+No PENDING items in DECISIONS.md this week. All standing decisions are active.
+
+---
+
+## Beta Tester Impact
+
+**What's better after this push:**
+- Hunt Pass buyers should see their amber avatar ring and leaderboard appearance (was completely broken)
+- Share & Earn referral card will re-appear on shopper dashboard after 7 days instead of being permanently dismissed
+- ENDED sale pages show accurate item counts instead of misleading "All items sold"
+- Social Posts promote button on organizer dashboard actually works now
+- Store Hours settings persist after page reload
+
+**What might still be rough:**
+- All 6 fixes need Chrome QA before we can confirm they work end-to-end in production
+- Pipeline DB verification still pending — outreach sends, digest suppression, and source attribution quality are unverified
+
+---
+
+## This Week's Priority
+
+1. **Push the S755 block** — 10 code files + 2 doc files (see Action Items)
+2. **Chrome QA sprint** — verify all 6 fixes in the browser, one feature at a time
+3. **Pipeline DB verification** — run the 3 SQL queries when workspace bash is available
+4. **Email verification migration** (20260515180000) — still pending since S726
+
+---
+
+## Action Items for Patrick
+
+- [ ] **Run the S755 push block** (see below)
+- [ ] **Deploy email verification migration** — `npx prisma migrate deploy` with Railway DATABASE_URL
+- [ ] **Delete fix-attendance.sql** from project root — has production IDs
+- [ ] **Log back into Chrome as yourself** (artifactmi@gmail.com) after any QA session
+
+---
+
+## S755 Push Block
 
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-
-git add packages/backend/src/routes/organizers.ts
-git add packages/backend/scripts/enrichContactEmails.ts
-git add packages/backend/src/services/scraper/index.ts
-git add packages/backend/scripts/backfillDirectoryMostRecentSource.py
-git add packages/backend/src/services/organizerAnalyticsService.ts
-git add packages/backend/src/services/scraper/sources/googlePlaces.ts
-git add packages/backend/src/services/scraper/sources/foursquarePlaces.ts
-git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/shopper/dashboard.tsx
+git add packages/frontend/tailwind.config.js
+git add packages/frontend/components/Avatar.tsx
+git add packages/backend/src/controllers/leaderboardController.ts
+git add packages/frontend/pages/shopper/league.tsx
+git add packages/frontend/pages/sales/[id].tsx
+git add packages/frontend/pages/organizer/settings.tsx
+git add packages/database/prisma/seed.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "Fix outreach pipeline: rate limit, digest bleed, storefront ENDED sales, HOT-first enrichment, directoryMostRecentSource, Foursquare category filter, DuckDuckGo fallback"
+git commit -m "Fix 6 bugs: Hunt Pass cosmetics, Share&Earn expiry, ENDED sale counts, Social Posts modal, Store Hours persistence, seed log labels"
 .\push.ps1
 ```
-
----
-
-## Next Session — What Claude Will Do First
-
-Next session starts with a **live pipeline audit** before any new work:
-1. Trigger the outreach workflow manually and check Railway logs — confirm sends are going through (not rate-limiting)
-2. Verify digest emails are no longer hitting `@system.finda.sale` addresses
-3. Spot-check `directoryMostRecentSource` distribution in DB
-4. Confirm a known organizer's storefront now shows their ENDED past sales
-
-Then: fix the bug backlog from S752/S753.
-
----
-
-## Pending Patrick Actions
-
-1. **Push the S754 block above** (if not done).
-2. **Log back into Chrome as yourself** — re-sign in with artifactmi@gmail.com after any QA.
-3. **Delete fix-attendance.sql** from project root — still has production sale IDs (carryover S750).
-4. **Email verification migration** — Deploy migration 20260515180000 when ready (carryover S726).
-
----
-
-## Blocked Queue (Active)
-
-| Feature | Status |
-|---------|--------|
-| Outreach pipeline sends | FIXED S754 — rate limit + digest quota burn fixed. Verify in Railway logs next session. |
-| Storefront ENDED past sales | FIXED S754 — `organizers.ts` now returns PUBLISHED + ENDED |
-| Email verification token expiry | Migration 20260515180000 pending deploy (Patrick action) |
-| #306 Store Hours | Save doesn't persist after reload — found S752 |
-| #305 Social Posts button | No-op — found S752 |
-| #307 Shop Mode | Not visible on PRO tier — found S752 |
-| Subscription copy mismatch | "TEAMS plan" on PRO account — found S752 |
-| #275 Hunt Pass Cosmetics | Avatar ring + leaderboard badge both broken — found S753 |
-| #265 Share & Earn card | Not rendering on dashboard — found S753 |
-| #292 ENDED-sale message | "0 items" + "3 unsold" conflict — found S753 |
