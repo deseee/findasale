@@ -314,12 +314,33 @@ export const BUSINESS_NAME_BLOCKLIST = [
   'roofing', 'plumbing', 'electrician', 'hvac', 'contractor', 'construction',
   'landscaping', 'lawn care', 'pest control', 'painting company',
 
-  // Medical
+  // Medical / optical
   'urgent care', 'clinic', 'hospital', 'dental', 'optometry', 'vision center',
   'chiropractic', 'physical therapy', 'pharmacy',
+  'visionworks', 'lenscrafters', 'pearle vision', 'america\'s best contacts', 'optical',
+  'eye care', 'eyecare', 'eye doctor', 'eyeglass world',
 
   // Real estate (different from estate sale companies)
   'real estate group', 'realty', 'realtor', 'property management',
+
+  // Legal / professional services
+  'attorney', 'law office', 'law firm', 'lawyer', 'esquire', 'legal services',
+  'accountant', 'cpa', 'financial advisor', 'insurance agent',
+
+  // Shopping malls / department stores (catch mall + antique mall query bleed)
+  ' mall', 'shopping center', 'shopping plaza', 'outlet mall',
+  'nordstrom', 'macy\'s', 'macys', 'jcpenney', 'sears', 'kohl\'s', 'kohls',
+  'belk', 'dillard\'s', 'dillards', 'bloomingdale',
+
+  // Beauty / cosmetics (catch jewelry consignment query bleed)
+  'makeup counter', 'beauty counter', 'cosmetics', 'sephora', 'ulta',
+  'chanel boutique', 'louis vuitton', 'gucci', 'hermes', 'prada',
+
+  // Jewelry retail chains (not resale — new luxury jewelry)
+  'kay jewelers', 'zales', 'jared', 'helzberg', 'tiffany', 'pandora',
+
+  // Jewelry repair only (not consignment/resale)
+  'watch repair', 'jewelry repair',
 ];
 
 // ---------------------------------------------------------------------------

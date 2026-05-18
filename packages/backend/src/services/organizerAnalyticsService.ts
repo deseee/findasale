@@ -278,6 +278,12 @@ function buildOrganizerDigestHtml(stats: OrganizerWeeklyStats, unsubToken: strin
  * Send weekly digest email to a single organizer
  */
 async function sendOrganizerDigestEmail(stats: OrganizerWeeklyStats): Promise<void> {
+  // Safety guard: never send digest to system placeholder addresses
+  if (stats.organizerEmail?.endsWith('@system.finda.sale')) {
+    console.log(`[OrganizerDigest] Skipping system email: ${stats.organizerEmail}`);
+    return;
+  }
+
   const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
   const unsubToken = stats.userId
     ? await generateUnsubscribeToken(stats.userId, 'emailWeeklyDigest')
@@ -311,6 +317,7 @@ export async function sendOrganizerWeeklyDigest(): Promise<void> {
 
     const organizers = await prisma.organizer.findMany({
       where: {
+        isUnmanagedListing: { not: true },
         sales: {
           some: {
             status: { in: ['PUBLISHED', 'ENDED'] },
