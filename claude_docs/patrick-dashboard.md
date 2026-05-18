@@ -4,9 +4,11 @@
 
 ## What Happened This Week
 
-**S757:** Production DB cleanup. Removed 5 test/QA sales (QA Test Auction, QA Settlement, QA Dims test, 2 stale ended Artifact copies) and 13 items. Nintendo Power mag moved into the live Artifact Downtown sale (now 100 items). Scraped directory (26,189 sales) untouched. No code changes.
+**S758:** Complete GEO & Discoverability plan — 10 phases + research queue, 25 roadmap entries (#432–#456). Phases 1-8: core funnel (data foundation → acquisition → conversion → premium schema → content moat → viral referral loop → retention hooks → MCP optimization). Phase 9: compounding data assets (post-sale pricing records stay live forever, EventSeries for recurring sales, voice search schema, "This Weekend" auto-pages). Phase 10: demand intelligence (capture unmet search demand, show organizers what buyers are looking for, shopper waitlist). Plus 5 research items needing investigation (embeddable widget, Price Oracle API, economic signal data, Spanish structured data, real-time agent subscriptions). No code changes — planning session. Strategy doc: `claude_docs/strategy/geo-implementation-plan.md`.
 
-**S756:** Pipeline DB verification completed (deferred from S755 by workspace outage). Outreach confirmed healthy at ~48 emails/day. Deleted 31 junk rows from the outreach queue. Identified root cause of the WARM email coverage gap and shipped a fix (daily website enrichment instead of weekly). Confirmed #336 and #339 were already built — roadmap updated.
+**S757:** Production DB cleanup. Removed 5 test/QA sales and 13 items. Nintendo Power mag moved into the live Artifact Downtown sale (now 100 items). Scraped directory (26,189 sales) untouched. No code changes.
+
+**S756:** Pipeline DB verification completed. Outreach confirmed healthy at ~48 emails/day. Deleted 31 junk rows. WARM email gap root cause fixed (daily website enrichment instead of weekly). Confirmed #336 and #339 were already built.
 
 **S755:** Mandatory QA ceiling session — fixed 6 bugs: Hunt Pass cosmetics (#275), Share & Earn card (#265), ENDED sale counts (#292), Social Posts button (#305), Store Hours persistence (#306), seed log labels. Patrick clarified #307 Retail Mode is TEAMS-only by design.
 
@@ -42,6 +44,7 @@ No PENDING items in DECISIONS.md this week. All standing decisions are active.
 
 - [ ] **Run the S755 push block** (10 code files — see below)
 - [ ] **Run the S756 push block** (2 code files + 2 doc files — see below)
+- [ ] **Run the S758 push block** (4 doc files — see below)
 - [ ] **Deploy email verification migration** — `npx prisma migrate deploy` with Railway DATABASE_URL (pending since S726)
 - [ ] **Delete fix-attendance.sql** from project root — has production IDs (pending since S750)
 - [ ] **Log back into Chrome as yourself** (artifactmi@gmail.com) after any QA session
@@ -72,5 +75,16 @@ git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git commit -m "chore: website enrichment daily cron; roadmap #336/#339 confirmed shipped"
+.\push.ps1
+```
+
+## S758 Push Block
+
+```powershell
+git add claude_docs/strategy/geo-implementation-plan.md
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "plan: GEO discoverability 3-phase plan, roadmap #432-#438"
 .\push.ps1
 ```

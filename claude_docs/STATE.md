@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S757 — Production DB Cleanup (COMPLETE).**
+**Latest: S758 — GEO & Discoverability Implementation Plan (COMPLETE).**
+
+Analyzed cross-session GEO/AI Discoverability strategy prompt against existing codebase. Found significant infrastructure already built (JSON-LD on 22 files, robots.txt, llms.txt, MCP server with 7 tools, city landing pages with SSR). Created 10-phase implementation plan + 5-item research queue (`claude_docs/strategy/geo-implementation-plan.md`). Added 25 roadmap entries #432–#456 covering: Phases 1-8 (data foundation → acquisition → conversion → premium schema → content moat → viral loop → retention → MCP optimization), Phase 9 (compounding data assets: post-sale pricing records, EventSeries for recurring sales, speakable voice search, "This Weekend" auto-pages), Phase 10 (demand intelligence: unmet demand capture, organizer demand dashboard, shopper waitlist). Research queue R1-R5: embeddable widget, Price Oracle API, sale density economic signals, Spanish structured data, real-time agent subscriptions. No code changes this session — planning only.
+
+**Previous: S757 — Production DB Cleanup (COMPLETE).**
 
 Removed test/QA data from the Railway production database. Deleted 5 test sales (QA Test Auction, QA Settlement Test Sale, QA Dims/Weight Test, 2 stale ENDED Artifact Downtown copies) and 13 items, plus all cascaded FK records (bids, donated items, line entries, purchases, ripples, settlements, etc.). Nintendo Power item moved from ENDED Artifact copy into the live Artifact Downtown Paw Paw sale (now 100 items). eBay Inventory draft (empty, 0 items) also removed. Scraped directory (26,189 sales) and all organizer accounts untouched. No code changes this session.
 
@@ -304,21 +308,26 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority 0 — Push S755 + S756 (Patrick action). S757 had no code changes.**
+**Priority 0 — Push S755 + S756 + S758 (Patrick action).**
 
-S755 had 10 code files. S756 added 2 more (roadmap.md + website enrichment cron). S757 = DB-only, no push needed beyond STATE.md + dashboard.
+S755 had 10 code files. S756 added 2 more (roadmap.md + website enrichment cron). S757 = DB-only. S758 = planning only (roadmap.md + STATE.md + dashboard + new strategy doc).
 
 **Priority 1 — Chrome QA on Blocked Queue (7 items, QA deferred per Patrick S756).**
 
 All 6 S755 bug fixes need browser verification: #275 Hunt Pass ring+badge, #265 Share & Earn card, #292 ENDED-sale counts, #305 Social Posts modal, #306 Store Hours persistence, #307 Retail Mode on TEAMS account. One per QA dispatch per §10c.
 
-**Priority 2 — Continue roadmap BROKEN items.**
+**Priority 2 — Begin GEO Phase 1 (#432–#435).**
 
-After QA ceiling is cleared (Blocked Queue < 8 verified items), resume feature work from roadmap.
+After QA ceiling is cleared, dispatch GEO Phase 1: enrich sale page JSON-LD (#432), create ai-plugin.json (#433), update llms.txt (#434), add bot/crawler visit tracking middleware + CrawlerVisit schema (#435). Full 8-phase plan in `claude_docs/strategy/geo-implementation-plan.md` — 17 roadmap entries total (#432–#448). Phase sequence: data foundation → acquisition funnel → conversion engine → premium schema → content moat → viral loop → retention hook → MCP optimization.
+
+**Priority 3 — Continue roadmap BROKEN items.**
+
+After GEO Phase 1 ships, resume BROKEN items from roadmap.
 
 **Patrick actions needed:**
 - **PUSH S755 block** (10 code files — see last session)
-- **PUSH S756 block** (2 files: website enrichment cron + roadmap, plus STATE.md + dashboard — block below)
+- **PUSH S756 block** (2 files: website enrichment cron + roadmap)
+- **PUSH S758 block** (see below — roadmap, STATE, dashboard, strategy doc)
 - Log back into Chrome as yourself (artifactmi@gmail.com) after any QA
 - Deploy email verification token migration (20260515180000) — still pending from S726
 - Delete fix-attendance.sql from project root — still pending from S750
@@ -326,6 +335,12 @@ After QA ceiling is cleared (Blocked Queue < 8 verified items), resume feature w
 ---
 
 ## Recent Sessions
+
+### S758 — GEO & Discoverability Implementation Plan (COMPLETE)
+
+**Trigger:** Patrick shared cross-session GEO strategy prompt for analysis.
+
+Analyzed GEO strategy + added original innovations. Created 10-phase plan + 5-item research queue. 25 roadmap entries #432–#456. Phases 1-8: core funnel (data foundation → acquisition → conversion → premium schema → content moat → viral loop → retention → MCP). Phase 9: compounding data assets (post-sale pricing records, EventSeries, speakable, "This Weekend" auto-pages). Phase 10: demand intelligence (unmet demand capture, organizer dashboard, shopper waitlist). Research queue: embeddable widget, Price Oracle, economic signals, Spanish data, agent subscriptions. No code changes. Strategy doc: `claude_docs/strategy/geo-implementation-plan.md`.
 
 ### S757 — Production DB Cleanup (COMPLETE)
 
