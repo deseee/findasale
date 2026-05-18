@@ -4,6 +4,8 @@
 
 ## What Happened This Week
 
+**S757:** Production DB cleanup. Removed 5 test/QA sales (QA Test Auction, QA Settlement, QA Dims test, 2 stale ended Artifact copies) and 13 items. Nintendo Power mag moved into the live Artifact Downtown sale (now 100 items). Scraped directory (26,189 sales) untouched. No code changes.
+
 **S756:** Pipeline DB verification completed (deferred from S755 by workspace outage). Outreach confirmed healthy at ~48 emails/day. Deleted 31 junk rows from the outreach queue. Identified root cause of the WARM email coverage gap and shipped a fix (daily website enrichment instead of weekly). Confirmed #336 and #339 were already built — roadmap updated.
 
 **S755:** Mandatory QA ceiling session — fixed 6 bugs: Hunt Pass cosmetics (#275), Share & Earn card (#265), ENDED sale counts (#292), Social Posts button (#305), Store Hours persistence (#306), seed log labels. Patrick clarified #307 Retail Mode is TEAMS-only by design.

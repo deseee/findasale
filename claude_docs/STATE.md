@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S756 — Pipeline DB Verification + WARM Email Gap Root Cause + Cron Fix (COMPLETE).**
+**Latest: S757 — Production DB Cleanup (COMPLETE).**
+
+Removed test/QA data from the Railway production database. Deleted 5 test sales (QA Test Auction, QA Settlement Test Sale, QA Dims/Weight Test, 2 stale ENDED Artifact Downtown copies) and 13 items, plus all cascaded FK records (bids, donated items, line entries, purchases, ripples, settlements, etc.). Nintendo Power item moved from ENDED Artifact copy into the live Artifact Downtown Paw Paw sale (now 100 items). eBay Inventory draft (empty, 0 items) also removed. Scraped directory (26,189 sales) and all organizer accounts untouched. No code changes this session.
+
+**Previous: S756 — Pipeline DB Verification + WARM Email Gap Root Cause + Cron Fix (COMPLETE).**
 
 Completed the S754/S755 deferred pipeline DB verification via psycopg2 (workspace bash now available). Pipeline confirmed healthy: 29 emails sent since S754 fix deployed (May 17-18), on pace at ~48/day matching warmup schedule. Deleted 31 junk BOUNCED DirectoryClaimEmail rows (26 image filenames stored as emailAddress, 5 Patrick test emails — all had attemptCount=0, never actually sent). directoryMostRecentSource confirmed 87.7% tagged. Confirmed #336 and #339 already fully implemented (roadmap rows updated). Identified and fixed WARM email gap bottleneck: switched website enrichment cron from weekly (Sundays only) to daily.
 
@@ -300,9 +304,9 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority 0 — Push S755 + S756 (Patrick action).**
+**Priority 0 — Push S755 + S756 (Patrick action). S757 had no code changes.**
 
-S755 had 10 code files. S756 added 2 more (roadmap.md + website enrichment cron). Push blocks below.
+S755 had 10 code files. S756 added 2 more (roadmap.md + website enrichment cron). S757 = DB-only, no push needed beyond STATE.md + dashboard.
 
 **Priority 1 — Chrome QA on Blocked Queue (7 items, QA deferred per Patrick S756).**
 
@@ -322,6 +326,14 @@ After QA ceiling is cleared (Blocked Queue < 8 verified items), resume feature w
 ---
 
 ## Recent Sessions
+
+### S757 — Production DB Cleanup (COMPLETE)
+
+**Trigger:** Patrick requested test data removal.
+
+Removed 5 test/QA sales + 13 items from Railway production DB. Cascading FK records cleaned in order (Bid, DonatedItem, ItemReservation, MaxBidByUser, Purchase, LineEntry, SaleChecklist, SaleDonation, SaleRipple, SaleSettlement, TrailStop, TreasureHuntQRClue, TreasureTrail). Nintendo Power item (from ENDED Artifact copy) migrated to live Artifact Downtown Paw Paw (now 100 items). 3 orphaned eBay-sync test items also removed. No code changes. No push required.
+
+---
 
 ### S756 — Pipeline DB Verification + WARM Email Gap Root Cause + Daily Cron Fix (COMPLETE)
 
