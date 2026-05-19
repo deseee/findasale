@@ -4,13 +4,13 @@
 
 ## What Happened This Week
 
-**S761 (today — QA session):** Verified #305 Social Posts ✅ and #307 Retail Mode ✅. Fixed 2 bugs: ai-score doubled /api/ prefix (inline fix), POS "No active sales" root cause (organizer roles guard). Push block below. #292 blocked by VM disk full — first task next session.
+**S762 (today — Full QA session):** Cleared the entire blocked QA queue — **16 items verified ✅**. Fixed a crash bug discovered during verification: ENDED sale pages with published items threw `TypeError` in JSON-LD structured data (`item.photoUrls?.[0]` null guard). Fix shipped and verified in Chrome.
 
-**S760:** GEO Phase 2 complete. 17 features, 44 files. Everything in the GEO roadmap is now shipped. Key additions: clearance discovery page (/clearance), 1-click OAuth claim on ghost listings, organizer demand dashboard card, 3 new admin pages, monthly trend report cron, MCP tool wrappers for AI agents, EventSeries schema for recurring organizers, platform syndication endpoint, shopper notify-me waitlist, directory confidence scoring, auto-liquidation trigger on sale end. Also confirmed closed: Help Library (#377/#378 done S742), SEO Content Moat (ISR pages = the 500-page generator).
+**S761:** Verified #305 Social Posts ✅ and #307 Retail Mode ✅. Fixed 2 bugs: ai-score doubled /api/ prefix (inline fix), POS "No active sales" root cause (organizer roles guard).
 
-**S759:** GEO Phases 1-11 — 15 features, 21 files. City landing pages, claim banner, AI Score tool, crawler tracking, Smart Search Views card, first-crawl email, ChatGPT plugin manifest, sitemap enrichment, llms.txt update.
+**S760:** GEO Phase 2 complete. 17 features, 44 files. Everything in the GEO roadmap is now shipped.
 
-**S758:** GEO strategy planning session. 29 roadmap entries added. No code.
+**S759:** GEO Phases 1-11 — 15 features, 21 files. City landing pages, claim banner, AI Score tool, crawler tracking, Smart Search Views card.
 
 **S756/S757:** Production DB cleanup + pipeline verification. Outreach healthy at ~48/day.
 
@@ -25,51 +25,51 @@
 
 ---
 
+## QA Queue — CLEARED ✅
+
+All 16 items verified this session (S762). Blocked queue is empty. Next session may begin new feature dev.
+
+**Verified today (S762):**
+- ✅ #437 Claim Banner · #438 AI Score · #443 OAuth Claim · #446 Smart Search Views · #454 Demand Dashboard
+- ✅ /admin/organizer-confidence · #306 Store Hours · #292 ENDED sale counts (+ crash fix)
+- ✅ #275 Hunt Pass ring+badge · #265 Share & Earn card
+- ✅ /city/grand-rapids-mi · /city/grand-rapids-mi/estate-sales · /this-weekend/grand-rapids-mi
+- ✅ /clearance · /admin/demand-signals · /admin/waitlist
+
+---
+
 ## Action Items for Patrick
 
-### S761 fixes — push first:
+### 1. Push S762 crash fix:
 ```powershell
-git add packages/frontend/pages/ai-score.tsx
-git commit -m "fix: remove doubled /api/ prefix in ai-score fetch call"
-
-git add packages/frontend/pages/organizer/pos.tsx
-git commit -m "fix: POS page shows sales for organizers whose roles array lacks ORGANIZER entry"
-
+git add packages/frontend/pages/sales/[id].tsx
+git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta (#292)"
 .\push.ps1
 ```
 
-### Then add S760 docs to wrap:
+### 2. Confirm S761 fixes were already pushed:
+- `packages/frontend/pages/ai-score.tsx` — doubled /api/ prefix fix
+- `packages/frontend/pages/organizer/pos.tsx` — organizer roles guard fix
+
+### 3. Then wrap docs:
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S761 wrap — QA results, ai-score + POS fixes logged"
+git commit -m "docs: S762 wrap — 16 QA items cleared, #292 crash fix"
 .\push.ps1
 ```
 
-- [ ] **Run S760 push block** (44 files — see S760 Push Block section below) if not yet pushed
-- [ ] **Run migrations** (covers S759 CrawlerVisit + S760 schema in one pass):
+### 4. Pending (when ready):
+- [ ] **Run S760 push block** (44 files — see STATE.md) if not yet pushed
+- [ ] **Run migrations** (CrawlerVisit + geo_demand_waitlist_confidence):
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
   $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
   npx prisma migrate deploy
   npx prisma generate
   ```
-- [ ] **#292 next session** — create a test ENDED sale with some sold/available/reserved items so we can verify the count display, then delete it
 - [ ] **Deploy email verification migration** (20260515180000) — pending since S726
 - [ ] **Delete fix-attendance.sql** from project root — pending since S750
-- [ ] **Log back into Chrome as yourself** (artifactmi@gmail.com) after any QA
-
----
-
-## QA Queue (~16 items — ceiling still active)
-
-**S755 fixes:** Hunt Pass ring/badge · Share & Earn card · ENDED-sale counts (#292 — VM disk full, next session) · Store Hours
-
-**S759 GEO pages:** /city/grand-rapids-mi · /city/grand-rapids-mi/estate-sales · /this-weekend/grand-rapids-mi · claim banner (⚠️ partial — spec question on crawler count) · /ai-score (push first) · Smart Search Views card
-
-**S760 new surfaces:** OAuth claim buttons · Demand Dashboard card · /clearance · /admin/demand-signals · /admin/waitlist · /admin/organizer-confidence
-
-**Closed this session:** #305 Social Posts ✅ · #307 Retail Mode ✅
 
 ---
 

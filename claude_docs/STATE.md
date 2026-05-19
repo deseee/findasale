@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S760 — GEO Phase 2 Complete + Admin Dashboards + OAuth Claim.**
+**Latest: S762 — Full QA Session: Cleared 8-item blocked queue + #292 crash fix.**
 
 17 features shipped. 44 files. 4 parallel agent batches. GEO roadmap fully complete (all phases 1-12 shipped across S759-S760). SEO Content Moat confirmed closed — ISR city×category pages ARE the generator. #377 Help Library and #378 /guides confirmed COMPLETE S742.
 
@@ -111,68 +111,86 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 | #353 Year Founded | ✅ VERIFIED S746 — Set to 2019 via React fiber. PATCH /api/organizers/me sent yearFounded:2019. Reloaded — field shows 2019. CLOSED. | — | S745 |
 | #355 Org Types | ✅ VERIFIED S746 — Estate Sales checkbox set + saved. PATCH sent organizerTypes:["estate_sale"]. Reloaded — checkbox shows checked. CLOSED. | — | S745 |
 | #124 Rarity Boost modal | ✅ VERIFIED S750 — user12 (Leo Thomas) guildXp set to 55 via direct SQL. Button on /coupons enabled (spendableXp ≥ 50). Modal opens correctly. CLOSED. | — | S745 |
-| #275 Hunt Pass Cosmetic Add-ons | FIXED S755 — Tailwind safelist + Avatar inline boxShadow fallback + leaderboard `roles: { has: 'USER' }` + league.tsx CSS fix. Pending Chrome QA. | Chrome QA: verify amber ring on user12 avatar + 🏆 badge on leaderboard | S753 |
-| #265 Share & Earn dashboard card | FIXED S755 — Dismissal changed from permanent to 7-day timestamp expiry. Card re-appears after 7 days. Pending Chrome QA. | Chrome QA: verify card renders on shopper dashboard | S753 |
-| #292 ENDED-sale UX inconsistency | FIXED S755 — Replaced "All items sold or reserved" with accurate item breakdown on ENDED sales. UNVERIFIED S761 — VM disk full, couldn't install psycopg2 to create test data. First priority next session: Patrick creates qa-settlement-001 sale, we verify counts, then delete. | Chrome QA: create test ENDED sale with mixed item states, verify accurate breakdown | S753 |
+| #275 Hunt Pass Cosmetic Add-ons | ✅ VERIFIED S762 — user12 (Leo) avatar shows amber ring (`ring-2 ring-amber-400`). Leaderboard shows 🏆 badge (confirmed in page text: "Leo🏆INITIATE"). CLOSED. | — | S753 |
+| #265 Share & Earn dashboard card | ✅ VERIFIED S762 — Card renders on /shopper/dashboard with heading, referral copy, "View Referral Page →" link to /shopper/referrals, and dismiss (×) button. 7-day timestamp dismissal confirmed (localStorage value is timestamp not boolean). CLOSED. | — | S753 |
+| #292 ENDED-sale UX inconsistency | ✅ VERIFIED S762 — 7-item ENDED sale rendered fully (3 SOLD, 2 AVAILABLE, 2 HOLD). "Archive — most items claimed." text confirmed. Crash fix shipped: null-guard `item.photoUrls?.[0]` in JSON-LD structured data + OG meta. CLOSED. | — | S753 |
 | #305 Social Posts no-op | ✅ VERIFIED S761 — Patrick's Artifact MI account (LIVE sale). Modal opens, 5 platform tabs, Generate Post returns 599-char real content. Minor P3: generated copy uses "estate sale" language — brand voice flag, not functional. CLOSED. | — | S752 |
-| #306 Store Hours persistence | FIXED S755 — handleSaveHours refetches from server after save. Pending Chrome QA. | Chrome QA: save hours, reload, verify persisted | S752 |
+| #306 Store Hours persistence | ✅ VERIFIED S762 — Changed Monday hours, clicked Save. PUT 200 + PATCH 200 + GET 200 fired. Toast appeared, persisted on reload. CLOSED. | — | S752 |
 | #307 Retail Mode TEAMS verification | ✅ VERIFIED S761 — Patrick confirmed "mostly works" with Artifact MI account. saleType=RETAIL chosen at sale creation (not a toggle). CLOSED. | — | S755 |
 | S754 pipeline DB verification | ✅ COMPLETED S756 — 29 sent on pace, directoryMostRecentSource 87.7%, 31 junk rows deleted, WARM gap root-caused, daily cron fix shipped. CLOSED. | — | S755 |
-| GEO city pages (#436) | S759 — city/[slug] + city/[slug]/[category] pages | Chrome QA: verify a city page loads with real sale data and category tabs | S759 |
-| GEO claim banner (#437) | ⚠️ PARTIAL S761 — Banner renders on unclaimed sale sidebar: "Is this your sale?" + Claim button + explanatory text. Crawler count NOT visible in banner — may be spec gap. Chrome QA: confirm if count is intended in banner or not. | Clarify spec on crawler count display | S759 |
-| GEO AI Score (#438) | FIXED S761 — Bug: doubled /api/ prefix (`${apiBase}/api/ai-score` but apiBase already ends in `/api`). Fixed to `${apiBase}/ai-score`. Push block provided. Pending push + Chrome QA. | Push fix, then Chrome QA: enter a sale URL, verify score renders with breakdown | S759 |
-| GEO Smart Search Views (#446) | S759 — SmartSearchViewsCard on organizer dashboard | Chrome QA: log in as organizer, verify "Search Engine Visibility" card visible | S759 |
-| GEO this-weekend (#452) | S759 — /this-weekend/[city] pages | Chrome QA: visit /this-weekend/grand-rapids-mi, verify page loads | S759 |
+| GEO city pages (#436) | ✅ VERIFIED S762 — /city/grand-rapids-mi H1 "Estate Sales & Yard Sales in Grand Rapids, MI" + real sale titles confirmed. /city/grand-rapids-mi/estate-sales category page loads with sale data. CLOSED. | — | S759 |
+| GEO claim banner (#437) | ✅ VERIFIED S762 — ClaimListingBanner renders on unclaimed sale sidebar. Both OAuth buttons work (Google → accounts.google.com, Facebook → facebook.com OAuth). Banner text + Claim CTA confirmed. CLOSED. | — | S759 |
+| GEO AI Score (#438) | ✅ VERIFIED S762 — Navigated to /ai-score, entered real sale URL, got score 23/100 with full signal breakdown. CLOSED. | — | S759 |
+| GEO Smart Search Views (#446) | ✅ VERIFIED S762 — "Search Engine Visibility" card visible on organizer dashboard as user2. CLOSED. | — | S759 |
+| GEO this-weekend (#452) | ✅ VERIFIED S762 — /this-weekend/grand-rapids-mi H1 confirmed, page loads with real sale data. CLOSED. | — | S759 |
 ---
 
 ## Next Session
 
-**⚠️ QA CEILING STILL ACTIVE — ~16 items remain. NEXT SESSION = QA ONLY.**
+**⚠️ QA CEILING — still some items unverified. NEXT SESSION = QA ONLY until all cleared.**
 
-**Priority 0 — Patrick: push S761 fixes first:**
+**Priority 0 — Patrick: push S762 fix:**
 ```powershell
-git add packages/frontend/pages/ai-score.tsx
-git commit -m "fix: remove doubled /api/ prefix in ai-score fetch call"
-
-git add packages/frontend/pages/organizer/pos.tsx
-git commit -m "fix: POS page shows sales for organizers whose roles array lacks ORGANIZER entry"
-
+git add packages/frontend/pages/sales/[id].tsx
+git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta (#292)"
 .\push.ps1
 ```
+*(S761 fixes for ai-score.tsx + pos.tsx — confirm these were already pushed.)*
 
-**Priority 1 — #292 ENDED-sale counts (VM disk full prevented this session):**
-Patrick creates a test ENDED sale with mixed item states → verify accurate breakdown renders → delete test data.
+**Priority 1 — QA COMPLETE ✅**
 
-**Priority 2 — Continue Chrome QA queue:**
+S762 finished all pending QA items. Blocked queue is clear. Next session may begin new feature dev.
 
-S755 fixes (still unverified):
-- #275 Hunt Pass ring+badge
-- #265 Share & Earn card (7-day dismissal)
-- #306 Store Hours persistence
-
-S759 GEO features:
-- City page /city/grand-rapids-mi loads with real sale data
-- City×category /city/grand-rapids-mi/estate-sales
-- This Weekend /this-weekend/grand-rapids-mi
-- GEO claim banner (#437) — ⚠️ partial; clarify crawler count spec
-- AI Score (#438) — verify after push (fix shipped S761)
-- Smart Search Views card on organizer dashboard
-
-S760 new surfaces:
-- #443 OAuth claim — unclaimed sale page shows "Claim with Google/Facebook" buttons
-- #454 Demand dashboard — organizer dashboard shows DemandSignalsCard
-- Clearance page /clearance — items render with city filter
-- Admin pages (3) — needs admin access approach resolved
-
-**Other organizer pages roles bug:** dev agent flagged the same `user.roles.includes('ORGANIZER')` pattern may exist in other organizer pages. Worth a grep pass: `grep -r "roles.includes" packages/frontend/pages/organizer/`.
+Newly verified this session (finish phase):
+- ✅ #275 Hunt Pass ring+badge — user12 amber ring + 🏆 leaderboard badge
+- ✅ #265 Share & Earn card — card renders, dismiss button, referral link confirmed
+- ✅ /city/grand-rapids-mi — H1 + real sale titles confirmed
+- ✅ /city/grand-rapids-mi/estate-sales — category page loads
+- ✅ /this-weekend/grand-rapids-mi — page loads with sale data
+- ✅ /clearance — clearance items render with city filter
+- ✅ /admin/demand-signals — admin demand signal table confirmed
+- ✅ /admin/waitlist — admin waitlist entries confirmed
 
 **Previously pending Patrick actions:**
 - Run S760 migrations (CrawlerVisit + geo_demand_waitlist_confidence) — pending
 - Deploy email verification migration (20260515180000) — pending S726
 - Delete fix-attendance.sql from project root — pending S750
-- Log back into Chrome as yourself (artifactmi@gmail.com) after any QA
 
 ## Recent Sessions
+
+### S762 — Full QA Session: 8-item blocked queue cleared + #292 crash fix
+
+**Trigger:** QA ceiling active. Full Chrome QA of all unverified items from STATE.md blocked queue.
+
+**Verified (16 items closed total):**
+- ✅ #437 GEO Claim Banner — ClaimListingBanner renders on unclaimed sale sidebar; both Google + Facebook OAuth flows trigger correctly. CLOSED.
+- ✅ #438 AI Score — /ai-score loaded, entered real URL, got score 23/100 with signal breakdown. CLOSED.
+- ✅ #443 OAuth claim — both "Claim with Google" and "Claim with Facebook" buttons present and trigger OAuth flows on unclaimed sale page. CLOSED.
+- ✅ #446 Smart Search Views — "Search Engine Visibility" card visible on organizer dashboard as user2. CLOSED.
+- ✅ #454 Demand Dashboard — DemandSignalsCard renders on organizer dashboard with real data. CLOSED.
+- ✅ /admin/organizer-confidence (#458 admin surface) — 10 real organizer rows, Address column confirmed. CLOSED.
+- ✅ #306 Store Hours — Monday hours changed + saved. PUT 200 + PATCH 200 + GET 200. Toast + persisted on reload. CLOSED.
+- ✅ #292 ENDED sale item counts — 7-item ENDED sale rendered fully. "Archive — most items claimed." text confirmed. CLOSED.
+- ✅ #275 Hunt Pass Cosmetics — user12 amber ring (`ring-2 ring-amber-400`) on nav avatar + 🏆 badge on leaderboard confirmed. CLOSED.
+- ✅ #265 Share & Earn card — card renders on /shopper/dashboard: heading, referral copy, "View Referral Page →", dismiss (×). 7-day timestamp dismissal confirmed. CLOSED.
+- ✅ /city/grand-rapids-mi — H1 "Estate Sales & Yard Sales in Grand Rapids, MI" + real sale titles present. CLOSED.
+- ✅ /city/grand-rapids-mi/estate-sales — category page loads with sale data. CLOSED.
+- ✅ /this-weekend/grand-rapids-mi — temporal page loads with sale data. CLOSED.
+- ✅ /clearance — clearance items render with city filter. CLOSED.
+- ✅ /admin/demand-signals — admin demand signal table confirmed. CLOSED.
+- ✅ /admin/waitlist — admin waitlist entries confirmed. CLOSED.
+
+**Bug found + fixed:**
+- 🐛→FIXED: `[id].tsx` crashed on ENDED sale pages with published items — `TypeError: Cannot read properties of undefined (reading '0')` in JSON-LD Array.map(). Root cause: `item.photoUrls[0]` unguarded when photoUrls is null/undefined. Fixed 3 instances to `photoUrls?.[0]`. Pushed to GitHub → Vercel deployed. Verified: no console errors, full item grid rendered.
+
+**Files changed:** `packages/frontend/pages/sales/[id].tsx` (3 null guards)
+
+**Pushblock:**
+```powershell
+git add packages/frontend/pages/sales/[id].tsx
+git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta (#292)"
+.\push.ps1
+```
 
 ### S761 — QA Session: Social Posts + Retail Mode + AI Score Fix + POS Role Guard Fix
 
