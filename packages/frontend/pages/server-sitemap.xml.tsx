@@ -1,7 +1,7 @@
-import { getServerSideSitemap } from 'next-sitemap';
+import { getServerSideSitemapLegacy as getServerSideSitemap } from 'next-sitemap';
 import api from '../lib/api';
 
-export async function getServerSideProps() {
+export async function getServerSideProps(ctx: any) {
   try {
     const baseUrl = process.env.SITE_URL || 'https://finda.sale';
 
@@ -166,11 +166,11 @@ export async function getServerSideProps() {
       ...guideUrls,
     ];
 
-    return getServerSideSitemap(fields);
+    return getServerSideSitemap(ctx, fields);
   } catch (error) {
     console.error('Error generating sitemap:', error);
     // Return empty sitemap if there's an error
-    return getServerSideSitemap([]);
+    return getServerSideSitemap(ctx, []);
   }
 }
 
