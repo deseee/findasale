@@ -1275,19 +1275,19 @@ const ReviewPage = () => {
                 const currentTags = editState.tags || item.tags || [];
                 const rarityKey = item.rarity && rarityColors[item.rarity] ? item.rarity : 'COMMON';
                 const readiness = computeReadiness(item, editState, ebayConnected);
-                const readinessBorder = {
-                  red: 'border-l-4 border-l-red-500',
-                  yellow: 'border-l-4 border-l-yellow-400',
-                  green: 'border-l-4 border-l-green-500',
-                  blue: 'border-l-4 border-l-blue-500',
+                const readinessBorderColor = {
+                  red: '#ef4444',
+                  yellow: '#facc15',
+                  green: '#22c55e',
+                  blue: '#3b82f6',
                 }[readiness];
 
                 return (
                   <div
                     key={item.id}
                     ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
-                    className={`relative bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] overflow-hidden ${readinessBorder}`}
-                    style={{ boxShadow: '0 1px 3px rgba(20,18,14,0.06)' }}
+                    className={`relative bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] border-l-4 overflow-hidden`}
+                    style={{ boxShadow: '0 1px 3px rgba(20,18,14,0.06)', borderLeftColor: readinessBorderColor }}
                   >
                     {/* Review stripe — amber, persists until approved */}
                     <div
