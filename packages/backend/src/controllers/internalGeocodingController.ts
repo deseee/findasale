@@ -116,37 +116,36 @@ export async function bulkUpdateGeocodedSales(req: Request, res: Response): Prom
       return;
     }
 
-    // Update each sale individually — only if lat is still null (safety check)
-    let updated = 0;
-    let skipped = 0;
+    // Respond immediately — Railway has a 30s request timeout; the DB loop below
+    // may exceed that for large batches. Fire-and-forget prevents double-response errors.
+    res.status(202).json({ message: 'Geocoding batch started', received: results.length, valid: valid.length });
 
-    for (const result of valid) {
-      const count = await prisma.sale.updateMany({
-        where: {
-          id: result.id,
-          lat: null, // Only update if still ungeocoded — prevents overwriting real data
-        },
-        data: {
-          lat: result.lat,
-          lng: result.lng,
-        },
-      });
+    // Run the update loop in the background after the response is sent
+    (async () => {
+      let updated = 0;
+      let skipped = 0;
 
-      if (count.count > 0) {
-        updated++;
-      } else {
-        skipped++;
+      for (const result of valid) {
+        const count = await prisma.sale.updateMany({
+          where: {
+            id: result.id,
+            lat: null, // Only update if still ungeocoded — prevents overwriting real data
+          },
+          data: {
+            lat: result.lat,
+            lng: result.lng,
+          },
+        });
+
+        if (count.count > 0) {
+          updated++;
+        } else {
+          skipped++;
+        }
       }
-    }
 
-    console.log(`[GeocodingBulk] Updated ${updated} sales, skipped ${skipped} (already had lat/lng or not found)`);
-
-    res.status(200).json({
-      received: results.length,
-      valid: valid.length,
-      updated,
-      skipped,
-    });
+      console.log(`[GeocodingBulk] Updated ${updated} sales, skipped ${skipped} (already had lat/lng or not found)`);
+    })().catch((err) => console.error('[GeocodingBulk] background error:', err));
   } catch (error) {
     console.error('[GeocodingBulk] Request error:', error instanceof Error ? error.message : String(error));
     res.status(500).json({ error: 'Internal server error' });

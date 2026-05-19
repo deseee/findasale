@@ -71,7 +71,7 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
     // If not owner, check if user is a member of a workspace
     if (!workspace) {
       const membership = await prisma.workspaceMember.findFirst({
-        where: { organizerId, workspace: { id: { not: '' } } },
+        where: { organizerId, acceptedAt: { not: null } },
         include: {
           workspace: {
             include: workspaceInclude,
@@ -767,7 +767,6 @@ export const getMyWorkspaceMemberships = async (req: AuthRequest, res: Response)
     const memberships = await prisma.workspaceMember.findMany({
       where: {
         acceptedAt: { not: null }, // Only accepted invitations
-        workspace: { id: { not: '' } }, // Skip orphaned members (workspace deleted without cascade)
         OR: [
           ...(organizer ? [{ organizerId: organizer.id }] : []),
           { userId },

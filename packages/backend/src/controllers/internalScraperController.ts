@@ -27,18 +27,25 @@ export const ingestFromGitHubActions = async (req: Request, res: Response): Prom
     // is the correct path for unclaimed scraped listings.
     const organizerId: string | undefined = req.body.organizerId || undefined;
 
-    const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
+    // Respond immediately to avoid Railway 30-second timeout → double-response error.
+    // Ingest runs in the background (fire-and-forget).
+    res.status(202).json({ message: 'Scraper ingest started' });
 
-    // Ingest each item
-    for (const item of items) {
-      const result = await ingestScrapedListing(item, organizerId);
-      if (result.status === 'created') stats.created++;
-      else if (result.status === 'updated') stats.updated++;
-      else if (result.status === 'skipped') stats.skipped++;
-      else stats.failed++;
-    }
+    const runIngest = async (): Promise<void> => {
+      const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
-    res.json({ stats });
+      for (const item of items) {
+        const result = await ingestScrapedListing(item, organizerId);
+        if (result.status === 'created') stats.created++;
+        else if (result.status === 'updated') stats.updated++;
+        else if (result.status === 'skipped') stats.skipped++;
+        else stats.failed++;
+      }
+
+      console.log('[internalScraperController] Ingest complete:', stats);
+    };
+
+    runIngest().catch(err => console.error('[scraper-ingest] background error:', err));
   } catch (error) {
     console.error('[internalScraperController] Ingest error:', error);
     if (!res.headersSent) {
