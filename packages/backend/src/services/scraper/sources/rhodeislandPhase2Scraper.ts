@@ -1,189 +1,298 @@
 /**
- * Rhode Island Department of Business Regulation — Pawnbroker License Scraper (Phase 2)
- * Scrapes licensed pawnbrokers from RI DBR banking division pawnbroker search
- * Source: https://dbr.ri.gov/
- * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data
+ * Rhode Island Phase 2 — Providence Open Data (Socrata) Business License Scraper
+ * Source: https://data.providenceri.gov/resource/ui7z-kv69.json
+ * Fetches business licenses from Providence RI Open Data portal via Socrata API,
+ * filtered for secondhand sale types (auction, estate sale, consignment, antique,
+ * pawn, thrift, resale, secondhand, flea market, yard sale, surplus, liquidation).
+ *
+ * ADR-073: Directory Scraper Phase 2 — Providence RI Open Data
  */
 
-import { defaultRateLimiter } from '../rateLimiter';
-import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
+import { getOrCreateScrapedOrganizer } from '../index';
 
-const RI_DBR_URL = 'https://dbr.ri.gov/';
-const RI_LICENSEE_URL = 'https://dbr.ri.gov/divisions/banking/pawnbrokers';
+const SOCRATA_ENDPOINT = 'https://data.providenceri.gov/resource/ui7z-kv69.json';
+const SOURCE_NAME = 'RhodeIslandPhase2';
+const SOURCE_LABEL = 'ProvidenceOpenData';
+
+// Secondhand sale keywords for Socrata $where filter
+const SALE_KEYWORDS = [
+  'auction',
+  'estate sale',
+  'consignment',
+  'antique',
+  'pawn',
+  'thrift',
+  'resale',
+  'secondhand',
+  'flea market',
+  'yard sale',
+  'surplus',
+  'liquidat',
+];
+
+// False-positive business name fragments
+const EXCLUDE_FRAGMENTS = [
+  'real estate', 'realty', 'realtor', 'mortgage', 'bank', 'credit union',
+  'financial', 'insurance', 'law office', 'attorney', 'lawyer',
+  'dental', 'dentist', 'medical', 'clinic', 'pharmacy', 'hospital',
+  'restaurant', 'hotel', 'motel', 'petroleum', 'gas station',
+  'automotive', 'car wash', 'daycare', 'school', 'church', 'funeral',
+  'landscaping', 'construction', 'plumbing', 'electrical', 'roofing',
+  'hair salon', 'nail salon', 'tattoo', 'massage', 'yoga', 'gym',
+  'grocery', 'supermarket',
+];
 
 /**
- * Scrape Rhode Island pawnbroker licenses from RI DBR.
- * Attempts static HTML fetch of pawnbroker licensee page.
+ * Map a keyword match to a valid businessCategory for getOrCreateScrapedOrganizer.
+ */
+function mapCategory(nameAndType: string): string {
+  const lower = nameAndType.toLowerCase();
+  if (lower.includes('auction')) return 'AUCTION_HOUSE';
+  if (lower.includes('estate sale')) return 'ESTATE_SALE_CO';
+  if (lower.includes('consign')) return 'CONSIGNMENT';
+  if (lower.includes('antique')) return 'ANTIQUE_DEALER';
+  if (lower.includes('pawn')) return 'PAWN_SHOP';
+  if (lower.includes('thrift') || lower.includes('resale') || lower.includes('secondhand')) return 'THRIFT_STORE';
+  if (lower.includes('flea')) return 'FLEA_MARKET';
+  if (lower.includes('yard sale')) return 'ESTATE_SALE_CO';
+  if (lower.includes('surplus') || lower.includes('liquidat')) return 'LIQUIDATION';
+  return 'THRIFT_STORE'; // fallback for anything that passed the keyword filter
+}
+
+/**
+ * Check if a business name contains any exclude fragment.
+ */
+function isFalsePositive(name: string): boolean {
+  const lower = name.toLowerCase();
+  return EXCLUDE_FRAGMENTS.some((frag) => lower.includes(frag));
+}
+
+/**
+ * Build the Socrata $where clause: OR across all keyword matches on likely text fields.
+ * We search across business name and business type/description fields.
+ */
+function buildWhereClause(nameField: string, typeField?: string): string {
+  const clauses = SALE_KEYWORDS.map((kw) => {
+    const escaped = kw.replace(/'/g, "''");
+    const parts = [`upper(${nameField}) like upper('%${escaped}%')`];
+    if (typeField) {
+      parts.push(`upper(${typeField}) like upper('%${escaped}%')`);
+    }
+    return `(${parts.join(' OR ')})`;
+  });
+  return clauses.join(' OR ');
+}
+
+interface SocrataRecord {
+  [key: string]: string | undefined;
+}
+
+/**
+ * Discover field names by fetching a single record.
+ * Returns the best-guess field names for business name, address, city, phone, and type.
+ */
+async function discoverFields(): Promise<{
+  nameField: string;
+  addressField?: string;
+  cityField?: string;
+  phoneField?: string;
+  typeField?: string;
+  zipField?: string;
+}> {
+  const url = `${SOCRATA_ENDPOINT}?$limit=1`;
+  const resp = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!resp.ok) {
+    throw new Error(`[${SOURCE_NAME}] Field discovery failed: HTTP ${resp.status}`);
+  }
+
+  const records: SocrataRecord[] = await resp.json();
+  if (!records.length) {
+    throw new Error(`[${SOURCE_NAME}] Field discovery returned empty dataset`);
+  }
+
+  const fields = Object.keys(records[0]);
+  const lower = fields.map((f) => f.toLowerCase());
+
+  console.log(`[${SOURCE_NAME}] Available fields: ${fields.join(', ')}`);
+
+  // Find business name field
+  const nameField =
+    fields.find((f) => f.toLowerCase() === 'businessname') ??
+    fields.find((f) => f.toLowerCase() === 'business_name') ??
+    fields.find((f) => f.toLowerCase() === 'dba_name') ??
+    fields.find((f) => f.toLowerCase() === 'dbaname') ??
+    fields.find((f) => f.toLowerCase() === 'company_name') ??
+    fields.find((f) => f.toLowerCase() === 'companyname') ??
+    fields.find((f) => lower.includes(f.toLowerCase()) && f.toLowerCase().includes('name'));
+
+  if (!nameField) {
+    throw new Error(`[${SOURCE_NAME}] Could not identify business name field from: ${fields.join(', ')}`);
+  }
+
+  // Find address field
+  const addressField =
+    fields.find((f) => f.toLowerCase() === 'address') ??
+    fields.find((f) => f.toLowerCase() === 'business_address') ??
+    fields.find((f) => f.toLowerCase() === 'street_address') ??
+    fields.find((f) => f.toLowerCase() === 'location_address') ??
+    fields.find((f) => f.toLowerCase().includes('address') && !f.toLowerCase().includes('email'));
+
+  // Find city field
+  const cityField =
+    fields.find((f) => f.toLowerCase() === 'city') ??
+    fields.find((f) => f.toLowerCase() === 'business_city') ??
+    fields.find((f) => f.toLowerCase().includes('city'));
+
+  // Find phone field
+  const phoneField =
+    fields.find((f) => f.toLowerCase() === 'phone') ??
+    fields.find((f) => f.toLowerCase() === 'telephone') ??
+    fields.find((f) => f.toLowerCase() === 'phone_number') ??
+    fields.find((f) => f.toLowerCase().includes('phone'));
+
+  // Find business type / description field
+  const typeField =
+    fields.find((f) => f.toLowerCase() === 'businesstype') ??
+    fields.find((f) => f.toLowerCase() === 'business_type') ??
+    fields.find((f) => f.toLowerCase() === 'license_type') ??
+    fields.find((f) => f.toLowerCase() === 'category') ??
+    fields.find((f) => f.toLowerCase() === 'description') ??
+    fields.find((f) => f.toLowerCase().includes('type') || f.toLowerCase().includes('category'));
+
+  // Find zip field
+  const zipField =
+    fields.find((f) => f.toLowerCase() === 'zip') ??
+    fields.find((f) => f.toLowerCase() === 'zipcode') ??
+    fields.find((f) => f.toLowerCase() === 'zip_code') ??
+    fields.find((f) => f.toLowerCase() === 'postal_code') ??
+    fields.find((f) => f.toLowerCase().includes('zip'));
+
+  console.log(`[${SOURCE_NAME}] Field mapping: name=${nameField}, address=${addressField}, city=${cityField}, phone=${phoneField}, type=${typeField}, zip=${zipField}`);
+
+  return { nameField, addressField, cityField, phoneField, typeField, zipField };
+}
+
+/**
+ * Scrape Providence RI Open Data (Socrata) business licenses for secondhand sale businesses.
+ * Uses $where filter to find relevant license types, then upserts via getOrCreateScrapedOrganizer.
+ * Throws if zero results are returned.
  */
 export async function runRhodeIslandPhase2Scraper(): Promise<void> {
-  const domain = new URL(RI_DBR_URL).hostname;
-  let totalRecords = 0;
-  let createdOrganizers = 0;
+  console.log(`[${SOURCE_NAME}] Starting Providence Open Data business license scraper`);
 
-  console.log('[RhodeIsland Phase2] Starting pawnbroker license scraper');
+  // Step 1: Discover field names
+  const { nameField, addressField, cityField, phoneField, typeField, zipField } = await discoverFields();
 
-  try {
-    // Step 1: Fetch the pawnbroker licensee page
-    await defaultRateLimiter.waitBeforeRequest(domain);
+  // Step 2: Build filtered query
+  const whereClause = buildWhereClause(nameField, typeField);
+  const queryUrl = `${SOCRATA_ENDPOINT}?$where=${encodeURIComponent(whereClause)}&$limit=1000`;
 
-    const pageResponse = await fetch(RI_LICENSEE_URL, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
+  console.log(`[${SOURCE_NAME}] Fetching with $where filter across ${SALE_KEYWORDS.length} keywords`);
 
-    if (!pageResponse.ok) {
-      // Try alternate URL pattern
-      await defaultRateLimiter.waitBeforeRequest(domain);
-      const altResponse = await fetch(`${RI_DBR_URL}divisions/banking/regulated-entities`, {
-        method: 'GET',
-        headers: {
-          'User-Agent': getRandomUserAgent(),
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Encoding': 'gzip, deflate',
-          Connection: 'keep-alive',
-        },
-        signal: AbortSignal.timeout(30000),
-      });
+  const resp = await fetch(queryUrl, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(30000),
+  });
 
-      if (!altResponse.ok) {
-        console.warn(
-          `[RhodeIsland Phase2] Portal blocked — TODO: Playwright/headless browser. Both URLs returned errors: ${pageResponse.status} / ${altResponse.status}`
-        );
-        return;
-      }
+  if (!resp.ok) {
+    throw new Error(`[${SOURCE_NAME}] Socrata API error: HTTP ${resp.status} ${resp.statusText}`);
+  }
+
+  const records: SocrataRecord[] = await resp.json();
+  console.log(`[${SOURCE_NAME}] Socrata returned ${records.length} raw records`);
+
+  if (records.length === 0) {
+    throw new Error(`[${SOURCE_NAME}] Zero results from Socrata API — endpoint may have changed or filter is too narrow`);
+  }
+
+  // Step 3: Deduplicate by normalized business name
+  const seen = new Set<string>();
+  const uniqueRecords: SocrataRecord[] = [];
+
+  for (const rec of records) {
+    const rawName = rec[nameField];
+    if (!rawName) continue;
+
+    const normalized = rawName.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    uniqueRecords.push(rec);
+  }
+
+  console.log(`[${SOURCE_NAME}] ${uniqueRecords.length} unique records after deduplication (removed ${records.length - uniqueRecords.length} dupes)`);
+
+  // Step 4: Filter false positives and upsert
+  let processed = 0;
+  let created = 0;
+  let skipped = 0;
+
+  for (const rec of uniqueRecords) {
+    const businessName = (rec[nameField] ?? '').trim();
+    if (!businessName) {
+      skipped++;
+      continue;
     }
 
-    const html = await pageResponse.text();
+    if (isFalsePositive(businessName)) {
+      skipped++;
+      continue;
+    }
 
-    // Detect Cloudflare or JS-only rendering
-    const isBlocked =
-      html.includes('cf-browser-verification') ||
-      html.includes('Just a moment') ||
-      html.includes('Checking your browser') ||
-      html.includes('_cf_chl_opt') ||
-      html.trim().length < 500;
+    // Also check type field for false positives
+    const typeValue = typeField ? (rec[typeField] ?? '') : '';
+    if (typeValue && isFalsePositive(typeValue)) {
+      skipped++;
+      continue;
+    }
 
-    if (isBlocked) {
-      console.warn(
-        '[RhodeIsland Phase2] Portal blocked — TODO: Playwright/headless browser required for dbr.ri.gov'
+    // Determine category from name + type
+    const categoryInput = `${businessName} ${typeValue}`;
+    const category = mapCategory(categoryInput);
+
+    // Extract location fields
+    const city = cityField ? (rec[cityField] ?? '').trim() : 'Providence';
+    const phone = phoneField ? (rec[phoneField] ?? '').trim() || undefined : undefined;
+
+    try {
+      const result = await getOrCreateScrapedOrganizer(
+        businessName,
+        SOURCE_NAME,
+        city || 'Providence',
+        'RI',
+        undefined,       // esnOrgId
+        undefined,       // googlePlaceId
+        undefined,       // foursquareVenueId
+        undefined,       // hereBusinessId
+        category,        // businessCategory
+        undefined,       // contactEmail
+        phone,           // phone
+        undefined,       // website
+        undefined,       // lat
+        undefined,       // lng
+        true,            // isStateLicensed
+        'RI',            // licenseState
+        undefined,       // licenseNumber
+        SOURCE_LABEL,    // sourceLabel
       );
-      return;
-    }
 
-    console.log('[RhodeIsland Phase2] Fetched pawnbroker licensee page');
+      processed++;
+      if (result) created++;
 
-    // Step 2: Parse table rows or list items for pawnbroker entries
-    const extractText = (cellHtml: string): string =>
-      cellHtml
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .trim();
-
-    // Try table parsing first
-    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
-    const rows = html.match(rowRegex) || [];
-
-    if (rows.length > 1) {
-      console.log(`[RhodeIsland Phase2] Found ${rows.length} table rows`);
-
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/g;
-        const cells = row.match(cellRegex) || [];
-
-        if (cells.length < 2) continue;
-
-        const businessName = extractText(cells[0]);
-        const city = cells.length > 1 ? extractText(cells[1]) : '';
-        const licenseNumber = cells.length > 2 ? extractText(cells[2]) : `RI-PAWN-${totalRecords + 1}`;
-
-        if (!businessName) continue;
-
-        totalRecords++;
-        console.log(`[RhodeIsland Phase2] Processing: ${businessName} (License ${licenseNumber}) in ${city}, RI`);
-
-        try {
-          const existing = await prisma.organizer.findFirst({
-            where: {
-              businessName: { equals: businessName, mode: 'insensitive' },
-              licenseState: 'RI',
-            },
-            select: { id: true },
-          });
-
-          if (existing) {
-            await prisma.organizer.update({
-              where: { id: existing.id },
-              data: {
-                licenseNumber,
-                licenseState: 'RI',
-                isStateLicensed: true,
-                directoryMostRecentSource: 'RhodeIslandPhase2',
-                directoryMostRecentAt: new Date(),
-              },
-            });
-          } else {
-            const slug = businessName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
-            const citySlug = city.toLowerCase().replace(/[^a-z0-9]/g, '-');
-            await prisma.organizer.create({
-              data: {
-                businessName,
-                phone: null,
-                address: city ? `${city}, RI` : 'Rhode Island',
-                bio: `Licensed pawnbroker in ${city || 'Rhode Island'}.`,
-                isClaimed: false,
-                isUnmanagedListing: true,
-                licenseNumber,
-                licenseState: 'RI',
-                isStateLicensed: true,
-                businessCategory: 'PAWN_SHOP',
-                directoryMostRecentSource: 'RhodeIslandPhase2',
-                directoryMostRecentAt: new Date(),
-                user: {
-                  create: {
-                    email: `scraper+${slug}-${citySlug}-ri-riphase2@system.finda.sale`,
-                    name: businessName,
-                    password: null,
-                    role: 'ORGANIZER',
-                    roles: ['ORGANIZER'],
-                  },
-                },
-              },
-            });
-            createdOrganizers++;
-          }
-
-          if (totalRecords % 50 === 0) {
-            console.log(
-              `[RhodeIsland Phase2] Progress: processed ${totalRecords} records, created ${createdOrganizers} organizers`
-            );
-          }
-        } catch (err) {
-          console.error(`[RhodeIsland Phase2] Error processing ${businessName}:`, err);
-        }
+      if (processed % 50 === 0) {
+        console.log(`[${SOURCE_NAME}] Progress: ${processed} processed, ${created} created, ${skipped} skipped`);
       }
-    } else {
-      // No table found — page may be a static list or require different parsing
-      console.warn(
-        '[RhodeIsland Phase2] Portal blocked — TODO: Playwright/headless browser. No table found on pawnbroker page — manual inspection of dbr.ri.gov required'
-      );
-      return;
+    } catch (err) {
+      console.error(`[${SOURCE_NAME}] Error upserting "${businessName}":`, err);
     }
+  }
 
-    console.log(
-      `[RhodeIsland Phase2] Scraper completed: processed ${totalRecords} records, created ${createdOrganizers} organizers`
-    );
-  } catch (err) {
-    console.error('[RhodeIsland Phase2] Scraper error:', err);
-    throw err;
+  console.log(`[${SOURCE_NAME}] Complete: ${processed} processed, ${created} created, ${skipped} skipped (false positives / empty names)`);
+
+  if (processed === 0) {
+    throw new Error(`[${SOURCE_NAME}] Zero valid records after filtering — all ${uniqueRecords.length} records were false positives`);
   }
 }
