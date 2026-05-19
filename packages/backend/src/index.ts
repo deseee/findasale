@@ -606,6 +606,25 @@ app.get('/api/protected', authenticate, (req, res) => {
   res.json({ message: 'This is a protected route', user: (req as any).user });
 });
 
+// eBay webhook stream guard — must run BEFORE Sentry's error handler so it never records this noise.
+// express.json() (global body parser) throws `stream is not readable` (raw-body type: stream.not.readable)
+// when eBay's delivery infrastructure closes the HTTP connection before body-parse finishes reading.
+// This occurs on rapid retries and keep-alive connection reuse. Since handleEbayAccountDeletion and
+// handleEbayNotification both ignore req.body entirely, we ack 200 immediately to halt eBay's retry loop.
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const isEbayWebhookPath =
+    req.path === '/api/ebay/account-deletion' || req.path === '/api/ebay/notifications';
+  const isStreamError =
+    err?.type === 'stream.not.readable' || err?.message === 'stream is not readable';
+  if (isEbayWebhookPath && isStreamError) {
+    if (!res.headersSent) {
+      res.status(200).json({});
+    }
+    return;
+  }
+  next(err);
+});
+
 // Sentry error handler — must be registered after all routes and before the custom error handler
 // Captures exceptions and attaches Sentry event IDs to req.sentry
 Sentry.setupExpressErrorHandler(app);

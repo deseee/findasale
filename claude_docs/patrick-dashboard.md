@@ -4,13 +4,13 @@
 
 ## What Happened This Week
 
-**S764 (today — Tier 2 Chrome QA):** 18 items verified. Found 2 P1 bugs: #363 lot number has no organizer input (backend + display both exist, UI missing); #439 backend SSR sale query doesn't include items (Product schema can't render for crawlers). Also found P2: add-items page has zero tooltip guidance; Brand Kit logo is URL-only; social links split across two settings pages.
+**S765 (today — Sentry/CI health audit + 11 bug fixes):** Daily monitor triggered investigation. All actionable Sentry issues now resolved — backend dropped from 36 → 0 active unresolved, frontend 4 → 0. Fixed: hooks violations (5 pages), MutationCache global onError, Sentry Dashlane filter, enrichment + geocoding + scraper ingest all fire-and-forget (Railway timeout fix), eBay webhook stream error suppressed, workspace PrismaClientUnknownRequestError fixed (invalid Prisma filter removed), FB Events scraper now extracts real street addresses from URL slugs. Migration created: 3 non-blocking indexes (Review.saleId eliminates 17s query, ItemReservation indexes).
+
+**S764:** 18 items verified. Found 2 P1 bugs: #363 lot number has no organizer input; #439 backend SSR sale query doesn't include items.
 
 **S763:** Low-token doc audit cleared 22 stale roadmap entries. Fixed 5 bugs: Flip Report tier gate (#41), login silent error, Hold-to-Pay modal wiring (#221), GEO JSON-LD SSR, ENDED sale noindex.
 
 **S762:** Cleared entire blocked QA queue — 16 items verified ✅. Fixed #292 crash on ENDED sale pages.
-
-**S761:** Verified #305 Social Posts ✅ and #307 Retail Mode ✅. Fixed ai-score + POS roles guard.
 
 ---
 
@@ -25,21 +25,45 @@
 
 ## Action Items for Patrick
 
-### 1. Push S763 + S764 docs:
+### 1. Push everything (S763 + S764 + S765):
 ```powershell
 git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
 git add packages/frontend/pages/login.tsx
 git add packages/frontend/pages/organizer/holds.tsx
 git add packages/frontend/pages/sales/[id].tsx
+git add packages/frontend/pages/organizer/message-templates.tsx
+git add packages/frontend/pages/coupons.tsx
+git add packages/frontend/pages/organizer/payouts.tsx
+git add packages/frontend/pages/organizer/webhooks.tsx
+git add packages/frontend/pages/shopper/rare-finds.tsx
+git add packages/frontend/pages/_app.tsx
+git add packages/frontend/sentry.client.config.ts
+git add packages/backend/src/controllers/internalListingEnrichmentController.ts
+git add packages/backend/src/controllers/internalGeocodingController.ts
+git add packages/backend/src/controllers/internalScraperController.ts
+git add packages/backend/src/controllers/workspaceController.ts
+git add packages/backend/src/index.ts
+git add packages/backend/src/services/scraper/sources/search-facebook-events.ts
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260628100000_add_missing_indexes/migration.sql
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/audits/qa-status-reconciliation-2026-05-18.md
 git add claude_docs/audits/qa-plan-2026-05-18.md
 git add claude_docs/audits/geo-verification-2026-05-18.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: flip report tier gate, login toast, hold-to-pay modal wiring, GEO JSON-LD SSR, noindex prop; S764 QA findings (#41 #221 #363 #449 #457)"
+git commit -m "fix: scraper ingest + eBay webhook + workspace Prisma errors + Review/ItemReservation indexes; hooks order, MutationCache, Sentry filter, fire-and-forget endpoints, FB Events address parsing"
 .\push.ps1
 ```
+
+### 2. Run migration after push (non-blocking, safe in prod):
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+Adds 3 indexes: Review.saleId (kills 17s query), ItemReservation.userId, ItemReservation.(status, expiresAt). PostgreSQL builds these without locking — safe to run anytime.
 
 ### 2. Pending (when ready):
 - [ ] **Run migrations** (CrawlerVisit + geo_demand_waitlist_confidence — S760, still pending):

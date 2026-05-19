@@ -8,9 +8,22 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S764 — Tier 2 Chrome QA + 2 P1 bugs found**
+**Latest: S765 — Sentry/CI health audit + 11 bug fixes**
 
-Live Chrome QA sweep of Tier 2 items from qa-plan-2026-05-18.md. 18 items verified across two batches (pre- and post-compaction). 2 P1 bugs found: #363 lot number input missing from organizer item form (backend supports it, display shows it, no UI); #439 backend SSR query excludes items (Product schema can't render server-side). No code changes this session — QA only.
+Daily health monitor triggered investigation. All actionable Sentry issues resolved. Backend Sentry: 36 → 0 active unresolved (11 resolved by code fixes, 14 ignored as stale build artifacts, rest moot). Frontend Sentry: 4 → 0. Requires 1 migration (non-blocking indexes).
+
+**Fixed this session:**
+- ✅ Hooks-count violations in 5 frontend pages — moved hooks above auth guards
+- ✅ Global MutationCache onError (_app.tsx) — kills 45x/day "Error: Rejected" Sentry noise
+- ✅ Sentry beforeSend filter — drops Dashlane extension errors at source
+- ✅ AI enrichment endpoint — fire-and-forget, eliminates Railway 30s timeout
+- ✅ Geocoding bulk endpoint — same fire-and-forget fix
+- ✅ Scraper ingest endpoint — same fire-and-forget fix (81 events, NODEJS-1B)
+- ✅ Facebook Events scraper — parseAddressFromFacebookSlug() extracts real addresses from ~54% of records
+- ✅ eBay account deletion — stream.not.readable suppressed before Sentry (eBay retry behavior, NODEJS-S)
+- ✅ Workspace routes — removed invalid Prisma relation filter causing PrismaClientUnknownRequestError on /api/workspace + /api/workspace/my-memberships (87 events, NODEJS-A/B)
+- ✅ Missing DB indexes — Review.saleId (eliminates 17s query), ItemReservation.userId + (status,expiresAt) — migration created
+- ✅ NODEJS-17 (e is not defined) — already fixed in prior commit 2e69a27f, confirmed closed
 
 **Verified this session:**
 - ✅ #433 #434 #378 #60 #260 #432 #441 #451 #440 #449 #457 #352 #360 #405 — Tier 2A quick checks all pass
@@ -106,19 +119,29 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority 0 — Patrick: push S763 + S764 docs:**
+**Priority 0 — Patrick: push S763 + S764 + S765 changes:**
 ```powershell
 git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
 git add packages/frontend/pages/login.tsx
 git add packages/frontend/pages/organizer/holds.tsx
 git add packages/frontend/pages/sales/[id].tsx
+git add packages/frontend/pages/organizer/message-templates.tsx
+git add packages/frontend/pages/coupons.tsx
+git add packages/frontend/pages/organizer/payouts.tsx
+git add packages/frontend/pages/organizer/webhooks.tsx
+git add packages/frontend/pages/shopper/rare-finds.tsx
+git add packages/frontend/pages/_app.tsx
+git add packages/frontend/sentry.client.config.ts
+git add packages/backend/src/controllers/internalListingEnrichmentController.ts
+git add packages/backend/src/controllers/internalGeocodingController.ts
+git add packages/backend/src/services/scraper/sources/search-facebook-events.ts
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/audits/qa-status-reconciliation-2026-05-18.md
 git add claude_docs/audits/qa-plan-2026-05-18.md
 git add claude_docs/audits/geo-verification-2026-05-18.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: flip report tier gate, login toast, hold-to-pay modal wiring, GEO JSON-LD SSR, noindex prop; S764 QA findings (#41 #221 #363 #449 #457)"
+git commit -m "fix: hooks order, MutationCache onError, Sentry filter, enrichment+geocoding fire-and-forget, FB Events address parsing; S764 P1 bugs, QA findings"
 .\push.ps1
 ```
 
@@ -142,6 +165,44 @@ Dispatch `findasale-dev` to add `items: { take: 20, select: { title, price, cond
 - Delete fix-attendance.sql from project root — pending S750
 
 ## Recent Sessions
+
+### S765 — Sentry/CI Health Audit + 6 Bug Fixes
+
+**Trigger:** Daily health monitor (scheduled task) ran. Patrick directed "investigate and dispatch repairs."
+
+**Health findings (last 24h):**
+- GitHub Actions: 11 failures — 10x auctioneer/pawnbroker scrapers (LOW, known ongoing), 1x Enrich AI Listing Metadata (FIXED)
+- Backend Sentry: 36 unresolved (14 ignored as stale build artifacts, 2 resolved by fixes, 3 active issues remain)
+- Frontend Sentry: 4 unresolved → all 3 code-related resolved; 1 ServiceWorker (persistent, low priority)
+
+**Bugs fixed (4 parallel agents):**
+- ✅ Hooks-count violations — 5 pages had auth-guard early returns before hook calls. Fixed: message-templates.tsx, coupons.tsx, payouts.tsx, webhooks.tsx, rare-finds.tsx
+- ✅ Global MutationCache onError in _app.tsx — TanStack Query v5 mutateAsync() rejections were unhandled
+- ✅ Sentry beforeSend filter (sentry.client.config.ts) — Dashlane extension errors dropped at source
+- ✅ internalListingEnrichmentController.ts — fire-and-forget pattern; Railway 30s timeout → 503 fixed
+- ✅ internalGeocodingController.ts — same fire-and-forget fix; "Geocode Ungeocoded Sales" workflow now passes
+- ✅ search-facebook-events.ts — parseAddressFromFacebookSlug() + parseAddressFromTitle() added; ~54% of FB Events records will now arrive with real street addresses
+
+**Geocoding investigation findings:**
+- GarageSaleFinder 5,637 null-lat records: parser is fine, addresses are clean — pure throughput backlog from May 16 large scrape. Will self-clear in ~10 nightly runs. No fix needed.
+- Facebook Events 1,130 null-lat records: structural — addresses were always blank at ingest. Fix shipped (slug parser). Existing records unaddressed; future scrapes will geocode correctly.
+
+**Sentry cleanup (MCP):**
+- Resolved: NEXTJS-1 (Error: Rejected), NEXTJS-E (Dashlane), NEXTJS-6 (hooks), NODEJS-1W (enrichment double-response), NODEJS-1V (geocoding double-response)
+- Ignored forever: 13 stale build artifacts (old "Cannot find module" errors, 15-25 days old)
+- Ignored until escalating: NODEJS-1E, NODEJS-11 (geocoding audit warnings, being addressed by FB Events fix)
+
+**Active Sentry issues NOT yet fixed (next dispatch candidates):**
+- NODEJS-1B: "Cannot set headers" at POST /api/internal/scraper/ingest — 81 events (double-response in scraper ingest handler)
+- NODEJS-17: ReferenceError: `e is not defined` at organizers route — 12 events, 10 days ago
+- NODEJS-S: "stream is not readable" at POST /api/ebay/account-deletion — 7 events, last seen 6h ago (active)
+- NODEJS-1Q: Slow DB query 17,391ms on Review LEFT JOIN Sale — P1 missing index
+- NODEJS-B/A: PrismaClientUnknownRequestError at /api/workspace routes — 87 events, 22-25 days old
+
+**Files changed:**
+`packages/frontend/pages/organizer/message-templates.tsx` · `packages/frontend/pages/coupons.tsx` · `packages/frontend/pages/organizer/payouts.tsx` · `packages/frontend/pages/organizer/webhooks.tsx` · `packages/frontend/pages/shopper/rare-finds.tsx` · `packages/frontend/pages/_app.tsx` · `packages/frontend/sentry.client.config.ts` · `packages/backend/src/controllers/internalListingEnrichmentController.ts` · `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/backend/src/services/scraper/sources/search-facebook-events.ts`
+
+---
 
 ### S764 — Tier 2 Chrome QA (18 items verified, 2 P1 bugs found)
 
@@ -246,3 +307,4 @@ git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta
 **Push:** 44 files (see S760 pushblock in Next Session).
 
 
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                

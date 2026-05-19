@@ -1298,6 +1298,7 @@ model Review {
   moderationStatus String       @default("APPROVED") // #116: 'PENDING' | 'APPROVED' | 'REJECTED'
   createdAt        DateTime     @default(now())
 
+  @@index([saleId]) // Sentry P1 FINDASALE-NODEJS-1Q: JOIN on Review.saleId → Sale was doing full table scan (17s query)
   @@index([moderationStatus])
 }
 
@@ -1484,6 +1485,9 @@ model ItemReservation {
   invoice             HoldInvoice? // relation
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
+
+  @@index([userId]) // Sentry: slow ItemReservation SELECT by user
+  @@index([status, expiresAt]) // Sentry: hold expiry cron + status filter
 }
 
 // Hold-to-Pay feature: Payment invoice for held items
