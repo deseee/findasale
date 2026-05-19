@@ -726,7 +726,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             <meta name="description" content={`${sale.saleType || 'Sale'} in ${sale.city}, ${sale.state} — browse items and get directions on FindA.Sale.`} />
             <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
             <meta property="og:description" content={sale.description} />
-            <meta property="og:image" content={sale.photoUrls[0] || ''} />
+            <meta property="og:image" content={sale.photoUrls?.[0] || ''} />
             <meta property="og:image:width" content="1200" />
             <meta property="og:image:height" content="630" />
             <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} />
@@ -734,7 +734,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             <meta name="twitter:card" content="summary_large_image" />
             <meta name="twitter:title" content={`${sale.title} — FindA.Sale`} />
             <meta name="twitter:description" content={sale.description} />
-          <meta name="twitter:image" content={sale.photoUrls[0] || ''} />
+          <meta name="twitter:image" content={sale.photoUrls?.[0] || ''} />
           </Head>
         ) : null
       )}
@@ -852,7 +852,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   '@type': 'Product',
                   'name': item.title,
                   ...(item.description ? { 'description': item.description } : {}),
-                  ...(item.photoUrls[0] ? { 'image': item.photoUrls[0] } : {}),
+                  ...(item.photoUrls?.[0] ? { 'image': item.photoUrls[0] } : {}),
                   ...(item.category ? { 'category': item.category } : {}),
                   ...(schemaCondition ? { 'itemCondition': schemaCondition } : {}),
                   'offers': {
@@ -931,7 +931,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               userRank={xpProfile?.explorerRank || 'INITIATE'}
               showRankUpCta={showRankUpCta}
               organizerName={sale.organizer.businessName}
-              photoUrl={sale.photoUrls[0]}
+              photoUrl={sale.photoUrls?.[0]}
             />
           </div>
         </div>
