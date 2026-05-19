@@ -2325,3 +2325,5 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     return { props: { ogData, initialData, noindex, eventSeriesData } };
   } catch {
     return { props: { ogData: null, initialData: null, noindex: false, eventSeriesData: null } }
+  }
+}
