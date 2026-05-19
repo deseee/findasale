@@ -6,8 +6,7 @@ import api from '../../lib/api';
 interface OrganizerConfidence {
   id: string;
   businessName: string;
-  city: string | null;
-  state: string | null;
+  address: string;
   directoryConfidenceScore: number | null;
   confidenceLastCalculated: string | null;
 }
@@ -125,8 +124,7 @@ const AdminOrganizerConfidence = () => {
             <thead className="bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700">
               <tr>
                 <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Organizer</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">City</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">State</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Address</th>
                 <th className="px-6 py-3 text-center text-sm font-medium text-warm-900 dark:text-warm-100">Confidence Score</th>
                 <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Last Calculated</th>
               </tr>
@@ -135,8 +133,7 @@ const AdminOrganizerConfidence = () => {
               {organizers.map((o) => (
                 <tr key={o.id} className="hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900">
                   <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 font-medium">{o.businessName}</td>
-                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{o.city || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{o.state || '—'}</td>
+                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{o.address || '—'}</td>
                   <td className="px-6 py-4 text-sm text-center">{scoreBadge(o.directoryConfidenceScore)}</td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
                     {o.confidenceLastCalculated ? new Date(o.confidenceLastCalculated).toLocaleDateString() : '—'}
