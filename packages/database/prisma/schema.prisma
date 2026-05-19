@@ -494,6 +494,8 @@ model Organizer {
   @@index([directoryNextCheckAt])
   @@index([suppressOutreach])
   @@index([claimStatus])
+  @@index([isClaimed]) // leadScoringService nightly batch filter — fixes Sentry FINDASALE-NODEJS-1G
+  @@index([isUnmanagedListing]) // leadScoringService + admin queries — fixes Sentry FINDASALE-NODEJS-1G
   @@index([esnOrgId])
   @@index([dedupeKey])
   @@index([corroborationScore])
