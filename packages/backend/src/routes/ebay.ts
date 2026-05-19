@@ -111,6 +111,7 @@ router.get('/notifications', handleEbayNotificationVerification);
 // POST: receive order events; marks items SOLD + withdraws eBay listing
 router.post('/notifications', handleEbayNotification);
 
+
 // Feature #244 Phase 3: Manual trigger for eBay sold sync (testing only)
 router.get('/sync-sold', authenticate, async (req: AuthRequest, res: Response) => {
   try {
