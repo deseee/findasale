@@ -1963,10 +1963,22 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           mpn: item.mpn,
         });
         const sanitizedDescription = sanitizeDescriptionForEbay(item.description);
+        // Bug #424: replace ALL occurrences of {{DESCRIPTION}} in the organizer's template.
+        // String.replace() with a string arg only replaces the first match; split/join is
+        // equivalent to replaceAll and works across all Node versions.
+        // Defined here (before inventoryPayload) so both the inventory item description
+        // and the offer listingDescription use the same resolved value.
+        const applyDescTemplate = (template: string, desc: string): string =>
+          template.includes('{{DESCRIPTION}}')
+            ? template.split('{{DESCRIPTION}}').join(desc)
+            : template + (desc ? `\n\n${desc}` : '');
+        const resolvedDescription = routing.descriptionHtml
+          ? applyDescTemplate(routing.descriptionHtml, sanitizedDescription)
+          : sanitizedDescription;
         const inventoryPayload: Record<string, unknown> = {
           product: {
             title: item.title.substring(0, 80),
-            description: sanitizedDescription,
+            description: resolvedDescription,
             imageUrls: photos,
             ...(aspects ? { aspects } : {}),
             ...(item.brand ? { brand: item.brand } : {}),
@@ -2064,19 +2076,10 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         }
 
         // Step 2: Upsert offer — find existing or create new, then update price/policies
-        // Inject description template if configured and item has no custom description HTML
-        let finalDescription = sanitizedDescription;
-        if (routing.descriptionHtml && !sanitizedDescription) {
-          finalDescription = routing.descriptionHtml.includes('{{DESCRIPTION}}')
-            ? routing.descriptionHtml.replace('{{DESCRIPTION}}', '')
-            : routing.descriptionHtml;
-        } else if (routing.descriptionHtml && sanitizedDescription) {
-          if (routing.descriptionHtml.includes('{{DESCRIPTION}}')) {
-            finalDescription = routing.descriptionHtml.replace('{{DESCRIPTION}}', sanitizedDescription);
-          } else {
-            finalDescription = `${routing.descriptionHtml}\n\n${sanitizedDescription}`;
-          }
-        }
+        // resolvedDescription was computed above (Bug #424) and already has the
+        // organizer's description template applied with all {{DESCRIPTION}} tokens
+        // replaced. Use it directly for the offer's listingDescription as well.
+        const finalDescription = resolvedDescription;
 
         const offerPayload: Record<string, unknown> = {
           sku,

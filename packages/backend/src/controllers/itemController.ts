@@ -1114,13 +1114,15 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
             inventoryUpdates['product.title'] = updatedItem.title;
           }
           if (description !== undefined && updatedItem.description !== undefined) {
-            // Apply organizer's eBay description template if configured
+            // Apply organizer's eBay description template if configured.
+            // Bug #424: use split/join to replace ALL occurrences of {{DESCRIPTION}} —
+            // String.replace() with a string argument only replaces the first match.
             const templateHtml = organizer.ebayPolicyMapping?.defaultDescriptionHtml ?? null;
             const rawDesc = updatedItem.description ?? '';
             let finalDesc = rawDesc;
             if (templateHtml) {
               if (templateHtml.includes('{{DESCRIPTION}}')) {
-                finalDesc = templateHtml.replace('{{DESCRIPTION}}', rawDesc);
+                finalDesc = templateHtml.split('{{DESCRIPTION}}').join(rawDesc);
               } else {
                 finalDesc = rawDesc ? `${rawDesc}\n\n${templateHtml}` : templateHtml;
               }
