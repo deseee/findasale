@@ -8,33 +8,29 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S765 — Sentry/CI health audit + 11 bug fixes**
+**Latest: S766 — QA sweep (Tier 2C/3A) + 3 bug fixes + test data seeded**
 
-Daily health monitor triggered investigation. All actionable Sentry issues resolved. Backend Sentry: 36 → 0 active unresolved (11 resolved by code fixes, 14 ignored as stale build artifacts, rest moot). Frontend Sentry: 4 → 0. Requires 1 migration (non-blocking indexes).
+Heavy QA session across Tier 2C Wave 2, Tier 3A payment flows, loyalty, and eBay batch. Patrick personally tested eBay items (#424–426) and flagged 3 bugs. Test data created directly in Railway DB for future QA (published sale with items + hold for user12, ended sale for donation kit testing).
 
 **Fixed this session:**
-- ✅ Hooks-count violations in 5 frontend pages — moved hooks above auth guards
-- ✅ Global MutationCache onError (_app.tsx) — kills 45x/day "Error: Rejected" Sentry noise
-- ✅ Sentry beforeSend filter — drops Dashlane extension errors at source
-- ✅ AI enrichment endpoint — fire-and-forget, eliminates Railway 30s timeout
-- ✅ Geocoding bulk endpoint — same fire-and-forget fix
-- ✅ Scraper ingest endpoint — same fire-and-forget fix (81 events, NODEJS-1B)
-- ✅ Facebook Events scraper — parseAddressFromFacebookSlug() extracts real addresses from ~54% of records
-- ✅ eBay account deletion — stream.not.readable suppressed before Sentry (eBay retry behavior, NODEJS-S)
-- ✅ Workspace routes — removed invalid Prisma relation filter causing PrismaClientUnknownRequestError on /api/workspace + /api/workspace/my-memberships (87 events, NODEJS-A/B)
-- ✅ Missing DB indexes — Review.saleId (eliminates 17s query), ItemReservation.userId + (status,expiresAt) — migration created
-- ✅ NODEJS-17 (e is not defined) — already fixed in prior commit 2e69a27f, confirmed closed
+- ✅ #363 — `lotNumber` text input added to auction item form (add-items/[saleId].tsx)
+- ✅ #58 — Achievement event hooks wired: PURCHASE_MADE (POS path), ITEM_LISTED, SALE_ATTENDED, ORGANIZER_CLAIMED were never firing. Fixed in rsvpController, itemController, posPaymentController, referralService.
+- ✅ #221 — Shopper holds page: "Purchase Now" linked to non-existent /checkout route (404). Fixed to /items/[id]. Button overflow on hold card fixed (flex-row on mobile, whitespace-nowrap).
 
 **Verified this session:**
-- ✅ #433 #434 #378 #60 #260 #432 #441 #451 #440 #449 #457 #352 #360 #405 — Tier 2A quick checks all pass
-- ✅ #263 — Insights + Brand Kit accessible via PRO TOOLS dropdown (not sidebar nav as plan assumed)
-- ✅ #411 — Dorm Dash sale type present on create-sale page
-- ✅ #416 — Leaflet map renders on sale detail; Directions button opens Google Maps correctly
-- ✅ #153 — Organizer storefront shows full profile (name, location, bio, hours, contact)
-- ⚠️ #363 — Buyer's Premium % in step 4 ✅; Lot Number field **MISSING** from organizer item form (P1 dispatched)
-- ⚠️ #223 — Tooltips on dashboard/settings/create-sale ✅; add-items page has **zero** guidance elements (P2)
+- ✅ #356 Broadcast composer, #271 TEAMS Workspace, #29 Loyalty Passport redirect, #289 XP Store tiers
+- ✅ #402 Cover Platform Fee toggle (AUCTION only), #285 POS item search + payment options, #406 Split bill, #288 Promote/Boost flow
+- ✅ #350 Nav polish — Patrick confirmed good
+- ✅ #439 — already fixed S760, closed
 
-**P2 Brand Kit findings:** Logo field is URL-only (no upload button). Social links split across Brand Kit and Profile Settings pages.
+**eBay bugs (Patrick tested directly):**
+- ❌ #424 — still broken (dispatching next session)
+- ⚠️ #425 — works but: (a) success toast intermittent, (b) edited-but-unsaved price sends stale stored price to eBay instead of the edited value
+- ❌ #426 — not working
+
+**Test data in Railway DB (use artifactmi account; Patrick must be present):**
+- "Barn Door QA Test Sale" (id: cmpbvumj90001e7t7v5sa1iqi) — PUBLISHED, holdsEnabled, safetyNotes set, 3 items (draftStatus=PUBLISHED), active hold for user12 (CONFIRMED status)
+- "QA Test Ended Sale — Donation Kit" (id: 6c9c9f00-17ce-4e69-a9df-b8ba30c1f387) — ENDED, 3 unsold AVAILABLE items
 
 ## Pool Audit Findings
 
@@ -119,7 +115,7 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority 0 — Patrick: push S763 + S764 + S765 changes:**
+**Priority 0 — Patrick: push S763–S766 changes:**
 ```powershell
 git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
 git add packages/frontend/pages/login.tsx
@@ -130,10 +126,16 @@ git add packages/frontend/pages/coupons.tsx
 git add packages/frontend/pages/organizer/payouts.tsx
 git add packages/frontend/pages/organizer/webhooks.tsx
 git add packages/frontend/pages/shopper/rare-finds.tsx
+git add packages/frontend/pages/shopper/holds.tsx
 git add packages/frontend/pages/_app.tsx
 git add packages/frontend/sentry.client.config.ts
+git add packages/frontend/pages/organizer/add-items/[saleId].tsx
 git add packages/backend/src/controllers/internalListingEnrichmentController.ts
 git add packages/backend/src/controllers/internalGeocodingController.ts
+git add packages/backend/src/controllers/rsvpController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/posPaymentController.ts
+git add packages/backend/src/services/referralService.ts
 git add packages/backend/src/services/scraper/sources/search-facebook-events.ts
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/audits/qa-status-reconciliation-2026-05-18.md
@@ -141,23 +143,21 @@ git add claude_docs/audits/qa-plan-2026-05-18.md
 git add claude_docs/audits/geo-verification-2026-05-18.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: hooks order, MutationCache onError, Sentry filter, enrichment+geocoding fire-and-forget, FB Events address parsing; S764 P1 bugs, QA findings"
+git commit -m "feat: lot number input auction form (#363); fix: achievement event hooks (#58); fix: hold card checkout link + overflow (#221); fix: hooks order, Sentry, enrichment fire-and-forget, FB Events"
 .\push.ps1
 ```
 
-**Priority 1 — Dispatch #363 P1 fix (lot number input):**
-Dispatch `findasale-dev` to add `lotNumber` text input to organizer item form in `packages/frontend/pages/organizer/add-items/[saleId].tsx`. Backend already handles it at itemController.ts lines 729/903. Condition: only show for AUCTION type sales (match pattern of buyersPremiumPct in create-sale.tsx). Display is already in ItemCard.tsx (line 377) and items/[id].tsx (line 681).
+**Priority 1 — eBay bug fixes (Patrick confirmed broken):**
+- #424 — dispatch findasale-dev to investigate and fix (read qa-plan for context)
+- #425 — two bugs: (a) success toast intermittent after eBay push; (b) if price edited but not saved before pushing to eBay, stale stored price is sent instead of edited value. Likely fix: flush form state before calling eBay push, and ensure toast fires on all success paths.
+- #426 — dispatch findasale-dev to investigate (read qa-plan for context)
 
-**Priority 2 — Dispatch #439 P1 fix (items in SSR sale query):**
-Dispatch `findasale-dev` to add `items: { take: 20, select: { title, price, condition, status } }` to the backend public sale GET query in saleController.ts (~line 313) so Product schema renders server-side for crawlers.
+**Priority 2 — QA remaining:**
+- #413 Physical Safety Disclosures — test data seeded (safetyNotes on Barn Door QA Test Sale). Use artifactmi + Patrick present. Navigate to sale detail as shopper, verify amber safety banner renders.
+- #415 Donation Kit — test data seeded (ended sale id: 6c9c9f00). Use artifactmi + Patrick present. Navigate to organizer sale management for ended sale, verify "Donate Items & Get Tax Receipt" button appears.
+- #428, #427, #429 — remaining Tier 2B eBay items (needs PRO + eBay connected, Patrick present)
 
-**Priority 3 — QA remaining from qa-plan-2026-05-18.md:**
-- #350 Nav Polish — shopper mobile viewport
-- Tier 2B eBay batch: #428, #424, #425, #426, #427, #429 (needs PRO + eBay connected)
-- Tier 2C Wave 2: #413, #412, #356, #359, #415, #271
-- Tier 3A Payment flows: #285, #402, #289, #288, #406 (highest business value)
-- #221 Hold-to-Pay modal flow (after S763 push)
-- #29 Loyalty Passport, #58 Achievement Badges
+**Note on Chrome QA with artifactmi:** artifactmi@gmail.com can be used as the test organizer account. Patrick must be present at the keyboard for Google OAuth steps (Chrome MCP can't interact with accounts.google.com).
 
 **Previously pending Patrick actions:**
 - Run S760 migrations (CrawlerVisit + geo_demand_waitlist_confidence) — still pending
@@ -165,6 +165,28 @@ Dispatch `findasale-dev` to add `items: { take: 20, select: { title, price, cond
 - Delete fix-attendance.sql from project root — pending S750
 
 ## Recent Sessions
+
+### S766 — QA Sweep (Tier 2C/3A) + 3 Bug Fixes + Test Data Seeded
+
+**Trigger:** Patrick directed "dispatch more QA, be token conscious."
+
+**Fixed:**
+- ✅ #363 — lotNumber text input in auction item form (add-items/[saleId].tsx)
+- ✅ #58 — achievement event hooks: PURCHASE_MADE (POS), ITEM_LISTED, SALE_ATTENDED, ORGANIZER_CLAIMED never fired. Wired to rsvpController, itemController, posPaymentController, referralService.
+- ✅ #221 — shopper holds: "Purchase Now" /checkout 404 fixed → /items/[id]. Button overflow fixed (flex-row + whitespace-nowrap on mobile).
+
+**Verified:**
+- ✅ #356 #271 #29 #289 #402 #285 #406 #288 #350
+
+**eBay (Patrick tested):** #424 broken, #425 two bugs (intermittent toast + stale price on push), #426 broken. All deferred to next session.
+
+**Dropped:** #359 Feature/Pinned Flag — maps to Feature Boost paid addon (post-500 organizer scale, already deferred in roadmap).
+
+**Test data seeded in Railway DB:** Barn Door QA Test Sale published (3 items, holds enabled, safetyNotes, hold for user12). Ended sale created for donation kit QA (3 unsold items).
+
+**Files changed:** `packages/frontend/pages/organizer/add-items/[saleId].tsx` · `packages/frontend/pages/shopper/holds.tsx` · `packages/backend/src/controllers/rsvpController.ts` · `packages/backend/src/controllers/itemController.ts` · `packages/backend/src/controllers/posPaymentController.ts` · `packages/backend/src/services/referralService.ts` · `claude_docs/audits/qa-plan-2026-05-18.md`
+
+---
 
 ### S765 — Sentry/CI Health Audit + 6 Bug Fixes
 

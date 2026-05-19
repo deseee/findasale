@@ -4,13 +4,13 @@
 
 ## What Happened This Week
 
-**S765 (today — Sentry/CI health audit + 11 bug fixes):** Daily monitor triggered investigation. All actionable Sentry issues now resolved — backend dropped from 36 → 0 active unresolved, frontend 4 → 0. Fixed: hooks violations (5 pages), MutationCache global onError, Sentry Dashlane filter, enrichment + geocoding + scraper ingest all fire-and-forget (Railway timeout fix), eBay webhook stream error suppressed, workspace PrismaClientUnknownRequestError fixed (invalid Prisma filter removed), FB Events scraper now extracts real street addresses from URL slugs. Migration created: 3 non-blocking indexes (Review.saleId eliminates 17s query, ItemReservation indexes).
+**S766 (latest — QA sweep + 3 bug fixes):** Tier 2C/3A QA. Fixed: #363 lot number input in auction form, #58 achievement event hooks (4 event types were never wiring to the achievement service), #221 shopper holds checkout link (was 404) + button overflow. Verified: #356 #271 #29 #289 #402 #285 #406 #288 #350. eBay bugs #424/#425/#426 confirmed by Patrick — queued for next session. Test data seeded in Railway DB.
 
-**S764:** 18 items verified. Found 2 P1 bugs: #363 lot number has no organizer input; #439 backend SSR sale query doesn't include items.
+**S765:** Sentry/CI health audit. Backend Sentry 36 → 0 unresolved. Fixed hooks violations (5 pages), MutationCache onError, enrichment + geocoding fire-and-forget, FB Events address parsing, workspace Prisma error.
 
-**S763:** Low-token doc audit cleared 22 stale roadmap entries. Fixed 5 bugs: Flip Report tier gate (#41), login silent error, Hold-to-Pay modal wiring (#221), GEO JSON-LD SSR, ENDED sale noindex.
+**S764:** 18 items verified. Found P1s #363 (lot number) and #439 (SSR query — already fixed, closed).
 
-**S762:** Cleared entire blocked QA queue — 16 items verified ✅. Fixed #292 crash on ENDED sale pages.
+**S763:** Low-token doc audit cleared 22 stale roadmap entries. Fixed 5 bugs: Flip Report tier gate, login error, Hold-to-Pay wiring, GEO JSON-LD SSR, ENDED noindex.
 
 ---
 
@@ -25,7 +25,7 @@
 
 ## Action Items for Patrick
 
-### 1. Push everything (S763 + S764 + S765):
+### 1. Push everything (S763–S766):
 ```powershell
 git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
 git add packages/frontend/pages/login.tsx
@@ -36,13 +36,19 @@ git add packages/frontend/pages/coupons.tsx
 git add packages/frontend/pages/organizer/payouts.tsx
 git add packages/frontend/pages/organizer/webhooks.tsx
 git add packages/frontend/pages/shopper/rare-finds.tsx
+git add packages/frontend/pages/shopper/holds.tsx
 git add packages/frontend/pages/_app.tsx
 git add packages/frontend/sentry.client.config.ts
+git add packages/frontend/pages/organizer/add-items/[saleId].tsx
 git add packages/backend/src/controllers/internalListingEnrichmentController.ts
 git add packages/backend/src/controllers/internalGeocodingController.ts
 git add packages/backend/src/controllers/internalScraperController.ts
 git add packages/backend/src/controllers/workspaceController.ts
+git add packages/backend/src/controllers/rsvpController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/posPaymentController.ts
 git add packages/backend/src/index.ts
+git add packages/backend/src/services/referralService.ts
 git add packages/backend/src/services/scraper/sources/search-facebook-events.ts
 git add packages/database/prisma/schema.prisma
 git add packages/database/prisma/migrations/20260628100000_add_missing_indexes/migration.sql
@@ -52,27 +58,20 @@ git add claude_docs/audits/qa-plan-2026-05-18.md
 git add claude_docs/audits/geo-verification-2026-05-18.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: scraper ingest + eBay webhook + workspace Prisma errors + Review/ItemReservation indexes; hooks order, MutationCache, Sentry filter, fire-and-forget endpoints, FB Events address parsing"
+git commit -m "feat: lot number input auction form (#363); fix: achievement hooks (#58); fix: hold card checkout + overflow (#221); fix: hooks, Sentry, fire-and-forget, FB Events, workspace Prisma"
 .\push.ps1
 ```
 
-### 2. Run migration after push (non-blocking, safe in prod):
+### 2. Run migration after push:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
-Adds 3 indexes: Review.saleId (kills 17s query), ItemReservation.userId, ItemReservation.(status, expiresAt). PostgreSQL builds these without locking — safe to run anytime.
 
-### 2. Pending (when ready):
-- [ ] **Run migrations** (CrawlerVisit + geo_demand_waitlist_confidence — S760, still pending):
-  ```powershell
-  cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-  $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-  npx prisma migrate deploy
-  npx prisma generate
-  ```
+### 3. Pending (when ready):
+- [ ] **Run S760 migrations** (CrawlerVisit + geo_demand_waitlist_confidence) — still pending
 - [ ] **Deploy email verification migration** (20260515180000) — pending since S726
 - [ ] **Delete fix-attendance.sql** from project root — pending since S750
 
@@ -98,10 +97,11 @@ Dispatch `findasale-records` for the marketing skill framing fix.
 
 ## QA Remaining
 
-From `claude_docs/audits/qa-plan-2026-05-18.md`:
-- **#350** Nav Polish — shopper mobile viewport
-- **Tier 2B eBay** (#428 #424 #425 #426 #427 #429) — needs PRO + eBay connected
-- **Tier 2C Wave 2** (#413 #412 #356 #359 #415 #271)
-- **Tier 3A Payments** (#285 #402 #289 #288 #406) — highest business value
-- **#221 Hold-to-Pay flow** — after push: select hold → Mark Sold → modal + checkout URL
-- **#29 Loyalty Passport, #58 Achievement Badges**
+- **eBay #424** — still broken, needs dev dispatch
+- **eBay #425** — two bugs: toast intermittent + stale price sent to eBay when price edited but not saved first
+- **eBay #426** — not working, needs dev dispatch
+- **#413 Safety Disclosures** — test data seeded, needs Patrick present to QA
+- **#415 Donation Kit** — test data seeded (ended sale with 3 unsold items), needs Patrick present
+- **#428 #427 #429** — remaining eBay Tier 2B items, needs PRO + eBay connected + Patrick present
+
+**Note:** artifactmi@gmail.com can be used for Chrome QA but Patrick must be present at the keyboard for Google OAuth steps.
