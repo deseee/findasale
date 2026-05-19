@@ -5,11 +5,13 @@ import { useRouter } from 'next/router';
 import { signIn } from 'next-auth/react';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
+import { useToast } from '../components/ToastContext';
 import { usePasskey } from '../hooks/usePasskey';
 
 const LoginPage = () => {
   const router = useRouter();
   const { login } = useAuth();
+  const { showToast } = useToast();
   const { authenticatePasskey, isSupported: passkeySupported, isLoading: passkeyLoading, error: passkeyError } = usePasskey();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -67,11 +69,11 @@ const LoginPage = () => {
         }
       }
     } catch (err: any) {
-      if (err.response?.status === 429) {
-        setError('Too many login attempts. Please wait a few minutes and try again.');
-      } else {
-        setError(err.response?.data?.message || 'An error occurred during login');
-      }
+      const msg = err.response?.status === 429
+        ? 'Too many login attempts. Please wait a few minutes and try again.'
+        : (err.response?.data?.message || 'An error occurred during login');
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(false);
     }
