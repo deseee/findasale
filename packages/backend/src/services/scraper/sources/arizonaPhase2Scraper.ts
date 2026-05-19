@@ -1,85 +1,203 @@
 /**
- * Arizona Department of Financial Institutions — Pawnbroker License Scraper (Phase 2)
- * Source: https://difi.az.gov/
- * ADR-073: Directory Scraper Phase 2 — State pawnbroker licensing data
+ * Arizona Phase 2 — Mesa AZ Open Data (Socrata) Business Licenses Scraper
+ * Source: https://data.mesaaz.gov/resource/6c65-na9e.json
+ * ADR-073: Directory Scraper Phase 2 — City business license data
  *
- * DATA SOURCE STATUS (verified 2026-05-09):
- *   - AZ DFI (difi.az.gov) licenses pawnbrokers. Portal returns HTTP 403 (Cloudflare WAF).
- *   - opendata.az.gov returns empty results for all business license / pawnbroker queries.
- *   - No Socrata or CKAN dataset found for AZ pawnbroker or secondhand dealer licenses.
- *   - AZ SOS (azsos.gov) has no public bulk entity API.
+ * Queries the Mesa AZ Open Data Socrata API for business licenses matching
+ * secondary sale keywords (auction, estate sale, consignment, antique, pawn,
+ * thrift, resale, secondhand, flea market, yard sale, surplus, liquidation).
  *
- * UNBLOCKING OPTIONS (in priority order):
- *   1. AZ DFI public records request: https://difi.az.gov/contact-us
- *      Request licensed pawnbroker list under ARS §39-121 (public records).
- *      Phone: (602) 771-2800. They may provide a CSV or XLSX.
- *   2. Phoenix city licenses: https://phoenix.gov/pdd/business-services — check if Phoenix
- *      publishes a Socrata dataset with business license types including pawnbroker.
- *   3. Tucson city licenses: https://www.tucsonaz.gov/open-data — similar check.
- *   4. If Cloudflare WAF on difi.az.gov is bypassed, the licensee search form is at:
- *      https://difi.az.gov/licensees — POST with license_type=Pawnbroker.
- *
- * NOTE: difi.az.gov is Cloudflare-protected and requires JS rendering.
- * This is a stub implementation. Full scraping requires Playwright/headless browser.
+ * NOTE: data.mesaaz.gov covers Mesa only. Other AZ cities need separate portals:
+ * TODO: Phoenix — https://www.phoenixopendata.com (check for business license dataset)
+ * TODO: Scottsdale — https://data.scottsdaleaz.gov (check for business license dataset)
+ * TODO: Tucson — https://data.tucsonaz.gov (check for business license dataset)
+ * TODO: Chandler — https://data.chandleraz.gov or https://chandleraz.gov/open-data
+ * TODO: Tempe — https://data.tempe.gov or https://tempegov.socrata.com
  */
 
-import { defaultRateLimiter } from '../rateLimiter';
-import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
+import { getOrCreateScrapedOrganizer } from '../index';
 
-const AZ_DIFI_URL = 'https://difi.az.gov/';
+const SOCRATA_ENDPOINT = 'https://data.mesaaz.gov/resource/6c65-na9e.json';
 
-/**
- * Scrape Arizona pawnbroker licenses from Arizona DFI.
- * Portal is Cloudflare-protected — stub implementation until Playwright is available.
- */
+const SEARCH_TERMS = [
+  'auction',
+  'estate sale',
+  'consignment',
+  'antique',
+  'pawn',
+  'thrift',
+  'resale',
+  'secondhand',
+  'flea market',
+  'yard sale',
+  'surplus',
+  'liquidat',
+];
+
+// False positive fragments — businesses whose names contain these are excluded
+const EXCLUDE_FRAGMENTS = [
+  'real estate',
+  'realty',
+  'realtor',
+  'mortgage',
+  'bank',
+  'credit union',
+  'financial',
+  'insurance',
+  'law office',
+  'attorney',
+  'lawyer',
+  'dental',
+  'dentist',
+  'medical',
+  'clinic',
+  'pharmacy',
+  'hospital',
+  'restaurant',
+  'hotel',
+  'motel',
+  'petroleum',
+  'gas station',
+  'automotive',
+  'car wash',
+  'daycare',
+  'school',
+  'church',
+  'funeral',
+  'landscaping',
+  'construction',
+  'plumbing',
+  'electrical',
+  'roofing',
+  'hair salon',
+  'nail salon',
+  'tattoo',
+  'massage',
+  'yoga',
+  'gym',
+  'grocery',
+  'supermarket',
+];
+
+interface SocrataRecord {
+  business_name?: string;
+  business_address?: string;
+  business_city?: string;
+  business_state?: string;
+  business_zip?: string;
+  business_phone?: string;
+}
+
+function nameIsExcluded(name: string): boolean {
+  const lower = name.toLowerCase();
+  return EXCLUDE_FRAGMENTS.some((f) => lower.includes(f));
+}
+
+function mapCategory(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.includes('auction')) return 'auctioneer';
+  if (lower.includes('estate sale')) return 'estate_sale';
+  if (lower.includes('consign')) return 'consignment';
+  if (lower.includes('antique')) return 'antique_dealer';
+  if (lower.includes('pawn')) return 'pawnbroker';
+  if (lower.includes('thrift') || lower.includes('resale') || lower.includes('secondhand'))
+    return 'thrift_store';
+  if (lower.includes('flea')) return 'flea_market';
+  return 'secondary_sale';
+}
+
+function buildWhereClause(): string {
+  return SEARCH_TERMS.map((term) => `business_name like '%${term}%'`).join(' OR ');
+}
+
 export async function runArizonaPhase2Scraper(): Promise<void> {
-  const domain = new URL(AZ_DIFI_URL).hostname;
+  console.log('[AZ-Phase2] Starting Mesa AZ Open Data business license scraper');
 
-  console.log('[Arizona Phase2] Starting pawnbroker license scraper');
+  const whereClause = buildWhereClause();
+  const url = `${SOCRATA_ENDPOINT}?$where=${encodeURIComponent(whereClause)}&$limit=1000`;
 
-  // Probe the portal to detect Cloudflare block
-  try {
-    await defaultRateLimiter.waitBeforeRequest(domain);
+  console.log(`[AZ-Phase2] Fetching: ${SOCRATA_ENDPOINT} with $limit=1000`);
 
-    const probeResponse = await fetch(AZ_DIFI_URL, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
+  const res = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+    },
+    signal: AbortSignal.timeout(30000),
+  });
 
-    const html = await probeResponse.text();
+  if (!res.ok) {
+    throw new Error(`[AZ-Phase2] Socrata API returned HTTP ${res.status}: ${res.statusText}`);
+  }
 
-    const isBlocked =
-      probeResponse.status === 403 ||
-      probeResponse.status === 503 ||
-      html.includes('cf-browser-verification') ||
-      html.includes('Just a moment') ||
-      html.includes('Checking your browser') ||
-      html.includes('_cf_chl_opt');
+  const records: SocrataRecord[] = await res.json();
 
-    if (isBlocked) {
-      console.warn(
-        '[Arizona Phase2] Portal blocked — TODO: Playwright/headless browser required for difi.az.gov (Cloudflare protection detected)'
-      );
-      return;
+  console.log(`[AZ-Phase2] Fetched ${records.length} raw records from Socrata`);
+
+  if (records.length === 0) {
+    throw new Error(
+      '[AZ-Phase2] Zero results fetched from Mesa AZ Open Data. ' +
+        'The dataset may have moved, the endpoint may have changed, or search terms returned no matches.'
+    );
+  }
+
+  let totalExcluded = 0;
+  let totalDupes = 0;
+  let totalUpserted = 0;
+  const seenKey = new Set<string>();
+
+  for (const record of records) {
+    const name = record.business_name?.trim();
+    if (!name) continue;
+
+    // False positive filter
+    if (nameIsExcluded(name)) {
+      totalExcluded++;
+      continue;
     }
 
-    // If not blocked, portal may be accessible — log for manual follow-up
-    console.warn(
-      '[Arizona Phase2] Portal accessible but full scraper not yet implemented — TODO: implement pawnbroker search form submission and HTML parsing'
-    );
-    return;
-  } catch (err) {
-    console.warn(
-      '[Arizona Phase2] Portal blocked — TODO: Playwright/headless browser required for difi.az.gov',
-      err
-    );
-    return;
+    // Deduplicate by name + city
+    const city = record.business_city?.trim() || 'Mesa';
+    const dedupeKey = `${name.toLowerCase()}:${city.toLowerCase()}`;
+    if (seenKey.has(dedupeKey)) {
+      totalDupes++;
+      continue;
+    }
+    seenKey.add(dedupeKey);
+
+    const state = record.business_state?.trim() || 'AZ';
+    const phone = record.business_phone?.trim() || undefined;
+    const category = mapCategory(name);
+
+    console.log(`[AZ-Phase2] Matched: "${name}" — ${city}, ${state} [${category}]`);
+
+    try {
+      const orgId = await getOrCreateScrapedOrganizer(
+        name,                // businessName
+        'MesaAZOpenData',    // sourceName
+        city,                // city
+        state,               // state
+        undefined,           // esnOrgId
+        undefined,           // googlePlaceId
+        undefined,           // foursquareVenueId
+        undefined,           // hereBusinessId
+        category,            // businessCategory
+        undefined,           // contactEmail
+        phone,               // phone
+        undefined,           // website
+        undefined,           // lat
+        undefined,           // lng
+        undefined,           // isStateLicensed
+        undefined,           // licenseState
+        undefined,           // licenseNumber
+        'Mesa AZ Open Data'  // sourceLabel
+      );
+      if (orgId) totalUpserted++;
+    } catch (upsertErr) {
+      console.error(`[AZ-Phase2] Upsert error for "${name}":`, upsertErr);
+    }
   }
+
+  console.log(
+    `[AZ-Phase2] Scraper completed: fetched=${records.length}, excluded=${totalExcluded}, dupes=${totalDupes}, upserted=${totalUpserted}`
+  );
 }

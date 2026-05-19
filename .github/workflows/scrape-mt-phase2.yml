@@ -1,8 +1,8 @@
 name: Scrape Montana Pawnbroker Licenses (Phase 2)
 
 on:
-  # schedule DISABLED — BROKEN — target is JS-rendered, blocked, or dead
-  # was: cron: '0 9 * * 1'
+  schedule:
+    - cron: '0 9 * * 1'
   workflow_dispatch:
 
 jobs:

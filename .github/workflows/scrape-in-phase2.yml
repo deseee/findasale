@@ -1,8 +1,8 @@
 name: Scrape Indiana Secondary Sale Licenses (Phase 2)
 
 on:
-  # schedule DISABLED — STUB — no accessible data source
-  # was: cron: '15 3 * * 1'
+  schedule:
+    - cron: '15 3 * * 1'
   workflow_dispatch:
 
 jobs:

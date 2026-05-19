@@ -1,53 +1,349 @@
 /**
- * New Hampshire — Secondary Sale License Scraper (Phase 2) — STUB
+ * New Hampshire — Secondary Sale License Scraper (Phase 2)
  *
- * STATUS: No freely accessible bulk source available from GitHub Actions runners.
- * This scraper returns 0 results cleanly and logs a clear diagnostic message.
+ * Source: NH Office of Professional Licensure and Certification (OPLC)
+ *   License verification portal: https://forms.nh.gov/licenseverification/
+ *   Auctioneer info page: https://www.oplc.nh.gov/auctioneers
  *
- * ATTEMPTED SOURCES (confirmed blocked or limited):
+ * Strategy:
+ *   The OPLC license verification portal is an ASP.NET form that allows
+ *   searching by profession type. We search for "Auctioneer" licenses
+ *   with an empty name (wildcard) to retrieve all active auctioneers.
  *
- *   1. NH Office of Professional Licensure and Certification (OPLC) — auctioneers
- *      https://www.oplc.nh.gov/auctioneers
- *      Auctioneer list is published as a basic HTML lookup (lplb.nh.gov/lookup).
- *      No bulk download; requires individual lookups per credential type.
+ *   The portal uses Akamai CDN which blocks cloud/datacenter IPs.
+ *   When blocked (HTTP 403), the scraper logs diagnostics and throws
+ *   so the workflow correctly reports zero results as a failure.
  *
- *   2. NH pawnbroker licensing
- *      Pawnbroker licenses are issued at the municipal level in NH (no state registry).
- *      No statewide data source exists.
- *
- *   3. NH SOS Business Entity Search — quickstart.sos.nh.gov
- *      Keyword search only; no bulk export or CSV download.
- *
- * UNBLOCKING OPTIONS (in priority order):
- *
- *   Option A — OPLC public records request for auctioneer licensee list:
- *     Contact NH OPLC for bulk CSV of active auctioneer credentials.
- *       https://www.oplc.nh.gov/
- *       Email: oplc@oplc.nh.gov | Phone: (603) 271-2152
- *
- *   Option B — NH SOS bulk business entity data:
- *     NH SOS may provide bulk data on request.
- *       https://sos.nh.gov/corporations/
+ * NH pawnbroker licensing is municipal-only (no statewide registry).
  *
  * ADR-073: Directory Scraper Phase 2 — State business licensing data
  */
 
+import * as cheerio from 'cheerio';
+import { defaultRateLimiter } from '../rateLimiter';
+import { getOrCreateScrapedOrganizer } from '../index';
+import { getRandomUserAgent } from '../userAgents';
+
+const OPLC_DOMAIN = 'forms.nh.gov';
+const OPLC_SEARCH_URL = 'https://forms.nh.gov/licenseverification/Search.aspx';
+
+const EXCLUDE_FRAGMENTS = [
+  'real estate', 'realty', 'realtor', 'mortgage', 'bank', 'credit union',
+  'financial', 'insurance', 'restaurant', 'petroleum', 'dental', 'medical',
+  'pharmacy', 'funeral', 'tax service', 'accounting', 'attorney',
+  'law office', 'landscaping', 'construction', 'plumbing', 'electrical',
+  'roofing', 'automotive repair', 'car wash', 'dry clean', 'laundry',
+  'hair salon', 'nail salon', 'tattoo', 'massage', 'yoga', 'daycare',
+];
+
+interface NHLicensee {
+  name: string;
+  city: string;
+  licenseNumber: string;
+  status: string;
+}
+
+function nameIsExcluded(name: string): boolean {
+  const lower = name.toLowerCase();
+  return EXCLUDE_FRAGMENTS.some((frag) => lower.includes(frag));
+}
+
 /**
- * New Hampshire secondary sale license scraper — Phase 2.
+ * Extract an ASP.NET hidden field value from HTML.
+ */
+function extractHiddenField(html: string, fieldId: string): string {
+  const match = html.match(
+    new RegExp(`id="${fieldId}"\\s+value="([^"]*)"`, 's'),
+  );
+  return match ? match[1] : '';
+}
+
+/**
+ * Build a URL-encoded form body.
+ */
+function buildFormBody(fields: Record<string, string>): string {
+  return Object.entries(fields)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+}
+
+/**
+ * Parse licensee rows from the OPLC search results HTML.
  *
- * Currently a no-op stub. OPLC auctioneer list has no bulk download;
- * pawnbroker licensing is municipal only.
- * See file header for confirmed details and unblocking options.
+ * The results page uses a GridView table. We look for table rows with
+ * license data (name, city, license number, status).
+ */
+function parseLicensees(html: string): NHLicensee[] {
+  const $ = cheerio.load(html);
+  const results: NHLicensee[] = [];
+
+  // Try multiple table selectors — ASP.NET GridView IDs vary
+  const tableSelectors = [
+    '#ctl00_MainContentPlaceHolder_gvSearchResults',
+    '#MainContentPlaceHolder_gvSearchResults',
+    '#gvSearchResults',
+    'table.GridView',
+    'table.grid',
+    '.results-table table',
+    '#results table',
+  ];
+
+  let $table = $();
+  for (const sel of tableSelectors) {
+    $table = $(sel);
+    if ($table.length > 0) break;
+  }
+
+  // Fallback: find any table with multiple rows that looks like results
+  if ($table.length === 0) {
+    $('table').each((_i, el) => {
+      const rows = $(el).find('tr');
+      if (rows.length > 3) {
+        $table = $(el);
+        return false; // break
+      }
+    });
+  }
+
+  if ($table.length === 0) {
+    // Try parsing without table structure — some portals use div-based layouts
+    const rows = $('div.row, div.result-item, div.licensee, tr');
+    if (rows.length === 0) {
+      console.log('[NewHampshirePhase2] No results table found in HTML');
+      return results;
+    }
+  }
+
+  // Parse table rows (skip header row)
+  $table.find('tr').each((_i, el) => {
+    const tds = $(el).find('td');
+    if (tds.length < 3) return; // skip header or malformed rows
+
+    // Common OPLC column orders:
+    // Name | License# | City | Status  OR
+    // License# | Name | City/State | Status
+    const cells = tds.map((_j, td) => $(td).text().trim()).get();
+
+    // Find which cell looks like a license number (alphanumeric pattern)
+    let name = '';
+    let licenseNumber = '';
+    let city = '';
+    let status = '';
+
+    for (const cell of cells) {
+      if (/^[A-Z]{2,4}[\-\s]?\d{3,}$/i.test(cell) && !licenseNumber) {
+        licenseNumber = cell;
+      } else if (/active|inactive|expired|pending|current/i.test(cell) && !status) {
+        status = cell;
+      } else if (!name && cell.length > 2 && !/^\d+$/.test(cell)) {
+        name = cell;
+      } else if (name && !city && cell.length > 1) {
+        // Could be city or city/state
+        const cityMatch = cell.match(/^([A-Za-z\s.'-]+?)(?:,\s*NH)?$/i);
+        if (cityMatch) {
+          city = cityMatch[1].trim();
+        } else {
+          city = cell;
+        }
+      }
+    }
+
+    if (name && !nameIsExcluded(name)) {
+      results.push({
+        name,
+        city: city || 'New Hampshire',
+        licenseNumber,
+        status: status || 'Active',
+      });
+    }
+  });
+
+  return results;
+}
+
+/**
+ * Attempt to fetch the OPLC initial search page and extract ASP.NET form state.
+ */
+async function fetchInitialPage(): Promise<{
+  html: string;
+  cookies: string;
+} | null> {
+  try {
+    await defaultRateLimiter.waitBeforeRequest(OPLC_DOMAIN);
+    const response = await fetch(OPLC_SEARCH_URL, {
+      method: 'GET',
+      headers: {
+        'User-Agent': getRandomUserAgent(),
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (response.status === 403) {
+      console.warn('[NewHampshirePhase2] OPLC returned 403 — Akamai WAF blocking cloud IP');
+      return null;
+    }
+
+    if (!response.ok) {
+      console.warn(`[NewHampshirePhase2] OPLC GET HTTP ${response.status}`);
+      return null;
+    }
+
+    const html = await response.text();
+    const cookies = response.headers.get('set-cookie') ?? '';
+    return { html, cookies };
+  } catch (err) {
+    console.warn('[NewHampshirePhase2] OPLC initial GET failed:', err);
+    return null;
+  }
+}
+
+/**
+ * POST search form to OPLC license verification.
+ */
+async function postSearchForm(
+  body: string,
+  cookies: string,
+): Promise<{ html: string; cookies: string } | null> {
+  try {
+    await defaultRateLimiter.waitBeforeRequest(OPLC_DOMAIN);
+    const response = await fetch(OPLC_SEARCH_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': getRandomUserAgent(),
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': OPLC_SEARCH_URL,
+        'Cookie': cookies,
+      },
+      body,
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!response.ok) {
+      console.warn(`[NewHampshirePhase2] OPLC POST HTTP ${response.status}`);
+      return null;
+    }
+
+    const html = await response.text();
+    const newCookies = response.headers.get('set-cookie') ?? cookies;
+    return { html, cookies: newCookies };
+  } catch (err) {
+    console.warn('[NewHampshirePhase2] OPLC POST failed:', err);
+    return null;
+  }
+}
+
+/**
+ * New Hampshire Phase 2 scraper — OPLC Auctioneer licenses.
+ *
+ * Uses the NH OPLC license verification portal (ASP.NET form).
+ * Searches for all active Auctioneer licenses statewide.
+ *
+ * NOTE: The portal uses Akamai CDN which blocks cloud/datacenter IPs.
+ * This scraper will work from residential IPs or with a proxy configured.
+ * When blocked, it throws with a clear diagnostic message.
  */
 export async function runNewHampshirePhase2Scraper(): Promise<void> {
-  console.log(
-    '[NewHampshirePhase2] STUB — OPLC auctioneer list has no bulk download; pawn licensing is municipal-only in NH.'
-  );
-  console.log(
-    '[NewHampshirePhase2] NH auctioneers regulated by OPLC (oplc.nh.gov). No statewide pawnbroker registry.'
-  );
-  console.log(
-    '[NewHampshirePhase2] See file header for unblocking options (OPLC records request).'
-  );
-  console.log('[NewHampshirePhase2] Fetched: 0, Matched: 0, Upserted: 0');
+  console.log('[NewHampshirePhase2] ═══ NH Phase 2 scraper starting ═══════');
+  console.log(`[NewHampshirePhase2] Source: ${OPLC_SEARCH_URL}`);
+
+  // Step 1 — GET initial page for ASP.NET form state
+  const initial = await fetchInitialPage();
+  if (!initial) {
+    throw new Error(
+      '[NewHampshirePhase2] OPLC portal unreachable (likely Akamai WAF blocking cloud IP). ' +
+      'Requires residential IP or proxy. Contact OPLC for bulk data: oplc@oplc.nh.gov / (603) 271-2152'
+    );
+  }
+
+  const viewstate = extractHiddenField(initial.html, '__VIEWSTATE');
+  const viewstateGen = extractHiddenField(initial.html, '__VIEWSTATEGENERATOR');
+  const eventVal = extractHiddenField(initial.html, '__EVENTVALIDATION');
+
+  if (!viewstate) {
+    throw new Error('[NewHampshirePhase2] Could not extract __VIEWSTATE from OPLC page — form structure may have changed');
+  }
+
+  console.log('[NewHampshirePhase2] Got initial page with form state');
+
+  // Step 2 — POST search for Auctioneer profession, all active, empty name = wildcard
+  // Common OPLC form field names (ASP.NET control IDs)
+  const searchBody = buildFormBody({
+    __EVENTTARGET: '',
+    __EVENTARGUMENT: '',
+    __VIEWSTATE: viewstate,
+    __VIEWSTATEGENERATOR: viewstateGen,
+    __EVENTVALIDATION: eventVal,
+    'ctl00$MainContentPlaceHolder$txtLastName': '',
+    'ctl00$MainContentPlaceHolder$txtFirstName': '',
+    'ctl00$MainContentPlaceHolder$txtLicenseNumber': '',
+    'ctl00$MainContentPlaceHolder$ddlProfession': 'Auctioneer',
+    'ctl00$MainContentPlaceHolder$ddlStatus': 'Active',
+    'ctl00$MainContentPlaceHolder$btnSearch': 'Search',
+  });
+
+  const searchResult = await postSearchForm(searchBody, initial.cookies);
+  if (!searchResult) {
+    throw new Error('[NewHampshirePhase2] OPLC search POST failed — portal may be down or blocking');
+  }
+
+  console.log(`[NewHampshirePhase2] Search response HTML size: ${searchResult.html.length} bytes`);
+
+  // Step 3 — Parse results
+  const licensees = parseLicensees(searchResult.html);
+  console.log(`[NewHampshirePhase2] Parsed ${licensees.length} auctioneer licensees`);
+
+  if (licensees.length === 0) {
+    // Check if we got results but couldn't parse them
+    const hasResults = /no\s*records?\s*found/i.test(searchResult.html);
+    if (hasResults) {
+      throw new Error('[NewHampshirePhase2] OPLC returned "no records found" — search parameters may need adjustment');
+    }
+    throw new Error(
+      '[NewHampshirePhase2] Parsed 0 licensees — HTML structure may have changed. ' +
+      'Response size: ' + searchResult.html.length + ' bytes'
+    );
+  }
+
+  // Step 4 — Upsert each licensee
+  let totalUpserted = 0;
+
+  for (const lic of licensees) {
+    // Skip inactive
+    if (lic.status && !/active|current/i.test(lic.status)) continue;
+
+    try {
+      const orgId = await getOrCreateScrapedOrganizer(
+        lic.name,                    // businessName
+        'NewHampshirePhase2',        // sourceName
+        lic.city,                    // city
+        'NH',                        // state
+        undefined,                   // esnOrgId
+        undefined,                   // googlePlaceId
+        undefined,                   // foursquareVenueId
+        undefined,                   // hereBusinessId
+        'auctioneer',                // businessCategory
+        undefined,                   // contactEmail
+        undefined,                   // phone
+        undefined,                   // website
+        undefined,                   // lat
+        undefined,                   // lng
+        true,                        // isStateLicensed
+        'New Hampshire',             // licenseState
+        lic.licenseNumber || undefined, // licenseNumber
+        undefined,                   // sourceLabel
+      );
+      if (orgId) totalUpserted++;
+    } catch (upsertErr) {
+      console.error(`[NewHampshirePhase2] Upsert error for "${lic.name}":`, upsertErr);
+    }
+  }
+
+  console.log('[NewHampshirePhase2] ─────────────────────────────────────────');
+  console.log(`[NewHampshirePhase2]  Licensees found  : ${licensees.length}`);
+  console.log(`[NewHampshirePhase2]  Upserted         : ${totalUpserted}`);
+  console.log('[NewHampshirePhase2] ═══ NH Phase 2 scraper complete ═══════');
 }

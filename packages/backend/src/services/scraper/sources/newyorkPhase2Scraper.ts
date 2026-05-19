@@ -4,17 +4,16 @@
  *
  * Ingests TWO dedicated NYC Open Data datasets via Socrata JSON API:
  *
- *   Dataset 1 — NYC Secondhand Dealer General Licenses
- *     https://data.cityofnewyork.us/resource/9jmq-ziz9.json
- *     All records are secondhand dealers — ingest all active ones.
- *     mapCategory: AUCTION_HOUSE if license_type includes 'AUCTION', else RESALE_SHOP
+ *   Dataset 1 — Secondhand Dealer General (9jmq-ziz9)
+ *     All records are secondhand dealers — category: secondary_sale
  *
- *   Dataset 2 — NYC Active Pawnbroker Licenses
- *     https://data.cityofnewyork.us/resource/u7z4-p9uq.json
- *     All records are pawnbrokers — ingest all as RESALE_SHOP.
+ *   Dataset 2 — Active Pawnbroker Licenses (u7z4-p9uq)
+ *     All records are pawnbrokers — category: pawnbroker
  *
- * Both APIs are paginated with $limit=2000&$offset until response.length < limit.
+ * Both APIs paginated with $limit=5000&$offset.
+ * Deduplicates across both datasets by normalized name+address.
  * isStateLicensed = true for all records (official NYC license registries).
+ * Throws if BOTH datasets return zero total results.
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
@@ -28,61 +27,20 @@ const SECONDHAND_URL =
 const PAWNBROKER_URL =
   'https://data.cityofnewyork.us/resource/u7z4-p9uq.json';
 
-const PAGE_LIMIT = 2000;
+const PAGE_LIMIT = 5000;
 
-/** Inactive license statuses to skip */
-const INACTIVE_STATUSES = new Set(['EXPIRED', 'INACTIVE', 'REVOKED', 'CANCELLED', 'SUSPENDED']);
-
-/**
- * Business name fragments that indicate non-secondhand-sale businesses
- * (construction, automotive, food service, professional services, etc.).
- * Applied to the NYC Secondhand Dealer General dataset (9jmq-ziz9) only.
- */
 const EXCLUDE_FRAGMENTS = [
-  'construction', 'renovation', 'demolition', 'contractor', 'contracting',
-  'plumbing', 'electrical', 'roofing', 'landscaping', 'landscape',
-  'automotive', 'auto parts', 'auto salvage', 'auto body', 'auto repair',
-  'scrap metal', 'scrap yard', 'recycling', 'salvage', 'junkyard',
-  'towing', 'tow yard', 'mechanic', 'garage repair',
-  'restaurant', 'diner', 'catering', 'food service',
-  'medical', 'pharmacy', 'dental', 'clinic', 'hospital',
-  'insurance', 'mortgage', 'financial services', 'accounting',
-  'law office', 'attorney', 'legal services',
-  'hotel', 'motel', 'hostel', 'lodging',
-  'cleaning service', 'janitorial', 'pest control',
-];
-
-/**
- * For the "Secondhand Dealer General" license category specifically,
- * require at least one of these keywords in the business name before ingesting.
- * License types that already target our audience (AUCTION, PAWNBROKER) bypass this check.
- */
-const SALE_TYPE_KEYWORDS = [
-  'estate', 'auction', 'antique', 'thrift', 'consign', 'resale', 're-sale',
-  'secondhand', 'second hand', 'vintage', 'collectible', 'flea market',
-  'liquidat', 'pawn', 'used goods', 'used merchandise', 'buy sell',
-  'swap', 'surplus', 'salvage shop', 'treasure',
+  'real estate', 'realty', 'realtor', 'mortgage',
+  'bank', 'credit union', 'financial', 'insurance',
+  'law office', 'attorney', 'lawyer',
+  'dental', 'dentist', 'medical', 'clinic', 'pharmacy', 'hospital',
+  'restaurant', 'hotel', 'motel',
 ];
 
 /** Returns true if the business name matches a known non-sale fragment. */
 function isExcluded(name: string): boolean {
   const lower = name.toLowerCase();
   return EXCLUDE_FRAGMENTS.some(fragment => lower.includes(fragment));
-}
-
-/**
- * Returns true if the license type already signals a target audience
- * (auctioneers, pawnbrokers) — bypasses the SALE_TYPE_KEYWORDS check.
- */
-function isTargetLicenseType(licenseType: string): boolean {
-  const upper = (licenseType || '').toUpperCase();
-  return upper.includes('AUCTION') || upper.includes('PAWN');
-}
-
-/** Returns true if the business name contains a sale-type keyword. */
-function hasSaleTypeKeyword(name: string): boolean {
-  const lower = name.toLowerCase();
-  return SALE_TYPE_KEYWORDS.some(keyword => lower.includes(keyword));
 }
 
 /**
@@ -99,6 +57,47 @@ function resolveName(record: Record<string, string>): string {
 }
 
 /**
+ * Build an address string from Socrata record fields.
+ */
+function resolveAddress(record: Record<string, string>): string {
+  const building = (record['address_building'] || '').trim();
+  const street = (record['address_street'] || record['street'] || '').trim();
+  return [building, street].filter(Boolean).join(' ');
+}
+
+/**
+ * Resolve the city from a Socrata record, defaulting to 'New York'.
+ */
+function resolveCity(record: Record<string, string>): string {
+  const city = (
+    record['address_city'] ||
+    record['city'] ||
+    ''
+  ).trim();
+  return city || 'New York';
+}
+
+/**
+ * Resolve phone from a Socrata record.
+ */
+function resolvePhone(record: Record<string, string>): string | undefined {
+  const phone = (
+    record['phone'] ||
+    record['contact_phone'] ||
+    record['telephone'] ||
+    ''
+  ).trim();
+  return phone || undefined;
+}
+
+/**
+ * Resolve zip from a Socrata record.
+ */
+function resolveZip(record: Record<string, string>): string {
+  return (record['address_zip'] || record['zip'] || '').trim();
+}
+
+/**
  * Resolve a license number from a Socrata record.
  */
 function resolveLicenseNumber(record: Record<string, string>): string {
@@ -111,35 +110,15 @@ function resolveLicenseNumber(record: Record<string, string>): string {
 }
 
 /**
- * Resolve the license status from a Socrata record.
+ * Build a dedup key from normalized name + address for cross-dataset dedup.
  */
-function resolveStatus(record: Record<string, string>): string {
-  return (
-    record['status'] ||
-    record['license_status'] ||
-    record['lic_status'] ||
-    'ACTIVE'
-  ).trim().toUpperCase();
-}
-
-/**
- * Slugify a business name for use in a dedupeKey fallback.
- */
-function slugifyName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .substring(0, 60);
-}
-
-/**
- * Map a secondhand dealer license type to a FindA.Sale business category.
- */
-function mapSecondhandCategory(licenseType: string): string {
-  const upper = (licenseType || '').toUpperCase();
-  if (upper.includes('AUCTION')) return 'AUCTION_HOUSE';
-  return 'RESALE_SHOP';
+function buildDedupeKey(name: string, address: string, zip: string): string {
+  const normalize = (s: string) =>
+    s.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  return `${normalize(name)}|${normalize(address)}|${zip}`;
 }
 
 /**
@@ -149,11 +128,7 @@ async function fetchPage(
   baseUrl: string,
   offset: number
 ): Promise<Record<string, string>[]> {
-  // Server-side active-status filter — eliminates expired/revoked/inactive records before transfer.
-  // Both NYC datasets are already type-specific (secondhand dealers / pawnbrokers); client-side
-  // INACTIVE_STATUSES filtering remains as a secondary safety net for any edge-case values.
-  const NYC_WHERE = encodeURIComponent(`status NOT IN ('EXPIRED','INACTIVE','REVOKED','CANCELLED','SUSPENDED')`);
-  const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}&$where=${NYC_WHERE}`;
+  const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}`;
   await defaultRateLimiter.waitBeforeRequest(NYC_DOMAIN);
 
   const response = await fetch(url, {
@@ -170,30 +145,16 @@ async function fetchPage(
 }
 
 /**
- * Ingest all records from a single NYC Open Data Socrata dataset.
- *
- * @param label           - Short label for log messages (e.g. 'secondhand', 'pawnbroker')
- * @param baseUrl         - Socrata resource URL without query params
- * @param defaultCategory - FindA.Sale category for all records in this dataset
- * @param dedupePrefix    - Prefix for dedupeKey (e.g. 'NY-SECONDARY', 'NY-SECONDARY-PAWN')
- * @param categoryFn           - Optional per-record category override (used for secondhand dealers)
- * @param applyNameFilters     - When true, applies EXCLUDE_FRAGMENTS + SALE_TYPE_KEYWORDS checks
+ * Fetch all pages from a Socrata dataset.
  */
-async function ingestNycDataset(
+async function fetchAllPages(
   label: string,
-  baseUrl: string,
-  defaultCategory: string,
-  dedupePrefix: string,
-  categoryFn?: (record: Record<string, string>) => string,
-  applyNameFilters = false
-): Promise<void> {
+  baseUrl: string
+): Promise<Record<string, string>[]> {
+  const allRecords: Record<string, string>[] = [];
   let offset = 0;
-  let totalFetched = 0;
-  let totalSkipped = 0;
-  let totalUpserted = 0;
 
-  console.log(`[NewYork Phase2] Starting ${label} dataset ingestion`);
-  console.log(`[NewYork Phase2] Source: ${baseUrl}`);
+  console.log(`[NewYork Phase2] Fetching ${label} from ${baseUrl}`);
 
   while (true) {
     let page: Record<string, string>[];
@@ -210,108 +171,139 @@ async function ingestNycDataset(
 
     if (!page || page.length === 0) break;
 
-    totalFetched += page.length;
-
-    for (const record of page) {
-      try {
-        const name = resolveName(record);
-        if (!name) continue;
-
-        // Filter inactive licenses
-        const status = resolveStatus(record);
-        if (INACTIVE_STATUSES.has(status)) {
-          totalSkipped++;
-          continue;
-        }
-
-        // Name-based filters for the secondhand dealer general dataset
-        if (applyNameFilters) {
-          const licenseType = record['license_type'] || '';
-
-          // Skip names that match known non-sale business categories
-          if (isExcluded(name)) {
-            totalSkipped++;
-            continue;
-          }
-
-          // For non-targeted license types, require a sale-type keyword in the name
-          if (!isTargetLicenseType(licenseType) && !hasSaleTypeKeyword(name)) {
-            totalSkipped++;
-            continue;
-          }
-        }
-
-        const licenseNumber = resolveLicenseNumber(record);
-        const dedupeKey = `${dedupePrefix}-${licenseNumber || slugifyName(name)}`;
-        const category = categoryFn ? categoryFn(record) : defaultCategory;
-        const city = (record['city'] || 'New York').trim();
-
-        const orgId = await getOrCreateScrapedOrganizer(
-          name,              // businessName
-          'NewYorkPhase2',   // sourceName
-          city,              // city
-          'NY',              // state
-          undefined,         // esnOrgId
-          undefined,         // googlePlaceId
-          undefined,         // foursquareVenueId
-          undefined,         // hereBusinessId
-          category,          // businessCategory
-          undefined,         // contactEmail
-          undefined,         // phone
-          undefined,         // website
-          undefined,         // lat
-          undefined,         // lng
-          true,              // isStateLicensed
-          'NY',              // licenseState
-          licenseNumber || undefined // licenseNumber
-        );
-
-        if (orgId) {
-          totalUpserted++;
-        }
-      } catch (rowErr) {
-        console.error(`[NewYork Phase2] ${label}: error on record:`, rowErr);
-      }
-    }
-
+    allRecords.push(...page);
     console.log(
-      `[NewYork Phase2] ${label}: processed offset ${offset}\u2013${offset + page.length - 1} (page size: ${page.length})`
+      `[NewYork Phase2] ${label}: fetched offset ${offset}–${offset + page.length - 1} (${page.length} records)`
     );
 
     if (page.length < PAGE_LIMIT) break;
     offset += PAGE_LIMIT;
   }
 
-  console.log(
-    `[NewYork Phase2] ${label} done — fetched: ${totalFetched}, skipped (inactive): ${totalSkipped}, upserted: ${totalUpserted}`
-  );
+  console.log(`[NewYork Phase2] ${label}: total fetched ${allRecords.length}`);
+  return allRecords;
+}
+
+interface NormalizedRecord {
+  name: string;
+  city: string;
+  phone?: string;
+  licenseNumber: string;
+  category: string;
+  dedupeKey: string;
 }
 
 /**
  * New York Phase 2 scraper — ingests both NYC Open Data license datasets.
+ * Deduplicates across datasets by name+address, then upserts via getOrCreateScrapedOrganizer.
+ * Throws if both datasets return zero total results.
  */
 export async function runNewYorkPhase2Scraper(): Promise<void> {
   console.log('[NewYork Phase2] === Starting New York Phase 2 Scraper ===');
 
-  // Dataset 1: NYC Secondhand Dealer General Licenses
-  // applyNameFilters=true: excludes construction/auto/food/professional records
-  // and requires a sale-type keyword for non-targeted license types
-  await ingestNycDataset(
-    'secondhand',
-    SECONDHAND_URL,
-    'RESALE_SHOP',
-    'NY-SECONDARY',
-    (record) => mapSecondhandCategory(record['license_type'] || ''),
-    true
-  );
+  // Fetch both datasets
+  const secondhandRaw = await fetchAllPages('secondhand', SECONDHAND_URL);
+  const pawnbrokerRaw = await fetchAllPages('pawnbroker', PAWNBROKER_URL);
 
-  // Dataset 2: NYC Active Pawnbroker Licenses
-  await ingestNycDataset(
-    'pawnbroker',
-    PAWNBROKER_URL,
-    'RESALE_SHOP',
-    'NY-SECONDARY-PAWN'
-  );
+  const totalFetched = secondhandRaw.length + pawnbrokerRaw.length;
+  if (totalFetched === 0) {
+    throw new Error(
+      '[NewYork Phase2] FATAL: Both datasets returned zero results. ' +
+      'API may be down or endpoints changed.'
+    );
+  }
 
-  console.log('[NewYork Phase2] === New York Phase 2 Scraper Complete ===');
+  // Normalize and deduplicate across both datasets
+  const seen = new Set<string>();
+  const records: NormalizedRecord[] = [];
+
+  function processRecords(
+    raw: Record<string, string>[],
+    category: string,
+    label: string
+  ): void {
+    let skippedExclude = 0;
+    let skippedNoName = 0;
+    let skippedDupe = 0;
+
+    for (const record of raw) {
+      const name = resolveName(record);
+      if (!name) {
+        skippedNoName++;
+        continue;
+      }
+
+      if (isExcluded(name)) {
+        skippedExclude++;
+        continue;
+      }
+
+      const address = resolveAddress(record);
+      const zip = resolveZip(record);
+      const key = buildDedupeKey(name, address, zip);
+
+      if (seen.has(key)) {
+        skippedDupe++;
+        continue;
+      }
+      seen.add(key);
+
+      records.push({
+        name,
+        city: resolveCity(record),
+        phone: resolvePhone(record),
+        licenseNumber: resolveLicenseNumber(record),
+        category,
+        dedupeKey: key,
+      });
+    }
+
+    console.log(
+      `[NewYork Phase2] ${label}: ${raw.length} raw → ${raw.length - skippedNoName - skippedExclude - skippedDupe} kept ` +
+      `(${skippedNoName} no-name, ${skippedExclude} excluded, ${skippedDupe} dupes)`
+    );
+  }
+
+  processRecords(secondhandRaw, 'secondary_sale', 'secondhand');
+  processRecords(pawnbrokerRaw, 'pawnbroker', 'pawnbroker');
+
+  console.log(`[NewYork Phase2] ${records.length} unique records to upsert`);
+
+  // Upsert all records
+  let upserted = 0;
+  let errors = 0;
+
+  for (const rec of records) {
+    try {
+      const orgId = await getOrCreateScrapedOrganizer(
+        rec.name,                    // businessName
+        'NewYorkPhase2',             // sourceName
+        rec.city,                    // city
+        'New York',                  // state
+        undefined,                   // esnOrgId
+        undefined,                   // googlePlaceId
+        undefined,                   // foursquareVenueId
+        undefined,                   // hereBusinessId
+        rec.category,                // businessCategory
+        undefined,                   // contactEmail
+        rec.phone,                   // phone
+        undefined,                   // website
+        undefined,                   // lat
+        undefined,                   // lng
+        true,                        // isStateLicensed
+        'NY',                        // licenseState
+        rec.licenseNumber || undefined, // licenseNumber
+        'NYC Open Data'              // sourceLabel
+      );
+
+      if (orgId) upserted++;
+    } catch (rowErr) {
+      errors++;
+      console.error(`[NewYork Phase2] Error upserting "${rec.name}":`, rowErr);
+    }
+  }
+
+  console.log(
+    `[NewYork Phase2] === Complete — upserted: ${upserted}, errors: ${errors}, total unique: ${records.length} ===`
+  );
 }

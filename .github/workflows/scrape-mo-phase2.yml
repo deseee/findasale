@@ -1,8 +1,8 @@
 name: Scrape Missouri Pawnbroker Licenses (Phase 2)
 
 on:
-  # DISABLED: Missouri pawnbrokers are licensed at the local/county level only (RSMo §§367.011–367.060).
-  # No statewide registry exists — confirmed via finance.mo.gov. No data to collect.
+  schedule:
+    - cron: '20 8 * * 1'
   workflow_dispatch:
 
 jobs:
