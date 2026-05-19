@@ -202,6 +202,122 @@ function parseDateFromSnippet(snippet: string): Date | null {
   }
 }
 
+
+/**
+ * Parse a street address from a Facebook Events URL slug.
+ *
+ * Slug format: {number}-{street-words}-{city}-{state}-{zip?}-{country?}
+ * The 2-letter state abbreviation (lowercase) is the anchor point.
+ * Everything before state = street number + name + (optional directional).
+ * Between state and end = optional 5-digit zip.
+ *
+ * Example: "3105-tuell-st-nw-grand-rapids-mi-49504"
+ *   → { address: "3105 Tuell St NW", city: "Grand Rapids", state: "MI", zip: "49504" }
+ */
+function parseAddressFromFacebookSlug(
+  sourceUrl: string
+): { address: string; city: string; state: string; zip: string } | null {
+  try {
+    // Extract the segment immediately after /events/
+    const eventsMatch = sourceUrl.match(/\/events\/([^/?#]+)/);
+    if (!eventsMatch) return null;
+
+    const slug = eventsMatch[1];
+    const parts = slug.split('-');
+
+    // Must start with a street number
+    if (!/^\d+$/.test(parts[0])) return null;
+
+    // Find the 2-letter state abbreviation followed by a zip or "united"
+    // Pattern: ...-{xx}-{5digits|united}-...
+    let stateIdx = -1;
+    for (let i = 1; i < parts.length - 1; i++) {
+      const part = parts[i];
+      if (!/^[a-z]{2}$/.test(part)) continue;
+      const next = parts[i + 1];
+      if (/^\d{5}$/.test(next) || next === 'united') {
+        stateIdx = i;
+        break;
+      }
+    }
+    if (stateIdx === -1) return null;
+
+    const stateAbbr = parts[stateIdx].toUpperCase();
+
+    // zip: 5-digit segment immediately after state (if present)
+    const zipCandidate = parts[stateIdx + 1];
+    const zip = /^\d{5}$/.test(zipCandidate) ? zipCandidate : '';
+
+    // Street: parts[0] through parts[stateIdx - 1], but we must carve out the city.
+    // City is everything between the street name and the state.
+    // The street number is parts[0]. The street suffix (St, Ave, Blvd, etc.) and
+    // optional post-directional come next, then city words.
+    // Strategy: walk backwards from stateIdx - 1 until we hit a known street suffix
+    // or a pure-numeric-start (house number again — shouldn't happen).
+    const streetSuffixes = new Set([
+      'st','ave','blvd','dr','rd','ln','way','ct','pl','cir','hwy','pkwy',
+      'trl','ter','sq','loop','xing','run','pass','pike','fwy','expy',
+    ]);
+    const cardinals = new Set(['n','s','e','w','ne','nw','se','sw']);
+
+    // Find the street suffix index (scanning forward from index 1)
+    let suffixIdx = -1;
+    for (let i = 1; i < stateIdx; i++) {
+      if (streetSuffixes.has(parts[i].toLowerCase())) {
+        // Check if the NEXT part is a cardinal (post-directional like NW)
+        if (i + 1 < stateIdx && cardinals.has(parts[i + 1].toLowerCase())) {
+          suffixIdx = i + 1;
+        } else {
+          suffixIdx = i;
+        }
+        break;
+      }
+    }
+
+    let streetParts: string[];
+    let cityParts: string[];
+
+    if (suffixIdx !== -1) {
+      streetParts = parts.slice(0, suffixIdx + 1);
+      cityParts   = parts.slice(suffixIdx + 1, stateIdx);
+    } else {
+      // No recognizable suffix — heuristic: first word after number = street name,
+      // rest up to state = city
+      streetParts = parts.slice(0, 2);
+      cityParts   = parts.slice(2, stateIdx);
+    }
+
+    if (streetParts.length === 0 || cityParts.length === 0) return null;
+
+    const address = streetParts
+      .map((p) =>
+        cardinals.has(p.toLowerCase())
+          ? p.toUpperCase()
+          : p.charAt(0).toUpperCase() + p.slice(1)
+      )
+      .join(' ');
+    const city = cityParts
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(' ');
+
+    return { address, city, state: stateAbbr, zip };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Secondary fallback: attempt to extract a street address from the event title.
+ * Looks for patterns like "123 Main St", "456 Oak Avenue", etc.
+ * Returns only the address string (city/state remain from metro or slug parse).
+ */
+function parseAddressFromTitle(title: string): string | null {
+  const match = title.match(
+    /(\d+\s+[A-Za-z]+(?:\s+[A-Za-z]+)?\s+(?:St|Ave|Blvd|Dr|Rd|Ln|Way|Ct|Pl|Cir|Hwy|Pkwy|Trl|Ter)\.?(?:\s+(?:NW|NE|SW|SE|N|S|E|W))?)/i
+  );
+  return match ? match[1].trim() : null;
+}
+
 /** Convert a raw search result into a ScrapedItem, or null if unusable. */
 function buildScrapedItem(
   result: SearchResult,
@@ -223,12 +339,21 @@ function buildScrapedItem(
   const startDate  = parsedStart ?? new Date(Date.now() + 7 * 86_400_000);
   const endDate    = new Date(startDate.getTime() + 86_400_000);
 
+  // Attempt to extract precise address from URL slug; fall back to title parse
+  const slugParsed = parseAddressFromFacebookSlug(url);
+  const titleAddress = !slugParsed ? parseAddressFromTitle(cleanTitle) : null;
+
+  const resolvedAddress = slugParsed?.address ?? titleAddress ?? '';
+  const resolvedCity    = slugParsed?.city    ?? metro.city;
+  const resolvedState   = slugParsed?.state   ?? metro.state;
+  const resolvedZip     = slugParsed?.zip     ?? '';
+
   return {
     title:         cleanTitle,
-    address:       '',
-    city:          metro.city,
-    state:         metro.state,
-    zip:           '',
+    address:       resolvedAddress,
+    city:          resolvedCity,
+    state:         resolvedState,
+    zip:           resolvedZip,
     startDate,
     endDate,
     description:   snippet || cleanTitle,
