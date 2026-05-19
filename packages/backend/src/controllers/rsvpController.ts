@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
 import { awardXp, checkMonthlyXpCap, XP_AWARDS } from '../services/xpService';
 import { createNotification } from '../services/notificationService';
+import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 
 // POST /sales/:id/rsvp — add/toggle RSVP for current user
 export const toggleSaleRSVP = async (req: AuthRequest, res: Response) => {
@@ -43,6 +44,11 @@ export const toggleSaleRSVP = async (req: AuthRequest, res: Response) => {
           userId: req.user.id,
         },
       });
+
+      // Feature #58: Award SALE_ATTENDED achievement (fire-and-forget)
+      checkAndAward(req.user.id, 'SALE_ATTENDED').catch(err =>
+        console.warn('[achievement] Failed to check SALE_ATTENDED:', err)
+      );
 
       // Award XP for RSVP (capped 10 XP/month)
       try {

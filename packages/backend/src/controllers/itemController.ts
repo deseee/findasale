@@ -30,6 +30,7 @@ import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary ear
 import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase 2: Async eBay comps
 import { fetchEbayPriceComps } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid
 import { composeDescription, stripShippingPhrases, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
+import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -704,6 +705,11 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       ...item,
       suggestedTags, // optional
     });
+
+    // Feature #58: Award ITEM_LISTED achievement (fire-and-forget)
+    checkAndAward(req.user.id, 'ITEM_LISTED').catch(err =>
+      console.warn('[achievement] Failed to check ITEM_LISTED:', err)
+    );
 
     // P2-3: Invalidate command center cache after item creation
     invalidateCommandCenterCache(req.user.organizer!.id).catch((err) =>
