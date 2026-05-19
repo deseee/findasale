@@ -319,8 +319,7 @@ router.get('/organizers/confidence', async (req: any, res: any) => {
         select: {
           id: true,
           businessName: true,
-          city: true,
-          state: true,
+          address: true,
           directoryConfidenceScore: true,
           confidenceLastCalculated: true,
         },
