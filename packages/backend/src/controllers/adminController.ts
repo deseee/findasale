@@ -341,7 +341,7 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
     const skip = (page - 1) * limit;
     const search = (req.query.search as string) || '';
     const role = (req.query.role as string) || '';
-    const hideZeroActivity = req.query.hideZeroActivity === 'true';
+    const hideScraped = req.query.hideScraped === 'true';
 
     const where: any = {};
 
@@ -356,15 +356,14 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
       where.role = role;
     }
 
-    // Filter out zero-activity accounts (likely bots/scrapers):
-    // no purchases AND (no organizer OR organizer with no sales)
-    if (hideZeroActivity) {
+    // Filter out scraper-created accounts: users whose organizer has isUnmanagedListing=true
+    // Real registered organizers always have isUnmanagedListing=false (default)
+    if (hideScraped) {
       where.AND = [
-        { purchases: { none: {} } },
         {
           OR: [
             { organizer: null },
-            { organizer: { is: { sales: { none: {} } } } },
+            { organizer: { is: { isUnmanagedListing: false } } },
           ],
         },
       ];
