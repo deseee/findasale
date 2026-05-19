@@ -647,6 +647,7 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
         take: 20,
       }),
       prisma.user.findMany({
+        where: { email: { not: { endsWith: '@system.finda.sale' } } },
         select: {
           id: true,
           email: true,
@@ -1447,7 +1448,24 @@ export const getDrilldown = async (req: AuthRequest, res: Response) => {
       return res.json({ sales });
     }
 
-    return res.status(400).json({ message: 'Unknown metric. Use: signups, sales, scrapedsales' });
+    if (metric === 'real-organizers') {
+      const organizers = await prisma.organizer.findMany({
+        where: { isUnmanagedListing: false },
+        select: {
+          id: true,
+          businessName: true,
+          contactEmail: true,
+          isClaimed: true,
+          subscriptionTier: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+      return res.json({ organizers });
+    }
+
+    return res.status(400).json({ message: 'Unknown metric. Use: signups, sales, scrapedsales, real-organizers' });
   } catch (error) {
     console.error('Error fetching drilldown:', error);
     res.status(500).json({ message: 'Failed to fetch drilldown data' });
