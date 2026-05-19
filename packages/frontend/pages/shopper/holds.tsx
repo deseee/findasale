@@ -203,17 +203,17 @@ const ShopperHoldsPage = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2 flex-shrink-0 sm:justify-center">
+                    <div className="flex flex-row sm:flex-col gap-2 flex-shrink-0 sm:justify-center w-full sm:w-auto">
                       <Link
-                        href={`/checkout?itemId=${hold.item.id}`}
-                        className="inline-block text-center bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition-colors"
+                        href={`/items/${hold.item.id}`}
+                        className="flex-1 sm:flex-none inline-block text-center bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition-colors whitespace-nowrap"
                       >
-                        Purchase Now
+                        View Item
                       </Link>
                       <button
                         onClick={() => handleReleaseHold(hold.id)}
                         disabled={cancelMutation.isPending}
-                        className="border border-red-400 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40 dark:bg-red-900/20 font-semibold py-2 px-4 rounded transition-colors disabled:opacity-50"
+                        className="flex-1 sm:flex-none border border-red-400 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40 dark:bg-red-900/20 font-semibold py-2 px-4 rounded transition-colors disabled:opacity-50 whitespace-nowrap"
                       >
                         {cancelMutation.isPending ? 'Releasing…' : 'Release Hold'}
                       </button>
