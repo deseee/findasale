@@ -1,9 +1,8 @@
 name: Scrape Rhode Island Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 8:00 AM UTC
-    - cron: '5 8 * * 1'
+  # schedule DISABLED — BROKEN — target is JS-rendered, blocked, or dead
+  # was: cron: '5 8 * * 1'
   workflow_dispatch:
 
 jobs:

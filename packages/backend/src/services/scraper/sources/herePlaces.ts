@@ -79,10 +79,16 @@ async function fetchHEREPage(
       signal: AbortSignal.timeout(12000),
       headers: { 'User-Agent': getRandomUserAgent() },
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error(`[HEREPlaces] Auth failure HTTP 401 for query="${query}" at ${lat},${lng}`);
+      }
+      throw new Error(`[HEREPlaces] HTTP ${response.status} for query="${query}" at ${lat},${lng}`);
+    }
     return (await response.json()) as HEREDiscoverResponse;
-  } catch {
-    return null;
+  } catch (err) {
+    console.error('[HEREPlaces] Fetch error:', err);
+    throw err;
   }
 }
 
@@ -129,7 +135,8 @@ async function geocodeWithHERE(location: string, apiKey: string): Promise<{ lat:
     const coords = data.items?.[0]?.position ?? null;
     geocodeCache.set(location, coords);
     return coords;
-  } catch {
+  } catch (err) {
+    console.error(`[HEREPlaces] Geocode error for "${location}":`, err);
     geocodeCache.set(location, null);
     return null;
   }
@@ -409,6 +416,10 @@ export async function runHEREPlacesScraper(metros: string[]): Promise<ScrapedIte
   console.log(
     `[HEREPlaces] Scraping complete — ${allItems.length} unique businesses, ${apiErrors} API errors`
   );
+
+  if (allItems.length === 0) {
+    throw new Error(`[HEREPlaces] Completed with zero results — source may be unavailable or blocking`);
+  }
 
   return allItems;
 }

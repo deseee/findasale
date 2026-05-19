@@ -1,8 +1,8 @@
 name: Scrape New Hampshire Auctioneer Licenses
 
 on:
-  schedule:
-    - cron: '30 9 * * 3'   # Wednesday 9:30am UTC
+  # schedule DISABLED — STUB — no state-level license registry
+  # was: cron: '30 9 * * 3'
   workflow_dispatch:
 
 concurrency:

@@ -1,9 +1,8 @@
 name: Scrape NAA Find an Auctioneer Directory
 
 on:
-  schedule:
-    # 1st of each month at 15:00 UTC
-    - cron: '0 15 1 * *'
+  # schedule DISABLED — BROKEN — target site blocks or has changed structure
+  # was: cron: '0 15 1 * *'
   workflow_dispatch:
 
 jobs:

@@ -1,9 +1,8 @@
 name: Scrape Kentucky Secondary Sale Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 3:30 AM UTC
-    - cron: '35 3 * * 1'
+  # schedule DISABLED — STUB — no accessible data source
+  # was: cron: '35 3 * * 1'
   workflow_dispatch:
 
 jobs:

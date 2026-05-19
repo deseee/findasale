@@ -1,8 +1,8 @@
 name: Scrape New Jersey Auctioneer Licenses
 
 on:
-  schedule:
-    - cron: '0 4 * * 4'   # Thursday 4:00 UTC
+  # schedule DISABLED — STUB — no state-level license registry
+  # was: cron: '0 4 * * 4'
   workflow_dispatch:
 
 concurrency:

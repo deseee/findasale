@@ -147,8 +147,10 @@ async function fetchFoursquarePage(
       } catch (e) {
         body = `(body read failed: ${e instanceof Error ? e.message : String(e)})`;
       }
-      console.warn(`[Foursquare] HTTP ${response.status} for "${query}" in ${city}, ${state} — ${body.slice(0, 400)}`);
-      return null;
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(`[Foursquare] Auth failure HTTP ${response.status} for "${query}" in ${city}, ${state} — ${body.slice(0, 400)}`);
+      }
+      throw new Error(`[Foursquare] HTTP ${response.status} for "${query}" in ${city}, ${state} — ${body.slice(0, 400)}`);
     }
     return (await response.json()) as FoursquarePlacesResponse;
   } catch (err) {
@@ -381,6 +383,13 @@ export async function runFoursquareScraper(metros?: string[], batch?: 1 | 2): Pr
   console.log(
     `[Foursquare] Scraping complete — ${allItems.length} unique businesses, ${apiErrors} API errors`
   );
+
+  if (allItems.length === 0 && apiErrors > 0) {
+    throw new Error(`[Foursquare] Completed with zero results and ${apiErrors} API errors — source may be unavailable or blocking`);
+  }
+  if (allItems.length === 0) {
+    throw new Error('[Foursquare] Completed with zero results — source may be unavailable or blocking');
+  }
 
   return allItems;
 }

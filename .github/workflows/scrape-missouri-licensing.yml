@@ -1,8 +1,8 @@
 name: Scrape Missouri Auctioneer Licenses
 
 on:
-  schedule:
-    - cron: '0 8 * * 1'   # Monday 8:00 AM UTC
+  # schedule DISABLED — BROKEN — Salesforce SPA, no API access
+  # was: cron: '0 8 * * 1'
   workflow_dispatch:
 
 concurrency:

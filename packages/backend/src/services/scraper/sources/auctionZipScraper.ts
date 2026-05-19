@@ -261,4 +261,8 @@ export async function runAuctionZipScraper(letters?: string[]): Promise<void> {
   console.log(
     `[AuctionZip] Complete — processed: ${totalProcessed}, created/merged: ${totalCreated}, skipped: ${totalSkipped}, errors: ${totalErrors}`
   );
+
+  if (totalProcessed === 0) {
+    throw new Error('[AuctionZip] Completed with zero results — site may be unavailable or blocking');
+  }
 }

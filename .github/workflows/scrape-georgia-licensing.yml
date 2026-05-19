@@ -1,8 +1,8 @@
 name: Scrape Georgia Auctioneer Licenses
 
 on:
-  schedule:
-    - cron: '0 8 * * 2'
+  # schedule DISABLED — STUB — no state-level license registry
+  # was: cron: '0 8 * * 2'
   workflow_dispatch:
 
 concurrency:

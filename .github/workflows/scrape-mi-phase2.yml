@@ -1,9 +1,8 @@
 name: Scrape Michigan Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 08:15 UTC
-    - cron: '15 8 * * 1'
+  # schedule DISABLED — BROKEN — target is JS-rendered, blocked, or dead
+  # was: cron: '15 8 * * 1'
   workflow_dispatch:
 
 jobs:

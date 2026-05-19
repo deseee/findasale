@@ -56,14 +56,13 @@ async function fetchStateMembers(
     });
 
     if (!response.ok) {
-      console.warn(`[NAADirectory] HTTP ${response.status} for state ${state}`);
-      return [];
+      throw new Error(`[NAADirectory] HTTP ${response.status} for state ${state}`);
     }
 
     html = await response.text();
   } catch (err) {
-    console.warn(`[NAADirectory] Fetch failed for state ${state}:`, err);
-    return [];
+    console.error(`[NAADirectory] Fetch failed for state ${state}:`, err);
+    throw err;
   }
 
   const members: NAAMember[] = [];
@@ -203,6 +202,10 @@ export async function scrapeNAADirectory(
   console.log(
     `[NAADirectory] Complete — found ${stats.itemsFound}, created ${stats.itemsCreated}, skipped ${stats.itemsSkipped}, failed ${stats.itemsFailed}`
   );
+
+  if (stats.itemsFound === 0) {
+    throw new Error('[NAA] Zero members found — site structure may have changed');
+  }
 
   return stats;
 }
