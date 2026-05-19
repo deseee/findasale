@@ -392,6 +392,40 @@ const AdminDashboard = () => {
                       </table>
                     </div>
                   )}
+
+                  {drilldownOpen === 'real-organizers' && drilldownData?.organizers && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-warm-200 dark:border-gray-700">
+                            <th className="text-left py-2 px-3 text-warm-600 dark:text-warm-400">Business</th>
+                            <th className="text-left py-2 px-3 text-warm-600 dark:text-warm-400">Email</th>
+                            <th className="text-center py-2 px-3 text-warm-600 dark:text-warm-400">Tier</th>
+                            <th className="text-center py-2 px-3 text-warm-600 dark:text-warm-400">Claimed</th>
+                            <th className="text-right py-2 px-3 text-warm-600 dark:text-warm-400">Joined</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {drilldownData.organizers.map((o: any) => (
+                            <tr key={o.id} className="border-b border-warm-100 dark:border-gray-700">
+                              <td className="py-2 px-3 text-warm-900 dark:text-warm-100">{o.businessName || '—'}</td>
+                              <td className="py-2 px-3 text-warm-600 dark:text-warm-400 text-xs">{o.contactEmail || '—'}</td>
+                              <td className="py-2 px-3 text-center">
+                                <span className="text-xs px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{o.subscriptionTier}</span>
+                              </td>
+                              <td className="py-2 px-3 text-center">
+                                {o.isClaimed
+                                  ? <span className="text-xs px-2 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">Yes</span>
+                                  : <span className="text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">No</span>
+                                }
+                              </td>
+                              <td className="py-2 px-3 text-right text-warm-500 dark:text-warm-400 text-xs">{new Date(o.createdAt).toLocaleDateString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </>
               ) : null}
             </div>
@@ -577,7 +611,7 @@ const AdminDashboard = () => {
             <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Data Integrity</h3>
             <p className="text-xs text-warm-500 dark:text-warm-400 mb-4">Scraped/test data is isolated. It cannot appear in metrics, revenue, or shopper views without an organizer claiming the listing.</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded border border-emerald-100 dark:border-emerald-800">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded border border-emerald-100 dark:border-emerald-800 cursor-pointer hover:opacity-80 transition" onClick={() => openDrilldown('sales')}>
                 <p className="text-xl font-bold text-emerald-900 dark:text-emerald-100">{(stats.realSalesCount ?? stats.totalSales).toLocaleString()}</p>
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">Real Sales</p>
                 <p className="text-[10px] text-emerald-500 dark:text-emerald-500 mt-0.5">Managed organizers</p>
@@ -591,12 +625,12 @@ const AdminDashboard = () => {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Scraped / Unclaimed ↗</p>
                 <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Isolated — click to view</p>
               </div>
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-800">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-800 cursor-pointer hover:opacity-80 transition" onClick={() => openDrilldown('real-organizers')}>
                 <p className="text-xl font-bold text-blue-900 dark:text-blue-100">{stats.totalOrganizers.toLocaleString()}</p>
                 <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Real Organizers</p>
                 <p className="text-[10px] text-blue-500 dark:text-blue-500 mt-0.5">isUnmanagedListing: false</p>
               </div>
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-100 dark:border-amber-800">
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-100 dark:border-amber-800 cursor-pointer hover:opacity-80 transition" onClick={() => openDrilldown('signups')}>
                 <p className="text-xl font-bold text-amber-900 dark:text-amber-100">{stats.totalUsers.toLocaleString()}</p>
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Real Users</p>
                 <p className="text-[10px] text-amber-500 dark:text-amber-500 mt-0.5">Excl. @system.finda.sale</p>
@@ -719,7 +753,8 @@ const AdminDashboard = () => {
             <div className="space-y-3">
               {activity.recentPurchases.length > 0 ? (
                 activity.recentPurchases.slice(0, 5).map(purchase => (
-                  <div key={purchase.id} className="border-b border-warm-200 dark:border-gray-700 pb-3 last:border-0 text-sm">
+                  <Link key={purchase.id} href="/admin/users" className="block cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700/50 rounded transition">
+                  <div className="border-b border-warm-200 dark:border-gray-700 pb-3 last:border-0 text-sm">
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-medium text-warm-900 dark:text-warm-100">{purchase.user?.name || 'Unknown'}</p>
@@ -734,6 +769,7 @@ const AdminDashboard = () => {
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">{new Date(purchase.createdAt).toLocaleDateString()}</p>
                   </div>
+                  </Link>
                 ))
               ) : (
                 <p className="text-warm-500 dark:text-warm-400">No recent purchases</p>
@@ -747,7 +783,8 @@ const AdminDashboard = () => {
             <div className="space-y-3">
               {activity.recentUsers.length > 0 ? (
                 activity.recentUsers.slice(0, 5).map(newUser => (
-                  <div key={newUser.id} className="border-b border-warm-200 dark:border-gray-700 pb-3 last:border-0 text-sm">
+                  <Link key={newUser.id} href="/admin/users" className="block cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700/50 rounded transition">
+                  <div className="border-b border-warm-200 dark:border-gray-700 pb-3 last:border-0 text-sm">
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-medium text-warm-900 dark:text-warm-100">{newUser.name}</p>
@@ -759,6 +796,7 @@ const AdminDashboard = () => {
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">{new Date(newUser.createdAt).toLocaleDateString()}</p>
                   </div>
+                  </Link>
                 ))
               ) : (
                 <p className="text-warm-500 dark:text-warm-400">No recent users</p>
