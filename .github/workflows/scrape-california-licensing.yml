@@ -1,8 +1,8 @@
 name: Scrape California Auctioneer Licenses
 
 on:
-  schedule:
-    - cron: '30 5 * * 2'   # Tuesday 5:30 UTC
+  # schedule DISABLED — STUB — no state-level license registry
+  # was: cron: '30 5 * * 2'
   workflow_dispatch:
 
 concurrency:

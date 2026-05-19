@@ -1,9 +1,8 @@
 name: Scrape Georgia Secondary Sale Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 7:00 AM UTC (staggered from other Phase 2 scrapers)
-    - cron: '5 7 * * 1'
+  # schedule DISABLED — STUB — no accessible data source
+  # was: cron: '5 7 * * 1'
   workflow_dispatch:
 
 jobs:

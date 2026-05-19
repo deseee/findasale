@@ -1,7 +1,7 @@
 name: Scrape Maine Auctioneer Licenses
 on:
-  schedule:
-    - cron: '0 6 * * 3'
+  # schedule DISABLED — STUB — no state-level license registry
+  # was: cron: '0 6 * * 3'
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}

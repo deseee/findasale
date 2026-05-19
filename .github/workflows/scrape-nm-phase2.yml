@@ -1,9 +1,8 @@
 name: Scrape New Mexico Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 10:45 UTC
-    - cron: '45 10 * * 1'
+  # schedule DISABLED — STUB — no accessible data source
+  # was: cron: '45 10 * * 1'
   workflow_dispatch:
 
 jobs:

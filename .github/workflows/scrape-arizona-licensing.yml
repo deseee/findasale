@@ -1,8 +1,8 @@
 name: Scrape Arizona Auctioneer Licenses
 
 on:
-  schedule:
-    - cron: '0 5 * * 2'   # Tuesday 5:00 UTC
+  # schedule DISABLED — STUB — no state-level license registry
+  # was: cron: '0 5 * * 2'
   workflow_dispatch:
 
 concurrency:

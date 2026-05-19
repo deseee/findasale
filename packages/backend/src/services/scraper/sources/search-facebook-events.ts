@@ -545,8 +545,11 @@ export async function scrapeFacebookEventsForMetro(
   }
 
   if (rawResults.length === 0) {
-    console.log(`[FB-Events] No results for ${metro.city}, ${metro.state} (all engines exhausted)`);
-    return [];
+    const triedEngines: string[] = [];
+    if (opts.serperKey) triedEngines.push('serper');
+    if (opts.braveKey) triedEngines.push('brave');
+    if (opts.scaleSerpKey) triedEngines.push('scaleserp');
+    throw new Error(`[FB-Events] All search engines failed for ${metro.city}, ${metro.state} (tried: ${triedEngines.join(', ') || 'none configured'})`);
   }
 
   // Debug: log first 3 URLs so we can monitor engine health

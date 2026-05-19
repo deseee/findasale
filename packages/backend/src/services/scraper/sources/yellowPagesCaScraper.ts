@@ -41,6 +41,14 @@ const PROVINCE_NAMES: Record<Province, string> = {
   NL: 'Newfoundland and Labrador',
 };
 
+// Reverse lookup: full province name (uppercased) → province code
+const PROVINCE_NAME_TO_CODE: Record<string, Province> = Object.fromEntries(
+  (Object.entries(PROVINCE_NAMES) as [Province, string][]).map(([code, name]) => [
+    name.toUpperCase(),
+    code,
+  ])
+) as Record<string, Province>;
+
 const KEYWORDS = [
   'estate sale',
   'auction house',
@@ -136,7 +144,31 @@ function extractJsonLd(html: string): YPListing[] {
           ? json['@graph']
           : [json];
 
-      for (const item of items) {
+      // Flatten ItemList → itemListElement[].item into the items array
+      const flattened: unknown[] = [];
+      for (const raw of items) {
+        const entry = raw as Record<string, unknown>;
+        if (!entry || typeof entry !== 'object') continue;
+        const entryType = entry['@type'];
+        if (
+          entryType === 'ItemList' ||
+          (Array.isArray(entryType) && entryType.includes('ItemList'))
+        ) {
+          const elements = entry['itemListElement'];
+          if (Array.isArray(elements)) {
+            for (const el of elements) {
+              const listItem = el as Record<string, unknown>;
+              if (listItem?.['item'] && typeof listItem['item'] === 'object') {
+                flattened.push(listItem['item']);
+              }
+            }
+          }
+        } else {
+          flattened.push(entry);
+        }
+      }
+
+      for (const item of flattened) {
         const obj = item as Record<string, unknown>;
         if (!obj || typeof obj !== 'object') continue;
 
@@ -173,8 +205,9 @@ function extractJsonLd(html: string): YPListing[] {
 
         if (!city) continue;
 
-        // Validate province is one we care about
-        const prov = region as Province;
+        // Normalize province: YP may return full name ("Ontario") or code ("ON")
+        const normalizedRegion = PROVINCE_NAME_TO_CODE[region] ?? region;
+        const prov = normalizedRegion as Province;
         if (!PROVINCES.includes(prov)) continue;
 
         results.push({ name, city, province: prov, phone, website, streetAddress: street, postalCode: postal });
@@ -306,6 +339,13 @@ export async function runYellowPagesCaScraper(): Promise<void> {
     console.log(
       `[YellowPagesCA] Scraper completed: fetched=${totalFetched}, matched=${totalMatched}, upserted=${totalUpserted}`
     );
+
+    if (totalFetched === 0) {
+      throw new Error(
+        '[YellowPagesCA] Zero results across all provinces and keywords. ' +
+          'YellowPages.ca may have changed its page structure or is blocking requests.'
+      );
+    }
   } catch (error) {
     console.error('[YellowPagesCA] Scraper error:', error);
     throw error;

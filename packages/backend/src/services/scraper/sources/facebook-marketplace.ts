@@ -188,6 +188,7 @@ function parseFBListings(response: FBGraphQLResponse): ScrapedItem[] {
     }
   } catch (error) {
     console.error('[FacebookMarketplace] Error parsing GraphQL response:', error);
+    throw error;
   }
 
   return items;

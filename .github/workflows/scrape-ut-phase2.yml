@@ -1,9 +1,8 @@
 name: Scrape Utah Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 12:00 PM UTC
-    - cron: '0 12 * * 1'
+  # schedule DISABLED — BROKEN — target is JS-rendered, blocked, or dead
+  # was: cron: '0 12 * * 1'
   workflow_dispatch:
 
 jobs:

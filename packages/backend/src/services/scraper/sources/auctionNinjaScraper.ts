@@ -164,8 +164,7 @@ export async function scrapeAuctionNinja(
     companies = await fetchAuctionNinjaCompanies(state, rateLimiter);
   } catch (err) {
     console.error(`[AuctionNinja] Failed to fetch companies for ${metro}:`, err);
-    // Graceful return — site may block, that's expected
-    return stats;
+    throw err;
   }
 
   stats.itemsFound = companies.length;
@@ -206,6 +205,10 @@ export async function scrapeAuctionNinja(
   console.log(
     `[AuctionNinja] ${metro} complete — found ${stats.itemsFound}, created ${stats.itemsCreated}, skipped ${stats.itemsSkipped}, failed ${stats.itemsFailed}`
   );
+
+  if (stats.itemsFound === 0) {
+    throw new Error(`[AuctionNinja] Completed with zero results — source may be unavailable or blocking`);
+  }
 
   return stats;
 }
