@@ -1289,11 +1289,6 @@ const ReviewPage = () => {
                     className={`relative bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] border-l-4 overflow-hidden`}
                     style={{ boxShadow: '0 1px 3px rgba(20,18,14,0.06)', borderLeftColor: readinessBorderColor }}
                   >
-                    {/* Review stripe — amber, persists until approved */}
-                    <div
-                      className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl"
-                      style={{ background: hasError ? '#C04A2B' : '#A87420' }}
-                    />
 
                     <div className="pl-5 pr-5 pt-5 pb-5">
                       {/* Smart chip row */}
