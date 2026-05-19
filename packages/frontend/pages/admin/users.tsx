@@ -11,6 +11,9 @@ interface User {
   createdAt: string;
   purchaseCount: number;
   saleCount: number;
+  oauthProvider: string | null;
+  emailVerified: boolean;
+  storefrontSlug: string | null;
 }
 
 interface PaginationInfo {
@@ -27,6 +30,7 @@ const AdminUsers = () => {
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [hideZeroActivity, setHideZeroActivity] = useState(false);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -46,6 +50,7 @@ const AdminUsers = () => {
       params.append('page', p.toString());
       if (search) params.append('search', search);
       if (roleFilter) params.append('role', roleFilter);
+      if (hideZeroActivity) params.append('hideZeroActivity', 'true');
 
       const res = await api.get(`/admin/users?${params.toString()}`);
       setUsers(res.data.users);
@@ -65,9 +70,20 @@ const AdminUsers = () => {
     }
   }, [user]);
 
+  // Re-fetch when hideZeroActivity changes
+  useEffect(() => {
+    if (user?.role === 'ADMIN') {
+      fetchUsers(1);
+    }
+  }, [hideZeroActivity]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     fetchUsers(1);
+  };
+
+  const handleRowClick = (u: User) => {
+    router.push(`/admin/users/${u.id}`);
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
@@ -100,7 +116,7 @@ const AdminUsers = () => {
     <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Manage Users</h1>
-          <p className="text-warm-600 dark:text-warm-400">Search, filter, and manage user roles</p>
+          <p className="text-warm-600 dark:text-warm-400">Search, filter, and manage user roles. Click any row to view full profile.</p>
         </div>
 
         {error && (
@@ -111,12 +127,13 @@ const AdminUsers = () => {
 
         {/* Search and Filter */}
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
-          <form onSubmit={handleSearch} className="flex flex-col gap-4 md:flex-row md:gap-4">
+          <form onSubmit={handleSearch} className="flex flex-col gap-4 md:flex-row md:items-center md:gap-4">
             <input
               type="text"
               placeholder="Search by name or email..."
               value={search}
-              aria-label="Search by name or email..." onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search by name or email..."
+              onChange={(e) => setSearch(e.target.value)}
               className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
             />
 
@@ -138,6 +155,20 @@ const AdminUsers = () => {
               Search
             </button>
           </form>
+
+          {/* Zero-activity filter toggle */}
+          <div className="mt-4 flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-warm-700 dark:text-warm-300">
+              <input
+                type="checkbox"
+                checked={hideZeroActivity}
+                onChange={(e) => setHideZeroActivity(e.target.checked)}
+                className="w-4 h-4 rounded border-warm-300 text-amber-600 focus:ring-amber-600"
+              />
+              Hide zero-activity accounts
+              <span className="text-warm-500 dark:text-warm-500 text-xs">(no purchases, no sales — likely bots or scrapers)</span>
+            </label>
+          </div>
         </div>
 
         {/* Users Table */}
@@ -149,6 +180,7 @@ const AdminUsers = () => {
                   <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Name</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Email</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Role</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Auth</th>
                   <th className="px-6 py-3 text-center text-sm font-medium text-warm-900 dark:text-warm-100">Purchases</th>
                   <th className="px-6 py-3 text-center text-sm font-medium text-warm-900 dark:text-warm-100">Sales</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Joined</th>
@@ -157,8 +189,17 @@ const AdminUsers = () => {
               </thead>
               <tbody className="divide-y divide-warm-200">
                 {users.map(u => (
-                  <tr key={u.id} className="hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900">
-                    <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 font-medium">{u.name}</td>
+                  <tr
+                    key={u.id}
+                    onClick={() => handleRowClick(u)}
+                    className="hover:bg-amber-50 dark:hover:bg-gray-700 dark:bg-gray-900 cursor-pointer"
+                  >
+                    <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 font-medium">
+                      {u.name}
+                      {!u.emailVerified && (
+                        <span className="ml-2 text-xs text-orange-500 dark:text-orange-400" title="Email not verified">●</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{u.email}</td>
                     <td className="px-6 py-4 text-sm">
                       <span className={`inline-block px-3 py-1 rounded text-xs font-medium ${
@@ -169,10 +210,32 @@ const AdminUsers = () => {
                         {u.role}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
+                      {u.oauthProvider ? (
+                        <span className="capitalize">{u.oauthProvider}</span>
+                      ) : (
+                        <span className="text-warm-400 dark:text-warm-500">email</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm text-center text-warm-600 dark:text-warm-400">{u.purchaseCount}</td>
-                    <td className="px-6 py-4 text-sm text-center text-warm-600 dark:text-warm-400">{u.saleCount}</td>
+                    <td className="px-6 py-4 text-sm text-center text-warm-600 dark:text-warm-400">
+                      {u.saleCount > 0 && u.storefrontSlug ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/organizer/storefront/${u.storefrontSlug}`, '_blank');
+                          }}
+                          className="text-amber-600 hover:underline"
+                          title="View storefront"
+                        >
+                          {u.saleCount}
+                        </button>
+                      ) : (
+                        u.saleCount
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{new Date(u.createdAt).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-sm text-center">
+                    <td className="px-6 py-4 text-sm text-center" onClick={(e) => e.stopPropagation()}>
                       <select
                         value={u.role}
                         onChange={(e) => setConfirmDialog({ userId: u.id, newRole: e.target.value })}

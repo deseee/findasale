@@ -341,6 +341,7 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
     const skip = (page - 1) * limit;
     const search = (req.query.search as string) || '';
     const role = (req.query.role as string) || '';
+    const hideZeroActivity = req.query.hideZeroActivity === 'true';
 
     const where: any = {};
 
@@ -355,6 +356,20 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
       where.role = role;
     }
 
+    // Filter out zero-activity accounts (likely bots/scrapers):
+    // no purchases AND (no organizer OR organizer with no sales)
+    if (hideZeroActivity) {
+      where.AND = [
+        { purchases: { none: {} } },
+        {
+          OR: [
+            { organizer: null },
+            { organizer: { is: { sales: { none: {} } } } },
+          ],
+        },
+      ];
+    }
+
     const [users, total] = await Promise.all([
       prisma.user.findMany({
         where,
@@ -364,8 +379,15 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
           name: true,
           role: true,
           createdAt: true,
+          oauthProvider: true,
+          emailVerified: true,
           purchases: { select: { id: true } },
-          organizer: { select: { sales: { select: { id: true } } } },
+          organizer: {
+            select: {
+              sales: { select: { id: true } },
+              customStorefrontSlug: true,
+            },
+          },
         },
         skip,
         take: limit,
@@ -380,8 +402,11 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
       name: user.name,
       role: user.role,
       createdAt: user.createdAt,
+      oauthProvider: user.oauthProvider,
+      emailVerified: user.emailVerified,
       purchaseCount: user.purchases.length,
       saleCount: user.organizer?.sales.length || 0,
+      storefrontSlug: user.organizer?.customStorefrontSlug || null,
     }));
 
     res.json({
@@ -452,6 +477,72 @@ export const suspendUser = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error suspending user:', error);
     res.status(500).json({ message: 'Failed to suspend user' });
+  }
+};
+
+// GET /api/admin/users/:userId — single user detail for admin
+export const getUserById = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        roles: true,
+        createdAt: true,
+        oauthProvider: true,
+        emailVerified: true,
+        emailVerifiedAt: true,
+        suspendedAt: true,
+        suspendReason: true,
+        fraudSuspect: true,
+        purchases: {
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        organizer: {
+          select: {
+            id: true,
+            businessName: true,
+            customStorefrontSlug: true,
+            subscriptionTier: true,
+            totalSales: true,
+            avgRating: true,
+            verificationStatus: true,
+            sales: {
+              select: {
+                id: true,
+                title: true,
+                status: true,
+                startDate: true,
+                city: true,
+              },
+              orderBy: { startDate: 'desc' },
+              take: 5,
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({ user });
+  } catch (error) {
+    console.error('Error fetching user by id:', error);
+    res.status(500).json({ message: 'Failed to fetch user' });
   }
 };
 

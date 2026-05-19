@@ -5,6 +5,7 @@ import { prisma } from '../index';
 import {
   getStats,
   getUsers,
+  getUserById,
   updateUserRole,
   suspendUser,
   getSales,
@@ -63,6 +64,7 @@ router.use(authenticate, requireAdmin);
 
 router.get('/stats', getStats);
 router.get('/users', getUsers);
+router.get('/users/:userId', getUserById);
 router.patch('/users/:userId/role', updateUserRole);
 router.patch('/users/:userId/suspend', suspendUser);
 router.get('/sales', getSales);
