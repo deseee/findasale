@@ -54,6 +54,24 @@ git commit -m "fix: flip report tier gate, login toast, hold-to-pay modal wiring
 
 ---
 
+## ⚠️ Brand Drift Alert — 2026-05-19
+
+Weekly scan found **2 P1 violations** — both are user-facing:
+
+1. **City page `<title>` tag** (`pages/city/[slug].tsx` line 60) reads `"Estate Sales & Yard Sales in [City], [State]"` — auctions and flea markets absent from the title of every city SEO page. High SEO impact.
+2. **Marketing skill framing** (`findasale-marketing/SKILL.md` line 49) — skill voice instruction anchors to "a neighbor who runs estate sales." Every piece of marketing content generated inherits this estate-sale-first lens.
+
+Also 4 P2 findings (meta description omissions on cities, neighborhoods, map, and city directory subtext) and the map page has no empty state when 0 results.
+
+**Note:** All 4 P3 code comment fixes from the 2026-05-12 audit were not applied and carry forward.
+
+Full report: `claude_docs/audits/brand-drift-2026-05-19.md`
+
+Dispatch `findasale-dev` for the P1 title fix + P2 meta batch + empty state.  
+Dispatch `findasale-records` for the marketing skill framing fix.
+
+---
+
 ## QA Remaining
 
 From `claude_docs/audits/qa-plan-2026-05-18.md`:
