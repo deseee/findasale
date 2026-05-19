@@ -59,7 +59,9 @@ const OrganizerSettingsPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [timezone, setTimezone] = useState('');
   const [byAppointment, setByAppointment] = useState(false);
-  const [hours, setHours] = useState<Array<{ dayOfWeek: number; openTime: string; closeTime: string }>>([]);
+  const [hours, setHours] = useState<Array<{ dayOfWeek: number; openTime: string; closeTime: string }>>(
+    Array.from({ length: 7 }, (_, i) => ({ dayOfWeek: i, openTime: '09:00', closeTime: '17:00' }))
+  );
   const [organizerTypes, setOrganizerTypes] = useState<string[]>([]);
   const [isSavingHours, setIsSavingHours] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
@@ -609,9 +611,11 @@ const OrganizerSettingsPage = () => {
     setIsSavingHours(true);
     try {
       const hoursToSave = byAppointment ? [] : hours;
+      const patchBody: Record<string, unknown> = { byAppointment };
+      if (timezone) patchBody.timezone = timezone;
       await Promise.all([
         api.put('/organizers/me/hours', hoursToSave),
-        api.patch('/organizers/me', { timezone, byAppointment }),
+        api.patch('/organizers/me', patchBody),
       ]);
       // Refetch hours from server to ensure UI reflects persisted state
       try {
@@ -1264,9 +1268,7 @@ const OrganizerSettingsPage = () => {
                                   type="time"
                                   value={hour.openTime || '09:00'}
                                   onChange={(e) => {
-                                    const newHours = [...hours];
-                                    newHours[index].openTime = e.target.value;
-                                    setHours(newHours);
+                                    setHours(hours.map((h, i) => i === index ? { ...h, openTime: e.target.value } : h));
                                   }}
                                   className="px-3 py-1 border border-warm-300 dark:border-gray-700 rounded text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                                 />
@@ -1275,9 +1277,7 @@ const OrganizerSettingsPage = () => {
                                   type="time"
                                   value={hour.closeTime || '17:00'}
                                   onChange={(e) => {
-                                    const newHours = [...hours];
-                                    newHours[index].closeTime = e.target.value;
-                                    setHours(newHours);
+                                    setHours(hours.map((h, i) => i === index ? { ...h, closeTime: e.target.value } : h));
                                   }}
                                   className="px-3 py-1 border border-warm-300 dark:border-gray-700 rounded text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                                 />
@@ -1290,15 +1290,10 @@ const OrganizerSettingsPage = () => {
                                 type="checkbox"
                                 checked={isClosed}
                                 onChange={(e) => {
-                                  const newHours = [...hours];
-                                  if (e.target.checked) {
-                                    newHours[index].openTime = '';
-                                    newHours[index].closeTime = '';
-                                  } else {
-                                    newHours[index].openTime = '09:00';
-                                    newHours[index].closeTime = '17:00';
-                                  }
-                                  setHours(newHours);
+                                  setHours(hours.map((h, i) => i === index
+                                    ? { ...h, openTime: e.target.checked ? '' : '09:00', closeTime: e.target.checked ? '' : '17:00' }
+                                    : h
+                                  ));
                                 }}
                                 className="w-4 h-4 rounded"
                               />
