@@ -34,11 +34,6 @@ const OrganizerPayoutsPage = () => {
   const [payoutMethod, setPayoutMethod] = useState<'standard' | 'instant'>('standard');
   const [selectedInterval, setSelectedInterval] = useState<Interval | null>(null);
 
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // ─── Data fetching ───────────────────────────────────────────────────────────
 
   const { data: balance, isLoading: balanceLoading, isError: balanceError } = useQuery({
@@ -143,6 +138,11 @@ const OrganizerPayoutsPage = () => {
       showToast(err.response?.data?.message || 'Failed to create payout', 'error');
     },
   });
+
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
