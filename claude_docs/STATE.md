@@ -8,25 +8,22 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S766 — QA sweep (Tier 2C/3A) + 3 bug fixes + test data seeded**
+**Latest: S767 — eBay bug fixes (#424 #425 #426) + QA verified (#413 #415) + truncated file recovery**
 
-Heavy QA session across Tier 2C Wave 2, Tier 3A payment flows, loyalty, and eBay batch. Patrick personally tested eBay items (#424–426) and flagged 3 bugs. Test data created directly in Railway DB for future QA (published sale with items + hold for user12, ended sale for donation kit testing).
+Pushed S763–S766 changes. Patrick confirmed migrations run (S760 CrawlerVisit + geo blocks), fix-attendance.sql deleted. QA verified #413 Physical Safety Disclosures and #415 Donation Kit. Dispatched 3 parallel eBay bug fixes.
 
 **Fixed this session:**
-- ✅ #363 — `lotNumber` text input added to auction item form (add-items/[saleId].tsx)
-- ✅ #58 — Achievement event hooks wired: PURCHASE_MADE (POS path), ITEM_LISTED, SALE_ATTENDED, ORGANIZER_CLAIMED were never firing. Fixed in rsvpController, itemController, posPaymentController, referralService.
-- ✅ #221 — Shopper holds page: "Purchase Now" linked to non-existent /checkout route (404). Fixed to /items/[id]. Button overflow on hold card fixed (flex-row on mobile, whitespace-nowrap).
+- ✅ #424 — eBay `{{DESCRIPTION}}` literal sent when item has no description. Root cause: `.replace()` only replaces first occurrence — fixed to `.split().join()` in ebayController.ts + itemController.ts
+- ✅ #425a — eBay push success toast intermittent. Fixed: fallback toast fires when backend returns success with empty results array (review.tsx)
+- ✅ #425b — Stale price sent to eBay when price edited-but-unsaved. Fixed: `handlePublishItem` now flushes `priceInputs` to DB before push (review.tsx)
+- ✅ #426 — Best Offer UI (toggle + auto-accept/decline % + live preview) missing from item edit form. Fixed: UI existed but gated behind `&& ebayConnected` incorrectly — removed that condition (edit-item/[id].tsx)
 
 **Verified this session:**
-- ✅ #356 Broadcast composer, #271 TEAMS Workspace, #29 Loyalty Passport redirect, #289 XP Store tiers
-- ✅ #402 Cover Platform Fee toggle (AUCTION only), #285 POS item search + payment options, #406 Split bill, #288 Promote/Boost flow
-- ✅ #350 Nav polish — Patrick confirmed good
-- ✅ #439 — already fixed S760, closed
+- ✅ #413 Physical Safety Disclosures — Patrick verified directly
+- ✅ #415 Donation Kit — Patrick verified directly
 
-**eBay bugs (Patrick tested directly):**
-- ❌ #424 — still broken (dispatching next session)
-- ⚠️ #425 — works but: (a) success toast intermittent, (b) edited-but-unsaved price sends stale stored price to eBay instead of the edited value
-- ❌ #426 — not working
+**Recovery (S767):**
+- Restored 4 Edit-tool-truncated files from HEAD: `index.ts` (29 lines missing), `internalScraperController.ts`, `workspaceController.ts`, `ebay.ts` — none were committed, no production impact
 
 **Test data in Railway DB (use artifactmi account; Patrick must be present):**
 - "Barn Door QA Test Sale" (id: cmpbvumj90001e7t7v5sa1iqi) — PUBLISHED, holdsEnabled, safetyNotes set, 3 items (draftStatus=PUBLISHED), active hold for user12 (CONFIRMED status)
@@ -115,54 +112,32 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority 0 — Patrick: push S763–S766 changes:**
+**Priority 0 — Patrick: push S767 eBay fixes:**
 ```powershell
-git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
-git add packages/frontend/pages/login.tsx
-git add packages/frontend/pages/organizer/holds.tsx
-git add packages/frontend/pages/sales/[id].tsx
-git add packages/frontend/pages/organizer/message-templates.tsx
-git add packages/frontend/pages/coupons.tsx
-git add packages/frontend/pages/organizer/payouts.tsx
-git add packages/frontend/pages/organizer/webhooks.tsx
-git add packages/frontend/pages/shopper/rare-finds.tsx
-git add packages/frontend/pages/shopper/holds.tsx
-git add packages/frontend/pages/_app.tsx
-git add packages/frontend/sentry.client.config.ts
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
-git add packages/backend/src/controllers/internalListingEnrichmentController.ts
-git add packages/backend/src/controllers/internalGeocodingController.ts
-git add packages/backend/src/controllers/rsvpController.ts
+git add packages/backend/src/controllers/ebayController.ts
 git add packages/backend/src/controllers/itemController.ts
-git add packages/backend/src/controllers/posPaymentController.ts
-git add packages/backend/src/services/referralService.ts
-git add packages/backend/src/services/scraper/sources/search-facebook-events.ts
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/audits/qa-status-reconciliation-2026-05-18.md
-git add claude_docs/audits/qa-plan-2026-05-18.md
-git add claude_docs/audits/geo-verification-2026-05-18.md
+git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: lot number input auction form (#363); fix: achievement event hooks (#58); fix: hold card checkout link + overflow (#221); fix: hooks order, Sentry, enrichment fire-and-forget, FB Events"
+git commit -m "fix: eBay {{DESCRIPTION}} template all occurrences (#424); fix: push toast fallback + stale price flush (#425); fix: Best Offer UI gate removed (#426)"
 .\push.ps1
 ```
 
-**Priority 1 — eBay bug fixes (Patrick confirmed broken):**
-- #424 — dispatch findasale-dev to investigate and fix (read qa-plan for context)
-- #425 — two bugs: (a) success toast intermittent after eBay push; (b) if price edited but not saved before pushing to eBay, stale stored price is sent instead of edited value. Likely fix: flush form state before calling eBay push, and ensure toast fires on all success paths.
-- #426 — dispatch findasale-dev to investigate (read qa-plan for context)
+**Priority 1 — QA: eBay Tier 2B batch (Patrick present + PRO + eBay connected):**
+- #428 Review Card Readiness Borders — verify colored left borders (red/yellow/green/blue) on review queue item cards
+- #427 eBay Local Pickup Mode — edit-item eBay section, verify Local Pickup checkbox present
+- #429 Review Queue Skips Store Description Template — approve item from queue, verify description is item's own not store template boilerplate
+- Also re-verify #424/#425/#426 after push deploys
 
-**Priority 2 — QA remaining:**
-- #413 Physical Safety Disclosures — test data seeded (safetyNotes on Barn Door QA Test Sale). Use artifactmi + Patrick present. Navigate to sale detail as shopper, verify amber safety banner renders.
-- #415 Donation Kit — test data seeded (ended sale id: 6c9c9f00). Use artifactmi + Patrick present. Navigate to organizer sale management for ended sale, verify "Donate Items & Get Tax Receipt" button appears.
-- #428, #427, #429 — remaining Tier 2B eBay items (needs PRO + eBay connected, Patrick present)
+**Priority 2 — Sentry bugs not yet fixed (dispatch findasale-dev):**
+- NODEJS-1B: "Cannot set headers" double-response at POST /api/internal/scraper/ingest (81 events)
+- NODEJS-17: ReferenceError `e is not defined` at organizers route (12 events)
+- NODEJS-S: "stream is not readable" at POST /api/ebay/account-deletion (7 events, still active)
+- NODEJS-1Q: 17-second slow DB query on Review LEFT JOIN Sale (P1 — missing index)
 
-**Note on Chrome QA with artifactmi:** artifactmi@gmail.com can be used as the test organizer account. Patrick must be present at the keyboard for Google OAuth steps (Chrome MCP can't interact with accounts.google.com).
-
-**Previously pending Patrick actions:**
-- Run S760 migrations (CrawlerVisit + geo_demand_waitlist_confidence) — still pending
+**Pending Patrick actions:**
 - Deploy email verification migration (20260515180000) — pending S726
-- Delete fix-attendance.sql from project root — pending S750
 
 ## Recent Sessions
 
@@ -329,4 +304,4 @@ git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta
 **Push:** 44 files (see S760 pushblock in Next Session).
 
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+                                                                                                                                                                                                                                                                                                    

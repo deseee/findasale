@@ -440,8 +440,9 @@ const ReviewPage = () => {
       });
     },
     onSuccess: (response) => {
-      const results = response.data.results || [];
+      const results: any[] = response.data?.results || [];
       let successCount = 0;
+      let errorCount = 0;
       results.forEach((result: any) => {
         if (result.status === 'success') {
           successCount++;
@@ -450,6 +451,7 @@ const ReviewPage = () => {
             showToast('Item pushed to eBay but is still a draft on FindA.Sale — shoppers won\'t see it until you approve it.', 'info');
           }
         } else {
+          errorCount++;
           const errorMsg = result.error?.includes('NOT_CONNECTED')
             ? 'eBay not connected'
             : result.error?.includes('POLICIES')
@@ -460,6 +462,9 @@ const ReviewPage = () => {
       });
       if (successCount > 0) {
         showToast(`${successCount} item${successCount !== 1 ? 's' : ''} pushed to eBay`, 'success');
+      } else if (results.length === 0 && errorCount === 0) {
+        // API succeeded but returned no results array — treat as full success
+        showToast('Item pushed to eBay', 'success');
       }
       queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
       setEbayPushItems({});
@@ -706,8 +711,19 @@ const ReviewPage = () => {
         queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
         showToast('Item published!', 'success');
 
-        // If eBay push is enabled for this item, push it to eBay
+        // If eBay push is enabled for this item, flush the current price first,
+        // then push. This ensures that a price typed in the review queue (priceInputs)
+        // but not yet saved reaches eBay rather than the stale DB value.
         if (ebayPushItems[item.id] && ebayConnected && tier !== 'SIMPLE') {
+          const currentPriceStr = priceInputs.get(item.id);
+          const currentPriceVal = currentPriceStr ? parseFloat(currentPriceStr) : NaN;
+          if (!isNaN(currentPriceVal) && currentPriceVal > 0 && currentPriceVal !== item.price) {
+            try {
+              await api.put(`/items/${item.id}`, { price: currentPriceVal });
+            } catch {
+              // best-effort price flush; proceed with push regardless
+            }
+          }
           ebayPushMutation.mutate([item.id]);
         }
       }

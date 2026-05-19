@@ -1429,7 +1429,7 @@ const EditItemPage = () => {
             )}
 
             {/* eBay Best Offers Section */}
-            {tier !== 'SIMPLE' && ebayConnected && (
+            {tier !== 'SIMPLE' && (
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
                 <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Best Offers</h3>
                 <div className="space-y-3">
