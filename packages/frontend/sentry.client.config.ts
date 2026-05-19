@@ -8,4 +8,9 @@ Sentry.init({
   // Replay captures sessions when an error occurs — 0% normally, 100% on error
   replaysSessionSampleRate: 0,
   replaysOnErrorSampleRate: 1.0,
+  beforeSend(event, hint) {
+    const msg = String(hint?.originalException ?? '');
+    if (msg.includes('Object Not Found Matching Id:')) return null;
+    return event;
+  },
 });

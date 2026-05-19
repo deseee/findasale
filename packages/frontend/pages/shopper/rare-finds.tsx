@@ -42,6 +42,27 @@ const RareFindsPage = () => {
   const [page, setPage] = useState(0);
   const [rarity, setRarity] = useState<string>('ALL'); // ALL, RARE, ULTRA_RARE, LEGENDARY
 
+  // Determine limit based on rarity filter
+  const limit = 20;
+  const offset = page * limit;
+  const rarityFilter = rarity === 'ALL' ? undefined : rarity;
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['rare-finds', page, rarity],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        limit: limit.toString(),
+        offset: offset.toString(),
+      });
+      if (rarityFilter) {
+        params.append('rarity', rarityFilter);
+      }
+      const response = await api.get(`/items/rare-finds?${params.toString()}`);
+      return response.data;
+    },
+    enabled: !!user?.id,
+  });
+
   // Redirect if not authenticated
   if (!authLoading && !user) {
     router.push('/login?redirect=/shopper/rare-finds');
@@ -79,26 +100,6 @@ const RareFindsPage = () => {
     );
   }
 
-  // Determine limit based on rarity filter
-  const limit = 20;
-  const offset = page * limit;
-  const rarityFilter = rarity === 'ALL' ? undefined : rarity;
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['rare-finds', page, rarity],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        offset: offset.toString(),
-      });
-      if (rarityFilter) {
-        params.append('rarity', rarityFilter);
-      }
-      const response = await api.get(`/items/rare-finds?${params.toString()}`);
-      return response.data;
-    },
-    enabled: !!user?.id,
-  });
 
   const items = data?.data || [];
   const total = data?.total || 0;

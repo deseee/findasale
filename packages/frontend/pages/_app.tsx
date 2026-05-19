@@ -15,7 +15,7 @@ const SpeedInsights = dynamic(
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, MutationCache } from '@tanstack/react-query';
 import { SessionProvider, useSession, signOut } from 'next-auth/react';
 import api from '../lib/api';
 import Layout from '../components/Layout';
@@ -304,6 +304,13 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
+        mutationCache: new MutationCache({
+          onError: (error) => {
+            // Errors are handled by individual mutation onError callbacks.
+            // This global handler prevents unhandled promise rejections from mutateAsync() callers.
+            console.error('[MutationCache] unhandled mutation error:', error);
+          },
+        }),
         defaultOptions: {
           queries: {
             staleTime: 60 * 1000,

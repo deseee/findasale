@@ -105,12 +105,6 @@ const CouponsPage = () => {
   const [showRarityBoostModal, setShowRarityBoostModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'shopper' | 'organizer'>('shopper');
 
-  // Redirect to login if not authenticated
-  if (!authLoading && !user) {
-    router.push('/login');
-    return null;
-  }
-
   const isOrganizer = user?.roles?.includes('ORGANIZER') ?? false;
 
   const { data: couponsData, isLoading: couponsLoading } = useQuery({
@@ -169,6 +163,13 @@ const CouponsPage = () => {
       showToast(msg, 'error');
     },
   });
+
+
+  // Redirect to login if not authenticated
+  if (!authLoading && !user) {
+    router.push('/login');
+    return null;
+  }
 
   const copyCode = async (code: string) => {
     try {

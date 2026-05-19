@@ -24,11 +24,6 @@ export default function TemplatesPage() {
   const [editData, setEditData] = useState({ title: '', body: '', category: 'general' });
   const [isAdding, setIsAdding] = useState(false);
 
-  if (!isLoading && (!user || !(user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   const { data } = useQuery({
     queryKey: ['message-templates'],
     queryFn: () => api.get('/message-templates').then(r => r.data),
@@ -49,6 +44,11 @@ export default function TemplatesPage() {
     mutationFn: (data: typeof editData) => api.post('/message-templates', data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['message-templates'] }); setIsAdding(false); setEditData({ title: '', body: '', category: 'general' }); },
   });
+
+  if (!isLoading && (!user || !(user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const templates: Template[] = data?.templates || [];
 

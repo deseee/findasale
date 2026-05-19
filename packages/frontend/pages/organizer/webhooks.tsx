@@ -42,11 +42,6 @@ const OrganizerWebhooksPage = () => {
   const [newEvents, setNewEvents] = useState<string[]>(['purchase.completed']);
   const [newSecret, setNewSecret] = useState<string | null>(null); // shown once after create
 
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   const { data: webhooks = [], isLoading } = useQuery<Webhook[]>({
     queryKey: ['webhooks'],
     queryFn: async () => (await api.get('/webhooks')).data,
@@ -80,6 +75,11 @@ const OrganizerWebhooksPage = () => {
     },
     onError: (err: any) => showToast(err.response?.data?.message || 'Failed to delete', 'error'),
   });
+
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const toggleEvent = (ev: string) => {
     setNewEvents(prev =>
