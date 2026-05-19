@@ -12,8 +12,14 @@ import ReturnToInventoryPanel from '../../../components/ReturnToInventoryPanel';
 export default function FlipReportPage() {
   const router = useRouter();
   const { saleId } = router.query;
-  const { canAccess } = useOrganizerTier();
-  const { data: flipReport, isLoading, error } = useFlipReport(saleId as string | null);
+  const { canAccess, tierLoading } = useOrganizerTier();
+  // Only fetch the report when the organizer has PRO access.
+  // Passing null disables the query (enabled: !!saleId in the hook) and prevents
+  // a 403 from the backend which would surface as "Unable to load flip report"
+  // for non-PRO users before TierGate gets a chance to render.
+  const { data: flipReport, isLoading, error } = useFlipReport(
+    canAccess('PRO') ? (saleId as string | null) : null
+  );
 
   // Show minimal loader while router is hydrating
   if (!saleId) {
@@ -26,7 +32,22 @@ export default function FlipReportPage() {
     );
   }
 
-  if (isLoading) {
+  // Show TierGate for non-PRO users before any error/empty state can surface.
+  // tierLoading guard prevents a flash of the upgrade UI for PRO users while auth loads.
+  if (!tierLoading && !canAccess('PRO')) {
+    return (
+      <>
+        <Head>
+          <title>Flip Report - FindA.Sale</title>
+        </Head>
+        <TierGate requiredTier="PRO" featureName="Flip Report" description="See exactly what sold, at what price, and what to price next time. Flip Report turns your sale history into your next sale's strategy.">
+          <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8" />
+        </TierGate>
+      </>
+    );
+  }
+
+  if (isLoading || tierLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
