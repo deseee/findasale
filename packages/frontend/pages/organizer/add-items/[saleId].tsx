@@ -278,6 +278,7 @@ const emptyForm = {
   reverseFloorPrice: '',
   shippingAvailable: false,
   shippingPrice: '',
+  lotNumber: '',
   tags: [] as string[], // Feature #42: Voice-to-tag support
   photoUrls: [] as string[],
 };
@@ -1765,6 +1766,18 @@ const AddItemsDetailPage = () => {
                             Default: {new Date(new Date(sale.startDate).getTime() - 86400000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Detroit' })} ET
                           </p>
                         )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-amber-900 dark:text-amber-200 mb-1">Lot Number</label>
+                        <input
+                          type="text"
+                          value={formData.lotNumber}
+                          onChange={(e) => setFormData({ ...formData, lotNumber: e.target.value })}
+                          className="w-full px-3 py-1.5 border border-amber-300 dark:border-amber-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                          placeholder="e.g. 42 (optional)"
+                          maxLength={20}
+                          aria-label="Lot number"
+                        />
                       </div>
                     </div>
                   )}

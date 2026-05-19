@@ -5,6 +5,7 @@ import { getStripe } from '../utils/stripe';
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from '../services/xpService';
+import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 
 const stripe = () => getStripe();
@@ -973,6 +974,13 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       } catch (err: any) {
         console.error('[pos-payment] Failed to create misc purchase record:', err);
       }
+    }
+
+    // Feature #58: Award PURCHASE_MADE achievement for linked shopper (fire-and-forget)
+    if (posRequest.shopperUserId) {
+      checkAndAward(posRequest.shopperUserId, 'PURCHASE_MADE').catch(err =>
+        console.warn('[achievement] Failed to check PURCHASE_MADE (POS):', err)
+      );
     }
 
     // Award XP to shopper for purchase

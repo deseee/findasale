@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { awardXp, checkMonthlyXpCap, applyHuntPassMultiplier, XP_AWARDS } from './xpService';
+import { checkAndAward } from './achievementService'; // Feature #58: Achievement tracking
 
 const REWARD_POINTS_PER_REFERRAL = 50;
 const REWARD_CREDIT_PER_REFERRAL = 5.0; // $5 store credit
@@ -217,6 +218,11 @@ export async function awardOrganizerClaimedXp(
         claimedAt: new Date(),
       },
     });
+
+    // Feature #58: Award ORGANIZER_CLAIMED achievement (fire-and-forget)
+    checkAndAward(shopperId, 'ORGANIZER_CLAIMED').catch(err =>
+      console.warn('[achievement] Failed to check ORGANIZER_CLAIMED:', err)
+    );
 
     return {
       success: true,
