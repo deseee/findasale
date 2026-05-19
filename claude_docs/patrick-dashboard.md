@@ -4,15 +4,13 @@
 
 ## What Happened This Week
 
-**S762 (today — Full QA session):** Cleared the entire blocked QA queue — **16 items verified ✅**. Fixed a crash bug discovered during verification: ENDED sale pages with published items threw `TypeError` in JSON-LD structured data (`item.photoUrls?.[0]` null guard). Fix shipped and verified in Chrome.
+**S763 (today — QA Reconciliation + 5 bug fixes):** Low-token document audit cleared 22 stale "Pending Chrome QA" entries from roadmap without burning Chrome tokens. Deprecated #414 (Grief Firewall — code doesn't exist). Fixed 5 confirmed bugs: Flip Report tier gate (#41), login silent error, Hold-to-Pay modal wiring (#221), GEO JSON-LD now in SSR path (#432 #439 #440 #441 #451), ENDED sale noindex now renders (#449 #457).
 
-**S761:** Verified #305 Social Posts ✅ and #307 Retail Mode ✅. Fixed 2 bugs: ai-score doubled /api/ prefix (inline fix), POS "No active sales" root cause (organizer roles guard).
+**S762:** Cleared entire blocked QA queue — 16 items verified ✅. Fixed #292 crash on ENDED sale pages.
 
-**S760:** GEO Phase 2 complete. 17 features, 44 files. Everything in the GEO roadmap is now shipped.
+**S761:** Verified #305 Social Posts ✅ and #307 Retail Mode ✅. Fixed ai-score + POS roles guard.
 
-**S759:** GEO Phases 1-11 — 15 features, 21 files. City landing pages, claim banner, AI Score tool, crawler tracking, Smart Search Views card.
-
-**S756/S757:** Production DB cleanup + pipeline verification. Outreach healthy at ~48/day.
+**S760:** GEO Phase 2 complete — 17 features, 44 files. Full GEO roadmap shipped.
 
 ---
 
@@ -25,43 +23,26 @@
 
 ---
 
-## QA Queue — CLEARED ✅
-
-All 16 items verified this session (S762). Blocked queue is empty. Next session may begin new feature dev.
-
-**Verified today (S762):**
-- ✅ #437 Claim Banner · #438 AI Score · #443 OAuth Claim · #446 Smart Search Views · #454 Demand Dashboard
-- ✅ /admin/organizer-confidence · #306 Store Hours · #292 ENDED sale counts (+ crash fix)
-- ✅ #275 Hunt Pass ring+badge · #265 Share & Earn card
-- ✅ /city/grand-rapids-mi · /city/grand-rapids-mi/estate-sales · /this-weekend/grand-rapids-mi
-- ✅ /clearance · /admin/demand-signals · /admin/waitlist
-
----
-
 ## Action Items for Patrick
 
-### 1. Push S762 crash fix:
+### 1. Push S763 fixes:
 ```powershell
+git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
+git add packages/frontend/pages/login.tsx
+git add packages/frontend/pages/organizer/holds.tsx
 git add packages/frontend/pages/sales/[id].tsx
-git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta (#292)"
-.\push.ps1
-```
-
-### 2. Confirm S761 fixes were already pushed:
-- `packages/frontend/pages/ai-score.tsx` — doubled /api/ prefix fix
-- `packages/frontend/pages/organizer/pos.tsx` — organizer roles guard fix
-
-### 3. Then wrap docs:
-```powershell
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/audits/qa-status-reconciliation-2026-05-18.md
+git add claude_docs/audits/qa-plan-2026-05-18.md
+git add claude_docs/audits/geo-verification-2026-05-18.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S762 wrap — 16 QA items cleared, #292 crash fix"
+git commit -m "fix: flip report tier gate, login toast, hold-to-pay modal wiring, GEO JSON-LD SSR, noindex prop (#41 #221 #449 #457)"
 .\push.ps1
 ```
 
-### 4. Pending (when ready):
-- [ ] **Run S760 push block** (44 files — see STATE.md) if not yet pushed
-- [ ] **Run migrations** (CrawlerVisit + geo_demand_waitlist_confidence):
+### 2. Pending (when ready):
+- [ ] **Run migrations** (CrawlerVisit + geo_demand_waitlist_confidence — S760, still pending):
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
   $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -73,54 +54,9 @@ git commit -m "docs: S762 wrap — 16 QA items cleared, #292 crash fix"
 
 ---
 
-## S760 Push Block
+## QA Remaining
 
-```powershell
-git add packages/frontend/pages/index.tsx
-git add packages/frontend/components/SearchFilterPanel.tsx
-git add "packages/frontend/pages/organizer/edit-sale/[id].tsx"
-git add packages/frontend/pages/sales/[id].tsx
-git add packages/frontend/components/DemandSignalsCard.tsx
-git add packages/frontend/components/ClaimListingBanner.tsx
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/clearance/index.tsx
-git add packages/frontend/pages/admin/demand-signals.tsx
-git add packages/frontend/pages/admin/waitlist.tsx
-git add packages/frontend/pages/admin/organizer-confidence.tsx
-git add packages/frontend/pages/admin/index.tsx
-git add packages/frontend/pages/_app.tsx
-git add packages/mcp-server/src/handlers.ts
-git add packages/mcp-server/src/types.ts
-git add packages/mcp-server/src/index.ts
-git add packages/mcp-server/src/tools/getTrendingSales.ts
-git add packages/mcp-server/src/tools/getSalesStartingSoon.ts
-git add packages/mcp-server/src/tools/findItemForSale.ts
-git add packages/backend/src/index.ts
-git add packages/backend/src/routes/organizers.ts
-git add packages/backend/src/routes/syndication.ts
-git add packages/backend/src/routes/shopperWaitlist.ts
-git add packages/backend/src/routes/demandSignals.ts
-git add packages/backend/src/routes/clearance.ts
-git add packages/backend/src/routes/sales.ts
-git add packages/backend/src/routes/search.ts
-git add packages/backend/src/routes/admin.ts
-git add packages/backend/src/controllers/internalJobRunnerController.ts
-git add packages/backend/src/controllers/saleController.ts
-git add packages/backend/src/controllers/demandSignalsController.ts
-git add packages/backend/src/controllers/clearanceController.ts
-git add packages/backend/src/services/syndicationFormatterService.ts
-git add packages/backend/src/services/unmetDemandService.ts
-git add packages/backend/src/services/directoryConfidenceService.ts
-git add packages/backend/src/jobs/monthlyTrendReportJob.ts
-git add packages/backend/src/jobs/saleAutoCloseCron.ts
-git add packages/backend/src/jobs/websiteEnrichmentJob.ts
-git add packages/backend/src/templates/monthlyTrendReport.ts
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260519100000_geo_demand_waitlist_confidence/migration.sql
-git add .github/workflows/pipeline-monthly-trend-report.yml
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "feat: GEO Phase 2 complete — OAuth claim, clearance, admin dashboards, MCP tools, demand signals, waitlist, confidence, EventSeries, syndication, auto-liquidation, trend reports (#382 #439 #442 #443 #448 #450 #453 #454 #455 #458 #459 #460)"
-.\push.ps1
-```
+~88 items per `claude_docs/audits/qa-plan-2026-05-18.md`:
+- **Tier 2** (25 quick Chrome checks, ~1-3 min each) — highest ROI next session
+- **#332-#335** (Shopify, ACH, Auto Markdown, Consignor Emails) — code confirmed exists
+- **#221 Hold-to-Pay** — QA after push: select hold → Mark Sold → confirm modal + checkout URL

@@ -8,41 +8,21 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S762 — Full QA Session: Cleared 8-item blocked queue + #292 crash fix.**
+**Latest: S763 — QA Reconciliation + 5 Bug Fixes (flip report, login, hold-to-pay, GEO JSON-LD SSR, noindex)**
 
-17 features shipped. 44 files. 4 parallel agent batches. GEO roadmap fully complete (all phases 1-12 shipped across S759-S760). SEO Content Moat confirmed closed — ISR city×category pages ARE the generator. #377 Help Library and #378 /guides confirmed COMPLETE S742.
+Low-token doc audit to reconcile ~60 stale "Pending Chrome QA" roadmap entries. 22 items updated to VERIFIED, #414 deprecated, #27a/#131 superseded. Then fixed 5 confirmed-broken items. GEO JSON-LD now in SSR path for crawlers. Hold-to-Pay modal now wired into holds.tsx.
 
 **What shipped:**
-- **#382** Sale type ordering fixed in 3 files (SearchFilterPanel, index.tsx, edit-sale)
-- **#439** Per-item Product schema JSON-LD on claimed sale pages (up to 20 items)
-- **#448** MCP tool wrappers: get_trending_sales, get_sales_starting_soon, find_item_for_sale
-- **#442** Monthly Trend Reports cron (1st of month, GitHub Actions, emailService)
-- **#450** EventSeries JSON-LD for recurring organizers (≥3 sales same type)
-- **#459** Platform Syndication Formatter + public /api/syndication/sale/:saleId endpoint
-- **#460** End-of-Sale Auto-Liquidation trigger (fire-and-forget, no schema needed)
-- **#453** Unmet Demand Signal Capture (new schema + search.ts integration)
-- **#455** Shopper Notify Me Waitlist (new schema + POST/GET/DELETE API)
-- **#458** Directory Confidence Score (schema fields + directoryConfidenceService.ts)
-- **#454** Organizer Demand Dashboard card (DemandSignalsCard + /api/organizer/demand-signals)
-- **Clearance page** /clearance — post-sale AVAILABLE items, SSR, nav link in Layout.tsx
-- **Admin dashboards** — /admin/demand-signals, /admin/waitlist, /admin/organizer-confidence
-- **#443** 1-Click OAuth Claim — Architect-approved (ADR-443), no migration, OAuthBridge → claim-oauth endpoint → dashboard redirect with toast
-- **4 truncated files restored** — saleController.ts, saleAutoCloseCron.ts, internalJobRunnerController.ts, index.ts (Edit-tool truncation from prior sessions)
+- **#41** Flip Report tier gate — useFlipReport hook now disabled for non-PRO, early-return TierGate added
+- **login.tsx** Login silent error — showToast wired into catch block (same fix register.tsx had)
+- **#221** Hold-to-Pay wiring — HoldToPayModal imported + wired into holds.tsx; modal opens on markSold action
+- **GEO JSON-LD SSR** (#432, #439, #440, #441, #451) — JSON-LD blocks moved before !mounted guard in [id].tsx; crawlers now receive full structured data
+- **noindex SSR** (#449, #457) — noindex prop added to SaleDetailPageProps, threaded from getServerSideProps, meta tag renders for ENDED/private sales
 
-**New migration (Patrick action):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-Covers BOTH CrawlerVisit (S759) and geo_demand_waitlist_confidence (S760) in one run.
-
-**⚠️ Verify before pushing:**
-- `packages/backend/src/index.ts` — confirm all 4 route mounts: syndication, shopperWaitlist, demandSignals, clearance
-- `packages/frontend/pages/sales/[id].tsx` — confirm Product schema + EventSeries + OAuth claim buttons all coexist
-
-**New scheduled task:** `findasale-seo-geo-monitor` — Tuesdays 7am, checks GSC URL, GEO pages, crawler stats, structured data.
+**Audit docs created:**
+- `claude_docs/audits/qa-status-reconciliation-2026-05-18.md`
+- `claude_docs/audits/qa-plan-2026-05-18.md`
+- `claude_docs/audits/geo-verification-2026-05-18.md`
 
 ## Pool Audit Findings
 
@@ -127,36 +107,50 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**⚠️ QA CEILING — still some items unverified. NEXT SESSION = QA ONLY until all cleared.**
-
-**Priority 0 — Patrick: push S762 fix:**
+**Priority 0 — Patrick: push S763 fixes:**
 ```powershell
+git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
+git add packages/frontend/pages/login.tsx
+git add packages/frontend/pages/organizer/holds.tsx
 git add packages/frontend/pages/sales/[id].tsx
-git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta (#292)"
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/audits/qa-status-reconciliation-2026-05-18.md
+git add claude_docs/audits/qa-plan-2026-05-18.md
+git add claude_docs/audits/geo-verification-2026-05-18.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: flip report tier gate, login toast, hold-to-pay modal wiring, GEO JSON-LD SSR, noindex prop (#41 #221 #449 #457)"
 .\push.ps1
 ```
-*(S761 fixes for ai-score.tsx + pos.tsx — confirm these were already pushed.)*
 
-**Priority 1 — QA COMPLETE ✅**
-
-S762 finished all pending QA items. Blocked queue is clear. Next session may begin new feature dev.
-
-Newly verified this session (finish phase):
-- ✅ #275 Hunt Pass ring+badge — user12 amber ring + 🏆 leaderboard badge
-- ✅ #265 Share & Earn card — card renders, dismiss button, referral link confirmed
-- ✅ /city/grand-rapids-mi — H1 + real sale titles confirmed
-- ✅ /city/grand-rapids-mi/estate-sales — category page loads
-- ✅ /this-weekend/grand-rapids-mi — page loads with sale data
-- ✅ /clearance — clearance items render with city filter
-- ✅ /admin/demand-signals — admin demand signal table confirmed
-- ✅ /admin/waitlist — admin waitlist entries confirmed
+**Priority 1 — QA remaining (~88 items per qa-plan-2026-05-18.md):**
+- Tier 2 (25 quick Chrome checks) from qa-plan-2026-05-18.md
+- #332-#335 (Shopify, ACH, Auto Markdown, Consignor Emails) — code confirmed exists, needs Chrome QA
+- #221 Hold-to-Pay — after push, QA the modal flow: select a hold → Mark Sold → confirm modal opens → verify checkout URL appears
 
 **Previously pending Patrick actions:**
-- Run S760 migrations (CrawlerVisit + geo_demand_waitlist_confidence) — pending
+- Run S760 migrations (CrawlerVisit + geo_demand_waitlist_confidence) — still pending
 - Deploy email verification migration (20260515180000) — pending S726
 - Delete fix-attendance.sql from project root — pending S750
 
 ## Recent Sessions
+
+### S763 — QA Reconciliation + 5 Bug Fixes
+
+**Trigger:** Stale roadmap had ~60 "Pending Chrome QA" entries; Patrick directed low-token document audit before Chrome to avoid re-verifying already-confirmed items.
+
+**Audit (document-only, no Chrome):** Cross-referenced all QA session records. 22 items updated to VERIFIED in roadmap, #414 (Grief Firewall) deprecated (code absent from codebase), #27a/#131 marked SUPERSEDED by #305. Created qa-status-reconciliation-2026-05-18.md, qa-plan-2026-05-18.md, geo-verification-2026-05-18.md.
+
+**Bugs fixed (4 parallel agents):**
+- ✅ #41 Flip Report "Unable to load" — useFlipReport called unconditionally; non-PRO gets 403 before TierGate. Fixed: null-disable hook for non-PRO + early-return TierGate guard.
+- ✅ login.tsx silent error — showToast wired to catch block (same pattern register.tsx already had). 
+- ✅ #221 Hold-to-Pay wiring — HoldToPayModal.tsx was complete + orphaned. Imported into holds.tsx, state wired, markSold opens modal for first selected hold.
+- ✅ GEO JSON-LD SSR (#432 #439 #440 #441 #451) — !mounted guard at [id].tsx line ~691 blocked all JSON-LD from SSR. JSON-LD blocks moved before the guard using initialData (already SSR prop). Crawlers now receive full structured data.
+- ✅ noindex SSR (#449 #457) — noindex computed in getServerSideProps but missing from SaleDetailPageProps. Added to props type, destructured, rendered in <Head> for ENDED/private sales.
+
+**#184 iCal confirmed already fixed:** AddToCalendarButton.tsx uses data: URI client-side. No action needed.
+
+**Files changed:** `packages/frontend/pages/organizer/flip-report/[saleId].tsx` · `packages/frontend/pages/login.tsx` · `packages/frontend/pages/organizer/holds.tsx` · `packages/frontend/pages/sales/[id].tsx` · `claude_docs/strategy/roadmap.md` + 3 new audit docs
 
 ### S762 — Full QA Session: 8-item blocked queue cleared + #292 crash fix
 

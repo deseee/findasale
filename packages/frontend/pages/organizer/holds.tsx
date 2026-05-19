@@ -17,6 +17,7 @@ import HoldTimer from '../../components/HoldTimer';
 import FraudBadge from '../../components/FraudBadge';
 import EmptyState from '../../components/EmptyState';
 import { formatDistanceToNow, parseISO } from 'date-fns';
+import HoldToPayModal from '../../components/HoldToPayModal';
 
 // Helper: Map explorer rank to badge emoji and description
 function getRankBadge(rank?: string): { emoji: string; label: string; description: string } {
@@ -80,6 +81,10 @@ const OrganizerHoldsPage = () => {
   const [saleFilter, setSaleFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'expiry' | 'created'>('expiry');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Hold-to-Pay modal state (#221)
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payModalHold, setPayModalHold] = useState<HoldItem | null>(null);
 
   // Initialize saleFilter from query param on mount
   React.useEffect(() => {
@@ -175,6 +180,16 @@ const OrganizerHoldsPage = () => {
 
   const handleBatch = (action: 'release' | 'extend' | 'markSold') => {
     if (selectedIds.size === 0) return;
+    if (action === 'markSold') {
+      // Hold-to-Pay: open modal for the first selected hold (#221)
+      const firstId = Array.from(selectedIds)[0];
+      const hold = holds.find((h) => h.id === firstId) ?? null;
+      if (hold) {
+        setPayModalHold(hold);
+        setShowPayModal(true);
+      }
+      return;
+    }
     batchMutation.mutate({ ids: Array.from(selectedIds), action });
   };
 
@@ -459,6 +474,29 @@ const OrganizerHoldsPage = () => {
           )}
         </div>
       </div>
+      {/* Hold-to-Pay Modal (#221) */}
+      {showPayModal && payModalHold && (
+        <HoldToPayModal
+          itemId={payModalHold.id}
+          itemTitle={payModalHold.item.title}
+          itemPrice={payModalHold.item.price ?? 0}
+          itemPhoto={payModalHold.item.photoUrls?.[0]}
+          shopperId={payModalHold.user.id}
+          shopperName={payModalHold.user.name}
+          shopperEmail={payModalHold.user.email}
+          organizerTier={(user?.organizerTier as 'SIMPLE' | 'PRO' | 'TEAMS') ?? 'SIMPLE'}
+          expiresAt={payModalHold.expiresAt}
+          isOpen={showPayModal}
+          onClose={() => {
+            setShowPayModal(false);
+            setPayModalHold(null);
+          }}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
+            setSelectedIds(new Set());
+          }}
+        />
+      )}
     </>
   );
 };
