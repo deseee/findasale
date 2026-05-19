@@ -30,7 +30,7 @@ const AdminUsers = () => {
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
-  const [hideZeroActivity, setHideZeroActivity] = useState(false);
+  const [hideScraped, setHideScraped] = useState(false);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -50,7 +50,7 @@ const AdminUsers = () => {
       params.append('page', p.toString());
       if (search) params.append('search', search);
       if (roleFilter) params.append('role', roleFilter);
-      if (hideZeroActivity) params.append('hideZeroActivity', 'true');
+      if (hideScraped) params.append('hideScraped', 'true');
 
       const res = await api.get(`/admin/users?${params.toString()}`);
       setUsers(res.data.users);
@@ -75,7 +75,7 @@ const AdminUsers = () => {
     if (user?.role === 'ADMIN') {
       fetchUsers(1);
     }
-  }, [hideZeroActivity]);
+  }, [hideScraped]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,12 +161,12 @@ const AdminUsers = () => {
             <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-warm-700 dark:text-warm-300">
               <input
                 type="checkbox"
-                checked={hideZeroActivity}
-                onChange={(e) => setHideZeroActivity(e.target.checked)}
+                checked={hideScraped}
+                onChange={(e) => setHideScraped(e.target.checked)}
                 className="w-4 h-4 rounded border-warm-300 text-amber-600 focus:ring-amber-600"
               />
-              Hide zero-activity accounts
-              <span className="text-warm-500 dark:text-warm-500 text-xs">(no purchases, no sales — likely bots or scrapers)</span>
+              Hide scraped organizers
+              <span className="text-warm-500 dark:text-warm-500 text-xs">(unmanaged listings imported by scrapers — not real registered users)</span>
             </label>
           </div>
         </div>
