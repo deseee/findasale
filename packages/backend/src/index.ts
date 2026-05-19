@@ -184,6 +184,7 @@ import qrScannerRoutes from './routes/qrScanner';                // QR Scanner P
 import imageProxyRoutes from './routes/imageProxy';              // Image proxy for eBay CDN images
 import { crawlerAnalyticsMiddleware } from './middleware/crawlerAnalytics'; // AI Crawler Analytics
 import crawlerStatsRouter from './routes/crawlerStats';           // AI Crawler Stats endpoint
+import demandSignalsRouter from './routes/demandSignals';          // #454 Organizer Demand Dashboard
 import aiScoreRouter from './routes/aiScore';                       // GEO Phase 3: Search Visibility Score
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
@@ -597,6 +598,7 @@ app.use('/api/qr-scanner', qrScannerRoutes);                                 // 
 app.use('/api', imageProxyRoutes);                                              // Image proxy for eBay CDN images
 app.use(crawlerAnalyticsMiddleware);                                             // AI Crawler Analytics — fire-and-forget, never blocks
 app.use('/api/crawler-stats', crawlerStatsRouter);                              // AI Crawler Stats
+app.use('/api/organizer/demand-signals', demandSignalsRouter);                  // #454 Organizer Demand Dashboard
 app.use('/api', aiScoreRouter);                                           // GEO Phase 3: Search Visibility Score
 
 // Protected route example
