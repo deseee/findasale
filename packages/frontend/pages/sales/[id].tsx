@@ -227,9 +227,10 @@ interface SaleDetailPageProps {
   ogData?: OGSaleData | null;
   initialData?: InitialSaleData | null;
   eventSeriesData?: EventSeriesData | null;
+  noindex?: boolean;
 }
 
-const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, eventSeriesData }) => {
+const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, eventSeriesData, noindex }) => {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
@@ -688,10 +689,182 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 
   // Server-side and pre-mount: render only OG meta + skeleton so FB/Twitter bots
   // get the correct OG tags without any browser-specific code running server-side.
+  // JSON-LD structured data is rendered here from initialData (SSR props) so crawlers
+  // receive it immediately without waiting for client-side hydration. (#432, #439, #440, #441, #451)
   if (!mounted || isLoading) {
     return (
       <>
         {ogHead}
+        {/* Bug #449/#457: noindex for ended/private sales — must render SSR so crawlers see it */}
+        {noindex && (
+          <Head>
+            <meta name="robots" content="noindex" />
+          </Head>
+        )}
+        {/* Bug #432: JSON-LD from SSR initialData — rendered server-side so crawlers receive it */}
+        {initialData && (
+          <Head>
+            <script type="application/ld+json" dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'Event',
+                'name': initialData.title,
+                'description': initialData.description || undefined,
+                'startDate': initialData.startDate,
+                'endDate': initialData.endDate,
+                'eventStatus': 'https://schema.org/EventScheduled',
+                'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
+                'location': {
+                  '@type': 'Place',
+                  'name': initialData.title,
+                  'address': {
+                    '@type': 'PostalAddress',
+                    'streetAddress': initialData.address || undefined,
+                    'addressLocality': initialData.city,
+                    'addressRegion': initialData.state,
+                    'addressCountry': 'US',
+                    'postalCode': initialData.zip || undefined,
+                  }
+                },
+                ...(initialData.organizer && initialData.organizer.businessName ? {
+                  'organizer': {
+                    '@type': 'Organization',
+                    'name': initialData.organizer.businessName,
+                    ...(initialData.organizerId
+                      ? { 'url': `https://finda.sale/organizer/storefront/${initialData.organizerId}` }
+                      : {}),
+                  }
+                } : {}),
+                'url': `https://finda.sale/sales/${initialData.id}`,
+                ...(initialData.photoUrls && initialData.photoUrls[0] ? {
+                  'image': initialData.photoUrls[0]
+                } : {}),
+                ...(initialData.items ? {
+                  'offers': {
+                    '@type': 'AggregateOffer',
+                    'url': `https://finda.sale/sales/${initialData.id}`,
+                    'priceCurrency': 'USD',
+                    'lowPrice': '0',
+                    'offerCount': initialData.items.length || 0
+                  }
+                } : {}),
+                'speakable': {
+                  '@type': 'SpeakableSpecification',
+                  'cssSelector': ['h1', '.sale-description', '.sale-dates']
+                },
+                'paymentAccepted': ['CreditCard', 'Cash', 'PaymentService'],
+              })
+            }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'BreadcrumbList',
+                'itemListElement': [
+                  {
+                    '@type': 'ListItem',
+                    'position': 1,
+                    'name': 'Home',
+                    'item': 'https://finda.sale'
+                  },
+                  {
+                    '@type': 'ListItem',
+                    'position': 2,
+                    'name': 'Sales',
+                    'item': 'https://finda.sale/trending'
+                  },
+                  {
+                    '@type': 'ListItem',
+                    'position': 3,
+                    'name': initialData.title,
+                    'item': `https://finda.sale/sales/${initialData.id}`
+                  }
+                ]
+              })
+            }} />
+          </Head>
+        )}
+        {/* #439: Per-item Product schema from SSR initialData */}
+        {initialData && initialData.isClaimed && initialData.items.length > 0 && (
+          <Head>
+            <script type="application/ld+json" dangerouslySetInnerHTML={{
+              __html: JSON.stringify(
+                initialData.items.map((item) => {
+                  const conditionMap: Record<string, string> = {
+                    NEW: 'https://schema.org/NewCondition',
+                    LIKE_NEW: 'https://schema.org/RefurbishedCondition',
+                    EXCELLENT: 'https://schema.org/RefurbishedCondition',
+                    GOOD: 'https://schema.org/UsedCondition',
+                    FAIR: 'https://schema.org/UsedCondition',
+                    POOR: 'https://schema.org/UsedCondition',
+                    USED: 'https://schema.org/UsedCondition',
+                    REFURBISHED: 'https://schema.org/RefurbishedCondition',
+                  };
+                  const schemaCondition = item.condition
+                    ? (conditionMap[item.condition.toUpperCase()] || 'https://schema.org/UsedCondition')
+                    : undefined;
+                  return {
+                    '@context': 'https://schema.org',
+                    '@type': 'Product',
+                    'name': item.title,
+                    ...(item.description ? { 'description': item.description } : {}),
+                    ...(item.photoUrls?.[0] ? { 'image': item.photoUrls[0] } : {}),
+                    ...(item.category ? { 'category': item.category } : {}),
+                    ...(schemaCondition ? { 'itemCondition': schemaCondition } : {}),
+                    'offers': {
+                      '@type': 'Offer',
+                      'priceCurrency': 'USD',
+                      ...(item.price != null ? { 'price': item.price.toFixed(2) } : {}),
+                      'availability': 'https://schema.org/InStock',
+                      'seller': {
+                        '@type': 'Organization',
+                        'name': initialData.organizer.businessName || initialData.title,
+                      },
+                    },
+                  };
+                })
+              )
+            }} />
+          </Head>
+        )}
+        {/* #450: EventSeries JSON-LD from SSR eventSeriesData */}
+        {eventSeriesData && eventSeriesData.isRecurring && eventSeriesData.organizerName && initialData && (
+          <Head>
+            <script type="application/ld+json" dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'EventSeries',
+                'name': `${eventSeriesData.organizerName}'s ${
+                  eventSeriesData.saleType
+                    ? eventSeriesData.saleType.charAt(0) + eventSeriesData.saleType.slice(1).toLowerCase().replace(/_/g, ' ')
+                    : 'Sale'
+                } Sales`,
+                'organizer': {
+                  '@type': 'Organization',
+                  'name': eventSeriesData.organizerName,
+                  ...(initialData.organizerId
+                    ? { 'url': `https://finda.sale/organizer/storefront/${initialData.organizerId}` }
+                    : {}),
+                },
+                'location': {
+                  '@type': 'Place',
+                  'address': {
+                    '@type': 'PostalAddress',
+                    'addressLocality': initialData.city,
+                    'addressRegion': initialData.state,
+                    'addressCountry': 'US',
+                  },
+                },
+                'subEvent': eventSeriesData.sales.map((s) => ({
+                  '@type': 'Event',
+                  'name': s.title,
+                  'startDate': s.startDate,
+                  'endDate': s.endDate,
+                  'url': `https://finda.sale/sales/${s.id}`,
+                })),
+              })
+            }} />
+          </Head>
+        )}
         <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
           <main className="container mx-auto px-4 py-8">
             <Skeleton className="h-5 w-28 mb-6" />
@@ -737,6 +910,13 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
           <meta name="twitter:image" content={sale.photoUrls?.[0] || ''} />
           </Head>
         ) : null
+      )}
+
+      {/* Bug #449/#457: noindex for ended/private scraped sales — rendered in both SSR and CSR paths */}
+      {noindex && (
+        <Head>
+          <meta name="robots" content="noindex" />
+        </Head>
       )}
 
       {/* Event schema.org + Breadcrumb JSON-LD */}
@@ -2144,6 +2324,4 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
 
     return { props: { ogData, initialData, noindex, eventSeriesData } };
   } catch {
-    return { props: { ogData: null, initialData: null, noindex: false, eventSeriesData: null } };
-  }
-}
+    return { props: { ogData: null, initialData: null, noindex: false, eventSeriesData: null } }
