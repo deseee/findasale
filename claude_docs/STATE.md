@@ -8,21 +8,20 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S763 — QA Reconciliation + 5 Bug Fixes (flip report, login, hold-to-pay, GEO JSON-LD SSR, noindex)**
+**Latest: S764 — Tier 2 Chrome QA + 2 P1 bugs found**
 
-Low-token doc audit to reconcile ~60 stale "Pending Chrome QA" roadmap entries. 22 items updated to VERIFIED, #414 deprecated, #27a/#131 superseded. Then fixed 5 confirmed-broken items. GEO JSON-LD now in SSR path for crawlers. Hold-to-Pay modal now wired into holds.tsx.
+Live Chrome QA sweep of Tier 2 items from qa-plan-2026-05-18.md. 18 items verified across two batches (pre- and post-compaction). 2 P1 bugs found: #363 lot number input missing from organizer item form (backend supports it, display shows it, no UI); #439 backend SSR query excludes items (Product schema can't render server-side). No code changes this session — QA only.
 
-**What shipped:**
-- **#41** Flip Report tier gate — useFlipReport hook now disabled for non-PRO, early-return TierGate added
-- **login.tsx** Login silent error — showToast wired into catch block (same fix register.tsx had)
-- **#221** Hold-to-Pay wiring — HoldToPayModal imported + wired into holds.tsx; modal opens on markSold action
-- **GEO JSON-LD SSR** (#432, #439, #440, #441, #451) — JSON-LD blocks moved before !mounted guard in [id].tsx; crawlers now receive full structured data
-- **noindex SSR** (#449, #457) — noindex prop added to SaleDetailPageProps, threaded from getServerSideProps, meta tag renders for ENDED/private sales
+**Verified this session:**
+- ✅ #433 #434 #378 #60 #260 #432 #441 #451 #440 #449 #457 #352 #360 #405 — Tier 2A quick checks all pass
+- ✅ #263 — Insights + Brand Kit accessible via PRO TOOLS dropdown (not sidebar nav as plan assumed)
+- ✅ #411 — Dorm Dash sale type present on create-sale page
+- ✅ #416 — Leaflet map renders on sale detail; Directions button opens Google Maps correctly
+- ✅ #153 — Organizer storefront shows full profile (name, location, bio, hours, contact)
+- ⚠️ #363 — Buyer's Premium % in step 4 ✅; Lot Number field **MISSING** from organizer item form (P1 dispatched)
+- ⚠️ #223 — Tooltips on dashboard/settings/create-sale ✅; add-items page has **zero** guidance elements (P2)
 
-**Audit docs created:**
-- `claude_docs/audits/qa-status-reconciliation-2026-05-18.md`
-- `claude_docs/audits/qa-plan-2026-05-18.md`
-- `claude_docs/audits/geo-verification-2026-05-18.md`
+**P2 Brand Kit findings:** Logo field is URL-only (no upload button). Social links split across Brand Kit and Profile Settings pages.
 
 ## Pool Audit Findings
 
@@ -107,7 +106,7 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority 0 — Patrick: push S763 fixes:**
+**Priority 0 — Patrick: push S763 + S764 docs:**
 ```powershell
 git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
 git add packages/frontend/pages/login.tsx
@@ -119,14 +118,23 @@ git add claude_docs/audits/qa-plan-2026-05-18.md
 git add claude_docs/audits/geo-verification-2026-05-18.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: flip report tier gate, login toast, hold-to-pay modal wiring, GEO JSON-LD SSR, noindex prop (#41 #221 #449 #457)"
+git commit -m "fix: flip report tier gate, login toast, hold-to-pay modal wiring, GEO JSON-LD SSR, noindex prop; S764 QA findings (#41 #221 #363 #449 #457)"
 .\push.ps1
 ```
 
-**Priority 1 — QA remaining (~88 items per qa-plan-2026-05-18.md):**
-- Tier 2 (25 quick Chrome checks) from qa-plan-2026-05-18.md
-- #332-#335 (Shopify, ACH, Auto Markdown, Consignor Emails) — code confirmed exists, needs Chrome QA
-- #221 Hold-to-Pay — after push, QA the modal flow: select a hold → Mark Sold → confirm modal opens → verify checkout URL appears
+**Priority 1 — Dispatch #363 P1 fix (lot number input):**
+Dispatch `findasale-dev` to add `lotNumber` text input to organizer item form in `packages/frontend/pages/organizer/add-items/[saleId].tsx`. Backend already handles it at itemController.ts lines 729/903. Condition: only show for AUCTION type sales (match pattern of buyersPremiumPct in create-sale.tsx). Display is already in ItemCard.tsx (line 377) and items/[id].tsx (line 681).
+
+**Priority 2 — Dispatch #439 P1 fix (items in SSR sale query):**
+Dispatch `findasale-dev` to add `items: { take: 20, select: { title, price, condition, status } }` to the backend public sale GET query in saleController.ts (~line 313) so Product schema renders server-side for crawlers.
+
+**Priority 3 — QA remaining from qa-plan-2026-05-18.md:**
+- #350 Nav Polish — shopper mobile viewport
+- Tier 2B eBay batch: #428, #424, #425, #426, #427, #429 (needs PRO + eBay connected)
+- Tier 2C Wave 2: #413, #412, #356, #359, #415, #271
+- Tier 3A Payment flows: #285, #402, #289, #288, #406 (highest business value)
+- #221 Hold-to-Pay modal flow (after S763 push)
+- #29 Loyalty Passport, #58 Achievement Badges
 
 **Previously pending Patrick actions:**
 - Run S760 migrations (CrawlerVisit + geo_demand_waitlist_confidence) — still pending
@@ -134,6 +142,22 @@ git commit -m "fix: flip report tier gate, login toast, hold-to-pay modal wiring
 - Delete fix-attendance.sql from project root — pending S750
 
 ## Recent Sessions
+
+### S764 — Tier 2 Chrome QA (18 items verified, 2 P1 bugs found)
+
+**Trigger:** Patrick directed "start tier 2, of the full flow ones what are the most pressing?" after S763 TS build fix confirmed green.
+
+**Verified:** ✅ #433 #434 #378 #60 #260 #432 #441 #451 #440 #449 #457 #352 #360 #405 #263 #411 #416 #153 — 18 items confirmed. See Current Status for details.
+
+**Bugs found:**
+- ❌ #363 P1: `lotNumber` input missing from organizer item form. Backend accepts it (itemController.ts lines 729/903), ItemCard.tsx + items/[id].tsx display it — but no organizer UI to set it. Dispatch to findasale-dev needed.
+- ❌ #439 P1: Backend public sale GET query excludes items. Product schema SSR can't render item data for crawlers. Fix: add items to saleController.ts ~line 313 query. Dispatch to findasale-dev needed.
+- ⚠️ #223 P2: add-items page (highest-use organizer flow) has zero Tooltip/explainer elements. Dashboard has 4, settings has 16, create-sale has 3 — but add-items has none.
+- ⚠️ Brand Kit P2: Logo field is URL-only (no upload button); social links duplicated across Brand Kit + Profile Settings pages.
+
+**No code changes this session. No push required beyond S763 + this STATE.md + patrick-dashboard.md.**
+
+---
 
 ### S763 — QA Reconciliation + 5 Bug Fixes
 
@@ -221,50 +245,4 @@ git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta
 
 **Push:** 44 files (see S760 pushblock in Next Session).
 
-### S759 — GEO/AI Discoverability Build — Phases 1-11 (COMPLETE)
-
-**Trigger:** Patrick's S758 GEO plan ready for implementation; QA deferred per Patrick directive.
-
-**What shipped:** 21 files across 3 parallel batches (12 agents). 15 GEO roadmap entries moved from Queued → SHIPPED.
-
-Core: city×category ISR pages, cities browse index, this-weekend temporal pages, sale page JSON-LD enrichment (Speakable + PaymentMethod + SoldOut + sr-only block + real AggregateOffer prices), ClaimListingBanner on unclaimed pages, AI Score tool at /ai-score, ChatGPT plugin manifest, CrawlerVisit schema+middleware+stats endpoint, Smart Search Views card on organizer dashboard, first-crawl email notification, stale scraped data protection (noindex + search exclusion).
-
-**Pre-existing crash bugs fixed:** city/[slug].tsx (5+ non-existent lib imports), cities/index.tsx (broken client-side). Both would have caused Vercel build failure.
-
-**Migration needed:** CrawlerVisit model — run `prisma migrate deploy` + `prisma generate` with Railway DB URL.
-
-**Push:** 21 files (see S759 pushblock below).
-
-
-### S758 — GEO & Discoverability Implementation Plan (COMPLETE)
-
-**Trigger:** Patrick shared cross-session GEO strategy prompt for analysis.
-
-Complete GEO strategy session. 12-phase plan + 5 research items + 4 GTM plays. 29 roadmap entries #432–#460. Phases 1-8: core funnel. Phase 9: compounding data assets. Phase 10: demand intelligence. Phase 11: data trust (auto-expire + confidence scoring — CRITICAL). Phase 12: syndication + auto-liquidation. Research queue: embeddable widget, Price Oracle, economic signals, Spanish data, agent subscriptions. GTM: build-in-public, Product Hunt infra launch, dev bounty, weekly wrangler audit. No code changes. Strategy doc: `claude_docs/strategy/geo-implementation-plan.md`.
-
-### S757 — Production DB Cleanup (COMPLETE)
-
-**Trigger:** Patrick requested test data removal.
-
-Removed 5 test/QA sales + 13 items from Railway production DB. Cascading FK records cleaned in order (Bid, DonatedItem, ItemReservation, MaxBidByUser, Purchase, LineEntry, SaleChecklist, SaleDonation, SaleRipple, SaleSettlement, TrailStop, TreasureHuntQRClue, TreasureTrail). Nintendo Power item (from ENDED Artifact copy) migrated to live Artifact Downtown Paw Paw (now 100 items). 3 orphaned eBay-sync test items also removed. No code changes. No push required.
-
----
-
-### S756 — Pipeline DB Verification + WARM Email Gap Root Cause + Daily Cron Fix (COMPLETE)
-
-**Trigger:** Patrick deferred Chrome QA, asked to begin S754 pipeline audit (blocked last session by workspace bash unavailability).
-
-**DB audit results (psycopg2 via Railway public proxy):**
-- DirectoryClaimEmail: 3,319 PENDING, 29 SENT. 31 junk rows deleted (26 image filenames + 5 Patrick test emails).
-- Outreach pace: 29 sent since S754 deploy (May 17-18), ~48/day — on warmup schedule.
-- directoryMostRecentSource: 87.7% tagged (S754 backfill of 46,333 records confirmed working).
-- WARM addressable pool: 208 orgs (have website + no contactEmail).
-
-**#336 + #339 roadmap cleanup:** Both features confirmed already fully implemented (schema + PATCH handler + processRapidDraft gate for #336; cloudAIService.ts confidence gate for #339). Roadmap rows updated from "P1 violation — queued" / "Queued" → "SHIPPED (confirmed S756) — Pending Chrome QA".
-
-**WARM email gap root cause:** Email discovery requires `website IS NOT NULL`. Only 1,223 of 36,851 WARM orgs have a website (3.3%). Root cause: `websiteEnrichmentJob.ts` has intentional `isStateLicensed: true` filter (WARM→HOT bridge for licensed orgs) and was running weekly only. Fix: switched GitHub Actions cron `0 1 * * 0` → `0 1 * * *` (daily). API impact: HERE 250K/month cap, daily runs = ~1,500/month (well under cap). Foursquare sandbox — fallback only, no lifetime cap concern.
-
-**Files changed:**
-- `.github/workflows/pipeline-website-enrichment.yml` — cron weekly → daily
-- `claude_docs/strategy/roadmap.md` — #336 and #339 status updated
 

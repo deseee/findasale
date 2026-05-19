@@ -366,7 +366,7 @@ const AddItemsDetailPage = () => {
 
   // Expandable item cards (like review & publish page)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
-  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; description: string }>>({});
+  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; description: string; lotNumber: string }>>({});
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'status' | 'date'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -377,6 +377,7 @@ const AddItemsDetailPage = () => {
       category: item.category || '',
       condition: item.condition || '',
       description: item.description || '',
+      lotNumber: item.lotNumber || '',
     };
   }, [itemEditState]);
 
@@ -390,6 +391,7 @@ const AddItemsDetailPage = () => {
         category: state.category,
         condition: state.condition,
         description: state.description,
+        lotNumber: state.lotNumber || null,
       });
       showToast('Item saved', 'success');
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
@@ -2193,6 +2195,7 @@ const AddItemsDetailPage = () => {
                               category: item.category || '',
                               condition: item.condition || '',
                               description: item.description || '',
+                              lotNumber: item.lotNumber || '',
                             }}));
                           }
                         }}
@@ -2323,6 +2326,21 @@ const AddItemsDetailPage = () => {
                               className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
                             />
                           </div>
+                          {item.listingType === 'AUCTION' && (
+                            <div>
+                              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">
+                                Lot Number
+                                <span className="ml-1 font-normal text-warm-500 dark:text-warm-400">(optional — auction catalog identifier)</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={editState.lotNumber}
+                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, lotNumber: e.target.value } }))}
+                                placeholder="e.g. 42"
+                                className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                              />
+                            </div>
+                          )}
                           <div className="flex gap-2">
                             <button
                               type="button"
