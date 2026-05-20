@@ -878,7 +878,9 @@ router.post('/enrichment/run-website-backfill', requireSecret, async (req: expre
     res.status(202).json({ ok: true, message: 'Website enrichment backfill started' });
     runWebsiteEnrichmentBackfill().catch(err => console.error('[WebsiteEnrichment] Backfill route error:', err));
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    if (!res.headersSent) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
   }
 });
 
