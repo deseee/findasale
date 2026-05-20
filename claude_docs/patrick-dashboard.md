@@ -4,7 +4,10 @@
 
 ## What Happened This Week
 
-**S768+ (latest — UX spot-check + Sentry dispatch):**
+**S769 (latest — roadmap audit):**
+- Roadmap corrected: #380 (FB Marketplace scraper), #418 (18-state scrapers), #331 (Voice-to-Tag Phase 2), #378 (Help Library) all marked SHIPPED. #364 (Bing) marked DEPRECATED. #460 (Auto-Liquidation) marked SUPERSEDED by existing discount rules. #338 (Sold-Price Comps) flagged as "possibly shipped — verify in Chrome."
+
+**S768+ (UX spot-check + Sentry dispatch):**
 - dashboard.tsx: Literal "X shoppers" fixed, clipboard error handling added, aria-labels cleaned up
 - edit-sale/[id].tsx: React hooks violation fixed, geocoding failure now shows a toast, 9 redundant aria-labels removed
 - NODEJS-17 resolved: organizers.ts was silently truncated — appended the missing 14 lines (claim-oauth close + export)
@@ -56,6 +59,7 @@ git add packages/database/prisma/migrations/20260520120000_add_sku_append_toggle
 git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
 git commit -m "feat: voice location extraction + eBay Custom Label toggles; fix: requestTimeout /api/internal/; fix: double-response scraper/enrichment; fix: 6 slow-query indexes; fix: organizers.ts truncation (NODEJS-17); fix: eBay webhook stream (NODEJS-S); fix: Review indexes (NODEJS-1Q); fix: dashboard X-placeholder + clipboard; fix: edit-sale hooks + geocoding toast + aria-labels"
 .\push.ps1
 ```

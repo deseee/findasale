@@ -142,6 +142,7 @@ git add packages/database/prisma/migrations/20260520120000_add_sku_append_toggle
 git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
 git commit -m "feat: voice location extraction + eBay Custom Label toggles; fix: requestTimeout /api/internal/ exemption; fix: double-response internalScraper/EnrichAI; fix: 6 slow-query indexes; fix: organizers.ts truncation (NODEJS-17); fix: eBay webhook stream error (NODEJS-S); fix: Review indexes (NODEJS-1Q); fix: dashboard X-placeholder + clipboard; fix: edit-sale hooks order + geocoding toast + aria-labels"
 .\push.ps1
 ```
@@ -171,6 +172,25 @@ npx prisma generate
 - Deploy email verification migration (20260515180000) — pending S726
 
 ## Recent Sessions
+
+### S769 — Roadmap Audit + 7 Status Corrections
+
+**Trigger:** Patrick asked "what roadmap stuff is left that isn't QA?" — needed accurate remaining dev work list.
+
+**Roadmap corrections (all Patrick-confirmed):**
+- #380 Facebook Marketplace GraphQL Scraper → SHIPPED (confirmed done)
+- #364 Bing Search API Facebook Event Discovery → DEPRECATED (approach abandoned)
+- #418 Phase 2 Scrapers (18 remaining states) → SHIPPED (audit complete)
+- #460 End-of-Sale Auto-Liquidation → SUPERSEDED (existing auto-markdown #334 + color-tagged discount rules #310 cover same functionality)
+- #378 Help Library Site Surface → SHIPPED S742 — VERIFIED per Patrick
+- #331 Voice-to-Tag Phase 2 → SHIPPED (confirmed done)
+- #338 Surface Sold-Price Comps → Possibly shipped — Patrick said "may be done"; marked for Chrome verify
+
+**OAuth linked accounts clarification:** #422 UI gap is a settings surface to manage which OAuth providers are connected to an existing account (distinct from main OAuth login). Non-urgent — backend 409 rejection already closes the security hole.
+
+**Files changed:** `claude_docs/strategy/roadmap.md`
+
+---
 
 ### S768 — CI/Sentry Fixes + Voice Location Extraction + eBay Custom Label Toggles
 
