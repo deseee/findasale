@@ -124,6 +124,12 @@ const EbayPolicySetupPage = () => {
     ebayDefaultShippingPolicyId: string | null;
   }>({ ebayDefaultShippingPolicyId: null });
 
+  // eBay Custom Label (SKU) append toggles
+  const [skuAppendDate, setSkuAppendDate] = useState(false);
+  const [skuAppendCost, setSkuAppendCost] = useState(false);
+  const [skuAppendLocation, setSkuAppendLocation] = useState(false);
+  const [originalSkuToggles, setOriginalSkuToggles] = useState({ skuAppendDate: false, skuAppendCost: false, skuAppendLocation: false });
+
   // Fetch setup data on mount
   useEffect(() => {
     if (!authLoading && !user) {
@@ -170,6 +176,17 @@ const EbayPolicySetupPage = () => {
         };
         setOrganizerDefaults(defaults);
         setOriginalOrganizerDefaults(JSON.parse(JSON.stringify(defaults)));
+
+        // Initialize SKU append toggles from organizer data
+        const skuToggles = {
+          skuAppendDate: organizerRes?.data?.skuAppendDate ?? false,
+          skuAppendCost: organizerRes?.data?.skuAppendCost ?? false,
+          skuAppendLocation: organizerRes?.data?.skuAppendLocation ?? false,
+        };
+        setSkuAppendDate(skuToggles.skuAppendDate);
+        setSkuAppendCost(skuToggles.skuAppendCost);
+        setSkuAppendLocation(skuToggles.skuAppendLocation);
+        setOriginalSkuToggles(skuToggles);
       } catch (error: any) {
         if (error.response?.status === 401) {
           setEbayConnected(false);
@@ -191,7 +208,10 @@ const EbayPolicySetupPage = () => {
 
   const hasChanges =
     JSON.stringify(mapping) !== JSON.stringify(originalMapping) ||
-    JSON.stringify(organizerDefaults) !== JSON.stringify(originalOrganizerDefaults);
+    JSON.stringify(organizerDefaults) !== JSON.stringify(originalOrganizerDefaults) ||
+    skuAppendDate !== originalSkuToggles.skuAppendDate ||
+    skuAppendCost !== originalSkuToggles.skuAppendCost ||
+    skuAppendLocation !== originalSkuToggles.skuAppendLocation;
 
   const handleSaveMapping = async () => {
     if (!mapping) return;
@@ -210,10 +230,17 @@ const EbayPolicySetupPage = () => {
       const payload = { ...mapping, weightTierMappings: sortedTiers };
       // Save the policy mapping (existing path)
       await api.post('/ebay/policy-mapping', payload);
-      // Save organizer-level eBay defaults (default shipping policy only — S725 removed publish-mode).
-      if (JSON.stringify(organizerDefaults) !== JSON.stringify(originalOrganizerDefaults)) {
+      // Save organizer-level eBay defaults and SKU append toggles.
+      const skuTogglesDirty =
+        skuAppendDate !== originalSkuToggles.skuAppendDate ||
+        skuAppendCost !== originalSkuToggles.skuAppendCost ||
+        skuAppendLocation !== originalSkuToggles.skuAppendLocation;
+      if (JSON.stringify(organizerDefaults) !== JSON.stringify(originalOrganizerDefaults) || skuTogglesDirty) {
         await api.patch('/organizers/me', {
           ebayDefaultShippingPolicyId: organizerDefaults.ebayDefaultShippingPolicyId,
+          skuAppendDate,
+          skuAppendCost,
+          skuAppendLocation,
         });
       }
       showToast('eBay settings saved', 'success');
@@ -229,6 +256,7 @@ const EbayPolicySetupPage = () => {
       setMapping(savedMapping);
       setOriginalMapping(JSON.parse(JSON.stringify(savedMapping)));
       setOriginalOrganizerDefaults(JSON.parse(JSON.stringify(organizerDefaults)));
+      setOriginalSkuToggles({ skuAppendDate, skuAppendCost, skuAppendLocation });
       // Refetch to ensure sync with backend
       const res = await api.get('/ebay/setup-data');
       setSetupData(res.data);
@@ -243,6 +271,9 @@ const EbayPolicySetupPage = () => {
   const handleDiscardChanges = () => {
     setMapping(JSON.parse(JSON.stringify(originalMapping)));
     setOrganizerDefaults(JSON.parse(JSON.stringify(originalOrganizerDefaults)));
+    setSkuAppendDate(originalSkuToggles.skuAppendDate);
+    setSkuAppendCost(originalSkuToggles.skuAppendCost);
+    setSkuAppendLocation(originalSkuToggles.skuAppendLocation);
   };
 
   const useSuggestedDefaults = () => {
@@ -795,6 +826,77 @@ const EbayPolicySetupPage = () => {
                     </div>
                   </div>
                 </div>
+              {/* Section G2: Custom Label (SKU) Append */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Custom Label (SKU) Append</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Optionally append extra fields to the Custom Label that shows in eBay Seller Hub. Useful for reconciling sales back to your records.
+                </p>
+
+                {/* Live preview */}
+                <div className="mb-5 px-4 py-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wide">Preview</p>
+                  <p className="font-mono text-sm text-gray-900 dark:text-white break-all">
+                    FAS-abc123xyz
+                    {skuAppendDate && <span className="text-sage-600 dark:text-sage-400"> {new Date().toISOString().slice(0, 10)}</span>}
+                    {skuAppendCost && <span className="text-sage-600 dark:text-sage-400"> $10.50</span>}
+                    {skuAppendLocation && <span className="text-sage-600 dark:text-sage-400"> Living Room</span>}
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Append Date */}
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <input
+                        type="checkbox"
+                        id="skuAppendDate"
+                        checked={skuAppendDate}
+                        onChange={(e) => setSkuAppendDate(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-sage-600 focus:ring-sage-600 dark:bg-gray-700"
+                      />
+                    </div>
+                    <label htmlFor="skuAppendDate" className="cursor-pointer">
+                      <span className="block text-sm font-medium text-gray-900 dark:text-white">Append Date</span>
+                      <span className="block text-xs text-gray-500 dark:text-gray-400">Add item cataloguing date (e.g. {new Date().toISOString().slice(0, 10)})</span>
+                    </label>
+                  </div>
+
+                  {/* Append Cost */}
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <input
+                        type="checkbox"
+                        id="skuAppendCost"
+                        checked={skuAppendCost}
+                        onChange={(e) => setSkuAppendCost(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-sage-600 focus:ring-sage-600 dark:bg-gray-700"
+                      />
+                    </div>
+                    <label htmlFor="skuAppendCost" className="cursor-pointer">
+                      <span className="block text-sm font-medium text-gray-900 dark:text-white">Append Cost</span>
+                      <span className="block text-xs text-gray-500 dark:text-gray-400">Add your cost basis (e.g. $10.50) — only appended if cost basis is set on the item</span>
+                    </label>
+                  </div>
+
+                  {/* Append Location */}
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <input
+                        type="checkbox"
+                        id="skuAppendLocation"
+                        checked={skuAppendLocation}
+                        onChange={(e) => setSkuAppendLocation(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-sage-600 focus:ring-sage-600 dark:bg-gray-700"
+                      />
+                    </div>
+                    <label htmlFor="skuAppendLocation" className="cursor-pointer">
+                      <span className="block text-sm font-medium text-gray-900 dark:text-white">Append Location</span>
+                      <span className="block text-xs text-gray-500 dark:text-gray-400">Add room/location tag (e.g. Row 2 Bin D) — only appended if location is set on the item</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
               </>
             )}
           </div>

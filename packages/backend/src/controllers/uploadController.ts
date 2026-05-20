@@ -457,7 +457,7 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
         embedding: [],
         listingType: 'FIXED',
         isActive: true,
-        autoEnhanced
+        autoEnhanced,
       }
     });
 

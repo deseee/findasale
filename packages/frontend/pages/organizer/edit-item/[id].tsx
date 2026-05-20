@@ -33,6 +33,7 @@ import EbayCompTiles from '../../../components/EbayCompTiles';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import VoiceDescriptionInput from '../../../components/VoiceDescriptionInput';
 import BarcodeScanner from '../../../components/BarcodeScanner';
+import { Mic } from 'lucide-react';
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -768,6 +769,7 @@ const EditItemPage = () => {
                   if (fields.packageLengthIn && !prev.packageLengthIn) updates.packageLengthIn = fields.packageLengthIn;
                   if (fields.packageWidthIn && !prev.packageWidthIn) updates.packageWidthIn = fields.packageWidthIn;
                   if (fields.packageHeightIn && !prev.packageHeightIn) updates.packageHeightIn = fields.packageHeightIn;
+                  if (fields.roomTag !== undefined) updates.roomTag = fields.roomTag;
                   if (fields.tags && fields.tags.length > 0) {
                     const newTags = fields.tags.filter((tag: string) => !prev.tags.includes(tag));
                     if (newTags.length > 0) {
@@ -786,6 +788,7 @@ const EditItemPage = () => {
                 packageLengthIn: formData.packageLengthIn,
                 packageWidthIn: formData.packageWidthIn,
                 packageHeightIn: formData.packageHeightIn,
+                roomTag: formData.roomTag,
               }}
             />
 
@@ -1004,9 +1007,11 @@ const EditItemPage = () => {
 
             {/* Feature #411: Dorm Dash — Room / Area Tag */}
             <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Room / Area Tag <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
-              </label>
+              <div className="flex items-center gap-2 mb-2">
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">
+                  Room / Area Tag <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
+                </label>
+              </div>
               <input
                 type="text"
                 placeholder="e.g. Bedroom, Garage, Study, Room 204"
