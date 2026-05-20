@@ -4687,4 +4687,30 @@ model UnmetDemandSignal {
   query       String   // normalized search query
   city        String?  // city slug if search was city-filtered
   state       String?
-  resultCount Int      @default(0) // how
+  resultCount Int      @default(0) // how many results were returned
+  createdAt   DateTime @default(now())
+
+  @@index([query])
+  @@index([city])
+  @@index([createdAt])
+}
+
+// Feature #455: Shopper Notify Me Waitlist
+// Shoppers request notification when a specific item type goes on sale in their city.
+model ShopperWaitlistEntry {
+  id         String    @id @default(cuid())
+  userId     String
+  itemType   String    // normalized item description ("vintage lamp", "mid-century dresser", etc.)
+  city       String?
+  state      String?
+  isActive   Boolean   @default(true)
+  notifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([itemType])
+  @@index([city, isActive])
+}
