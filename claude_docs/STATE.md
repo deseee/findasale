@@ -12,6 +12,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 Started from daily health monitor output. Fixed 3 Sentry/CI issues, built voice location extraction (room/bin/shelf) into existing mic button, added eBay Custom Label append toggles (date/cost/location). Schema recovered after Edit-tool truncation. Railway cache-busted.
 
+**Also fixed this session (S768+, UX spot-check + Sentry dispatch):**
+- ✅ dashboard.tsx — Literal "X shoppers" placeholder replaced with real viewCount; clipboard copy wrapped in try/catch+toast; 3 stray console.errors removed; icon-only links got aria-label; dropdown buttons got aria-haspopup/aria-expanded
+- ✅ edit-sale/[id].tsx — Rules of Hooks violation fixed (auth early return moved into useEffect); geocoding failure now shows toast to user; 9 redundant aria-labels removed from inputs with htmlFor associations
+- ✅ NODEJS-17 — organizers.ts was truncated (Edit tool truncation bug) — appended missing 14 lines for claim-oauth route close: prisma.$transaction close + res.json + error handler + export default router
+- ✅ NODEJS-S — index.ts: added express.raw() middleware for /api/ebay/account-deletion and /api/ebay/notifications (matches Stripe webhook pattern); stops "stream is not readable" Sentry error
+- ✅ NODEJS-1Q — Added 3 Review table indexes to schema.prisma (userId, saleId+moderationStatus+createdAt composite, reviewerIp) + migration 20260520140000
+
 **Fixed this session:**
 - ✅ requestTimeout middleware — added `/api/internal/` exemption; prevents 30s kill switch firing on fire-and-forget enrichment routes
 - ✅ NODEJS-1B double-response — `internalScraperController.ts` moved 202 outside try; `internalSaleDetailEnrichmentController.ts` + `internal.ts` route got `!res.headersSent` guard in catch
@@ -114,6 +121,10 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 **Priority 0 — Patrick: push S768 changes (all files listed below):**
 ```powershell
 git add packages/backend/src/middleware/requestTimeout.ts
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/organizer/edit-sale/[id].tsx
+git add packages/backend/src/index.ts
+git add packages/database/prisma/migrations/20260520140000_add_review_query_indexes/migration.sql
 git add packages/backend/src/controllers/internalScraperController.ts
 git add packages/backend/src/controllers/internalSaleDetailEnrichmentController.ts
 git add packages/backend/src/routes/internal.ts
@@ -131,7 +142,7 @@ git add packages/database/prisma/migrations/20260520120000_add_sku_append_toggle
 git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: voice location extraction (room/bin/shelf) via existing mic; feat: eBay Custom Label append toggles (date/cost/location); fix: requestTimeout /api/internal/ exemption; fix: double-response internalScraper/EnrichAI; fix: 6 slow-query indexes; fix: schema truncation recovery"
+git commit -m "feat: voice location extraction + eBay Custom Label toggles; fix: requestTimeout /api/internal/ exemption; fix: double-response internalScraper/EnrichAI; fix: 6 slow-query indexes; fix: organizers.ts truncation (NODEJS-17); fix: eBay webhook stream error (NODEJS-S); fix: Review indexes (NODEJS-1Q); fix: dashboard X-placeholder + clipboard; fix: edit-sale hooks order + geocoding toast + aria-labels"
 .\push.ps1
 ```
 

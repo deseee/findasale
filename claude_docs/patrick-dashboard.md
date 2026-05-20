@@ -4,7 +4,14 @@
 
 ## What Happened This Week
 
-**S768 (latest — CI fixes + Voice Location + eBay Custom Label):** Fixed 3 Sentry/CI issues (requestTimeout exemption for internal routes, double-response in scraper/enrichment controllers, 6 slow-query indexes). Built voice location extraction — when you say "living room" or "Bin B6" while recording a description, the room/bin field auto-fills silently, no extra button. Added eBay Custom Label append toggles: new card in eBay settings lets you turn on date, cost, and/or location appended to the Custom Label (FAS-... 2026-05-20 $10.50 Row 2 Bin D). Also recovered schema.prisma after Edit-tool truncation wiped ~27 lines. Railway cache-busted.
+**S768+ (latest — UX spot-check + Sentry dispatch):**
+- dashboard.tsx: Literal "X shoppers" fixed, clipboard error handling added, aria-labels cleaned up
+- edit-sale/[id].tsx: React hooks violation fixed, geocoding failure now shows a toast, 9 redundant aria-labels removed
+- NODEJS-17 resolved: organizers.ts was silently truncated — appended the missing 14 lines (claim-oauth close + export)
+- NODEJS-S resolved: eBay webhook routes now use express.raw() like Stripe — "stream is not readable" gone
+- NODEJS-1Q addressed: 3 new Review table indexes (userId, composite saleId+moderationStatus+createdAt, reviewerIp) + migration file
+
+**S768 (CI fixes + Voice Location + eBay Custom Label):** Fixed 3 Sentry/CI issues (requestTimeout exemption for internal routes, double-response in scraper/enrichment controllers, 6 slow-query indexes). Built voice location extraction — when you say "living room" or "Bin B6" while recording a description, the room/bin field auto-fills silently, no extra button. Added eBay Custom Label append toggles: new card in eBay settings lets you turn on date, cost, and/or location appended to the Custom Label (FAS-... 2026-05-20 $10.50 Row 2 Bin D). Also recovered schema.prisma after Edit-tool truncation wiped ~27 lines. Railway cache-busted.
 
 **S767:** Fixed all 3 eBay bugs (#424 {{DESCRIPTION}} literal, #425 intermittent toast + stale price, #426 Best Offer UI). Patrick verified #413 Safety Disclosures + #415 Donation Kit.
 
@@ -28,6 +35,10 @@
 ### 1. Push S768 changes:
 ```powershell
 git add packages/backend/src/middleware/requestTimeout.ts
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/organizer/edit-sale/[id].tsx
+git add packages/backend/src/index.ts
+git add packages/database/prisma/migrations/20260520140000_add_review_query_indexes/migration.sql
 git add packages/backend/src/controllers/internalScraperController.ts
 git add packages/backend/src/controllers/internalSaleDetailEnrichmentController.ts
 git add packages/backend/src/routes/internal.ts
@@ -45,7 +56,7 @@ git add packages/database/prisma/migrations/20260520120000_add_sku_append_toggle
 git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: voice location extraction (room/bin/shelf) via existing mic; feat: eBay Custom Label append toggles (date/cost/location); fix: requestTimeout /api/internal/ exemption; fix: double-response internalScraper/EnrichAI; fix: 6 slow-query indexes; fix: schema truncation recovery"
+git commit -m "feat: voice location extraction + eBay Custom Label toggles; fix: requestTimeout /api/internal/; fix: double-response scraper/enrichment; fix: 6 slow-query indexes; fix: organizers.ts truncation (NODEJS-17); fix: eBay webhook stream (NODEJS-S); fix: Review indexes (NODEJS-1Q); fix: dashboard X-placeholder + clipboard; fix: edit-sale hooks + geocoding toast + aria-labels"
 .\push.ps1
 ```
 

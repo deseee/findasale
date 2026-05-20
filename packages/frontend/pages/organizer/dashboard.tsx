@@ -382,7 +382,6 @@ const OrganizerDashboard = () => {
       const newSaleId = response.data.id;
       router.push(`/organizer/edit-sale/${newSaleId}`);
     } catch (error: any) {
-      console.error('Clone failed:', error);
       showToast(error.response?.data?.message || 'Failed to clone sale', 'error');
     } finally {
       setCloningId(null);
@@ -673,6 +672,8 @@ const OrganizerDashboard = () => {
                   <button
                     onClick={() => setAddItemsDropdownOpen(!addItemsDropdownOpen)}
                     className="rounded-full px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 transition-colors flex items-center gap-1.5"
+                    aria-haspopup="true"
+                    aria-expanded={addItemsDropdownOpen}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                     + Items
@@ -720,6 +721,8 @@ const OrganizerDashboard = () => {
                   <button
                     onClick={() => setPosDropdownOpen(!posDropdownOpen)}
                     className="rounded-full px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors flex items-center gap-1"
+                    aria-haspopup="true"
+                    aria-expanded={posDropdownOpen}
                   >
                     <ShoppingCart className="w-4 h-4" />
                     POS
@@ -888,8 +891,12 @@ const OrganizerDashboard = () => {
                 <button
                   onClick={async () => {
                     const url = `https://finda.sale/organizer/storefront/${storefrontSlug}`;
-                    await navigator.clipboard.writeText(url);
-                    showToast('Storefront link copied!', 'success');
+                    try {
+                      await navigator.clipboard.writeText(url);
+                      showToast('Storefront link copied!', 'success');
+                    } catch {
+                      showToast('Could not copy link', 'error');
+                    }
                   }}
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-warm-100 dark:bg-gray-700 text-warm-800 dark:text-warm-200 hover:bg-warm-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
                 >
@@ -1052,10 +1059,10 @@ const OrganizerDashboard = () => {
                                   ⚠️ DRAFT
                                 </span>
                               )}
-                              <Link href={`/organizer/edit-sale/${activeSale.id}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" title="Edit sale details">
+                              <Link href={`/organizer/edit-sale/${activeSale.id}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" title="Edit sale details" aria-label="Edit sale details">
                                 <Pencil className="w-3.5 h-3.5" />
                               </Link>
-                              <Link href={`/sales/${activeSale.id}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" title="View this sale as shoppers see it">
+                              <Link href={`/sales/${activeSale.id}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" title="View this sale as shoppers see it" aria-label="View this sale as shoppers see it">
                                 <Eye className="w-3.5 h-3.5" />
                               </Link>
                               {statsData?.activeSale && (
@@ -1153,7 +1160,6 @@ const OrganizerDashboard = () => {
                                 showToast('Sale closed — completing your settlement', 'success');
                                 setTimeout(() => router.push(`/organizer/settlement/${activeSale!.id}`), 800);
                               } catch (error: any) {
-                                console.error('Failed to close sale:', error);
                                 showToast(error.response?.data?.message || 'Failed to close sale', 'error');
                               }
                               setConfirmState(s => ({ ...s, open: false }));
@@ -1366,7 +1372,7 @@ const OrganizerDashboard = () => {
                 if (statsData.activeSale.viewCount > 10) {
                   return (
                     <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 text-sm text-blue-800 dark:text-blue-200">
-                      X shoppers have questions — answer them
+                      {statsData.activeSale.viewCount} shoppers are viewing — answer their questions
                     </div>
                   );
                 }
@@ -1705,7 +1711,6 @@ const OrganizerDashboard = () => {
                                       showToast('Sale reopened', 'success');
                                       queryClient.invalidateQueries({ queryKey: ['organizer-sales', user?.id] });
                                     } catch (error: any) {
-                                      console.error('Failed to reopen sale:', error);
                                       // Feature #249: Handle concurrent sales tier limit (409)
                                       if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
                                         const tierErr = error.response.data;

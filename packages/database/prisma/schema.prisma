@@ -1312,6 +1312,9 @@ model Review {
 
   @@index([saleId]) // Sentry P1 FINDASALE-NODEJS-1Q: JOIN on Review.saleId → Sale was doing full table scan (17s query)
   @@index([moderationStatus])
+  @@index([userId]) // dedup findFirst({ where: { userId, saleId } }) in createReview
+  @@index([saleId, moderationStatus, createdAt(sort: Desc)]) // getSaleReviews hot path: WHERE saleId+moderationStatus ORDER BY createdAt DESC
+  @@index([reviewerIp]) // bulk-review IP count query in createReview anomaly detection
 }
 
 model ReviewVote {
