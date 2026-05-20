@@ -12,8 +12,8 @@ import { Request, Response, NextFunction } from 'express';
  */
 export const requestTimeout = (timeoutMs: number = 30000) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Skip timeout guard for health check endpoints
-    if (req.path === '/' || req.path === '/api/health') {
+    // Skip timeout guard for health check endpoints and internal pipeline routes
+    if (req.path === '/' || req.path === '/api/health' || req.path.startsWith('/api/internal/')) {
       return next();
     }
 

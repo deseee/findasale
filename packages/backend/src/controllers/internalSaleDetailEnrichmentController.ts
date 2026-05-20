@@ -53,7 +53,9 @@ export async function triggerSaleDetailEnrichment(req: Request, res: Response): 
       '[SaleDetailEnrichment Trigger] Request error:',
       error instanceof Error ? error.message : String(error)
     );
-    res.status(500).json({ error: 'Internal server error' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 }
 
