@@ -8,22 +8,21 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S767 — eBay bug fixes (#424 #425 #426) + QA verified (#413 #415) + truncated file recovery**
+**Latest: S768 — CI/Sentry fixes + Voice Location Extraction + eBay Custom Label Append Toggles**
 
-Pushed S763–S766 changes. Patrick confirmed migrations run (S760 CrawlerVisit + geo blocks), fix-attendance.sql deleted. QA verified #413 Physical Safety Disclosures and #415 Donation Kit. Dispatched 3 parallel eBay bug fixes.
+Started from daily health monitor output. Fixed 3 Sentry/CI issues, built voice location extraction (room/bin/shelf) into existing mic button, added eBay Custom Label append toggles (date/cost/location). Schema recovered after Edit-tool truncation. Railway cache-busted.
 
 **Fixed this session:**
-- ✅ #424 — eBay `{{DESCRIPTION}}` literal sent when item has no description. Root cause: `.replace()` only replaces first occurrence — fixed to `.split().join()` in ebayController.ts + itemController.ts
-- ✅ #425a — eBay push success toast intermittent. Fixed: fallback toast fires when backend returns success with empty results array (review.tsx)
-- ✅ #425b — Stale price sent to eBay when price edited-but-unsaved. Fixed: `handlePublishItem` now flushes `priceInputs` to DB before push (review.tsx)
-- ✅ #426 — Best Offer UI (toggle + auto-accept/decline % + live preview) missing from item edit form. Fixed: UI existed but gated behind `&& ebayConnected` incorrectly — removed that condition (edit-item/[id].tsx)
+- ✅ requestTimeout middleware — added `/api/internal/` exemption; prevents 30s kill switch firing on fire-and-forget enrichment routes
+- ✅ NODEJS-1B double-response — `internalScraperController.ts` moved 202 outside try; `internalSaleDetailEnrichmentController.ts` + `internal.ts` route got `!res.headersSent` guard in catch
+- ✅ 6 slow-query indexes added to schema.prisma — Organizer stripeCustomerId, subscriptionStatus/Tier, graceEndAt, lastScoredAt; User createdAt, roles
 
-**Verified this session:**
-- ✅ #413 Physical Safety Disclosures — Patrick verified directly
-- ✅ #415 Donation Kit — Patrick verified directly
+**New features this session:**
+- ✅ Voice location extraction — `extractLocationTag()` in voiceController.ts detects room names, bin codes (bin B6), shelf/row/aisle references from transcript; auto-fills roomTag field via existing description mic button in VoiceDescriptionInput + RapidCapture (no new UI button)
+- ✅ eBay Custom Label append toggles — skuAppendDate/Cost/Location booleans on Organizer model; `buildCustomLabel()` in ebayController builds `FAS-{id} [date] [$cost] [location]`; settings UI added to organizer/settings/ebay.tsx; manual migration created (20260520120000)
 
-**Recovery (S767):**
-- Restored 4 Edit-tool-truncated files from HEAD: `index.ts` (29 lines missing), `internalScraperController.ts`, `workspaceController.ts`, `ebay.ts` — none were committed, no production impact
+**Recovery this session:**
+- schema.prisma truncation: Edit tool cut file at line 4689 mid-UnmetDemandSignal, ShopperWaitlistEntry entirely missing. Recovered via `git show 683fd4a4:...` as clean base, added 3 new fields, restored to 4716 lines. Pushed as commit 2ba70eb2.
 
 **Test data in Railway DB (use artifactmi account; Patrick must be present):**
 - "Barn Door QA Test Sale" (id: cmpbvumj90001e7t7v5sa1iqi) — PUBLISHED, holdsEnabled, safetyNotes set, 3 items (draftStatus=PUBLISHED), active hold for user12 (CONFIRMED status)
@@ -112,34 +111,94 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority 0 — Patrick: push S767 eBay fixes:**
+**Priority 0 — Patrick: push S768 changes (all files listed below):**
 ```powershell
+git add packages/backend/src/middleware/requestTimeout.ts
+git add packages/backend/src/controllers/internalScraperController.ts
+git add packages/backend/src/controllers/internalSaleDetailEnrichmentController.ts
+git add packages/backend/src/routes/internal.ts
+git add packages/database/prisma/schema.prisma
+git add packages/backend/src/controllers/voiceController.ts
+git add packages/frontend/components/VoiceDescriptionInput.tsx
+git add packages/frontend/components/RapidCapture.tsx
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add packages/backend/src/controllers/uploadController.ts
 git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
-git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/pages/organizer/settings/ebay.tsx
+git add packages/database/prisma/migrations/20260520120000_add_sku_append_toggles/migration.sql
+git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: eBay {{DESCRIPTION}} template all occurrences (#424); fix: push toast fallback + stale price flush (#425); fix: Best Offer UI gate removed (#426)"
+git commit -m "feat: voice location extraction (room/bin/shelf) via existing mic; feat: eBay Custom Label append toggles (date/cost/location); fix: requestTimeout /api/internal/ exemption; fix: double-response internalScraper/EnrichAI; fix: 6 slow-query indexes; fix: schema truncation recovery"
 .\push.ps1
 ```
 
-**Priority 1 — QA: eBay Tier 2B batch (Patrick present + PRO + eBay connected):**
+**Priority 1 — After push: Patrick run migration:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**Priority 2 — QA: eBay Tier 2B batch (Patrick present + PRO + eBay connected):**
 - #428 Review Card Readiness Borders — verify colored left borders (red/yellow/green/blue) on review queue item cards
 - #427 eBay Local Pickup Mode — edit-item eBay section, verify Local Pickup checkbox present
 - #429 Review Queue Skips Store Description Template — approve item from queue, verify description is item's own not store template boilerplate
-- Also re-verify #424/#425/#426 after push deploys
+- Verify voice extraction: say "living room" while describing an item — roomTag should auto-fill
+- Verify eBay settings: toggle skuAppendDate/Cost/Location — Custom Label preview should update
 
-**Priority 2 — Sentry bugs not yet fixed (dispatch findasale-dev):**
-- NODEJS-1B: "Cannot set headers" double-response at POST /api/internal/scraper/ingest (81 events)
+**Priority 3 — Sentry bugs not yet fixed:**
 - NODEJS-17: ReferenceError `e is not defined` at organizers route (12 events)
 - NODEJS-S: "stream is not readable" at POST /api/ebay/account-deletion (7 events, still active)
-- NODEJS-1Q: 17-second slow DB query on Review LEFT JOIN Sale (P1 — missing index)
+- NODEJS-1Q: slow DB query on Review LEFT JOIN Sale — P1 missing index (separate from indexes added this session)
+- ebayController.ts line ~2726 (25021 retry path) — still uses `FAS-${item.id}` (intentional, matches existing eBay item). Needs buildCustomLabel() applied once retry path is understood.
 
 **Pending Patrick actions:**
 - Deploy email verification migration (20260515180000) — pending S726
 
 ## Recent Sessions
+
+### S768 — CI/Sentry Fixes + Voice Location Extraction + eBay Custom Label Toggles
+
+**Trigger:** Daily health monitor output (automated). Patrick directed "investigate remaining GitHub Actions 2, 3, 4" then "dispatch 1 2 3 in parallel."
+
+**CI/Sentry fixed (3 parallel agents):**
+- ✅ requestTimeout middleware — `/api/internal/` path exempted; Enrich AI timeout was 30s kill switch hitting fire-and-forget routes before 202 response (2/6 runs failing)
+- ✅ NODEJS-1B double-response — `internalScraperController.ts` moved `res.status(202).json()` outside try block; `internalSaleDetailEnrichmentController.ts` + `internal.ts` route added `!res.headersSent` guard in catch
+- ✅ 6 slow-query indexes — Organizer stripeCustomerId (Stripe webhook `findFirst`), subscriptionStatus+subscriptionTier composite, graceEndAt+graceTierBefore, lastScoredAt; User createdAt, roles
+
+**Voice location extraction (Patrick request — no new button):**
+- `extractLocationTag(transcript)` in voiceController.ts — regex patterns for room names (living room, bedroom, garage, attic, kitchen, etc.), bin codes (bin B6), shelf/row/aisle, location/loc codes. Returns title-cased result (e.g. "bin b6" → "Bin B6", "row c shelf two" → "Row C Shelf 2")
+- Wired into VoiceDescriptionInput.tsx — if `result.locationTag` and roomTag empty, auto-fills via `onFieldUpdate({ roomTag })`, appends "room: X" to toast
+- Wired into RapidCapture.tsx `handleVoiceInput` — after description PATCH succeeds, silent PATCH `/items/${itemId}` with `{ roomTag }`, appends to toast
+- Removed: separate room mic button from edit-item/[id].tsx label + RapidCapture overlay badge (Patrick: "too much for the ui")
+- Removed: `roomTag` from uploadController.ts item create (now set via post-creation PATCH in voice handler)
+
+**eBay Custom Label append toggles (Patrick request):**
+- schema.prisma: `skuAppendDate`, `skuAppendCost`, `skuAppendLocation` Boolean @default(false) on Organizer model
+- ebayController.ts: `buildCustomLabel(itemId, organizer, item)` builds `FAS-{id}[ date][ $cost][ location]` based on toggles; replaces hardcoded `FAS-${item.id}` at ~lines 1586 + 1869
+- organizers.ts route: 3 new Zod schema fields + prisma.organizer.update() data
+- ebay.tsx settings page: "Custom Label (SKU) Append" card with live preview + 3 toggle rows
+- Manual migration created: `20260520120000_add_sku_append_toggles/migration.sql` (IF NOT EXISTS guards; `migrate dev` fails on Railway — no shadow DB permission)
+
+**Schema truncation recovery:**
+- Edit tool truncated schema.prisma at line 4689 mid-UnmetDemandSignal; ShopperWaitlistEntry entirely missing
+- Recovered via `git show 683fd4a4:packages/database/prisma/schema.prisma` as clean base
+- Added 3 SKU fields, restored to 4716 lines, pushed as commit 2ba70eb2
+
+**Railway cache-bust:** Dockerfile.production comment updated to `2026-05-20b-force-rebuild (sku-append-toggles)`
+
+**Not fixed this session:**
+- NODEJS-17: ReferenceError `e` at organizers route (12 events)
+- NODEJS-S: stream not readable at eBay account-deletion (7 events)
+- ebayController.ts ~line 2726 retry path still hardcoded `FAS-${item.id}` (intentional)
+
+**Files changed:** `requestTimeout.ts` · `internalScraperController.ts` · `internalSaleDetailEnrichmentController.ts` · `internal.ts` (routes) · `schema.prisma` · `voiceController.ts` · `VoiceDescriptionInput.tsx` · `RapidCapture.tsx` · `edit-item/[id].tsx` · `add-items/[saleId].tsx` · `uploadController.ts` · `ebayController.ts` · `organizers.ts` (routes) · `ebay.tsx` (settings) · `migration.sql` (20260520120000) · `Dockerfile.production`
+
+---
 
 ### S766 — QA Sweep (Tier 2C/3A) + 3 Bug Fixes + Test Data Seeded
 
@@ -288,20 +347,3 @@ git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta
 **Key learnings:** `NEXT_PUBLIC_API_URL` already includes `/api` suffix — don't append `/api/` to it. Organizers registered without seeded `roles` array get `['USER']` default — must dual-check `role` (string) AND `roles` (array) throughout organizer pages.
 
 **Files fixed:** `packages/frontend/pages/ai-score.tsx` · `packages/frontend/pages/organizer/pos.tsx`
-
-### S760 — GEO Phase 2 Complete + Admin Dashboards + OAuth Claim
-
-**Trigger:** Patrick signed off on continuing GEO phases after S759 push confirmed green.
-
-**What shipped:** 17 features, 44 files, 4 parallel batches. GEO roadmap phases 2-12 complete. #382 sale type ordering, #439 Product schema, #448 MCP tools, #442 monthly trend reports, #450 EventSeries, #459 syndication formatter, #460 auto-liquidation trigger, #453/#455/#458 schema batch (unmet demand + shopper waitlist + confidence score), #454 demand dashboard, clearance page, 3 admin dashboards, #443 1-click OAuth claim. Also restored 4 Edit-tool-truncated files from prior sessions.
-
-**Confirmed closed:** #377 Help Library (COMPLETE S742), #378 /guides (SHIPPED S742), SEO Content Moat (ISR pages = generator — 75 guides + city/category pages = 500+ indexed pages).
-
-**Migration created:** 20260519100000_geo_demand_waitlist_confidence (UnmetDemandSignal + ShopperWaitlistEntry + Organizer confidence fields). Run with `prisma migrate deploy` — covers both S759 CrawlerVisit and S760 in one pass.
-
-**New scheduled task:** findasale-seo-geo-monitor, Tuesdays 7am — GSC URL check, GEO page spot-checks, crawler stats, structured data audit, open roadmap items.
-
-**Push:** 44 files (see S760 pushblock in Next Session).
-
-
-                                                                                                                                                                                                                                                                                                    
