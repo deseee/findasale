@@ -102,10 +102,12 @@ const EditSalePage = () => {
     return distance > 0.0045; // Beyond ~0.5 miles / 0.8 km
   };
 
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
+  // Auth guard — must live in useEffect to avoid Rules of Hooks violation (early return before useQuery)
+  useEffect(() => {
+    if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+      router.push('/login');
+    }
+  }, [authLoading, user, router]);
 
   const { data: sale, isLoading, isError: saleError, refetch } = useQuery({
     queryKey: ['sale', id],
@@ -148,6 +150,7 @@ const EditSalePage = () => {
       setSuggestions([]); // Clear suggestions on error
       setIsAutoGeocodingOnLoad(false);
       setGeocodingAttempted(true);
+      showToast('Location could not be auto-detected. Please enter coordinates manually.', 'warning');
       return false;
     }
   };
@@ -605,8 +608,7 @@ const EditSalePage = () => {
                 name="title"
                 value={formData.title}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-              aria-label="Title" />
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100" />
             </div>
 
             <div>
@@ -670,8 +672,7 @@ const EditSalePage = () => {
                       name="startDate"
                       value={formData.startDate}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                    aria-label="Startdate" />
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100" />
                   </div>
                   <div>
                     <label htmlFor="edit-endDate" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Date</label>
@@ -681,8 +682,7 @@ const EditSalePage = () => {
                       name="endDate"
                       value={formData.endDate}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                    aria-label="Enddate" />
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100" />
                   </div>
                 </div>
 
@@ -727,8 +727,7 @@ const EditSalePage = () => {
                 name="address"
                 value={formData.address}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-              aria-label="Address" />
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100" />
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -740,8 +739,7 @@ const EditSalePage = () => {
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                aria-label="City" />
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100" />
               </div>
               <div>
                 <label htmlFor="edit-state" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">State</label>
@@ -751,8 +749,7 @@ const EditSalePage = () => {
                   name="state"
                   value={formData.state}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                aria-label="State" />
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100" />
               </div>
               <div>
                 <label htmlFor="edit-zip" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">ZIP</label>
@@ -762,8 +759,7 @@ const EditSalePage = () => {
                   name="zip"
                   value={formData.zip}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                aria-label="Zip" />
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100" />
               </div>
             </div>
 
@@ -781,8 +777,7 @@ const EditSalePage = () => {
                 onChange={handleChange}
                 placeholder="Start typing or select..."
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                autoComplete="off"
-              aria-label="Start typing or select..." />
+                autoComplete="off" />
               <datalist id="neighborhood-list">
                 <option value="Downtown" />
                 <option value="Eastown" />
@@ -1039,8 +1034,7 @@ const EditSalePage = () => {
                       value={formData.markdownFloor ?? ''}
                       onChange={handleMarkdownFloorChange}
                       placeholder="e.g., 5.00 (optional)"
-                      className="w-full max-w-xs px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                    aria-label="e.g., 5.00 (optional)" />
+                      className="w-full max-w-xs px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100" />
                     <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">
                       Items will never be discounted below this price
                     </p>

@@ -427,9 +427,14 @@ const contactLimiter = rateLimit({
   message: { error: 'Too many messages sent. Please wait before trying again.' },
 });
 
-// Raw body middleware for Stripe webhooks (must come before json parser)
+// Raw body middleware for Stripe and eBay webhooks (must come before json parser)
+// eBay routes: express.raw() consumes the stream before global express.json() can attempt it,
+// preventing the "stream is not readable" Sentry error when eBay closes the connection early.
+// handleEbayAccountDeletion and handleEbayNotification ignore req.body, so raw buffer is fine.
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/ebay/account-deletion', express.raw({ type: '*/*' }));
+app.use('/api/ebay/notifications', express.raw({ type: '*/*' }));
 
 // JSON parser with 1 MB body size limit to prevent payload attacks
 app.use(express.json({ limit: '1mb' }));

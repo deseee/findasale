@@ -2096,7 +2096,7 @@ router.post('/:id/claim-oauth', authenticate, async (req: AuthRequest, res: Resp
         where: { id: req.user.id },
         data: { roles: newRoles },
       }),
-    ]);
+    ])
 
     return res.json({ success: true, organizerId: id });
   } catch (error: any) {
