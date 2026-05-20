@@ -279,7 +279,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
         },
         include: { organizer: true },
         take: hotQuota * CANDIDATE_MULTIPLIER,
-        orderBy: { touch1SentAt: 'asc' },
+        orderBy: [{ touch1SentAt: { sort: 'asc', nulls: 'first' } }],
       });
       recordsToSend.push(...hotRecords);
     }
@@ -293,7 +293,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
         },
         include: { organizer: true },
         take: warmQuota * CANDIDATE_MULTIPLIER,
-        orderBy: { touch1SentAt: 'asc' },
+        orderBy: [{ touch1SentAt: { sort: 'asc', nulls: 'first' } }],
       });
       recordsToSend.push(...warmRecords);
     }
@@ -307,7 +307,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
         },
         include: { organizer: true },
         take: coldQuota * CANDIDATE_MULTIPLIER,
-        orderBy: { touch1SentAt: 'asc' },
+        orderBy: [{ touch1SentAt: { sort: 'asc', nulls: 'first' } }],
       });
       recordsToSend.push(...coldRecords);
     }
@@ -328,7 +328,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
         },
         include: { organizer: true },
         take: untieredQuota * CANDIDATE_MULTIPLIER,
-        orderBy: { touch1SentAt: 'asc' },
+        orderBy: [{ touch1SentAt: { sort: 'asc', nulls: 'first' } }],
       });
       recordsToSend.push(...untieredRecords);
     }
