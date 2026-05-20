@@ -44,6 +44,31 @@ let ebayTokenCache: CachedToken | null = null;
 const findingApiCache = new Map<string, { result: any; expiresAt: number }>();
 const FINDING_API_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+/**
+ * Builds the eBay Custom Label (SKU) for a given item and organizer.
+ * Base: FAS-{itemId}
+ * Optional appends (organizer toggles): date, costBasis, roomTag
+ * Format: "FAS-abc123 2026-05-20 $10.50 Living Room"
+ */
+function buildCustomLabel(
+  itemId: string,
+  organizer: { skuAppendDate?: boolean; skuAppendCost?: boolean; skuAppendLocation?: boolean },
+  item: { createdAt?: Date | null; costBasis?: number | null; roomTag?: string | null }
+): string {
+  const parts: string[] = [`FAS-${itemId}`];
+  if (organizer.skuAppendDate && item.createdAt) {
+    parts.push(item.createdAt.toISOString().slice(0, 10)); // YYYY-MM-DD
+  }
+  if (organizer.skuAppendCost && item.costBasis != null) {
+    parts.push(`$${item.costBasis.toFixed(2)}`);
+  }
+  if (organizer.skuAppendLocation && item.roomTag) {
+    parts.push(item.roomTag);
+  }
+  return parts.join(' ');
+}
+
+
 // Decode common HTML entities (eBay Description arrives entity-encoded inside XML)
 function decodeHtmlEntities(str: string): string {
   return str
@@ -1561,6 +1586,9 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
         tags: true,
         ebayListingId: true,
         ebayCategoryId: true,
+        createdAt: true,
+        costBasis: true,
+        roomTag: true,
         sale: {
           select: {
             organizerId: true,
@@ -1583,7 +1611,7 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
     }
 
     // Build preview payload
-    const sku = `FAS-${item.id}`;
+    const sku = buildCustomLabel(item.id, organizer, item);
     const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
     // Resolve categoryId: stored → Taxonomy API suggestion → static map fallback
     // (same cascade as pushSaleToEbay). Requires an active user access token
@@ -1795,6 +1823,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             bestOfferMinimumAmt: true,
             draftStatus: true,
             ebayShippingOverride: true,
+            createdAt: true,
+            costBasis: true,
+            roomTag: true,
           },
         },
       },
@@ -1866,7 +1897,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
     for (const item of sale.items) {
       try {
-        const sku = `FAS-${item.id}`;
+        const sku = buildCustomLabel(item.id, organizer, item);
 
         // Resolve policies for this item based on organizer's routing configuration
         const routing = await resolvePoliciesForItem(
@@ -2531,7 +2562,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         }
         results.push({
           itemId: item.id,
-          sku: `FAS-${item.id}`,
+          sku: buildCustomLabel(item.id, organizer, item),
           ebayListingId: null,
           status: 'error',
           error: 'INTERNAL_ERROR',
@@ -2698,6 +2729,8 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
 
       // 25021 retry path: walk accepted conditions and re-publish
       if (publishError.includes('25021') && item.ebayCategoryId) {
+        // TODO: skuAppend toggles not applied here — publishItemNow is a repair path for
+        // already-created offers; the SKU must match the one originally pushed to eBay.
         const sku = `FAS-${item.id}`;
         const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
         const inventoryUrl = ebayProxyUrl(inventoryPath);

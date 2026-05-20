@@ -26,6 +26,7 @@ interface VoiceExtractionResult {
   lengthIn?: number;
   widthIn?: number;
   heightIn?: number;
+  locationTag?: string;
 }
 
 interface VoiceDescriptionInputProps {
@@ -40,6 +41,7 @@ interface VoiceDescriptionInputProps {
     packageLengthIn?: string;
     packageWidthIn?: string;
     packageHeightIn?: string;
+    roomTag?: string;
     description: string;
   }) => void;
   existingFields?: {
@@ -51,6 +53,7 @@ interface VoiceDescriptionInputProps {
     packageLengthIn?: string;
     packageWidthIn?: string;
     packageHeightIn?: string;
+    roomTag?: string;
   };
   disabled?: boolean;
   /**
@@ -247,6 +250,11 @@ const VoiceDescriptionInput: React.FC<VoiceDescriptionInputProps> = ({
       }
       if (result.heightIn && !existingFields.packageHeightIn) {
         autoUpdates.packageHeightIn = result.heightIn.toString();
+      }
+
+      if (result.locationTag && !existingFields.roomTag) {
+        autoUpdates.roomTag = result.locationTag;
+        filledParts.push(`room: ${result.locationTag}`);
       }
 
       // Include dims in summary if all three were filled

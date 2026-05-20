@@ -144,7 +144,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   // Feature #331: Voice-to-tag state (per-thumbnail mic)
   const [voiceItemId, setVoiceItemId] = useState<string | null>(null);
   const [voiceIndicator, setVoiceIndicator] = useState<{ itemId: string; showing: boolean } | null>(null);
-  
+
   // Feature #341: Multi-angle role prompts state
   const [showMultiAnglePrompt, setShowMultiAnglePrompt] = useState(false);
   const [pendingPhotoRole, setPendingPhotoRole] = useState<string | null>(null);
@@ -409,6 +409,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       let extractedLength: number | undefined;
       let extractedWidth: number | undefined;
       let extractedHeight: number | undefined;
+      let extractedLocationTag: string | undefined;
 
       try {
         const extractRes = await api.post('/voice/extract', { transcript });
@@ -419,6 +420,9 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         if (extract.lengthIn && typeof extract.lengthIn === 'number') extractedLength = extract.lengthIn;
         if (extract.widthIn && typeof extract.widthIn === 'number') extractedWidth = extract.widthIn;
         if (extract.heightIn && typeof extract.heightIn === 'number') extractedHeight = extract.heightIn;
+        if (extract.locationTag && typeof extract.locationTag === 'string') {
+          extractedLocationTag = extract.locationTag;
+        }
       } catch {
         // Extract is best-effort — never block the append on failure
       }
@@ -448,6 +452,15 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       ) {
         parts.push(`dims ${extractedLength}\u00d7${extractedWidth}\u00d7${extractedHeight} in`);
       }
+      if (extractedLocationTag) {
+        try {
+          await api.patch(`/items/${itemId}`, { roomTag: extractedLocationTag });
+          parts.push(`room: ${extractedLocationTag}`);
+        } catch {
+          // best-effort, don't block
+        }
+      }
+
       const summary = parts.length > 0 ? `Voice saved: ${parts.join(', ')}` : 'Voice saved.';
       showToast(summary, 'success');
 

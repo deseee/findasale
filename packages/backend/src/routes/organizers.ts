@@ -65,6 +65,10 @@ const organizerProfileSchema = z.object({
   ebayStoreUrl: z.string().url().optional().or(z.literal('')),
   address: z.string().optional(),
   returnWindowHours: z.number().int().min(0).nullable().optional(),
+  // eBay Custom Label append toggles
+  skuAppendDate: z.boolean().optional(),
+  skuAppendCost: z.boolean().optional(),
+  skuAppendLocation: z.boolean().optional(),
 }).strict();
 
 const awardBadgesSchema = z.object({
@@ -323,7 +327,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address, skuAppendDate, skuAppendCost, skuAppendLocation } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -366,6 +370,9 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(ebayDefaultShippingPolicyId !== undefined && { ebayDefaultShippingPolicyId }),
         ...(ebayStoreUrl !== undefined && { ebayStoreUrl }),
         ...(address !== undefined && { address }),
+        ...(skuAppendDate !== undefined && { skuAppendDate }),
+        ...(skuAppendCost !== undefined && { skuAppendCost }),
+        ...(skuAppendLocation !== undefined && { skuAppendLocation }),
         // returnWindowHours is a per-Sale field (Sale model) — not an Organizer field.
         // Removed from Prisma update to prevent P2025 crash. Frontend still sends it
         // (Zod allows it as optional); it is silently ignored here until an

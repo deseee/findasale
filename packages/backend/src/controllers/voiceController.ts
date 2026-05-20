@@ -5,7 +5,7 @@
  * Uses simple regex/keyword patterns (no AI call) for fast, deterministic extraction.
  * Endpoint: POST /api/ai/voice-extract
  * Request: { transcript: string }
- * Response: { name: string, tags: string[], category: string, estimatedPrice?: number }
+ * Response: { name: string, tags: string[], category: string, estimatedPrice?: number, locationTag?: string }
  */
 
 import { Request, Response } from 'express';
@@ -297,6 +297,74 @@ function extractDimensions(transcript: string): { lengthIn?: number; widthIn?: n
   return undefined;
 }
 
+
+/**
+ * Extract location/room/bin/shelf tag from transcript.
+ * Returns a title-cased string (e.g. "Living Room", "Bin B6", "Row C Shelf 2")
+ * or undefined if no location mention is found.
+ */
+function extractLocationTag(transcript: string): string | undefined {
+  const lower = transcript.toLowerCase();
+
+  // Room names (longest first to avoid partial matches)
+  const rooms = [
+    'master bedroom', 'living room', 'dining room', 'laundry room',
+    'sunroom', 'mudroom', 'bedroom', 'basement', 'kitchen', 'bathroom',
+    'hallway', 'pantry', 'closet', 'attic', 'garage', 'office', 'study',
+  ];
+  for (const room of rooms) {
+    if (lower.includes(room)) {
+      return room.replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+  }
+
+  // Multi-word codes: "row X shelf Y"
+  const rowShelf = lower.match(/\brow\s+([a-z0-9]+)\s+shelf\s+([a-z0-9]+)\b/i);
+  if (rowShelf) {
+    const part1 = rowShelf[1].toUpperCase();
+    const part2 = rowShelf[2].toUpperCase();
+    return `Row ${part1} Shelf ${part2}`;
+  }
+
+  // Bin codes: "bin A3" or "bin 12"
+  const bin = lower.match(/\bbin\s+([a-z]?[0-9]+|[a-z][0-9]*|[a-z])\b/i);
+  if (bin) {
+    return `Bin ${bin[1].toUpperCase()}`;
+  }
+
+  // Shelf codes: "shelf B2"
+  const shelf = lower.match(/\bshelf\s+([a-z0-9]+)\b/i);
+  if (shelf) {
+    return `Shelf ${shelf[1].toUpperCase()}`;
+  }
+
+  // Aisle codes
+  const aisle = lower.match(/\baisle\s+([a-z0-9]+)\b/i);
+  if (aisle) {
+    return `Aisle ${aisle[1].toUpperCase()}`;
+  }
+
+  // Location / loc codes
+  const loc = lower.match(/\b(?:location|loc)\s+([a-z0-9]+)\b/i);
+  if (loc) {
+    return `Location ${loc[1].toUpperCase()}`;
+  }
+
+  // Row code (standalone)
+  const row = lower.match(/\brow\s+([a-z0-9]+)\b/i);
+  if (row) {
+    return `Row ${row[1].toUpperCase()}`;
+  }
+
+  // Section code
+  const section = lower.match(/\bsection\s+([a-z0-9]+)\b/i);
+  if (section) {
+    return `Section ${section[1].toUpperCase()}`;
+  }
+
+  return undefined;
+}
+
 /**
  * POST /api/ai/voice-extract
  * Extract item data from voice transcript
@@ -315,6 +383,7 @@ export const voiceExtract = async (req: Request, res: Response) => {
     const estimatedPrice = estimatePrice(transcript, category) ?? 0;
     const weightOz = extractWeightOz(transcript);
     const dims = extractDimensions(transcript);
+    const locationTag = extractLocationTag(transcript);
 
     if (!name) {
       return res.status(400).json({ message: 'Could not extract item name from transcript' });
@@ -329,6 +398,7 @@ export const voiceExtract = async (req: Request, res: Response) => {
       ...(dims?.lengthIn !== undefined ? { lengthIn: dims.lengthIn } : {}),
       ...(dims?.widthIn !== undefined ? { widthIn: dims.widthIn } : {}),
       ...(dims?.heightIn !== undefined ? { heightIn: dims.heightIn } : {}),
+      ...(locationTag !== undefined ? { locationTag } : {}),
     });
   } catch (error) {
     console.error('[voiceController] Error extracting from transcript:', error);
