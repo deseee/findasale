@@ -403,6 +403,9 @@ export default function PromotePage(): JSX.Element {
       'CSV copied to clipboard! Ready to paste into EstateSales.NET'
     );
 
+  const downloadFacebookXLSX = () =>
+    downloadFile(`${apiBase}/export/${saleId}/facebook-xlsx`, `facebook-marketplace-${saleId}.xlsx`);
+
   const downloadFacebookJSON = () =>
     downloadFile(`${apiBase}/export/${saleId}/facebook-json`, `sale-${saleId}-facebook.json`);
 
@@ -632,22 +635,22 @@ export default function PromotePage(): JSX.Element {
                 <div className="text-4xl mb-3">👥</div>
                 <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">Facebook Marketplace</h3>
                 <p className="text-warm-700 dark:text-warm-300 text-sm mb-4">
-                  Your item data formatted for Facebook Marketplace
+                  Download a ready-to-upload spreadsheet for Facebook Marketplace bulk listing
                 </p>
                 <div className="flex gap-3">
                   <button
-                    onClick={downloadFacebookJSON}
+                    onClick={downloadFacebookXLSX}
                     disabled={loading}
                     className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white py-2 px-3 rounded-lg font-medium transition text-sm"
                   >
-                    Download
+                    Download Spreadsheet
                   </button>
                   <button
-                    onClick={copyFacebookJSON}
+                    onClick={downloadFacebookJSON}
                     disabled={loading}
                     className="flex-1 bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 disabled:bg-warm-200 text-warm-900 dark:text-warm-100 py-2 px-3 rounded-lg font-medium transition text-sm"
                   >
-                    Copy
+                    JSON
                   </button>
                 </div>
               </div>
@@ -826,10 +829,11 @@ export default function PromotePage(): JSX.Element {
               <div>
                 <h4 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">👥 Facebook Marketplace</h4>
                 <ol className="list-decimal list-inside space-y-1">
-                  <li>Click "Download" to save the item data file</li>
-                  <li>Open Facebook Marketplace on Facebook.com or the app</li>
-                  <li>Click "Create" → "List an item"</li>
-                  <li>Use the item details in the file to fill in each listing manually</li>
+                  <li>Click "Download Spreadsheet" to save the .xlsx file</li>
+                  <li>Go to Facebook Marketplace → "Create new listing"</li>
+                  <li>Select "Item for sale" → scroll down and choose "Bulk upload"</li>
+                  <li>Upload the spreadsheet — up to 50 listings are created at once</li>
+                  <li>Review and publish your listings</li>
                 </ol>
               </div>
 
