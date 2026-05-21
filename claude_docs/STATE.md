@@ -8,9 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S768 — CI/Sentry fixes + Voice Location Extraction + eBay Custom Label Append Toggles**
+**Latest: S770 — MailerLite Purge + Hex Escape Fix + Cron Root Cause Fix**
 
-Started from daily health monitor output. Fixed 3 Sentry/CI issues, built voice location extraction (room/bin/shelf) into existing mic button, added eBay Custom Label append toggles (date/cost/location). Schema recovered after Edit-tool truncation. Railway cache-busted.
+Purged 498 junk scraped-directory subscribers from MailerLite (free plan was full at 500, blocking real users like a1clcook@gmail.com). Fixed hex escape Prisma error from scraped HTML descriptions. Patched `syncLeadTierGroups` cron to only sync registered users (root cause of the junk subscriber flood).
 
 **Also fixed this session (S768+, UX spot-check + Sentry dispatch):**
 - ✅ dashboard.tsx — Literal "X shoppers" placeholder replaced with real viewCount; clipboard copy wrapped in try/catch+toast; 3 stray console.errors removed; icon-only links got aria-label; dropdown buttons got aria-haspopup/aria-expanded
@@ -118,8 +118,9 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority 0 — Patrick: push S768 changes (all files listed below):**
+**Priority 0 — Patrick: combined push (S768 + S770 fixes):**
 ```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/middleware/requestTimeout.ts
 git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/frontend/pages/organizer/edit-sale/[id].tsx
@@ -140,10 +141,12 @@ git add packages/backend/src/routes/organizers.ts
 git add packages/frontend/pages/organizer/settings/ebay.tsx
 git add packages/database/prisma/migrations/20260520120000_add_sku_append_toggles/migration.sql
 git add packages/backend/Dockerfile.production
+git add packages/backend/src/services/listingEnrichmentService.ts
+git add packages/backend/src/jobs/outreachEmailsCron.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git commit -m "feat: voice location extraction + eBay Custom Label toggles; fix: requestTimeout /api/internal/ exemption; fix: double-response internalScraper/EnrichAI; fix: 6 slow-query indexes; fix: organizers.ts truncation (NODEJS-17); fix: eBay webhook stream error (NODEJS-S); fix: Review indexes (NODEJS-1Q); fix: dashboard X-placeholder + clipboard; fix: edit-sale hooks order + geocoding toast + aria-labels"
+git commit -m "feat: voice location extraction + eBay Custom Label toggles; fix: MailerLite cron userId filter (prevents scraped org sync); fix: hex escape sanitizer for scraped HTML; fix: requestTimeout /api/internal/; fix: double-response scraper/enrichment; fix: 6 slow-query indexes; fix: organizers.ts truncation; fix: eBay webhook stream; fix: Review indexes; fix: dashboard placeholder + clipboard; fix: edit-sale hooks + geocoding toast"
 .\push.ps1
 ```
 
@@ -168,10 +171,35 @@ npx prisma generate
 - NODEJS-1Q: slow DB query on Review LEFT JOIN Sale — P1 missing index (separate from indexes added this session)
 - ebayController.ts line ~2726 (25021 retry path) — still uses `FAS-${item.id}` (intentional, matches existing eBay item). Needs buildCustomLabel() applied once retry path is understood.
 
+**Priority 4 — Railway log check (optional):**
+- Check Railway logs for more 413 MailerLite errors like a1clcook@gmail.com (could not access Railway CLI from this session's VM). a1clcook should auto-enroll on next login — `addShopperSubscriber` fires on auth.
+
 **Pending Patrick actions:**
 - Deploy email verification migration (20260515180000) — pending S726
 
 ## Recent Sessions
+
+### S770 — MailerLite Purge + Hex Escape Fix + Cron Root Cause
+
+**Trigger:** Patrick pasted 3 Railway log issues: MailerLite 413 for a1clcook@gmail.com, hex escape Prisma error on sale cmoog3n0l009tq4utw56ejcrx, enrichment batch health 6/7.
+
+**MailerLite investigation + purge:**
+- Free plan was at 500/500 subscribers — all real user registrations blocked (413 errors)
+- Root cause: `syncLeadTierGroups` weekly cron in outreachEmailsCron.ts synced ALL organizers with contactEmail + leadTier to MailerLite — including ~56K scraped directory organizers who never created accounts
+- 498 of 501 subscribers were junk (scraped emails). 4 legitimate subscribers identified and preserved (a1clcook, plus 3 seed accounts)
+- Purged all 498 junk subscribers via MailerLite `batch_requests` API (batches of 50 DELETE operations)
+- **Root cause fix:** Added `userId: { not: null }` to `syncLeadTierGroups` Prisma query — only registered users now sync to MailerLite
+
+**Hex escape fix (listingEnrichmentService.ts):**
+- Scraped HTML descriptions contain literal `\x` byte sequences that Prisma/PostgreSQL rejects as invalid hex escapes
+- Added `sanitizeForPostgres()` function: strips `\x` not followed by valid hex pairs
+- Applied in both free extraction path and Haiku AI path
+
+**Could not complete:** Railway log search for more 413-blocked users. Railway CLI not available in this VM session; Sentry had no matching issues. a1clcook should auto-enroll on next login.
+
+**Files changed:** `packages/backend/src/services/listingEnrichmentService.ts` · `packages/backend/src/jobs/outreachEmailsCron.ts`
+
+---
 
 ### S769 — Roadmap Audit + 7 Status Corrections
 
@@ -358,23 +386,3 @@ git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta
 .\push.ps1
 ```
 
-### S761 — QA Session: Social Posts + Retail Mode + AI Score Fix + POS Role Guard Fix
-
-**Trigger:** QA ceiling (18 items). Exclusive QA session. No new feature dev.
-
-**Verified (2 items closed):**
-- ✅ #305 Social Posts modal — Patrick's Artifact MI account. Modal opens, 5 tabs, generates real content. CLOSED.
-- ✅ #307 Retail Mode — Patrick confirmed "mostly works." CLOSED.
-
-**Fixed (2 bugs):**
-- ❌→FIXED: ai-score page (#438) — doubled `/api/` prefix in fetch call. Single-line inline fix. Push block delivered.
-- 🐛 NEW: POS page "No active sales" bug — `user.roles.includes('ORGANIZER')` returned false for organizers whose DB `roles` array defaults to `['USER']`. Fixed 7 guard sites in pos.tsx to `roles.includes('ORGANIZER') || role === 'ORGANIZER'`. Zero TS errors. Push block delivered.
-
-**Partial/Unverified:**
-- ⚠️ #437 GEO claim banner — banner renders, crawler count not visible in banner (spec gap).
-- 🔒 #292 ENDED-sale counts — VM disk full, couldn't create test data. First priority next session.
-- 🔒 Admin pages blocked — user1 no longer has admin access post-launch; need new approach.
-
-**Key learnings:** `NEXT_PUBLIC_API_URL` already includes `/api` suffix — don't append `/api/` to it. Organizers registered without seeded `roles` array get `['USER']` default — must dual-check `role` (string) AND `roles` (array) throughout organizer pages.
-
-**Files fixed:** `packages/frontend/pages/ai-score.tsx` · `packages/frontend/pages/organizer/pos.tsx`
