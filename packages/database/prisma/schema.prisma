@@ -510,6 +510,10 @@ model Organizer {
   @@index([subscriptionStatus, subscriptionTier]) // Sentry slow Organizer SELECT: adminController MRR query filters on both columns simultaneously
   @@index([graceEndAt, graceTierBefore]) // Sentry slow Organizer SELECT: tierGraceCronJob findMany WHERE graceEndAt <= now AND graceTierBefore IS NOT NULL
   @@index([lastScoredAt]) // Sentry slow Organizer SELECT: outreachEmailsCron syncLeadTierGroups filters on lastScoredAt >= 7d ago
+  @@index([leadTier]) // Sentry slow Organizer COUNT: adminController scrape-pool-stats groupBy leadTier + internal route leadTier counts (1888ms)
+  @@index([totalSales]) // Sentry slow Organizer COUNT: organizer percentile rank query count({ where: { totalSales: { lt: X } } })
+  @@index([country]) // Sentry slow Organizer COUNT: adminController Canada analytics filter count({ where: { country: 'CA' } })
+  @@index([isUnmanagedListing, directoryStatus]) // Sentry slow Organizer COUNT: hot activeScrapedWhere combo used in 7+ adminController queries simultaneously
 }
 
 // Feature #354: OrganizerHours — business hours per day of week
