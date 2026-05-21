@@ -245,7 +245,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const staticNavLinks = [
     { href: '/map', label: 'Map' },
     { href: '/trending', label: 'Trending' },
-    { href: '/clearance', label: 'Clearance' },
   ];
 
   const authLinks = isClient ? (
@@ -477,6 +476,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               </>
             )}
 
+            <Link href="/clearance" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Clearance items from active sales">
+              <Tag size={16} className="text-amber-500" />
+              <span>Clearance</span>
+            </Link>
+
             <SectionHeader icon={Share2} label="Sale Context" />
             <Link href="/organizer/promote" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Share and promote your sale">
               <Share2 size={16} className="text-amber-400" />
@@ -568,6 +572,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/search" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Search across all sales and items">
               <Search size={16} className="text-indigo-500" />
               <span>Search</span>
+            </Link>
+            <Link href="/clearance" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Clearance items from active sales">
+              <Tag size={16} className="text-indigo-500" />
+              <span>Clearance</span>
             </Link>
             <Link href="/shopper/explorer-profile" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your explorer journey, badges, and discovery history">
               <Award size={16} className="text-indigo-500" />
