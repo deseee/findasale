@@ -778,6 +778,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700">
                       <Heart size={14} className="text-rose-500" /> Wishlist
                     </Link>
+                    <Link href="/clearance" onClick={() => setExploreOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700">
+                      <Tag size={14} className="text-amber-500" /> Clearance
+                    </Link>
                   </div>
                 )}
               </div>
@@ -1374,6 +1378,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/trending" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <TrendingUp size={14} className="inline mr-2 text-indigo-500" /> Trending
                         </Link>
+                        <Link href="/clearance" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Tag size={14} className="inline mr-2 text-indigo-500" /> Clearance
+                        </Link>
                         <Link href="/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Map size={14} className="inline mr-2 text-indigo-500" /> Treasure Trails
                         </Link>
@@ -1595,6 +1602,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/trending" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <TrendingUp size={14} className="inline mr-2 text-indigo-500" /> Trending
+                    </Link>
+                    <Link href="/clearance" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Tag size={14} className="inline mr-2 text-indigo-500" /> Clearance
                     </Link>
                     <Link href="/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Map size={14} className="inline mr-2 text-indigo-500" /> Treasure Trails
