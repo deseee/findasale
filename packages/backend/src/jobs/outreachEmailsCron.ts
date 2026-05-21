@@ -522,6 +522,7 @@ export async function syncLeadTierGroups(): Promise<void> {
       contactEmail: { not: null },
       leadTier: { not: null },
       lastScoredAt: { gte: sevenDaysAgo },
+      userId: { not: null },  // Only sync registered users — exclude scraped directory entries
     },
     select: { id: true, contactEmail: true, leadTier: true },
   });
