@@ -694,3 +694,170 @@ function formatDateISO(date: Date | null | undefined): string {
   const d = new Date(date);
   return d.toISOString().replace('T', ' ').slice(0, 19);
 }
+
+/**
+ * Map FindA.Sale item condition to Facebook Marketplace condition string
+ */
+function mapConditionForFacebook(condition: string | null | undefined): string {
+  switch (condition) {
+    case 'NEW':
+      return 'New';
+    case 'REFURBISHED':
+      return 'Used - Like New';
+    case 'PARTS_OR_REPAIR':
+      return 'Used - Fair';
+    case 'USED':
+    default:
+      return 'Used - Good';
+  }
+}
+
+/**
+ * Export sale items as XLSX for Facebook Marketplace bulk upload
+ * GET /api/export/:saleId/facebook-xlsx
+ */
+export const exportFacebookXLSX = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { saleId } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({ message: 'Authentication required' });
+      return;
+    }
+
+    // Platform Safety #99: Check export rate limit
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastExportAt: true }
+    });
+
+    if (user) {
+      const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
+      if (!allowed && nextExportDate) {
+        res.status(429).json({
+          message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
+        });
+        return;
+      }
+    }
+
+    // Fetch sale with organizer and published items
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        organizer: true,
+        items: {
+          where: { draftStatus: 'PUBLISHED' },
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            description: true,
+            category: true,
+            condition: true,
+            photoUrls: true,
+            shippingAvailable: true,
+            shippingPrice: true,
+            qrEmbedEnabled: true,
+          },
+        },
+      },
+    });
+
+    // Verify sale exists
+    if (!sale) {
+      res.status(400).json({ message: 'Sale not found' });
+      return;
+    }
+
+    // Verify organizer ownership
+    if (sale.organizer.userId !== userId) {
+      res.status(403).json({ message: 'Not authorized' });
+      return;
+    }
+
+    // Verify published items exist
+    if (!sale.items || sale.items.length === 0) {
+      res.status(400).json({ message: 'No published items to export' });
+      return;
+    }
+
+    // Facebook limit: 50 items max
+    const FACEBOOK_ITEM_LIMIT = 50;
+    const truncated = sale.items.length > FACEBOOK_ITEM_LIMIT;
+    const itemsToExport = sale.items.slice(0, FACEBOOK_ITEM_LIMIT);
+
+    // Build worksheet data following Facebook's official bulk upload template layout
+    // Row 1: Title row
+    // Row 2: Instructions
+    // Row 3: Column descriptions (REQUIRED/OPTIONAL hints)
+    // Row 4: Column headers
+    // Row 5+: Item data rows
+    const wsData: (string | number)[][] = [
+      ['Facebook Marketplace Bulk Upload Template', '', '', '', ''],
+      [
+        'You can create up to 50 listings at once. When you are finished, be sure to save or export this as an XLS/XLSX file.',
+        '', '', '', ''
+      ],
+      ['REQUIRED', 'REQUIRED', 'REQUIRED', 'OPTIONAL', 'OPTIONAL'],
+      ['TITLE', 'PRICE', 'CONDITION', 'DESCRIPTION', 'CATEGORY'],
+    ];
+
+    // Add item rows
+    for (const item of itemsToExport) {
+      const title = truncate(item.title, 150);
+      const price = item.price ? Math.round(Number(item.price)) : 0;
+      const condition = mapConditionForFacebook(item.condition);
+      const listingUrl = `https://finda.sale/sales/${saleId}`;
+      const descBase = truncate(item.description, 4950); // reserve room for appended URL
+      const description = descBase
+        ? `${descBase}\n\nView full listing: ${listingUrl}`
+        : `View full listing: ${listingUrl}`;
+      const category = item.category || '';
+
+      wsData.push([title, price, condition, description, category]);
+    }
+
+    // If items were truncated, add a note row after the data
+    if (truncated) {
+      wsData.push([
+        `Note: Export limited to 50 items. Visit finda.sale/sales/${saleId} for full inventory.`,
+        '', '', '', ''
+      ]);
+    }
+
+    // Build workbook using SheetJS
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const XLSX = require('xlsx');
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Listings');
+
+    const xlsxBuffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    // Set response headers
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="facebook-marketplace-${saleId}.xlsx"`
+    );
+
+    // Platform Safety #99: Update lastExportAt timestamp
+    await prisma.user.update({
+      where: { id: userId },
+      data: { lastExportAt: new Date() }
+    });
+
+    res.status(200).send(xlsxBuffer);
+  } catch (error) {
+    console.error('exportFacebookXLSX error:', error);
+    res.status(500).json({ message: 'Export failed' });
+  }
+};

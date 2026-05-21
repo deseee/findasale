@@ -4,6 +4,7 @@ import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for
 import {
   exportEstatesalesCSV,
   exportFacebookJSON,
+  exportFacebookXLSX,
   exportCraigslistText,
   exportOrganizer,
 } from '../controllers/exportController';
@@ -17,6 +18,11 @@ router.get('/:saleId/estatesales-csv', authenticate, requireTier('PRO'), exportE
 // GET /api/export/:saleId/facebook-json
 // #65 Sprint 2: Gated to PRO tier
 router.get('/:saleId/facebook-json', authenticate, requireTier('PRO'), exportFacebookJSON);
+
+// GET /api/export/:saleId/facebook-xlsx
+// Facebook Marketplace bulk upload XLSX (matches official template format)
+// Gated to PRO tier — shares the same monthly rate limit as other export endpoints
+router.get('/:saleId/facebook-xlsx', authenticate, requireTier('PRO'), exportFacebookXLSX);
 
 // GET /api/export/:saleId/craigslist-text
 // #65 Sprint 2: Gated to PRO tier
