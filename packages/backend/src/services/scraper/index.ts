@@ -11,6 +11,7 @@ import { RateLimiter, defaultRateLimiter } from './rateLimiter';
 import { scrapeTheSaleSeker } from './sources/saleSeeker';
 import { enrichOrganizer } from './enrichment';
 import { getSourceById } from './sourceRegistry';
+import * as Sentry from '@sentry/node';
 
 export interface ScrapeJob {
   source: string;
@@ -564,6 +565,9 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
         itemsSkipped: legacy.skipped,
         itemsFailed: legacy.failed,
       });
+      if (itemsFound === 0) {
+        Sentry.captureMessage(`[Scraper] ${source} (${metro}) returned 0 results`, 'warning');
+      }
       return;
     }
 
@@ -593,6 +597,10 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
       itemsSkipped: stats.itemsSkipped,
       itemsFailed: stats.itemsFailed,
     });
+
+    if (stats.itemsFound === 0) {
+      Sentry.captureMessage(`[Scraper] ${source} (${metro}) returned 0 results`, 'warning');
+    }
   } catch (error) {
     console.error(`[scraper] Job ${jobId} failed:`, error);
     await finishScrapeJob(jobId, 'FAILED', {

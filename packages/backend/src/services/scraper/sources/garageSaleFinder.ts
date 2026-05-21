@@ -143,7 +143,9 @@ export async function parseGarageSalesFinderSale(
     const html = await response.text();
     const parsed = parseGarageSalesFinderListing(html);
 
-    if (!parsed || !parsed.title || !parsed.address || !parsed.city || !parsed.state || !parsed.zip || !parsed.startDate || !parsed.endDate) {
+    // address and zip intentionally omitted — GSF hides street addresses on many
+    // listings (empty string). ingestScrapedListing handles empty addresses fine.
+    if (!parsed || !parsed.title || !parsed.city || !parsed.state || !parsed.startDate || !parsed.endDate) {
       return null;
     }
 
