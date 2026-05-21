@@ -13,7 +13,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const isCanadaFilter = countryFilter === 'CA';
 
     const totalUsers = await prisma.user.count({
-      where: { email: { not: { endsWith: '@system.finda.sale' } } },
+      where: { NOT: [{ email: { endsWith: '@system.finda.sale' } }, { email: { endsWith: '@example.com' } }] },
     });
     // CONTAMINATION FIX: Count only real organizers, exclude isUnmanagedListing: true
     const totalOrganizers = await prisma.organizer.count({
@@ -44,7 +44,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const newUsersLast7d = await prisma.user.count({
       where: {
         createdAt: { gte: sevenDaysAgo },
-        email: { not: { endsWith: '@system.finda.sale' } },
+        NOT: [{ email: { endsWith: '@system.finda.sale' } }, { email: { endsWith: '@example.com' } }],
       },
     });
 
@@ -219,7 +219,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       const signupCount = await prisma.user.count({
         where: {
           createdAt: { gte: dayStart, lt: dayEnd },
-          email: { not: { endsWith: '@system.finda.sale' } },
+          NOT: [{ email: { endsWith: '@system.finda.sale' } }, { email: { endsWith: '@example.com' } }],
         },
       });
       sparklines.signups.push(signupCount);
@@ -647,7 +647,7 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
         take: 20,
       }),
       prisma.user.findMany({
-        where: { email: { not: { endsWith: '@system.finda.sale' } } },
+        where: { NOT: [{ email: { endsWith: '@system.finda.sale' } }, { email: { endsWith: '@example.com' } }] },
         select: {
           id: true,
           email: true,
@@ -1413,7 +1413,7 @@ export const getDrilldown = async (req: AuthRequest, res: Response) => {
 
     if (metric === 'signups') {
       const users = await prisma.user.findMany({
-        where: { email: { not: { endsWith: '@system.finda.sale' } } },
+        where: { NOT: [{ email: { endsWith: '@system.finda.sale' } }, { email: { endsWith: '@example.com' } }] },
         select: { id: true, name: true, email: true, createdAt: true, roles: true },
         orderBy: { createdAt: 'desc' },
         take: 50,
