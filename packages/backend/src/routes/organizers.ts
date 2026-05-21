@@ -821,7 +821,7 @@ router.get('/claim/verify/:token', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error verifying claim email:', error);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -845,10 +845,10 @@ router.get('/admin/claim-requests', authenticate, async (req: AuthRequest, res: 
       ],
     });
 
-    res.json(claims);
+    return res.json(claims);
   } catch (error) {
     console.error('Error fetching claim requests:', error);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -891,10 +891,10 @@ router.post('/admin/claim-requests/:id/approve', authenticate, async (req: AuthR
       }
     }).catch(err => console.error('[XP] intro lookup failed:', err));
 
-    res.json({ success: true, message: 'Claim approved' });
+    return res.json({ success: true, message: 'Claim approved' });
   } catch (error) {
     console.error('Error approving claim:', error);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -912,10 +912,10 @@ router.post('/admin/claim-requests/:id/reject', authenticate, async (req: AuthRe
       data: { status: 'REJECTED', reviewedAt: new Date(), reviewedBy: req.user!.id },
     });
 
-    res.json({ success: true, message: 'Claim rejected' });
+    return res.json({ success: true, message: 'Claim rejected' });
   } catch (error) {
     console.error('Error rejecting claim:', error);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -1992,7 +1992,7 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error submitting claim request:', error);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -2036,7 +2036,7 @@ router.get('/claim/verify/:token', async (req: Request, res: Response) => {
       },
     });
 
-    res.json({
+    return res.json({
       message: 'Claim verified',
       organizer: {
         id: claimRequest.organizer.id,
@@ -2046,7 +2046,7 @@ router.get('/claim/verify/:token', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error verifying claim request:', error);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -2105,7 +2105,7 @@ router.post('/:id/claim-oauth', authenticate, async (req: AuthRequest, res: Resp
       return res.status(409).json({ error: 'ALREADY_CLAIMED' });
     }
     console.error('[claim-oauth] Error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 

@@ -782,6 +782,15 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
 export const getServerSideProps: GetServerSideProps<OrganizerPageProps> = async (context) => {
   const { id } = context.params as { id: string };
 
+  // Fast-fail malformed IDs (e.g. "cmoog3bkr000=" from malformed links/bots).
+  // Cuid2 IDs are 24 alphanumeric chars. Anything outside [a-z0-9] at 20–30 chars
+  // is invalid — skip the API call entirely and return 404 immediately.
+  // This prevents the API error from triggering the axios interceptor on the server
+  // and stops the cascade that causes SW rejection + router invariant on the client.
+  if (!id || !/^[a-z0-9]{20,30}$/.test(id)) {
+    return { notFound: true };
+  }
+
   try {
     const response = await api.get(`/organizers/${id}`);
     return {
@@ -789,10 +798,10 @@ export const getServerSideProps: GetServerSideProps<OrganizerPageProps> = async 
         organizer: response.data,
       },
     };
-  } catch (error) {
-    return {
-      notFound: true,
-    };
+  } catch (error: any) {
+    // 404 from backend → organizer not found
+    // Any other error (500, network) → also 404 to avoid broken page render
+    return { notFound: true };
   }
 };
 
