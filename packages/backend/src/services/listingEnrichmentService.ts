@@ -113,7 +113,22 @@ function tryFreeExtraction(description: string, saleTitle: string): EnrichedList
     summary = summary.slice(0, 150);
   }
 
-  return { categories, priceRange, summary };
+  return {
+    categories: categories.map(sanitizeForPostgres),
+    priceRange: sanitizeForPostgres(priceRange),
+    summary: sanitizeForPostgres(summary),
+  };
+}
+
+/**
+ * Strip invalid PostgreSQL hex escape sequences from a string.
+ * Scraped descriptions often contain literal \x sequences (e.g. \xc2\xa0 for NBSP)
+ * that PostgreSQL interprets as hex escapes and rejects when invalid.
+ * We replace them with a space so the text remains readable.
+ */
+function sanitizeForPostgres(value: string): string {
+  // Replace any \x not followed by exactly two hex digits with a space
+  return value.replace(/\\x(?![0-9a-fA-F]{2})/g, ' ').trim();
 }
 
 export async function enrichScrapedListing(
@@ -211,11 +226,11 @@ Return ONLY JSON, no explanation.`;
     // Sanitize and cap arrays/strings
     parsed.categories = parsed.categories
       .slice(0, 5)
-      .map((c: string) => (typeof c === 'string' ? c.slice(0, 50) : ''))
+      .map((c: string) => (typeof c === 'string' ? sanitizeForPostgres(c.slice(0, 50)) : ''))
       .filter((c: string) => c.length > 0);
 
-    parsed.priceRange = parsed.priceRange.slice(0, 100);
-    parsed.summary = parsed.summary.slice(0, 150);
+    parsed.priceRange = sanitizeForPostgres(parsed.priceRange.slice(0, 100));
+    parsed.summary = sanitizeForPostgres(parsed.summary.slice(0, 150));
 
     return parsed;
   } catch (error: any) {
