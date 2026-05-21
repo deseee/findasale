@@ -36,6 +36,10 @@ function parseAddress(address: string): { city: string; zip: string } {
  * Ingests records into Organizer table with NewMexicoLicensing source attribution.
  */
 export async function runNewMexicoLicensingScraper(): Promise<void> {
+  // Phase 1 portal URL is dead (404 since ~2026-05). Phase 2 scraper uses alternative data source.
+  console.log('[NewMexicoLicensing] Scraper disabled — Phase 1 portal URL (rld.state.nm.us) no longer responds. Phase 2 handles this state.');
+  return;
+
   const rateLimiter = defaultRateLimiter;
   const domain = new URL(SEARCH_URL).hostname;
   let totalRecords = 0;

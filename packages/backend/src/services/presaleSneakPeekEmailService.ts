@@ -143,9 +143,12 @@ export async function sendPresaleSneakPeekEmails(): Promise<void> {
 
     console.log(`[presaleSneakPeekJob] Found ${sales.length} sale(s) in 24–48h window`);
 
+    let skipped = 0;
+    let sent = 0;
+
     for (const sale of sales) {
       if (sale.items.length === 0) {
-        console.log(`  Skipping "${sale.title}" — no items with photos`);
+        skipped++;
         continue;
       }
 
@@ -205,9 +208,11 @@ export async function sendPresaleSneakPeekEmails(): Promise<void> {
           saleUrl,
         });
       }
+
+      sent++;
     }
 
-    console.log(`[presaleSneakPeekJob] Done.`);
+    console.log(`[presaleSneakPeekJob] Processed ${sent} of ${sales.length} sales (${skipped} skipped — no items with photos)`);
   } catch (err) {
     console.error('[presaleSneakPeekJob] Fatal error:', err);
   }

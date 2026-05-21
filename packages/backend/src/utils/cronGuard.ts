@@ -106,6 +106,19 @@ export function cronGuard(
       } catch (_sentryErr) {
         // Sentry initialization may not be complete — silently continue
       }
+
+      // Alert on consecutive failures if threshold is configured
+      const threshold = opts.alertThresholdConsecutiveFailures;
+      if (threshold && count >= threshold) {
+        try {
+          Sentry.captureMessage(
+            `[CRON] ${opts.jobName} failed ${count} consecutive times (threshold: ${threshold})`,
+            'warning'
+          );
+        } catch (_sentryErr) {
+          // Sentry not ready — continue
+        }
+      }
     }
   };
 }
