@@ -76,7 +76,8 @@ export async function getServerSideProps(ctx: any) {
     let canonicalCitySlugs: string[] = [];
     try {
       const citySlugsResponse = await api.get('/sales/city-slugs');
-      canonicalCitySlugs = citySlugsResponse.data.slugs || citySlugsResponse.data || [];
+      const raw = citySlugsResponse.data.slugs || citySlugsResponse.data || [];
+      canonicalCitySlugs = raw.map((item: any) => typeof item === 'string' ? item : item.slug).filter(Boolean);
     } catch {
       // Endpoint may not exist yet — skip canonical city+category URLs gracefully
     }
@@ -107,14 +108,6 @@ export async function getServerSideProps(ctx: any) {
         });
       }
     }
-
-    // Generate city URLs from sale data (legacy — city name only, no state code)
-    const cityUrls = cities.map((city: string) => ({
-      loc: `${baseUrl}/city/${city}`,
-      lastmod: new Date().toISOString(),
-      changefreq: 'daily',
-      priority: 0.8,
-    }));
 
     // Generate neighborhood URLs
     const neighborhoodUrls = neighborhoods.map((neighborhood: string) => ({
@@ -159,7 +152,6 @@ export async function getServerSideProps(ctx: any) {
       ...staticUrls,
       ...saleUrls,
       ...cityCategoryUrls,
-      ...cityUrls,
       ...neighborhoodUrls,
       ...zipUrls,
       ...tagUrls,
