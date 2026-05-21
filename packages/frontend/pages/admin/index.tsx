@@ -633,7 +633,7 @@ const AdminDashboard = () => {
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-100 dark:border-amber-800 cursor-pointer hover:opacity-80 transition" onClick={() => openDrilldown('signups')}>
                 <p className="text-xl font-bold text-amber-900 dark:text-amber-100">{stats.totalUsers.toLocaleString()}</p>
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Real Users</p>
-                <p className="text-[10px] text-amber-500 dark:text-amber-500 mt-0.5">Excl. @system.finda.sale</p>
+                <p className="text-[10px] text-amber-500 dark:text-amber-500 mt-0.5">Excl. @system.finda.sale / @example.com</p>
               </div>
             </div>
           </div>
