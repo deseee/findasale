@@ -96,16 +96,14 @@ function ServiceWorkerUpdateNotifier() {
 
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
 
-    // Graceful error handling: SW registration may fail, but should not break the app.
-    // next-pwa registers /sw.js and does not attach a .catch() to that promise.
-    // On pages that 404 mid-render the browser rejects the pending registration.
-    // Catching both .ready and any existing registration silences that unhandled rejection.
+    // next-pwa auto-registration is disabled (register: false in next.config.js).
+    // We register manually here so the promise always has a .catch(), preventing
+    // unhandled rejections on 404 pages (Sentry FINDASALE-NEXTJS-1, 47 events).
     if (process.env.NODE_ENV === 'production') {
-      navigator.serviceWorker.ready.catch((err) => {
-        console.warn('[SW] ready failed (non-critical):', err);
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        // Registration failure is non-fatal — the app works without a service worker.
+        console.warn('[SW] registration failed (non-critical):', err);
       });
-      // Suppress the unhandled rejection from next-pwa's register() call on aborted navigations
-      navigator.serviceWorker.getRegistrations().catch(() => {});
     }
 
     return () => {
