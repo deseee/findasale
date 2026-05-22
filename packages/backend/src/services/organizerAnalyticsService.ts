@@ -318,6 +318,9 @@ export async function sendOrganizerWeeklyDigest(): Promise<void> {
     const organizers = await prisma.organizer.findMany({
       where: {
         isUnmanagedListing: { not: true },
+        user: {
+          email: { not: { endsWith: '@system.finda.sale' } },
+        },
         sales: {
           some: {
             status: { in: ['PUBLISHED', 'ENDED'] },
@@ -339,6 +342,7 @@ export async function sendOrganizerWeeklyDigest(): Promise<void> {
         const stats = await getOrganizerWeeklyStats(organizer.id);
         await sendOrganizerDigestEmail(stats);
         sent++;
+        await new Promise(r => setTimeout(r, 400));
       } catch (err) {
         console.error(`[OrganizerDigest] Failed for organizer ${organizer.id}:`, err);
         errors++;
