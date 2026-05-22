@@ -358,10 +358,9 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         if (isRapidfire) {
           onPhotoCapture?.(photo);
           
-          // Feature #341: Show multi-angle prompt after first photo in rapidfire mode
+          // Feature #341: Multi-angle prompt disabled — revisit in roadmap
           if (!firstPhotoTaken) {
             setFirstPhotoTaken(true);
-            setShowMultiAnglePrompt(true);
           }
         }
 
@@ -1465,58 +1464,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               )}
             </button>}
 
-            {/* Feature #341: Multi-angle role prompt (after first photo in rapidfire mode, portrait only) */}
-            {!isLandscape && isRapidfire && showMultiAnglePrompt && (
-              <div className="absolute bottom-24 left-0 right-0 mx-auto max-w-xs px-4">
-                <div className="bg-black/80 backdrop-blur rounded-lg p-4 border border-white/10">
-                  <div className="text-white text-sm font-medium mb-3 text-center">
-                    Got the front — want another angle?
-                  </div>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    <button
-                      onClick={() => handleSelectPhotoRole('BACK_STAMP')}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                        pendingPhotoRole === 'BACK_STAMP'
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-white/20 text-white hover:bg-white/30'
-                      }`}
-                      title="Capture back or stamp"
-                    >
-                      Back/Stamp
-                    </button>
-                    <button
-                      onClick={() => handleSelectPhotoRole('DETAIL_DAMAGE')}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                        pendingPhotoRole === 'DETAIL_DAMAGE'
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-white/20 text-white hover:bg-white/30'
-                      }`}
-                      title="Capture damage or detail"
-                    >
-                      Damage Detail
-                    </button>
-                    <button
-                      onClick={() => handleSelectPhotoRole('LABEL_BRAND')}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                        pendingPhotoRole === 'LABEL_BRAND'
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-white/20 text-white hover:bg-white/30'
-                      }`}
-                      title="Capture label or brand"
-                    >
-                      Label/Brand
-                    </button>
-                    <button
-                      onClick={() => handleSelectPhotoRole(null)}
-                      className="px-3 py-1.5 rounded-full text-xs font-semibold bg-sage-600/40 text-white hover:bg-sage-600/60 transition-all"
-                      title="Skip to next item"
-                    >
-                      Skip →
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Feature #341: Multi-angle role prompt removed — revisit in roadmap */}
           </div>
         </div>
 
