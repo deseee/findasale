@@ -157,7 +157,7 @@ export async function parseGarageSalesFinderSale(
 
     return {
       title: parsed.title,
-      address: parsed.address,
+      address: parsed.address ?? '',
       city: parsed.city,
       state: parsed.state,
       zip: parsed.zip,
