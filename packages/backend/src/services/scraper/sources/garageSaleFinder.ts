@@ -181,3 +181,6 @@ export async function parseGarageSalesFinderSale(
     return null;
   }
 }
+
+  }
+}

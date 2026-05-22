@@ -161,3 +161,5 @@ packages/*/claude_docs/
 # =========================
 "packages/backend/C:"*
 "packages/frontend/C:"*
+packages/backend/C:
+packages/frontend/C:
