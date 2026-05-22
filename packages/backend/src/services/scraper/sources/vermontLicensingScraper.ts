@@ -1,133 +1,51 @@
 /**
  * Vermont Secretary of State — Auctioneer License Scraper
- * Scrapes licensed auctioneers from Vermont professional regulation directory
- * Source: https://www.sec.state.vt.us/professional-regulation/professions/auctioneer.aspx
- * Public directory with auctioneer records
+ *
+ * SOURCE CHANGE: The original URL (www.sec.state.vt.us) is dead — DNS ENOTFOUND.
+ * Vermont rebranded to sos.vermont.gov, which is behind Imperva/Incapsula bot
+ * protection and returns a JS challenge page to all non-browser clients.
+ *
+ * The licensing portal migrated to a Pega-based system at:
+ *   https://secure.professionals.vermont.gov/prweb/PRServletCustom?UserIdentifier=LicenseLookupGuestUser
+ * This portal (also behind Imperva) requires:
+ *   - Browser-rendered JS to initialize session state and CSRF tokens
+ *   - Interactive form submission with encrypted action parameters
+ *   - A "Roster Download" flow (NGLPGenerateRosterDownload activity) that opens
+ *     a separate authenticated window — not accessible via server-side fetch
+ *
+ * No public CSV, open-data export, or unauthenticated REST endpoint exists for
+ * Vermont auctioneer licenses. This scraper cannot be implemented without a
+ * headless browser (Playwright/Puppeteer) or a manual data export arrangement
+ * with the Vermont Office of Professional Regulation.
+ *
+ * This function exits cleanly so the scheduler does not keep firing and logging
+ * DNS failures or retry loops.
+ *
  * ADR-073: Directory Scraper Phase 1 — State licensing data
+ * Blocked: Vermont portal requires headless browser — tracked for Phase 2
  */
-
-import { RateLimiter, defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
-import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
-
-const VERMONT_BASE_URL = 'https://www.sec.state.vt.us/professional-regulation/professions/auctioneer.aspx';
 
 /**
- * Scrape Vermont auctioneer licenses from state professional regulation directory.
- * Public directory — no authentication required.
- * Ingests records into Organizer table with VermontLicensing source attribution.
+ * Vermont auctioneer license scraper — currently non-operational.
+ *
+ * Vermont's licensing data is behind Imperva bot protection and a Pega-based
+ * portal that requires JS session initialization. A simple HTTP fetch cannot
+ * access the data. This function exits cleanly rather than retrying dead URLs.
+ *
+ * To unblock: implement a Playwright-based scraper targeting
+ * https://secure.professionals.vermont.gov with the "Roster Download" flow
+ * (ProductCategoryID PC021 = Auctioneers), or contact the Vermont Office of
+ * Professional Regulation for a direct data export.
  */
 export async function runVermontLicensingScraper(): Promise<void> {
-  const rateLimiter = defaultRateLimiter;
-  const domain = new URL(VERMONT_BASE_URL).hostname;
-  let totalRecords = 0;
-  let createdOrganizers = 0;
-
-  try {
-    console.log('[VermontLicensing] Starting auctioneer license scraper');
-
-    await rateLimiter.waitBeforeRequest(domain);
-
-    const response = await fetch(VERMONT_BASE_URL, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch Vermont auctioneer directory: ${response.status}`);
-    }
-
-    const html = await response.text();
-
-    // Parse HTML table rows
-    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
-    const rows = html.match(rowRegex) || [];
-
-    console.log(`[VermontLicensing] Found ${rows.length} table rows`);
-
-    const extractText = (html: string): string => {
-      return html
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .trim();
-    };
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-
-      const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/g;
-      const cells = row.match(cellRegex) || [];
-
-      if (cells.length < 2) {
-        continue;
-      }
-
-      const name = extractText(cells[0]);
-      const licenseNum = extractText(cells[1]);
-      const city = cells.length > 2 ? extractText(cells[2]) : 'Vermont';
-      const status = cells.length > 3 ? extractText(cells[3]) : 'Active';
-
-      if (!name || !licenseNum) {
-        continue;
-      }
-
-      totalRecords++;
-
-      if (status !== 'Active') {
-        console.log(
-          `[VermontLicensing] Skipping ${name} (license ${licenseNum}): status=${status}`
-        );
-        continue;
-      }
-
-      console.log(`[VermontLicensing] Processing: ${name} (License ${licenseNum}) in ${city}, VT`);
-
-      const organizerId = await getOrCreateScrapedOrganizer(
-        name,
-        'VermontLicensing',
-        city || 'Vermont',
-        'VT',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'AUCTION_HOUSE',
-        undefined
-      );
-
-      if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: {
-            licenseNumber: licenseNum,
-            licenseState: 'VT',
-            isStateLicensed: true,
-          },
-        });
-
-        createdOrganizers++;
-
-        if (totalRecords % 50 === 0) {
-          console.log(
-            `[VermontLicensing] Progress: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
-          );
-        }
-      }
-    }
-
-    console.log(
-      `[VermontLicensing] Scraper completed: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
-    );
-  } catch (error) {
-    console.error('[VermontLicensing] Scraper error:', error);
-    throw error;
-  }
+  console.warn(
+    '[VermontLicensing] Scraper is not operational: Vermont licensing portal ' +
+      '(secure.professionals.vermont.gov) requires a headless browser to access. ' +
+      'The original URL (www.sec.state.vt.us) is decommissioned — DNS ENOTFOUND. ' +
+      'Skipping without error to prevent scheduler retry loops. ' +
+      'To fix: implement Playwright-based scraper for NGLPGenerateRosterDownload ' +
+      '(ProductCategoryID PC021) or contact Vermont OPR for a data export.'
+  );
+  // Return cleanly — do not throw, so the scheduler marks this run as completed
+  // rather than triggering exponential-backoff retries against a dead host.
 }
