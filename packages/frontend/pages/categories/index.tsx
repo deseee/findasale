@@ -7,6 +7,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
+import { formatCategoryLabel } from '../../lib/itemConstants';
 
 const CATEGORY_ICONS: Record<string, string> = {
   furniture: '🪑',
@@ -25,21 +26,6 @@ const CATEGORY_ICONS: Record<string, string> = {
   other: '📦',
 };
 
-/** Decode HTML entities stored in DB category names (e.g. &amp; → &). */
-function decodeHTMLEntities(str: string): string {
-  if (typeof document !== 'undefined') {
-    const txt = document.createElement('textarea');
-    txt.innerHTML = str;
-    return txt.value;
-  }
-  return str
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'");
-}
 
 const CategoriesIndexPage = () => {
   const { data, isLoading, isError } = useQuery({
@@ -161,9 +147,8 @@ const CategoriesIndexPage = () => {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {entries.map(([cat, count]) => {
-              const decoded = decodeHTMLEntities(cat);
-              const label = decoded.charAt(0).toUpperCase() + decoded.slice(1);
-              const iconKey = decoded.toLowerCase().trim();
+              const label = formatCategoryLabel(cat);
+              const iconKey = label.toLowerCase().trim();
               const icon = CATEGORY_ICONS[iconKey] ?? CATEGORY_ICONS[cat.toLowerCase().trim()] ?? '📦';
               return (
                 <Link

@@ -1191,7 +1191,14 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               {/* Sale type pill */}
               {sale.saleType && (
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={{ background: 'rgba(255,255,255,0.12)', color: '#F2F0EA', border: '1px solid rgba(255,255,255,0.18)' }}>
-                  {sale.saleType.replace(/_/g, ' ')}
+                  {({
+                    ESTATE: 'Estate Sale', YARD: 'Yard Sale', GARAGE: 'Garage Sale',
+                    MOVING: 'Moving Sale', DOWNSIZING: 'Downsizing Sale', AUCTION: 'Auction',
+                    FLEA_MARKET: 'Flea Market', SWAP_MEET: 'Swap Meet', POPUP: 'Pop-Up Sale',
+                    LIQUIDATION: 'Liquidation Sale', CHARITY: 'Charity Sale', RETAIL: 'Retail Store',
+                    ONLINE: 'Online Sale', CONSIGNMENT: 'Consignment Sale', BOOTH: 'Vendor Booth',
+                    BUSINESS_CORPORATE: 'Corporate Sale', DORM_DASH: 'Dorm Dash',
+                  } as Record<string, string>)[sale.saleType] ?? sale.saleType.replace(/_/g, ' ')}
                 </span>
               )}
             </div>
@@ -1276,9 +1283,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         <div className="px-6 py-2.5 text-xs border-b border-black/8 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.02em' }}>
           <Link href="/" className="hover:underline">Home</Link>
           <span className="mx-2">/</span>
-          <span>{sale.city}, {sale.state}</span>
+          <Link href="/trending" className="hover:underline">Sales</Link>
           <span className="mx-2">/</span>
-          <span style={{ color: '#1A1814' }} className="dark:text-[#F2F0EA]">{sale.organizer.businessName}</span>
+          <span style={{ color: '#1A1814' }} className="dark:text-[#F2F0EA]">{sale.title}</span>
         </div>
 
 

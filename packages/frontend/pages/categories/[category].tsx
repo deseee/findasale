@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
+import { formatCategoryLabel } from '../../lib/itemConstants';
 import { SkeletonCard } from '../../components/SkeletonCards';
 import { getItemImageUrl } from '../../lib/imageUtils';
 
@@ -141,7 +142,7 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
   });
 
   const label = category
-    ? category.charAt(0).toUpperCase() + category.slice(1)
+    ? formatCategoryLabel(category)
     : '...';
 
   // Slugify category for API calls (e.g., "Furniture" → "furniture")
@@ -233,7 +234,7 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
                   : 'bg-warm-200 text-warm-800 dark:bg-gray-700 dark:text-gray-100 hover:bg-warm-300 dark:hover:bg-gray-600'
               }`}
             >
-              {cat.charAt(0).toUpperCase() + cat.slice(1)}
+              {formatCategoryLabel(cat)}
             </Link>
           ))}
         </div>

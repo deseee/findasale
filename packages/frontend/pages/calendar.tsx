@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, differenceInDays } from 'date-fns';
 import api from '../lib/api';
 import Skeleton from '../components/Skeleton';
 import RemindMeButton from '../components/RemindMeButton';
@@ -47,30 +47,66 @@ const CalendarPage = () => {
 
   const sales = (salesData as Sale[]) || [];
 
+  const ONGOING_THRESHOLD_DAYS = 7;
+
+  // Separate ongoing (>7 days) from regular sales
+  const { ongoingSales, regularSales } = useMemo(() => {
+    const ongoing: Sale[] = [];
+    const regular: Sale[] = [];
+    sales.forEach((sale) => {
+      try {
+        const start = parseISO(sale.startDate);
+        const end = parseISO(sale.endDate);
+        if (differenceInDays(end, start) > ONGOING_THRESHOLD_DAYS) {
+          ongoing.push(sale);
+        } else {
+          regular.push(sale);
+        }
+      } catch {
+        regular.push(sale);
+      }
+    });
+    return { ongoingSales: ongoing, regularSales: regular };
+  }, [sales]);
+
   // Build a map of date -> sales for efficient lookup
+  // Regular sales appear on every day they span; ongoing sales only on start+end
   const salesByDate = useMemo(() => {
     const map = new Map<string, Sale[]>();
-    sales.forEach((sale) => {
+    const addToDate = (dateKey: string, sale: Sale) => {
+      if (!map.has(dateKey)) map.set(dateKey, []);
+      map.get(dateKey)!.push(sale);
+    };
+
+    regularSales.forEach((sale) => {
       try {
         const startDate = parseISO(sale.startDate);
         const endDate = parseISO(sale.endDate);
-
-        // Add sale to each day it spans
         const currentDay = new Date(startDate);
         while (currentDay <= endDate) {
-          const dateKey = format(currentDay, 'yyyy-MM-dd');
-          if (!map.has(dateKey)) {
-            map.set(dateKey, []);
-          }
-          map.get(dateKey)!.push(sale);
+          addToDate(format(currentDay, 'yyyy-MM-dd'), sale);
           currentDay.setDate(currentDay.getDate() + 1);
         }
       } catch {
         // Skip sales with invalid dates
       }
     });
+
+    // Ongoing sales only appear on their start and end dates
+    ongoingSales.forEach((sale) => {
+      try {
+        addToDate(format(parseISO(sale.startDate), 'yyyy-MM-dd'), sale);
+        const endKey = format(parseISO(sale.endDate), 'yyyy-MM-dd');
+        if (endKey !== format(parseISO(sale.startDate), 'yyyy-MM-dd')) {
+          addToDate(endKey, sale);
+        }
+      } catch {
+        // Skip sales with invalid dates
+      }
+    });
+
     return map;
-  }, [sales]);
+  }, [regularSales, ongoingSales]);
 
   // Get calendar grid for current month
   const monthStart = startOfMonth(currentDate);
@@ -191,6 +227,29 @@ const CalendarPage = () => {
               Next →
             </button>
           </div>
+
+          {/* Ongoing Sales Banner */}
+          {!isLoading && ongoingSales.length > 0 && (
+            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <h3 className="text-sm font-bold text-blue-800 dark:text-blue-300 mb-2 uppercase tracking-wide">
+                Ongoing Sales
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {ongoingSales.map((sale) => (
+                  <Link
+                    key={sale.id}
+                    href={`/sales/${sale.id}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-full text-sm text-blue-800 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition"
+                  >
+                    <span className="font-medium line-clamp-1">{sale.title}</span>
+                    <span className="text-blue-500 dark:text-blue-400 text-xs whitespace-nowrap">
+                      {format(parseISO(sale.startDate), 'MMM d')} – {format(parseISO(sale.endDate), 'MMM d')}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           {isLoading ? (
             <div className="space-y-4">
@@ -324,7 +383,7 @@ const CalendarPage = () => {
             </li>
             <li className="flex gap-2">
               <span className="text-amber-600">•</span>
-              <span>Multi-day sales appear on each day they run</span>
+              <span>Long-running sales are grouped in the &ldquo;Ongoing Sales&rdquo; banner above the calendar</span>
             </li>
           </ul>
         </div>
