@@ -18,7 +18,13 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## What Happened This Week
 
-**S772 (latest — roadmap reconciliation audit, docs only):**
+**S773 (latest — Facebook Export Tracking + Sold Nudge):**
+- Researched what's actually possible with Facebook in 2026. Finding: no public API or webhooks for standard Marketplace sellers. The bulk upload is a manual XLSX file organizers upload themselves. Meta Marketplace Partner Program (how Shopify integrates) requires Meta approval — long-term path, not near-term.
+- Built what IS possible: when an organizer downloads the Facebook XLSX, FindA.Sale now records which specific items were exported (`fbExportedAt` timestamp). When any of those items sell on FindA.Sale, the organizer gets an in-app notification: "This item was exported to Facebook — remember to mark it sold there too" with a direct link to their Facebook Marketplace selling page.
+- Wired across all 8 places an item can be marked sold (POS, reservation, Stripe checkout, terminal, eBay webhook, eBay sync cron, items route).
+- **Action needed:** Push block + migration in Action Items below.
+
+**S772 (roadmap reconciliation audit, docs only):**
 - Brought the roadmap back in sync with reality after ~30 sessions of QA drift. No code changed.
 - ~45 finished features that were still mislabeled "Pending Chrome QA" are now marked SHIPPED & VERIFIED, with a clean summary table showing which session verified each one.
 - Everything still genuinely waiting on a browser test (a handful of eBay items + #338 sold-price comps) is now grouped in one new "Pending Chrome QA Backlog" section — so what's left to test lives in one place.
@@ -58,19 +64,27 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## Action Items for Patrick
 
-### 1. Push S771 bug-hunt fixes:
+### 1. Push S773 Facebook export tracking (11 files + docs):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/services/scraper/index.ts
-git add packages/frontend/sentry.client.config.ts
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260523120000_add_fb_exported_at/migration.sql
+git add packages/backend/src/controllers/exportController.ts
+git add packages/backend/src/services/facebookNudgeService.ts
+git add packages/backend/src/controllers/posPaymentController.ts
+git add packages/backend/src/controllers/reservationController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/terminalController.ts
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/backend/src/jobs/ebaySoldSyncCron.ts
+git add packages/backend/src/routes/items.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: stop Sentry-capturing 0-result scrapes (noise flood); filter FB in-app browser instrumentation errors in beforeSend"
+git commit -m "feat: track fbExportedAt per item on Facebook XLSX export; nudge organizer to mark sold on FB when item sells"
 .\push.ps1
 ```
-_Note: the prior S768/S770 code push appears already committed (today's git log covers it). After deploy, the 18 "GarageSaleFinder returned 0 results" Sentry issues will stop and can be bulk-resolved in the Sentry UI._
 
-### 2. Run migration (verify if not already run — review-index + sku-toggle migrations from S768):
+### 2. After Railway deploys S773 — run the migration:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -78,7 +92,16 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-### 3. Deploy email verification migration (when ready — pending since S726):
+### 3. Push S771 bug-hunt fixes (if not yet pushed):
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/services/scraper/index.ts
+git add packages/frontend/sentry.client.config.ts
+git commit -m "fix: stop Sentry-capturing 0-result scrapes (noise flood); filter FB in-app browser instrumentation errors in beforeSend"
+.\push.ps1
+```
+
+### 4. Run pending migrations (review-index + sku-toggle from S768; email-verification from S726 — if not yet run):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"

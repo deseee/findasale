@@ -90,19 +90,44 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Priority 0 — Patrick: push S771 bug-hunt fixes:**
+**Priority 0 — Patrick: push S773 Facebook export tracking + sold nudge:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260523120000_add_fb_exported_at/migration.sql
+git add packages/backend/src/controllers/exportController.ts
+git add packages/backend/src/services/facebookNudgeService.ts
+git add packages/backend/src/controllers/posPaymentController.ts
+git add packages/backend/src/controllers/reservationController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/terminalController.ts
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/backend/src/jobs/ebaySoldSyncCron.ts
+git add packages/backend/src/routes/items.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat: track fbExportedAt per item on Facebook XLSX export; nudge organizer to mark sold on FB when item sells"
+.\push.ps1
+```
+
+**Priority 1 — After Railway deploys S773, run the fbExportedAt migration:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**Priority 2 — Patrick: also push S771 bug-hunt fixes (if not yet pushed):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/services/scraper/index.ts
 git add packages/frontend/sentry.client.config.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
 git commit -m "fix: stop Sentry-capturing 0-result scrapes (noise flood); filter FB in-app browser instrumentation errors in beforeSend"
 .\push.ps1
 ```
-_The prior S768/S770 code push appears already committed (today's git log covers it). After this deploys, the 18 "GarageSaleFinder returned 0 results" Sentry issues stop firing and can be bulk-resolved in the Sentry UI._
 
-**Priority 1 — Verify migrations applied (review-index + sku-toggle from S768; email-verification from S726). If not yet run:**
+**Priority 3 — Verify migrations applied (review-index + sku-toggle from S768; email-verification from S726). If not yet run:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -130,6 +155,31 @@ npx prisma generate
 - Deploy email verification migration (20260515180000) — pending S726
 
 ## Recent Sessions
+
+### S773 — Facebook Export Tracking + Sold Nudge (#461)
+
+**Trigger:** Patrick — "now that we have facebook marketplace bulk uploads, is there any way that if a listing gets marked as sold on facebook or finda.sale the item is removed from the other?"
+
+**Research finding:** Facebook Marketplace has no public API or webhooks for standard sellers — the bulk upload is a manual XLSX download that organizers upload themselves. Meta Marketplace Partner Program (Item API) is a real integration path (how Shopify does it) but requires Meta partner approval not achievable at current scale.
+
+**Feature built:** Per-item Facebook export tracking (`fbExportedAt DateTime?` on Item) + organizer nudge notification when a tracked item sells on FindA.Sale with deep link to facebook.com/marketplace/selling/.
+
+- `fbExportedAt` field added to Item model (schema.prisma)
+- Migration created: `20260523120000_add_fb_exported_at`
+- `exportController.ts`: both `exportFacebookXLSX` and `exportFacebookJSON` now stamp `fbExportedAt` on exported items
+- `facebookNudgeService.ts`: new service — fetches item, checks `fbExportedAt`, creates organizer notification
+- 8 sold trigger points wired (posPaymentController, reservationController, stripeController, terminalController, ebayController webhook, ebaySoldSyncCron, routes/items.ts)
+- All wired as fire-and-forget: `notifyFacebookExportedItemSold(id).catch(err => console.warn(...))`
+- TypeScript: zero errors
+- Roadmap: #461 added — "Facebook Export Tracking + Sold Nudge | ORG | SIMPLE | Queued S773 — Dev dispatched"
+- Long-term path documented in roadmap: Meta Marketplace Partner Program application
+
+**Files changed (11):** schema.prisma · 20260523120000_add_fb_exported_at/migration.sql · exportController.ts · facebookNudgeService.ts (NEW) · posPaymentController.ts · reservationController.ts · stripeController.ts · terminalController.ts · ebayController.ts · ebaySoldSyncCron.ts · routes/items.ts
+
+**Push block:** See "## Next Session" Priority 0.
+**Pending:** Migration deploy (fbExportedAt column) after Railway picks up the push. Chrome QA of nudge flow.
+
+---
 
 ### S772 — Roadmap Reconciliation Audit (DOCS)
 Synced `strategy/roadmap.md` against ~30 sessions of QA evidence (S718–S769), then consolidated the file to make it leaner. No code touched.
