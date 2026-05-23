@@ -23,6 +23,17 @@ function createGmailClient() {
 }
 
 /**
+ * RFC 2047 encode a header value if it contains non-ASCII characters.
+ * Uses Base64 encoding: =?UTF-8?B?<base64>?=
+ */
+function encodeSubject(subject: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7F]*$/.test(subject)) return subject;
+  const encoded = Buffer.from(subject, 'utf-8').toString('base64');
+  return `=?UTF-8?B?${encoded}?=`;
+}
+
+/**
  * Build an RFC 2822 raw email and Base64url-encode it for the Gmail API.
  */
 function buildRawMessage(options: {
@@ -38,18 +49,19 @@ function buildRawMessage(options: {
   const headers = [
     `From: ${options.from}`,
     `To: ${toAddresses}`,
-    `Subject: ${options.subject}`,
+    `Subject: ${encodeSubject(options.subject)}`,
     `MIME-Version: 1.0`,
     ...(options.replyTo ? [`Reply-To: ${options.replyTo}`] : []),
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
 
+  const htmlBase64 = Buffer.from(options.html, 'utf-8').toString('base64');
   const body = [
     `--${boundary}`,
     `Content-Type: text/html; charset="UTF-8"`,
-    `Content-Transfer-Encoding: 7bit`,
+    `Content-Transfer-Encoding: base64`,
     ``,
-    options.html,
+    htmlBase64,
     `--${boundary}--`,
   ];
 
