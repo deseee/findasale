@@ -311,6 +311,13 @@ export const exportFacebookJSON = async (
       data: { lastExportAt: new Date() }
     });
 
+    // Stamp fbExportedAt on all exported items
+    const jsonExportedItemIds = sale.items.map((item: any) => item.id);
+    await prisma.item.updateMany({
+      where: { id: { in: jsonExportedItemIds } },
+      data: { fbExportedAt: new Date() }
+    });
+
     res.status(200).json(facebookData);
   } catch (error) {
     console.error('exportFacebookJSON error:', error);
@@ -853,6 +860,13 @@ export const exportFacebookXLSX = async (
     await prisma.user.update({
       where: { id: userId },
       data: { lastExportAt: new Date() }
+    });
+
+    // Stamp fbExportedAt on all exported items
+    const exportedItemIds = itemsToExport.map((item: any) => item.id);
+    await prisma.item.updateMany({
+      where: { id: { in: exportedItemIds } },
+      data: { fbExportedAt: new Date() }
     });
 
     res.status(200).send(xlsxBuffer);

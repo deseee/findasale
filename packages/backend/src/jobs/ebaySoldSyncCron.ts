@@ -18,6 +18,7 @@ import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken, endEbayListingIfExists } from '../controllers/ebayController';
+import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 
 interface EbayItem {
   id: string;
@@ -203,6 +204,9 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         // Withdraw eBay listing so item can't be purchased again on eBay (fire-and-forget)
         endEbayListingIfExists(matchedItem.id).catch(err =>
           console.warn(`[eBay Sync] withdraw failed for item ${matchedItem!.id}:`, err.message)
+        );
+        notifyFacebookExportedItemSold(matchedItem.id).catch(err =>
+          console.warn(`[FB Nudge] failed for item ${matchedItem!.id}:`, err.message)
         );
 
         // Notify organizer

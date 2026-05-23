@@ -23,6 +23,7 @@ import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98:
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
+import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature #XXX: Shopify Cross-Listing
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
 import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService'; // P2-2: Refund cap + logging
@@ -723,6 +724,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   endEbayListingIfExists(item.id).catch(err =>
                     console.error('[eBay] Failed to withdraw offer:', err)
                   );
+                  notifyFacebookExportedItemSold(item.id).catch(err =>
+                    console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
+                  );
 
                   // Update ItemReservation if exists
                   await prisma.itemReservation.updateMany({
@@ -1192,6 +1196,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
           // Fire-and-forget: end eBay listing if item was pushed there
           endEbayListingIfExists(paymentIntent.metadata.itemId).catch(err =>
             console.error('[eBay] Failed to withdraw offer:', err)
+          );
+          notifyFacebookExportedItemSold(paymentIntent.metadata.itemId).catch(err =>
+            console.warn(`[FB Nudge] failed for item ${paymentIntent.metadata.itemId}:`, err.message)
           );
 
           if (soldItem) {
@@ -1826,6 +1833,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
               Promise.allSettled(
                 posPaymentLink.itemIds!.map((itemId: string) => endEbayListingIfExists(itemId))
               ).catch(() => {});
+              Promise.allSettled(
+                posPaymentLink.itemIds!.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
+              ).catch(() => {});
             });
           }
 
@@ -1931,6 +1941,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
           setImmediate(() => {
             Promise.allSettled(
               holdInvoice.itemIds.map((itemId: string) => endEbayListingIfExists(itemId))
+            ).catch(() => {});
+            Promise.allSettled(
+              holdInvoice.itemIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
             ).catch(() => {});
           });
 

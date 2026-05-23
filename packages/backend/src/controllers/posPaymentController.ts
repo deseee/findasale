@@ -7,6 +7,7 @@ import { createNotification } from '../lib/notificationService';
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from '../services/xpService';
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
+import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 
 const stripe = () => getStripe();
 
@@ -939,6 +940,9 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
         // Fire-and-forget: end eBay listing if item was pushed there
         endEbayListingIfExists(item.id).catch(err =>
           console.error('[eBay] Failed to withdraw offer:', err)
+        );
+        notifyFacebookExportedItemSold(item.id).catch(err =>
+          console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
         );
 
         // Update ItemReservation if exists

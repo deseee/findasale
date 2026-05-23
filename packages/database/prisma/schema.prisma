@@ -1130,6 +1130,8 @@ model Item {
   // S696: ItemBundle relation
   bundleId                   String?
   bundle                     ItemBundle?            @relation("BundleItems", fields: [bundleId], references: [id])
+  // Feature: Facebook Export Tracking — stamped when item is included in FB Marketplace XLSX/JSON export
+  fbExportedAt               DateTime?
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 

@@ -19,6 +19,7 @@ import {
   WeightTierMapping,
 } from '../utils/ebayPolicyParser';
 import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
+import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -4582,6 +4583,9 @@ export const handleEbayNotification = async (req: express.Request, res: Response
       // Withdraw eBay listing (fire-and-forget — item is already sold, prevent double-sale)
       endEbayListingIfExists(matchedItem.id).catch(err =>
         console.warn(`[eBay Notify] withdraw failed for item ${matchedItem!.id}:`, err.message)
+      );
+      notifyFacebookExportedItemSold(matchedItem.id).catch(err =>
+        console.warn(`[FB Nudge] failed for item ${matchedItem!.id}:`, err.message)
       );
 
       // Notify organizer
