@@ -100,33 +100,6 @@ async function backfillBatch(skip: number): Promise<{
     const condition = item.condition!;
     const priceInCents = Math.round(priceInDollars * 100);
 
-    // Check if a benchmark already exists for this category + condition + dataSource
-    // within $10 price band
-    const existingBenchmark = await prisma.priceBenchmark.findFirst({
-      where: {
-        entry: {
-          // PriceBenchmark doesn't have category/condition directly — it has a relation to EncyclopediaEntry
-          // But we're creating standalone benchmarks, so we need to understand the schema better.
-          // Re-read: PriceBenchmark has entryId (FK to EncyclopediaEntry), condition, dataSource
-          // So we can't query by item.category directly. Instead, find similar benchmarks by condition + region
-        },
-      },
-    });
-
-    // Actually, looking at the schema more carefully: PriceBenchmark is tied to EncyclopediaEntry, not Item.
-    // But the task says to create benchmarks from Items. This suggests we either:
-    // 1. Create EncyclopediaEntry records first (but that seems wrong — those are curated)
-    // 2. Store benchmarks differently, OR
-    // 3. The design allows PriceBenchmark to exist without an entry (entryId optional)?
-    //
-    // Looking at valuationService.ts line 64, benchmarks ARE queried with:
-    //   where: { entry: { category: ... }, condition: ... }
-    // This means benchmarks are tied to encyclopedia entries, which have categories.
-    //
-    // Decision: Create EncyclopediaEntry stubs with AUTO_GENERATED status + benchmarks.
-    // This way: (a) benchmarks are correctly tied to entries, (b) curator job can later enrich them,
-    // (c) valuationService queries continue to work.
-
     const infoStr = `[backfillBenchmarks] Item ${item.id}: category=${category}, condition=${condition}, price=$${(priceInCents / 100).toFixed(2)}`;
 
     // Create or retrieve encyclopedia entry for this category

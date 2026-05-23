@@ -1,7 +1,12 @@
 name: Scrape NAA Find an Auctioneer Directory
 
 on:
-  # schedule DISABLED — BROKEN — target site blocks or has changed structure
+  # schedule DISABLED — BROKEN — NAA directory is JavaScript-rendered (Novi AMS platform).
+  # Static HTTP fetch returns a "Loading..." placeholder with no member data.
+  # The site also requires a logged-in member session for full results.
+  # To fix: implement Playwright/Puppeteer headless rendering with auth session cookies,
+  # or use the Novi AMS API if NAA exposes one. Plain fetch cannot retrieve member cards.
+  # Verified broken: 2026-05-23 — web_fetch returned zero member cards in HTML.
   # was: cron: '0 15 1 * *'
   workflow_dispatch:
 

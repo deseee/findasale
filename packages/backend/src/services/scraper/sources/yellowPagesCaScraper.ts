@@ -254,7 +254,7 @@ async function fetchPage(
 // Main export
 // ---------------------------------------------------------------------------
 
-export async function runYellowPagesCaScraper(): Promise<void> {
+export async function runYellowPagesCaScraper(): Promise<{ fetched: number; matched: number; upserted: number }> {
   console.log('[YellowPagesCA] Starting YellowPages.ca directory scraper');
   console.log(`[YellowPagesCA] Provinces: ${PROVINCES.join(', ')}`);
   console.log(`[YellowPagesCA] Keywords: ${KEYWORDS.join(', ')}`);
@@ -346,6 +346,8 @@ export async function runYellowPagesCaScraper(): Promise<void> {
           'YellowPages.ca may have changed its page structure or is blocking requests.'
       );
     }
+
+    return { fetched: totalFetched, matched: totalMatched, upserted: totalUpserted };
   } catch (error) {
     console.error('[YellowPagesCA] Scraper error:', error);
     throw error;

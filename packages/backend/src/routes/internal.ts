@@ -73,7 +73,6 @@ import { runSouthDakotaLicensingScraper } from '../services/scraper/sources/sout
 import { runTexasLicensingScraper } from '../services/scraper/sources/texasLicensingScraper';
 import { runUtahLicensingScraper } from '../services/scraper/sources/utahLicensingScraper';
 import { runOsmScraper } from '../services/scraper/osmScraper';
-import { scrapeTheSaleSeker, DEFAULT_METROS } from '../services/scraper/sources/saleSeeker';
 import { scrapeGarageSaleFinder } from '../services/scraper/sources/garageSaleFinder';
 import { runAuctionZipScraper } from '../services/scraper/sources/auctionZipScraper';
 import { scrapeAuctionNinja } from '../services/scraper/sources/auctionNinjaScraper';
@@ -111,7 +110,6 @@ import { runFloridaPhase2Scraper } from '../services/scraper/sources/floridaPhas
 import { runGeorgiaPhase2Scraper } from '../services/scraper/sources/georgiaPhase2Scraper';
 import { runNorthCarolinaPhase2Scraper } from '../services/scraper/sources/northCarolinaPhase2Scraper';
 import { runOhioPhase2Scraper } from '../services/scraper/sources/ohioPhase2Scraper';
-import { runCanada411Scraper } from '../services/scraper/sources/canada411Scraper';
 import { runYellowPagesCaScraper } from '../services/scraper/sources/yellowPagesCaScraper';
 import { runAlabamaPhase2Scraper } from '../services/scraper/sources/alabamaPhase2Scraper';
 import { runKentuckyPhase2Scraper } from '../services/scraper/sources/kentuckyPhase2Scraper';
@@ -609,27 +607,6 @@ router.post('/scraper/run-osm', requireSecret, async (req: express.Request, res:
   });
 });
 
-// POST /api/internal/scraper/run-sale-seeker
-router.post('/scraper/run-sale-seeker', requireSecret, async (req: express.Request, res: express.Response) => {
-  res.status(202).json({ message: 'SaleSeker scraper started' });
-  (async () => {
-    try {
-      const { getOrCreateSystemOrganizer } = await import('../services/scraper/index');
-      const organizerId = await getOrCreateSystemOrganizer();
-      const metros = req.body?.metros || DEFAULT_METROS;
-      for (const metro of metros) {
-        try {
-          const { defaultRateLimiter } = await import('../services/scraper/index');
-          await scrapeTheSaleSeker(metro, organizerId, defaultRateLimiter);
-        } catch (err) {
-          console.error(`[SaleSeker] Metro ${metro} failed:`, err);
-        }
-      }
-    } catch (error: any) {
-      console.error('[SaleSeker] scraper error:', error);
-    }
-  })();
-});
 
 // POST /api/internal/scraper/run-garagesalefinder
 router.post('/scraper/run-garagesalefinder', requireSecret, async (req: express.Request, res: express.Response) => {
@@ -890,10 +867,6 @@ router.post('/scraper/run-north-carolina-phase2', requireSecret, async (req: exp
 router.post('/scraper/run-ohio-phase2', requireSecret, async (req: express.Request, res: express.Response) => { res.status(202).json({ message: 'Ohio Phase 2 scraper started' }); runOhioPhase2Scraper().catch(err => {
     console.error('[Ohio] scraper error:', err);
     Sentry.captureException(err, { tags: { scraper: '[Ohio]', type: 'scraper_failure' } });
-  }); });
-router.post('/scraper/run-canada411', requireSecret, async (req: express.Request, res: express.Response) => { res.status(202).json({ message: 'Canada411 scraper started' }); runCanada411Scraper().catch(err => {
-    console.error('[Canada411] scraper error:', err);
-    Sentry.captureException(err, { tags: { scraper: '[Canada411]', type: 'scraper_failure' } });
   }); });
 router.post('/scraper/run-yellowpages-ca', requireSecret, async (req: express.Request, res: express.Response) => { res.status(202).json({ message: 'YellowPages.ca scraper started' }); runYellowPagesCaScraper().catch(err => {
     console.error('[YellowPagesCa] scraper error:', err);

@@ -1,7 +1,8 @@
 name: Pipeline — Organizer Website Address
 on:
   schedule:
-    - cron: '0 4 * * 2'
+    - cron: '0 4 * * 2'  # Tuesday
+    - cron: '0 4 * * 5'  # Friday
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}

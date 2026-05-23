@@ -8,7 +8,6 @@ import { prisma } from '../../lib/prisma';
 import { ParsedListing } from './htmlParser';
 import { checkDuplicate } from './dedupe';
 import { RateLimiter, defaultRateLimiter } from './rateLimiter';
-import { scrapeTheSaleSeker } from './sources/saleSeeker';
 import { enrichOrganizer } from './enrichment';
 import { getSourceById } from './sourceRegistry';
 
@@ -542,7 +541,6 @@ export async function getOrCreateScrapedOrganizer(
 /**
  * Main scraping entry point.
  * Dispatches to the registered source handler via SOURCE_REGISTRY.
- * Legacy 'SaleSeker' source is handled directly (not yet in registry).
  */
 export async function runScrapeRun(source: string, metro: string): Promise<void> {
   const jobId = await createScrapeJob(source, metro);
@@ -552,26 +550,6 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
     console.log(`[scraper] Starting job ${jobId} — ${source} / ${metro}`);
 
     const systemOrganizerId = await getOrCreateSystemOrganizer();
-
-    // Legacy SaleSeker not yet in registry — handle directly
-    if (source === 'SaleSeker') {
-      const legacy = await scrapeTheSaleSeker(metro, systemOrganizerId, rateLimiter);
-      const itemsFound = legacy.created + legacy.updated + legacy.skipped + legacy.failed;
-      await finishScrapeJob(jobId, 'SUCCESS', {
-        itemsFound,
-        itemsCreated: legacy.created,
-        itemsUpdated: legacy.updated,
-        itemsSkipped: legacy.skipped,
-        itemsFailed: legacy.failed,
-      });
-      if (itemsFound === 0) {
-        // 0 results is a normal SUCCESS outcome for low-volume metros — the empty
-        // job is already recorded in ScrapedSalesJob. Real failures throw and are
-        // captured in the catch block below. Do NOT Sentry-capture here (noise).
-        console.log(`[scraper] ${source} (${metro}) returned 0 results — no listings this run`);
-      }
-      return;
-    }
 
     const sourceDef = getSourceById(source);
     if (!sourceDef) {
