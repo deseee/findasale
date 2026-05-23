@@ -89,6 +89,15 @@ const createGmailClient = () => {
 };
 
 /**
+ * RFC 2047 encode a header value if it contains non-ASCII characters.
+ */
+function encodeSubject(subject: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7F]*$/.test(subject)) return subject;
+  return `=?UTF-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`;
+}
+
+/**
  * Build an RFC 2822 raw email message string with proper MIME headers.
  * Returns base64url-encoded string ready for Gmail API.
  */
@@ -100,10 +109,11 @@ const buildRawEmail = (opts: {
   listUnsubscribe: string;
 }): string => {
   const boundary = `boundary_${uuid().replace(/-/g, '')}`;
+  const htmlBase64 = Buffer.from(opts.html, 'utf-8').toString('base64');
   const rawLines = [
     `From: ${opts.from}`,
     `To: ${opts.to}`,
-    `Subject: ${opts.subject}`,
+    `Subject: ${encodeSubject(opts.subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     `List-Unsubscribe: ${opts.listUnsubscribe}`,
@@ -111,9 +121,9 @@ const buildRawEmail = (opts: {
     '',
     `--${boundary}`,
     `Content-Type: text/html; charset="UTF-8"`,
-    `Content-Transfer-Encoding: 7bit`,
+    `Content-Transfer-Encoding: base64`,
     '',
-    opts.html,
+    htmlBase64,
     '',
     `--${boundary}--`,
   ];
