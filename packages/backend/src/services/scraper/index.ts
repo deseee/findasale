@@ -11,7 +11,6 @@ import { RateLimiter, defaultRateLimiter } from './rateLimiter';
 import { scrapeTheSaleSeker } from './sources/saleSeeker';
 import { enrichOrganizer } from './enrichment';
 import { getSourceById } from './sourceRegistry';
-import * as Sentry from '@sentry/node';
 
 export interface ScrapeJob {
   source: string;
@@ -566,7 +565,10 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
         itemsFailed: legacy.failed,
       });
       if (itemsFound === 0) {
-        Sentry.captureMessage(`[Scraper] ${source} (${metro}) returned 0 results`, 'warning');
+        // 0 results is a normal SUCCESS outcome for low-volume metros — the empty
+        // job is already recorded in ScrapedSalesJob. Real failures throw and are
+        // captured in the catch block below. Do NOT Sentry-capture here (noise).
+        console.log(`[scraper] ${source} (${metro}) returned 0 results — no listings this run`);
       }
       return;
     }
@@ -599,7 +601,10 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
     });
 
     if (stats.itemsFound === 0) {
-      Sentry.captureMessage(`[Scraper] ${source} (${metro}) returned 0 results`, 'warning');
+      // 0 results is a normal SUCCESS outcome for low-volume metros — the empty
+      // job is already recorded in ScrapedSalesJob. Real failures throw and are
+      // captured in the catch block below. Do NOT Sentry-capture here (noise).
+      console.log(`[scraper] ${source} (${metro}) returned 0 results — no listings this run`);
     }
   } catch (error) {
     console.error(`[scraper] Job ${jobId} failed:`, error);
