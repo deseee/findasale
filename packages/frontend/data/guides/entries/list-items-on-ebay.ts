@@ -26,14 +26,12 @@ You only do this once. After that, any item in your sale can be pushed to eBay.
 
 Every item card in the review queue shows a colored border:
 
-| Color | Meaning |
-|-------|---------|
-| **Green** | Ready on FindA.Sale. All required fields for your sale listing are filled. |
-| **Blue** | Ready to push to eBay. All eBay required fields are filled — including weight and dimensions, which eBay requires for calculated shipping but FindA.Sale does not. |
-| **Yellow** | Missing something optional — listing will go live but may underperform (missing a second photo, short description). |
-| **Red** | Missing something required. Listing cannot go live until this is fixed. |
+- **Green** — Ready on FindA.Sale. All required fields are filled.
+- **Blue** — Ready to push to eBay. Weight and dimensions are filled in (eBay requires these; FindA.Sale doesn't).
+- **Yellow** — Missing something optional. The listing will go live but may underperform — usually a short description or only one photo.
+- **Red** — Missing something required. The listing can't go live until this is fixed.
 
-If you see red, tap the item to see what's missing. Common culprits: no photos, no price, no weight or dimensions for calculated shipping. An item can be green (ready on FindA.Sale) while still showing no blue border — that just means it needs weight and dimensions before it can go to eBay.
+An item can be green before it's blue. Green means it's ready for your FindA.Sale listing. Blue means it's also ready for eBay — the difference is usually just weight and dimensions. If you see red, tap the item to find out what's missing.
 
 ---
 
@@ -84,9 +82,9 @@ The listing appears in your eBay seller account within 60 seconds.
 
 ## What happens when it sells
 
-If the item sells on eBay, FindA.Sale marks it sold automatically. The item is removed from your active sale listing. You won't accidentally sell it twice.
+If the item sells on eBay, FindA.Sale marks it sold automatically and removes it from your active sale listing. You won't accidentally sell it twice.
 
-If it sells at your sale first (in-person or through FindA.Sale), you'll need to end the eBay listing manually from your eBay seller account. FindA.Sale marks it sold but doesn't yet push a sold status back to eBay.
+If it sells at your sale first — in-person or through FindA.Sale — the eBay listing is ended automatically. No manual action needed on either side.
 
 ---
 
@@ -112,7 +110,7 @@ The item has no photos, or the photos are still processing. Wait for the review 
 No. You push items one at a time. Only push what makes sense for shipping — fragile items, very large items, or things worth less than $15 after shipping usually aren't worth it.
 
 **Can I change the price on eBay separately from my sale price?**
-Not through FindA.Sale. The price pushed to eBay is your sale price. If you change the price in FindA.Sale after the listing is live, it won't update eBay automatically. End the eBay listing and push again at the new price.
+No — the two stay in sync. If you update the price in FindA.Sale, it pushes to your live eBay listing automatically when you save. If you change the price directly on eBay, it syncs back into FindA.Sale within a few hours. Title, description, and condition work the same way.
 
 **What shipping policies does FindA.Sale use?**
 It uses whatever defaults are set in your eBay seller account. If you haven't set them up, eBay will prompt you when you first connect. Check your eBay account's Business Policies section if you get errors.
@@ -149,7 +147,7 @@ Some items are worth more than your local buyers will pay. For those, push them 
 First, connect your eBay account. Go to Settings, then Integrations, then eBay. Tap Connect, sign in to eBay, and authorize. You only do this once.
 
 **[0:20–0:32]**
-Now go to your review queue. Each item card has a colored border. Green means it's ready on FindA.Sale. Blue means it's ready to push to eBay — that's when weight and dimensions are filled in too. Red means something required is missing. Tap a blue item to open it.
+Now go to your review queue. Each item card has a colored border. Green means it's ready on FindA.Sale. Blue means it's also ready to push to eBay — weight and dimensions are filled in. Red means something required is missing. Tap a blue item to open it.
 
 **[0:32–0:50]**
 Scroll to the eBay section. If you're shipping it, enter the package weight in ounces and the dimensions. If it's pickup only, select Local Pickup. That's the one thing FindA.Sale can't fill in for you — everything else, it handles.
@@ -158,7 +156,7 @@ Scroll to the eBay section. If you're shipping it, enter the package weight in o
 Tap Push to eBay. FindA.Sale sends the title, photos, description, category, condition, and price over to eBay. The listing is live in about 60 seconds. The border on the card turns blue.
 
 **[1:05–1:20]**
-If it sells on eBay, FindA.Sale marks it sold here automatically. No double-selling. If it sells at your sale first, go end the eBay listing from your eBay account — that part isn't automatic yet.
+If it sells on eBay, FindA.Sale marks it sold automatically. No double-selling. If it sells at your sale first, the eBay listing is ended automatically too — no manual step needed.
 
 **[1:20–1:30]**
 If a push fails, the error tells you exactly what's wrong. Missing weight, wrong category, expired account token — tap the item, fix the issue, push again. Usually takes 30 seconds to fix.`,
