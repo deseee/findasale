@@ -114,6 +114,7 @@ async function main() {
   async function postOne(batch: { num: number; items: any[] }): Promise<void> {
     const MAX_RETRIES = 3;
     let attempt = 0;
+    let completedIncremented = false;
 
     while (attempt < MAX_RETRIES) {
       try {
@@ -130,10 +131,14 @@ async function main() {
         });
 
         completed++;
+        completedIncremented = true;
 
         if (!response.ok) {
           if ((response.status === 502 || response.status === 503) && attempt < MAX_RETRIES - 1) {
             attempt++;
+            // Undo increment so the counter stays accurate during retry
+            completed--;
+            completedIncremented = false;
             const delayMs = Math.pow(2, attempt) * 1000;
             console.log(
               `[run-estatesalesnet] (${completed}/${totalBatches}) Batch ${batch.num} HTTP ${response.status} — retrying in ${delayMs}ms (attempt ${attempt}/${MAX_RETRIES})`
@@ -150,16 +155,30 @@ async function main() {
           return;
         }
 
+        // Backend responds 202 (fire-and-forget ingest) — no stats in response body
+        if (response.status === 202) {
+          console.log(
+            `[run-estatesalesnet] (${completed}/${totalBatches}) Batch ${batch.num} — submitted OK`
+          );
+          return;
+        }
+
         const result = (await response.json()) as {
-          stats: { created: number; updated: number; skipped: number; failed: number };
+          stats?: { created: number; updated: number; skipped: number; failed: number };
         };
-        totals.created += result.stats.created;
-        totals.updated += result.stats.updated;
-        totals.skipped += result.stats.skipped;
-        totals.failed += result.stats.failed;
-        console.log(
-          `[run-estatesalesnet] (${completed}/${totalBatches}) Batch ${batch.num} — ${result.stats.created}c / ${result.stats.skipped}s / ${result.stats.failed}f`
-        );
+        if (result.stats) {
+          totals.created += result.stats.created;
+          totals.updated += result.stats.updated;
+          totals.skipped += result.stats.skipped;
+          totals.failed += result.stats.failed;
+          console.log(
+            `[run-estatesalesnet] (${completed}/${totalBatches}) Batch ${batch.num} — ${result.stats.created}c / ${result.stats.skipped}s / ${result.stats.failed}f`
+          );
+        } else {
+          console.log(
+            `[run-estatesalesnet] (${completed}/${totalBatches}) Batch ${batch.num} — OK (no stats)`
+          );
+        }
         return;
       } catch (error) {
         if (attempt < MAX_RETRIES - 1) {
@@ -172,7 +191,10 @@ async function main() {
           continue;
         }
 
-        completed++;
+        // Only increment if the try block never reached completed++ (i.e. fetch itself threw)
+        if (!completedIncremented) {
+          completed++;
+        }
         totals.httpErrors++;
         console.error(
           `[run-estatesalesnet] (${completed}/${totalBatches}) Batch ${batch.num} threw:`,
