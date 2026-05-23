@@ -25,6 +25,15 @@ Sentry.init({
     // rejection causes a second navigation to the same /organizers/[id] URL
     // before the /404 redirect settles. Not actionable — page already 404d.
     if (msg.includes('Invariant: attempted to hard navigate to the same URL')) return null;
+    // Known noise: Facebook/Meta in-app browser injects its own instrumentation
+    // (app://navigation_performance_logger_android). On beforeunload it can throw
+    // "Java object is gone" / "enableDidUserTypeOnKeyboardLogging" as the WebView
+    // tears down. Third-party code we don't control — not actionable.
+    if (msg.includes('Java object is gone') || msg.includes('enableDidUserTypeOnKeyboardLogging')) return null;
+    if (event.exception?.values?.some((v: any) =>
+      v.stacktrace?.frames?.some((f: any) =>
+        typeof f.filename === 'string' && f.filename.includes('navigation_performance_logger'))
+    )) return null;
     return event;
   },
 });
