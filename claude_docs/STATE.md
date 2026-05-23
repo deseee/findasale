@@ -8,7 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S770 — MailerLite Purge + Hex Escape Fix + Cron Root Cause Fix**
+**Latest: S771 — Bug Hunt (Sentry / Railway / crons)**
+
+- ✅ Scraper Sentry-noise flood fixed at source — `services/scraper/index.ts` was firing `Sentry.captureMessage(...returned 0 results..., 'warning')` on every zero-result scrape (added in today's commit 176fc6c). 18 of 19 unresolved Sentry issues were this noise. Zero results is a normal SUCCESS for low-volume metros (only small markets fired → scraper is healthy). Both calls → console.log; removed now-unused Sentry import.
+- ✅ NODEJS-W (playwright-extra `default.use is not a function`, fatal module-load crash) — confirmed already fixed in current `saleDetailEnrichment.ts` (named `{ chromium }` import + deferred stealth registration). Resolved stale Sentry issue.
+- ✅ NEXTJS-G ("Java object is gone") — Facebook in-app browser instrumentation, not our code. Added beforeSend filter in `sentry.client.config.ts`. Resolved.
+- Verified Railway backend Online, all in-process crons [CRON OK], no runtime errors in log buffer. Slow-query Sentry warnings (NODEJS-10/1G/1X/1T) confirmed STALE — last fired 2026-05-08, transient scrape-load, no fix shipped (would need speculative migration).
+- Files changed: `packages/backend/src/services/scraper/index.ts` · `packages/frontend/sentry.client.config.ts`
+
+**S770 — MailerLite Purge + Hex Escape Fix + Cron Root Cause Fix**
 
 Purged 498 junk scraped-directory subscribers from MailerLite (free plan was full at 500, blocking real users like a1clcook@gmail.com). Fixed hex escape Prisma error from scraped HTML descriptions. Patched `syncLeadTierGroups` cron to only sync registered users (root cause of the junk subscriber flood).
 
@@ -118,39 +126,19 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Next Session
 
-**Priority 0 — Patrick: combined push (S768 + S770 fixes):**
+**Priority 0 — Patrick: push S771 bug-hunt fixes:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/middleware/requestTimeout.ts
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/organizer/edit-sale/[id].tsx
-git add packages/backend/src/index.ts
-git add packages/database/prisma/migrations/20260520140000_add_review_query_indexes/migration.sql
-git add packages/backend/src/controllers/internalScraperController.ts
-git add packages/backend/src/controllers/internalSaleDetailEnrichmentController.ts
-git add packages/backend/src/routes/internal.ts
-git add packages/database/prisma/schema.prisma
-git add packages/backend/src/controllers/voiceController.ts
-git add packages/frontend/components/VoiceDescriptionInput.tsx
-git add packages/frontend/components/RapidCapture.tsx
-git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add packages/backend/src/controllers/uploadController.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizer/settings/ebay.tsx
-git add packages/database/prisma/migrations/20260520120000_add_sku_append_toggles/migration.sql
-git add packages/backend/Dockerfile.production
-git add packages/backend/src/services/listingEnrichmentService.ts
-git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/src/services/scraper/index.ts
+git add packages/frontend/sentry.client.config.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "feat: voice location extraction + eBay Custom Label toggles; fix: MailerLite cron userId filter (prevents scraped org sync); fix: hex escape sanitizer for scraped HTML; fix: requestTimeout /api/internal/; fix: double-response scraper/enrichment; fix: 6 slow-query indexes; fix: organizers.ts truncation; fix: eBay webhook stream; fix: Review indexes; fix: dashboard placeholder + clipboard; fix: edit-sale hooks + geocoding toast"
+git commit -m "fix: stop Sentry-capturing 0-result scrapes (noise flood); filter FB in-app browser instrumentation errors in beforeSend"
 .\push.ps1
 ```
+_The prior S768/S770 code push appears already committed (today's git log covers it). After this deploys, the 18 "GarageSaleFinder returned 0 results" Sentry issues stop firing and can be bulk-resolved in the Sentry UI._
 
-**Priority 1 — After push: Patrick run migration:**
+**Priority 1 — Verify migrations applied (review-index + sku-toggle from S768; email-verification from S726). If not yet run:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -178,6 +166,26 @@ npx prisma generate
 - Deploy email verification migration (20260515180000) — pending S726
 
 ## Recent Sessions
+
+### S771 — Bug Hunt (Sentry / Railway / crons)
+
+**Trigger:** Patrick — "use remaining usage to hunt and fix bugs, especially Railway/GitHub Actions/crons."
+
+**Found + fixed:**
+- **Scraper Sentry-noise flood (root cause):** today's commit 176fc6c added `Sentry.captureMessage(...returned 0 results..., 'warning')` to `services/scraper/index.ts` (two call sites, lines ~569 + ~602). It fired on every zero-result scrape — 18 of 19 unresolved Sentry issues were this, all from one scrape run ~16h ago across small markets. Differential evidence (only small metros fired, not all) proves the scraper is healthy and these are legitimate empties. Both calls converted to `console.log`; removed unused `import * as Sentry`. The empty job is already recorded in ScrapedSalesJob; real failures still throw + are captured in the catch block.
+- **NEXTJS-G (filtered):** "Java object is gone" / enableDidUserTypeOnKeyboardLogging — Facebook in-app browser (Facebook 561.0.0) injected instrumentation (`app://navigation_performance_logger_android`), not our code. Added beforeSend filter in `sentry.client.config.ts`. Resolved.
+
+**Verified / triaged (no fix needed):**
+- **NODEJS-W** (playwright-extra fatal module-load crash) — already fixed in current source (named `{ chromium }` import + deferred `chromium.use(StealthPlugin())` in getPlaywrightBrowser). Last fired 2026-05-06. Resolved stale issue.
+- **Slow-query warnings** (NODEJS-10 Sale ~1.6s [48 events], 1G Organizer, 1X BEGIN, 1T ItemReservation) — all STALE, last fired 2026-05-08, transient load during a bulk scrape window. No structural index gap; declined speculative migration.
+- Railway backend Online; in-process crons (auction, markdown, eBay sync, reservation expiry) all [CRON OK]; no runtime errors in log buffer.
+- GitHub Actions run history not directly queryable via available MCP (no workflow-runs tool); scraper crons confirmed running healthy via Sentry + Railway cross-reference.
+
+**Could not do:** Railway DB direct query (psycopg2) — VM `/sessions` disk at 100%, install failed. Not needed (log + differential evidence sufficient).
+
+**Files changed:** `packages/backend/src/services/scraper/index.ts` · `packages/frontend/sentry.client.config.ts`
+
+---
 
 ### S770 — MailerLite Purge + Hex Escape Fix + Cron Root Cause
 

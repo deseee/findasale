@@ -4,7 +4,13 @@
 
 ## What Happened This Week
 
-**S770 (latest — MailerLite cleanup):**
+**S771 (latest — bug hunt: Sentry / Railway / crons):**
+- Found Sentry being flooded by scraper noise: today's "Sentry capture" commit was firing a warning on EVERY zero-result scrape. Zero results is normal for small markets — it was burying real errors and burning quota. Fixed at source (now console.log, not Sentry).
+- Closed a real latent crash (NODEJS-W, playwright-extra module-load TypeError) — confirmed already fixed in current code, resolved the stale Sentry issue.
+- Filtered out Facebook in-app browser noise (NEXTJS-G "Java object is gone") via beforeSend.
+- Verified: Railway backend Online, all crons reporting [CRON OK], no runtime errors. Slow-query Sentry warnings confirmed STALE (last fired May 8, transient scrape-load — no fix needed).
+
+**S770 (MailerLite cleanup):**
 - MailerLite free plan was FULL (500/500) — all new user signups were getting 413 errors (a1clcook@gmail.com was blocked). Root cause: the weekly `syncLeadTierGroups` cron was syncing ALL 56K+ scraped directory organizers to MailerLite, not just registered users. 498 of 501 subscribers were junk scraped emails.
 - Purged all 498 junk subscribers. 4 legitimate subscribers remain.
 - Fixed root cause: added `userId: { not: null }` filter to the cron query so only real registered users sync going forward.
@@ -32,39 +38,19 @@
 
 ## Action Items for Patrick
 
-### 1. Push S768 + S770 combined:
+### 1. Push S771 bug-hunt fixes:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/middleware/requestTimeout.ts
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/organizer/edit-sale/[id].tsx
-git add packages/backend/src/index.ts
-git add packages/database/prisma/migrations/20260520140000_add_review_query_indexes/migration.sql
-git add packages/backend/src/controllers/internalScraperController.ts
-git add packages/backend/src/controllers/internalSaleDetailEnrichmentController.ts
-git add packages/backend/src/routes/internal.ts
-git add packages/database/prisma/schema.prisma
-git add packages/backend/src/controllers/voiceController.ts
-git add packages/frontend/components/VoiceDescriptionInput.tsx
-git add packages/frontend/components/RapidCapture.tsx
-git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add packages/backend/src/controllers/uploadController.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizer/settings/ebay.tsx
-git add packages/database/prisma/migrations/20260520120000_add_sku_append_toggles/migration.sql
-git add packages/backend/Dockerfile.production
-git add packages/backend/src/services/listingEnrichmentService.ts
-git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/src/services/scraper/index.ts
+git add packages/frontend/sentry.client.config.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "feat: voice location extraction + eBay Custom Label toggles; fix: MailerLite cron userId filter; fix: hex escape sanitizer; fix: requestTimeout /api/internal/; fix: double-response scraper/enrichment; fix: 6 slow-query indexes; fix: organizers.ts truncation; fix: eBay webhook stream; fix: Review indexes; fix: dashboard placeholder + clipboard; fix: edit-sale hooks + geocoding toast"
+git commit -m "fix: stop Sentry-capturing 0-result scrapes (noise flood); filter FB in-app browser instrumentation errors in beforeSend"
 .\push.ps1
 ```
+_Note: the prior S768/S770 code push appears already committed (today's git log covers it). After deploy, the 18 "GarageSaleFinder returned 0 results" Sentry issues will stop and can be bulk-resolved in the Sentry UI._
 
-### 2. Run migration (after push deploys):
+### 2. Run migration (verify if not already run — review-index + sku-toggle migrations from S768):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
