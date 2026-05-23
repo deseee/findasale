@@ -8,7 +8,7 @@ const entry: GuideEntry = {
   priority: 1,
   relatedGuides: ['lighting-and-framing', 'when-to-retake', 'multi-angle-photos'],
   videoUrl: undefined,
-  body: `Rapidfire mode lets you photograph every item in a sale without stopping to type titles, set prices, or fill in details. You take photos — one per item — and move on. The app queues everything for review, where you confirm prices and fix anything that needs attention. Most organizers photograph 60 items in about five minutes.
+  body: `Rapidfire mode lets you photograph every item in a sale without stopping to type titles, set prices, or fill in details. You take photos — one per item — and move on. The app queues everything for review, where you confirm prices and fix anything that needs attention. Most organizers photograph 100 items in about an hour.
 
 This guide is for anyone running a sale with a lot of items: yard sales, estate sales, flea market booths, consignment drop-offs, auctions. If you're listing more than 10 items, use this mode.
 
@@ -84,7 +84,7 @@ The orange **Retake** nudge appears on any photo where the image quality may aff
 ## Common questions
 
 **How long does this actually take?**
-For a typical yard sale or estate sale room (20–30 items), most organizers finish photographing in under two minutes. Review takes longer — budget 3–5 minutes per 20 items if you're reviewing prices carefully.
+For a typical yard sale or estate sale room (20–30 items), most organizers finish photographing in about 15–20 minutes. Review adds time on top — budget a few minutes per 10 items if you're checking prices carefully.
 
 **What if I photographed an item twice?**
 Delete the duplicate in review. Tap the item, then tap the trash icon. Only approved items get listed.
@@ -153,7 +153,7 @@ The orange Retake nudge means a photo might be hard for buyers to read. You can 
 
 That's it. Photo session, review queue, done.
 
-Most organizers list sixty items in about five minutes of shooting. The rest is just confirming prices.
+Most organizers get through a hundred items in about an hour — shooting and reviewing. The bulk of that time is in the review queue confirming prices.
 
 Tap Add Items to get started.
 
