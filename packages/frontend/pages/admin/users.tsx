@@ -14,6 +14,8 @@ interface User {
   oauthProvider: string | null;
   emailVerified: boolean;
   storefrontSlug: string | null;
+  suspendedAt: string | null;
+  deletedAt: string | null;
 }
 
 interface PaginationInfo {
@@ -35,7 +37,9 @@ const AdminUsers = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ userId: string; newRole: string } | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && (!user || !user.roles?.includes('ADMIN'))) {
@@ -97,6 +101,51 @@ const AdminUsers = () => {
       setError('Failed to update user role');
     } finally {
       setUpdatingRole(null);
+    }
+  };
+
+  const handleSuspendToggle = async (u: User) => {
+    try {
+      setActionLoading(u.id);
+      if (u.suspendedAt) {
+        await api.patch(`/admin/users/${u.id}/unsuspend`);
+        setUsers(users.map(x => x.id === u.id ? { ...x, suspendedAt: null } : x));
+      } else {
+        await api.patch(`/admin/users/${u.id}/suspend`, { suspendReason: 'ADMIN_ACTION' });
+        setUsers(users.map(x => x.id === u.id ? { ...x, suspendedAt: new Date().toISOString() } : x));
+      }
+    } catch (err) {
+      console.error('Error toggling suspension:', err);
+      setError('Failed to update suspension status');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async (userId: string) => {
+    try {
+      setActionLoading(userId);
+      await api.delete(`/admin/users/${userId}`);
+      setUsers(users.map(u => u.id === userId ? { ...u, deletedAt: new Date().toISOString() } : u));
+      setDeleteDialog(null);
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      setError('Failed to delete user');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRestore = async (userId: string) => {
+    try {
+      setActionLoading(userId);
+      await api.patch(`/admin/users/${userId}/restore`);
+      setUsers(users.map(u => u.id === userId ? { ...u, deletedAt: null } : u));
+    } catch (err) {
+      console.error('Error restoring user:', err);
+      setError('Failed to restore user');
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -192,13 +241,23 @@ const AdminUsers = () => {
                   <tr
                     key={u.id}
                     onClick={() => handleRowClick(u)}
-                    className="hover:bg-amber-50 dark:hover:bg-gray-700 dark:bg-gray-900 cursor-pointer"
+                    className={`hover:bg-amber-50 dark:hover:bg-gray-700 cursor-pointer ${
+                      u.deletedAt ? 'opacity-50 bg-red-50 dark:bg-red-900/10' : 'dark:bg-gray-900'
+                    }`}
                   >
                     <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 font-medium">
-                      {u.name}
-                      {!u.emailVerified && (
-                        <span className="ml-2 text-xs text-orange-500 dark:text-orange-400" title="Email not verified">●</span>
-                      )}
+                      <span className="flex items-center gap-2 flex-wrap">
+                        {u.name}
+                        {!u.emailVerified && (
+                          <span className="text-xs text-orange-500 dark:text-orange-400" title="Email not verified">●</span>
+                        )}
+                        {u.suspendedAt && (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">Suspended</span>
+                        )}
+                        {u.deletedAt && (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">Deleted</span>
+                        )}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{u.email}</td>
                     <td className="px-6 py-4 text-sm">
@@ -236,16 +295,48 @@ const AdminUsers = () => {
                     </td>
                     <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{new Date(u.createdAt).toLocaleDateString()}</td>
                     <td className="px-6 py-4 text-sm text-center" onClick={(e) => e.stopPropagation()}>
-                      <select
-                        value={u.role}
-                        onChange={(e) => setConfirmDialog({ userId: u.id, newRole: e.target.value })}
-                        disabled={updatingRole === u.id}
-                        className="px-2 py-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-xs focus:outline-none focus:ring-2 focus:ring-amber-600"
-                      >
-                        <option value="USER">User</option>
-                        <option value="ORGANIZER">Organizer</option>
-                        <option value="ADMIN">Admin</option>
-                      </select>
+                      <div className="flex items-center gap-1 justify-center flex-wrap">
+                        <select
+                          value={u.role}
+                          onChange={(e) => setConfirmDialog({ userId: u.id, newRole: e.target.value })}
+                          disabled={updatingRole === u.id}
+                          className="px-2 py-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-xs focus:outline-none focus:ring-2 focus:ring-amber-600"
+                        >
+                          <option value="USER">User</option>
+                          <option value="ORGANIZER">Organizer</option>
+                          <option value="ADMIN">Admin</option>
+                        </select>
+                        {u.deletedAt ? (
+                          <button
+                            onClick={() => handleRestore(u.id)}
+                            disabled={actionLoading === u.id}
+                            className="px-2 py-1 text-xs rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleSuspendToggle(u)}
+                              disabled={actionLoading === u.id}
+                              className={`px-2 py-1 text-xs rounded disabled:opacity-50 ${
+                                u.suspendedAt
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                                  : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/50'
+                              }`}
+                            >
+                              {u.suspendedAt ? 'Unsuspend' : 'Suspend'}
+                            </button>
+                            <button
+                              onClick={() => setDeleteDialog(u.id)}
+                              disabled={actionLoading === u.id}
+                              className="px-2 py-1 text-xs rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -279,13 +370,13 @@ const AdminUsers = () => {
           </div>
         )}
 
-        {/* Confirmation Dialog */}
+        {/* Role Change Confirmation Dialog */}
         {confirmDialog && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm">
               <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-4">Change User Role</h3>
               <p className="text-warm-600 dark:text-warm-400 mb-6">
-                Are you sure you want to change this user's role to <strong>{confirmDialog.newRole}</strong>?
+                Are you sure you want to change this user&apos;s role to <strong>{confirmDialog.newRole}</strong>?
               </p>
               <div className="flex gap-3 justify-end">
                 <button
@@ -299,6 +390,32 @@ const AdminUsers = () => {
                   className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700"
                 >
                   Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        {deleteDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm">
+              <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-4">Delete User Account</h3>
+              <p className="text-warm-600 dark:text-warm-400 mb-6">
+                Are you sure you want to delete this account? This can be reversed.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setDeleteDialog(null)}
+                  className="px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDelete(deleteDialog)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                >
+                  Delete
                 </button>
               </div>
             </div>

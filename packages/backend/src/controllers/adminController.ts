@@ -380,6 +380,8 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
           createdAt: true,
           oauthProvider: true,
           emailVerified: true,
+          suspendedAt: true,
+          deletedAt: true,
           purchases: { select: { id: true } },
           organizer: {
             select: {
@@ -403,6 +405,8 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
       createdAt: user.createdAt,
       oauthProvider: user.oauthProvider,
       emailVerified: user.emailVerified,
+      suspendedAt: user.suspendedAt,
+      deletedAt: user.deletedAt,
       purchaseCount: user.purchases.length,
       saleCount: user.organizer?.sales.length || 0,
       storefrontSlug: user.organizer?.customStorefrontSlug || null,
@@ -466,16 +470,84 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// PATCH /api/admin/users/:userId/suspend — toggle user suspension
-// Note: The suspended field doesn't exist in the schema yet, so this is a placeholder
+// PATCH /api/admin/users/:userId/suspend — suspend a user account
 export const suspendUser = async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
-    // For now, just return success — suspended field would need a schema migration
-    res.json({ message: 'User suspension placeholder (requires schema update)' });
+    const { suspendReason } = req.body;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        suspendedAt: new Date(),
+        suspendReason: suspendReason || 'ADMIN_ACTION',
+        tokenVersion: { increment: 1 },
+      },
+    });
+
+    res.json({ success: true, message: 'Account suspended' });
   } catch (error) {
     console.error('Error suspending user:', error);
     res.status(500).json({ message: 'Failed to suspend user' });
+  }
+};
+
+// PATCH /api/admin/users/:userId/unsuspend — unsuspend a user account
+export const unsuspendUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        suspendedAt: null,
+        suspendReason: null,
+      },
+    });
+
+    res.json({ success: true, message: 'Account unsuspended' });
+  } catch (error) {
+    console.error('Error unsuspending user:', error);
+    res.status(500).json({ message: 'Failed to unsuspend user' });
+  }
+};
+
+// DELETE /api/admin/users/:userId — soft-delete a user account
+export const deleteUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        deletedAt: new Date(),
+        tokenVersion: { increment: 1 },
+      },
+    });
+
+    res.json({ success: true, message: 'Account deleted' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ message: 'Failed to delete user' });
+  }
+};
+
+// PATCH /api/admin/users/:userId/restore — restore a soft-deleted user account
+export const restoreUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        deletedAt: null,
+      },
+    });
+
+    res.json({ success: true, message: 'Account restored' });
+  } catch (error) {
+    console.error('Error restoring user:', error);
+    res.status(500).json({ message: 'Failed to restore user' });
   }
 };
 

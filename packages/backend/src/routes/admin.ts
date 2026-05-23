@@ -8,6 +8,9 @@ import {
   getUserById,
   updateUserRole,
   suspendUser,
+  unsuspendUser,
+  deleteUser,
+  restoreUser,
   getSales,
   deleteSale,
   getRecentActivity,
@@ -67,6 +70,9 @@ router.get('/users', getUsers);
 router.get('/users/:userId', getUserById);
 router.patch('/users/:userId/role', updateUserRole);
 router.patch('/users/:userId/suspend', suspendUser);
+router.patch('/users/:userId/unsuspend', unsuspendUser);
+router.delete('/users/:userId', deleteUser);
+router.patch('/users/:userId/restore', restoreUser);
 router.get('/sales', getSales);
 router.delete('/sales/:saleId', deleteSale);
 router.get('/activity', getRecentActivity);

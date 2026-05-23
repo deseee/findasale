@@ -2088,6 +2088,7 @@ router.post('/:id/claim-oauth', authenticate, async (req: AuthRequest, res: Resp
         data: {
           isClaimed: true,
           isUnmanagedListing: false,
+          isHiddenFromDirectory: false,
           claimStatus: 'CLAIMED',
           userId: req.user.id,
         },
