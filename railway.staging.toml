@@ -1,0 +1,22 @@
+# railway.staging.toml — Staging slot configuration
+# Purpose: Faster failure detection for pre-production validation.
+# Differences from railway.toml (production):
+#   - healthcheckTimeout: 120s (vs 300s) — fail fast, do not wait for a slow start
+#   - restartPolicyMaxRetries: 1 (vs 3) — one bad deploy should surface immediately
+#   - restartPolicyType: ON_FAILURE — same as prod, but retries are intentionally low
+
+[build]
+# Same Dockerfile as production — staging must be byte-for-byte equivalent
+dockerfilePath = "packages/backend/Dockerfile.production"
+
+[deploy]
+startCommand = "node /app/packages/backend/dist/index.js"
+
+# Shorter timeout surfaces broken starts in <2 min instead of <5 min.
+# Tune up only if a legitimate cold-start consistently exceeds 120s.
+healthcheckPath = "/"
+healthcheckTimeout = 120
+
+# Fail fast: one retry then abort. Avoids masking repeated crash-loops.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 1
