@@ -308,7 +308,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
     return (
       <div className="w-64 flex-shrink-0 pr-6">
         <div className="sticky top-20">
-          <h2 className="text-lg font-semibold text-warm-900 mb-6">Filters</h2>
+          <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Filters</h2>
           {filterContent}
           {resultCount !== undefined && (
             <p className="text-xs text-warm-500 mt-6">

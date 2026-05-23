@@ -58,7 +58,6 @@ const MapPage = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [saleTypeFilter, setSaleTypeFilter] = useState<SaleTypeFilter>('all');
-  const [filteredPins, setFilteredPins] = useState<SalePin[]>([]);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [activeTrail, setActiveTrail] = useState<ActiveTrail | null>(null);
 
@@ -182,8 +181,8 @@ const MapPage = () => {
     return result;
   }, [sales, dateFilter, saleTypeFilter]);
 
-  // Convert filtered sales to map pins
-  useMemo(() => {
+  // Convert filtered sales to map pins (derived data — no state needed)
+  const filteredPins = useMemo(() => {
     // Build a Set of sale IDs that have an active SALE_BUMP boost
     const featuredSaleIds = new Set(
       (featuredBoosts ?? [])
@@ -191,8 +190,8 @@ const MapPage = () => {
         .map((b) => b.targetId as string)
     );
 
-    const pins = filteredSales
-      .filter((s) => s.lat && s.lng)
+    return filteredSales
+      .filter((s) => s.lat != null && s.lng != null)
       .map((s): SalePin => {
         const now = new Date();
         const saleStart = new Date(s.startDate);
@@ -219,7 +218,6 @@ const MapPage = () => {
           customMapPin: s.organizer?.customMapPin,
         };
       });
-    setFilteredPins(pins);
   }, [filteredSales, featuredBoosts]);
 
   const handleUseLocation = () => {

@@ -8,8 +8,8 @@ const PrivacyPage = () => {
   return (
     <>
       <Head>
-        <title>Privacy Policy \u2013 FindA.Sale</title>
-        <meta name="description" content="Privacy Policy for FindA.Sale \u2014 estate sales, yard sales, auctions, and flea markets. How we collect, use, and protect your personal information." />
+        <title>Privacy Policy – FindA.Sale</title>
+        <meta name="description" content="Privacy Policy for FindA.Sale — estate sales, yard sales, auctions, and flea markets. How we collect, use, and protect your personal information." />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-4xl mx-auto px-4 py-12">
@@ -35,7 +35,7 @@ const PrivacyPage = () => {
             <h3 className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-2">Transaction Information</h3>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
               We record purchase history, bid history, and payout records. Payment card details are never stored on our
-              servers \u2014 they are transmitted directly to Stripe and handled under their PCI-compliant infrastructure.
+              servers — they are transmitted directly to Stripe and handled under their PCI-compliant infrastructure.
             </p>
 
             <h3 className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-2">Location Information</h3>
