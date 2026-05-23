@@ -6,5 +6,8 @@ CREATE INDEX "User_deletedAt_idx" ON "User"("deletedAt");
 ALTER TABLE "Organizer" ADD COLUMN "isHiddenFromDirectory" BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX "Organizer_isHiddenFromDirectory_idx" ON "Organizer"("isHiddenFromDirectory");
 
--- Backfill: hide all existing scraped/unmanaged organizers from directory
-UPDATE "Organizer" SET "isHiddenFromDirectory" = true WHERE "isUnmanagedListing" = true;
+-- NOTE: Backfill removed from migration to prevent WAL overflow on large tables.
+-- Run backfill separately in batches of 100 after migration completes:
+--   UPDATE "Organizer" SET "isHiddenFromDirectory" = true
+--   WHERE "isUnmanagedListing" = true AND "isHiddenFromDirectory" = false
+--   LIMIT 100;  (repeat until 0 rows affected)
