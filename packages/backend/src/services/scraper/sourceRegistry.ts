@@ -62,7 +62,7 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     type: 'directory',
     runMode: 'metro-loop',
     enabled: true,
-    cronSchedule: '0 0 * * *',
+    // cronSchedule removed — ESN is handled by GH Actions (scrape-estatesalesnet.yml); metro-slug cron always returned 0 results
     qualityTier: 'high',
     run: wrapLegacyStats(scrapeEstateSalesNet),
   },
@@ -117,8 +117,14 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     legalNote: 'Public business directory — same parent company as Canada411 (Thryv Canada). Public fields only, 1 req/sec rate limit.',
     // national-once: no metro or organizerId context needed; wrap to match interface
     run: async (_metro: string, _organizerId: string, _rateLimiter: RateLimiter): Promise<ScrapeStats> => {
-      await runYellowPagesCaScraper();
-      return { itemsFound: 0, itemsCreated: 0, itemsUpdated: 0, itemsSkipped: 0, itemsFailed: 0 };
+      const s = await runYellowPagesCaScraper();
+      return {
+        itemsFound: s.fetched,
+        itemsCreated: s.upserted,
+        itemsUpdated: 0,
+        itemsSkipped: s.fetched - s.matched,
+        itemsFailed: 0,
+      };
     },
   },
 ];

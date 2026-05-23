@@ -4,6 +4,17 @@
  * Public member directory — no ToS prohibition found.
  * Run mode: national-once (iterates all US states, metro param is unused).
  * ADR-073: Directory Scraper Phase 1
+ *
+ * STATUS: BROKEN — JS-rendered, cannot scrape with plain fetch.
+ * The NAA directory runs on Novi AMS. Member results load via JavaScript
+ * after page load; a static HTTP fetch returns only a "Loading..." placeholder.
+ * Full results also require a logged-in member session.
+ * CSS selectors in this file (.member-card, .directory-listing, etc.) will never
+ * match because the member HTML is never present in the static response.
+ *
+ * Fix path: replace fetch() with Playwright headless browser + auth session cookies,
+ * or use the Novi AMS API if NAA exposes a public endpoint.
+ * Verified broken: 2026-05-23.
  */
 
 import * as cheerio from 'cheerio';

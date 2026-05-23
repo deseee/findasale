@@ -1,0 +1,55 @@
+name: Scrape AuctionZip Auctioneer Directory
+
+on:
+  schedule:
+    - cron: '0 6 * * 0'  # Weekly — Sunday 06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: scrape-auctionzip
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    name: AuctionZip Directory Scraper
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: packages/database
+
+      - name: Run AuctionZip Scraper
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { runAuctionZipScraper } from "./src/services/scraper/sources/auctionZipScraper";
+            (async () => { try {
+              await runAuctionZipScraper();
+              console.log("AuctionZip scraper completed successfully");
+              process.exit(0);
+            } catch (err) {
+              console.error("AuctionZip scraper failed:", err);
+              process.exit(1);
+            }
+            })();
+          '

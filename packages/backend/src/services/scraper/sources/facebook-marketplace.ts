@@ -169,7 +169,7 @@ function parseFBListings(response: FBGraphQLResponse): ScrapedItem[] {
         title,
         address: '', // FB doesn't provide street address in search results
         city,
-        state: '', // FB doesn't provide state — infer from reverse geocode later if needed
+        state: metro.split('-').pop()?.toUpperCase() ?? '', // Parse state abbreviation from metro slug (e.g. 'grand-rapids-mi' → 'MI')
         startDate: new Date(),
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default 30 days from now
         sourceUrl: `https://www.facebook.com/marketplace/item/${id}/`,
