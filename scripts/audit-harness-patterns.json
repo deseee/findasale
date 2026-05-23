@@ -1,0 +1,262 @@
+{
+  "version": "1.0.0",
+  "description": "Grep patterns for audit-harness.sh. Each pattern entry has: pattern (ERE), severity, rationale.",
+  "categories": {
+    "security": {
+      "critical": [
+        {
+          "id": "SEC-C-001",
+          "pattern": "(password|passwd|secret|api_key|apikey|auth_token|access_token)\\s*=\\s*['\"][^'\"]{4,}['\"]",
+          "rationale": "Hardcoded credential assignment"
+        },
+        {
+          "id": "SEC-C-002",
+          "pattern": "-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----",
+          "rationale": "Private key material in source"
+        },
+        {
+          "id": "SEC-C-003",
+          "pattern": "sk_(live|test)_[A-Za-z0-9]{24,}",
+          "rationale": "Stripe secret key in source"
+        }
+      ],
+      "high": [
+        {
+          "id": "SEC-H-001",
+          "pattern": "process\\.env\\.[A-Z_]+\\s*\\|\\|\\s*['\"][^'\"]+(pass|secret|key)[^'\"]*['\"]",
+          "rationale": "Env var with non-placeholder secret fallback"
+        },
+        {
+          "id": "SEC-H-002",
+          "pattern": "eval\\s*\\(",
+          "rationale": "eval() — potential code injection vector"
+        },
+        {
+          "id": "SEC-H-003",
+          "pattern": "dangerouslySetInnerHTML",
+          "rationale": "XSS vector — must be reviewed for sanitization"
+        },
+        {
+          "id": "SEC-H-004",
+          "pattern": "helmet\\s*\\(\\s*\\{[^}]*contentSecurityPolicy\\s*:\\s*false",
+          "rationale": "CSP explicitly disabled in helmet config"
+        }
+      ],
+      "medium": [
+        {
+          "id": "SEC-M-001",
+          "pattern": "req\\.body\\.[a-zA-Z]+.*prisma\\.(create|update|upsert)\\s*\\(",
+          "rationale": "Possible unsanitized user input passed directly to Prisma write"
+        },
+        {
+          "id": "SEC-M-002",
+          "pattern": "\\$\\{req\\.(body|query|params)\\.[^}]+\\}",
+          "rationale": "User input interpolated into template string — injection risk"
+        },
+        {
+          "id": "SEC-M-003",
+          "pattern": "cors\\s*\\(\\s*\\{[^}]*origin\\s*:\\s*['\"]\\*['\"]",
+          "rationale": "CORS wildcard origin"
+        }
+      ],
+      "low": [
+        {
+          "id": "SEC-L-001",
+          "pattern": "console\\.(log|debug)\\s*\\(.*req\\.(body|headers)",
+          "rationale": "Request body/headers logged — may leak PII in production"
+        },
+        {
+          "id": "SEC-L-002",
+          "pattern": "http://(?!localhost|127\\.0\\.0\\.1)[a-zA-Z]",
+          "rationale": "Non-localhost HTTP (non-TLS) external URL"
+        }
+      ]
+    },
+    "codeQuality": {
+      "critical": [],
+      "high": [
+        {
+          "id": "CQ-H-001",
+          "pattern": "as\\s+any\\b",
+          "rationale": "Unsafe type cast to any — bypasses type safety"
+        },
+        {
+          "id": "CQ-H-002",
+          "pattern": "//\\s*@ts-ignore",
+          "rationale": "TypeScript error suppression without justification"
+        },
+        {
+          "id": "CQ-H-003",
+          "pattern": "//\\s*@ts-nocheck",
+          "rationale": "Entire file TypeScript checking disabled"
+        }
+      ],
+      "medium": [
+        {
+          "id": "CQ-M-001",
+          "pattern": "console\\.(log|debug|info)\\s*\\(",
+          "rationale": "console.log left in production code"
+        },
+        {
+          "id": "CQ-M-002",
+          "pattern": "//\\s*(TODO|FIXME|HACK|XXX)\\b",
+          "rationale": "Unresolved TODO/FIXME/HACK marker"
+        },
+        {
+          "id": "CQ-M-003",
+          "pattern": ":\\s*any\\b(?!\\s*=>)",
+          "rationale": "Explicit any type annotation"
+        }
+      ],
+      "low": [
+        {
+          "id": "CQ-L-001",
+          "pattern": "^import\\s+.*from\\s+['\"]",
+          "rationale": "Imported symbol — cross-reference for unused imports (informational)"
+        },
+        {
+          "id": "CQ-L-002",
+          "pattern": "\\bconsole\\.warn\\s*\\(",
+          "rationale": "console.warn in production"
+        },
+        {
+          "id": "CQ-L-003",
+          "pattern": "debugger;",
+          "rationale": "debugger statement left in source"
+        }
+      ]
+    },
+    "accessibility": {
+      "critical": [],
+      "high": [
+        {
+          "id": "A11Y-H-001",
+          "pattern": "<img\\s(?![^>]*\\balt=)[^>]*/?>",
+          "rationale": "img element missing alt attribute"
+        },
+        {
+          "id": "A11Y-H-002",
+          "pattern": "<(button|a)\\s[^>]*onClick[^>]*>\\s*<(svg|img)[^>]*/?>\\s*</(button|a)>",
+          "rationale": "Interactive element with only icon child and no accessible label"
+        }
+      ],
+      "medium": [
+        {
+          "id": "A11Y-M-001",
+          "pattern": "<(input|select|textarea)(?![^>]*(aria-label|aria-labelledby|id=))[^>]*>",
+          "rationale": "Form control without accessible label"
+        },
+        {
+          "id": "A11Y-M-002",
+          "pattern": "onClick(?!.*onKey)",
+          "rationale": "onClick handler without matching keyboard handler — check for keyboard accessibility"
+        },
+        {
+          "id": "A11Y-M-003",
+          "pattern": "tabIndex\\s*=\\s*\\{?[2-9][0-9]*\\}?",
+          "rationale": "tabIndex > 1 disrupts natural tab order"
+        }
+      ],
+      "low": [
+        {
+          "id": "A11Y-L-001",
+          "pattern": "aria-hidden\\s*=\\s*['\"]true['\"]",
+          "rationale": "aria-hidden element — verify it is decorative only"
+        },
+        {
+          "id": "A11Y-L-002",
+          "pattern": "role\\s*=\\s*['\"]presentation['\"]",
+          "rationale": "presentation role — verify correct usage"
+        }
+      ]
+    },
+    "performance": {
+      "critical": [],
+      "high": [
+        {
+          "id": "PERF-H-001",
+          "pattern": "await prisma\\.[a-zA-Z]+\\.findMany\\(\\s*\\)",
+          "rationale": "findMany() with no arguments — unbounded table scan"
+        },
+        {
+          "id": "PERF-H-002",
+          "pattern": "for\\s*(await)?\\s*\\([^)]+\\)\\s*\\{[^}]*await prisma",
+          "rationale": "Prisma query inside a loop — likely N+1 pattern"
+        }
+      ],
+      "medium": [
+        {
+          "id": "PERF-M-001",
+          "pattern": "prisma\\.[a-zA-Z]+\\.findMany\\([^)]*\\)(?![^;]*take\\s*:)",
+          "rationale": "findMany() without take/limit — may be unbounded"
+        },
+        {
+          "id": "PERF-M-002",
+          "pattern": "import\\s+[^;]+from\\s+['\"]lodash['\"]",
+          "rationale": "Full lodash import — use lodash/method for tree-shaking"
+        },
+        {
+          "id": "PERF-M-003",
+          "pattern": "import\\s+\\*\\s+as\\s+[a-zA-Z]+\\s+from",
+          "rationale": "Namespace import may prevent tree-shaking"
+        }
+      ],
+      "low": [
+        {
+          "id": "PERF-L-001",
+          "pattern": "useState\\([^)]*\\).*useEffect",
+          "rationale": "useState + useEffect pair — consider React Query for server data"
+        },
+        {
+          "id": "PERF-L-002",
+          "pattern": "\\.map\\s*\\([^)]+\\)\\.filter\\s*\\(",
+          "rationale": "map().filter() — consider filter().map() to reduce iterations"
+        }
+      ]
+    },
+    "configuration": {
+      "critical": [],
+      "high": [
+        {
+          "id": "CFG-H-001",
+          "pattern": "postgresql://[^@]+:[^@]+@(?!process\\.env)",
+          "rationale": "Hardcoded PostgreSQL connection string with credentials"
+        },
+        {
+          "id": "CFG-H-002",
+          "pattern": "(NEXTAUTH_SECRET|JWT_SECRET|SESSION_SECRET)\\s*=\\s*['\"][^'\"]{4,}['\"]",
+          "rationale": "Auth secret hardcoded in source"
+        }
+      ],
+      "medium": [
+        {
+          "id": "CFG-M-001",
+          "pattern": "localhost:\\d+",
+          "rationale": "localhost URL reference — verify not in production code path"
+        },
+        {
+          "id": "CFG-M-002",
+          "pattern": "127\\.0\\.0\\.1",
+          "rationale": "Loopback IP reference"
+        },
+        {
+          "id": "CFG-M-003",
+          "pattern": "ep-[a-z]+-[a-z]+-[a-z0-9]+\\.us-east-[0-9]+\\.aws\\.neon\\.tech",
+          "rationale": "Decommissioned Neon DB hostname reference"
+        }
+      ],
+      "low": [
+        {
+          "id": "CFG-L-001",
+          "pattern": "http://(?!localhost|127\\.0\\.0\\.1)",
+          "rationale": "Non-TLS URL in config — should be https in production"
+        },
+        {
+          "id": "CFG-L-002",
+          "pattern": "\\.env\\.local",
+          "rationale": ".env.local reference — confirm not committed"
+        }
+      ]
+    }
+  }
+}

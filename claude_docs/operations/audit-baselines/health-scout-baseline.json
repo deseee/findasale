@@ -1,0 +1,48 @@
+{
+  "version": "1.0.0",
+  "created": "2026-05-22",
+  "description": "Baseline thresholds for health-scout automated audits",
+  "categories": {
+    "security": {
+      "patterns": ["hardcoded secrets", "exposed API keys", "missing auth middleware", "SQL injection", "XSS vectors", "CSRF missing", "insecure headers"],
+      "maxAllowed": { "critical": 0, "high": 0, "medium": 5, "low": 20 }
+    },
+    "codeQuality": {
+      "patterns": ["console.log in production", "TODO/FIXME/HACK", "any type usage", "unused imports", "dead code"],
+      "maxAllowed": { "critical": 0, "high": 3, "medium": 15, "low": 50 }
+    },
+    "accessibility": {
+      "patterns": ["missing alt text", "missing aria labels", "color contrast", "keyboard navigation", "focus management"],
+      "maxAllowed": { "critical": 0, "high": 2, "medium": 10, "low": 30 }
+    },
+    "performance": {
+      "patterns": ["N+1 queries", "missing indexes", "unbounded queries", "large bundle imports", "missing lazy loading"],
+      "maxAllowed": { "critical": 0, "high": 2, "medium": 8, "low": 25 }
+    },
+    "configuration": {
+      "patterns": ["hardcoded URLs", "missing env vars", "stale env references", "localhost in config"],
+      "maxAllowed": { "critical": 0, "high": 0, "medium": 5, "low": 15 }
+    }
+  },
+  "scanTargets": [
+    "packages/backend/src/**/*.ts",
+    "packages/frontend/pages/**/*.tsx",
+    "packages/frontend/components/**/*.tsx",
+    "packages/database/prisma/schema.prisma",
+    "packages/shared/**/*.ts"
+  ],
+  "excludePaths": [
+    "**/node_modules/**",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/dist/**",
+    "**/.next/**"
+  ],
+  "reportFormat": {
+    "output": "claude_docs/archive/health-reports/",
+    "naming": "health-scout-{date}.md",
+    "includeFilePaths": true,
+    "includeLineNumbers": true,
+    "includeSeverity": true
+  }
+}
