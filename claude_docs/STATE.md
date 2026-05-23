@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S771 — Bug Hunt (Sentry / Railway / crons)**
+**Latest: S774 — Scraper Audit + Admin User Mgmt + Migration Recovery**
+
+Full scraper ecosystem audit: removed 5 dead scrapers (SaleSeker, Newspaper RSS, Canada411, Eventbrite, AuctionNinja dupe), fixed 4 misconfigured scrapers (FB Marketplace state field, YellowPages.ca stats tracking, ESN cron removal, Website Address Friday), fixed backfillBenchmarks dead Prisma query, created AuctionZip GH Actions workflow. Added admin suspend/delete for users + `isHiddenFromDirectory` flag on Organizer. Migration crashed production DB (WAL overflow from bulk UPDATE on 57K rows) — rewrote migration to DDL-only, resolved Prisma failed-migration record, re-applied successfully. Backfill run separately via `prisma db execute`. Postgres region moved from EU West (Amsterdam) to US East by Patrick. Stale DATABASE_URL password discovered and corrected (was `QvnU...` → now `Qlzi...`).
+
+**S771 — Bug Hunt (Sentry / Railway / crons)**
 
 - ✅ Scraper Sentry-noise flood fixed at source — `services/scraper/index.ts` was firing `Sentry.captureMessage(...returned 0 results..., 'warning')` on every zero-result scrape (added in today's commit 176fc6c). 18 of 19 unresolved Sentry issues were this noise. Zero results is a normal SUCCESS for low-volume metros (only small markets fired → scraper is healthy). Both calls → console.log; removed now-unused Sentry import.
 - ✅ NODEJS-W (playwright-extra `default.use is not a function`, fatal module-load crash) — confirmed already fixed in current `saleDetailEnrichment.ts` (named `{ chromium }` import + deferred stealth registration). Resolved stale Sentry issue.
@@ -90,7 +94,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Priority 0 — Patrick: push S773 Facebook export tracking + sold nudge:**
+**Priority 0 — Push S773 Facebook export tracking + sold nudge (if not yet pushed):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/database/prisma/schema.prisma
@@ -113,48 +117,58 @@ git commit -m "feat: track fbExportedAt per item on Facebook XLSX export; nudge 
 **Priority 1 — After Railway deploys S773, run the fbExportedAt migration:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-**Priority 2 — Patrick: also push S771 bug-hunt fixes (if not yet pushed):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/services/scraper/index.ts
-git add packages/frontend/sentry.client.config.ts
-git commit -m "fix: stop Sentry-capturing 0-result scrapes (noise flood); filter FB in-app browser instrumentation errors in beforeSend"
-.\push.ps1
-```
-
-**Priority 3 — Verify migrations applied (review-index + sku-toggle from S768; email-verification from S726). If not yet run:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJaZz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
 
 **Priority 2 — QA: eBay Tier 2B batch (Patrick present + PRO + eBay connected):**
-- #428 Review Card Readiness Borders — verify colored left borders (red/yellow/green/blue) on review queue item cards
-- #427 eBay Local Pickup Mode — edit-item eBay section, verify Local Pickup checkbox present
-- #429 Review Queue Skips Store Description Template — approve item from queue, verify description is item's own not store template boilerplate
-- Verify voice extraction: say "living room" while describing an item — roomTag should auto-fill
-- Verify eBay settings: toggle skuAppendDate/Cost/Location — Custom Label preview should update
+- #428 Review Card Readiness Borders, #427 eBay Local Pickup Mode, #429 Review Queue Skips Store Description Template
+- Verify voice extraction + eBay Custom Label toggles in settings
 
 **Priority 3 — Sentry bugs not yet fixed:**
-- NODEJS-17: ReferenceError `e is not defined` at organizers route (12 events)
-- NODEJS-S: "stream is not readable" at POST /api/ebay/account-deletion (7 events, still active)
-- NODEJS-1Q: slow DB query on Review LEFT JOIN Sale — P1 missing index (separate from indexes added this session)
-- ebayController.ts line ~2726 (25021 retry path) — still uses `FAS-${item.id}` (intentional, matches existing eBay item). Needs buildCustomLabel() applied once retry path is understood.
-
-**Priority 4 — Railway log check (optional):**
-- Check Railway logs for more 413 MailerLite errors like a1clcook@gmail.com (could not access Railway CLI from this session's VM). a1clcook should auto-enroll on next login — `addShopperSubscriber` fires on auth.
+- NODEJS-17: ReferenceError `e is not defined` at organizers route
+- NODEJS-S: "stream is not readable" at POST /api/ebay/account-deletion
+- NODEJS-1Q: slow DB query on Review LEFT JOIN Sale
 
 **Pending Patrick actions:**
 - Deploy email verification migration (20260515180000) — pending S726
 
+**Note:** Railway DATABASE_URL password changed. Old `QvnU...` no longer works. Current password: `Qlzi9PdY34gG6H7zIVOBbJaZz1V1sI2sicifzXhDM8`. All blocks above already use the correct one. Postgres region now US East (moved from EU West this session).
+
 ## Recent Sessions
+
+### S774 — Scraper Audit + Admin User Management + Migration Recovery
+
+**Trigger:** Patrick — "scraper audit — what do we actually have, what works, what's dead weight?"
+
+**Scraper cleanup (5 removed, 4 fixed):**
+- Removed: SaleSeker (dead), Newspaper RSS (dead), Canada411 (dead), Eventbrite (dead), AuctionNinja dupe (redundant — NAA covers same source)
+- Fixed: FB Marketplace missing `state` field, YellowPages.ca stats tracking, ESN cron removal (non-functional), Website Address Friday cron (moved to weekly from daily)
+- Fixed: backfillBenchmarks dead Prisma query (`findMany` on deleted fields)
+- Created: AuctionZip GH Actions workflow (was missing — scraper existed but no cron)
+- NAA scraper: tested selectors, confirmed working, left `enabled: false` for Patrick to activate
+
+**Admin user management:**
+- Added suspend/delete endpoints to admin users controller
+- Added `isHiddenFromDirectory` boolean to Organizer model (scraped organizers hidden by default)
+- Added `deletedAt` soft-delete timestamp to User model
+
+**Migration crash + recovery:**
+- Original migration included `UPDATE "Organizer" SET "isHiddenFromDirectory" = true WHERE "isUnmanagedListing" = true` — bulk UPDATE on ~57K rows caused WAL overflow, Postgres ran out of disk, crashed
+- Database confirmed clean (PostgreSQL transactional DDL rolled back all changes)
+- Rewrote migration to DDL-only (ALTER TABLE + CREATE INDEX, no data manipulation)
+- Resolved Prisma `_prisma_migrations` failed record via `prisma migrate resolve --rolled-back`
+- Re-applied migration successfully
+- Ran backfill separately via `prisma db execute --stdin`
+
+**Infrastructure:**
+- Discovered Postgres was in EU West (Amsterdam) while backend is US East — cross-Atlantic latency on every API call. Patrick moved Postgres to US East during this session.
+- Discovered stale DATABASE_URL password in CLAUDE.md and STATE.md. Old: `QvnU...`, current: `Qlzi...`. All references updated.
+
+**Files changed:** Multiple scraper configs, admin controllers, schema.prisma, migration SQL. All pushed by Patrick during session.
+
+---
 
 ### S773 — Facebook Export Tracking + Sold Nudge (#461)
 
@@ -252,126 +266,11 @@ Synced `strategy/roadmap.md` against ~30 sessions of QA evidence (S718–S769), 
 
 ---
 
-### S768 — CI/Sentry Fixes + Voice Location Extraction + eBay Custom Label Toggles
+### S768 — CI/Sentry Fixes + Voice Location Extraction + eBay Custom Label Toggles (summary)
 
-**Trigger:** Daily health monitor output (automated). Patrick directed "investigate remaining GitHub Actions 2, 3, 4" then "dispatch 1 2 3 in parallel."
-
-**CI/Sentry fixed (3 parallel agents):**
-- ✅ requestTimeout middleware — `/api/internal/` path exempted; Enrich AI timeout was 30s kill switch hitting fire-and-forget routes before 202 response (2/6 runs failing)
-- ✅ NODEJS-1B double-response — `internalScraperController.ts` moved `res.status(202).json()` outside try block; `internalSaleDetailEnrichmentController.ts` + `internal.ts` route added `!res.headersSent` guard in catch
-- ✅ 6 slow-query indexes — Organizer stripeCustomerId (Stripe webhook `findFirst`), subscriptionStatus+subscriptionTier composite, graceEndAt+graceTierBefore, lastScoredAt; User createdAt, roles
-
-**Voice location extraction (Patrick request — no new button):**
-- `extractLocationTag(transcript)` in voiceController.ts — regex patterns for room names (living room, bedroom, garage, attic, kitchen, etc.), bin codes (bin B6), shelf/row/aisle, location/loc codes. Returns title-cased result (e.g. "bin b6" → "Bin B6", "row c shelf two" → "Row C Shelf 2")
-- Wired into VoiceDescriptionInput.tsx — if `result.locationTag` and roomTag empty, auto-fills via `onFieldUpdate({ roomTag })`, appends "room: X" to toast
-- Wired into RapidCapture.tsx `handleVoiceInput` — after description PATCH succeeds, silent PATCH `/items/${itemId}` with `{ roomTag }`, appends to toast
-- Removed: separate room mic button from edit-item/[id].tsx label + RapidCapture overlay badge (Patrick: "too much for the ui")
-- Removed: `roomTag` from uploadController.ts item create (now set via post-creation PATCH in voice handler)
-
-**eBay Custom Label append toggles (Patrick request):**
-- schema.prisma: `skuAppendDate`, `skuAppendCost`, `skuAppendLocation` Boolean @default(false) on Organizer model
-- ebayController.ts: `buildCustomLabel(itemId, organizer, item)` builds `FAS-{id}[ date][ $cost][ location]` based on toggles; replaces hardcoded `FAS-${item.id}` at ~lines 1586 + 1869
-- organizers.ts route: 3 new Zod schema fields + prisma.organizer.update() data
-- ebay.tsx settings page: "Custom Label (SKU) Append" card with live preview + 3 toggle rows
-- Manual migration created: `20260520120000_add_sku_append_toggles/migration.sql` (IF NOT EXISTS guards; `migrate dev` fails on Railway — no shadow DB permission)
-
-**Schema truncation recovery:**
-- Edit tool truncated schema.prisma at line 4689 mid-UnmetDemandSignal; ShopperWaitlistEntry entirely missing
-- Recovered via `git show 683fd4a4:packages/database/prisma/schema.prisma` as clean base
-- Added 3 SKU fields, restored to 4716 lines, pushed as commit 2ba70eb2
-
-**Railway cache-bust:** Dockerfile.production comment updated to `2026-05-20b-force-rebuild (sku-append-toggles)`
-
-**Not fixed this session:**
-- NODEJS-17: ReferenceError `e` at organizers route (12 events)
-- NODEJS-S: stream not readable at eBay account-deletion (7 events)
-- ebayController.ts ~line 2726 retry path still hardcoded `FAS-${item.id}` (intentional)
-
-**Files changed:** `requestTimeout.ts` · `internalScraperController.ts` · `internalSaleDetailEnrichmentController.ts` · `internal.ts` (routes) · `schema.prisma` · `voiceController.ts` · `VoiceDescriptionInput.tsx` · `RapidCapture.tsx` · `edit-item/[id].tsx` · `add-items/[saleId].tsx` · `uploadController.ts` · `ebayController.ts` · `organizers.ts` (routes) · `ebay.tsx` (settings) · `migration.sql` (20260520120000) · `Dockerfile.production`
+CI/Sentry: fixed requestTimeout middleware, NODEJS-1B double-response, 6 slow-query indexes. Features: voice location extraction (roomTag auto-fill), eBay Custom Label append toggles (skuAppendDate/Cost/Location). Schema truncation recovered.
 
 ---
-
-### S766 — QA Sweep (Tier 2C/3A) + 3 Bug Fixes + Test Data Seeded
-
-**Trigger:** Patrick directed "dispatch more QA, be token conscious."
-
-**Fixed:**
-- ✅ #363 — lotNumber text input in auction item form (add-items/[saleId].tsx)
-- ✅ #58 — achievement event hooks: PURCHASE_MADE (POS), ITEM_LISTED, SALE_ATTENDED, ORGANIZER_CLAIMED never fired. Wired to rsvpController, itemController, posPaymentController, referralService.
-- ✅ #221 — shopper holds: "Purchase Now" /checkout 404 fixed → /items/[id]. Button overflow fixed (flex-row + whitespace-nowrap on mobile).
-
-**Verified:**
-- ✅ #356 #271 #29 #289 #402 #285 #406 #288 #350
-
-**eBay (Patrick tested):** #424 broken, #425 two bugs (intermittent toast + stale price on push), #426 broken. All deferred to next session.
-
-**Dropped:** #359 Feature/Pinned Flag — maps to Feature Boost paid addon (post-500 organizer scale, already deferred in roadmap).
-
-**Test data seeded in Railway DB:** Barn Door QA Test Sale published (3 items, holds enabled, safetyNotes, hold for user12). Ended sale created for donation kit QA (3 unsold items).
-
-**Files changed:** `packages/frontend/pages/organizer/add-items/[saleId].tsx` · `packages/frontend/pages/shopper/holds.tsx` · `packages/backend/src/controllers/rsvpController.ts` · `packages/backend/src/controllers/itemController.ts` · `packages/backend/src/controllers/posPaymentController.ts` · `packages/backend/src/services/referralService.ts` · `claude_docs/audits/qa-plan-2026-05-18.md`
-
----
-
-### S765 — Sentry/CI Health Audit + 6 Bug Fixes
-
-**Trigger:** Daily health monitor (scheduled task) ran. Patrick directed "investigate and dispatch repairs."
-
-**Health findings (last 24h):**
-- GitHub Actions: 11 failures — 10x auctioneer/pawnbroker scrapers (LOW, known ongoing), 1x Enrich AI Listing Metadata (FIXED)
-- Backend Sentry: 36 unresolved (14 ignored as stale build artifacts, 2 resolved by fixes, 3 active issues remain)
-- Frontend Sentry: 4 unresolved → all 3 code-related resolved; 1 ServiceWorker (persistent, low priority)
-
-**Bugs fixed (4 parallel agents):**
-- ✅ Hooks-count violations — 5 pages had auth-guard early returns before hook calls. Fixed: message-templates.tsx, coupons.tsx, payouts.tsx, webhooks.tsx, rare-finds.tsx
-- ✅ Global MutationCache onError in _app.tsx — TanStack Query v5 mutateAsync() rejections were unhandled
-- ✅ Sentry beforeSend filter (sentry.client.config.ts) — Dashlane extension errors dropped at source
-- ✅ internalListingEnrichmentController.ts — fire-and-forget pattern; Railway 30s timeout → 503 fixed
-- ✅ internalGeocodingController.ts — same fire-and-forget fix; "Geocode Ungeocoded Sales" workflow now passes
-- ✅ search-facebook-events.ts — parseAddressFromFacebookSlug() + parseAddressFromTitle() added; ~54% of FB Events records will now arrive with real street addresses
-
-**Geocoding investigation findings:**
-- GarageSaleFinder 5,637 null-lat records: parser is fine, addresses are clean — pure throughput backlog from May 16 large scrape. Will self-clear in ~10 nightly runs. No fix needed.
-- Facebook Events 1,130 null-lat records: structural — addresses were always blank at ingest. Fix shipped (slug parser). Existing records unaddressed; future scrapes will geocode correctly.
-
-**Sentry cleanup (MCP):**
-- Resolved: NEXTJS-1 (Error: Rejected), NEXTJS-E (Dashlane), NEXTJS-6 (hooks), NODEJS-1W (enrichment double-response), NODEJS-1V (geocoding double-response)
-- Ignored forever: 13 stale build artifacts (old "Cannot find module" errors, 15-25 days old)
-- Ignored until escalating: NODEJS-1E, NODEJS-11 (geocoding audit warnings, being addressed by FB Events fix)
-
-**Active Sentry issues NOT yet fixed (next dispatch candidates):**
-- NODEJS-1B: "Cannot set headers" at POST /api/internal/scraper/ingest — 81 events (double-response in scraper ingest handler)
-- NODEJS-17: ReferenceError: `e is not defined` at organizers route — 12 events, 10 days ago
-- NODEJS-S: "stream is not readable" at POST /api/ebay/account-deletion — 7 events, last seen 6h ago (active)
-- NODEJS-1Q: Slow DB query 17,391ms on Review LEFT JOIN Sale — P1 missing index
-- NODEJS-B/A: PrismaClientUnknownRequestError at /api/workspace routes — 87 events, 22-25 days old
-
-**Files changed:**
-`packages/frontend/pages/organizer/message-templates.tsx` · `packages/frontend/pages/coupons.tsx` · `packages/frontend/pages/organizer/payouts.tsx` · `packages/frontend/pages/organizer/webhooks.tsx` · `packages/frontend/pages/shopper/rare-finds.tsx` · `packages/frontend/pages/_app.tsx` · `packages/frontend/sentry.client.config.ts` · `packages/backend/src/controllers/internalListingEnrichmentController.ts` · `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/backend/src/services/scraper/sources/search-facebook-events.ts`
-
----
-
-### S764 — Tier 2 Chrome QA (18 items verified, 2 P1 bugs found)
-
-**Trigger:** Patrick directed "start tier 2, of the full flow ones what are the most pressing?" after S763 TS build fix confirmed green.
-
-**Verified:** ✅ #433 #434 #378 #60 #260 #432 #441 #451 #440 #449 #457 #352 #360 #405 #263 #411 #416 #153 — 18 items confirmed. See Current Status for details.
-
-**Bugs found:**
-- ❌ #363 P1: `lotNumber` input missing from organizer item form. Backend accepts it (itemController.ts lines 729/903), ItemCard.tsx + items/[id].tsx display it — but no organizer UI to set it. Dispatch to findasale-dev needed.
-- ❌ #439 P1: Backend public sale GET query excludes items. Product schema SSR can't render item data for crawlers. Fix: add items to saleController.ts ~line 313 query. Dispatch to findasale-dev needed.
-- ⚠️ #223 P2: add-items page (highest-use organizer flow) has zero Tooltip/explainer elements. Dashboard has 4, settings has 16, create-sale has 3 — but add-items has none.
-- ⚠️ Brand Kit P2: Logo field is URL-only (no upload button); social links duplicated across Brand Kit + Profile Settings pages.
-
-**No code changes this session. No push required beyond S763 + this STATE.md + patrick-dashboard.md.**
-
----
-
-### S763 — QA Reconciliation + 5 Bug Fixes
-
-**Trigger:** Stale roadmap had ~60 "Pending Chrome QA" entries; Patrick directed low-token document audit before Chrome to avoid re-verifying already-confirmed items.
-
-**Audit (document-only, no Chrome):** Cross-referenced all QA session records. 22 items updated to VERIFIED in roadmap, #414 (Grief Firewall) deprecated (code absent from codebase), #27a/#131 marked SUPERSEDED by #305. Created qa-status-reconciliation-2026-05-18.md, qa-plan-2026-05-18.md, geo-verification-2026-05-18.md.
 
 **Bugs fixed (4 parallel agents):**
 - ✅ #41 Flip Report "Unable to load" — useFlipReport called unconditionally; non-PRO gets 403 before TierGate. Fixed: null-disable hook for non-PRO + early-return TierGate guard.

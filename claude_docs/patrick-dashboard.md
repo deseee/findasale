@@ -18,7 +18,14 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## What Happened This Week
 
-**S773 (latest — Facebook Export Tracking + Sold Nudge):**
+**S774 (latest — Scraper Audit + Admin User Mgmt + Migration Recovery):**
+- Full scraper ecosystem audit. Removed 5 dead scrapers, fixed 4 misconfigured ones, created missing AuctionZip workflow.
+- Added admin ability to suspend/delete users. Added `isHiddenFromDirectory` flag so scraped organizers don't pollute the public directory.
+- Migration crashed production DB (bulk UPDATE on 57K rows overflowed the WAL). Rewrote to DDL-only, recovered cleanly, re-applied, ran backfill separately.
+- Discovered Postgres was in EU West (Amsterdam) while backend is US East — you moved it to US East during session. Cross-Atlantic latency eliminated.
+- Found and fixed stale DATABASE_URL password in all docs. Old password no longer works.
+
+**S773 (Facebook Export Tracking + Sold Nudge):**
 - Researched what's actually possible with Facebook in 2026. Finding: no public API or webhooks for standard Marketplace sellers. The bulk upload is a manual XLSX file organizers upload themselves. Meta Marketplace Partner Program (how Shopify integrates) requires Meta approval — long-term path, not near-term.
 - Built what IS possible: when an organizer downloads the Facebook XLSX, FindA.Sale now records which specific items were exported (`fbExportedAt` timestamp). When any of those items sell on FindA.Sale, the organizer gets an in-app notification: "This item was exported to Facebook — remember to mark it sold there too" with a direct link to their Facebook Marketplace selling page.
 - Wired across all 8 places an item can be marked sold (POS, reservation, Stripe checkout, terminal, eBay webhook, eBay sync cron, items route).
@@ -87,7 +94,7 @@ git commit -m "feat: track fbExportedAt per item on Facebook XLSX export; nudge 
 ### 2. After Railway deploys S773 — run the migration:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJaZz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
@@ -104,7 +111,7 @@ git commit -m "fix: stop Sentry-capturing 0-result scrapes (noise flood); filter
 ### 4. Run pending migrations (review-index + sku-toggle from S768; email-verification from S726 — if not yet run):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJaZz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
