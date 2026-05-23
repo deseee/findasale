@@ -292,7 +292,16 @@ const io = initSocket(httpServer, allowedOrigins);
 // Feature #70: Initialize live feed service for real-time activity streams
 initLiveFeed(io);
 
-app.use(
+app.use((req, res, next) => {
+  // Widget inventory is a public embeddable endpoint — any origin allowed.
+  // Must bypass the allowlist check below before it rejects external domains.
+  if (req.path.startsWith('/api/widget')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+    return next();
+  }
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (curl, Postman, server-to-server)
@@ -303,8 +312,8 @@ app.use(
       return callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
-  })
-);
+  })(req, res, next);
+});
 
 // Feature #106: Initialize Redis client for distributed rate limiting
 // Falls back gracefully to in-memory store if Redis is unavailable
