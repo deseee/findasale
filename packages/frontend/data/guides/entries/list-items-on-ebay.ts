@@ -28,8 +28,8 @@ Every item card in the review queue shows a colored border:
 
 | Color | Meaning |
 |-------|---------|
-| **Green** | Ready to push. All required fields are filled. |
-| **Blue** | Already pushed to eBay. |
+| **Blue** | Ready to push. All required fields are filled. |
+| **Green** | Already pushed to eBay and live. |
 | **Yellow** | Missing something optional — listing will go live but may underperform (missing a second photo, short description). |
 | **Red** | Missing something required. Listing cannot go live until this is fixed. |
 
@@ -60,6 +60,9 @@ This is the one thing FindA.Sale can't fill in for you.
 
 You can offer both — calculated shipping and local pickup — at the same time.
 
+**Tip: capture weight, dimensions, and location with voice notes.**
+During a photo session, you can dictate this information instead of typing it later. While photographing an item, tap the microphone and say something like "twelve ounces, eight by six by four inches, master bedroom bookshelf." The app records it as a note attached to that item. When you open the item in the review queue, the note is there — tap to transfer the values into the shipping fields. You can also do this from the edit item page if you're going back through your inventory after the sale is set up.
+
 ---
 
 ## Step 3. Push the item
@@ -75,7 +78,7 @@ FindA.Sale sends to eBay:
 - Your asking price
 - Your shipping policy, payment policy, and fulfillment settings (pulled from your eBay account defaults)
 
-The listing appears in your eBay seller account within 60 seconds. The item card border turns blue.
+The listing appears in your eBay seller account within 60 seconds. The item card border turns green.
 
 ---
 
@@ -146,7 +149,7 @@ Some items are worth more than your local buyers will pay. For those, push them 
 First, connect your eBay account. Go to Settings, then Integrations, then eBay. Tap Connect, sign in to eBay, and authorize. You only do this once.
 
 **[0:20–0:32]**
-Now go to your review queue. Each item card has a colored border. Green means it's ready to push. Red means something's missing — usually weight or dimensions. Blue means it's already on eBay. Tap a green item to open it.
+Now go to your review queue. Each item card has a colored border. Blue means it's ready to push. Red means something's missing — usually weight or dimensions. Green means it's already on eBay. Tap a blue item to open it.
 
 **[0:32–0:50]**
 Scroll to the eBay section. If you're shipping it, enter the package weight in ounces and the dimensions. If it's pickup only, select Local Pickup. That's the one thing FindA.Sale can't fill in for you — everything else, it handles.
