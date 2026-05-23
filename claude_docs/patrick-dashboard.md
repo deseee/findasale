@@ -2,6 +2,20 @@
 
 ---
 
+## Audit Alerts (Weekly Site Audit — 2026-05-23)
+
+**HIGH — `/categories` page shows raw eBay taxonomy paths as category names.** Instead of clean labels like "Comics" or "Action Figures," shoppers see internal strings like "Collectibles:Comic Books & Memorabilia:Comics:Comics & Graphic Novels." Needs a display-name mapping before this page is shown to new users.
+
+**MEDIUM (4 items):**
+- `/privacy` — em dash renders as literal `—` text
+- `/calendar` — long-running sales repeat on every day, dominating the view
+- `/sales/[id]` — "YARD" badge on an auction sale + breadcrumb missing sale name
+- `/map` — 200 sales listed but zero pins visible on the map
+
+Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
+
+---
+
 ## What Happened This Week
 
 **S772 (latest — roadmap reconciliation audit, docs only):**
