@@ -61,7 +61,7 @@ This is the one thing FindA.Sale can't fill in for you.
 You can offer both — calculated shipping and local pickup — at the same time.
 
 **Tip: capture weight, dimensions, and location with voice notes.**
-During a photo session, you can dictate this information instead of typing it later. While photographing an item, tap the microphone and say something like "twelve ounces, eight by six by four inches, master bedroom bookshelf." The app records it as a note attached to that item. When you open the item in the review queue, the note is there — tap to transfer the values into the shipping fields. You can also do this from the edit item page if you're going back through your inventory after the sale is set up.
+During a photo session, tap the microphone and say something like "twelve ounces, eight by six by four inches, master bedroom bookshelf." The app automatically parses what you said and fills in the correct fields — no typing, no manual transfer. You can do this from the edit item page too, if you're filling in details after the sale is already set up.
 
 ---
 
