@@ -4,7 +4,13 @@
 
 ## What Happened This Week
 
-**S771 (latest — bug hunt: Sentry / Railway / crons):**
+**S772 (latest — roadmap reconciliation audit, docs only):**
+- Brought the roadmap back in sync with reality after ~30 sessions of QA drift. No code changed.
+- ~45 finished features that were still mislabeled "Pending Chrome QA" are now marked SHIPPED & VERIFIED, with a clean summary table showing which session verified each one.
+- Everything still genuinely waiting on a browser test (a handful of eBay items + #338 sold-price comps) is now grouped in one new "Pending Chrome QA Backlog" section — so what's left to test lives in one place.
+- Cleaned up STATE.md: removed 38 already-closed tracking rows, kept the 7 that are still open.
+
+**S771 (bug hunt: Sentry / Railway / crons):**
 - Found Sentry being flooded by scraper noise: today's "Sentry capture" commit was firing a warning on EVERY zero-result scrape. Zero results is normal for small markets — it was burying real errors and burning quota. Fixed at source (now console.log, not Sentry).
 - Closed a real latent crash (NODEJS-W, playwright-extra module-load TypeError) — confirmed already fixed in current code, resolved the stale Sentry issue.
 - Filtered out Facebook in-app browser noise (NEXTJS-G "Java object is gone") via beforeSend.
