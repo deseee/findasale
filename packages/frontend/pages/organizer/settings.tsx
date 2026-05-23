@@ -1968,7 +1968,7 @@ const OrganizerSettingsPage = () => {
           {/* Website Tab — PRO/TEAMS only */}
           {activeTab === 'website' && (
             <div className="space-y-6">
-              {canAccess('PRO') ? (
+              {(tier === 'PRO' || tier === 'TEAMS') ? (
                 <WebsiteEmbedTab organizerSlug={storefrontSlug || user?.id || ''} />
               ) : (
                 <div className="card p-8 text-center">
