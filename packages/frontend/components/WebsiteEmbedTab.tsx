@@ -108,7 +108,7 @@ export default function WebsiteEmbedTab({ organizerSlug }: WebsiteEmbedTabProps)
   // Fetch organizer's sales for "Which sale?" dropdown
   const { data: sales } = useQuery<Sale[]>({
     queryKey: ['organizer-sales-embed'],
-    queryFn: () => api.get('/sales?organizerOwn=true&limit=20').then((r) => r.data?.sales ?? r.data ?? []),
+    queryFn: () => api.get('/sales/mine').then((r) => r.data?.sales ?? r.data ?? []),
     staleTime: 5 * 60_000,
   });
 
