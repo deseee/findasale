@@ -1,8 +1,10 @@
 name: Scrape Facebook Marketplace
 
 on:
-  schedule:
-    - cron: '0 3 * * 6'  # Saturday 3:00 UTC — weekly (Saturday is otherwise clear)
+  # PARKED S[current] — GitHub Actions Azure IPs are silently blocked by Facebook.
+  # Scraper ran for multiple months and produced ZERO ingested listings (confirmed via DB query).
+  # Keeping workflow_dispatch so it can be manually triggered if residential proxy is added.
+  # schedule removed — do not re-enable without IP solution. See roadmap #380.
   workflow_dispatch:
 
 concurrency:
