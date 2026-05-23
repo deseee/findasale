@@ -52,11 +52,11 @@
     }
   ],
   "env": {
-    "NEXT_PUBLIC_API_URL": "https://backend-staging.up.railway.app"
+    "NEXT_PUBLIC_API_URL": "https://backend-production.up.railway.app"
   },
   "build": {
     "env": {
-      "NEXT_PUBLIC_API_URL": "https://backend-staging.up.railway.app"
+      "NEXT_PUBLIC_API_URL": "https://backend-production.up.railway.app"
     }
   }
 }

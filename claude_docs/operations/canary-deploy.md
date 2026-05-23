@@ -11,31 +11,36 @@
 ```
 PR opened
   └── Vercel auto-builds a preview URL (unique per commit)
-        └── Preview env points NEXT_PUBLIC_API_URL at staging backend
-              └── Manual or CI smoke test on preview URL
+        └── Preview env points NEXT_PUBLIC_API_URL at production backend
+              └── Manual or Claude smoke test on preview URL
                     └── PR merged to main
                           ├── Vercel auto-deploys frontend to production
                           └── Railway auto-deploys backend to production
-                                └── canary-rollback.sh runs (CI or manual)
+                                └── canary-rollback.sh runs (Claude or manual)
                                       ├── PASS → deployment confirmed healthy
                                       └── FAIL → auto-rollback triggered
 ```
+
+> **Decision (2026-05-22):** No separate Railway staging service. Preview builds
+> hit the production API. The canary script runs post-deploy against production.
+> Rationale: solo founder, pre-revenue — staging overhead adds cost with no return.
+> Revisit when team grows or revenue justifies the spend.
 
 ### Stage details
 
 | Stage | Platform | Config file | Auto-triggered |
 |-------|----------|-------------|----------------|
 | Preview | Vercel | `packages/frontend/vercel.json` | Yes — every PR |
-| Staging backend | Railway | `railway.staging.toml` | Manual or CI |
+| Staging backend | Railway | `railway.staging.toml` | **Not provisioned** — reserved for future |
 | Production frontend | Vercel | Vercel project settings | Yes — push to main |
 | Production backend | Railway | `railway.toml` | Yes — push to main |
 
 ### Preview environment behaviour
 
 - Every PR automatically gets a unique Vercel preview URL (`https://<hash>.vercel.app`).
-- The preview build sets `NEXT_PUBLIC_API_URL` to the staging backend URL via `vercel.json` `env` + `build.env`.
+- The preview build sets `NEXT_PUBLIC_API_URL` to the production backend URL via `vercel.json` `env` + `build.env`. No separate staging backend is provisioned.
 - All preview responses include the header `X-Deployment-Type: preview` for easy identification in browser devtools or logs.
-- Preview deploys are non-destructive — they never touch the production database or Railway production service.
+- Preview deploys are non-destructive — they use the production API but only for read testing. Destructive write testing should be done with test accounts.
 
 ---
 
@@ -139,12 +144,11 @@ Or: Vercel dashboard → project → Deployments → find the last healthy deplo
 
 | Variable | Preview | Staging | Production |
 |----------|---------|---------|------------|
-| `NEXT_PUBLIC_API_URL` | Staging backend URL (set in `vercel.json`) | N/A (backend only) | Production backend URL (Vercel project env) |
-| `NODE_ENV` | `production` (Next.js build) | `production` | `production` |
-| `DATABASE_URL` | Staging DB (set in Railway staging service) | Staging DB | Production Railway DB |
-| `RAILWAY_ENVIRONMENT` | — | `staging` | `production` |
+| `NEXT_PUBLIC_API_URL` | Production backend URL (set in `vercel.json`) | N/A (not provisioned) | Production backend URL (Vercel project env) |
+| `NODE_ENV` | `production` (Next.js build) | — | `production` |
+| `DATABASE_URL` | — (frontend only) | — | Production Railway DB |
 
-**Critical:** The staging Railway service must have its own `DATABASE_URL` pointing to a staging/shadow database, not the production Railway PostgreSQL instance. Never point staging at the production DB.
+**Note:** No staging service is provisioned. If one is added later, it MUST have its own `DATABASE_URL` pointing to a separate database — never the production instance.
 
 ---
 
