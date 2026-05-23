@@ -281,8 +281,8 @@ const RegisterPage = () => {
               />
             </div>
             <div>
-              <label htmlFor="dateOfBirth" className="sr-only">
-                Date of Birth
+              <label htmlFor="dateOfBirth" className="block text-xs text-warm-600 dark:text-warm-400 mb-1 px-1">
+                Date of Birth <span className="text-warm-400 dark:text-warm-500">(required to verify you&apos;re 13 or older)</span>
               </label>
               <input
                 id="dateOfBirth"
@@ -294,7 +294,7 @@ const RegisterPage = () => {
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-warm-300 dark:border-gray-600 placeholder-warm-500 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-amber-500 focus:border-amber-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-800"
                 aria-invalid={!!ageError}
                 aria-describedby={ageError ? "age-error" : undefined}
-              aria-label="Date of Birth" />
+                aria-label="Date of Birth" />
               {ageError && (
                 <p id="age-error" role="alert" className="mt-1 text-sm text-red-600 dark:text-red-400">{ageError}</p>
               )}
