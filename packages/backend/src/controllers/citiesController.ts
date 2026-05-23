@@ -150,6 +150,7 @@ export async function getCityDirectory(req: Request, res: Response) {
     const organizers = await prisma.organizer.findMany({
       where: {
         isUnmanagedListing: true,
+        isHiddenFromDirectory: false,
         directoryStatus: 'ACTIVE',
         address: { contains: cityName, mode: 'insensitive' },
       },

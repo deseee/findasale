@@ -205,6 +205,7 @@ model User {
   bidCancellationCount Int               @default(0) // Total bids cancelled by user (as buyer)
   suspendedAt          DateTime? // Account suspension timestamp (null = active)
   suspendReason        String? // Reason for suspension: SERIAL_CHARGEBACKS, BID_CANCEL_PATTERN, COLLUSION_SUSPECT
+  deletedAt            DateTime? // Soft-delete timestamp (null = active)
   // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
   sourcebookEntries    SourcebookEntry[] @relation("SourcebookAuthor")
   organizedSourcebook  SourcebookEntry[] @relation("OrganizerSourcebook")
@@ -262,6 +263,7 @@ model User {
   @@index([guildXp])
   @@index([explorerRank])
   @@index([suspendedAt])
+  @@index([deletedAt])
   @@index([xpExpiresAt]) // D-XP-002: For nightly expiry cron query
   @@index([lastXpActivityAt]) // D-XP-002: For tracking last activity
   @@index([deviceFingerprint]) // Platform Safety #118: Fast fraud detection lookups
@@ -420,6 +422,7 @@ model Organizer {
   claimStatus              String   @default("UNCLAIMED") // "UNCLAIMED" | "INVITED" | "CLAIMED" | "OPTED_OUT"
   isClaimed                Boolean  @default(true)  // True for all organizer-managed listings; scrapers set false
   isUnmanagedListing       Boolean  @default(false) // True for scraped/unverified listings not yet claimed
+  isHiddenFromDirectory    Boolean  @default(false) // True = hidden from public directory/search; set for scraped orgs, cleared on claim
   claimEmails              DirectoryClaimEmail[]
   // ADR-073: Verified Organizer autofill sources (migration 20260430300000)
   verificationSource       String?
@@ -502,6 +505,7 @@ model Organizer {
   @@index([claimStatus])
   @@index([isClaimed]) // leadScoringService nightly batch filter — fixes Sentry FINDASALE-NODEJS-1G
   @@index([isUnmanagedListing]) // leadScoringService + admin queries — fixes Sentry FINDASALE-NODEJS-1G
+  @@index([isHiddenFromDirectory]) // Public directory queries filter on this flag
   @@index([esnOrgId])
   @@index([dedupeKey])
   @@index([corroborationScore])
