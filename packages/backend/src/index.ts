@@ -249,6 +249,7 @@ import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
 import saleOfTheDayRoutes from './routes/saleOfTheDay'; // Feature #401: Sale of the Day
 import clearanceRoutes from './routes/clearance'; // Feature #460: End-of-Sale Auto-Liquidation clearance discovery
+import widgetRoutes from './routes/widget'; // Public embeddable widget inventory
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -581,6 +582,14 @@ app.use('/api/categories', categoriesRoutes);                          // ADR-07
 app.use('/api/internal', internalRoutes);                              // ADR-076: Internal scraper endpoint
 app.use('/api/public', saleOfTheDayRoutes);                            // Feature #401: Sale of the Day (public, no auth)
 app.use('/api/clearance', clearanceRoutes);                              // Feature #460: End-of-Sale clearance discovery (public, no auth)
+// Widget inventory: public, unauthenticated, wildcard CORS (per-route only — global CORS unchanged)
+app.use('/api/widget', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+  next();
+}, widgetRoutes);                                                          // Public embeddable widget (embed feature)
 app.use('/api/outreach', outreachRoutes);                             // Phase 1: Cold outreach email pipeline
 app.use('/api/unsubscribe', unsubscribeRoutes);                        // Unsubscribe / Preferences
 app.use('/api/earnings', earningsPdfRoutes);                           // Payout PDF Export (/api/earnings/pdf)

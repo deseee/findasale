@@ -176,3 +176,17 @@ export const supportChatLimiter = rateLimit({
   standardHeaders: false,
   legacyHeaders: false,
 });
+
+/**
+ * Widget inventory limiter: 60 requests per minute per IP (public embed endpoint)
+ * IP-keyed only — no user auth on this public route.
+ */
+export const widgetInventoryLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,
+  keyGenerator: (req: Request) => req.ip ?? '0.0.0.0',
+  validate: false,
+  message: 'Too many widget requests from this IP, please try again later.',
+  standardHeaders: false,
+  legacyHeaders: false,
+});

@@ -28,6 +28,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io as socketIO } from 'socket.io-client';
+import WebsiteEmbedTab from '../../components/WebsiteEmbedTab';
 
 const OrganizerSettingsPage = () => {
   const router = useRouter();
@@ -36,7 +37,7 @@ const OrganizerSettingsPage = () => {
   const { showSurvey } = useFeedbackSurvey();
   const { tier, isPro } = useOrganizerTier();
   const { isLowBandwidth, networkType, toggleLowBandwidth } = useNetworkQuality();
-  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security' | 'help' | 'ebay'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security' | 'help' | 'ebay' | 'website'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
@@ -442,7 +443,7 @@ const OrganizerSettingsPage = () => {
     }
 
     // Set active tab from query param (e.g. /organizer/settings?tab=profile)
-    const validTabs = ['payments', 'notifications', 'profile', 'subscription', 'appearance', 'verification', 'security', 'help', 'ebay'];
+    const validTabs = ['payments', 'notifications', 'profile', 'subscription', 'appearance', 'verification', 'security', 'help', 'ebay', 'website'];
     if (router.query.tab && validTabs.includes(router.query.tab as string)) {
       setActiveTab(router.query.tab as any);
     }
@@ -658,8 +659,8 @@ const OrganizerSettingsPage = () => {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto flex-nowrap">
-            {['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'ebay', 'help'].map((tab) => {
-              const tabLabel = tab === 'verification' ? 'Get Verified' : tab.charAt(0).toUpperCase() + tab.slice(1);
+            {(['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'ebay', ...(tier !== 'SIMPLE' && tier !== null ? ['website'] : []), 'help'] as const).map((tab) => {
+              const tabLabel = tab === 'verification' ? 'Get Verified' : tab === 'website' ? 'Website' : tab.charAt(0).toUpperCase() + tab.slice(1);
               return (
                 <button
                   key={tab}
@@ -1961,6 +1962,31 @@ const OrganizerSettingsPage = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Website Tab — PRO/TEAMS only */}
+          {activeTab === 'website' && (
+            <div className="space-y-6">
+              {canAccess('PRO') ? (
+                <WebsiteEmbedTab organizerSlug={storefrontSlug || user?.id || ''} />
+              ) : (
+                <div className="card p-8 text-center">
+                  <div className="text-4xl mb-4">🔒</div>
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-2">
+                    This feature is available on PRO and TEAMS plans.
+                  </h2>
+                  <p className="text-warm-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+                    Add a live inventory widget to your own website — shoppers can browse your listings without leaving your page.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('subscription')}
+                    className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition"
+                  >
+                    Upgrade to PRO →
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
