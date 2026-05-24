@@ -11,6 +11,7 @@ export const getBrandFollows = async (req: AuthRequest, res: Response) => {
     const brandFollows = await prisma.brandFollow.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
+      take: 200,
       select: { id: true, brandName: true, notifyEmail: true, notifyPush: true, createdAt: true },
     });
     res.json(brandFollows);
