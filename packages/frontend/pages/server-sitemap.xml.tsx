@@ -227,4 +227,9 @@ export async function getServerSideProps(ctx: any) {
   } catch (error) {
     console.error('Error generating sitemap:', error);
     // Return empty sitemap if there's an error
-    ret
+    return getServerSideSitemap(ctx, []);
+  }
+}
+
+// Default export to prevent next.js errors
+export default function Sitemap() {}
