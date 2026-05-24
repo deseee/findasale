@@ -727,6 +727,11 @@ const AdminDashboard = () => {
           <p className="text-warm-600 dark:text-warm-400 text-sm">View creator/affiliate dashboard and analytics</p>
         </Link>
 
+        <Link href="/admin/creators" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 transition">
+          <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Creators Admin</h3>
+          <p className="text-warm-600 dark:text-warm-400 text-sm">Manage all affiliates — codes, clicks, referrals, earnings</p>
+        </Link>
+
         <Link href="/admin/scraper" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-green-50 dark:bg-green-900/20 border border-green-100 transition">
           <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Scraper Management</h3>
           <p className="text-warm-600 dark:text-warm-400 text-sm">Trigger scrape runs, view sources, monitor results</p>
