@@ -10,6 +10,7 @@ import { notifyFollowersOfNewSale } from '../services/followerNotificationServic
 import { syncOrganizerTier } from '../services/tierService';
 import { notifyMatchedBuyers } from '../services/buyerMatchService';
 import { markSalePublished } from '../services/mailerliteService';
+import { pingIndexNowForSale } from '../services/indexNowService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
@@ -958,6 +959,18 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
           });
         }
       }).catch(() => {});
+
+      // IndexNow: notify search engines of newly published sale + items
+      try {
+        prisma.item.findMany({ where: { saleId: updated.id }, select: { id: true } }).then((items) => {
+          const itemIds = items.map((item) => item.id);
+          pingIndexNowForSale(updated.id, itemIds).catch((err) =>
+            console.error('[IndexNow] ping failed:', err)
+          );
+        }).catch((err) => console.error('[IndexNow] failed to fetch item IDs:', err));
+      } catch {
+        // Non-blocking — never fail a publish because of IndexNow
+      }
     }
 
     // Phase 31: When sale is marked ENDED, recalculate organizer's tier
