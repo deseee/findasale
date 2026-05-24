@@ -1545,24 +1545,71 @@ export const getDrilldown = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// GET /api/admin/outreach-opens — list emails with openedAt set
+// GET /api/admin/outreach-opens — list emails with any touch opened
 export const getOutreachOpens = async (req: AuthRequest, res: Response) => {
   try {
-    const opens = await prisma.directoryClaimEmail.findMany({
-      where: { openedAt: { not: null } },
-      orderBy: { openedAt: 'desc' },
+    const rows = await (prisma as any).directoryClaimEmail.findMany({
+      where: {
+        OR: [
+          { touch1OpenedAt: { not: null } },
+          { touch2OpenedAt: { not: null } },
+          { touch3OpenedAt: { not: null } },
+          { touch4OpenedAt: { not: null } },
+        ],
+      },
       select: {
         emailAddress: true,
-        organizerName: true,
-        city: true,
-        state: true,
-        website: true,
-        sentAt: true,
-        openedAt: true,
-        touchNumber: true,
         status: true,
+        touch1SentAt: true,
+        touch1OpenedAt: true,
+        touch2SentAt: true,
+        touch2OpenedAt: true,
+        touch3SentAt: true,
+        touch3OpenedAt: true,
+        touch4SentAt: true,
+        touch4OpenedAt: true,
+        organizer: {
+          select: {
+            businessName: true,
+            website: true,
+            address: true,
+          },
+        },
       },
+      orderBy: [
+        { touch4OpenedAt: 'desc' },
+        { touch3OpenedAt: 'desc' },
+        { touch2OpenedAt: 'desc' },
+        { touch1OpenedAt: 'desc' },
+      ],
     });
+
+    // Flatten: find most recent open per row
+    const opens = rows.map((r: any) => {
+      const touchOpens = [
+        { touch: 1, sentAt: r.touch1SentAt, openedAt: r.touch1OpenedAt },
+        { touch: 2, sentAt: r.touch2SentAt, openedAt: r.touch2OpenedAt },
+        { touch: 3, sentAt: r.touch3SentAt, openedAt: r.touch3OpenedAt },
+        { touch: 4, sentAt: r.touch4SentAt, openedAt: r.touch4OpenedAt },
+      ].filter((t) => t.openedAt);
+
+      const latest = touchOpens.sort(
+        (a, b) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
+      )[0];
+
+      return {
+        emailAddress: r.emailAddress,
+        organizerName: r.organizer?.businessName ?? null,
+        website: r.organizer?.website ?? null,
+        address: r.organizer?.address ?? null,
+        status: r.status,
+        touchNumber: latest?.touch ?? null,
+        sentAt: latest?.sentAt ?? null,
+        openedAt: latest?.openedAt ?? null,
+        allOpens: touchOpens,
+      };
+    });
+
     res.json({ count: opens.length, opens });
   } catch (error: any) {
     console.error('Error fetching outreach opens:', error);
