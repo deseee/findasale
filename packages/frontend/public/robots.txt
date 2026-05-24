@@ -3,6 +3,7 @@ Allow: /
 Allow: /sales
 Allow: /items
 Allow: /organizers
+Allow: /organizers/
 Allow: /search
 Allow: /categories
 Allow: /city
