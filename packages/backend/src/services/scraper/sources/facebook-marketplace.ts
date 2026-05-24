@@ -126,7 +126,7 @@ function getMetroCoordinates(metro: string): { lat: number; lng: number } {
 /**
  * Parse Facebook Marketplace GraphQL response for listings
  */
-function parseFBListings(response: FBGraphQLResponse): ScrapedItem[] {
+function parseFBListings(response: FBGraphQLResponse, metro: string): ScrapedItem[] {
   const items: ScrapedItem[] = [];
 
   try {
@@ -273,7 +273,7 @@ export async function scrapeFacebookMarketplace(
           continue;
         }
 
-        const items = parseFBListings(response.data);
+        const items = parseFBListings(response.data, metro);
         console.log(
           `[FacebookMarketplace] Found ${items.length} listings for "${query}" in ${metro}`
         );
