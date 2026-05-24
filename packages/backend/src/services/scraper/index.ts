@@ -486,7 +486,6 @@ export async function getOrCreateScrapedOrganizer(
             bio: `Sale organizer based in ${city}, ${state}.`,
             isClaimed: false,
             isUnmanagedListing: true,
-            isHiddenFromDirectory: true,
             esnOrgId,
             googlePlaceId,
             businessCategory,
