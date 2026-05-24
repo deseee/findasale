@@ -13,7 +13,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const isCanadaFilter = countryFilter === 'CA';
 
     const totalUsers = await prisma.user.count({
-      where: { NOT: [{ email: { endsWith: '@system.finda.sale' } }, { email: { endsWith: '@example.com' } }] },
+      where: { deletedAt: null, NOT: [{ email: { endsWith: '@system.finda.sale' } }, { email: { endsWith: '@example.com' } }] },
     });
     // CONTAMINATION FIX: Count only real organizers, exclude isUnmanagedListing: true
     const totalOrganizers = await prisma.organizer.count({
@@ -44,6 +44,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const newUsersLast7d = await prisma.user.count({
       where: {
         createdAt: { gte: sevenDaysAgo },
+        deletedAt: null,
         NOT: [{ email: { endsWith: '@system.finda.sale' } }, { email: { endsWith: '@example.com' } }],
       },
     });
