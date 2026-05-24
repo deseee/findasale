@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Week of May 24, 2026 (Updated S780)
+# Patrick's Dashboard — Week of May 24, 2026 (Updated S780b)
 
 ---
 
@@ -18,13 +18,14 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## What Happened This Week
 
-**S780 (latest — Deliverability Fix + GitGuardian + CORS + Indexes):**
+**S780/S780b (latest — Deliverability Fix + GitGuardian + CORS + Indexes + Password Rotation + DNS):**
 - Fixed email MIME: plain-text fallback now included in outreach emails (was html-only, hurting deliverability)
 - Fixed CORS P0: `api.finda.sale` wasn't in the CORS allowlist after S779 added it as Railway custom domain — 34 errors in 23hrs
-- GitGuardian alert: live Railway DB password was committed in STATE.md (S776). Removed from files. **You need to rotate the Railway DB password** — it's in git history
+- GitGuardian alert: live Railway DB password was committed in STATE.md (S776). Removed from files. ✅ **Password rotated** — new password active, backend uses reference variable (auto-updates)
 - 7 database indexes added for 5 Sentry slow queries (1–1.7 second queries down to fast indexed lookups)
-- DNS audit: root SPF needs `_spf.google.com` include, root DKIM missing — see action items below
-- All 4 pending pushes from S779 confirmed deployed and live on Vercel
+- ✅ Root SPF DNS updated: added `_spf.google.com` include + changed `?all` → `~all` (stronger anti-spoofing)
+- All S780 code changes confirmed pushed and deployed
+- Migration confirmed applied to Railway DB
 
 **S779 (Outreach Email Deliverability Fix):**
 - Found root cause of 0% open rate: every email body had `backend-production-153c9.up.railway.app` URLs — spam filters blocked them automatically.
@@ -61,50 +62,31 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## Action Items for Patrick
 
-### 1. URGENT — Rotate Railway DB password:
-Railway dashboard → findasale-db service → Variables → change `POSTGRES_PASSWORD`. Then update `DATABASE_URL` on the backend service too. After rotation, update your global CLAUDE.md with the new password.
+### 1. Update Global CLAUDE.md password:
+In your Cowork settings (Global CLAUDE.md), Ctrl+H replace old password `Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8` with new `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`. Both DATABASE_URL lines (internal + public proxy).
 
-### 2. Push S780 changes:
+### 2. Push S780b wrap docs:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/jobs/outreachEmailsCron.ts
-git add packages/backend/src/index.ts
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260524120000_add_performance_indexes/migration.sql
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: MIME text/plain + CORS api.finda.sale + 7 perf indexes; S780 wrap"
+git commit -m "docs: S780b wrap — password rotation + SPF DNS fix complete"
 .\push.ps1
 ```
-Then run migration (after Railway deploys):
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="[Railway DATABASE_URL — get from Railway dashboard Variables tab]"
-npx prisma migrate deploy
-npx prisma generate
-```
 
-### 3. Delete temp scripts (hardcoded credentials — do NOT commit):
+### 3. Delete temp scripts (if still present):
 ```powershell
 Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\database\check-hidden.js"
 Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\database\fix-hidden-backfill.js"
 ```
 
-### 4. DNS fixes for email deliverability:
-- Update root SPF record to: `v=spf1 a mx include:_spf.google.com include:_spf.mlsend.com ~all`
-- Add root DKIM: generate from Google Admin Console for `google._domainkey.finda.sale`
-- Later: upgrade DMARC from `p=none` to `p=quarantine`
-
-### 5. Fix global CLAUDE.md password (manual):
-Change both occurrences of `JaZz` → `JScz` in the DATABASE_URL lines.
-
 ---
 
 ## Next Up
 
-1. Rotate Railway DB password (action #1 above — P0 security)
-2. Push S780 + run migration (action #2)
+1. Update Global CLAUDE.md password (action #1)
+2. Push S780b wrap docs (action #2)
 3. Delete temp scripts (action #3)
-4. DNS fixes for email deliverability (action #4)
-5. user3 TEAMS modal bug + review queue UX improvement
-6. Chrome QA: #424/#425/#426 (needs PRO account with eBay OAuth connected)
+4. user3 TEAMS modal bug + review queue UX improvement
+5. Chrome QA: #424/#425/#426 (needs PRO account with eBay OAuth connected)
+6. DMARC upgrade to `p=quarantine` (after SPF propagation — a few days)

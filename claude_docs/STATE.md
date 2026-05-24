@@ -18,10 +18,18 @@ Audit of S779 priorities plus execution. 4 code fixes, 1 P0 credential leak reme
 - ✅ GitGuardian P0 — PostgreSQL URI (live Railway password) found in STATE.md + patrick-dashboard.md committed in S776. Removed from both files. **Password rotation needed** — credential remains in git history.
 - ✅ 7 performance indexes added for 5 Sentry slow queries (NODEJS-2N/2M/2K/2J/1P): DirectoryClaimEmail outreach cron (status+touch4+touch1, sentAt), Sale (createdAt, status+markdownEnabled+startDate), Organizer (isUnmanagedListing+createdAt, createdAt)
 
-**Deliverability DNS audit findings (Patrick action):**
-- Root SPF missing `_spf.google.com` include (P1)
-- Root DKIM record missing for Google Workspace
-- DMARC at p=none (upgrade to p=quarantine after SPF/DKIM fixed)
+**Deliverability DNS fixes (S780b):**
+- ✅ Root SPF updated: `v=spf1 a mx include:_spf.google.com include:_spf.mlsend.com ~all` (added Google, changed ?all → ~all)
+- Root DKIM for Google: not needed for root domain (root sends via Resend/MailerLite, outreach subdomain already has Google DKIM)
+- DMARC at p=none — upgrade to p=quarantine after SPF propagation confirmed (give it a few days)
+
+**S780b — Railway DB password rotated:**
+- ✅ New password active: `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`
+- ✅ Backend `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` reference variable (auto-rotates)
+- ✅ `packages/database/.env` updated with new password
+- ✅ `scripts/backup-everything.ps1` PGPASSWORD updated
+- ✅ Memory file updated with new password
+- ⚠️ Global CLAUDE.md still has old password — Patrick must update manually
 
 **Sentry scan (6 issues reviewed):**
 - FINDASALE-NODEJS-3: CORS errors — fixed (api.finda.sale origin)
@@ -133,42 +141,14 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action — P0: Rotate Railway DB password**
-The current Railway DB password is in git history (committed in S776 STATE.md). Go to Railway dashboard → findasale-db service → Variables → change `POSTGRES_PASSWORD`. After rotation, update:
-1. Railway `DATABASE_URL` env var on backend service
-2. Global CLAUDE.md (the private one in AppData) with new password
-3. Any local `.env` files
+**Patrick Action — Update Global CLAUDE.md password:**
+Replace old password `Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8` with new `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW` in both DATABASE_URL lines (internal + public proxy). Use Ctrl+H find-and-replace.
 
-**Patrick Action — Push S780 changes:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/jobs/outreachEmailsCron.ts
-git add packages/backend/src/index.ts
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260524120000_add_performance_indexes/migration.sql
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "fix: MIME text/plain + CORS api.finda.sale + 7 perf indexes; S780 wrap"
-.\push.ps1
-```
-Then run migration (after Railway deploys):
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="[Railway DATABASE_URL — get from Railway dashboard Variables tab]"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-**Patrick Action — Delete temp scripts (hardcoded credentials — do NOT commit):**
+**Patrick Action — Delete temp scripts (if still present):**
 ```powershell
 Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\database\check-hidden.js"
 Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\database\fix-hidden-backfill.js"
 ```
-
-**Patrick Action — DNS fixes for email deliverability:**
-- Update root SPF: `v=spf1 a mx include:_spf.google.com include:_spf.mlsend.com ~all`
-- Add root DKIM: generate from Google Admin Console for `google._domainkey.finda.sale`
-- Later: upgrade DMARC to `p=quarantine`
 
 **Priority 1 — Dispatch user3 TEAMS modal bug + review queue UX improvement:**
 - Dispatch findasale-dev to fix SIMPLE tier user seeing "Welcome to TEAMS!" onboarding modal
@@ -179,7 +159,8 @@ Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\datab
 - #425: UI confirmed (✅ "Also push to eBay" checkbox in review queue More Details). End-to-end push not tested without real publish.
 - #426: ✅ fully verified (Best Offers checkbox + conditional fields on edit-item).
 
-**Note:** Global CLAUDE.md has wrong DB password (`JaZz` should be `JScz`). Cannot edit from Cowork session — Patrick must update manually or it will cause auth failures on future migration commands.
+**Priority 3 — DMARC upgrade:**
+- After a few days of SPF propagation, upgrade root `_dmarc` from `p=none` to `p=quarantine` in Vercel DNS.
 
 ## Recent Sessions
 
@@ -197,7 +178,9 @@ DNS deliverability audit: root SPF missing google include (P1), root DKIM missin
 
 Verified all 4 pending pushes from S779 deployed to Vercel (READY). fbExportedAt migration confirmed applied in Railway DB.
 
-Files changed: `packages/backend/src/jobs/outreachEmailsCron.ts`, `packages/backend/src/index.ts`, `packages/database/prisma/schema.prisma`, `packages/database/prisma/migrations/20260524120000_add_performance_indexes/migration.sql`, `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`
+**S780b continuation:** Railway DB password rotated (Patrick did it in Railway dashboard). Backend uses `${{Postgres.DATABASE_URL}}` reference variable — auto-updates. Local `.env` and backup script updated. Root SPF DNS record updated via Chrome in Vercel DNS dashboard: `v=spf1 a mx include:_spf.google.com include:_spf.mlsend.com ~all` (added Google include, changed `?all` → `~all`). S780 code changes confirmed already on GitHub. Migration confirmed applied. All S780 action items complete except: Global CLAUDE.md password update (Patrick manual — Cowork internal file not editable by Claude), temp script deletion, DMARC upgrade (deferred for SPF propagation).
+
+Files changed: `packages/backend/src/jobs/outreachEmailsCron.ts`, `packages/backend/src/index.ts`, `packages/database/prisma/schema.prisma`, `packages/database/prisma/migrations/20260524120000_add_performance_indexes/migration.sql`, `packages/database/.env`, `scripts/backup-everything.ps1`, `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`
 
 ### S779 — Outreach Email Deliverability Fix (DNS + Railway Env)
 
