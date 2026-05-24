@@ -2,6 +2,11 @@ import { MCPToolDefinition } from '../types';
 
 export const getSaleTool: MCPToolDefinition = {
   name: 'get_sale',
+  annotations: {
+    title: 'Get Sale Details',
+    readOnlyHint: true,
+    openWorldHint: true,
+  },
   description: 'Fetch full details for a specific sale including description, organizer info, and images.',
   inputSchema: {
     type: 'object',

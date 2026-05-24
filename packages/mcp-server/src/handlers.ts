@@ -44,10 +44,15 @@ export async function handleSearchSales(
     query,
     limit = 20,
     sortBy,
+    minConfidence,
   } = input as SearchSalesInput;
 
   if (limit && (limit < 1 || limit > 50)) {
     throw new Error('limit must be between 1 and 50');
+  }
+
+  if (minConfidence !== undefined && (minConfidence < 0 || minConfidence > 1)) {
+    throw new Error('minConfidence must be between 0.0 and 1.0');
   }
 
   const params: Record<string, any> = {};
@@ -64,6 +69,7 @@ export async function handleSearchSales(
   if (query) params.query = query;
   if (limit) params.limit = limit;
   if (sortBy) params.sortBy = sortBy;
+  if (minConfidence !== undefined) params.minConfidence = minConfidence;
 
   return fetchJSON<SearchSalesResponse>('get', '/api/sales/search', params);
 }

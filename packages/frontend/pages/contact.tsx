@@ -147,4 +147,8 @@ const ContactPage = () => {
   );
 };
 
+export const getStaticProps = async () => {
+  return { props: {} };
+};
+
 export default ContactPage;

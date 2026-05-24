@@ -739,4 +739,8 @@ const FAQPage = () => {
   );
 };
 
+export const getStaticProps = async () => {
+  return { props: {} };
+};
+
 export default FAQPage;

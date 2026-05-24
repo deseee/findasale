@@ -31,6 +31,7 @@ export interface SaleData {
   organizerName: string;
   organizerId: string;
   images: ImageData[];
+  confidenceScore?: number | null;
 }
 
 export interface SearchSalesResponse {
@@ -151,9 +152,18 @@ export interface ListCategoriesResponse {
 // MCP Tool Definitions
 // ──────────────────────────────────────────────────────────────
 
+export interface MCPToolAnnotations {
+  title?: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
+
 export interface MCPToolDefinition {
   name: string;
   description: string;
+  annotations?: MCPToolAnnotations;
   inputSchema: {
     type: string;
     properties: Record<string, any>;
@@ -177,6 +187,7 @@ export interface SearchSalesInput {
   query?: string;
   limit?: number;
   sortBy?: string;
+  minConfidence?: number;
 }
 
 export interface GetSaleInput {

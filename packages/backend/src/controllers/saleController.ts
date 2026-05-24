@@ -76,7 +76,8 @@ const saleQuerySchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   page: z.string().optional().default('1'),
-  limit: z.string().optional().default('10')
+  limit: z.string().optional().default('10'),
+  minConfidence: z.string().optional()
 });
 
 const saleCreateSchema = z.object({
@@ -182,6 +183,11 @@ export const listSales = async (req: Request, res: Response) => {
       where.lng = { gte: lng - lngDelta, lte: lng + lngDelta };
     }
 
+    const minConfidence = query.minConfidence ? parseFloat(query.minConfidence) : undefined;
+    if (minConfidence !== undefined && !isNaN(minConfidence)) {
+      where.organizer = { directoryConfidenceScore: { gte: minConfidence } };
+    }
+
     const [sales, total] = await Promise.all([
       prisma.sale.findMany({
         where,
@@ -190,7 +196,7 @@ export const listSales = async (req: Request, res: Response) => {
         orderBy: [{ isPinned: 'desc' }, { startDate: 'asc' }],
         include: {
           organizer: {
-            select: { id: true, businessName: true, phone: true, reputationTier: true, user: { select: { customMapPin: true } } }
+            select: { id: true, businessName: true, phone: true, reputationTier: true, directoryConfidenceScore: true, user: { select: { customMapPin: true } } }
           },
           items: {
             select: { organizerDiscountAmount: true, markdownApplied: true }
@@ -250,6 +256,7 @@ export const listSales = async (req: Request, res: Response) => {
         boost: boostBySaleId.get(sale.id) ?? null,
         locked,
         minutesUntilUnlock,
+        confidenceScore: sale.organizer?.directoryConfidenceScore ?? null,
       };
     });
     
@@ -727,6 +734,11 @@ export const searchSales = async (req: Request, res: Response) => {
           },
         };
 
+    const minConfidenceSearch = req.query.minConfidence ? parseFloat(req.query.minConfidence as string) : undefined;
+    const confidenceFilter = (minConfidenceSearch !== undefined && !isNaN(minConfidenceSearch))
+      ? { directoryConfidenceScore: { gte: minConfidenceSearch } }
+      : {};
+
     const sales = await prisma.sale.findMany({
       where: {
         ...scrapedEndedExclusion,
@@ -734,9 +746,10 @@ export const searchSales = async (req: Request, res: Response) => {
           { title: { contains: q, mode: 'insensitive' } },
           { description: { contains: q, mode: 'insensitive' } },
           { tags: { hasSome: [q] } }
-        ]
+        ],
+        ...(Object.keys(confidenceFilter).length > 0 ? { organizer: confidenceFilter } : {}),
       },
-      include: { organizer: { select: { businessName: true } } },
+      include: { organizer: { select: { businessName: true, directoryConfidenceScore: true } } },
       take: 20
     });
 
@@ -752,6 +765,7 @@ export const searchSales = async (req: Request, res: Response) => {
         ...converted,
         locked,
         minutesUntilUnlock,
+        confidenceScore: (sale.organizer as any)?.directoryConfidenceScore ?? null,
       };
     });
 

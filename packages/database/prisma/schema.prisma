@@ -520,6 +520,7 @@ model Organizer {
   @@index([isUnmanagedListing, directoryStatus]) // Sentry slow Organizer COUNT: hot activeScrapedWhere combo used in 7+ adminController queries simultaneously
   @@index([isUnmanagedListing, createdAt]) // Sentry NODEJS-1P: adminController organizer findMany WHERE isUnmanagedListing=false ORDER BY createdAt DESC (real-organizers + recent additions)
   @@index([createdAt]) // Sentry NODEJS-1P: adminController recentAdditions ORDER BY createdAt DESC on large organizer table
+  @@index([directoryConfidenceScore]) // Feature #458: minConfidence filter on public sale search
 }
 
 // Feature #354: OrganizerHours — business hours per day of week

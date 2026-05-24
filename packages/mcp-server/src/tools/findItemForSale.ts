@@ -2,6 +2,11 @@ import { MCPToolDefinition } from '../types';
 
 export const findItemForSaleTool: MCPToolDefinition = {
   name: 'find_item_for_sale',
+  annotations: {
+    title: 'Find Item For Sale',
+    readOnlyHint: true,
+    openWorldHint: true,
+  },
   description:
     'Search for a specific item across all active sales. Use this when a user asks to find a particular object, furniture piece, collectible, or any item available for purchase at a sale.',
   inputSchema: {

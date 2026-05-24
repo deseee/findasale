@@ -2,6 +2,11 @@ import { MCPToolDefinition } from '../types';
 
 export const searchSalesTool: MCPToolDefinition = {
   name: 'search_sales',
+  annotations: {
+    title: 'Search Sales',
+    readOnlyHint: true,
+    openWorldHint: true,
+  },
   description:
     'Search for active estate sales, yard sales, auctions, flea markets, and consignment sales by city, location, or date.',
   inputSchema: {
@@ -51,6 +56,10 @@ export const searchSalesTool: MCPToolDefinition = {
       sortBy: {
         type: 'string',
         description: 'Sort order: relevance, startDate, distance (default: relevance)',
+      },
+      minConfidence: {
+        type: 'number',
+        description: 'Minimum organizer confidence score (0.0–1.0). Use 0.7 for verified entries, 0.4 for third-party-corroborated. Default: no filter.',
       },
     },
   },
