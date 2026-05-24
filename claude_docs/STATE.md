@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S775 — eBay Tier 2B QA + Custom Label Bug Fix**
+**Latest: S776 — isHiddenFromDirectory Investigation + Scraper Fix + Data Recovery**
+
+Investigated whether the S774 `isHiddenFromDirectory` backfill was needed. Finding: the field's only consumer is `citiesController.ts` (city directory SEO pages) — there is no separate "public organizer directory" that uses it. The scraper was incorrectly setting `isHiddenFromDirectory: true` on every new scraped org, hiding them from the one place they're meant to appear. Fixed: removed that line from `scraper/index.ts`. Verified DB: backfill DID run — all 60,236 scraped organizers had `isHiddenFromDirectory = true` (city pages returning zero results, live regression). Ran batched reverse fix in 500-row chunks; all 60,236 restored to `false`. City pages functional again. Temp scripts (`check-hidden.js`, `fix-hidden-backfill.js`) left in `packages/database/` — delete after push.
+
+**Previous: S775 — eBay Tier 2B QA + Custom Label Bug Fix**
 
 Chrome QA of eBay Tier 2B batch: #427 Local Pickup Mode ✅, #428 Review Card Readiness Borders ✅, #429 Description Template on Approve ✅, Voice location extraction ✅ (Patrick verified directly). Bug found and fixed: Custom Label append toggles (`skuAppendDate/Cost/Location`) were not persisting — root cause was GET /organizers/me missing these 3 fields from its response JSON. Fix: 3-line add to `packages/backend/src/routes/organizers.ts`. TypeScript clean. Awaiting Patrick push.
 
@@ -100,21 +104,81 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Priority 0 — Patrick action required: Push the Custom Label fix**
+**Priority 0 — Patrick: push everything pending (3 commits)**
+
+Commit 1 — S776 scraper fix:
 ```powershell
-git add packages/backend/src/routes/organizers.ts
-git commit -m "fix: include skuAppendDate/Cost/Location in GET /organizers/me response"
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/services/scraper/index.ts
+git commit -m "fix: remove isHiddenFromDirectory=true from new scraped org creation (was hiding all new scrapes from city pages)"
 .\push.ps1
 ```
-After push, verify on `/organizer/settings/ebay` — toggle Append Date, save, reload, confirm checkboxes stay checked.
 
-**Priority 1 — Slow query dispatch (Sentry 2K, 2J, 1P, 1G):**
+Commit 2 — S775 Custom Label fix + lockfile:
+```powershell
+pnpm install
+git add packages/backend/src/routes/organizers.ts
+git add pnpm-lock.yaml
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "fix: include skuAppendDate/Cost/Location in GET /organizers/me response; regenerate lockfile for Vercel"
+.\push.ps1
+```
+After Railway deploys: go to `/organizer/settings/ebay`, toggle Append Date, save, reload — checkbox should stay checked.
+
+Commit 3 — S773 Facebook export tracking (after S775 deploys):
+```powershell
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260523120000_add_fb_exported_at/migration.sql
+git add packages/backend/src/controllers/exportController.ts
+git add packages/backend/src/services/facebookNudgeService.ts
+git add packages/backend/src/controllers/posPaymentController.ts
+git add packages/backend/src/controllers/reservationController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/terminalController.ts
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/backend/src/jobs/ebaySoldSyncCron.ts
+git add packages/backend/src/routes/items.ts
+git commit -m "feat: track fbExportedAt per item on Facebook XLSX export; nudge organizer to mark sold on FB when item sells"
+.\push.ps1
+```
+Then run migration:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**Also: delete temp scripts** `packages/database/check-hidden.js` and `packages/database/fix-hidden-backfill.js` (they have credentials hardcoded — don't commit).
+
+**Priority 1 — Continue Chrome QA backlog:**
+Remaining items: #338 (Sold-Price Comps), #424 (eBay locale display), #425 (eBay variation pricing), #426 (eBay listing status), #430 (register form silent error). Needs Patrick present + PRO + eBay connected for eBay items.
+
+**Priority 2 — Slow query dispatch (Sentry 2K, 2J, 1P, 1G):**
 4 slow query warnings remain (1–1.7s). Dispatch findasale-dev to add missing indexes.
 
-**Priority 2 — Continue Chrome QA backlog:**
-Remaining in "Pending Chrome QA Backlog": #338, #424, #425, #426. Also #430 (register form silent error) still unverified.
+**Note:** Global CLAUDE.md has wrong DB password (`JaZz` should be `JScz`). Cannot edit from Cowork session — Patrick must update manually or it will cause auth failures on future migration commands.
 
 ## Recent Sessions
+
+### S776 — isHiddenFromDirectory Investigation + Scraper Fix + Data Recovery
+
+**Trigger:** Patrick — investigate whether the S774 isHiddenFromDirectory backfill was actually needed.
+
+**Finding:** `isHiddenFromDirectory` has exactly 3 usages in the entire codebase: (1) `citiesController.ts` filters `isHiddenFromDirectory: false` to show scraped orgs on city pages, (2) `scraper/index.ts` was creating new orgs with `isHiddenFromDirectory: true`, (3) claim flow sets it to `false` on claim. There is no separate "public organizer directory" — the field gates city page visibility only. S774's intent (hide from "public directory") misidentified the consumer.
+
+**Scraper bug fixed:** Removed `isHiddenFromDirectory: true` from new org creation in `scraper/index.ts` line 489. New scraped orgs will now appear on city pages (column defaults to `false`).
+
+**Data regression found and fixed:** Verified via direct DB query — backfill DID run in S774. All 60,236 scraped organizers had `isHiddenFromDirectory = true`, making every city page return zero organizer results (live, silent regression). Ran batched reverse fix in 500-row chunks. All 60,236 restored to `false`. City pages functional.
+
+**Password discovery:** Correct proxy URL password is `JScz...` (in `packages/database/.env`). Global CLAUDE.md and dashboard.md had stale `JaZz...` — dashboard.md corrected this session. Global CLAUDE.md cannot be edited from Cowork session.
+
+**Files changed:** `packages/backend/src/services/scraper/index.ts`
+**Temp files (delete, do not commit):** `packages/database/check-hidden.js`, `packages/database/fix-hidden-backfill.js`
+
+---
 
 ### S775 — eBay Tier 2B QA + Custom Label Bug Fix
 
