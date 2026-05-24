@@ -1544,3 +1544,28 @@ export const getDrilldown = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to fetch drilldown data' });
   }
 };
+
+// GET /api/admin/outreach-opens — list emails with openedAt set
+export const getOutreachOpens = async (req: AuthRequest, res: Response) => {
+  try {
+    const opens = await prisma.directoryClaimEmail.findMany({
+      where: { openedAt: { not: null } },
+      orderBy: { openedAt: 'desc' },
+      select: {
+        emailAddress: true,
+        organizerName: true,
+        city: true,
+        state: true,
+        website: true,
+        sentAt: true,
+        openedAt: true,
+        touchNumber: true,
+        status: true,
+      },
+    });
+    res.json({ count: opens.length, opens });
+  } catch (error: any) {
+    console.error('Error fetching outreach opens:', error);
+    res.status(500).json({ message: 'Failed to fetch outreach opens', error: error.message });
+  }
+};
