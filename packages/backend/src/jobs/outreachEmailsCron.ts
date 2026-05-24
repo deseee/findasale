@@ -98,6 +98,26 @@ function encodeSubject(subject: string): string {
 }
 
 /**
+ * Convert HTML to plain text for the text/plain MIME part.
+ * Strips tags, decodes common HTML entities, collapses whitespace.
+ */
+const htmlToPlainText = (html: string): string => {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(p|div|h[1-6]|li|tr)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+};
+
+/**
  * Build an RFC 2822 raw email message string with proper MIME headers.
  * Returns base64url-encoded string ready for Gmail API.
  */
@@ -109,6 +129,8 @@ const buildRawEmail = (opts: {
   listUnsubscribe: string;
 }): string => {
   const boundary = `boundary_${uuid().replace(/-/g, '')}`;
+  const plainText = htmlToPlainText(opts.html);
+  const plainBase64 = Buffer.from(plainText, 'utf-8').toString('base64');
   const htmlBase64 = Buffer.from(opts.html, 'utf-8').toString('base64');
   const rawLines = [
     `From: ${opts.from}`,
@@ -118,6 +140,12 @@ const buildRawEmail = (opts: {
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     `List-Unsubscribe: ${opts.listUnsubscribe}`,
     `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
+    '',
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    '',
+    plainBase64,
     '',
     `--${boundary}`,
     `Content-Type: text/html; charset="UTF-8"`,

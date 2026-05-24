@@ -285,6 +285,9 @@ if (!allowedOrigins.includes('https://finda.sale')) {
 if (!allowedOrigins.includes('https://www.finda.sale')) {
   allowedOrigins.push('https://www.finda.sale');
 }
+if (!allowedOrigins.includes('https://api.finda.sale')) {
+  allowedOrigins.push('https://api.finda.sale');
+}
 
 // V1: Initialize Socket.io on the shared HTTP server — mirrors the Express CORS policy
 const io = initSocket(httpServer, allowedOrigins);

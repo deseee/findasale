@@ -518,6 +518,8 @@ model Organizer {
   @@index([totalSales]) // Sentry slow Organizer COUNT: organizer percentile rank query count({ where: { totalSales: { lt: X } } })
   @@index([country]) // Sentry slow Organizer COUNT: adminController Canada analytics filter count({ where: { country: 'CA' } })
   @@index([isUnmanagedListing, directoryStatus]) // Sentry slow Organizer COUNT: hot activeScrapedWhere combo used in 7+ adminController queries simultaneously
+  @@index([isUnmanagedListing, createdAt]) // Sentry NODEJS-1P: adminController organizer findMany WHERE isUnmanagedListing=false ORDER BY createdAt DESC (real-organizers + recent additions)
+  @@index([createdAt]) // Sentry NODEJS-1P: adminController recentAdditions ORDER BY createdAt DESC on large organizer table
 }
 
 // Feature #354: OrganizerHours — business hours per day of week
@@ -923,6 +925,8 @@ model Sale {
   @@index([status, startDate]) // Sentry P0: upcoming sales ordering
   @@index([sourceUrl]) // Sentry P0: scraper deduplication queries
   @@index([status, markdownEnabled]) // Sentry slow query: markdownCron findMany WHERE status=PUBLISHED AND markdownEnabled=true
+  @@index([createdAt]) // Sentry NODEJS-2K: adminController sale.count WHERE createdAt >= 7d ago (sparklines + new sales)
+  @@index([status, markdownEnabled, startDate]) // Sentry NODEJS-2J: markdownCron findMany WHERE status=PUBLISHED AND markdownEnabled=true AND startDate <= now
 }
 
 // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
@@ -4474,6 +4478,8 @@ model DirectoryClaimEmail {
   @@index([emailAddress])
   @@index([touch1SentAt, touch1Opened, touch1Clicked])
   @@index([touch4SentAt])
+  @@index([status, touch4SentAt, touch1SentAt]) // Sentry NODEJS-2N: outreachEmailsCron findMany WHERE status NOT IN (...) AND touch4SentAt IS NULL ORDER BY touch1SentAt
+  @@index([sentAt]) // Sentry NODEJS-2M: outreachEmailsCron findFirst WHERE sentAt != null ORDER BY sentAt DESC
 }
 
 // ADR-074: Metro Sync — top eBay sold items per metro area, synced nightly by metroSyncCron
