@@ -1,7 +1,5 @@
 import { getServerSideSitemapLegacy as getServerSideSitemap } from 'next-sitemap';
 import api from '../lib/api';
-import fs from 'fs';
-import path from 'path';
 
 export async function getServerSideProps(ctx: any) {
   try {
@@ -155,8 +153,7 @@ export async function getServerSideProps(ctx: any) {
     // Generate guide URLs (ADR-075 SEO Content Moat)
     let guideUrls: any[] = [];
     try {
-      const indexPath = path.join(process.cwd(), 'data', 'seo-pages', 'index.json');
-      const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf-8')) as Array<{ slug: string }>;
+      const indexData = require('../data/seo-pages/index.json') as Array<{ slug: string }>;
       guideUrls = indexData.map((entry: any) => ({
         loc: `${baseUrl}/guide/${entry.slug}`,
         lastmod: '2026-05-01',
