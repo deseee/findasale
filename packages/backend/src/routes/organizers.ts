@@ -551,6 +551,9 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       timezone: (organizer as any).timezone || null,
       byAppointment: (organizer as any).byAppointment ?? false,
       returnWindowHours: (organizer as any).returnWindowHours ?? null,
+      skuAppendDate: (organizer as any).skuAppendDate ?? false,
+      skuAppendCost: (organizer as any).skuAppendCost ?? false,
+      skuAppendLocation: (organizer as any).skuAppendLocation ?? false,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);

@@ -54,7 +54,7 @@
 - [x] OAuth credentials (Google, Facebook) → Vercel env vars ✅ (2026-03-06)
 - [x] Platform fee locked at 10% flat ✅ (session 106)
 - [x] VAPID keys confirmed in production ✅ (S679)
-- [ ] **⚠️ Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway**
+- [x] **⚠️ Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway**
 - [x] **Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway** ✅ (S679)
 
 ### Beta Recruitment
@@ -76,10 +76,10 @@
 - [ ] **#394 Full Product Walkthrough** — complete organizer + shopper role walkthrough start to finish (create sale → add items → publish → shopper browses → buys → settlement). Dispatch: `Skill('findasale-qa')`. _Priority 5 — do after QA backlog sprint clears known issues._
 
 ### Pre-Wire (Triggers Met)
-- [ ] Canary Deploy + Auto-Rollback: Add Vercel preview env + Railway staging slot config (trigger met — pre-beta stable)
-- [ ] Audit Automation Library: health-scout baseline JSON + test harness scaffold (trigger met)
-- [ ] Estate Planning Toolkit pre-wire: add `executorUserId` + `estateId` to Organizer schema (zero-build, zero UI)
-- [ ] QuickBooks pre-wire: add QB-compatible column ordering + account codes to existing CSV export
+- [x] Canary Deploy + Auto-Rollback: Add Vercel preview env + Railway staging slot config (trigger met — pre-beta stable)
+- [x] Audit Automation Library: health-scout baseline JSON + test harness scaffold (trigger met)
+- [x] Estate Planning Toolkit pre-wire: add `executorUserId` + `estateId` to Organizer schema (zero-build, zero UI)
+- [x] QuickBooks pre-wire: add QB-compatible column ordering + account codes to existing CSV export
 
 ### Human Verification (Patrick must run)
 - [ ] **Auction E2E — Stripe test mode:** Set auction end time on a test item → click End Auction button → confirm winner notification sent → open Stripe checkout link → complete checkout → confirm organizer close notification fires. (Documented S279; feature shipped S278.)
@@ -429,9 +429,9 @@ Single home for features that are code-shipped but genuinely lack any browser/hu
 | # | Feature | Role | Tier | Why still pending |
 |---|---------|------|------|-------------------|
 | 338 | Surface Sold-Price Comps in Edit-Item UI | ORG | SIMPLE | May be done (backend comps exist); needs Chrome confirm of "based on N sources / median" line before promoting. |
-| 427 | eBay Local Pickup Mode | ORG | PRO | Shipped S727 (Tier 2B); no browser QA evidence yet. |
-| 428 | Review Card Readiness Borders | ORG | ALL | Shipped S727 (Tier 2B); no browser QA evidence yet. |
-| 429 | eBay Push from Review Queue (description template) | ORG | PRO | FIXED S736; fix not yet Chrome-confirmed end-to-end. |
+| 427 | eBay Local Pickup Mode | ORG | PRO | ✅ Chrome QA S775 — SALE_ADDRESS persists on reload confirmed. |
+| 428 | Review Card Readiness Borders | ORG | ALL | ✅ Chrome QA S775 — red border incomplete, blue border complete item confirmed. |
+| 429 | eBay Push from Review Queue (description template) | ORG | PRO | ✅ Chrome QA S775 — description persisted after review queue approve confirmed via API. |
 | 424 | eBay Description Template Fix | ORG | PRO | Shipped S727; no browser QA evidence yet. |
 | 425 | eBay Push from Publish All | ORG | PRO | Shipped S727; no browser QA evidence yet. |
 | 426 | eBay Best Offers UI | ORG | PRO | Shipped S727; no browser QA evidence yet. |
@@ -614,9 +614,9 @@ Infrastructure and internal systems. All code-verified. No browser QA needed.
 | 424 | eBay Description Template Fix | ORG | PRO | S727: {{DESCRIPTION}} placeholder was left literal when item had no description. Fixed: empty-description path now replaces placeholder with empty string. ebayController.ts. Pending Chrome QA. |
 | 425 | eBay Push from Publish All | ORG | PRO | S727: publishMutation.onSuccess in review.tsx was missing eBay push entirely. Fixed: fires for all items with checkbox checked, matching handleApproveAll pattern. Draft warning toast wired. Pending Chrome QA. |
 | 426 | eBay Best Offers UI | ORG | PRO | S727: toggle + auto-accept/auto-decline percentage inputs on edit-item eBay section. Live dollar preview. Threshold validation (decline > accept). Converts to dollar amounts on save. edit-item/[id].tsx. Schema fields already existed (allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt). Pending Chrome QA. |
-| 427 | eBay Local Pickup Mode | ORG | PRO | S727: checkbox on edit-item + review cards sets ebayShippingOverride=LOCAL_PICKUP_ONLY. Smart phrase detector nudge on description/notes. Backend routes to local pickup fulfillment policy (pickupDropOff=true or name match). Pending Chrome QA. |
-| 428 | Review Card Readiness Borders | ORG | ALL | S727: border-l-4 color on each item card in review queue. Red=missing title/price/photo. Yellow=missing category/condition/description. Green=FindA.Sale ready. Blue=green+weight+eBay connected. computeReadiness() helper in review.tsx. Pending Chrome QA. |
-| 429 | eBay Push from Review Queue Skips Store Description Template | ORG | PRO | FIXED S736. review.tsx handleApproveItem and handleApproveAll now include description: editState.description in update payloads. Pending Chrome QA. |
+| 427 | eBay Local Pickup Mode | ORG | PRO | ✅ Chrome QA S775. S727: checkbox on edit-item + review cards sets ebayShippingOverride=LOCAL_PICKUP_ONLY. Smart phrase detector nudge on description/notes. Backend routes to local pickup fulfillment policy. |
+| 428 | Review Card Readiness Borders | ORG | ALL | ✅ Chrome QA S775. S727: border-l-4 color on each item card in review queue. Red=missing title/price/photo. Yellow=missing category/condition/description. Green=FindA.Sale ready. Blue=green+weight+eBay connected. |
+| 429 | eBay Push from Review Queue Skips Store Description Template | ORG | PRO | ✅ Chrome QA S775. FIXED S736. review.tsx handleApproveItem and handleApproveAll now include description: editState.description in update payloads. |
 | 430 | Register Form Silent Error — Existing Email Shows No Feedback | PLATFORM | ALL | FIXED S736. pages/register.tsx catch block now calls showToast(msg, 'error') so error is always visible. Pending Chrome QA. |
 | 220 | Cloudinary URL Utility | PLATFORM | ALL | Consolidated Cloudinary URL generation into single shared utility. S317. |
 

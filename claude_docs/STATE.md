@@ -8,7 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S774 — Scraper Audit + Admin User Mgmt + Migration Recovery**
+**Latest: S775 — eBay Tier 2B QA + Custom Label Bug Fix**
+
+Chrome QA of eBay Tier 2B batch: #427 Local Pickup Mode ✅, #428 Review Card Readiness Borders ✅, #429 Description Template on Approve ✅, Voice location extraction ✅ (Patrick verified directly). Bug found and fixed: Custom Label append toggles (`skuAppendDate/Cost/Location`) were not persisting — root cause was GET /organizers/me missing these 3 fields from its response JSON. Fix: 3-line add to `packages/backend/src/routes/organizers.ts`. TypeScript clean. Awaiting Patrick push.
+
+---
+
+**S774 — Scraper Audit + Admin User Mgmt + Migration Recovery**
 
 Full scraper ecosystem audit: removed 5 dead scrapers (SaleSeker, Newspaper RSS, Canada411, Eventbrite, AuctionNinja dupe), fixed 4 misconfigured scrapers (FB Marketplace state field, YellowPages.ca stats tracking, ESN cron removal, Website Address Friday), fixed backfillBenchmarks dead Prisma query, created AuctionZip GH Actions workflow. Added admin suspend/delete for users + `isHiddenFromDirectory` flag on Organizer. Migration crashed production DB (WAL overflow from bulk UPDATE on 57K rows) — rewrote migration to DDL-only, resolved Prisma failed-migration record, re-applied successfully. Backfill run separately via `prisma db execute`. Postgres region moved from EU West (Amsterdam) to US East by Patrick. Stale DATABASE_URL password discovered and corrected (was `QvnU...` → now `Qlzi...`).
 
@@ -94,19 +100,40 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Priority 1 — QA: eBay Tier 2B batch (Patrick present + PRO + eBay connected):**
-- #428 Review Card Readiness Borders, #427 eBay Local Pickup Mode, #429 Review Queue Skips Store Description Template
-- Verify voice extraction + eBay Custom Label toggles in settings
+**Priority 0 — Patrick action required: Push the Custom Label fix**
+```powershell
+git add packages/backend/src/routes/organizers.ts
+git commit -m "fix: include skuAppendDate/Cost/Location in GET /organizers/me response"
+.\push.ps1
+```
+After push, verify on `/organizer/settings/ebay` — toggle Append Date, save, reload, confirm checkboxes stay checked.
 
-**Priority 2 — Slow query issues (Sentry 2K, 2J, 1P, 1G):**
-- 4 unresolved slow query warnings remain (1–1.7s). Low urgency but worth a dispatch to add missing indexes.
+**Priority 1 — Slow query dispatch (Sentry 2K, 2J, 1P, 1G):**
+4 slow query warnings remain (1–1.7s). Dispatch findasale-dev to add missing indexes.
 
-**Infrastructure note (S775):**
-- Backend DATABASE_URL now set to `${{Postgres.DATABASE_URL}}` — Railway reference, immune to password rotation.
-- packages/database/.env updated with current password (Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8).
-- All 273 migrations confirmed applied as of 2026-05-24.
+**Priority 2 — Continue Chrome QA backlog:**
+Remaining in "Pending Chrome QA Backlog": #338, #424, #425, #426. Also #430 (register form silent error) still unverified.
 
 ## Recent Sessions
+
+### S775 — eBay Tier 2B QA + Custom Label Bug Fix
+
+**Trigger:** Patrick — "begin the qa"
+
+**Chrome QA results:**
+- #427 eBay Local Pickup Mode ✅ — switched to SALE_ADDRESS, saved, reloaded, JS confirmed persisted
+- #428 Review Card Readiness Borders ✅ — red border on incomplete (Untitled, $0), blue border on complete (MXL 770, 92% confidence)
+- #429 Description Template on Approve ✅ — MXL 770 approved from review queue; API confirmed description "2 8. MXL 770 small-diaphragm..." saved to item
+- Voice location extraction ✅ — Patrick verified directly on device
+- Custom Label toggles ❌ BUG FOUND → root cause identified → fix deployed
+
+**Bug root cause:** GET /organizers/me (line ~515 in organizers.ts) manually constructs response JSON but omitted `skuAppendDate`, `skuAppendCost`, `skuAppendLocation`. PATCH saves correctly; GET never returns them. Frontend defaults to `false` on reload.
+
+**Fix:** 3-line add to `packages/backend/src/routes/organizers.ts` GET /me response. TypeScript clean. Awaiting Patrick push.
+
+**Roadmap updated:** #427, #428, #429 marked ✅ Chrome QA S775 in roadmap.md Pending Chrome QA Backlog and UNTESTED sections.
+
+---
 
 ### S774 — Scraper Audit + Admin User Management + Migration Recovery
 

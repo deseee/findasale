@@ -18,7 +18,12 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## What Happened This Week
 
-**S774 (latest — Scraper Audit + Admin User Mgmt + Migration Recovery):**
+**S775 (latest — eBay Tier 2B QA + Custom Label Bug Fix):**
+- Chrome QA: #427 Local Pickup Mode ✅, #428 Review Card Readiness Borders ✅, #429 Description saves on approve ✅, Voice location extraction ✅ (you tested directly).
+- Bug found + fixed: eBay Custom Label append toggles (Append Date/Cost/Location) were saving a success toast but resetting to unchecked on every page reload. Root cause: the GET `/organizers/me` endpoint never returned those 3 fields. Fix: 3-line add to organizers.ts. Awaiting your push (Priority 0 below).
+- Roadmap: #427, #428, #429 marked ✅ Chrome QA S775.
+
+**S774 (Scraper Audit + Admin User Mgmt + Migration Recovery):**
 - Full scraper ecosystem audit. Removed 5 dead scrapers, fixed 4 misconfigured ones, created missing AuctionZip workflow.
 - Added admin ability to suspend/delete users. Added `isHiddenFromDirectory` flag so scraped organizers don't pollute the public directory.
 - Migration crashed production DB (bulk UPDATE on 57K rows overflowed the WAL). Rewrote to DDL-only, recovered cleanly, re-applied, ran backfill separately.
@@ -70,6 +75,18 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 ---
 
 ## Action Items for Patrick
+
+### 0. Push S775 Custom Label fix (1 file):
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/routes/organizers.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "fix: include skuAppendDate/Cost/Location in GET /organizers/me response"
+.\push.ps1
+```
+After Railway deploys, go to `/organizer/settings/ebay`, toggle "Append Date", save, reload — checkbox should stay checked.
 
 ### 1. Push S773 Facebook export tracking (11 files + docs):
 ```powershell
