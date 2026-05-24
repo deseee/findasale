@@ -153,9 +153,9 @@ export async function getServerSideProps(ctx: any) {
     // Generate guide URLs (ADR-075 SEO Content Moat)
     let guideUrls: any[] = [];
     try {
-      const indexData = require('../data/seo-pages/index.json') as Array<{ slug: string }>;
-      guideUrls = indexData.map((entry: any) => ({
-        loc: `${baseUrl}/guide/${entry.slug}`,
+      const slugs = require('../data/seo-pages/slugs.json') as string[];
+      guideUrls = slugs.map((slug: string) => ({
+        loc: `${baseUrl}/guide/${slug}`,
         lastmod: '2026-05-01',
         changefreq: 'weekly',
         priority: 0.7,
