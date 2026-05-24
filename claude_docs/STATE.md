@@ -8,9 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S776 — isHiddenFromDirectory Investigation + Scraper Fix + Data Recovery**
+**Latest: S778 — Vercel Build Fix + eBay Blue Pill + Re-push Button + #424 Root Cause**
 
-Investigated whether the S774 `isHiddenFromDirectory` backfill was needed. Finding: the field's only consumer is `citiesController.ts` (city directory SEO pages) — there is no separate "public organizer directory" that uses it. The scraper was incorrectly setting `isHiddenFromDirectory: true` on every new scraped org, hiding them from the one place they're meant to appear. Fixed: removed that line from `scraper/index.ts`. Verified DB: backfill DID run — all 60,236 scraped organizers had `isHiddenFromDirectory = true` (city pages returning zero results, live regression). Ran batched reverse fix in 500-row chunks; all 60,236 restored to `false`. City pages functional again. Temp scripts (`check-hidden.js`, `fix-hidden-backfill.js`) left in `packages/database/` — delete after push.
+Vercel build was failing for 4+ consecutive deploys (`@types/react` missing) because `NODE_ENV=production` causes pnpm to skip all `devDependencies`. Fix: moved all 11 devDependencies to regular `dependencies` in `packages/frontend/package.json`; added `.npmrc` with public-hoist-pattern entries. Then hit a second missing type (`@types/minimatch`) — added to deps. Awaiting Patrick push + Vercel confirmation.
+
+eBay UX improvements: (1) status badge on `[saleId].tsx` turns blue (instead of green "Live") when `item.ebayListingId` is set; (2) "Re-push to eBay" button added to `edit-item/[id].tsx` alongside "View on eBay" — calls existing `handlePushToEbay`, allows applying description template to already-listed items.
+
+#424 root cause confirmed: `EbayPolicyMapping.defaultDescriptionHtml` was NULL in Patrick's DB (template never saved in FindA.Sale eBay Settings, only in eBay's own listing template system). Patrick added the template to the FindA.Sale field. Existing items need "Re-push to eBay" to apply it.
+
+user3 TEAMS modal (Blocked Queue): Confirmed not a bug — Patrick had manually set user3 to TEAMS in Railway DB. Removed from blocked queue.
 
 **Previous: S775 — eBay Tier 2B QA + Custom Label Bug Fix**
 
@@ -91,7 +97,6 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| user3 TEAMS modal — needs confirmation | Seed file says user3 = SIMPLE, but saw "Welcome to TEAMS!" modal. Patrick says user3 may be intentionally TEAMS in Railway DB. Verify before dispatching fix. | Query Railway DB: `SELECT "subscriptionTier" FROM "Organizer" WHERE id = (SELECT "organizerId" FROM "User" WHERE email = 'user3@example.com')` | S777 |
 | Settings UI for linked OAuth providers | Backend endpoint `/auth/oauth/link` ready, no frontend surface yet | Build linked-accounts section in organizer/settings.tsx (deferred — security hole closed by backend rejection alone) | S723 |
 
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
@@ -105,30 +110,36 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Priority 0 — Patrick: push everything pending (3 commits)**
+**Priority 0 — Patrick: push everything pending**
 
-Commit 1 — S776 scraper fix:
+Commit 1 — S778 @types/minimatch fix (Vercel build):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+pnpm install
+git add packages/frontend/package.json pnpm-lock.yaml
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: add @types/minimatch to deps; S778 wrap docs"
+.\push.ps1
+```
+Then watch Vercel — should deploy clean. eBay blue pill + re-push button already in this deploy.
+
+Commit 2 — S776 scraper fix:
+```powershell
 git add packages/backend/src/services/scraper/index.ts
 git commit -m "fix: remove isHiddenFromDirectory=true from new scraped org creation (was hiding all new scrapes from city pages)"
 .\push.ps1
 ```
 
-Commit 2 — S775 Custom Label fix + lockfile:
+Commit 3 — S775 Custom Label fix:
 ```powershell
-pnpm install
 git add packages/backend/src/routes/organizers.ts
-git add pnpm-lock.yaml
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "fix: include skuAppendDate/Cost/Location in GET /organizers/me response; regenerate lockfile for Vercel"
+git commit -m "fix: include skuAppendDate/Cost/Location in GET /organizers/me response"
 .\push.ps1
 ```
 After Railway deploys: go to `/organizer/settings/ebay`, toggle Append Date, save, reload — checkbox should stay checked.
 
-Commit 3 — S773 Facebook export tracking (after S775 deploys):
+Commit 4 — S773 Facebook export tracking:
 ```powershell
 git add packages/database/prisma/schema.prisma
 git add packages/database/prisma/migrations/20260523120000_add_fb_exported_at/migration.sql
@@ -152,7 +163,7 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**Also: delete temp scripts** `packages/database/check-hidden.js` and `packages/database/fix-hidden-backfill.js` (they have credentials hardcoded — don't commit).
+**Also: delete temp scripts** `packages/database/check-hidden.js` and `packages/database/fix-hidden-backfill.js` (hardcoded credentials — do not commit).
 
 **Priority 1 — Dispatch user3 TEAMS modal bug + review queue UX improvement:**
 - Dispatch findasale-dev to fix SIMPLE tier user seeing "Welcome to TEAMS!" onboarding modal
@@ -172,6 +183,22 @@ npx prisma generate
 **Note:** Global CLAUDE.md has wrong DB password (`JaZz` should be `JScz`). Cannot edit from Cowork session — Patrick must update manually or it will cause auth failures on future migration commands.
 
 ## Recent Sessions
+
+### S778 — Vercel Build Fix + eBay Blue Pill + Re-push Button
+
+**Trigger:** Continuation of S777 QA session. Vercel build was failing; eBay UX gaps addressed.
+
+**Vercel build fix:** `NODE_ENV=production` causes pnpm to skip `devDependencies`. Fix: moved all 11 devDependencies to regular `dependencies` in `packages/frontend/package.json`. Added `.npmrc` with public-hoist-pattern entries. Then hit `@types/minimatch` missing — added to deps. Awaiting Patrick push + Vercel confirmation.
+
+**eBay UX:** (1) Status badge on `[saleId].tsx` turns blue when `item.ebayListingId` is set (instead of showing a second "eBay" pill). (2) "Re-push to eBay" button added to `edit-item/[id].tsx` alongside "View on eBay" — allows applying description template to already-listed items via existing `handlePushToEbay` handler.
+
+**#424 root cause:** `EbayPolicyMapping.defaultDescriptionHtml` was NULL (template lived in eBay's own system, not FindA.Sale settings). Patrick added the template. Existing items need re-push to pick it up.
+
+**user3 TEAMS modal:** Confirmed not a bug — Patrick manually set user3 to TEAMS in Railway DB. Removed from blocked queue.
+
+**Files changed:** `packages/frontend/package.json` · `packages/frontend/pages/organizer/add-items/[saleId].tsx` · `packages/frontend/pages/organizer/edit-item/[id].tsx` · `.npmrc`
+
+---
 
 ### S777 — Chrome QA: #338, #430 Verified; #424/#425/#426 UNVERIFIED; user3 TEAMS modal bug found
 
@@ -336,23 +363,6 @@ Synced `strategy/roadmap.md` against ~30 sessions of QA evidence (S718–S769), 
 **Files changed:** `packages/backend/src/services/listingEnrichmentService.ts` · `packages/backend/src/jobs/outreachEmailsCron.ts`
 
 ---
-
-### S769 — Roadmap Audit + 7 Status Corrections
-
-**Trigger:** Patrick asked "what roadmap stuff is left that isn't QA?" — needed accurate remaining dev work list.
-
-**Roadmap corrections (all Patrick-confirmed):**
-- #380 Facebook Marketplace GraphQL Scraper → SHIPPED (confirmed done)
-- #364 Bing Search API Facebook Event Discovery → DEPRECATED (approach abandoned)
-- #418 Phase 2 Scrapers (18 remaining states) → SHIPPED (audit complete)
-- #460 End-of-Sale Auto-Liquidation → SUPERSEDED (existing auto-markdown #334 + color-tagged discount rules #310 cover same functionality)
-- #378 Help Library Site Surface → SHIPPED S742 — VERIFIED per Patrick
-- #331 Voice-to-Tag Phase 2 → SHIPPED (confirmed done)
-- #338 Surface Sold-Price Comps → Possibly shipped — Patrick said "may be done"; marked for Chrome verify
-
-**OAuth linked accounts clarification:** #422 UI gap is a settings surface to manage which OAuth providers are connected to an existing account (distinct from main OAuth login). Non-urgent — backend 409 rejection already closes the security hole.
-
-**Files changed:** `claude_docs/strategy/roadmap.md`
 
 ---
 

@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Week of May 21, 2026
+# Patrick's Dashboard — Week of May 24, 2026
 
 ---
 
@@ -18,25 +18,23 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## What Happened This Week
 
-**S776 (latest — isHiddenFromDirectory investigation + data recovery):**
-- Investigated whether the S774 backfill was needed. Finding: `isHiddenFromDirectory` only gates city page directory visibility — there is no other consumer.
-- Scraper bug fixed: `scraper/index.ts` was creating all new scraped orgs with `isHiddenFromDirectory: true`, permanently hiding new scrapes from city pages. Removed that line.
-- **Live data regression confirmed and fixed:** All 60,236 scraped organizers were hidden from city pages (zero results on every city page). Batched reverse fix ran — all restored. City pages functional again.
-- Password note: Correct DB password is `JScz...`. Global CLAUDE.md has stale `JaZz...` — see Action Item #4.
+**S778 (latest — Vercel Build Fix + eBay UX):**
+- Vercel was failing 4+ deploys: `NODE_ENV=production` causes pnpm to skip devDependencies. Fixed by moving all build-time deps to regular dependencies + adding `@types/minimatch`. Awaiting your push + Vercel confirmation.
+- eBay blue pill: status badge on the add-items page turns blue when an item is live on eBay (instead of a second pill).
+- "Re-push to eBay" button added to edit-item page — use this to apply your description template to items already listed on eBay.
+- #424 confirmed: your eBay description template only lives in eBay's own system. You added it to FindA.Sale eBay Settings. Use "Re-push" on existing items to apply it.
 
-**S775 (eBay Tier 2B QA + Custom Label Bug Fix):**
-- Chrome QA: #427 Local Pickup Mode ✅, #428 Review Card Readiness Borders ✅, #429 Description saves on approve ✅, Voice location extraction ✅ (you tested directly).
-- Bug found + fixed: eBay Custom Label append toggles were resetting on every reload. Root cause: GET `/organizers/me` never returned those 3 fields. Fix: 3-line add to organizers.ts. Awaiting your push.
+**S777 (Chrome QA):**
+- #430 Register form silent error ✅ verified.
+- #338 Sold-Price Comps ✅ verified (shows price range + condition + 3 comparable eBay sales).
+- #424/#425/#426 eBay features — UNVERIFIED (no seed account has eBay OAuth connected).
 
-**S774 (Scraper Audit + Admin User Mgmt + Migration Recovery):**
-- Full scraper ecosystem audit. Removed 5 dead scrapers, fixed 4 misconfigured ones, created missing AuctionZip workflow.
-- Added admin ability to suspend/delete users. Added `isHiddenFromDirectory` flag (intent was right, implementation landed wrong — fixed S776).
-- Migration crashed production DB (bulk UPDATE on 57K rows overflowed the WAL). Rewrote to DDL-only, recovered cleanly.
-- Postgres moved from EU West to US East — cross-Atlantic latency eliminated.
+**S776 (isHiddenFromDirectory fix + data recovery):**
+- All 60,236 scraped organizers were hidden from city pages. Fixed + restored.
+- Scraper bug patched so new scrapes won't be hidden.
 
-**S773 (Facebook Export Tracking + Sold Nudge):**
-- Built per-item Facebook export tracking + organizer nudge when exported items sell on FindA.Sale.
-- **Action needed:** Push block + migration in Action Items below.
+**S775 (eBay Tier 2B QA + Custom Label fix):**
+- #427, #428, #429 ✅. Custom Label toggles reset bug fixed (GET /organizers/me now returns those fields).
 
 ---
 
@@ -51,31 +49,34 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## Action Items for Patrick
 
-### 0. Push S776 scraper fix (1 file):
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/services/scraper/index.ts
-git commit -m "fix: remove isHiddenFromDirectory=true from new scraped org creation (was hiding all new scrapes from city pages)"
-.\push.ps1
-```
-
-### 1. Push S775 Custom Label fix + lockfile + wrap docs:
+### 1. Push S778 Vercel fix + wrap docs (FIRST — unblocks Vercel):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 pnpm install
-git add packages/backend/src/routes/organizers.ts
-git add pnpm-lock.yaml
+git add packages/frontend/package.json pnpm-lock.yaml
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "fix: include skuAppendDate/Cost/Location in GET /organizers/me response; regenerate lockfile for Vercel"
+git commit -m "fix: add @types/minimatch to deps; S778 wrap docs"
 .\push.ps1
 ```
-After Railway deploys: go to `/organizer/settings/ebay`, toggle "Append Date", save, reload — checkbox should stay checked.
+Then watch Vercel — should deploy clean. eBay blue pill + re-push button will go live.
 
-### 2. Push S773 Facebook export tracking (11 files):
+### 2. Push S776 scraper fix:
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/services/scraper/index.ts
+git commit -m "fix: remove isHiddenFromDirectory=true from new scraped org creation"
+.\push.ps1
+```
+
+### 3. Push S775 Custom Label fix:
+```powershell
+git add packages/backend/src/routes/organizers.ts
+git commit -m "fix: include skuAppendDate/Cost/Location in GET /organizers/me response"
+.\push.ps1
+```
+
+### 4. Push S773 Facebook export tracking + run migration:
+```powershell
 git add packages/database/prisma/schema.prisma
 git add packages/database/prisma/migrations/20260523120000_add_fb_exported_at/migration.sql
 git add packages/backend/src/controllers/exportController.ts
@@ -90,7 +91,7 @@ git add packages/backend/src/routes/items.ts
 git commit -m "feat: track fbExportedAt per item on Facebook XLSX export; nudge organizer to mark sold on FB when item sells"
 .\push.ps1
 ```
-Then run the migration:
+Then run migration:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
@@ -98,17 +99,18 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-### 3. Delete temp scripts (hardcoded credentials — do not commit):
+### 5. Delete temp scripts (hardcoded credentials — do not commit):
 Delete `packages/database/check-hidden.js` and `packages/database/fix-hidden-backfill.js`.
 
-### 4. Fix global CLAUDE.md password (manual — important):
+### 6. Fix global CLAUDE.md password (manual):
 Open: `C:\Users\desee\AppData\Roaming\Claude\local-agent-mode-sessions\42d3662d-10d1-4e34-9d2d-01726cdad063\5685eb83-5389-4313-9ba3-a01c604a25c3\local_567c17d6-4663-4c25-b4fb-33a4a7fe0fd2\.claude\CLAUDE.md`
-Change both occurrences of `JaZz` → `JScz` in the DATABASE_URL lines. This is why migration commands kept failing this session.
+Change both occurrences of `JaZz` → `JScz` in the DATABASE_URL lines.
 
 ---
 
 ## Next Up
 
-1. Chrome QA backlog: #338 (Sold-Price Comps), #424, #425, #426 (eBay — needs PRO + eBay connected), #430 (register form silent error)
-2. Slow query dispatch: 4 Sentry warnings (2K, 2J, 1P, 1G) — findasale-dev to add missing indexes
-3. S771 Sentry fixes still need push if not done (scraper/index.ts + sentry.client.config.ts)
+1. Verify Vercel deploys clean after S778 push (action #1 above)
+2. Use "Re-push to eBay" on items already listed to apply description template
+3. Chrome QA: #424/#425/#426 (needs PRO account with eBay OAuth connected)
+4. Slow query dispatch: 4 Sentry warnings (2K, 2J, 1P, 1G) — findasale-dev to add missing indexes
