@@ -131,6 +131,11 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
 
+  // Ensure guide data is included in Vercel serverless bundle for server-sitemap.xml
+  outputFileTracingIncludes: {
+    '/server-sitemap.xml': ['./data/seo-pages/**/*'],
+  },
+
   // Force webpack to bundle these ESM packages rather than loading them natively.
   // @tanstack/react-query v5 ships a "modern" ESM build that uses
   // `import { jsx } from "react/jsx-runtime"` — React is CJS so Node.js 24's
