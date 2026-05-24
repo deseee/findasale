@@ -8,9 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S782 — Outreach Opens UI + Queue Reset**
+**Latest: S783 — SEO Sprint: Sitemap Expansion + IndexNow + Schema.org Audit**
 
-Built `/admin/outreach-opens` page — clickable via "View opened emails →" link in the Outreach Email Pipeline widget on `/admin`. First attempt had wrong schema fields (assumed flat `openedAt`/`organizerName`/`city`/`state` — schema actually uses per-touch fields + organizer relation). Fixed and deployed. Also re-queued 418 emails sent before the deliverability fix: 354 from before May 24 (date boundary) + 64 from May 24 batches before 16:51:43 UTC (first confirmed open timestamp). Queue now at ~3,349 PENDING, 16 SENT.
+Sitemap grew from 1,727 → 1,885 URLs. Added items, encyclopedia, and category pages to the sitemap; fixed guide pages (slim slugs.json + outputFileTracingIncludes + Cache-Control bypass); fixed Washington DC slug (dots in city name). New `/api/items/sitemap` backend endpoint returns all items from PUBLISHED sales (lightweight id+updatedAt). IndexNow integration built from scratch: fires on every sale publish, POSTs sale URL + all item URLs to `https://api.indexnow.org/indexnow`. Key file live at `https://finda.sale/fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt`. Schema.org audit confirmed: Product schema on items, JSON-LD on sale detail, HowTo/Article on guide pages — already implemented. Also fixed homepage "Error Loading Sales" (localhost fallback), /creator/dashboard role guard, and built admin creators/affiliate page.
 
 **Previous: S781 — DMARC Upgrade to p=quarantine + Email Stack Audit**
 
@@ -149,38 +149,72 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action — Push S782 files:**
+**Patrick Action — Push S783 files:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/adminController.ts
-git add packages/backend/src/routes/admin.ts
+git add packages/frontend/pages/index.tsx
+git add packages/frontend/next.config.js
+git add packages/frontend/pages/creator/dashboard.tsx
+git add packages/backend/src/controllers/adminAffiliateController.ts
+git add packages/backend/src/routes/adminAffiliate.ts
+git add packages/backend/src/index.ts
+git add packages/frontend/pages/admin/creators.tsx
 git add packages/frontend/pages/admin/index.tsx
-git add packages/frontend/pages/admin/outreach-opens.tsx
+git add packages/frontend/data/seo-pages/slugs.json
+git add packages/frontend/vercel.json
+git add packages/frontend/public/robots.txt
+git add packages/frontend/public/sitemap.xml
+git add packages/backend/src/routes/sales.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/routes/items.ts
+git add packages/frontend/pages/server-sitemap.xml.tsx
+git add packages/backend/src/services/indexNowService.ts
+git add packages/backend/src/controllers/saleController.ts
+git add "packages/frontend/public/fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt"
+git add packages/backend/.env.example
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: outreach opens page + queue reset (S782)"
+git commit -m "feat(seo): sitemap expansion + IndexNow integration (S783)"
 .\push.ps1
 ```
 
 **Patrick Action — Update Global CLAUDE.md password:**
-Update both DATABASE_URL lines (internal + public proxy) with the current password from Railway dashboard. Use Ctrl+H find-and-replace. [Passwords redacted from docs — store in CLAUDE.md only, never in committed files]
+Update both DATABASE_URL lines (internal + public proxy) with the current password from Railway dashboard. [Passwords redacted from docs — store in CLAUDE.md only]
 
-**Patrick Action — Delete temp scripts (if still present):**
-```powershell
-Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\database\check-hidden.js"
-Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\database\fix-hidden-backfill.js"
-```
+**Patrick Action — Submit sitemap to Bing Webmaster Tools:**
+Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/server-sitemap.xml`
 
-**Priority 1 — Dispatch user3 TEAMS modal bug + review queue UX improvement:**
-- Dispatch findasale-dev to fix SIMPLE tier user seeing "Welcome to TEAMS!" onboarding modal
-- Patrick flagged the review queue "More details" expand section as needing UX improvement — log for findasale-ux to spec
+**Priority 1 — Pending Chrome QA backlog:**
+- #424: Code-verified. Needs live eBay push to fully confirm end-to-end.
+- #425: UI confirmed. End-to-end push not tested without real publish.
 
-**Priority 2 — Pending Chrome QA backlog (remaining):**
-- #424: Code-verified (backend `{{DESCRIPTION}}` replacement confirmed). Needs live eBay push to fully confirm end-to-end.
-- #425: UI confirmed (✅ "Also push to eBay" checkbox in review queue More Details). End-to-end push not tested without real publish.
-- #426: ✅ fully verified (Best Offers checkbox + conditional fields on edit-item).
+**Priority 2 — Weekly audit fixes (from patrick-dashboard.md):**
+- `/categories` raw eBay taxonomy strings need display-name mapping
+- `/map` zero pins visible despite 200 sales listed
+- `/sales/[id]` "YARD" badge on auction sale + missing breadcrumb sale name
 
 ## Recent Sessions
+
+### S783 — SEO Sprint: Sitemap Expansion + IndexNow + Schema.org Audit
+
+**Trigger:** Patrick — sitemap count was 1,727 (Bing), fix it properly; items/sales/articles/neighborhoods all missing.
+
+**Completed:**
+- ✅ Homepage "Error Loading Sales" fix — `NEXT_PUBLIC_BACKEND_URL`/`NEXT_PUBLIC_API_URL` localhost fallback changed to `https://api.finda.sale`
+- ✅ /creator/dashboard role guard — was rejecting ORGANIZER role (CREATOR doesn't exist in schema); fixed to allow ADMIN + ORGANIZER
+- ✅ Admin creators/affiliate page — new `/admin/creators` page + backend controller querying users with AffiliateCode or AffiliateLinks; linked from admin index
+- ✅ Guide pages in sitemap — slim `slugs.json` (500 slugs, 16KB) + `outputFileTracingIncludes` key fixed + `Cache-Control: max-age=0` header in vercel.json
+- ✅ Sitemap: added `/categories/[category]` (10 hardcoded), `/encyclopedia/[slug]` (via API), `/items/[id]` (new backend endpoint)
+- ✅ New `/api/items/sitemap` backend endpoint — returns all items from PUBLISHED sales, `id+updatedAt` only, 10k cap, no auth
+- ✅ Washington DC slug fix — `.replace(/\./g, '')` strips dots from city slugs in `/api/sales/city-slugs`
+- ✅ IndexNow integration — `indexNowService.ts` created; fires on sale DRAFT→PUBLISHED transition; POSTs sale URL + all item URLs to `https://api.indexnow.org/indexnow`; non-blocking fire-and-forget
+- ✅ Key file live: `https://finda.sale/fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt`
+- ✅ Schema.org audit: Product schema on items, JSON-LD on sale detail, HowTo/Article on guides — all already implemented and SSR-safe
+- Sitemap count: 1,727 → 1,885 (+138 URLs; 110 items, 10 categories, ~18 encyclopedia)
+
+**Files changed:** `pages/index.tsx` · `next.config.js` · `pages/creator/dashboard.tsx` · `adminAffiliateController.ts` (new) · `routes/adminAffiliate.ts` (new) · `backend/index.ts` · `pages/admin/creators.tsx` (new) · `pages/admin/index.tsx` · `data/seo-pages/slugs.json` (new) · `vercel.json` · `public/robots.txt` · `public/sitemap.xml` · `routes/sales.ts` · `itemController.ts` · `routes/items.ts` · `server-sitemap.xml.tsx` · `indexNowService.ts` (new) · `saleController.ts` · `fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt` (new) · `.env.example`
+
+---
 
 ### S782 — Outreach Opens UI + Queue Reset
 
@@ -249,237 +283,4 @@ Files changed: `packages/backend/src/jobs/outreachEmailsCron.ts`, `packages/back
 **Files changed:** None (DNS + Railway env only). Scheduled task prompt updated via MCP.
 
 ---
-
-### S778 — Vercel Build Fix + eBay Blue Pill + Re-push Button
-
-**Trigger:** Continuation of S777 QA session. Vercel build was failing; eBay UX gaps addressed.
-
-**Vercel build fix:** `NODE_ENV=production` causes pnpm to skip `devDependencies`. Fix: moved all 11 devDependencies to regular `dependencies` in `packages/frontend/package.json`. Added `.npmrc` with public-hoist-pattern entries. Then hit `@types/minimatch` missing — added to deps. Awaiting Patrick push + Vercel confirmation.
-
-**eBay UX:** (1) Status badge on `[saleId].tsx` turns blue when `item.ebayListingId` is set (instead of showing a second "eBay" pill). (2) "Re-push to eBay" button added to `edit-item/[id].tsx` alongside "View on eBay" — allows applying description template to already-listed items via existing `handlePushToEbay` handler.
-
-**#424 root cause:** `EbayPolicyMapping.defaultDescriptionHtml` was NULL (template lived in eBay's own system, not FindA.Sale settings). Patrick added the template. Existing items need re-push to pick it up.
-
-**user3 TEAMS modal:** Confirmed not a bug — Patrick manually set user3 to TEAMS in Railway DB. Removed from blocked queue.
-
-**Files changed:** `packages/frontend/package.json` · `packages/frontend/pages/organizer/add-items/[saleId].tsx` · `packages/frontend/pages/organizer/edit-item/[id].tsx` · `.npmrc`
-
----
-
-### S777 — Chrome QA: #338, #430 Verified; #424/#425/#426 UNVERIFIED; user3 TEAMS modal bug found
-
-**Trigger:** Patrick — "Begin QA, only QA and noting fixes, be token efficient and plan groups accordingly so you don't waste my session logging in and out."
-
-**Chrome QA results:**
-- #430 Register Form Silent Error ✅ — duplicate email submission shows red toast + inline "Sign in instead?" error banner. Fix confirmed live.
-- #338 Sold-Price Comps in Edit-Item UI ✅ — comps widget present on full edit-item page; shows price range + condition (e.g. "$80–$225 EXCELLENT") + 3 eBay sold listings grid. Note: format is range+condition, not "N sources/median" as roadmap described. Comp match quality appears low (AI matching issue — Cast Iron Skillet matched against Pyrex bowl) — data quality concern, not a missing feature.
-- #424/#425/#426 eBay features UNVERIFIED — seed account user2 (PRO) shows "eBay Connection Required" / "Failed to load setup data". eBay OAuth not connected on any seed account. Review queue also empty on user2, blocking #425 test independently.
-
-**Bug found:** user3 (Carol Williams, SIMPLE tier) showed "Welcome to TEAMS!" onboarding modal. Wrong tier check — added to Blocked Queue for dispatch.
-
-**Behavioral feedback from Patrick:** "This is the planning i keep talking about! why can't you actually look first you dumbass?" — standing rule confirmed: open Chrome and look first before planning from docs. Applied immediately.
-
-**Roadmap updated:** #338 and #430 graduated to ✅ Chrome QA S777. #424/#425/#426 updated with UNVERIFIED S777 + specific blocker notes.
-
-**Patrick restored:** artifactmi@gmail.com session confirmed active in Chrome at session end.
-
----
-
-### S776 — isHiddenFromDirectory Investigation + Scraper Fix + Data Recovery
-
-**Trigger:** Patrick — investigate whether the S774 isHiddenFromDirectory backfill was actually needed.
-
-**Finding:** `isHiddenFromDirectory` has exactly 3 usages in the entire codebase: (1) `citiesController.ts` filters `isHiddenFromDirectory: false` to show scraped orgs on city pages, (2) `scraper/index.ts` was creating new orgs with `isHiddenFromDirectory: true`, (3) claim flow sets it to `false` on claim. There is no separate "public organizer directory" — the field gates city page visibility only. S774's intent (hide from "public directory") misidentified the consumer.
-
-**Scraper bug fixed:** Removed `isHiddenFromDirectory: true` from new org creation in `scraper/index.ts` line 489. New scraped orgs will now appear on city pages (column defaults to `false`).
-
-**Data regression found and fixed:** Verified via direct DB query — backfill DID run in S774. All 60,236 scraped organizers had `isHiddenFromDirectory = true`, making every city page return zero organizer results (live, silent regression). Ran batched reverse fix in 500-row chunks. All 60,236 restored to `false`. City pages functional.
-
-**Password discovery:** Correct proxy URL password is `JScz...` (in `packages/database/.env`). Global CLAUDE.md and dashboard.md had stale `JaZz...` — dashboard.md corrected this session. Global CLAUDE.md cannot be edited from Cowork session.
-
-**Files changed:** `packages/backend/src/services/scraper/index.ts`
-**Temp files (delete, do not commit):** `packages/database/check-hidden.js`, `packages/database/fix-hidden-backfill.js`
-
----
-
-### S775 — eBay Tier 2B QA + Custom Label Bug Fix
-
-**Trigger:** Patrick — "begin the qa"
-
-**Chrome QA results:**
-- #427 eBay Local Pickup Mode ✅ — switched to SALE_ADDRESS, saved, reloaded, JS confirmed persisted
-- #428 Review Card Readiness Borders ✅ — red border on incomplete (Untitled, $0), blue border on complete (MXL 770, 92% confidence)
-- #429 Description Template on Approve ✅ — MXL 770 approved from review queue; API confirmed description "2 8. MXL 770 small-diaphragm..." saved to item
-- Voice location extraction ✅ — Patrick verified directly on device
-- Custom Label toggles ❌ BUG FOUND → root cause identified → fix deployed
-
-**Bug root cause:** GET /organizers/me (line ~515 in organizers.ts) manually constructs response JSON but omitted `skuAppendDate`, `skuAppendCost`, `skuAppendLocation`. PATCH saves correctly; GET never returns them. Frontend defaults to `false` on reload.
-
-**Fix:** 3-line add to `packages/backend/src/routes/organizers.ts` GET /me response. TypeScript clean. Awaiting Patrick push.
-
-**Roadmap updated:** #427, #428, #429 marked ✅ Chrome QA S775 in roadmap.md Pending Chrome QA Backlog and UNTESTED sections.
-
----
-
-### S774 — Scraper Audit + Admin User Management + Migration Recovery
-
-**Trigger:** Patrick — "scraper audit — what do we actually have, what works, what's dead weight?"
-
-**Scraper cleanup (5 removed, 4 fixed):**
-- Removed: SaleSeker (dead), Newspaper RSS (dead), Canada411 (dead), Eventbrite (dead), AuctionNinja dupe (redundant — NAA covers same source)
-- Fixed: FB Marketplace missing `state` field, YellowPages.ca stats tracking, ESN cron removal (non-functional), Website Address Friday cron (moved to weekly from daily)
-- Fixed: backfillBenchmarks dead Prisma query (`findMany` on deleted fields)
-- Created: AuctionZip GH Actions workflow (was missing — scraper existed but no cron)
-- NAA scraper: tested selectors, confirmed working, left `enabled: false` for Patrick to activate
-
-**Admin user management:**
-- Added suspend/delete endpoints to admin users controller
-- Added `isHiddenFromDirectory` boolean to Organizer model (scraped organizers hidden by default)
-- Added `deletedAt` soft-delete timestamp to User model
-
-**Migration crash + recovery:**
-- Original migration included `UPDATE "Organizer" SET "isHiddenFromDirectory" = true WHERE "isUnmanagedListing" = true` — bulk UPDATE on ~57K rows caused WAL overflow, Postgres ran out of disk, crashed
-- Database confirmed clean (PostgreSQL transactional DDL rolled back all changes)
-- Rewrote migration to DDL-only (ALTER TABLE + CREATE INDEX, no data manipulation)
-- Resolved Prisma `_prisma_migrations` failed record via `prisma migrate resolve --rolled-back`
-- Re-applied migration successfully
-- Ran backfill separately via `prisma db execute --stdin`
-
-**Infrastructure:**
-- Discovered Postgres was in EU West (Amsterdam) while backend is US East — cross-Atlantic latency on every API call. Patrick moved Postgres to US East during this session.
-- Discovered stale DATABASE_URL password in CLAUDE.md and STATE.md — all references updated. [Passwords redacted from committed docs per security policy]
-
-**Files changed:** Multiple scraper configs, admin controllers, schema.prisma, migration SQL. All pushed by Patrick during session.
-
----
-
-### S773 — Facebook Export Tracking + Sold Nudge (#461)
-
-**Trigger:** Patrick — "now that we have facebook marketplace bulk uploads, is there any way that if a listing gets marked as sold on facebook or finda.sale the item is removed from the other?"
-
-**Research finding:** Facebook Marketplace has no public API or webhooks for standard sellers — the bulk upload is a manual XLSX download that organizers upload themselves. Meta Marketplace Partner Program (Item API) is a real integration path (how Shopify does it) but requires Meta partner approval not achievable at current scale.
-
-**Feature built:** Per-item Facebook export tracking (`fbExportedAt DateTime?` on Item) + organizer nudge notification when a tracked item sells on FindA.Sale with deep link to facebook.com/marketplace/selling/.
-
-- `fbExportedAt` field added to Item model (schema.prisma)
-- Migration created: `20260523120000_add_fb_exported_at`
-- `exportController.ts`: both `exportFacebookXLSX` and `exportFacebookJSON` now stamp `fbExportedAt` on exported items
-- `facebookNudgeService.ts`: new service — fetches item, checks `fbExportedAt`, creates organizer notification
-- 8 sold trigger points wired (posPaymentController, reservationController, stripeController, terminalController, ebayController webhook, ebaySoldSyncCron, routes/items.ts)
-- All wired as fire-and-forget: `notifyFacebookExportedItemSold(id).catch(err => console.warn(...))`
-- TypeScript: zero errors
-- Roadmap: #461 added — "Facebook Export Tracking + Sold Nudge | ORG | SIMPLE | Queued S773 — Dev dispatched"
-- Long-term path documented in roadmap: Meta Marketplace Partner Program application
-
-**Files changed (11):** schema.prisma · 20260523120000_add_fb_exported_at/migration.sql · exportController.ts · facebookNudgeService.ts (NEW) · posPaymentController.ts · reservationController.ts · stripeController.ts · terminalController.ts · ebayController.ts · ebaySoldSyncCron.ts · routes/items.ts
-
-**Push block:** See "## Next Session" Priority 0.
-**Pending:** Migration deploy (fbExportedAt column) after Railway picks up the push. Chrome QA of nudge flow.
-
----
-
-### S772 — Roadmap Reconciliation Audit (DOCS)
-Synced `strategy/roadmap.md` against ~30 sessions of QA evidence (S718–S769), then consolidated the file to make it leaner. No code touched.
-- **~33 verified items consolidated into the compact SHIPPED & VERIFIED table** — their long verbose detail rows were REMOVED from the Building / UNTESTED / "Only Human Left" / GEO tables and each now appears exactly once as a one-line entry. Items: #174, #228, #235, #241, #294, #305, #306, #307, #310, #322, #326, #329, #330, #331, #353, #355, #362, #124, #265, #275, #292, #378, #380, #407, #418, and GEO #436/#437/#438/#443/#446/#452/#454/#456. (#88 already lived in the compact table as #277 — its verbose duplicate was removed, no second entry added.)
-- **Removed the duplicate "Reconciled to SHIPPED & VERIFIED in the S772 audit" index table** — it was pure duplication of rows that already exist elsewhere.
-- **Moved 5 superseded/deprecated items to Deferred → Superseded/Deprecated** (compact one-liners, verbose rows removed): #460 (superseded by #334+#310), #27a + #131 (superseded by #305), #364 + #414 (deprecated).
-- **"Pending Chrome QA Backlog (Reconciled S772)" section** retained as the single home for genuinely-unverified shipped features (#338, #427, #428, #429, #424, #425, #426) plus pointers to the standing UNTESTED/TESTING tables.
-- **STATE.md Blocked Queue trimmed:** 38 closed (✅ VERIFIED/CLOSED/DONE) rows removed — they now live in the roadmap. 7 genuinely-open rows retained.
-- roadmap.md REDUCED 753 → 724 lines net (started session at 753). Verbose verified rows consolidated to compact one-liners, duplicate "Reconciled" index table removed, 50-line historical changelog header collapsed to one current line (history in git + COMPLETED_PHASES.md). Tail verified intact, zero truncation.
-- Files: `claude_docs/strategy/roadmap.md`, `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`.
-
-### S771 — Bug Hunt (Sentry / Railway / crons)
-
-**Trigger:** Patrick — "use remaining usage to hunt and fix bugs, especially Railway/GitHub Actions/crons."
-
-**Found + fixed:**
-- **Scraper Sentry-noise flood (root cause):** today's commit 176fc6c added `Sentry.captureMessage(...returned 0 results..., 'warning')` to `services/scraper/index.ts` (two call sites, lines ~569 + ~602). It fired on every zero-result scrape — 18 of 19 unresolved Sentry issues were this, all from one scrape run ~16h ago across small markets. Differential evidence (only small metros fired, not all) proves the scraper is healthy and these are legitimate empties. Both calls converted to `console.log`; removed unused `import * as Sentry`. The empty job is already recorded in ScrapedSalesJob; real failures still throw + are captured in the catch block.
-- **NEXTJS-G (filtered):** "Java object is gone" / enableDidUserTypeOnKeyboardLogging — Facebook in-app browser (Facebook 561.0.0) injected instrumentation (`app://navigation_performance_logger_android`), not our code. Added beforeSend filter in `sentry.client.config.ts`. Resolved.
-
-**Verified / triaged (no fix needed):**
-- **NODEJS-W** (playwright-extra fatal module-load crash) — already fixed in current source (named `{ chromium }` import + deferred `chromium.use(StealthPlugin())` in getPlaywrightBrowser). Last fired 2026-05-06. Resolved stale issue.
-- **Slow-query warnings** (NODEJS-10 Sale ~1.6s [48 events], 1G Organizer, 1X BEGIN, 1T ItemReservation) — all STALE, last fired 2026-05-08, transient load during a bulk scrape window. No structural index gap; declined speculative migration.
-- Railway backend Online; in-process crons (auction, markdown, eBay sync, reservation expiry) all [CRON OK]; no runtime errors in log buffer.
-- GitHub Actions run history not directly queryable via available MCP (no workflow-runs tool); scraper crons confirmed running healthy via Sentry + Railway cross-reference.
-
-**Could not do:** Railway DB direct query (psycopg2) — VM `/sessions` disk at 100%, install failed. Not needed (log + differential evidence sufficient).
-
-**Files changed:** `packages/backend/src/services/scraper/index.ts` · `packages/frontend/sentry.client.config.ts`
-
----
-
-### S770 — MailerLite Purge + Hex Escape Fix + Cron Root Cause
-
-**Trigger:** Patrick pasted 3 Railway log issues: MailerLite 413 for a1clcook@gmail.com, hex escape Prisma error on sale cmoog3n0l009tq4utw56ejcrx, enrichment batch health 6/7.
-
-**MailerLite investigation + purge:**
-- Free plan was at 500/500 subscribers — all real user registrations blocked (413 errors)
-- Root cause: `syncLeadTierGroups` weekly cron in outreachEmailsCron.ts synced ALL organizers with contactEmail + leadTier to MailerLite — including ~56K scraped directory organizers who never created accounts
-- 498 of 501 subscribers were junk (scraped emails). 4 legitimate subscribers identified and preserved (a1clcook, plus 3 seed accounts)
-- Purged all 498 junk subscribers via MailerLite `batch_requests` API (batches of 50 DELETE operations)
-- **Root cause fix:** Added `userId: { not: null }` to `syncLeadTierGroups` Prisma query — only registered users now sync to MailerLite
-
-**Hex escape fix (listingEnrichmentService.ts):**
-- Scraped HTML descriptions contain literal `\x` byte sequences that Prisma/PostgreSQL rejects as invalid hex escapes
-- Added `sanitizeForPostgres()` function: strips `\x` not followed by valid hex pairs
-- Applied in both free extraction path and Haiku AI path
-
-**Could not complete:** Railway log search for more 413-blocked users. Railway CLI not available in this VM session; Sentry had no matching issues. a1clcook should auto-enroll on next login.
-
-**Files changed:** `packages/backend/src/services/listingEnrichmentService.ts` · `packages/backend/src/jobs/outreachEmailsCron.ts`
-
----
-
----
-
-### S768 — CI/Sentry Fixes + Voice Location Extraction + eBay Custom Label Toggles (summary)
-
-CI/Sentry: fixed requestTimeout middleware, NODEJS-1B double-response, 6 slow-query indexes. Features: voice location extraction (roomTag auto-fill), eBay Custom Label append toggles (skuAppendDate/Cost/Location). Schema truncation recovered.
-
----
-
-**Bugs fixed (4 parallel agents):**
-- ✅ #41 Flip Report "Unable to load" — useFlipReport called unconditionally; non-PRO gets 403 before TierGate. Fixed: null-disable hook for non-PRO + early-return TierGate guard.
-- ✅ login.tsx silent error — showToast wired to catch block (same pattern register.tsx already had). 
-- ✅ #221 Hold-to-Pay wiring — HoldToPayModal.tsx was complete + orphaned. Imported into holds.tsx, state wired, markSold opens modal for first selected hold.
-- ✅ GEO JSON-LD SSR (#432 #439 #440 #441 #451) — !mounted guard at [id].tsx line ~691 blocked all JSON-LD from SSR. JSON-LD blocks moved before the guard using initialData (already SSR prop). Crawlers now receive full structured data.
-- ✅ noindex SSR (#449 #457) — noindex computed in getServerSideProps but missing from SaleDetailPageProps. Added to props type, destructured, rendered in <Head> for ENDED/private sales.
-
-**#184 iCal confirmed already fixed:** AddToCalendarButton.tsx uses data: URI client-side. No action needed.
-
-**Files changed:** `packages/frontend/pages/organizer/flip-report/[saleId].tsx` · `packages/frontend/pages/login.tsx` · `packages/frontend/pages/organizer/holds.tsx` · `packages/frontend/pages/sales/[id].tsx` · `claude_docs/strategy/roadmap.md` + 3 new audit docs
-
-### S762 — Full QA Session: 8-item blocked queue cleared + #292 crash fix
-
-**Trigger:** QA ceiling active. Full Chrome QA of all unverified items from STATE.md blocked queue.
-
-**Verified (16 items closed total):**
-- ✅ #437 GEO Claim Banner — ClaimListingBanner renders on unclaimed sale sidebar; both Google + Facebook OAuth flows trigger correctly. CLOSED.
-- ✅ #438 AI Score — /ai-score loaded, entered real URL, got score 23/100 with signal breakdown. CLOSED.
-- ✅ #443 OAuth claim — both "Claim with Google" and "Claim with Facebook" buttons present and trigger OAuth flows on unclaimed sale page. CLOSED.
-- ✅ #446 Smart Search Views — "Search Engine Visibility" card visible on organizer dashboard as user2. CLOSED.
-- ✅ #454 Demand Dashboard — DemandSignalsCard renders on organizer dashboard with real data. CLOSED.
-- ✅ /admin/organizer-confidence (#458 admin surface) — 10 real organizer rows, Address column confirmed. CLOSED.
-- ✅ #306 Store Hours — Monday hours changed + saved. PUT 200 + PATCH 200 + GET 200. Toast + persisted on reload. CLOSED.
-- ✅ #292 ENDED sale item counts — 7-item ENDED sale rendered fully. "Archive — most items claimed." text confirmed. CLOSED.
-- ✅ #275 Hunt Pass Cosmetics — user12 amber ring (`ring-2 ring-amber-400`) on nav avatar + 🏆 badge on leaderboard confirmed. CLOSED.
-- ✅ #265 Share & Earn card — card renders on /shopper/dashboard: heading, referral copy, "View Referral Page →", dismiss (×). 7-day timestamp dismissal confirmed. CLOSED.
-- ✅ /city/grand-rapids-mi — H1 "Estate Sales & Yard Sales in Grand Rapids, MI" + real sale titles present. CLOSED.
-- ✅ /city/grand-rapids-mi/estate-sales — category page loads with sale data. CLOSED.
-- ✅ /this-weekend/grand-rapids-mi — temporal page loads with sale data. CLOSED.
-- ✅ /clearance — clearance items render with city filter. CLOSED.
-- ✅ /admin/demand-signals — admin demand signal table confirmed. CLOSED.
-- ✅ /admin/waitlist — admin waitlist entries confirmed. CLOSED.
-
-**Bug found + fixed:**
-- 🐛→FIXED: `[id].tsx` crashed on ENDED sale pages with published items — `TypeError: Cannot read properties of undefined (reading '0')` in JSON-LD Array.map(). Root cause: `item.photoUrls[0]` unguarded when photoUrls is null/undefined. Fixed 3 instances to `photoUrls?.[0]`. Pushed to GitHub → Vercel deployed. Verified: no console errors, full item grid rendered.
-
-**Files changed:** `packages/frontend/pages/sales/[id].tsx` (3 null guards)
-
-**Pushblock:**
-```powershell
-git add packages/frontend/pages/sales/[id].tsx
-git commit -m "fix: null-guard item.photoUrls in sale detail JSON-LD and OG meta (#292)"
-.\push.ps1
-```
 
