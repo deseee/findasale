@@ -428,13 +428,14 @@ Single home for features that are code-shipped but genuinely lack any browser/hu
 
 | # | Feature | Role | Tier | Why still pending |
 |---|---------|------|------|-------------------|
-| 338 | Surface Sold-Price Comps in Edit-Item UI | ORG | SIMPLE | May be done (backend comps exist); needs Chrome confirm of "based on N sources / median" line before promoting. |
+| 338 | Surface Sold-Price Comps in Edit-Item UI | ORG | SIMPLE | ✅ Chrome QA S777 — comps widget present on edit-item full page; shows price range + condition (e.g. "$80–$225 EXCELLENT") + 3 eBay sold listings grid. Note: format is range+condition, not "N sources/median" — roadmap description was stale. Comp match quality noted as low (AI matching issue, not missing feature). Graduated. |
+| 430 | Register Form Silent Error — Duplicate Email | PLATFORM | ALL | ✅ Chrome QA S777 — duplicate email submission shows red toast notification + inline error banner with "Sign in instead?" link. Fix confirmed live. Graduated. |
 | 427 | eBay Local Pickup Mode | ORG | PRO | ✅ Chrome QA S775 — SALE_ADDRESS persists on reload confirmed. |
 | 428 | Review Card Readiness Borders | ORG | ALL | ✅ Chrome QA S775 — red border incomplete, blue border complete item confirmed. |
 | 429 | eBay Push from Review Queue (description template) | ORG | PRO | ✅ Chrome QA S775 — description persisted after review queue approve confirmed via API. |
-| 424 | eBay Description Template Fix | ORG | PRO | Shipped S727; no browser QA evidence yet. |
-| 425 | eBay Push from Publish All | ORG | PRO | Shipped S727; no browser QA evidence yet. |
-| 426 | eBay Best Offers UI | ORG | PRO | Shipped S727; no browser QA evidence yet. |
+| 424 | eBay Description Template Fix | ORG | PRO | Code-verified S777 — backend `applyDescTemplate()` uses `split('{{DESCRIPTION}}').join(desc)` to replace all occurrences; empty description → empty string (not literal placeholder). Cannot browser-verify without pushing a live eBay listing. Backend fix confirmed present. |
+| 425 | eBay Push from Publish All | ORG | PRO | ✅ Chrome QA S777 (UI) — "Also push to eBay" checkbox confirmed in review queue "More details" expandable section, alongside "Local pickup only" toggle + shipping dimension fields. End-to-end push flow not tested (would require actual eBay publish). UI surface confirmed. |
+| 426 | eBay Best Offers UI | ORG | PRO | ✅ Chrome QA S777 — "Best Offers" heading + "Accept Best Offers on eBay" checkbox confirmed on edit-item page (/organizer/edit-item/[id]). Auto-accept/decline pct fields conditionally render when checkbox is checked (per code + DOM). |
 
 Plus the larger **UNTESTED — Need Chrome QA** table above (built-but-never-browser-tested features, e.g. #138, #5, #150, #152, #155, #156, #160, #170, etc.) and the **TESTING — Active QA Queue** PARTIAL rows (#172 Stripe Connect e2e, #132 à-la-carte, #71 reputation, #27/#66 exports). Those remain the standing QA queue; this audit did not invent new verification for them.
 
@@ -617,7 +618,7 @@ Infrastructure and internal systems. All code-verified. No browser QA needed.
 | 427 | eBay Local Pickup Mode | ORG | PRO | ✅ Chrome QA S775. S727: checkbox on edit-item + review cards sets ebayShippingOverride=LOCAL_PICKUP_ONLY. Smart phrase detector nudge on description/notes. Backend routes to local pickup fulfillment policy. |
 | 428 | Review Card Readiness Borders | ORG | ALL | ✅ Chrome QA S775. S727: border-l-4 color on each item card in review queue. Red=missing title/price/photo. Yellow=missing category/condition/description. Green=FindA.Sale ready. Blue=green+weight+eBay connected. |
 | 429 | eBay Push from Review Queue Skips Store Description Template | ORG | PRO | ✅ Chrome QA S775. FIXED S736. review.tsx handleApproveItem and handleApproveAll now include description: editState.description in update payloads. |
-| 430 | Register Form Silent Error — Existing Email Shows No Feedback | PLATFORM | ALL | FIXED S736. pages/register.tsx catch block now calls showToast(msg, 'error') so error is always visible. Pending Chrome QA. |
+| 430 | Register Form Silent Error — Existing Email Shows No Feedback | PLATFORM | ALL | FIXED S736. ✅ Chrome QA S777 — red toast + inline "Sign in instead?" banner confirmed live. |
 | 220 | Cloudinary URL Utility | PLATFORM | ALL | Consolidated Cloudinary URL generation into single shared utility. S317. |
 
 ## Blocked
