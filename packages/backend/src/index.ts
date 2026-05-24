@@ -96,6 +96,7 @@ import plannerRoutes from './routes/planner'; // Planning assistant chatbot
 import organizerDigestRoutes from './routes/organizerDigest'; // Organizer weekly digest manual trigger
 import buyingPoolRoutes from './routes/buyingPools'; // Group Buying Pools
 import adminRoutes from './routes/admin'; // Admin panel
+import adminAffiliateRoutes from './routes/adminAffiliate'; // Admin: Creator/Affiliate management
 import devRoutes from './routes/dev'; // Dev utilities
 import notificationInboxRoutes from './routes/notificationInbox'; // Notification inbox
 import waitlistRoutes from './routes/waitlist'; // Item Waitlist / "Notify Me"
@@ -526,6 +527,7 @@ app.use('/api/planner', plannerRoutes); // Planning assistant chatbot
 app.use('/api/buying-pools', buyingPoolRoutes); // Group Buying Pools
 app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly digest manual trigger
 app.use('/api/admin', adminRoutes); // Admin panel
+app.use('/api/admin/affiliate', adminAffiliateRoutes); // Admin: Creator/Affiliate management
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api/dev', devRoutes); // Dev utilities
 }
