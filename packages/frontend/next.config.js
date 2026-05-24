@@ -133,7 +133,7 @@ const nextConfig = {
 
   // Ensure guide data is included in Vercel serverless bundle for server-sitemap.xml
   outputFileTracingIncludes: {
-    '/server-sitemap.xml': ['./data/seo-pages/**/*'],
+    '/pages/server-sitemap.xml': ['./data/seo-pages/**/*'],
   },
 
   // Force webpack to bundle these ESM packages rather than loading them natively.
