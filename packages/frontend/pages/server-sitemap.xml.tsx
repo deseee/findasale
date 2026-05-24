@@ -71,6 +71,23 @@ export async function getServerSideProps(ctx: any) {
           }))
       : [];
 
+    // Fetch organizer profile pages for sitemap
+    let organizerUrls: any[] = [];
+    try {
+      const organizersResponse = await api.get('/leaderboard/organizers');
+      const organizers = organizersResponse.data.leaderboard || organizersResponse.data || [];
+      organizerUrls = organizers
+        .filter((org: any) => org.organizerId)
+        .map((org: any) => ({
+          loc: `${baseUrl}/organizers/${org.organizerId}`,
+          lastmod: new Date().toISOString(),
+          changefreq: 'weekly',
+          priority: 0.7,
+        }));
+    } catch {
+      // Endpoint may fail gracefully — organizer URLs are optional
+    }
+
     // Fetch canonical city slugs (e.g. "grand-rapids-mi") from dedicated endpoint.
     // Falls back to empty array if the endpoint isn't available yet.
     let canonicalCitySlugs: string[] = [];
@@ -151,6 +168,7 @@ export async function getServerSideProps(ctx: any) {
     const fields = [
       ...staticUrls,
       ...saleUrls,
+      ...organizerUrls,
       ...cityCategoryUrls,
       ...neighborhoodUrls,
       ...zipUrls,

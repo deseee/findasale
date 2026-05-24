@@ -171,7 +171,7 @@ router.get('/city-slugs', async (req, res) => {
     `;
 
     const slugs = rows.map((r) => ({
-      slug: r.slug,
+      slug: r.slug.replace(/\./g, ''),
       city: r.city,
       state: r.state,
       count: Number(r.count),
