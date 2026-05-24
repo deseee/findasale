@@ -163,7 +163,7 @@ git commit -m "feat: outreach opens page + queue reset (S782)"
 ```
 
 **Patrick Action — Update Global CLAUDE.md password:**
-Replace old password `Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8` with new `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW` in both DATABASE_URL lines (internal + public proxy). Use Ctrl+H find-and-replace.
+Update both DATABASE_URL lines (internal + public proxy) with the current password from Railway dashboard. Use Ctrl+H find-and-replace. [Passwords redacted from docs — store in CLAUDE.md only, never in committed files]
 
 **Patrick Action — Delete temp scripts (if still present):**
 ```powershell
@@ -206,7 +206,7 @@ Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\datab
 - ✅ DMARC upgraded: `_dmarc.finda.sale` TXT → `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@finda.sale` — confirmed live via Google DNS
 
 **Still pending (Patrick):**
-- Global CLAUDE.md password update (old `Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8` → new `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`)
+- Global CLAUDE.md password update — get current password from Railway dashboard and update both DATABASE_URL lines [redacted from docs]
 
 **Files changed:** None (DNS change only via Vercel dashboard)
 
@@ -347,7 +347,7 @@ Files changed: `packages/backend/src/jobs/outreachEmailsCron.ts`, `packages/back
 
 **Infrastructure:**
 - Discovered Postgres was in EU West (Amsterdam) while backend is US East — cross-Atlantic latency on every API call. Patrick moved Postgres to US East during this session.
-- Discovered stale DATABASE_URL password in CLAUDE.md and STATE.md. Old: `QvnU...`, current: `Qlzi...`. All references updated.
+- Discovered stale DATABASE_URL password in CLAUDE.md and STATE.md — all references updated. [Passwords redacted from committed docs per security policy]
 
 **Files changed:** Multiple scraper configs, admin controllers, schema.prisma, migration SQL. All pushed by Patrick during session.
 

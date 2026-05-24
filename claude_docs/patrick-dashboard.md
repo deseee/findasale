@@ -66,7 +66,7 @@ git commit -m "feat: outreach opens page + queue reset (S782)"
 ```
 
 ### 2. Update Global CLAUDE.md password:
-In your Cowork settings (Global CLAUDE.md), Ctrl+H replace old password `Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8` with new `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`. Both DATABASE_URL lines (internal + public proxy).
+In your Cowork settings (Global CLAUDE.md), update both DATABASE_URL lines (internal + public proxy) with the new password from Railway dashboard. [Passwords redacted from docs — store in CLAUDE.md only, never in committed files]
 
 ### 3. Delete temp scripts (if still present):
 ```powershell
