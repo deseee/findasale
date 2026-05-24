@@ -94,47 +94,17 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Priority 0 — Push S773 Facebook export tracking + sold nudge (if not yet pushed):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260523120000_add_fb_exported_at/migration.sql
-git add packages/backend/src/controllers/exportController.ts
-git add packages/backend/src/services/facebookNudgeService.ts
-git add packages/backend/src/controllers/posPaymentController.ts
-git add packages/backend/src/controllers/reservationController.ts
-git add packages/backend/src/controllers/stripeController.ts
-git add packages/backend/src/controllers/terminalController.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/jobs/ebaySoldSyncCron.ts
-git add packages/backend/src/routes/items.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "feat: track fbExportedAt per item on Facebook XLSX export; nudge organizer to mark sold on FB when item sells"
-.\push.ps1
-```
-
-**Priority 1 — After Railway deploys S773, run the fbExportedAt migration:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJaZz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-**Priority 2 — QA: eBay Tier 2B batch (Patrick present + PRO + eBay connected):**
+**Priority 1 — QA: eBay Tier 2B batch (Patrick present + PRO + eBay connected):**
 - #428 Review Card Readiness Borders, #427 eBay Local Pickup Mode, #429 Review Queue Skips Store Description Template
 - Verify voice extraction + eBay Custom Label toggles in settings
 
-**Priority 3 — Sentry bugs not yet fixed:**
-- NODEJS-17: ReferenceError `e is not defined` at organizers route
-- NODEJS-S: "stream is not readable" at POST /api/ebay/account-deletion
-- NODEJS-1Q: slow DB query on Review LEFT JOIN Sale
+**Priority 2 — Slow query issues (Sentry 2K, 2J, 1P, 1G):**
+- 4 unresolved slow query warnings remain (1–1.7s). Low urgency but worth a dispatch to add missing indexes.
 
-**Pending Patrick actions:**
-- Deploy email verification migration (20260515180000) — pending S726
-
-**Note:** Railway DATABASE_URL password changed. Old `QvnU...` no longer works. Current password: `Qlzi9PdY34gG6H7zIVOBbJaZz1V1sI2sicifzXhDM8`. All blocks above already use the correct one. Postgres region now US East (moved from EU West this session).
+**Infrastructure note (S775):**
+- Backend DATABASE_URL now set to `${{Postgres.DATABASE_URL}}` — Railway reference, immune to password rotation.
+- packages/database/.env updated with current password (Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8).
+- All 273 migrations confirmed applied as of 2026-05-24.
 
 ## Recent Sessions
 
