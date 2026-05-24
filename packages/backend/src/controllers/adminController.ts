@@ -1319,39 +1319,29 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
       googlePlaced: totalScrapedOrgs > 0 ? Math.round((enrichmentCoverage.googlePlaced / totalScrapedOrgs) * 100) : 0,
     };
 
-    // Outreach status
-    const outreachOrgsWithSent = await prisma.organizer.findMany({
-      where: {
-        ...activeScrapedWhere,
-        outreachAuditLogs: {
-          some: { event: 'SENT' },
-        },
-      },
-      select: { id: true },
-      take: 10000,
+    // Outreach status — queried from DirectoryClaimEmail live status (not audit logs)
+    const outreachStatusCounts = await (prisma as any).directoryClaimEmail.groupBy({
+      by: ['status'],
+      _count: true,
     });
 
-    const outreachOrgsWithOpened = await prisma.organizer.findMany({
-      where: {
-        ...activeScrapedWhere,
-        outreachAuditLogs: {
-          some: { event: 'OPENED' },
-        },
-      },
-      select: { id: true },
-      take: 10000,
+    const outreachStatusMap: Record<string, number> = {};
+    outreachStatusCounts.forEach((r: any) => {
+      outreachStatusMap[r.status] = r._count;
     });
 
-    const outreachOrgsWithBounced = await prisma.organizer.findMany({
+    const outreachOrgsWithSent = { length: outreachStatusMap['SENT'] ?? 0 };
+    const outreachOrgsWithOpened = { length: await (prisma as any).directoryClaimEmail.count({
       where: {
-        ...activeScrapedWhere,
-        outreachAuditLogs: {
-          some: { event: 'BOUNCED' },
-        },
+        OR: [
+          { touch1OpenedAt: { not: null } },
+          { touch2OpenedAt: { not: null } },
+          { touch3OpenedAt: { not: null } },
+          { touch4OpenedAt: { not: null } },
+        ],
       },
-      select: { id: true },
-      take: 10000,
-    });
+    })};
+    const outreachOrgsWithBounced = { length: outreachStatusMap['BOUNCED'] ?? 0 };
 
     // Last scrape runs grouped by source
     const scrapeRuns = await prisma.scrapedSalesJob.findMany({
