@@ -154,6 +154,7 @@ export async function getServerSideProps(ctx: any) {
     let guideUrls: any[] = [];
     try {
       const slugs = require('../data/seo-pages/slugs.json') as string[];
+      console.log('[sitemap] guide slugs loaded:', slugs?.length ?? 'null');
       guideUrls = slugs.map((slug: string) => ({
         loc: `${baseUrl}/guide/${slug}`,
         lastmod: '2026-05-01',
@@ -161,8 +162,9 @@ export async function getServerSideProps(ctx: any) {
         priority: 0.7,
       }));
     } catch (err) {
-      console.warn('Could not load guide entries for sitemap:', err);
+      console.error('[sitemap] Could not load guide slugs:', err);
     }
+    console.log('[sitemap] total fields:', guideUrls.length, 'guide URLs');
 
     // Combine all URL sets
     const fields = [
