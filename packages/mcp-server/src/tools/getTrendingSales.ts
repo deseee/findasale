@@ -2,6 +2,11 @@ import { MCPToolDefinition } from '../types';
 
 export const getTrendingSalesTool: MCPToolDefinition = {
   name: 'get_trending_sales',
+  annotations: {
+    title: 'Get Trending Sales',
+    readOnlyHint: true,
+    openWorldHint: true,
+  },
   description:
     'Returns currently active sales with the most recent activity — new items added, high shopper interest. Use this when a user asks what sales are popular, hot, or happening now.',
   inputSchema: {

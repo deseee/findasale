@@ -2,6 +2,11 @@ import { MCPToolDefinition } from '../types';
 
 export const searchItemsTool: MCPToolDefinition = {
   name: 'search_items',
+  annotations: {
+    title: 'Search Items',
+    readOnlyHint: true,
+    openWorldHint: true,
+  },
   description: 'Search for items across all active sales by keyword, category, price, or location.',
   inputSchema: {
     type: 'object',

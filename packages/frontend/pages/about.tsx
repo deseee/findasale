@@ -96,4 +96,8 @@ const AboutPage = () => {
   );
 };
 
+export const getStaticProps = async () => {
+  return { props: {} };
+};
+
 export default AboutPage;
