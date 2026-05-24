@@ -603,6 +603,15 @@ const AdminDashboard = () => {
                   })}
                 </tbody>
               </table>
+
+              <div className="mt-4 text-right">
+                <a
+                  href="/admin/outreach-opens"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-200"
+                >
+                  View opened emails →
+                </a>
+              </div>
             </div>
           )}
 
