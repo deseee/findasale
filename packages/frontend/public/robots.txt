@@ -24,7 +24,6 @@ Disallow: /*?*sort=
 Disallow: /*?*filter=
 Disallow: /offline
 
-Sitemap: https://finda.sale/sitemap.xml
 Sitemap: https://finda.sale/server-sitemap.xml
 
 # Crawl delay and request rate
