@@ -34,6 +34,7 @@ import {
   getScrapePoolStats,
   getScrapeMetros,
   getOutreachStats,
+  getOutreachOpens,
   getDrilldown,
 } from '../controllers/adminController';
 import {
@@ -136,6 +137,7 @@ router.get('/scrape-pool-stats', getScrapePoolStats);
 
 // Outreach funnel stats and KPI drilldowns
 router.get('/outreach-stats', getOutreachStats);
+router.get('/outreach-opens', getOutreachOpens);
 router.get('/drilldown/:metric', getDrilldown);
 
 // Feature #362: GET /api/admin/xp-velocity — XP exploit detection
