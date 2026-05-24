@@ -32,7 +32,7 @@ const AdminUsers = () => {
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
-  const [hideScraped, setHideScraped] = useState(false);
+  const [hideScraped, setHideScraped] = useState(true);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
