@@ -154,7 +154,6 @@ export async function getServerSideProps(ctx: any) {
     let guideUrls: any[] = [];
     try {
       const slugs = require('../data/seo-pages/slugs.json') as string[];
-      console.log('[sitemap] guide slugs loaded:', slugs?.length ?? 'null');
       guideUrls = slugs.map((slug: string) => ({
         loc: `${baseUrl}/guide/${slug}`,
         lastmod: '2026-05-01',
@@ -164,7 +163,50 @@ export async function getServerSideProps(ctx: any) {
     } catch (err) {
       console.error('[sitemap] Could not load guide slugs:', err);
     }
-    console.log('[sitemap] total fields:', guideUrls.length, 'guide URLs');
+
+    // Category pages (hardcoded item categories)
+    const ITEM_CATEGORIES = [
+      'furniture', 'clothing', 'electronics', 'books', 'antiques',
+      'tools', 'kitchen', 'art', 'jewelry', 'other',
+    ];
+    const categoryUrls = ITEM_CATEGORIES.map((cat) => ({
+      loc: `${baseUrl}/categories/${cat}`,
+      lastmod: new Date().toISOString(),
+      changefreq: 'daily',
+      priority: 0.8,
+    }));
+
+    // Encyclopedia entries
+    let encyclopediaUrls: any[] = [];
+    try {
+      const encyclopediaResponse = await api.get('/encyclopedia/entries');
+      const entries = encyclopediaResponse.data.entries || encyclopediaResponse.data || [];
+      encyclopediaUrls = entries
+        .filter((entry: any) => entry.slug)
+        .map((entry: any) => ({
+          loc: `${baseUrl}/encyclopedia/${entry.slug}`,
+          lastmod: new Date().toISOString(),
+          changefreq: 'weekly',
+          priority: 0.7,
+        }));
+    } catch {
+      // Graceful fallback — encyclopedia URLs are optional
+    }
+
+    // Individual item pages
+    let itemUrls: any[] = [];
+    try {
+      const itemsResponse = await api.get('/items/sitemap');
+      const items = itemsResponse.data.items || itemsResponse.data || [];
+      itemUrls = items.map((item: any) => ({
+        loc: `${baseUrl}/items/${item.id}`,
+        lastmod: item.updatedAt ? new Date(item.updatedAt).toISOString() : new Date().toISOString(),
+        changefreq: 'daily',
+        priority: 0.8,
+      }));
+    } catch {
+      // Graceful fallback — item URLs are optional
+    }
 
     // Combine all URL sets
     const fields = [
@@ -176,15 +218,13 @@ export async function getServerSideProps(ctx: any) {
       ...zipUrls,
       ...tagUrls,
       ...guideUrls,
+      ...categoryUrls,
+      ...encyclopediaUrls,
+      ...itemUrls,
     ];
 
     return getServerSideSitemap(ctx, fields);
   } catch (error) {
     console.error('Error generating sitemap:', error);
     // Return empty sitemap if there's an error
-    return getServerSideSitemap(ctx, []);
-  }
-}
-
-// Default export to prevent next.js errors
-export default function Sitemap() {}
+    ret

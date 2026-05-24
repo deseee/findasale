@@ -3011,3 +3011,27 @@ export const getSimilarItems = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error fetching similar items' });
   }
 };
+// SEO: Sitemap items endpoint — returns id + updatedAt for all items in PUBLISHED sales
+// Public, no auth required. Cap at 10,000 to keep response lightweight.
+export const getSitemapItems = async (req: Request, res: Response) => {
+  try {
+    const items = await prisma.item.findMany({
+      where: {
+        sale: {
+          status: 'PUBLISHED',
+        },
+      },
+      select: {
+        id: true,
+        updatedAt: true,
+      },
+      take: 10000,
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    res.json({ items });
+  } catch (error) {
+    console.error('[getSitemapItems] Error:', error);
+    res.status(500).json({ message: 'Server error fetching sitemap items' });
+  }
+};

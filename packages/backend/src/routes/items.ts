@@ -30,6 +30,7 @@ import {
   getItemEbayComps,
   getCompSummary,
   getSimilarItems,
+  getSitemapItems,
 } from '../controllers/itemController';
 import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
@@ -85,6 +86,9 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // #111: Apply item endpoint rate limiter to all GET operations
 router.use(itemEndpointLimiter);
+
+// SEO sitemap — MUST be before /:id to avoid param capture
+router.get('/sitemap', getSitemapItems); // GET /api/items/sitemap — public, no auth
 
 // Sprint 4a: FTS search endpoints — MUST be declared before /:id to avoid param capture
 router.get('/search', searchItemsHandler);           // GET /api/items/search?q=...
