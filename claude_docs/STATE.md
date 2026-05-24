@@ -8,15 +8,28 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S779 — Outreach Email Deliverability Fix**
+**Latest: S780 — Deliverability Fix + GitGuardian + CORS + Slow Query Indexes**
 
-Root cause of 0% open rate (417 sends, 0 real opens): all outreach email bodies contained `https://backend-production-153c9.up.railway.app` URLs (tracking pixel + unsubscribe link). `.railway.app` is a shared provider domain flagged by spam filters same as heroku/ngrok. Fix: added `api.finda.sale` custom domain to Railway backend service; added CNAME (`api` → `uerigpyb.up.railway.app`) and TXT verification record to Vercel DNS; Patrick set `RAILWAY_BACKEND_URL=https://api.finda.sale` in Railway Variables. Future outreach emails will use clean branded URLs.
+Audit of S779 priorities plus execution. 4 code fixes, 1 P0 credential leak remediated, 6 DB indexes added.
 
-Secondary issue identified (not yet fixed): `buildRawEmail()` in `outreachEmailsCron.ts` declares `multipart/alternative` but only includes `text/html` — missing `text/plain` fallback. Fix needed next session.
+**Fixes shipped:**
+- ✅ buildRawEmail() MIME fix — added `htmlToPlainText()` helper + text/plain part to multipart/alternative (was html-only, contributing to spam classification)
+- ✅ CORS P0 — `api.finda.sale` added to allowedOrigins in index.ts (34 CORS errors in 23hrs from new Railway custom domain added S779 but not in CORS allowlist)
+- ✅ GitGuardian P0 — PostgreSQL URI (live Railway password) found in STATE.md + patrick-dashboard.md committed in S776. Removed from both files. **Password rotation needed** — credential remains in git history.
+- ✅ 7 performance indexes added for 5 Sentry slow queries (NODEJS-2N/2M/2K/2J/1P): DirectoryClaimEmail outreach cron (status+touch4+touch1, sentAt), Sale (createdAt, status+markdownEnabled+startDate), Organizer (isUnmanagedListing+createdAt, createdAt)
 
-Added GitGuardian to `findasale-ci-sentry-health` scheduled task (Step 3). GG_API_KEY needed to activate.
+**Deliverability DNS audit findings (Patrick action):**
+- Root SPF missing `_spf.google.com` include (P1)
+- Root DKIM record missing for Google Workspace
+- DMARC at p=none (upgrade to p=quarantine after SPF/DKIM fixed)
 
-No code files changed this session — DNS + Railway env changes only.
+**Sentry scan (6 issues reviewed):**
+- FINDASALE-NODEJS-3: CORS errors — fixed (api.finda.sale origin)
+- 5 slow queries — indexes added (migration 20260524120000)
+
+**Previous: S779 — Outreach Email Deliverability Fix**
+
+Root cause of 0% open rate (417 sends, 0 real opens): all outreach email bodies contained `https://backend-production-153c9.up.railway.app` URLs. Fix: added `api.finda.sale` custom domain to Railway; set `RAILWAY_BACKEND_URL=https://api.finda.sale` in Railway Variables.
 
 **Previous: S778 — Vercel Build Fix + eBay Blue Pill + Re-push Button + #424 Root Cause**
 
@@ -120,67 +133,42 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Priority 0 — Outreach deliverability follow-ups:**
-- Fix `buildRawEmail()` in `outreachEmailsCron.ts` — add `text/plain` MIME part so `multipart/alternative` is valid. Dispatch findasale-dev.
-- Gmail deliverability audit — check SPF/DKIM/DMARC alignment for `outreach@finda.sale`; review Gmail Postmaster Tools if available.
-- Review GitGuardian issues Patrick flagged — resolve or dismiss each incident.
-- Review new Sentry issues Patrick flagged.
-- Note: `GG_API_KEY` needed in Railway env to activate GitGuardian step in `findasale-ci-sentry-health` scheduled task.
+**Patrick Action — P0: Rotate Railway DB password**
+The current Railway DB password is in git history (committed in S776 STATE.md). Go to Railway dashboard → findasale-db service → Variables → change `POSTGRES_PASSWORD`. After rotation, update:
+1. Railway `DATABASE_URL` env var on backend service
+2. Global CLAUDE.md (the private one in AppData) with new password
+3. Any local `.env` files
 
-**Priority 1 — Patrick: push everything pending**
-
-Commit 1 — S778 @types/minimatch fix (Vercel build):
+**Patrick Action — Push S780 changes:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-pnpm install
-git add packages/frontend/package.json pnpm-lock.yaml
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/src/index.ts
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260524120000_add_performance_indexes/migration.sql
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: add @types/minimatch to deps; S778 wrap docs"
+git commit -m "fix: MIME text/plain + CORS api.finda.sale + 7 perf indexes; S780 wrap"
 .\push.ps1
 ```
-Then watch Vercel — should deploy clean. eBay blue pill + re-push button already in this deploy.
-
-Commit 2 — S776 scraper fix:
-```powershell
-git add packages/backend/src/services/scraper/index.ts
-git commit -m "fix: remove isHiddenFromDirectory=true from new scraped org creation (was hiding all new scrapes from city pages)"
-.\push.ps1
-```
-
-Commit 3 — S775 Custom Label fix:
-```powershell
-git add packages/backend/src/routes/organizers.ts
-git commit -m "fix: include skuAppendDate/Cost/Location in GET /organizers/me response"
-.\push.ps1
-```
-After Railway deploys: go to `/organizer/settings/ebay`, toggle Append Date, save, reload — checkbox should stay checked.
-
-Commit 4 — S773 Facebook export tracking:
-```powershell
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260523120000_add_fb_exported_at/migration.sql
-git add packages/backend/src/controllers/exportController.ts
-git add packages/backend/src/services/facebookNudgeService.ts
-git add packages/backend/src/controllers/posPaymentController.ts
-git add packages/backend/src/controllers/reservationController.ts
-git add packages/backend/src/controllers/stripeController.ts
-git add packages/backend/src/controllers/terminalController.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/jobs/ebaySoldSyncCron.ts
-git add packages/backend/src/routes/items.ts
-git commit -m "feat: track fbExportedAt per item on Facebook XLSX export; nudge organizer to mark sold on FB when item sells"
-.\push.ps1
-```
-Then run migration:
+Then run migration (after Railway deploys):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
+$env:DATABASE_URL="[Railway DATABASE_URL — get from Railway dashboard Variables tab]"
 npx prisma migrate deploy
 npx prisma generate
 ```
 
-**Also: delete temp scripts** `packages/database/check-hidden.js` and `packages/database/fix-hidden-backfill.js` (hardcoded credentials — do not commit).
+**Patrick Action — Delete temp scripts (hardcoded credentials — do NOT commit):**
+```powershell
+Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\database\check-hidden.js"
+Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\database\fix-hidden-backfill.js"
+```
+
+**Patrick Action — DNS fixes for email deliverability:**
+- Update root SPF: `v=spf1 a mx include:_spf.google.com include:_spf.mlsend.com ~all`
+- Add root DKIM: generate from Google Admin Console for `google._domainkey.finda.sale`
+- Later: upgrade DMARC to `p=quarantine`
 
 **Priority 1 — Dispatch user3 TEAMS modal bug + review queue UX improvement:**
 - Dispatch findasale-dev to fix SIMPLE tier user seeing "Welcome to TEAMS!" onboarding modal
@@ -191,15 +179,25 @@ npx prisma generate
 - #425: UI confirmed (✅ "Also push to eBay" checkbox in review queue More Details). End-to-end push not tested without real publish.
 - #426: ✅ fully verified (Best Offers checkbox + conditional fields on edit-item).
 
-**Priority 3 — Slow query dispatch (Sentry 2K, 2J, 1P, 1G):**
-4 slow query warnings remain (1–1.7s). Dispatch findasale-dev to add missing indexes.
-
-**Priority 2 — Slow query dispatch (Sentry 2K, 2J, 1P, 1G):**
-4 slow query warnings remain (1–1.7s). Dispatch findasale-dev to add missing indexes.
-
 **Note:** Global CLAUDE.md has wrong DB password (`JaZz` should be `JScz`). Cannot edit from Cowork session — Patrick must update manually or it will cause auth failures on future migration commands.
 
 ## Recent Sessions
+
+### S780 — Deliverability Fix + GitGuardian + CORS + Slow Query Indexes
+
+**Trigger:** Patrick — "audit last few sessions and begin the work on the to do's"
+
+Executed S779 Next Session priorities. 4 fixes shipped:
+1. **buildRawEmail() MIME fix** — added htmlToPlainText() + text/plain part to multipart/alternative emails (outreachEmailsCron.ts)
+2. **CORS P0** — api.finda.sale added to allowedOrigins (index.ts). 34 CORS errors in 23hrs from new custom domain.
+3. **GitGuardian P0** — live Railway DB password found in STATE.md + patrick-dashboard.md on GitHub (commit 00e58aadd, S776). Credential removed from both files. Password rotation needed (credential in git history).
+4. **7 performance indexes** — migration 20260524120000 addresses 5 Sentry slow queries (DirectoryClaimEmail 2x, Sale 2x, Organizer 2x + createdAt)
+
+DNS deliverability audit: root SPF missing google include (P1), root DKIM missing, DMARC at p=none. Patrick action items provided.
+
+Verified all 4 pending pushes from S779 deployed to Vercel (READY). fbExportedAt migration confirmed applied in Railway DB.
+
+Files changed: `packages/backend/src/jobs/outreachEmailsCron.ts`, `packages/backend/src/index.ts`, `packages/database/prisma/schema.prisma`, `packages/database/prisma/migrations/20260524120000_add_performance_indexes/migration.sql`, `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`
 
 ### S779 — Outreach Email Deliverability Fix (DNS + Railway Env)
 

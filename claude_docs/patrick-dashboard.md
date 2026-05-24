@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Week of May 24, 2026 (Updated S779)
+# Patrick's Dashboard — Week of May 24, 2026 (Updated S780)
 
 ---
 
@@ -18,12 +18,17 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## What Happened This Week
 
-**S779 (latest — Outreach Email Deliverability Fix):**
+**S780 (latest — Deliverability Fix + GitGuardian + CORS + Indexes):**
+- Fixed email MIME: plain-text fallback now included in outreach emails (was html-only, hurting deliverability)
+- Fixed CORS P0: `api.finda.sale` wasn't in the CORS allowlist after S779 added it as Railway custom domain — 34 errors in 23hrs
+- GitGuardian alert: live Railway DB password was committed in STATE.md (S776). Removed from files. **You need to rotate the Railway DB password** — it's in git history
+- 7 database indexes added for 5 Sentry slow queries (1–1.7 second queries down to fast indexed lookups)
+- DNS audit: root SPF needs `_spf.google.com` include, root DKIM missing — see action items below
+- All 4 pending pushes from S779 confirmed deployed and live on Vercel
+
+**S779 (Outreach Email Deliverability Fix):**
 - Found root cause of 0% open rate: every email body had `backend-production-153c9.up.railway.app` URLs — spam filters blocked them automatically.
 - Fixed: `api.finda.sale` added as custom domain on Railway; DNS records added to Vercel; you set `RAILWAY_BACKEND_URL=https://api.finda.sale` in Railway Variables.
-- Next outreach emails will have clean `api.finda.sale` URLs. Monitor open rates on next batch.
-- Still to fix: missing plain-text fallback in email builder (next session).
-- GitGuardian added to the daily health check task. Need to add `GG_API_KEY` to Railway env to activate it — what's the key?
 
 **S778 (Vercel Build Fix + eBay UX):**
 - Vercel was failing 4+ deploys: `NODE_ENV=production` causes pnpm to skip devDependencies. Fixed by moving all build-time deps to regular dependencies + adding `@types/minimatch`. Awaiting your push + Vercel confirmation.
@@ -56,68 +61,50 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## Action Items for Patrick
 
-### 1. Push S778 Vercel fix + wrap docs (FIRST — unblocks Vercel):
+### 1. URGENT — Rotate Railway DB password:
+Railway dashboard → findasale-db service → Variables → change `POSTGRES_PASSWORD`. Then update `DATABASE_URL` on the backend service too. After rotation, update your global CLAUDE.md with the new password.
+
+### 2. Push S780 changes:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-pnpm install
-git add packages/frontend/package.json pnpm-lock.yaml
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/src/index.ts
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260524120000_add_performance_indexes/migration.sql
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: add @types/minimatch to deps; S778 wrap docs"
+git commit -m "fix: MIME text/plain + CORS api.finda.sale + 7 perf indexes; S780 wrap"
 .\push.ps1
 ```
-Then watch Vercel — should deploy clean. eBay blue pill + re-push button will go live.
-
-### 2. Push S776 scraper fix:
-```powershell
-git add packages/backend/src/services/scraper/index.ts
-git commit -m "fix: remove isHiddenFromDirectory=true from new scraped org creation"
-.\push.ps1
-```
-
-### 3. Push S775 Custom Label fix:
-```powershell
-git add packages/backend/src/routes/organizers.ts
-git commit -m "fix: include skuAppendDate/Cost/Location in GET /organizers/me response"
-.\push.ps1
-```
-
-### 4. Push S773 Facebook export tracking + run migration:
-```powershell
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260523120000_add_fb_exported_at/migration.sql
-git add packages/backend/src/controllers/exportController.ts
-git add packages/backend/src/services/facebookNudgeService.ts
-git add packages/backend/src/controllers/posPaymentController.ts
-git add packages/backend/src/controllers/reservationController.ts
-git add packages/backend/src/controllers/stripeController.ts
-git add packages/backend/src/controllers/terminalController.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/jobs/ebaySoldSyncCron.ts
-git add packages/backend/src/routes/items.ts
-git commit -m "feat: track fbExportedAt per item on Facebook XLSX export; nudge organizer to mark sold on FB when item sells"
-.\push.ps1
-```
-Then run migration:
+Then run migration (after Railway deploys):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
+$env:DATABASE_URL="[Railway DATABASE_URL — get from Railway dashboard Variables tab]"
 npx prisma migrate deploy
 npx prisma generate
 ```
 
-### 5. Delete temp scripts (hardcoded credentials — do not commit):
-Delete `packages/database/check-hidden.js` and `packages/database/fix-hidden-backfill.js`.
+### 3. Delete temp scripts (hardcoded credentials — do NOT commit):
+```powershell
+Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\database\check-hidden.js"
+Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\database\fix-hidden-backfill.js"
+```
 
-### 6. Fix global CLAUDE.md password (manual):
-Open: `C:\Users\desee\AppData\Roaming\Claude\local-agent-mode-sessions\42d3662d-10d1-4e34-9d2d-01726cdad063\5685eb83-5389-4313-9ba3-a01c604a25c3\local_567c17d6-4663-4c25-b4fb-33a4a7fe0fd2\.claude\CLAUDE.md`
+### 4. DNS fixes for email deliverability:
+- Update root SPF record to: `v=spf1 a mx include:_spf.google.com include:_spf.mlsend.com ~all`
+- Add root DKIM: generate from Google Admin Console for `google._domainkey.finda.sale`
+- Later: upgrade DMARC from `p=none` to `p=quarantine`
+
+### 5. Fix global CLAUDE.md password (manual):
 Change both occurrences of `JaZz` → `JScz` in the DATABASE_URL lines.
 
 ---
 
 ## Next Up
 
-1. Verify Vercel deploys clean after S778 push (action #1 above)
-2. Use "Re-push to eBay" on items already listed to apply description template
-3. Chrome QA: #424/#425/#426 (needs PRO account with eBay OAuth connected)
-4. Slow query dispatch: 4 Sentry warnings (2K, 2J, 1P, 1G) — findasale-dev to add missing indexes
+1. Rotate Railway DB password (action #1 above — P0 security)
+2. Push S780 + run migration (action #2)
+3. Delete temp scripts (action #3)
+4. DNS fixes for email deliverability (action #4)
+5. user3 TEAMS modal bug + review queue UX improvement
+6. Chrome QA: #424/#425/#426 (needs PRO account with eBay OAuth connected)
