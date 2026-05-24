@@ -193,7 +193,7 @@ const nextConfig = {
   // Listing each backend auth path in beforeFiles ensures Railway handles them; NextAuth only sees
   // its own paths (session, csrf, providers, callback, signin, signout, _log, error).
   async rewrites() {
-    const railwayApi = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
+    const railwayApi = (process.env.NEXT_PUBLIC_API_URL || 'https://api.finda.sale/api').replace(/\/$/, '');
     return {
       // beforeFiles: run BEFORE all Next.js filesystem routes (including pages/api/auth/[...nextauth].ts).
       // Backend auth endpoints must be listed here explicitly so NextAuth never intercepts them.
