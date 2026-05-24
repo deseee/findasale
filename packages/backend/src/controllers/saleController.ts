@@ -25,6 +25,7 @@ import { awardOrgReferralFirstSale } from '../services/referralService'; // Feat
 import { checkCrewVisitBonus } from '../services/crewService'; // Crew visit XP multiplier
 import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurrent Sales Gate
 import { isSaleLocked, getEffectivePublishTime, getMinutesUntilUnlock } from '../services/rankService'; // Rank-based early access gate
+import { geocodeAddress } from '../services/geocodingService'; // Map pin fix: geocode platform sales on publish
 
 // Feature #5: Sale type categories (inlined from shared package)
 enum SaleType {
@@ -1001,6 +1002,25 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     }
 
     res.json(convertDecimalsToNumbers(updated));
+
+    // Map pin fix: geocode platform sales on publish if lat is missing
+    if (status === 'PUBLISHED' && updated.lat == null && updated.address && updated.city && updated.state) {
+      geocodeAddress(updated.address, updated.city, updated.state, updated.zip || null)
+        .then((geo) => {
+          if (geo) {
+            return prisma.sale.update({
+              where: { id: updated.id },
+              data: { lat: geo.lat, lng: geo.lng },
+            });
+          }
+        })
+        .then(() => {
+          console.log(`[geocode] Platform sale ${updated.id} geocoded on publish`);
+        })
+        .catch((err) => {
+          console.error(`[geocode] Failed to geocode sale ${updated.id} on publish:`, err instanceof Error ? err.message : err);
+        });
+    }
 
     // P2-3: Invalidate command center cache after sale status change
     invalidateCommandCenterCache(updated.organizerId).catch((err) =>
