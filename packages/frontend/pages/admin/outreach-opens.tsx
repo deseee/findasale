@@ -6,8 +6,7 @@ import api from '../../lib/api';
 interface OutreachOpen {
   emailAddress: string;
   organizerName: string | null;
-  city: string | null;
-  state: string | null;
+  address: string | null;
   website: string | null;
   sentAt: string | null;
   openedAt: string | null;
@@ -73,7 +72,7 @@ export default function OutreachOpensPage() {
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                   <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">Organizer</th>
                   <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">Email</th>
-                  <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">Location</th>
+                  <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">Address</th>
                   <th className="text-left px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">Website</th>
                   <th className="text-center px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">Touch</th>
                   <th className="text-right px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">Sent</th>
@@ -93,8 +92,8 @@ export default function OutreachOpensPage() {
                     <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
                       {o.emailAddress}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                      {[o.city, o.state].filter(Boolean).join(', ') || '—'}
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-[200px] truncate">
+                      {o.address || '—'}
                     </td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-[180px] truncate">
                       {o.website ? (
