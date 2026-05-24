@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Week of May 24, 2026
+# Patrick's Dashboard — Week of May 24, 2026 (Updated S779)
 
 ---
 
@@ -18,7 +18,14 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## What Happened This Week
 
-**S778 (latest — Vercel Build Fix + eBay UX):**
+**S779 (latest — Outreach Email Deliverability Fix):**
+- Found root cause of 0% open rate: every email body had `backend-production-153c9.up.railway.app` URLs — spam filters blocked them automatically.
+- Fixed: `api.finda.sale` added as custom domain on Railway; DNS records added to Vercel; you set `RAILWAY_BACKEND_URL=https://api.finda.sale` in Railway Variables.
+- Next outreach emails will have clean `api.finda.sale` URLs. Monitor open rates on next batch.
+- Still to fix: missing plain-text fallback in email builder (next session).
+- GitGuardian added to the daily health check task. Need to add `GG_API_KEY` to Railway env to activate it — what's the key?
+
+**S778 (Vercel Build Fix + eBay UX):**
 - Vercel was failing 4+ deploys: `NODE_ENV=production` causes pnpm to skip devDependencies. Fixed by moving all build-time deps to regular dependencies + adding `@types/minimatch`. Awaiting your push + Vercel confirmation.
 - eBay blue pill: status badge on the add-items page turns blue when an item is live on eBay (instead of a second pill).
 - "Re-push to eBay" button added to edit-item page — use this to apply your description template to items already listed on eBay.

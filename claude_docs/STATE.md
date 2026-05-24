@@ -8,7 +8,17 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S778 — Vercel Build Fix + eBay Blue Pill + Re-push Button + #424 Root Cause**
+**Latest: S779 — Outreach Email Deliverability Fix**
+
+Root cause of 0% open rate (417 sends, 0 real opens): all outreach email bodies contained `https://backend-production-153c9.up.railway.app` URLs (tracking pixel + unsubscribe link). `.railway.app` is a shared provider domain flagged by spam filters same as heroku/ngrok. Fix: added `api.finda.sale` custom domain to Railway backend service; added CNAME (`api` → `uerigpyb.up.railway.app`) and TXT verification record to Vercel DNS; Patrick set `RAILWAY_BACKEND_URL=https://api.finda.sale` in Railway Variables. Future outreach emails will use clean branded URLs.
+
+Secondary issue identified (not yet fixed): `buildRawEmail()` in `outreachEmailsCron.ts` declares `multipart/alternative` but only includes `text/html` — missing `text/plain` fallback. Fix needed next session.
+
+Added GitGuardian to `findasale-ci-sentry-health` scheduled task (Step 3). GG_API_KEY needed to activate.
+
+No code files changed this session — DNS + Railway env changes only.
+
+**Previous: S778 — Vercel Build Fix + eBay Blue Pill + Re-push Button + #424 Root Cause**
 
 Vercel build was failing for 4+ consecutive deploys (`@types/react` missing) because `NODE_ENV=production` causes pnpm to skip all `devDependencies`. Fix: moved all 11 devDependencies to regular `dependencies` in `packages/frontend/package.json`; added `.npmrc` with public-hoist-pattern entries. Then hit a second missing type (`@types/minimatch`) — added to deps. Awaiting Patrick push + Vercel confirmation.
 
@@ -110,7 +120,14 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Priority 0 — Patrick: push everything pending**
+**Priority 0 — Outreach deliverability follow-ups:**
+- Fix `buildRawEmail()` in `outreachEmailsCron.ts` — add `text/plain` MIME part so `multipart/alternative` is valid. Dispatch findasale-dev.
+- Gmail deliverability audit — check SPF/DKIM/DMARC alignment for `outreach@finda.sale`; review Gmail Postmaster Tools if available.
+- Review GitGuardian issues Patrick flagged — resolve or dismiss each incident.
+- Review new Sentry issues Patrick flagged.
+- Note: `GG_API_KEY` needed in Railway env to activate GitGuardian step in `findasale-ci-sentry-health` scheduled task.
+
+**Priority 1 — Patrick: push everything pending**
 
 Commit 1 — S778 @types/minimatch fix (Vercel build):
 ```powershell
@@ -183,6 +200,26 @@ npx prisma generate
 **Note:** Global CLAUDE.md has wrong DB password (`JaZz` should be `JScz`). Cannot edit from Cowork session — Patrick must update manually or it will cause auth failures on future migration commands.
 
 ## Recent Sessions
+
+### S779 — Outreach Email Deliverability Fix (DNS + Railway Env)
+
+**Trigger:** Patrick — "not one open in 417 sends?" (outreach touch 1 stats: 418 sent, 1 open = test send, 0 real opens)
+
+**Root cause:** Every outreach email body embedded `https://backend-production-153c9.up.railway.app` URLs (tracking pixel + one-click unsubscribe link). `.railway.app` is a shared hosting provider domain (same spam-filter category as herokuapp.com, ngrok.io) — routed directly to spam regardless of sender reputation.
+
+**Fix applied:**
+- Registered `api.finda.sale` as custom domain on Railway backend service (port 5000)
+- Added CNAME `api` → `uerigpyb.up.railway.app` to Vercel DNS via API
+- Added TXT `_railway-verify.api` → `railway-verify=86c20c9ad02b641fa4ea5fdff1ca936cca0c89b584a1f4bdc0e5d22322765783` to Vercel DNS via API
+- Patrick set `RAILWAY_BACKEND_URL=https://api.finda.sale` in Railway Variables
+
+**Secondary issue identified:** `buildRawEmail()` in `outreachEmailsCron.ts` declares `multipart/alternative` but only includes `text/html` — no `text/plain` part. Spam filters treat this as a secondary signal. Fix pending.
+
+**Scheduled task update:** `findasale-ci-sentry-health` updated to include GitGuardian as Step 3. GG_API_KEY needed in Railway env.
+
+**Files changed:** None (DNS + Railway env only). Scheduled task prompt updated via MCP.
+
+---
 
 ### S778 — Vercel Build Fix + eBay Blue Pill + Re-push Button
 
