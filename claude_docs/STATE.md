@@ -8,7 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S783 — SEO Sprint: Sitemap Expansion + IndexNow + Schema.org Audit**
+**Latest: S784 — Audit Fixes: Map Geocoding + Categories Icons**
+
+Map bug fixed: platform sales (organizer-created) now get geocoded server-side when status transitions to PUBLISHED and lat is null. `geocodeAddress()` call added to `updateSaleStatus` in saleController.ts (fire-and-forget, never blocks publish response). Batch backfill job (`internalGeocodingController.ts`) extended to include `sourceName: null, status: PUBLISHED` sales so existing pinless sales will be geocoded on next batch run.
+
+Categories bug fixed: `CATEGORY_ICONS` expanded from 14 to 200+ entries covering eBay leaf node names (comics, action figures, toys, kitchen items, coins, jewelry, clothing subcategories, electronics, sports, music, art, etc.). `DISPLAY_NAME_OVERRIDES` map added to shorten verbose eBay names (e.g. "Comics & Graphic Novels" → "Comics"). Render logic updated to use displayLabel everywhere.
+
+Roadmap items #424 and #425: human-verified by Patrick this session.
+
+**Previous: S783 — SEO Sprint: Sitemap Expansion + IndexNow + Schema.org Audit**
 
 Sitemap grew from 1,727 → 1,885 URLs. Added items, encyclopedia, and category pages to the sitemap; fixed guide pages (slim slugs.json + outputFileTracingIncludes + Cache-Control bypass); fixed Washington DC slug (dots in city name). New `/api/items/sitemap` backend endpoint returns all items from PUBLISHED sales (lightweight id+updatedAt). IndexNow integration built from scratch: fires on every sale publish, POSTs sale URL + all item URLs to `https://api.indexnow.org/indexnow`. Key file live at `https://finda.sale/fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt`. Schema.org audit confirmed: Product schema on items, JSON-LD on sale detail, HowTo/Article on guide pages — already implemented. Also fixed homepage "Error Loading Sales" (localhost fallback), /creator/dashboard role guard, and built admin creators/affiliate page.
 
@@ -149,7 +157,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action — Push S783 files:**
+**Patrick Action — Push S783 + S784 files (combined):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/pages/index.tsx
@@ -172,9 +180,11 @@ git add packages/backend/src/services/indexNowService.ts
 git add packages/backend/src/controllers/saleController.ts
 git add "packages/frontend/public/fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt"
 git add packages/backend/.env.example
+git add packages/backend/src/controllers/internalGeocodingController.ts
+git add packages/frontend/pages/categories/index.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat(seo): sitemap expansion + IndexNow integration (S783)"
+git commit -m "feat(map): geocode platform sales on publish + batch backfill; feat(categories): expand icons + display name overrides (S784)"
 .\push.ps1
 ```
 
@@ -194,6 +204,19 @@ Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/se
 - `/sales/[id]` "YARD" badge on auction sale + missing breadcrumb sale name
 
 ## Recent Sessions
+
+### S784 — Audit Fixes: Map Geocoding + Categories Icons
+
+**Trigger:** Weekly audit had HIGH (/categories raw taxonomy) and MEDIUM (/map zero pins). Patrick confirmed #424 and #425 human-verified.
+
+**Completed:**
+- ✅ `/map` zero pins root cause confirmed and fixed: `geocodeAddress()` call added to `updateSaleStatus` in `saleController.ts` — fires when status → PUBLISHED and lat is null. Non-blocking fire-and-forget. `internalGeocodingController.ts` batch job extended with `OR: [{ sourceName: null, status: 'PUBLISHED' }]` to backfill existing platform sales without coordinates.
+- ✅ `/categories` display improved: `CATEGORY_ICONS` expanded from 14 to 200+ entries covering eBay leaf node names. `DISPLAY_NAME_OVERRIDES` added for verbose names (e.g. "Comics & Graphic Novels" → "Comics"). Render logic updated to use displayLabel.
+- ✅ Roadmap #424 (eBay description template code-verified) and #425 marked human-verified.
+
+**Files changed:** `packages/backend/src/controllers/saleController.ts` · `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/frontend/pages/categories/index.tsx`
+
+---
 
 ### S783 — SEO Sprint: Sitemap Expansion + IndexNow + Schema.org Audit
 

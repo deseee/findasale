@@ -1,15 +1,16 @@
-# Patrick's Dashboard — Week of May 24, 2026 (Updated S783)
+# Patrick's Dashboard — Week of May 24, 2026 (Updated S784)
 
 ---
 
 ## Audit Alerts (Weekly Site Audit — 2026-05-23)
 
-**HIGH — `/categories` page shows raw eBay taxonomy paths as category names.** Instead of clean labels like "Comics" or "Action Figures," shoppers see internal strings like "Collectibles:Comic Books & Memorabilia:Comics:Comics & Graphic Novels." Needs a display-name mapping before this page is shown to new users.
+✅ **HIGH — `/categories` fixed (S784).** Icons expanded to 200+ eBay leaf node names. Verbose names shortened via display overrides. Deploy to see effect.
 
-**MEDIUM (3 items):**
+✅ **MEDIUM — `/map` geocoding fixed (S784).** Sales now get geocoded when published. Batch backfill job extended to cover existing platform sales. Pins will appear as the backfill runs after deploy.
+
+**MEDIUM (2 remaining):**
 - `/privacy` — em dash renders as literal `—` text
 - `/calendar` — long-running sales repeat on every day, dominating the view
-- `/map` — 200 sales listed but zero pins visible on the map
 
 Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
@@ -17,7 +18,11 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## What Happened This Week
 
-**S783 (latest — SEO Sprint):**
+**S784 (latest — Audit Fixes):**
+- Fixed `/map` zero pins: platform sales now geocoded on publish; batch backfill job extended to cover existing published sales.
+- Fixed `/categories` display: 200+ eBay leaf node icons + verbose name overrides (e.g. "Comics & Graphic Novels" → "Comics").
+
+**S783 (SEO Sprint):**
 - Sitemap: 1,727 → 1,885 URLs. Added item pages, encyclopedia entries, category pages, and guide pages (500 articles).
 - IndexNow: fires automatically every time an organizer publishes a sale — Bing gets pinged instantly with the sale URL + all its item URLs. Key file live at `https://finda.sale/fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt` ✅
 - Schema.org audit: Product schema on items, JSON-LD on sale detail, HowTo/Article on guides — all already implemented.
@@ -39,7 +44,7 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## Pending Patrick Actions
 
-1. **Push S783** — full push block in STATE.md § Next Session
+1. **Push S783 + S784** — combined push block in STATE.md § Next Session
 2. **Submit sitemap to Bing Webmaster Tools** — `https://www.bing.com/webmasters` → Add sitemap → `https://finda.sale/server-sitemap.xml`
 3. **Update Global CLAUDE.md password** — Ctrl+H find-and-replace with current Railway DB password
 
