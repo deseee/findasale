@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S781 — DMARC Upgrade to p=quarantine + Email Stack Audit**
+**Latest: S782 — Outreach Opens UI + Queue Reset**
+
+Built `/admin/outreach-opens` page — clickable via "View opened emails →" link in the Outreach Email Pipeline widget on `/admin`. First attempt had wrong schema fields (assumed flat `openedAt`/`organizerName`/`city`/`state` — schema actually uses per-touch fields + organizer relation). Fixed and deployed. Also re-queued 418 emails sent before the deliverability fix: 354 from before May 24 (date boundary) + 64 from May 24 batches before 16:51:43 UTC (first confirmed open timestamp). Queue now at ~3,349 PENDING, 16 SENT.
+
+**Previous: S781 — DMARC Upgrade to p=quarantine + Email Stack Audit**
 
 DMARC upgraded from `p=none` to `p=quarantine` (with `rua=mailto:dmarc-reports@finda.sale`). SPF/DKIM confirmed clean for Resend and Google Workspace. MailerLite DKIM gap documented (free plan limitation — acceptable given ~0 campaign usage). Email stack roles clarified.
 
@@ -145,6 +149,19 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
+**Patrick Action — Push S782 files:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/adminController.ts
+git add packages/backend/src/routes/admin.ts
+git add packages/frontend/pages/admin/index.tsx
+git add packages/frontend/pages/admin/outreach-opens.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat: outreach opens page + queue reset (S782)"
+.\push.ps1
+```
+
 **Patrick Action — Update Global CLAUDE.md password:**
 Replace old password `Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8` with new `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW` in both DATABASE_URL lines (internal + public proxy). Use Ctrl+H find-and-replace.
 
@@ -163,11 +180,21 @@ Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\datab
 - #425: UI confirmed (✅ "Also push to eBay" checkbox in review queue More Details). End-to-end push not tested without real publish.
 - #426: ✅ fully verified (Best Offers checkbox + conditional fields on edit-item).
 
-**Priority 3 — eBay pending QA:**
-- #424: Code-verified. Needs live eBay push to fully confirm end-to-end.
-- #425: UI confirmed. End-to-end push not tested without real publish.
-
 ## Recent Sessions
+
+### S782 — Outreach Opens UI + Queue Reset
+
+**Trigger:** Patrick saw 7 new email opens on the admin dashboard and wanted to (1) see which emails were opened, (2) have a clickable page for it, and (3) re-queue all emails sent before the fix.
+
+**Completed:**
+- ✅ Fixed `getOutreachOpens` controller — initial version assumed flat fields (`openedAt`, `organizerName`, `city`, `state`) that don't exist. Rewrote to query per-touch fields (`touch1OpenedAt`–`touch4OpenedAt`) with OR condition + organizer relation join for `businessName` and `website`.
+- ✅ Built `/admin/outreach-opens` page (`pages/admin/outreach-opens.tsx`) — table of all organizers who opened any outreach email, with name, email, address, website (linked), touch number, sent date, open date, status badge.
+- ✅ Added "View opened emails →" link to Outreach Email Pipeline widget in `pages/admin/index.tsx`.
+- ✅ Re-queued 418 pre-fix emails via direct Railway DB update: 354 from May 17–23 + 64 from May 24 batches before 16:51:43 UTC (first confirmed open). All touch fields cleared, status reset to PENDING, attemptCount = 0.
+
+**Files changed:** `packages/backend/src/controllers/adminController.ts` · `packages/backend/src/routes/admin.ts` · `packages/frontend/pages/admin/index.tsx` · `packages/frontend/pages/admin/outreach-opens.tsx` (new)
+
+---
 
 ### S781 — DMARC Upgrade + Email Stack Audit
 
