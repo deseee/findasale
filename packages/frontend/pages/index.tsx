@@ -653,7 +653,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
 };
 
 export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
-  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.finda.sale';
 
   try {
     const res = await fetch(`${BACKEND_URL}/api/feed?limit=12&status=upcoming`);
