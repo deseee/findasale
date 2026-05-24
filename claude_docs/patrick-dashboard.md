@@ -8,11 +8,11 @@
 
 ✅ **MEDIUM — `/map` geocoding fixed (S784).** Sales now get geocoded when published. Batch backfill job extended to cover existing platform sales. Pins will appear as the backfill runs after deploy.
 
-**MEDIUM (2 remaining):**
-- `/privacy` — em dash renders as literal `—` text
-- `/calendar` — long-running sales repeat on every day, dominating the view
+✅ **MEDIUM — `/privacy` already clean.** Deployed file uses real em dash characters. Audit finding was stale.
 
-Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
+✅ **MEDIUM — `/calendar` already fixed.** Ongoing sales banner (blue pills) already deployed. Long-running sales are separated from the grid.
+
+Full report: `claude_docs/audits/weekly-audit-2026-05-23.md` — all findings resolved.
 
 ---
 

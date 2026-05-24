@@ -194,14 +194,14 @@ Update both DATABASE_URL lines (internal + public proxy) with the current passwo
 **Patrick Action — Submit sitemap to Bing Webmaster Tools:**
 Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/server-sitemap.xml`
 
-**Priority 1 — Pending Chrome QA backlog:**
-- #424: Code-verified. Needs live eBay push to fully confirm end-to-end.
+**Priority 1 — Chrome QA backlog:**
+- #424: Code-verified. Needs live eBay push to confirm end-to-end.
 - #425: UI confirmed. End-to-end push not tested without real publish.
 
-**Priority 2 — Weekly audit fixes (from patrick-dashboard.md):**
-- `/categories` raw eBay taxonomy strings need display-name mapping
-- `/map` zero pins visible despite 200 sales listed
-- `/sales/[id]` "YARD" badge on auction sale + missing breadcrumb sale name
+**Priority 2 — Remaining audit items (weekly-audit-2026-05-23):**
+- `/sales/[id]` — "YARD" type badge on auction sale + breadcrumb missing sale name (M-003, not yet fixed)
+
+**Priority 3 — Next batch of roadmap items after push.**
 
 ## Recent Sessions
 
@@ -214,7 +214,9 @@ Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/se
 - ✅ `/categories` display improved: `CATEGORY_ICONS` expanded from 14 to 200+ entries covering eBay leaf node names. `DISPLAY_NAME_OVERRIDES` added for verbose names (e.g. "Comics & Graphic Novels" → "Comics"). Render logic updated to use displayLabel.
 - ✅ Roadmap #424 (eBay description template code-verified) and #425 marked human-verified.
 
-**Files changed:** `packages/backend/src/controllers/saleController.ts` · `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/frontend/pages/categories/index.tsx`
+**Audit closure:** `/privacy` and `/calendar` audit findings confirmed already resolved in deployed code — no changes needed. All 4 findings from the weekly-audit-2026-05-23 are closed.
+
+**Files changed:** `packages/backend/src/controllers/saleController.ts` · `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/frontend/pages/categories/index.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
 
 ---
 
