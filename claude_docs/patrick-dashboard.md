@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Week of May 24, 2026 (Updated S784)
+# Patrick's Dashboard — Week of May 24, 2026 (Updated S784b)
 
 ---
 
@@ -18,7 +18,12 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md` — all findings re
 
 ## What Happened This Week
 
-**S784 (latest — Audit Fixes):**
+**S784b (QA batch — 9 items Chrome-verified):**
+- ✅ #352 Organizer tagline, #354 Business Hours, #356 Broadcasts, #359 Pin Sale, #360 Social Links — all visible in settings.
+- ✅ #60 Pricing page ($29 PRO, $79 TEAMS), #260 One-big-sale upgrade section, #263 PRO TOOLS dropdown, #271 TEAMS webhooks/API table.
+- QA session prompt for Groups B/C/D is ready: `claude_docs/qa-session-prompt-groups-bcd.md` — use in a separate Cowork session (one Chrome session at a time).
+
+**S784 (Audit Fixes):**
 - Fixed `/map` zero pins: platform sales now geocoded on publish; batch backfill job extended to cover existing published sales.
 - Fixed `/categories` display: 200+ eBay leaf node icons + verbose name overrides (e.g. "Comics & Graphic Novels" → "Comics").
 
@@ -44,9 +49,10 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md` — all findings re
 
 ## Pending Patrick Actions
 
-1. **Push S783 + S784** — combined push block in STATE.md § Next Session
+1. **Push S783 + S784 + S784b** — combined push block in STATE.md § Next Session
 2. **Submit sitemap to Bing Webmaster Tools** — `https://www.bing.com/webmasters` → Add sitemap → `https://finda.sale/server-sitemap.xml`
 3. **Update Global CLAUDE.md password** — Ctrl+H find-and-replace with current Railway DB password
+4. **Run Groups B/C/D QA session** — open new Cowork session, paste content of `claude_docs/qa-session-prompt-groups-bcd.md` as opening prompt
 
 ---
 

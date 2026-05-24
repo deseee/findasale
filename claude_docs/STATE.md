@@ -8,13 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S784 — Audit Fixes: Map Geocoding + Categories Icons**
+**Latest: S784 — Audit Fixes: Map Geocoding + Categories Icons + QA Batch (9 items)**
 
 Map bug fixed: platform sales (organizer-created) now get geocoded server-side when status transitions to PUBLISHED and lat is null. `geocodeAddress()` call added to `updateSaleStatus` in saleController.ts (fire-and-forget, never blocks publish response). Batch backfill job (`internalGeocodingController.ts`) extended to include `sourceName: null, status: PUBLISHED` sales so existing pinless sales will be geocoded on next batch run.
 
 Categories bug fixed: `CATEGORY_ICONS` expanded from 14 to 200+ entries covering eBay leaf node names (comics, action figures, toys, kitchen items, coins, jewelry, clothing subcategories, electronics, sports, music, art, etc.). `DISPLAY_NAME_OVERRIDES` map added to shorten verbose eBay names (e.g. "Comics & Graphic Novels" → "Comics"). Render logic updated to use displayLabel everywhere.
 
 Roadmap items #424 and #425: human-verified by Patrick this session.
+
+**S784b QA continuation (same session, context compressed):** Chrome QA of 9 Pending Chrome QA roadmap items — all verified. Chrome conflict encountered mid-session (two Cowork sessions sharing one browser — mutual logout). DB inaccessible from VM (disk full + Railway password rotated 2026-05-24 post-GitGuardian, new password not available in VM). QA prompt for Groups B/C/D (`qa-session-prompt-groups-bcd.md`) fixed: added Chrome concurrency warning + replaced hardcoded DB password with Railway dashboard instructions.
 
 **Previous: S783 — SEO Sprint: Sitemap Expansion + IndexNow + Schema.org Audit**
 
@@ -157,7 +159,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action — Push S783 + S784 files (combined):**
+**Patrick Action — Push S783 + S784 + S784b files (combined):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/pages/index.tsx
@@ -182,9 +184,11 @@ git add "packages/frontend/public/fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt"
 git add packages/backend/.env.example
 git add packages/backend/src/controllers/internalGeocodingController.ts
 git add packages/frontend/pages/categories/index.tsx
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/qa-session-prompt-groups-bcd.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat(map): geocode platform sales on publish + batch backfill; feat(categories): expand icons + display name overrides (S784)"
+git commit -m "feat(map): geocode platform sales on publish + batch backfill; feat(categories): expand icons; qa(S784b): verify 9 Pending Chrome QA items; fix QA session prompt"
 .\push.ps1
 ```
 
@@ -194,29 +198,47 @@ Update both DATABASE_URL lines (internal + public proxy) with the current passwo
 **Patrick Action — Submit sitemap to Bing Webmaster Tools:**
 Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/server-sitemap.xml`
 
-**Priority 1 — Chrome QA backlog:**
+**Priority 1 — Groups B/C/D QA session (prompt is ready):**
+Use `claude_docs/qa-session-prompt-groups-bcd.md` in a dedicated session when Chrome is free (ONE session at a time). Covers XP/Guild system, camera/photo pipeline, eBay features. DB checks require Railway dashboard password (get from dashboard → Postgres → Connect).
+
+**Priority 2 — Remaining organizer QA items (Group A, not yet verified):**
+- #363 Auction Buyer's Premium — AUCTION type toggle seen, but "Buyer's Premium %" input + per-item "Lot #" fields not confirmed. Needs Chrome.
+- #41 Sale Share / iCal Export — not tested this session.
+- Shopper batch: #266, #7, #350, #351, #184 — need user12/user13 login.
+
+**Priority 3 — Chrome QA backlog (code-verified only):**
 - #424: Code-verified. Needs live eBay push to confirm end-to-end.
 - #425: UI confirmed. End-to-end push not tested without real publish.
 
-**Priority 2 — Remaining audit items (weekly-audit-2026-05-23):**
+**Priority 4 — Remaining audit items (weekly-audit-2026-05-23):**
 - `/sales/[id]` — "YARD" type badge on auction sale + breadcrumb missing sale name (M-003, not yet fixed)
 
-**Priority 3 — Next batch of roadmap items after push.**
+**Patrick Action — Update Global CLAUDE.md password:**
+Update both DATABASE_URL lines (internal + public proxy) with the current password from Railway dashboard. [Passwords redacted from docs — store in CLAUDE.md only]
+
+**Patrick Action — Submit sitemap to Bing Webmaster Tools:**
+Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/server-sitemap.xml`
 
 ## Recent Sessions
 
-### S784 — Audit Fixes: Map Geocoding + Categories Icons
+### S784 — Audit Fixes: Map Geocoding + Categories Icons + Chrome QA Batch
 
-**Trigger:** Weekly audit had HIGH (/categories raw taxonomy) and MEDIUM (/map zero pins). Patrick confirmed #424 and #425 human-verified.
+**Trigger:** Weekly audit had HIGH (/categories raw taxonomy) and MEDIUM (/map zero pins). Patrick confirmed #424 and #425 human-verified. Also: QA plan session — 9 Pending Chrome QA items knocked out.
 
 **Completed:**
 - ✅ `/map` zero pins root cause confirmed and fixed: `geocodeAddress()` call added to `updateSaleStatus` in `saleController.ts` — fires when status → PUBLISHED and lat is null. Non-blocking fire-and-forget. `internalGeocodingController.ts` batch job extended with `OR: [{ sourceName: null, status: 'PUBLISHED' }]` to backfill existing platform sales without coordinates.
 - ✅ `/categories` display improved: `CATEGORY_ICONS` expanded from 14 to 200+ entries covering eBay leaf node names. `DISPLAY_NAME_OVERRIDES` added for verbose names (e.g. "Comics & Graphic Novels" → "Comics"). Render logic updated to use displayLabel.
 - ✅ Roadmap #424 (eBay description template code-verified) and #425 marked human-verified.
+- ✅ Chrome QA — 9 items verified: #352 (tagline field), #354 (business hours), #356 (broadcasts), #359 (pin sale), #360 (social links), #60 (pricing page $29/$79), #260 (one-big-sale upgrade), #263 (PRO TOOLS dropdown), #271 (TEAMS webhooks/API table). Roadmap rows updated.
+- ✅ QA session prompt fixed (`qa-session-prompt-groups-bcd.md`): Chrome concurrency warning added; hardcoded DB password replaced with Railway dashboard instructions.
+
+**Chrome conflict mid-session:** Patrick had started the groups B/C/D QA session in another Cowork window — they share one browser, causing mutual logout. Chrome work stopped; prompt was already generated and sent to the other session.
+
+**DB inaccessible from VM:** Railway DB password rotated 2026-05-24 (post-GitGuardian). New password not available in VM bash. psycopg2 auth failure confirmed regardless per memory. DB checks deferred to groups B/C/D session via Railway dashboard instructions in the prompt.
 
 **Audit closure:** `/privacy` and `/calendar` audit findings confirmed already resolved in deployed code — no changes needed. All 4 findings from the weekly-audit-2026-05-23 are closed.
 
-**Files changed:** `packages/backend/src/controllers/saleController.ts` · `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/frontend/pages/categories/index.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+**Files changed:** `packages/backend/src/controllers/saleController.ts` · `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/frontend/pages/categories/index.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/qa-session-prompt-groups-bcd.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
 
 ---
 
