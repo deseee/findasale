@@ -1536,14 +1536,24 @@ const EditItemPage = () => {
                     <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
                       Live on eBay
                     </div>
-                    <a
-                      href={`https://www.ebay.com/itm/${item.ebayListingId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-                    >
-                      View on eBay
-                    </a>
+                    <div className="flex gap-2">
+                      <a
+                        href={`https://www.ebay.com/itm/${item.ebayListingId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                      >
+                        View on eBay
+                      </a>
+                      <button
+                        type="button"
+                        onClick={handlePushToEbay}
+                        disabled={ebayPushPending}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {ebayPushPending ? 'Pushing...' : 'Re-push to eBay'}
+                      </button>
+                    </div>
                   </div>
                 ) : item?.ebayOfferId ? (
                   <div className="space-y-2">
