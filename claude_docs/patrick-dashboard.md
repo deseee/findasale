@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Week of May 24, 2026 (Updated S780b)
+# Patrick's Dashboard — Week of May 24, 2026 (Updated S781)
 
 ---
 
@@ -18,7 +18,12 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 
 ## What Happened This Week
 
-**S780/S780b (latest — Deliverability Fix + GitGuardian + CORS + Indexes + Password Rotation + DNS):**
+**S781 (latest — DMARC Upgrade + Email Stack Audit):**
+- Full email auth audit: Resend ✅ clean, Google Workspace ✅ clean, MailerLite gap documented (free plan, negligible risk — 1 campaign ever sent)
+- Email stack roles clarified: Resend = app automated emails, Google Workspace = cold outreach, MailerLite = subscriber list (barely used)
+- ✅ DMARC upgraded: `_dmarc.finda.sale` now `p=quarantine` — confirmed live. Emails that fail auth land in spam instead of inboxes.
+
+**S780/S780b (Deliverability Fix + GitGuardian + CORS + Indexes + Password Rotation + DNS):**
 - Fixed email MIME: plain-text fallback now included in outreach emails (was html-only, hurting deliverability)
 - Fixed CORS P0: `api.finda.sale` wasn't in the CORS allowlist after S779 added it as Railway custom domain — 34 errors in 23hrs
 - GitGuardian alert: live Railway DB password was committed in STATE.md (S776). Removed from files. ✅ **Password rotated** — new password active, backend uses reference variable (auto-updates)
@@ -65,12 +70,12 @@ Full report: `claude_docs/audits/weekly-audit-2026-05-23.md`
 ### 1. Update Global CLAUDE.md password:
 In your Cowork settings (Global CLAUDE.md), Ctrl+H replace old password `Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8` with new `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`. Both DATABASE_URL lines (internal + public proxy).
 
-### 2. Push S780b wrap docs:
+### 2. Push S781 wrap docs:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S780b wrap — password rotation + SPF DNS fix complete"
+git commit -m "docs: S781 wrap — DMARC upgrade to p=quarantine confirmed"
 .\push.ps1
 ```
 
@@ -85,8 +90,7 @@ Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\datab
 ## Next Up
 
 1. Update Global CLAUDE.md password (action #1)
-2. Push S780b wrap docs (action #2)
+2. Push S781 wrap docs (action #2)
 3. Delete temp scripts (action #3)
 4. user3 TEAMS modal bug + review queue UX improvement
 5. Chrome QA: #424/#425/#426 (needs PRO account with eBay OAuth connected)
-6. DMARC upgrade to `p=quarantine` (after SPF propagation — a few days)

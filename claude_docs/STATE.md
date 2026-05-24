@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S780 — Deliverability Fix + GitGuardian + CORS + Slow Query Indexes**
+**Latest: S781 — DMARC Upgrade to p=quarantine + Email Stack Audit**
+
+DMARC upgraded from `p=none` to `p=quarantine` (with `rua=mailto:dmarc-reports@finda.sale`). SPF/DKIM confirmed clean for Resend and Google Workspace. MailerLite DKIM gap documented (free plan limitation — acceptable given ~0 campaign usage). Email stack roles clarified.
+
+**Previous: S780 — Deliverability Fix + GitGuardian + CORS + Slow Query Indexes**
 
 Audit of S779 priorities plus execution. 4 code fixes, 1 P0 credential leak remediated, 6 DB indexes added.
 
@@ -159,10 +163,27 @@ Remove-Item -LiteralPath "C:\Users\desee\ClaudeProjects\FindaSale\packages\datab
 - #425: UI confirmed (✅ "Also push to eBay" checkbox in review queue More Details). End-to-end push not tested without real publish.
 - #426: ✅ fully verified (Best Offers checkbox + conditional fields on edit-item).
 
-**Priority 3 — DMARC upgrade:**
-- After a few days of SPF propagation, upgrade root `_dmarc` from `p=none` to `p=quarantine` in Vercel DNS.
+**Priority 3 — eBay pending QA:**
+- #424: Code-verified. Needs live eBay push to fully confirm end-to-end.
+- #425: UI confirmed. End-to-end push not tested without real publish.
 
 ## Recent Sessions
+
+### S781 — DMARC Upgrade + Email Stack Audit
+
+**Trigger:** Deferred from S780b — upgrade `_dmarc.finda.sale` from `p=none` to `p=quarantine` after SPF propagation.
+
+**Completed:**
+- ✅ Full SPF/DKIM/DMARC audit: Resend DKIM (TXT) verified, Google Workspace DKIM on `outreach.finda.sale` verified, MailerLite DKIM gap documented (free plan uses `d=mlsend.com` not `d=finda.sale` — paywalled feature, ~0 campaigns sent so risk is negligible)
+- ✅ Email stack roles clarified: Resend = platform automated emails (outreachEmailsCron etc.), Google Workspace = cold outreach to organizers, MailerLite = subscriber list/newsletter (barely used)
+- ✅ DMARC upgraded: `_dmarc.finda.sale` TXT → `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@finda.sale` — confirmed live via Google DNS
+
+**Still pending (Patrick):**
+- Global CLAUDE.md password update (old `Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8` → new `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`)
+
+**Files changed:** None (DNS change only via Vercel dashboard)
+
+---
 
 ### S780 — Deliverability Fix + GitGuardian + CORS + Slow Query Indexes
 
