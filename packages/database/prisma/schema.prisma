@@ -5,8 +5,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL") // pooled (PgBouncer) — used by app at runtime
-  directUrl = env("DIRECT_URL") // direct connection — required for migrations (Prisma)
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL") // same URL — no PgBouncer in use; eliminates DIRECT_URL secret
 }
 
 model User {

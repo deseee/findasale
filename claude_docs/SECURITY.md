@@ -97,7 +97,15 @@ Test fixtures and .env.example templates are permitted; live credentials in any 
 
 Rotate keys if exposed.
 
-(Rule added 2026-03-11, Session 137.)
+**Railway DB password rotation checklist (run every time the Railway DB password changes):**
+1. Update `packages/database/.env` with new password
+2. Verify Railway backend uses `${{Postgres.DATABASE_URL}}` reference variable (auto-rotates — no action needed)
+3. Update GitHub Secret `DATABASE_URL` in repo Settings → Secrets and variables → Actions
+4. `DIRECT_URL` secret is intentionally not used — schema.prisma aliases directUrl to DATABASE_URL
+
+If GitHub Secrets are not updated after a rotation, ALL Monday cron workflows will fail on the next scheduled run.
+
+(Rule added 2026-03-11, Session 137. Rotation checklist added S788 after third recurrence.)
 
 ---
 
