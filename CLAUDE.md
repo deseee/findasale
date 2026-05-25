@@ -1,3 +1,96 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+---
+
+## Commands
+
+**Run everything (frontend + backend concurrently):**
+```bash
+pnpm dev
+```
+
+**Run individually:**
+```bash
+pnpm --filter ./packages/backend dev      # Express on :3001, hot-reload via nodemon+tsx
+pnpm --filter ./packages/frontend dev     # Next.js on :3000
+```
+
+**Build:**
+```bash
+pnpm --filter ./packages/backend build    # tsc → dist/
+pnpm --filter ./packages/frontend build   # next build (runs generate-seo-index.ts pre-build)
+```
+
+**Lint & type-check:**
+```bash
+pnpm --filter ./packages/frontend lint                                          # ESLint via next lint
+cd packages/frontend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules
+cd packages/backend  && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules
+```
+
+**Tests (backend only — Jest):**
+```bash
+pnpm --filter ./packages/backend test
+pnpm --filter ./packages/backend test -- --testPathPattern=src/__tests__/myFile.test.ts
+```
+
+**Database:**
+```bash
+# Local dev only — never against production
+cd packages/database
+npx prisma migrate dev          # create + apply a new migration
+npx prisma generate             # regenerate TypeScript client after schema change
+npx prisma db seed              # run prisma/seed.ts
+npx prisma studio               # GUI browser for the DB
+
+# Production (Railway) — always override DATABASE_URL
+$env:DATABASE_URL="<Railway connection string>"
+npx prisma migrate deploy       # apply pending migrations
+npx prisma generate             # regenerate client
+```
+
+---
+
+## Architecture
+
+### Monorepo layout
+
+```
+packages/
+  backend/   — Express API (Node.js, Prisma, Stripe, Socket.io)
+  frontend/  — Next.js 14 Pages Router PWA (Vercel)
+  database/  — Prisma schema + migrations (sole schema authority)
+  shared/    — Cross-boundary types (NEVER import from frontend — breaks Vercel build)
+```
+
+### Two separate deployments
+
+- **Frontend:** Vercel → `finda.sale` (auto-deploy on push to `main`)
+- **Backend:** Railway → `backend-production-153c9.up.railway.app` (auto-deploy on push to `main`)
+- **Database:** Railway PostgreSQL (`maglev.proxy.rlwy.net:13949/railway`)
+- `packages/database/.env` points to localhost — always override `DATABASE_URL` for production commands.
+
+### Backend structure
+
+`src/routes/` registers 100+ Express route files (one per domain). Each route file imports from `src/controllers/` which calls `src/services/`. Background jobs live in `src/jobs/`, cron scheduling in index.ts.
+
+Auth is stateless JWT (cookie-based). NextAuth v4 handles OAuth on the frontend and writes its own session cookie; the backend has a parallel JWT flow for API access. The `[...nextauth]` catch-all must not conflict with any backend route prefix.
+
+### Frontend structure
+
+Next.js 14 **Pages Router** (not App Router). All pages live in `pages/`. API routes in `pages/api/` proxy to the Express backend or handle NextAuth. State is TanStack Query (server) + React context (client). Images are Cloudinary signed-URL uploads.
+
+### Key cross-layer rules
+
+- `packages/database/` owns schema — no Prisma edits in other packages.
+- `packages/backend/` owns business logic and API response shape.
+- `packages/frontend/` never imports `@findasale/shared` — copy types locally instead.
+- Production schema changes: `prisma migrate deploy` (never `prisma db push`).
+
+---
+
 # Project Execution Contract – FindA.Sale
 
 Scope: Entire monorepo
