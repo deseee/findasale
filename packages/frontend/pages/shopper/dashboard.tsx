@@ -45,6 +45,84 @@ import RankHeroSection from '../../components/RankHeroSection';
 import ActionBar from '../../components/ActionBar';
 import ExplorerGuildOnboardingCard from '../../components/ExplorerGuildOnboardingCard';
 
+interface QrModalProps {
+  qrDataUrl: string;
+  referralLink: string | null;
+  onClose: () => void;
+  showToast: (message: string, type: 'success' | 'error' | 'info') => void;
+}
+
+function QrModal({ qrDataUrl, referralLink, onClose, showToast }: QrModalProps) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  const handleShare = async () => {
+    const link = referralLink || window.location.origin;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'FindA.Sale', url: link });
+      } catch {
+        // User cancelled — no toast needed
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast('Link copied to clipboard!', 'success');
+      } catch {
+        showToast('Could not copy link', 'error');
+      }
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-gray-900 dark:bg-gray-950 rounded-lg p-6 max-w-sm w-full shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-white">Your QR Code</h2>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md text-gray-400 hover:text-white transition-colors"
+            aria-label="Close QR modal"
+          >
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex justify-center mb-4">
+          <button
+            onClick={() => setExpanded((prev) => !prev)}
+            className="focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg"
+            aria-label={expanded ? 'Shrink QR code' : 'Expand QR code'}
+            title={expanded ? 'Click to shrink' : 'Click to expand'}
+          >
+            <img
+              src={qrDataUrl}
+              alt="Your personal QR code for checkout"
+              className={`border-4 border-amber-600 rounded-lg transition-all duration-200 ${expanded ? 'w-72 h-72' : 'w-56 h-56'}`}
+            />
+          </button>
+        </div>
+        <p className="text-center text-xs text-gray-500 mb-4">Tap QR to {expanded ? 'shrink' : 'expand'}</p>
+        <p className="text-center text-sm text-gray-300 mb-4">
+          Show this to the organizer at checkout
+        </p>
+        <button
+          onClick={handleShare}
+          className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors"
+        >
+          Share My Link
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const ShopperDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
@@ -413,43 +491,12 @@ const ShopperDashboard = () => {
 
           {/* QR Modal */}
           {showQrModal && shopperQRCodeDataUrl && (
-            <div
-              className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4"
-              onClick={() => setShowQrModal(false)}
-            >
-              <div
-                className="bg-gray-900 dark:bg-gray-950 rounded-lg p-6 max-w-sm w-full shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-bold text-white">Your QR Code</h2>
-                  <button
-                    onClick={() => setShowQrModal(false)}
-                    className="p-1 rounded-md text-gray-400 hover:text-white transition-colors"
-                    aria-label="Close QR modal"
-                  >
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-                <div className="flex justify-center mb-6">
-                  <img
-                    src={shopperQRCodeDataUrl}
-                    alt="Your personal QR code for checkout"
-                    className="w-56 h-56 border-4 border-amber-600 rounded-lg"
-                  />
-                </div>
-                <p className="text-center text-sm text-gray-300">
-                  Show this to the organizer at checkout
-                </p>
-              </div>
-            </div>
+            <QrModal
+              qrDataUrl={shopperQRCodeDataUrl}
+              referralLink={referralLink}
+              onClose={() => setShowQrModal(false)}
+              showToast={showToast}
+            />
           )}
 
           {/* 1b. Explorer's Guild Onboarding Card (for INITIATE users) */}

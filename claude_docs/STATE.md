@@ -8,9 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S786 — DB Audit: Camera Features Root Cause Found + Railway CLI Fixed + Nav Fix**
+**Latest: S787 — QA Session: Shopper Features, Camera QA, Bug Fixes Dispatched**
 
-Railway DB access fixed permanently: CLI `railway run --service backend env` gets live password; psycopg2 works. DB audit of all 6 camera features complete. Mobile nav drawer updated to match desktop. Roadmap corrections for #323/#332/#334.
+Continuation of QA backlog. Bell icon order fixed in Layout.tsx (desktop+mobile). QR expand+share added to dashboard.tsx and CartDrawer.tsx. #7 referral rewards ✅ Chrome-verified. #339 low-confidence refuse-to-fill ✅ confirmed via "Too dark to identify" dialog. #340 UNVERIFIED (VM camera too dark for publish). #261 UNVERIFIED (no RANGER users in production DB). Shopper accounts (user12+) blocked — production DB not re-seeded after S576 password change.
 
 **#319, #325, #328 — BROKEN (root cause confirmed):** Photo table has 0 rows. Upload pipeline writes to Item.photoUrls (string array) only; never creates Photo records. All three features depend on Photo model fields (photoRole, orderIndex, roleReasoning) — dead code. Fix: make upload pipeline create Photo records. Dispatching to dev next session.
 
@@ -178,12 +178,12 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
-| #261 Treasure Hunt XP Rank Multiplier | Rank permanence bug FIXED (xpService.ts ratchet shipped S785). Still needs retest: set user12 to RANGER, trigger QR scan, verify ~38 XP awarded | Re-run test as RANGER after push.ps1; needs QR scan API call | S785 |
+| #261 Treasure Hunt XP Rank Multiplier | UNVERIFIED S787 — No RANGER users in production DB; /admin access denied for user1 (Patrick-only) | Patrick: promote a test shopper to RANGER in Railway DB, then re-test QR scan XP (~38 XP) | S787 |
 | RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
+| Shopper account login blocked (#266, #184, user12+) | Production DB not re-seeded after S576 password change — Seedy2025! rejected for all shopper accounts | Patrick: `cd packages/database && $env:DATABASE_URL="[Railway URL]" && npx prisma db seed` against production | S787 |
 | #319 Burst Clustering | BROKEN S786 — Photo table has 0 rows; upload pipeline writes to Item.photoUrls only, never creates Photo records; clusterConfidence NULL on all 130 items | Fix upload pipeline to create Photo records (dispatch findasale-dev) | S786 |
 
-| #339 Low-Confidence Refuse-to-Fill | ⚠️ aiConfidence written on all items but low-conf items still have titles/categories — gate may not enforce blanks | Chrome QA: upload ambiguous item, verify brand/category left blank at conf <0.6 | S786 |
-| #340 Auto-Reopen Camera After Publish | No DB column (pure frontend flow). Needs Chrome rapidfire mobile viewport test | Chrome QA mobile: rapidfire → publish → verify camera reopens | S786 |
+| #340 Auto-Reopen Camera After Publish | VM camera too dark to complete item publish in S787; cannot verify auto-reopen loop | Chrome QA mobile: need better-lit environment or mobile device; rapidfire → publish → verify camera reopens | S787 |
 | #328 Photo Role Awareness Phase 1 | BROKEN S786 — Photo table has 0 rows; same root cause as #319/#325. photoRole/roleReasoning exist in schema but dead code | Fix upload pipeline to create Photo records (same dispatch as #319) | S786 |
 | #325 Best-Photo-First Sorting | BROKEN S786 — Photo table has 0 rows; same root cause as #319. orderIndex column exists but unreachable | Fix upload pipeline to create Photo records (same dispatch as #319) | S786 |
 | #244 eBay Quick List / Direct Push | Push to eBay button confirmed in edit-item ✅; eBay CSV export not found on add-items page; full flow needs eBay connection for user1 | Connect eBay to user1 in Railway DB, then retest | S785 |
@@ -204,16 +204,30 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action — Push S786 wrap docs + nav fix + roadmap:**
+**Patrick Action — Push S787 wrap + bug fixes + roadmap:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/shopper/dashboard.tsx
+git add packages/frontend/components/CartDrawer.tsx
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix(nav): add missing mobile drawer items (Discount Rules, Consignors, Locations, Shopify); chore(roadmap): camera feature DB audit S786; chore(state): S786 wrap"
+git commit -m "fix(nav): bell icon before QR scanner desktop+mobile (#350); feat(shopper): QR modal expand+share in dashboard+CartDrawer (#351); chore(qa): S787 QA results — #7 ✅ #339 ✅; chore(state): S787 wrap"
 .\push.ps1
 ```
+
+**Patrick Action — Seed production DB (BLOCKER for all shopper QA):**
+Shopper accounts (user12+) can't log in — production was never re-seeded after S576 password change.
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="[Railway DATABASE_URL from Railway dashboard → findasale-db → Variables]"
+npx prisma db seed
+```
+⚠️ This will reset seed data including organizer users. Run only after confirming Patrick's test data is backed up.
+
+**Patrick Action — Promote a test shopper to RANGER (for #261 QA):**
+In Railway DB (Prisma Studio or psql), find user12–user23, set `guildXp` ≥ 2000 and `explorerRank` = 'RANGER'. Then re-test QR scan for ~38 XP.
 
 **Patrick Action — Update Global CLAUDE.md credentials section:**
 Both DATABASE_URL lines now use password: `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`
@@ -289,6 +303,29 @@ Camera/Photo batch (#319, #336, #339, #340, #328, #325) all UNVERIFIED because u
 - M-003: `/sales/[id]` — "YARD" badge on auction sale + breadcrumb missing sale name.
 
 ## Recent Sessions
+
+### S787 — QA Session: Shopper Features + Camera + Icon Order + QR Expand/Share
+
+**Trigger:** Continue QA backlog (S787 is QA-ceiling session per §4 rule). Goal: clear shopper batch, camera batch, XP rank.
+
+**Verified ✅ (2):**
+- #7 Shopper Referral Rewards: /shopper/referrals loads, referral link displays, copy button works, stats show signups/XP. ✅ Chrome-verified.
+- #339 Low-Confidence Refuse-to-Fill: Photographed item in dark environment → "Too dark to identify" dialog appeared → AI fields (brand/category) refused to fill, title/description still populated. Low-confidence path confirmed working. ✅
+
+**UNVERIFIED (3):**
+- #340 Auto-Reopen Camera: VM camera too dark to complete item publish; cannot verify auto-reopen behavior.
+- #261 Treasure Hunt XP Rank Multiplier: No RANGER users in production DB; /admin access denied for user1.
+- #266 Explorer Profile Dropdown: Page loads ✅; avatar dropdown UNVERIFIED — shopper accounts (user12+) blocked by re-seed requirement.
+
+**Bugs Fixed + Dispatched:**
+- #350 Nav Icon Order: Bell icon was position 4 (after cart) in desktop and mobile. Layout.tsx surgical edit — bell moved before QR scanner. TypeScript clean.
+- #351 QR Modal Expand + Share: dashboard.tsx and CartDrawer.tsx — added click-to-expand state toggle + Web Share API + clipboard fallback. TypeScript clean.
+
+**Blocker confirmed:** Shopper accounts (user12+) login fails with Seedy2025! — production DB not re-seeded after S576 password change. All shopper-specific tests (#266, #184, etc.) blocked until Patrick runs seed against production Railway DB.
+
+**Files changed:** `packages/frontend/components/Layout.tsx` · `packages/frontend/pages/shopper/dashboard.tsx` · `packages/frontend/components/CartDrawer.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S786 — DB Audit: Camera Feature Root Cause + Railway CLI Fixed + Nav Fix + Roadmap Corrections
 

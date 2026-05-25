@@ -46,7 +46,9 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'shared' | 'error'>('idle');
   const [showQrModal, setShowQrModal] = useState(false);
+  const [qrExpanded, setQrExpanded] = useState(false);
   const [shopperQRCodeDataUrl, setShopperQRCodeDataUrl] = useState<string | null>(null);
+  const [referralLink, setReferralLink] = useState<string | null>(null);
 
   const { data: holds = [], isLoading, refetch } = useQuery({
     queryKey: ['my-holds-full'],
@@ -66,6 +68,20 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
       const response = await api.get(`/users/qr/${user.id}`);
       if (response.data?.qrCodeDataUrl) {
         setShopperQRCodeDataUrl(response.data.qrCodeDataUrl);
+      }
+      return response.data;
+    },
+    enabled: isOpen && !!user?.id,
+  });
+
+  // Fetch referral link for QR modal share button
+  useQuery({
+    queryKey: ['my-referral-code'],
+    queryFn: async () => {
+      const response = await api.get('/referrals/my-code');
+      if (response.data?.code) {
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+        setReferralLink(`${baseUrl}/register?ref=${response.data.code}`);
       }
       return response.data;
     },
@@ -134,6 +150,24 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
       setShareStatus('error');
       showToast('Failed to share cart', 'error');
       console.error('[drawer] Share cart error:', err);
+    }
+  };
+
+  const handleShareQrLink = async () => {
+    const link = referralLink || (typeof window !== 'undefined' ? window.location.origin : '');
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'FindA.Sale', url: link });
+      } catch {
+        // User cancelled — no toast needed
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast('Link copied to clipboard!', 'success');
+      } catch {
+        showToast('Could not copy link', 'error');
+      }
     }
   };
 
@@ -474,25 +508,34 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
                   aria-label="Close QR modal"
                 >
                   <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
-              <div className="flex justify-center mb-6">
-                <img
-                  src={shopperQRCodeDataUrl}
-                  alt="Your personal QR code for checkout"
-                  className="w-56 h-56 border-4 border-amber-600 rounded-lg"
-                />
+              <div className="flex justify-center mb-2">
+                <button
+                  onClick={() => setQrExpanded((prev) => !prev)}
+                  className="focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg"
+                  aria-label={qrExpanded ? 'Shrink QR code' : 'Expand QR code'}
+                  title={qrExpanded ? 'Click to shrink' : 'Click to expand'}
+                >
+                  <img
+                    src={shopperQRCodeDataUrl}
+                    alt="Your personal QR code for checkout"
+                    className={`border-4 border-amber-600 rounded-lg transition-all duration-200 ${qrExpanded ? 'w-72 h-72' : 'w-56 h-56'}`}
+                  />
+                </button>
               </div>
-              <p className="text-center text-sm text-gray-300">
+              <p className="text-center text-xs text-gray-500 mb-4">Tap QR to {qrExpanded ? 'shrink' : 'expand'}</p>
+              <p className="text-center text-sm text-gray-300 mb-4">
                 Show this to the organizer at checkout
               </p>
+              <button
+                onClick={handleShareQrLink}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors"
+              >
+                Share My Link
+              </button>
             </div>
           </div>
         )}
