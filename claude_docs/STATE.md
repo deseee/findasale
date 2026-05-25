@@ -204,105 +204,55 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action — Push S787 wrap + bug fixes + roadmap:**
+**S788 wrap push block:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
-git add packages/frontend/components/CartDrawer.tsx
-git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix(nav): bell icon before QR scanner desktop+mobile (#350); feat(shopper): QR modal expand+share in dashboard+CartDrawer (#351); chore(qa): S787 QA results — #7 ✅ #339 ✅; chore(state): S787 wrap"
+git commit -m "chore(state): S788 wrap -- scraper incident fix + GitHub Actions credentials"
 .\push.ps1
 ```
 
-**Patrick Action — Seed production DB (BLOCKER for all shopper QA):**
-Shopper accounts (user12+) can't log in — production was never re-seeded after S576 password change.
+**Patrick Action -- Seed production DB (BLOCKER for all shopper QA):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="[Railway DATABASE_URL from Railway dashboard → findasale-db → Variables]"
+$env:DATABASE_URL="[Railway DATABASE_URL from Railway dashboard]"
 npx prisma db seed
 ```
-⚠️ This will reset seed data including organizer users. Run only after confirming Patrick's test data is backed up.
+Back up Barn Door QA Test Sale data first.
 
-**Patrick Action — Promote a test shopper to RANGER (for #261 QA):**
-In Railway DB (Prisma Studio or psql), find user12–user23, set `guildXp` ≥ 2000 and `explorerRank` = 'RANGER'. Then re-test QR scan for ~38 XP.
+**Patrick Action -- Promote a test shopper to RANGER** -- set any user12-user23 to guildXp >= 2000 + explorerRank = RANGER in Railway DB for #261 QA.
 
-**Patrick Action — Update Global CLAUDE.md credentials section:**
-Both DATABASE_URL lines now use password: `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`
-Also update binary note: Railway CLI downloads to /tmp each session (not persistent). Token stays the same.
+**Patrick Action -- Submit sitemap to Bing** -- https://www.bing.com/webmasters -> Add sitemap -> https://finda.sale/server-sitemap.xml
 
-**Patrick Action — Push S783 + S784 + S784b files (combined — still pending):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/index.tsx
-git add packages/frontend/next.config.js
-git add packages/frontend/pages/creator/dashboard.tsx
-git add packages/backend/src/controllers/adminAffiliateController.ts
-git add packages/backend/src/routes/adminAffiliate.ts
-git add packages/backend/src/index.ts
-git add packages/frontend/pages/admin/creators.tsx
-git add packages/frontend/pages/admin/index.tsx
-git add packages/frontend/data/seo-pages/slugs.json
-git add packages/frontend/vercel.json
-git add packages/frontend/public/robots.txt
-git add packages/frontend/public/sitemap.xml
-git add packages/backend/src/routes/sales.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/backend/src/routes/items.ts
-git add packages/frontend/pages/server-sitemap.xml.tsx
-git add packages/backend/src/services/indexNowService.ts
-git add packages/backend/src/controllers/saleController.ts
-git add "packages/frontend/public/fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt"
-git add packages/backend/.env.example
-git add packages/backend/src/controllers/internalGeocodingController.ts
-git add packages/frontend/pages/categories/index.tsx
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/qa-session-prompt-groups-bcd.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "feat(map): geocode platform sales on publish + batch backfill; feat(categories): expand icons; qa(S784b): verify 9 Pending Chrome QA items; fix QA session prompt"
-.\push.ps1
-```
+**Next session goal: QA batches + STATE.md cleanup**
 
-**Patrick Action — Push S785 wrap docs + rank permanence fix:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add packages/backend/src/services/xpService.ts
-git add packages/backend/src/controllers/xpController.ts
-git add claude_docs/strategy/roadmap.md
-git commit -m "fix(xp): rank permanence — explorerRank ratchet-only, never demotes on XP spend; qa(S785): Batches 1+2+3 results in roadmap + blocked queue"
-.\push.ps1
-```
+1. STATE.md cleanup first -- archive sessions older than S785 into session-log-archive.md. Trim stale push blocks. Target: <200 lines.
 
-**Patrick Action — Update Global CLAUDE.md password:**
-Update both DATABASE_URL lines (internal + public proxy) with the current password from Railway dashboard. [Passwords redacted from docs — store in CLAUDE.md only]
+2. Dispatch photo pipeline fix -- #319/#325/#328 dead because upload pipeline never creates Photo records. Dispatch findasale-dev.
 
-**Patrick Action — Submit sitemap to Bing Webmaster Tools:**
-Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/server-sitemap.xml`
+3. QA batch -- camera features (after photo fix ships): #319, #325, #328, #336, #339, #340
 
-**Priority 1 — Rank permanence bug fix (SHIPPED S785 — in push block above):**
-Fix: `spendXp()` in `xpService.ts` now uses `lifetimeXpEarned` for rank threshold + ratchet against current stored rank (takes the higher). All 5 XP sink endpoints in `xpController.ts` now read `explorerRank` from DB post-write rather than recomputing from spendable balance. Leo's DB record restored to SCOUT. Awaiting push.
+4. QA batch -- eBay features (needs eBay connection for user1): #244, #293, #295, #298
 
-**Priority 2 — Investigate missing schema items:**
-#323 (Item.valuationMethod not in schema), #332 (ShopifyConnection table missing), #334 (MarkdownRule table missing) — all claim to be shipped but DB schema doesn't match. Dispatch findasale-dev to investigate migration history and either confirm shipped or flag as not migrated.
+5. QA batch -- shopper features (after re-seed): #266, #184, #261 (after RANGER promotion)
 
-**Priority 3 — Resolve upload_image camera QA block:**
-Camera/Photo batch (#319, #336, #339, #340, #328, #325) all UNVERIFIED because upload_image imageId format is unknown in VM context. Research correct imageId format for `mcp__Claude_in_Chrome__upload_image` or find alternative photo injection method.
+6. QA ceiling -- 15+ items in Blocked Queue. Stay QA-only until below 8.
 
-**Priority 4 — Remaining organizer QA (Group A):**
-- #363 Auction Buyer's Premium — "Buyer's Premium %" input + per-item "Lot #" fields not confirmed. Needs Chrome.
-- #41 Sale Share / iCal Export — not tested.
-- Shopper batch: #266, #7, #350, #351, #184 — need user12/user13 login.
-
-**Priority 5 — Chrome QA backlog:**
-- #424: Code-verified. Needs live eBay push to confirm end-to-end.
-- M-003: `/sales/[id]` — "YARD" badge on auction sale + breadcrumb missing sale name.
 
 ## Recent Sessions
+
+### S788 -- Scraper Incident: GitHub Actions Failures Diagnosed + Fixed
+
+**Trigger:** 9 GitHub Actions workflows failed Monday May 25 (scrapers + SMTP verifier). 3rd+ recurrence of the same root cause.
+
+**Root cause:** Railway DB password rotated S780b (May 24). Railway services auto-rotate via reference variable but GitHub Secrets are static -- DATABASE_URL and DIRECT_URL went stale.
+
+**Fix:** Patrick updated GitHub Secrets. SMTP re-run confirmed working (3m 51s). schema.prisma directUrl now aliases DATABASE_URL (no more DIRECT_URL secret needed). SECURITY.md rotation checklist added. 8 scraper files fixed: AZ new dataset ID, RI field mapping, ID/MO/MN/MT/NV changed from throw to clean exit 0.
+
+**Files changed:** packages/database/prisma/schema.prisma, claude_docs/SECURITY.md, 8x scraper source files, claude_docs/STATE.md, claude_docs/patrick-dashboard.md
+
+---
 
 ### S787 — QA Session: Shopper Features + Camera + Icon Order + QR Expand/Share
 
@@ -422,12 +372,3 @@ Camera/Photo batch (#319, #336, #339, #340, #328, #325) all UNVERIFIED because u
 - Sitemap count: 1,727 → 1,885 (+138 URLs; 110 items, 10 categories, ~18 encyclopedia)
 
 **Files changed:** `pages/index.tsx` · `next.config.js` · `pages/creator/dashboard.tsx` · `adminAffiliateController.ts` (new) · `routes/adminAffiliate.ts` (new) · `backend/index.ts` · `pages/admin/creators.tsx` (new) · `pages/admin/index.tsx` · `data/seo-pages/slugs.json` (new) · `vercel.json` · `public/robots.txt` · `public/sitemap.xml` · `routes/sales.ts` · `itemController.ts` · `routes/items.ts` · `server-sitemap.xml.tsx` · `indexNowService.ts` (new) · `saleController.ts` · `fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt` (new) · `.env.example`
-
----
-
-### S782 — Outreach Opens UI + Queue Reset
-
-**Trigger:** Patrick saw 7 new email opens on the admin dashboard and wanted to (1) see which emails were opened, (2) have a clickable page for it, and (3) re-queue all emails sent before the fix.
-
-**Completed:**
-- ✅ Fixed `getOutreachOpens` controller — initial version assumed flat fields (`openedAt`, `organizerName`, `city`, `state`) that don't exist. Rewrote to query per-touch fields (`touch1OpenedAt`–`touch4Ope
