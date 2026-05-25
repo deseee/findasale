@@ -1280,6 +1280,22 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/organizer/hubs" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Store size={14} className="inline mr-2 text-gray-400" /> Market Hubs
                         </Link>
+                        {canAccess('PRO') && (
+                          <>
+                            <Link href="/organizer/color-rules" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                              <Tag size={14} className="inline mr-2 text-teal-500" /> Discount Rules
+                            </Link>
+                            <Link href="/organizer/consignors" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                              <Users size={14} className="inline mr-2 text-teal-500" /> Consignors
+                            </Link>
+                            <Link href="/organizer/locations" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                              <MapPin size={14} className="inline mr-2 text-teal-500" /> Locations
+                            </Link>
+                            <Link href="/organizer/shopify" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                              <ShoppingBag size={14} className="inline mr-2 text-teal-500" /> Shopify
+                            </Link>
+                          </>
+                        )}
                       </>
                     )}
                   </>
