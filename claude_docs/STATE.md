@@ -204,14 +204,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**S788 wrap push block:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "chore(state): S788 wrap -- scraper incident fix + GitHub Actions credentials"
-.\push.ps1
-```
+**S789 note:** STATE.md cleanup done this session -- S783 and older archived to session-log-archive.md.
 
 **Patrick Action -- Seed production DB (BLOCKER for all shopper QA):**
 ```powershell
@@ -227,7 +220,7 @@ Back up Barn Door QA Test Sale data first.
 
 **Next session goal: QA batches + STATE.md cleanup**
 
-1. STATE.md cleanup first -- archive sessions older than S785 into session-log-archive.md. Trim stale push blocks. Target: <200 lines.
+1. ~~STATE.md cleanup~~ DONE (S789) -- S783 archived, stale push block removed. 349 lines.
 
 2. Dispatch photo pipeline fix -- #319/#325/#328 dead because upload pipeline never creates Photo records. Dispatch findasale-dev.
 
@@ -353,22 +346,3 @@ Back up Barn Door QA Test Sale data first.
 **Files changed:** `packages/backend/src/controllers/saleController.ts` · `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/frontend/pages/categories/index.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/qa-session-prompt-groups-bcd.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
 
 ---
-
-### S783 — SEO Sprint: Sitemap Expansion + IndexNow + Schema.org Audit
-
-**Trigger:** Patrick — sitemap count was 1,727 (Bing), fix it properly; items/sales/articles/neighborhoods all missing.
-
-**Completed:**
-- ✅ Homepage "Error Loading Sales" fix — `NEXT_PUBLIC_BACKEND_URL`/`NEXT_PUBLIC_API_URL` localhost fallback changed to `https://api.finda.sale`
-- ✅ /creator/dashboard role guard — was rejecting ORGANIZER role (CREATOR doesn't exist in schema); fixed to allow ADMIN + ORGANIZER
-- ✅ Admin creators/affiliate page — new `/admin/creators` page + backend controller querying users with AffiliateCode or AffiliateLinks; linked from admin index
-- ✅ Guide pages in sitemap — slim `slugs.json` (500 slugs, 16KB) + `outputFileTracingIncludes` key fixed + `Cache-Control: max-age=0` header in vercel.json
-- ✅ Sitemap: added `/categories/[category]` (10 hardcoded), `/encyclopedia/[slug]` (via API), `/items/[id]` (new backend endpoint)
-- ✅ New `/api/items/sitemap` backend endpoint — returns all items from PUBLISHED sales, `id+updatedAt` only, 10k cap, no auth
-- ✅ Washington DC slug fix — `.replace(/\./g, '')` strips dots from city slugs in `/api/sales/city-slugs`
-- ✅ IndexNow integration — `indexNowService.ts` created; fires on sale DRAFT→PUBLISHED transition; POSTs sale URL + all item URLs to `https://api.indexnow.org/indexnow`; non-blocking fire-and-forget
-- ✅ Key file live: `https://finda.sale/fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt`
-- ✅ Schema.org audit: Product schema on items, JSON-LD on sale detail, HowTo/Article on guides — all already implemented and SSR-safe
-- Sitemap count: 1,727 → 1,885 (+138 URLs; 110 items, 10 categories, ~18 encyclopedia)
-
-**Files changed:** `pages/index.tsx` · `next.config.js` · `pages/creator/dashboard.tsx` · `adminAffiliateController.ts` (new) · `routes/adminAffiliate.ts` (new) · `backend/index.ts` · `pages/admin/creators.tsx` (new) · `pages/admin/index.tsx` · `data/seo-pages/slugs.json` (new) · `vercel.json` · `public/robots.txt` · `public/sitemap.xml` · `routes/sales.ts` · `itemController.ts` · `routes/items.ts` · `server-sitemap.xml.tsx` · `indexNowService.ts` (new) · `saleController.ts` · `fa3d9e1b8c2047a6d5f3e9b1c4a87d20.txt` (new) · `.env.example`

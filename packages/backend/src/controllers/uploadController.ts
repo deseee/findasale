@@ -461,6 +461,16 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
       }
     });
 
+    // #319/#325/#328: Sync Photo table — fire-and-forget, never blocks response
+    prisma.photo.create({
+      data: {
+        itemId: item.id,
+        url: photoUrl,
+        isPrimary: true,
+        orderIndex: 0,
+      },
+    }).catch(err => console.warn('[Photo sync] create failed on uploadRapidfire:', err));
+
     // Debounce: start AI trigger timer (4.5s window for user to add more photos via "+")
     resetRapidDraftDebounce(item.id);
 
