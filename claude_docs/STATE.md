@@ -8,9 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S785 — QA Batch 1: XP/Guild System (8 ✅, 2 UNVERIFIED, 1 Bug Dispatched)**
+**Latest: S785 — QA Batches 1+2+3 Complete (8 ✅, 16 UNVERIFIED, 2 ✅ DB-only, 1 Bug Fixed)**
 
-Chrome QA of 8 XP/Guild features confirmed with real data. 1 rank permanence bug found and dispatched to dev. Batch 2/3 deferred to next session.
+All 3 QA batches run. Batch 1 (XP/Guild): 8 Chrome-verified. Batch 2 (Camera/Photo): all 6 UNVERIFIED — upload_image imageId issue + handleAnalyzePhotos JS crash blocked photo tests. Batch 3 (eBay): 2 DB-verified (#320, #321), rest UNVERIFIED — user1 has no eBay connection. Rank permanence bug fixed and in push block.
 
 **Verified ✅:** #267 RSVP XP (2 XP, SaleRSVP row created, RSVP_CONFIRMED notification), #255 Rank-Up Notifications (Maya 498→503 guildXp → SCOUT, RANK_UP notification in DB), #257 Scout Hold Duration (holdDurationMinutes=45, UI shows 00:44:57 countdown), #227 XP Profile API (5 fields confirmed on /api/xp/profile), #290 Hunt Pass Dual-Rail Cash Column ($ value + XP cost side-by-side on /coupons), #289 Shopper Coupon Generation (Standard tier generated, 100 XP deducted), #312 XP Economy Security Hardening (leaderboard API returns only rank/userName/guildXp/explorerRank — no PII), #349 In-App QR Scanner Phase 1 (scan button in header, modal opens with camera permission request).
 
@@ -18,7 +18,7 @@ Chrome QA of 8 XP/Guild features confirmed with real data. 1 rank permanence bug
 
 **UNVERIFIED:** #261 Treasure Hunt XP Rank Multiplier (blocked by rank permanence bug — manipulating to RANGER tier unreliable until fix ships), RSVP XP monthly cap (only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to verify 10 XP cap).
 
-**Batch 2/3 deferred:** Camera/Photo pipeline (#319, #336, #339, #340, #328, #325) and eBay features (#244, #293, #295, #298, #320, #321, #323, #332, #333, #334, #335) not tested this session — Chrome sequential concurrency constraint + context at limit. See Next Session.
+**Batch 2/3 run — mostly UNVERIFIED:** Camera/Photo (#319, #336, #339, #340, #328, #325) all UNVERIFIED — photo upload blocked in VM. eBay: #320 ✅ DB-verified, #321 ✅ DB-verified, rest UNVERIFIED (no eBay connection for user1). See Blocked Queue.
 
 **Previous: S784 — Audit Fixes: Map Geocoding + Categories Icons + QA Batch (9 items)**
 
@@ -162,8 +162,23 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
-| #261 Treasure Hunt XP Rank Multiplier | Rank permanence bug blocks reliable RANGER-tier setup (coupon spend demotes rank) | Fix rank permanence bug first (dev dispatched S785), then retest as RANGER | S785 |
+| #261 Treasure Hunt XP Rank Multiplier | Rank permanence bug FIXED (xpService.ts ratchet shipped S785). Still needs retest: set user12 to RANGER, trigger QR scan, verify ~38 XP awarded | Re-run test as RANGER after push.ps1; needs QR scan API call | S785 |
 | RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
+| #319 Burst Clustering | handleAnalyzePhotos JS crash with DataTransfer programmatic upload; upload_image imageId format unknown | Resolve upload_image imageId issue; retry with real photo | S785 |
+| #336 Organizer-Intent-Wins in Rapidfire | Needs real rapidfire session with photo upload to verify manual title/price survives AI run | Fix upload_image access, retry photo upload flow | S785 |
+| #339 Low-Confidence Refuse-to-Fill | Needs ambiguous photo upload to verify brand/category left blank when confidence < 0.6 | Fix upload_image access, retry with blurry/ambiguous photo | S785 |
+| #340 Auto-Reopen Camera After Publish | Needs real rapidfire publish flow with photo to verify camera auto-reopens | Fix upload_image access, retry full rapidfire loop | S785 |
+| #328 Photo Role Awareness Phase 1 | photoRole column exists in schema; 0 photos in DB have role set — needs real upload to trigger Haiku tagging | Fix upload_image access, retry bulk upload | S785 |
+| #325 Best-Photo-First Sorting | orderIndex column exists in Photo table; 0 photos in DB — needs real bulk upload to verify ordering | Fix upload_image access, retry bulk upload | S785 |
+| #244 eBay Quick List / Direct Push | Push to eBay button confirmed in edit-item ✅; eBay CSV export not found on add-items page; full flow needs eBay connection for user1 | Connect eBay to user1 in Railway DB, then retest | S785 |
+| #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
+| #295 eBay Category Review Alerting | 0 items with ebayNeedsReview=true in DB; badge can't be triggered without eBay connection | Connect eBay to user1, push item to trigger category exhaustion | S785 |
+| #298 eBay Advanced Setup | Page renders 'eBay Connection Required' instead of 8 sections; needs eBay connected | Connect eBay to user1, then verify 8 sections + Use suggested defaults button | S785 |
+| #323 PriceBenchmark Valuation Fallback | Item.valuationMethod field not found in DB schema — feature may be unimplemented or field renamed | Investigate: grep schema.prisma for valuationMethod; dispatch dev if missing | S785 |
+| #332 Shopify Cross-Listing | ShopifyConnection table does not exist in DB schema | Investigate: check migration history; roadmap says shipped S589 | S785 |
+| #333 ACH Consignor Payouts | /organizer/consignors page renders but no consignors for user1; no settlement to test ACH | Create test consignor + settlement for user1 | S785 |
+| #334 Automatic Markdown Cycles | MarkdownRule table does not exist in DB schema | Investigate: check migration history; roadmap says shipped | S785 |
+| #335 Automated Consignor Email Notifications | 0 consignors with email in DB; no data to verify notification flow | Add email to test consignor, trigger a sale/item event | S785 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
 | MN/MI/TN licensing scrapers | Bot-blocked (Radware/DIFS 403) — graceful no-ops, no failure emails | Needs headless browser + residential proxy (#SCRAPER-HEADLESS-PROXY in Deferred) | S713 |
@@ -213,7 +228,8 @@ git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add packages/backend/src/services/xpService.ts
 git add packages/backend/src/controllers/xpController.ts
-git commit -m "fix(xp): rank permanence — explorerRank ratchet-only, never demotes on XP spend; docs(S785): QA Batch 1 results"
+git add claude_docs/strategy/roadmap.md
+git commit -m "fix(xp): rank permanence — explorerRank ratchet-only, never demotes on XP spend; qa(S785): Batches 1+2+3 results in roadmap + blocked queue"
 .\push.ps1
 ```
 
@@ -226,11 +242,11 @@ Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/se
 **Priority 1 — Rank permanence bug fix (SHIPPED S785 — in push block above):**
 Fix: `spendXp()` in `xpService.ts` now uses `lifetimeXpEarned` for rank threshold + ratchet against current stored rank (takes the higher). All 5 XP sink endpoints in `xpController.ts` now read `explorerRank` from DB post-write rather than recomputing from spendable balance. Leo's DB record restored to SCOUT. Awaiting push.
 
-**Priority 2 — Batch 2 QA: Camera/Photo Pipeline:**
-Use Chrome (ONE session, sequential). Test: #319 Burst Clustering, #336 Organizer-Intent-Wins in Rapidfire, #339 Low-Confidence Refuse-to-Fill, #340 Auto-Reopen Camera, #328 Photo Role Awareness Phase 1, #325 Best-Photo-First Sorting. Use user1 (organizer). Upload photos via `mcp__Claude_in_Chrome__upload_image` — works in VM.
+**Priority 2 — Investigate missing schema items:**
+#323 (Item.valuationMethod not in schema), #332 (ShopifyConnection table missing), #334 (MarkdownRule table missing) — all claim to be shipped but DB schema doesn't match. Dispatch findasale-dev to investigate migration history and either confirm shipped or flag as not migrated.
 
-**Priority 3 — Batch 3 QA: eBay Features:**
-Note: user1 has no eBay connection in test DB. Most items UNVERIFIED until eBay account is linked for QA. Items: #244, #293, #295, #298, #320, #321 (✅ DB-verified), #323, #332, #333, #334, #335. #334 (MarkdownRule table) and #323 (Item.valuationMethod) don't exist in schema — needs dev investigation first.
+**Priority 3 — Resolve upload_image camera QA block:**
+Camera/Photo batch (#319, #336, #339, #340, #328, #325) all UNVERIFIED because upload_image imageId format is unknown in VM context. Research correct imageId format for `mcp__Claude_in_Chrome__upload_image` or find alternative photo injection method.
 
 **Priority 4 — Remaining organizer QA (Group A):**
 - #363 Auction Buyer's Premium — "Buyer's Premium %" input + per-item "Lot #" fields not confirmed. Needs Chrome.
@@ -261,9 +277,16 @@ Note: user1 has no eBay connection in test DB. Most items UNVERIFIED until eBay 
 
 **Bug found:** `explorerRank` demotes on XP spend. Leo (SCOUT, guildXp=500) → generated Standard coupon → guildXp=400 → backend recalculated rank → INITIATE demotion. Root cause: rank threshold check uses current `guildXp` balance, not cumulative/peak. Fix dispatched to findasale-dev.
 
-**Batch 2/3 deferred:** Camera/Photo and eBay features not tested — Chrome sequential concurrency rule + context budget exhausted.
+**Batch 2 (Camera/Photo) — all UNVERIFIED:** #319, #336, #339, #340, #328, #325 — all blocked by upload_image imageId unknown + handleAnalyzePhotos JS crash with DataTransfer programmatic upload. photoRole and orderIndex columns confirmed in schema; 0 photos have data in DB.
 
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `packages/backend/src/services/xpService.ts` · `packages/backend/src/controllers/xpController.ts`
+**Batch 3 (eBay) — DB-verified (2), UNVERIFIED (rest):**
+- ✅ #320 Async eBay Comp Fetch: 6 items with aiSuggestedPrice confirmed.
+- ✅ #321 Encyclopedia Auto-Generation: 57 AUTO_GENERATED entries + haiku_inferred benchmarks confirmed.
+- UNVERIFIED: #244, #293, #295, #298 — user1 has no EbayConnection in test DB. #323 (Item.valuationMethod not in schema), #332 (ShopifyConnection table missing), #334 (MarkdownRule table missing) — schema gaps need investigation. #333, #335 — no test consignors with email.
+
+**Bug fix shipped:** Rank permanence ratchet in xpService.ts + xpController.ts. Leo's DB record restored to SCOUT.
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md` · `packages/backend/src/services/xpService.ts` · `packages/backend/src/controllers/xpController.ts`
 
 ---
 
