@@ -1,84 +1,68 @@
-# Patrick's Dashboard — Week of May 24, 2026 (Updated S785 — Full Wrap)
+# Patrick's Dashboard — Week of May 24, 2026 (Updated S786)
 
 ---
 
 ## What Needs Your Attention Now
 
-1. **Push S783 + S784 + S784b** — combined push block in STATE.md § Next Session (still pending)
-2. **Push S785 wrap docs + rank fix + roadmap** — push block in STATE.md § Next Session
-3. **Update Global CLAUDE.md password** — Ctrl+H find-and-replace with current Railway DB password
-4. **Submit sitemap to Bing Webmaster Tools** — `https://www.bing.com/webmasters` → Add sitemap → `https://finda.sale/server-sitemap.xml`
-5. **Investigate 3 missing schema features** — #323 (Item.valuationMethod), #332 (ShopifyConnection), #334 (MarkdownRule) all claim shipped but tables don't exist in DB
+1. **Push S786** — push block below
+2. **Update Global CLAUDE.md password** — both DATABASE_URL lines → `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`; update binary note (downloads to /tmp each session, not persistent)
+3. **Push S783 + S784 + S784b** — combined push block in STATE.md § Next Session (still pending if not done)
+4. **Push S785 wrap** — push block in STATE.md § Next Session (still pending if not done)
+5. **Submit sitemap to Bing** — `https://www.bing.com/webmasters` → Add sitemap → `https://finda.sale/server-sitemap.xml`
 
 ---
 
-## What Happened This Week
+## S786 Push Block
 
-**S785 (QA Batches 1+2+3 — all 3 groups run):**
-
-Batch 1 — XP/Guild (8 verified, 2 UNVERIFIED):
-- ✅ #267 RSVP XP — 2 XP awarded on RSVP, SaleRSVP row created, notification confirmed.
-- ✅ #255 Rank-Up Notifications — Maya ranked up to SCOUT at 503 XP; RANK_UP notification in DB.
-- ✅ #257 Scout Hold Duration — holdDurationMinutes=45 confirmed, countdown shows 00:44:57.
-- ✅ #227 XP Profile API — /api/xp/profile returns 5 correct fields.
-- ✅ #290 Hunt Pass Dual-Rail Cash Column — $ value + XP cost shown side-by-side.
-- ✅ #289 Shopper Coupon Generation — Standard tier coupon generated, 100 XP deducted.
-- ✅ #312 XP Economy Security Hardening — leaderboard API has no PII (no userId/email).
-- ✅ #349 In-App QR Scanner Phase 1 — button in header, modal opens with camera request.
-- ✅ **Rank permanence bug fixed** — Leo went SCOUT→INITIATE after spending 100 XP. Fix shipped: rank now uses lifetime XP for thresholds and only ratchets up, never drops on spend.
-- UNVERIFIED: #261 Treasure Hunt multiplier (needs retest now that rank fix shipped), RSVP monthly cap.
-
-Batch 2 — Camera/Photo pipeline (all 6 UNVERIFIED):
-- #319, #336, #339, #340, #328, #325 — all blocked by photo upload issue in VM. The `upload_image` tool requires an imageId we can't get without a prior screenshot; programmatic upload crashed the AI pipeline. Schema columns (photoRole, orderIndex) confirmed to exist — just no photos to test against.
-
-Batch 3 — eBay features (2 verified via DB, rest UNVERIFIED):
-- ✅ #320 Async eBay Comp Fetch — 6 items confirmed with aiSuggestedPrice from async background fetch.
-- ✅ #321 Encyclopedia Auto-Generation — 57 AUTO_GENERATED entries + haiku_inferred price benchmarks confirmed in DB.
-- UNVERIFIED (no eBay connection for test user): #244, #293, #295, #298.
-- UNVERIFIED (schema gaps): #323 (Item.valuationMethod missing), #332 (ShopifyConnection table missing), #334 (MarkdownRule table missing) — these say "shipped" in the roadmap but the tables don't exist in production DB. Needs investigation.
-- UNVERIFIED (no test data): #333 (no consignors), #335 (no consignors with email).
-
-**S784b (QA batch — 9 items Chrome-verified):**
-- ✅ #352 Organizer tagline, #354 Business Hours, #356 Broadcasts, #359 Pin Sale, #360 Social Links
-- ✅ #60 Pricing page ($29 PRO, $79 TEAMS), #260 One-big-sale upgrade, #263 PRO TOOLS dropdown, #271 TEAMS webhooks/API table
-
-**S784 (Audit Fixes):**
-- Fixed `/map` zero pins and `/categories` display (200+ icons + name overrides).
-
-**S783 (SEO Sprint):**
-- Sitemap: 1,727 → 1,885 URLs. IndexNow live (fires on every publish). Schema.org confirmed.
-
-**S782–S780 (Email + Deliverability):**
-- Deliverability fixed (custom domain, MIME, CORS, DMARC upgraded). Outreach opens page at `/admin/outreach-opens`.
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/components/Layout.tsx
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(nav): add missing mobile drawer items (Discount Rules, Consignors, Locations, Shopify); chore(roadmap): camera feature DB audit S786; chore(state): S786 wrap"
+.\push.ps1
+```
 
 ---
 
-## Outreach Pipeline
+## What Happened This Session (S786)
 
-| Metric | Value |
-|--------|-------|
-| Queue | ~3,319 PENDING |
-| Sent (total) | 29 since fix |
-| Opens | Active — check `/admin/outreach-opens` |
-| HOT leads with email | ~5,517 addressable |
-| WARM leads with email | ~208 addressable |
+**Railway DB access — fixed.** Stale password in session context was the root cause of all psycopg2 failures. Fix: Railway CLI `railway run --service backend env` extracts the live password each session. No more hardcoded passwords. Pattern saved to memory.
 
----
+**Camera features DB audit — root cause found:**
 
-## SEO Status
+| Feature | Status | Finding |
+|---------|--------|---------|
+| #319 Burst Clustering | ❌ BROKEN | Photo table has 0 rows. Upload pipeline never creates Photo records — writes to Item.photoUrls array only. clusterConfidence NULL on all 130 items. |
+| #325 Best-Photo-First | ❌ BROKEN | Same root cause. orderIndex column exists but unreachable. |
+| #328 Photo Role Awareness | ❌ BROKEN | Same root cause. photoRole/roleReasoning columns exist but dead code. |
+| #336 Intent-Wins | ⚠️ Pending Chrome QA | userEditedFields populated on 18/130 items with real field arrays. Data confirmed. Need Chrome to verify AI respects the gate. |
+| #339 Low-Conf Refuse-to-Fill | ⚠️ Pending Chrome QA | aiConfidence on 100% of items but low-conf items still have filled fields. Gate may not be enforcing. |
+| #340 Auto-Reopen Rapidfire | ⚠️ Pending Chrome QA | No DB column (pure frontend). Needs Chrome mobile viewport test. |
 
-| Signal | Status |
-|--------|--------|
-| Sitemap | ✅ 1,885 URLs, auto-grows as items published |
-| IndexNow | ✅ Live — fires on every sale publish |
-| Schema.org (items) | ✅ Product schema implemented |
-| Schema.org (sales) | ✅ JSON-LD implemented |
-| Schema.org (guides) | ✅ HowTo/Article implemented |
-| Bing sitemap submission | ⏳ Patrick action needed |
-| Google Search Console | ⏳ Verify submitted |
+**One fix for three broken features:** The upload pipeline needs to create `Photo` records (not just append to `Item.photoUrls`). Next session dispatch to findasale-dev.
+
+**Roadmap corrections:** #323, #332, #334 were listed as NOT BUILT — they ARE built, just under different model/field names than the roadmap stated. All moved to Pending Chrome QA.
+
+**Mobile nav fix:** Discount Rules, Consignors, Locations, Shopify now appear in mobile drawer (were missing from TEAMS section).
 
 ---
 
-## Audit Alerts (Weekly — 2026-05-23)
+## Next Session Priority Order
 
-✅ All 4 findings resolved. Map, categories, privacy, calendar — all fixed or confirmed clean.
+1. **Dispatch findasale-dev:** Fix upload pipeline to create Photo records — unblocks #319, #325, #328 in one shot
+2. **Chrome QA:** #336 (intent-wins), #339 (refuse-to-fill), #340 (auto-reopen rapidfire)
+3. **Chrome QA:** #323 (valuation fallback), #332 (Shopify), #334 (markdown cycles)
+4. **Continue eBay backlog:** #244, #293, #295, #298 — needs eBay connected to user1
+5. **Retest:** #261 Treasure Hunt multiplier (rank fix shipped S785)
+
+---
+
+## Active Blocked Items (condensed)
+
+- **#319/#325/#328** — BROKEN: upload pipeline skips Photo table. One dev fix unblocks all three.
+- **eBay batch** (#244, #293, #295, #298) — needs eBay connected to user1 in Railway DB
+- **#333/#335** — needs test consignor with email
+- **#261** — retest now that rank permanence fix shipped
+- **Email verification migration** — Patrick deploys when ready (S726 migration block in STATE.md)

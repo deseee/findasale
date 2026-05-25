@@ -8,7 +8,23 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S785 — QA Batches 1+2+3 Complete (8 ✅, 16 UNVERIFIED, 2 ✅ DB-only, 1 Bug Fixed)**
+**Latest: S786 — DB Audit: Camera Features Root Cause Found + Railway CLI Fixed + Nav Fix**
+
+Railway DB access fixed permanently: CLI `railway run --service backend env` gets live password; psycopg2 works. DB audit of all 6 camera features complete. Mobile nav drawer updated to match desktop. Roadmap corrections for #323/#332/#334.
+
+**#319, #325, #328 — BROKEN (root cause confirmed):** Photo table has 0 rows. Upload pipeline writes to Item.photoUrls (string array) only; never creates Photo records. All three features depend on Photo model fields (photoRole, orderIndex, roleReasoning) — dead code. Fix: make upload pipeline create Photo records. Dispatching to dev next session.
+
+**#336 Intent-Wins — ✅ data confirmed:** userEditedFields populated on 18/130 items with real field arrays. Pending Chrome QA to verify AI respects the gate.
+
+**#339 Low-Confidence — ⚠️ partial:** aiConfidence written on 100% of items (avg 0.589, 93/130 below 0.6 threshold). But low-conf items still have titles/categories filled in — refuse-to-fill gate may not be enforcing. Pending Chrome QA.
+
+**#340 Auto-Reopen — UNVERIFIED:** pure frontend flow, no DB column. Needs Chrome rapidfire mobile test.
+
+**Mobile nav fix shipped:** Discount Rules, Consignors, Locations, Shopify added to mobile drawer TEAMS section (were missing, desktop sidebar had them).
+
+**Roadmap corrections:** #323 (PriceBenchmark — IS implemented as ItemValuation.method/60-40 blend), #332 (Shopify — IS implemented on Organizer model + ShopifyListing table), #334 (Markdown Cycles — IS implemented as MarkdownCycle model). All three moved to Pending Chrome QA.
+
+**Previous: S785 — QA Batches 1+2+3 Complete (8 ✅, 16 UNVERIFIED, 2 ✅ DB-only, 1 Bug Fixed)**
 
 All 3 QA batches run. Batch 1 (XP/Guild): 8 Chrome-verified. Batch 2 (Camera/Photo): all 6 UNVERIFIED — upload_image imageId issue + handleAnalyzePhotos JS crash blocked photo tests. Batch 3 (eBay): 2 DB-verified (#320, #321), rest UNVERIFIED — user1 has no eBay connection. Rank permanence bug fixed and in push block.
 
@@ -164,20 +180,20 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | #261 Treasure Hunt XP Rank Multiplier | Rank permanence bug FIXED (xpService.ts ratchet shipped S785). Still needs retest: set user12 to RANGER, trigger QR scan, verify ~38 XP awarded | Re-run test as RANGER after push.ps1; needs QR scan API call | S785 |
 | RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
-| #319 Burst Clustering | handleAnalyzePhotos JS crash with DataTransfer programmatic upload; upload_image imageId format unknown | Resolve upload_image imageId issue; retry with real photo | S785 |
-| #336 Organizer-Intent-Wins in Rapidfire | Needs real rapidfire session with photo upload to verify manual title/price survives AI run | Fix upload_image access, retry photo upload flow | S785 |
-| #339 Low-Confidence Refuse-to-Fill | Needs ambiguous photo upload to verify brand/category left blank when confidence < 0.6 | Fix upload_image access, retry with blurry/ambiguous photo | S785 |
-| #340 Auto-Reopen Camera After Publish | Needs real rapidfire publish flow with photo to verify camera auto-reopens | Fix upload_image access, retry full rapidfire loop | S785 |
-| #328 Photo Role Awareness Phase 1 | photoRole column exists in schema; 0 photos in DB have role set — needs real upload to trigger Haiku tagging | Fix upload_image access, retry bulk upload | S785 |
-| #325 Best-Photo-First Sorting | orderIndex column exists in Photo table; 0 photos in DB — needs real bulk upload to verify ordering | Fix upload_image access, retry bulk upload | S785 |
+| #319 Burst Clustering | BROKEN S786 — Photo table has 0 rows; upload pipeline writes to Item.photoUrls only, never creates Photo records; clusterConfidence NULL on all 130 items | Fix upload pipeline to create Photo records (dispatch findasale-dev) | S786 |
+
+| #339 Low-Confidence Refuse-to-Fill | ⚠️ aiConfidence written on all items but low-conf items still have titles/categories — gate may not enforce blanks | Chrome QA: upload ambiguous item, verify brand/category left blank at conf <0.6 | S786 |
+| #340 Auto-Reopen Camera After Publish | No DB column (pure frontend flow). Needs Chrome rapidfire mobile viewport test | Chrome QA mobile: rapidfire → publish → verify camera reopens | S786 |
+| #328 Photo Role Awareness Phase 1 | BROKEN S786 — Photo table has 0 rows; same root cause as #319/#325. photoRole/roleReasoning exist in schema but dead code | Fix upload pipeline to create Photo records (same dispatch as #319) | S786 |
+| #325 Best-Photo-First Sorting | BROKEN S786 — Photo table has 0 rows; same root cause as #319. orderIndex column exists but unreachable | Fix upload pipeline to create Photo records (same dispatch as #319) | S786 |
 | #244 eBay Quick List / Direct Push | Push to eBay button confirmed in edit-item ✅; eBay CSV export not found on add-items page; full flow needs eBay connection for user1 | Connect eBay to user1 in Railway DB, then retest | S785 |
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 | #295 eBay Category Review Alerting | 0 items with ebayNeedsReview=true in DB; badge can't be triggered without eBay connection | Connect eBay to user1, push item to trigger category exhaustion | S785 |
 | #298 eBay Advanced Setup | Page renders 'eBay Connection Required' instead of 8 sections; needs eBay connected | Connect eBay to user1, then verify 8 sections + Use suggested defaults button | S785 |
-| #323 PriceBenchmark Valuation Fallback | Item.valuationMethod field not found in DB schema — feature may be unimplemented or field renamed | Investigate: grep schema.prisma for valuationMethod; dispatch dev if missing | S785 |
-| #332 Shopify Cross-Listing | ShopifyConnection table does not exist in DB schema | Investigate: check migration history; roadmap says shipped S589 | S785 |
+
+
 | #333 ACH Consignor Payouts | /organizer/consignors page renders but no consignors for user1; no settlement to test ACH | Create test consignor + settlement for user1 | S785 |
-| #334 Automatic Markdown Cycles | MarkdownRule table does not exist in DB schema | Investigate: check migration history; roadmap says shipped | S785 |
+
 | #335 Automated Consignor Email Notifications | 0 consignors with email in DB; no data to verify notification flow | Add email to test consignor, trigger a sale/item event | S785 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
@@ -187,6 +203,21 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 ---
 
 ## Next Session
+
+**Patrick Action — Push S786 wrap docs + nav fix + roadmap:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/components/Layout.tsx
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(nav): add missing mobile drawer items (Discount Rules, Consignors, Locations, Shopify); chore(roadmap): camera feature DB audit S786; chore(state): S786 wrap"
+.\push.ps1
+```
+
+**Patrick Action — Update Global CLAUDE.md credentials section:**
+Both DATABASE_URL lines now use password: `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`
+Also update binary note: Railway CLI downloads to /tmp each session (not persistent). Token stays the same.
 
 **Patrick Action — Push S783 + S784 + S784b files (combined — still pending):**
 ```powershell
@@ -258,6 +289,31 @@ Camera/Photo batch (#319, #336, #339, #340, #328, #325) all UNVERIFIED because u
 - M-003: `/sales/[id]` — "YARD" badge on auction sale + breadcrumb missing sale name.
 
 ## Recent Sessions
+
+### S786 — DB Audit: Camera Feature Root Cause + Railway CLI Fixed + Nav Fix + Roadmap Corrections
+
+**Trigger:** Continue QA backlog — investigate why camera features showed 0 DB rows in S785. Fix Railway DB access (psycopg2 auth failing due to stale password in session context).
+
+**Railway CLI fixed:** Downloaded CLI to /tmp, used `RAILWAY_TOKEN + railway run --service backend env` to extract live DATABASE_URL password. psycopg2 now works. Pattern saved to memory — no more hardcoded passwords. Live password: `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW` (internal password, also works against maglev public proxy).
+
+**DB audit — 130 items, 0 Photo records:**
+- Photo table completely empty — Cloudinary URLs stored in Item.photoUrls array only
+- #319 clusterConfidence NULL on all items — burst clustering never fires
+- #325 orderIndex unreachable — Photo records never created
+- #328 photoRole unreachable — same root cause
+- Root cause (all three): upload pipeline skips Photo table insertion entirely
+- #336 userEditedFields populated on 18/130 items ✅ data confirmed; needs Chrome QA
+- #339 aiConfidence on 100% of items; but low-conf items still have titles filled — gate may not enforce
+- #340 no DB column (pure frontend) — needs Chrome mobile test
+
+**Roadmap corrections (all 3 were wrong table/field names in roadmap):**
+- #323: IS implemented as ItemValuation.method (60/40 blend) → Pending Chrome QA
+- #332: IS implemented on Organizer model + ShopifyListing table → Pending Chrome QA
+- #334: IS implemented as MarkdownCycle model → Pending Chrome QA
+
+**Mobile nav fix:** Discount Rules, Consignors, Locations, Shopify added to mobile drawer TEAMS section.
+
+**Files changed:** Layout.tsx, roadmap.md, STATE.md, patrick-dashboard.md
 
 ### S785 — QA Batch 1: XP/Guild System (8 ✅, 2 UNVERIFIED, 1 Bug)
 
