@@ -700,6 +700,18 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       }
     });
 
+    // #319/#325/#328: Sync Photo table — fire-and-forget, never blocks item creation response
+    if (photoUrls.length > 0) {
+      prisma.photo.createMany({
+        data: photoUrls.map((url, idx) => ({
+          itemId: item.id,
+          url,
+          isPrimary: idx === 0,
+          orderIndex: idx,
+        })),
+      }).catch(err => console.warn('[Photo sync] createMany failed on item create:', err));
+    }
+
     // Return item with suggested tags (could be used by frontend to pre-fill fields)
     res.status(201).json({
       ...item,
@@ -1881,6 +1893,15 @@ export const addItemPhoto = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: { photoUrls: [...item.photoUrls, url] },
     });
+    // #319/#325/#328: Sync Photo table — fire-and-forget
+    prisma.photo.create({
+      data: {
+        itemId: id,
+        url,
+        isPrimary: item.photoUrls.length === 0,
+        orderIndex: item.photoUrls.length,
+      },
+    }).catch(err => console.warn('[Photo sync] create failed on addItemPhoto:', err));
     // If item is in DRAFT status, reset the AI analysis debounce timer to give user
     // more time to add additional photos via the "+" button (multi-angle grouping)
     if (item.draftStatus === 'DRAFT') {
@@ -1907,10 +1928,25 @@ export const removeItemPhoto = async (req: AuthRequest, res: Response) => {
     if (idx < 0 || idx >= item.photoUrls.length) {
       return res.status(400).json({ message: 'Photo index out of range' });
     }
+    const removedUrl = item.photoUrls[idx];
     const updated = await prisma.item.update({
       where: { id },
       data: { photoUrls: item.photoUrls.filter((_, i) => i !== idx) },
     });
+    // #319/#325/#328: Sync Photo table — delete the removed record, re-index remaining
+    const remainingUrls = updated.photoUrls;
+    prisma.photo.deleteMany({ where: { itemId: id, url: removedUrl } })
+      .then(() =>
+        Promise.all(
+          remainingUrls.map((u, newIdx) =>
+            prisma.photo.updateMany({
+              where: { itemId: id, url: u },
+              data: { orderIndex: newIdx, isPrimary: newIdx === 0 },
+            })
+          )
+        )
+      )
+      .catch(err => console.warn('[Photo sync] sync failed on removeItemPhoto:', err));
     res.json({ photoUrls: updated.photoUrls });
   } catch (error) {
     console.error('removeItemPhoto error:', error);
@@ -1940,6 +1976,15 @@ export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: { photoUrls },
     });
+    // #319/#325/#328: Sync Photo table — update orderIndex and isPrimary to match new order
+    Promise.all(
+      photoUrls.map((u: string, newIdx: number) =>
+        prisma.photo.updateMany({
+          where: { itemId: id, url: u },
+          data: { orderIndex: newIdx, isPrimary: newIdx === 0 },
+        })
+      )
+    ).catch(err => console.warn('[Photo sync] updateMany failed on reorderItemPhotos:', err));
     res.json({ photoUrls: updated.photoUrls });
   } catch (error) {
     console.error('reorderItemPhotos error:', error);
