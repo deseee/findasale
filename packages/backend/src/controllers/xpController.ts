@@ -7,7 +7,6 @@ import {
   spendXp,
   getSpendableXp,
   XP_SINKS,
-  getRankForXp,
 } from '../services/xpService';
 import { prisma } from '../lib/prisma';
 const router = Router();
@@ -125,13 +124,13 @@ router.post(
         return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
 
-      // Get updated user to calculate new rank
+      // Get updated user — explorerRank already correctly written by spendXp (uses lifetimeXpEarned ratchet)
       const userAfter = await prisma.user.findUnique({
         where: { id: userId },
         select: { guildXp: true, explorerRank: true },
       });
 
-      const newRank = getRankForXp(userAfter?.guildXp || 0);
+      const newRank = userAfter?.explorerRank ?? userBefore?.explorerRank ?? 'INITIATE';
       const rankChanged = newRank !== userBefore?.explorerRank;
 
       // Create rarity boost
@@ -208,13 +207,13 @@ router.post(
         return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
 
-      // Get updated user to calculate new rank
+      // Get updated user — explorerRank already correctly written by spendXp (uses lifetimeXpEarned ratchet)
       const userAfter = await prisma.user.findUnique({
         where: { id: userId },
         select: { guildXp: true, explorerRank: true },
       });
 
-      const newRank = getRankForXp(userAfter?.guildXp || 0);
+      const newRank = userAfter?.explorerRank ?? userBefore?.explorerRank ?? 'INITIATE';
       const rankChanged = newRank !== userBefore?.explorerRank;
 
       // Generate coupon code
@@ -328,13 +327,13 @@ router.post(
         return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
 
-      // Get updated user to calculate new rank
+      // Get updated user — explorerRank already correctly written by spendXp (uses lifetimeXpEarned ratchet)
       const userAfter = await prisma.user.findUnique({
         where: { id: userId },
         select: { guildXp: true, explorerRank: true },
       });
 
-      const newRank = getRankForXp(userAfter?.guildXp || 0);
+      const newRank = userAfter?.explorerRank ?? userBefore?.explorerRank ?? 'INITIATE';
       const rankChanged = newRank !== userBefore?.explorerRank;
 
       // Record the reveal in the item (or create a temporary tracking record)
@@ -468,13 +467,13 @@ router.post(
         return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
 
-      // Get updated user to calculate new rank
+      // Get updated user — explorerRank already correctly written by spendXp (uses lifetimeXpEarned ratchet)
       const userAfter = await prisma.user.findUnique({
         where: { id: userId },
         select: { guildXp: true, explorerRank: true },
       });
 
-      const newRank = getRankForXp(userAfter?.guildXp || 0);
+      const newRank = userAfter?.explorerRank ?? userBefore?.explorerRank ?? 'INITIATE';
       const rankChanged = newRank !== userBefore?.explorerRank;
 
       // Update haul post
@@ -571,13 +570,13 @@ router.post(
         return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
 
-      // Get updated user to calculate new rank
+      // Get updated user — explorerRank already correctly written by spendXp (uses lifetimeXpEarned ratchet)
       const userAfter = await prisma.user.findUnique({
         where: { id: userId },
         select: { guildXp: true, explorerRank: true },
       });
 
-      const newRank = getRankForXp(userAfter?.guildXp || 0);
+      const newRank = userAfter?.explorerRank ?? userBefore?.explorerRank ?? 'INITIATE';
       const rankChanged = newRank !== userBefore?.explorerRank;
 
       // Calculate 24 hours from now

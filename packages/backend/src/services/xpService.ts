@@ -501,9 +501,17 @@ export async function spendXp(
       },
     });
 
-    // Recalculate rank based on lifetime XP (permanent milestones)
-    // Note: ranks are milestones — spending XP does NOT drop rank (gamedesign S417 decision #14)
-    const newRank = getRankForXp(updatedUser.lifetimeXpEarned);
+    // Recalculate rank — ranks are permanent milestones, spending XP never demotes.
+    // (gamedesign S417 decision #14)
+    // Use lifetimeXpEarned for the threshold check, but also apply a ratchet against
+    // the current stored rank. This guards against users whose lifetimeXpEarned was
+    // not backfilled (e.g. XP seeded directly into guildXp before the field existed).
+    const RANK_ORDER: ExplorerRank[] = ['INITIATE', 'SCOUT', 'RANGER', 'SAGE', 'GRANDMASTER'];
+    const lifetimeRank = getRankForXp(updatedUser.lifetimeXpEarned);
+    const lifetimeRankIdx = RANK_ORDER.indexOf(lifetimeRank);
+    const currentRankIdx = RANK_ORDER.indexOf(updatedUser.explorerRank);
+    // Never decrease rank below what the user currently holds
+    const newRank = lifetimeRankIdx >= currentRankIdx ? lifetimeRank : updatedUser.explorerRank;
     if (newRank !== updatedUser.explorerRank) {
       await prisma.user.update({
         where: { id: userId },
@@ -853,7 +861,7 @@ export async function clawBackChargebackXp(
     const totalXpToRemove = xpTransactions.reduce((sum, tx) => sum + tx.points, 0);
 
     // Remove XP from user's guildXp
-    const updatedUser = await prisma.user.update({
+    await prisma.user.update({
       where: { id: userId },
       data: {
         guildXp: {
@@ -873,13 +881,24 @@ export async function clawBackChargebackXp(
       },
     });
 
-    // Recalculate rank (may drop if spending would have dropped it)
-    const newRank = getRankForXp(updatedUser.guildXp);
-    if (newRank !== updatedUser.explorerRank) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { explorerRank: newRank },
-      });
+    // Re-fetch with lifetimeXpEarned for rank calculation — ranks are permanent milestones,
+    // chargeback clawback removes spendable XP but does not demote rank.
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { guildXp: true, lifetimeXpEarned: true, explorerRank: true },
+    });
+    if (updatedUser) {
+      const RANK_ORDER: ExplorerRank[] = ['INITIATE', 'SCOUT', 'RANGER', 'SAGE', 'GRANDMASTER'];
+      const lifetimeRank = getRankForXp(updatedUser.lifetimeXpEarned);
+      const lifetimeRankIdx = RANK_ORDER.indexOf(lifetimeRank);
+      const currentRankIdx = RANK_ORDER.indexOf(updatedUser.explorerRank);
+      const newRank = lifetimeRankIdx >= currentRankIdx ? lifetimeRank : updatedUser.explorerRank;
+      if (newRank !== updatedUser.explorerRank) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { explorerRank: newRank },
+        });
+      }
     }
 
     console.log(
