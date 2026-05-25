@@ -964,4 +964,54 @@ router.post('/backfill-organizer-contacts', requireSecret, runOrganizerContactBa
 // POST /api/internal/jobs/run - single dispatcher for background pipeline jobs (GitHub Actions cron)
 router.post('/jobs/run', requireSecret, runInternalJob);
 
+// POST /api/internal/backfill-photos — #319/#325/#328: create Photo records for items missing them
+// Idempotent: skips URLs that already have a Photo record. Run once to fix existing items.
+router.post('/backfill-photos', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const items = await prisma.item.findMany({
+      where: { photoUrls: { isEmpty: false } },
+      select: { id: true, photoUrls: true },
+    });
+
+    let created = 0;
+    let skipped = 0;
+
+    for (const item of items) {
+      // Fetch existing Photo records for this item to avoid duplicates
+      const existing = await prisma.photo.findMany({
+        where: { itemId: item.id },
+        select: { url: true },
+      });
+      const existingUrls = new Set(existing.map(p => p.url));
+
+      for (let idx = 0; idx < item.photoUrls.length; idx++) {
+        const url = item.photoUrls[idx];
+        if (existingUrls.has(url)) {
+          skipped++;
+          continue;
+        }
+        await prisma.photo.create({
+          data: {
+            itemId: item.id,
+            url,
+            isPrimary: idx === 0,
+            orderIndex: idx,
+          },
+        });
+        created++;
+      }
+    }
+
+    res.json({
+      message: 'Photo backfill complete',
+      itemsProcessed: items.length,
+      photosCreated: created,
+      photosSkipped: skipped,
+    });
+  } catch (err) {
+    console.error('[backfill-photos] error:', err);
+    res.status(500).json({ message: 'Backfill failed', error: String(err) });
+  }
+});
+
 export default router;
