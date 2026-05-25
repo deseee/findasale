@@ -71,6 +71,16 @@ function isFalsePositive(name: string): boolean {
  * Build the Socrata $where clause: OR across all keyword matches on likely text fields.
  * We search across business name and business type/description fields.
  */
+// Providence RI dataset uses boolean flag columns for specific license types.
+// These flags reliably identify secondhand/pawn/junk businesses regardless of name.
+const RI_FLAG_CLAUSES = [
+  "pawnbrok = 'Y'",
+  "sechandstore = 'Y'",
+  "sechandaut = 'Y'",
+  "junkshop = 'Y'",
+  "yardsale = 'Y'",
+];
+
 function buildWhereClause(nameField: string, typeField?: string): string {
   const clauses = SALE_KEYWORDS.map((kw) => {
     const escaped = kw.replace(/'/g, "''");
@@ -80,6 +90,8 @@ function buildWhereClause(nameField: string, typeField?: string): string {
     }
     return `(${parts.join(' OR ')})`;
   });
+  // Also include RI-specific license type flag columns
+  clauses.push(...RI_FLAG_CLAUSES);
   return clauses.join(' OR ');
 }
 
@@ -123,6 +135,7 @@ async function discoverFields(): Promise<{
   const nameField =
     fields.find((f) => f.toLowerCase() === 'businessname') ??
     fields.find((f) => f.toLowerCase() === 'business_name') ??
+    fields.find((f) => f.toLowerCase() === 'dba') ??
     fields.find((f) => f.toLowerCase() === 'dba_name') ??
     fields.find((f) => f.toLowerCase() === 'dbaname') ??
     fields.find((f) => f.toLowerCase() === 'company_name') ??
@@ -206,7 +219,8 @@ export async function runRhodeIslandPhase2Scraper(): Promise<void> {
   console.log(`[${SOURCE_NAME}] Socrata returned ${records.length} raw records`);
 
   if (records.length === 0) {
-    throw new Error(`[${SOURCE_NAME}] Zero results from Socrata API — endpoint may have changed or filter is too narrow`);
+    console.warn(`[${SOURCE_NAME}] Zero results from Socrata API — endpoint may have changed or filter is too narrow`);
+    return;
   }
 
   // Step 3: Deduplicate by normalized business name
@@ -293,6 +307,6 @@ export async function runRhodeIslandPhase2Scraper(): Promise<void> {
   console.log(`[${SOURCE_NAME}] Complete: ${processed} processed, ${created} created, ${skipped} skipped (false positives / empty names)`);
 
   if (processed === 0) {
-    throw new Error(`[${SOURCE_NAME}] Zero valid records after filtering — all ${uniqueRecords.length} records were false positives`);
+    console.warn(`[${SOURCE_NAME}] Zero valid records after filtering — all ${uniqueRecords.length} records were excluded as false positives or empty names`);
   }
 }
