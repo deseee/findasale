@@ -8,7 +8,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S784 — Audit Fixes: Map Geocoding + Categories Icons + QA Batch (9 items)**
+**Latest: S785 — QA Batch 1: XP/Guild System (8 ✅, 2 UNVERIFIED, 1 Bug Dispatched)**
+
+Chrome QA of 8 XP/Guild features confirmed with real data. 1 rank permanence bug found and dispatched to dev. Batch 2/3 deferred to next session.
+
+**Verified ✅:** #267 RSVP XP (2 XP, SaleRSVP row created, RSVP_CONFIRMED notification), #255 Rank-Up Notifications (Maya 498→503 guildXp → SCOUT, RANK_UP notification in DB), #257 Scout Hold Duration (holdDurationMinutes=45, UI shows 00:44:57 countdown), #227 XP Profile API (5 fields confirmed on /api/xp/profile), #290 Hunt Pass Dual-Rail Cash Column ($ value + XP cost side-by-side on /coupons), #289 Shopper Coupon Generation (Standard tier generated, 100 XP deducted), #312 XP Economy Security Hardening (leaderboard API returns only rank/userName/guildXp/explorerRank — no PII), #349 In-App QR Scanner Phase 1 (scan button in header, modal opens with camera permission request).
+
+**Bug → dev dispatched:** `explorerRank` demotes on XP spend. Leo (user5) was SCOUT (guildXp=500). Generating a Standard coupon deducted 100 XP → guildXp=400 → backend recalculated explorerRank → INITIATE demotion. Fix: rank should ratchet up only; use cumulative/peak XP for threshold checks, never decrement on spend. Dispatched to findasale-dev this session.
+
+**UNVERIFIED:** #261 Treasure Hunt XP Rank Multiplier (blocked by rank permanence bug — manipulating to RANGER tier unreliable until fix ships), RSVP XP monthly cap (only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to verify 10 XP cap).
+
+**Batch 2/3 deferred:** Camera/Photo pipeline (#319, #336, #339, #340, #328, #325) and eBay features (#244, #293, #295, #298, #320, #321, #323, #332, #333, #334, #335) not tested this session — Chrome sequential concurrency constraint + context at limit. See Next Session.
+
+**Previous: S784 — Audit Fixes: Map Geocoding + Categories Icons + QA Batch (9 items)**
 
 Map bug fixed: platform sales (organizer-created) now get geocoded server-side when status transitions to PUBLISHED and lat is null. `geocodeAddress()` call added to `updateSaleStatus` in saleController.ts (fire-and-forget, never blocks publish response). Batch backfill job (`internalGeocodingController.ts`) extended to include `sourceName: null, status: PUBLISHED` sales so existing pinless sales will be geocoded on next batch run.
 
@@ -150,6 +162,8 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
+| #261 Treasure Hunt XP Rank Multiplier | Rank permanence bug blocks reliable RANGER-tier setup (coupon spend demotes rank) | Fix rank permanence bug first (dev dispatched S785), then retest as RANGER | S785 |
+| RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
 | MN/MI/TN licensing scrapers | Bot-blocked (Radware/DIFS 403) — graceful no-ops, no failure emails | Needs headless browser + residential proxy (#SCRAPER-HEADLESS-PROXY in Deferred) | S713 |
@@ -159,7 +173,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action — Push S783 + S784 + S784b files (combined):**
+**Patrick Action — Push S783 + S784 + S784b files (combined — still pending):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/pages/index.tsx
@@ -192,34 +206,66 @@ git commit -m "feat(map): geocode platform sales on publish + batch backfill; fe
 .\push.ps1
 ```
 
+**Patrick Action — Push S785 wrap docs + rank permanence fix:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add packages/backend/src/services/xpService.ts
+git add packages/backend/src/controllers/xpController.ts
+git commit -m "fix(xp): rank permanence — explorerRank ratchet-only, never demotes on XP spend; docs(S785): QA Batch 1 results"
+.\push.ps1
+```
+
 **Patrick Action — Update Global CLAUDE.md password:**
 Update both DATABASE_URL lines (internal + public proxy) with the current password from Railway dashboard. [Passwords redacted from docs — store in CLAUDE.md only]
 
 **Patrick Action — Submit sitemap to Bing Webmaster Tools:**
 Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/server-sitemap.xml`
 
-**Priority 1 — Groups B/C/D QA session (prompt is ready):**
-Use `claude_docs/qa-session-prompt-groups-bcd.md` in a dedicated session when Chrome is free (ONE session at a time). Covers XP/Guild system, camera/photo pipeline, eBay features. DB checks require Railway dashboard password (get from dashboard → Postgres → Connect).
+**Priority 1 — Rank permanence bug fix (SHIPPED S785 — in push block above):**
+Fix: `spendXp()` in `xpService.ts` now uses `lifetimeXpEarned` for rank threshold + ratchet against current stored rank (takes the higher). All 5 XP sink endpoints in `xpController.ts` now read `explorerRank` from DB post-write rather than recomputing from spendable balance. Leo's DB record restored to SCOUT. Awaiting push.
 
-**Priority 2 — Remaining organizer QA items (Group A, not yet verified):**
-- #363 Auction Buyer's Premium — AUCTION type toggle seen, but "Buyer's Premium %" input + per-item "Lot #" fields not confirmed. Needs Chrome.
-- #41 Sale Share / iCal Export — not tested this session.
+**Priority 2 — Batch 2 QA: Camera/Photo Pipeline:**
+Use Chrome (ONE session, sequential). Test: #319 Burst Clustering, #336 Organizer-Intent-Wins in Rapidfire, #339 Low-Confidence Refuse-to-Fill, #340 Auto-Reopen Camera, #328 Photo Role Awareness Phase 1, #325 Best-Photo-First Sorting. Use user1 (organizer). Upload photos via `mcp__Claude_in_Chrome__upload_image` — works in VM.
+
+**Priority 3 — Batch 3 QA: eBay Features:**
+Note: user1 has no eBay connection in test DB. Most items UNVERIFIED until eBay account is linked for QA. Items: #244, #293, #295, #298, #320, #321 (✅ DB-verified), #323, #332, #333, #334, #335. #334 (MarkdownRule table) and #323 (Item.valuationMethod) don't exist in schema — needs dev investigation first.
+
+**Priority 4 — Remaining organizer QA (Group A):**
+- #363 Auction Buyer's Premium — "Buyer's Premium %" input + per-item "Lot #" fields not confirmed. Needs Chrome.
+- #41 Sale Share / iCal Export — not tested.
 - Shopper batch: #266, #7, #350, #351, #184 — need user12/user13 login.
 
-**Priority 3 — Chrome QA backlog (code-verified only):**
+**Priority 5 — Chrome QA backlog:**
 - #424: Code-verified. Needs live eBay push to confirm end-to-end.
-- #425: UI confirmed. End-to-end push not tested without real publish.
-
-**Priority 4 — Remaining audit items (weekly-audit-2026-05-23):**
-- `/sales/[id]` — "YARD" type badge on auction sale + breadcrumb missing sale name (M-003, not yet fixed)
-
-**Patrick Action — Update Global CLAUDE.md password:**
-Update both DATABASE_URL lines (internal + public proxy) with the current password from Railway dashboard. [Passwords redacted from docs — store in CLAUDE.md only]
-
-**Patrick Action — Submit sitemap to Bing Webmaster Tools:**
-Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/server-sitemap.xml`
+- M-003: `/sales/[id]` — "YARD" badge on auction sale + breadcrumb missing sale name.
 
 ## Recent Sessions
+
+### S785 — QA Batch 1: XP/Guild System (8 ✅, 2 UNVERIFIED, 1 Bug)
+
+**Trigger:** S784b QA session prompt ready. Groups B/C/D priority. Batch 1 = XP/Guild features for Leo (user5/SCOUT) and Maya (user6/shopper near rank-up).
+
+**Verified ✅ (8 features):**
+- #267 RSVP XP: Maya RSVPed to a sale. SaleRSVP row created, +2 guildXp, RSVP_CONFIRMED notification in DB. ✅
+- #255 Rank-Up Notifications: Maya at 498 XP → VISIT event (+5) pushed her to 503 (threshold=500) → RANK_UP notification (type=RANK_UP, title="You've reached SCOUT!") confirmed in DB. ✅
+- #257 Scout Hold Duration: Leo's reservation shows holdDurationMinutes=45, countdown displays 00:44:57 on /shopper/holds. ✅
+- #227 XP Profile API + Shopper Dashboard: /api/xp/profile returns guildXp, explorerRank, rankLabel, nextRankXp, lifetimeXp. All 5 fields confirmed. ✅
+- #290 Hunt Pass Dual-Rail Cash Column: /coupons shows $ value alongside XP cost for each tier. ✅
+- #289 Shopper Coupon Generation (3 Tiers): Standard tier generated successfully, 100 XP deducted, coupon code appeared. ✅
+- #312 XP Economy Security Hardening: /api/xp/leaderboard returns only rank, userName, guildXp, explorerRank — no userId, no email. ✅
+- #349 In-App QR Scanner Phase 1: Scan button visible in header, modal opens and requests camera permission. ✅
+
+**UNVERIFIED (2):** #261 Treasure Hunt XP Rank Multiplier (blocked by rank permanence bug), RSVP XP monthly cap (need 5 RSVPs in one month; only 3 platform sales have Going button).
+
+**Bug found:** `explorerRank` demotes on XP spend. Leo (SCOUT, guildXp=500) → generated Standard coupon → guildXp=400 → backend recalculated rank → INITIATE demotion. Root cause: rank threshold check uses current `guildXp` balance, not cumulative/peak. Fix dispatched to findasale-dev.
+
+**Batch 2/3 deferred:** Camera/Photo and eBay features not tested — Chrome sequential concurrency rule + context budget exhausted.
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `packages/backend/src/services/xpService.ts` · `packages/backend/src/controllers/xpController.ts`
+
+---
 
 ### S784 — Audit Fixes: Map Geocoding + Categories Icons + Chrome QA Batch
 
@@ -268,66 +314,4 @@ Go to https://www.bing.com/webmasters → Add sitemap → `https://finda.sale/se
 **Trigger:** Patrick saw 7 new email opens on the admin dashboard and wanted to (1) see which emails were opened, (2) have a clickable page for it, and (3) re-queue all emails sent before the fix.
 
 **Completed:**
-- ✅ Fixed `getOutreachOpens` controller — initial version assumed flat fields (`openedAt`, `organizerName`, `city`, `state`) that don't exist. Rewrote to query per-touch fields (`touch1OpenedAt`–`touch4OpenedAt`) with OR condition + organizer relation join for `businessName` and `website`.
-- ✅ Built `/admin/outreach-opens` page (`pages/admin/outreach-opens.tsx`) — table of all organizers who opened any outreach email, with name, email, address, website (linked), touch number, sent date, open date, status badge.
-- ✅ Added "View opened emails →" link to Outreach Email Pipeline widget in `pages/admin/index.tsx`.
-- ✅ Re-queued 418 pre-fix emails via direct Railway DB update: 354 from May 17–23 + 64 from May 24 batches before 16:51:43 UTC (first confirmed open). All touch fields cleared, status reset to PENDING, attemptCount = 0.
-
-**Files changed:** `packages/backend/src/controllers/adminController.ts` · `packages/backend/src/routes/admin.ts` · `packages/frontend/pages/admin/index.tsx` · `packages/frontend/pages/admin/outreach-opens.tsx` (new)
-
----
-
-### S781 — DMARC Upgrade + Email Stack Audit
-
-**Trigger:** Deferred from S780b — upgrade `_dmarc.finda.sale` from `p=none` to `p=quarantine` after SPF propagation.
-
-**Completed:**
-- ✅ Full SPF/DKIM/DMARC audit: Resend DKIM (TXT) verified, Google Workspace DKIM on `outreach.finda.sale` verified, MailerLite DKIM gap documented (free plan uses `d=mlsend.com` not `d=finda.sale` — paywalled feature, ~0 campaigns sent so risk is negligible)
-- ✅ Email stack roles clarified: Resend = platform automated emails (outreachEmailsCron etc.), Google Workspace = cold outreach to organizers, MailerLite = subscriber list/newsletter (barely used)
-- ✅ DMARC upgraded: `_dmarc.finda.sale` TXT → `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@finda.sale` — confirmed live via Google DNS
-
-**Still pending (Patrick):**
-- Global CLAUDE.md password update — get current password from Railway dashboard and update both DATABASE_URL lines [redacted from docs]
-
-**Files changed:** None (DNS change only via Vercel dashboard)
-
----
-
-### S780 — Deliverability Fix + GitGuardian + CORS + Slow Query Indexes
-
-**Trigger:** Patrick — "audit last few sessions and begin the work on the to do's"
-
-Executed S779 Next Session priorities. 4 fixes shipped:
-1. **buildRawEmail() MIME fix** — added htmlToPlainText() + text/plain part to multipart/alternative emails (outreachEmailsCron.ts)
-2. **CORS P0** — api.finda.sale added to allowedOrigins (index.ts). 34 CORS errors in 23hrs from new custom domain.
-3. **GitGuardian P0** — live Railway DB password found in STATE.md + patrick-dashboard.md on GitHub (commit 00e58aadd, S776). Credential removed from both files. Password rotation needed (credential in git history).
-4. **7 performance indexes** — migration 20260524120000 addresses 5 Sentry slow queries (DirectoryClaimEmail 2x, Sale 2x, Organizer 2x + createdAt)
-
-DNS deliverability audit: root SPF missing google include (P1), root DKIM missing, DMARC at p=none. Patrick action items provided.
-
-Verified all 4 pending pushes from S779 deployed to Vercel (READY). fbExportedAt migration confirmed applied in Railway DB.
-
-**S780b continuation:** Railway DB password rotated (Patrick did it in Railway dashboard). Backend uses `${{Postgres.DATABASE_URL}}` reference variable — auto-updates. Local `.env` and backup script updated. Root SPF DNS record updated via Chrome in Vercel DNS dashboard: `v=spf1 a mx include:_spf.google.com include:_spf.mlsend.com ~all` (added Google include, changed `?all` → `~all`). S780 code changes confirmed already on GitHub. Migration confirmed applied. All S780 action items complete except: Global CLAUDE.md password update (Patrick manual — Cowork internal file not editable by Claude), temp script deletion, DMARC upgrade (deferred for SPF propagation).
-
-Files changed: `packages/backend/src/jobs/outreachEmailsCron.ts`, `packages/backend/src/index.ts`, `packages/database/prisma/schema.prisma`, `packages/database/prisma/migrations/20260524120000_add_performance_indexes/migration.sql`, `packages/database/.env`, `scripts/backup-everything.ps1`, `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`
-
-### S779 — Outreach Email Deliverability Fix (DNS + Railway Env)
-
-**Trigger:** Patrick — "not one open in 417 sends?" (outreach touch 1 stats: 418 sent, 1 open = test send, 0 real opens)
-
-**Root cause:** Every outreach email body embedded `https://backend-production-153c9.up.railway.app` URLs (tracking pixel + one-click unsubscribe link). `.railway.app` is a shared hosting provider domain (same spam-filter category as herokuapp.com, ngrok.io) — routed directly to spam regardless of sender reputation.
-
-**Fix applied:**
-- Registered `api.finda.sale` as custom domain on Railway backend service (port 5000)
-- Added CNAME `api` → `uerigpyb.up.railway.app` to Vercel DNS via API
-- Added TXT `_railway-verify.api` → `railway-verify=86c20c9ad02b641fa4ea5fdff1ca936cca0c89b584a1f4bdc0e5d22322765783` to Vercel DNS via API
-- Patrick set `RAILWAY_BACKEND_URL=https://api.finda.sale` in Railway Variables
-
-**Secondary issue identified:** `buildRawEmail()` in `outreachEmailsCron.ts` declares `multipart/alternative` but only includes `text/html` — no `text/plain` part. Spam filters treat this as a secondary signal. Fix pending.
-
-**Scheduled task update:** `findasale-ci-sentry-health` updated to include GitGuardian as Step 3. GG_API_KEY needed in Railway env.
-
-**Files changed:** None (DNS + Railway env only). Scheduled task prompt updated via MCP.
-
----
-
+- ✅ Fixed `getOutreachOpens` controller — initial version assumed flat fields (`openedAt`, `organizerName`, `city`, `state`) that don't exist. Rewrote to query per-touch fields (`touch1OpenedAt`–`touch4Ope
