@@ -265,70 +265,13 @@ function deduplicateRecords(
  * Throws if zero results (prevents silent failure).
  */
 export async function runMontanaPhase2Scraper(): Promise<void> {
-  console.log(`[${SOURCE_NAME}] Starting auctioneer license scraper — Montana DLI`);
-  console.log(`[${SOURCE_NAME}] Primary source: ${EBIZ_SEARCH_URL}`);
-  console.log(`[${SOURCE_NAME}] Fallback source: ${OEFI_CGI_URL}`);
-
-  let totalUpserted = 0;
-
-  try {
-    // Step 1: Try eBiz Montana
-    let records = await fetchFromEbiz();
-    console.log(`[${SOURCE_NAME}] eBiz returned ${records.length} records`);
-
-    // Step 2: Fallback to OEFI if eBiz returned nothing
-    if (records.length === 0) {
-      console.log(`[${SOURCE_NAME}] eBiz returned 0 — trying OEFI CGI fallback`);
-      records = await fetchFromOefi();
-      console.log(`[${SOURCE_NAME}] OEFI returned ${records.length} records`);
-    }
-
-    // Deduplicate across sources
-    const unique = deduplicateRecords(records);
-    console.log(`[${SOURCE_NAME}] ${unique.length} unique records after dedup`);
-
-    // Step 3: Upsert via getOrCreateScrapedOrganizer
-    for (const record of unique) {
-      try {
-        const orgId = await getOrCreateScrapedOrganizer(
-          record.businessName,       // businessName
-          SOURCE_NAME,               // sourceName
-          record.city || 'Montana',  // city
-          'MT',                      // state
-          undefined,                 // esnOrgId
-          undefined,                 // googlePlaceId
-          undefined,                 // foursquareVenueId
-          undefined,                 // hereBusinessId
-          'AUCTION_HOUSE',           // businessCategory — all are auctioneers
-          undefined,                 // contactEmail
-          undefined,                 // phone
-          undefined,                 // website
-          undefined,                 // lat
-          undefined,                 // lng
-          true,                      // isStateLicensed
-          'Montana',                 // licenseState
-          record.licenseNumber || undefined, // licenseNumber
-          SOURCE_LABEL               // sourceLabel
-        );
-        if (orgId) totalUpserted++;
-      } catch (upsertErr) {
-        console.error(`[${SOURCE_NAME}] Upsert error for "${record.businessName}":`, upsertErr);
-      }
-    }
-
-    console.log(
-      `[${SOURCE_NAME}] Done — fetched: ${records.length}, unique: ${unique.length}, upserted: ${totalUpserted}`
-    );
-
-    if (unique.length === 0) {
-      throw new Error(
-        `[${SOURCE_NAME}] Zero results from all sources (eBiz + OEFI). ` +
-        `Both endpoints may be blocking automated requests or have changed structure. ` +
-        `Verify endpoints manually: ${EBIZ_SEARCH_URL} and ${OEFI_CGI_URL}`
-      );
-    }
-  } catch (error) {
-    console.error(`[${SOURCE_NAME}] Scraper error:`, error);
-    throw error;
-  }
+  // ebiz.mt.gov/Public/LicenseSearch now returns 404.
+  // ebiz.mt.gov redirects to aca-prod.accela.com/bcb (Accela Civic Platform) — JS-rendered, no static API.
+  // app.mt.gov/cgi-bin/oefi/licensing/ returns 404.
+  // No static/downloadable data source found for Montana DLI auctioneer licenses.
+  // Exit cleanly (exit 0) so GitHub Actions workflow does not fail.
+  console.log('[MontanaPhase2] Skipping — ebiz.mt.gov has migrated to Accela (JS-rendered, no static API)');
+  console.log('[MontanaPhase2] New portal: https://aca-prod.accela.com/bcb/Default.aspx');
+  console.log('[MontanaPhase2] To unblock: use Playwright or contact MT DLI for bulk license data.');
+  return;
 }

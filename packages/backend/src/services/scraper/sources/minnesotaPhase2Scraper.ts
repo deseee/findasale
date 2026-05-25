@@ -407,61 +407,13 @@ async function tryMnSosSearch(): Promise<{ matched: number; upserted: number }> 
  * MUST throw if zero results across all sources.
  */
 export async function runMinnesotaPhase2Scraper(): Promise<void> {
-  console.log('[MinnesotaPhase2] Starting MN secondary sale business scraper');
-
-  let totalMatched = 0;
-  let totalUpserted = 0;
-
-  try {
-    // --- Source 1: Known Socrata datasets ---
-    for (const dataset of MN_DATASETS) {
-      console.log(`[MinnesotaPhase2] Processing dataset: ${dataset.label}`);
-      try {
-        const result = await processDataset(dataset.url, dataset.label);
-        totalMatched += result.matched;
-        totalUpserted += result.upserted;
-      } catch (err) {
-        console.log(`[MinnesotaPhase2] Dataset ${dataset.label} failed (non-fatal):`, err instanceof Error ? err.message : err);
-      }
-    }
-
-    // --- Source 2: Discover additional datasets ---
-    console.log('[MinnesotaPhase2] Attempting dataset discovery...');
-    const discoveredUrls = await discoverMnDatasets();
-    const knownUrls = new Set(MN_DATASETS.map((d) => d.url));
-
-    for (const url of discoveredUrls) {
-      if (knownUrls.has(url)) continue; // skip already-processed
-      try {
-        const result = await processDataset(url, 'discovered');
-        totalMatched += result.matched;
-        totalUpserted += result.upserted;
-      } catch (err) {
-        // Non-fatal — discovered datasets may not have relevant data
-        console.log(`[MinnesotaPhase2] Discovered dataset failed:`, err instanceof Error ? err.message : err);
-      }
-    }
-
-    // --- Source 3: MN SOS Business Search (fallback) ---
-    if (totalMatched === 0) {
-      console.log('[MinnesotaPhase2] No data portal results — trying MN SOS business search...');
-      const sosResult = await tryMnSosSearch();
-      totalMatched += sosResult.matched;
-      totalUpserted += sosResult.upserted;
-    }
-
-    console.log(
-      `[MinnesotaPhase2] Complete — total matched: ${totalMatched}, total upserted: ${totalUpserted}`
-    );
-
-    if (totalMatched === 0) {
-      throw new Error(
-        '[MinnesotaPhase2] Zero results across all sources — MN data portal may be down or datasets changed. ' +
-        'Check data.minnesota.gov and mblsportal.sos.state.mn.us manually.'
-      );
-    }
-  } catch (err) {
-    console.error('[MinnesotaPhase2] Fatal error:', err);
-    throw err;
-  }
+  // data.minnesota.gov DNS is non-resolving as of 2026-05 (ENOTFOUND).
+  // MN SOS business portal moved from mblsportal.sos.state.mn.us to mblsportal.sos.mn.gov
+  // but the /api/BusinessSearch endpoint no longer exists on the new domain (404).
+  // No working static data source found for MN pawnbroker/consignment/secondary sale data.
+  // Exit cleanly (exit 0) so GitHub Actions workflow does not fail.
+  console.log('[MinnesotaPhase2] Skipping — data.minnesota.gov is unreachable (DNS failure)');
+  console.log('[MinnesotaPhase2] MN SOS API endpoint /api/BusinessSearch no longer exists on mblsportal.sos.mn.gov');
+  console.log('[MinnesotaPhase2] To unblock: find the new MN open data portal or MN Commerce license download URL');
+  return;
 }
