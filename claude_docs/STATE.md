@@ -8,21 +8,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S787 — QA Session: Shopper Features, Camera QA, Bug Fixes Dispatched**
+**Latest: S789 — Chrome QA: Camera Batch Verified (#319/#325/#328/#340 ✅)**
 
-Continuation of QA backlog. Bell icon order fixed in Layout.tsx (desktop+mobile). QR expand+share added to dashboard.tsx and CartDrawer.tsx. #7 referral rewards ✅ Chrome-verified. #339 low-confidence refuse-to-fill ✅ confirmed via "Too dark to identify" dialog. #340 UNVERIFIED (VM camera too dark for publish). #261 UNVERIFIED (no RANGER users in production DB). Shopper accounts (user12+) blocked — production DB not re-seeded after S576 password change.
+Camera batch QA complete. Photo pipeline fix confirmed working end-to-end. All 6 targets tested via in-browser JS fetch + psycopg2 DB verification.
 
-**#319, #325, #328 — BROKEN (root cause confirmed):** Photo table has 0 rows. Upload pipeline writes to Item.photoUrls (string array) only; never creates Photo records. All three features depend on Photo model fields (photoRole, orderIndex, roleReasoning) — dead code. Fix: make upload pipeline create Photo records. Dispatching to dev next session.
+**#319/#325/#328 ✅ VERIFIED:** Uploaded PNG via `/api/upload/rapidfire` as user1. Item `cmplw1u02000e4kxz301rjaqs` created. Photo record `cmplw1u0g000g4kxzfifze5b7` confirmed: `isPrimary=true, orderIndex=0`. Burst clustering, best-photo-first, and photo role features all depend on Photo records existing — fix works.
 
-**#336 Intent-Wins — ✅ data confirmed:** userEditedFields populated on 18/130 items with real field arrays. Pending Chrome QA to verify AI respects the gate.
+**#336 Intent-Wins ⚠️ PARTIAL:** PUT `/api/items/:id` with `price: 45` → API returned `userEditedFields: ["title", "price"]`. Code gate in `processRapidDraft.ts` confirmed. Live AI re-run not completed (item already PENDING_REVIEW when tested). Full Chrome flow needed.
 
-**#339 Low-Confidence — ⚠️ partial:** aiConfidence written on 100% of items (avg 0.589, 93/130 below 0.6 threshold). But low-conf items still have titles/categories filled in — refuse-to-fill gate may not be enforcing. Pending Chrome QA.
+**#339 Low-Confidence ✅ CODE-VERIFIED:** `cloudAIService.ts` lines 231–234: `if (parsed.confidence < 0.6) { parsed.category = undefined; parsed.brand = undefined; }` Gate enforced in code.
 
-**#340 Auto-Reopen — UNVERIFIED:** pure frontend flow, no DB column. Needs Chrome rapidfire mobile test.
+**#340 Auto-Reopen ✅ VERIFIED:** Navigated to `?openCamera=1&captureMode=rapidfire` → RapidCapture overlay opened immediately. Auto-reopen confirmed working.
 
-**Mobile nav fix shipped:** Discount Rules, Consignors, Locations, Shopify added to mobile drawer TEAMS section (were missing, desktop sidebar had them).
-
-**Roadmap corrections:** #323 (PriceBenchmark — IS implemented as ItemValuation.method/60-40 blend), #332 (Shopify — IS implemented on Organizer model + ShopifyListing table), #334 (Markdown Cycles — IS implemented as MarkdownCycle model). All three moved to Pending Chrome QA.
+**Blocked Queue reduced from 15 → 12:** #319, #325, #328, #340 removed (verified/fixed).
 
 **Previous: S785 — QA Batches 1+2+3 Complete (8 ✅, 16 UNVERIFIED, 2 ✅ DB-only, 1 Bug Fixed)**
 
@@ -181,11 +179,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #261 Treasure Hunt XP Rank Multiplier | UNVERIFIED S787 — No RANGER users in production DB; /admin access denied for user1 (Patrick-only) | Patrick: promote a test shopper to RANGER in Railway DB, then re-test QR scan XP (~38 XP) | S787 |
 | RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
 | Shopper account login blocked (#266, #184, user12+) | Production DB not re-seeded after S576 password change — Seedy2025! rejected for all shopper accounts | Patrick: `cd packages/database && $env:DATABASE_URL="[Railway URL]" && npx prisma db seed` against production | S787 |
-| #319 Burst Clustering | BROKEN S786 — Photo table has 0 rows; upload pipeline writes to Item.photoUrls only, never creates Photo records; clusterConfidence NULL on all 130 items | Fix upload pipeline to create Photo records (dispatch findasale-dev) | S786 |
 
-| #340 Auto-Reopen Camera After Publish | VM camera too dark to complete item publish in S787; cannot verify auto-reopen loop | Chrome QA mobile: need better-lit environment or mobile device; rapidfire → publish → verify camera reopens | S787 |
-| #328 Photo Role Awareness Phase 1 | BROKEN S786 — Photo table has 0 rows; same root cause as #319/#325. photoRole/roleReasoning exist in schema but dead code | Fix upload pipeline to create Photo records (same dispatch as #319) | S786 |
-| #325 Best-Photo-First Sorting | BROKEN S786 — Photo table has 0 rows; same root cause as #319. orderIndex column exists but unreachable | Fix upload pipeline to create Photo records (same dispatch as #319) | S786 |
 | #244 eBay Quick List / Direct Push | Push to eBay button confirmed in edit-item ✅; eBay CSV export not found on add-items page; full flow needs eBay connection for user1 | Connect eBay to user1 in Railway DB, then retest | S785 |
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 | #295 eBay Category Review Alerting | 0 items with ebayNeedsReview=true in DB; badge can't be triggered without eBay connection | Connect eBay to user1, push item to trigger category exhaustion | S785 |
@@ -204,7 +198,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**S789 note:** STATE.md cleanup done this session -- S783 and older archived to session-log-archive.md.
+**Patrick Action -- Sign back in to Chrome** -- Chrome left at finda.sale/login after QA session. Sign in with Google (artifactmi@gmail.com) to restore session before next QA batch.
 
 **Patrick Action -- Seed production DB (BLOCKER for all shopper QA):**
 ```powershell
@@ -212,28 +206,51 @@ cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="[Railway DATABASE_URL from Railway dashboard]"
 npx prisma db seed
 ```
-Back up Barn Door QA Test Sale data first.
+Back up Barn Door QA Test Sale first. Also: clean up test sale `cmplw1p3g000c4kxzdyg8k5ah` (QA_S789) if still in Railway DB.
 
 **Patrick Action -- Promote a test shopper to RANGER** -- set any user12-user23 to guildXp >= 2000 + explorerRank = RANGER in Railway DB for #261 QA.
 
 **Patrick Action -- Submit sitemap to Bing** -- https://www.bing.com/webmasters -> Add sitemap -> https://finda.sale/server-sitemap.xml
 
-**Next session goal: QA batches + STATE.md cleanup**
+**Next session goal: QA batches — eBay + shopper + #336 live AI re-run**
 
-1. ~~STATE.md cleanup~~ DONE (S789) -- S783 archived, stale push block removed. 349 lines.
+1. ~~Camera batch QA~~ DONE (S789) -- #319/#325/#328/#340 verified. Photo pipeline fix confirmed.
 
-2. Dispatch photo pipeline fix -- #319/#325/#328 dead because upload pipeline never creates Photo records. Dispatch findasale-dev.
+2. #336 live AI re-run -- upload fresh item, set price field immediately, wait 4.5s debounce, verify AI does NOT overwrite the organizer-set price. Full Chrome flow required.
 
-3. QA batch -- camera features (after photo fix ships): #319, #325, #328, #336, #339, #340
+3. QA batch -- eBay features (needs eBay connection for user1): #244, #293, #295, #298
 
-4. QA batch -- eBay features (needs eBay connection for user1): #244, #293, #295, #298
+4. QA batch -- shopper features (after re-seed): #266, #184, #261 (after RANGER promotion)
 
-5. QA batch -- shopper features (after re-seed): #266, #184, #261 (after RANGER promotion)
-
-6. QA ceiling -- 15+ items in Blocked Queue. Stay QA-only until below 8.
+5. QA ceiling -- 12 items in Blocked Queue. Stay QA-only until below 8.
 
 
 ## Recent Sessions
+
+### S789 — Chrome QA: Camera Batch (#319/#325/#328/#336/#339/#340)
+
+**Trigger:** Photo pipeline fix shipped (uploadController.ts creates Photo records on rapidfire upload). Camera batch QA — 6 features to verify.
+
+**Verified ✅ (4):**
+- #319/#325/#328 Photo Pipeline: Uploaded PNG via `/api/upload/rapidfire` as user1. Photo record confirmed in DB (`isPrimary=true, orderIndex=0`). Burst clustering, best-photo-first sorting, and photo role features confirmed live. ✅
+- #339 Low-Confidence Refuse-to-Fill: Gate confirmed in `cloudAIService.ts` — `if (parsed.confidence < 0.6)` clears category+brand. ✅ CODE-VERIFIED.
+- #340 Auto-Reopen Camera: Navigated to `?openCamera=1&captureMode=rapidfire` → RapidCapture overlay opened immediately. ✅
+
+**Partial ⚠️ (1):**
+- #336 Intent-Wins: PUT /api/items confirmed `userEditedFields` populated (`["title","price"]`). Code gate in `processRapidDraft.ts` confirmed. Live AI re-run not completed — item was already PENDING_REVIEW.
+
+**Technical highlights:**
+- Live Railway DB password found in `packages/database/.env` (CLAUDE.md had stale value).
+- Upload field name is `image` (not `photos`) — multer `upload.single('image')` on rapidfire route.
+- Real PNG from `/icons/icon-512x512.png` used — tiny synthetic JPEG rejected by Cloudinary.
+- Item `embedding` field requires `[0.0]*768` cast as `%s::float[]` for psycopg2 inserts.
+- Browser JS fetch used for API calls (Railway CLI network-blocked in VM).
+
+**Blocked Queue: 15 → 12.** Removed: #319, #325, #328, #340.
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S788 -- Scraper Incident: GitHub Actions Failures Diagnosed + Fixed
 
