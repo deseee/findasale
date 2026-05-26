@@ -8,19 +8,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S789 — Chrome QA: Camera Batch Verified (#319/#325/#328/#340 ✅)**
+**Latest: S790 — Chrome QA: Intent-Wins Verified (#336 ✅)**
 
 Camera batch QA complete. Photo pipeline fix confirmed working end-to-end. All 6 targets tested via in-browser JS fetch + psycopg2 DB verification.
 
 **#319/#325/#328 ✅ VERIFIED:** Uploaded PNG via `/api/upload/rapidfire` as user1. Item `cmplw1u02000e4kxz301rjaqs` created. Photo record `cmplw1u0g000g4kxzfifze5b7` confirmed: `isPrimary=true, orderIndex=0`. Burst clustering, best-photo-first, and photo role features all depend on Photo records existing — fix works.
 
-**#336 Intent-Wins ⚠️ PARTIAL:** PUT `/api/items/:id` with `price: 45` → API returned `userEditedFields: ["title", "price"]`. Code gate in `processRapidDraft.ts` confirmed. Live AI re-run not completed (item already PENDING_REVIEW when tested). Full Chrome flow needed.
+**#336 Intent-Wins ✅ VERIFIED:** Uploaded photo via `/api/upload/rapidfire` (item `cmpm8i85s01ck4kxzevahxif2`). Immediately PUT `price: 45` → API returned `userEditedFields: ["price"]`. Waited 6s for AI to complete → GET confirmed `price: 45, draftStatus: PENDING_REVIEW`. AI generated title/description/category/tags but did NOT overwrite the organizer-set price. Intent-Wins gate confirmed end-to-end. Test item deleted.
 
 **#339 Low-Confidence ✅ CODE-VERIFIED:** `cloudAIService.ts` lines 231–234: `if (parsed.confidence < 0.6) { parsed.category = undefined; parsed.brand = undefined; }` Gate enforced in code.
 
 **#340 Auto-Reopen ✅ VERIFIED:** Navigated to `?openCamera=1&captureMode=rapidfire` → RapidCapture overlay opened immediately. Auto-reopen confirmed working.
 
-**Blocked Queue reduced from 15 → 12:** #319, #325, #328, #340 removed (verified/fixed).
+**Blocked Queue reduced from 15 → 11:** #319, #325, #328, #340 removed S789 (verified). #336 removed S790 (verified).
 
 **Previous: S785 — QA Batches 1+2+3 Complete (8 ✅, 16 UNVERIFIED, 2 ✅ DB-only, 1 Bug Fixed)**
 
@@ -198,8 +198,6 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action -- Sign back in to Chrome** -- Chrome left at finda.sale/login after QA session. Sign in with Google (artifactmi@gmail.com) to restore session before next QA batch.
-
 **Patrick Action -- Seed production DB (BLOCKER for all shopper QA):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
@@ -212,17 +210,17 @@ Back up Barn Door QA Test Sale first. Also: clean up test sale `cmplw1p3g000c4kx
 
 **Patrick Action -- Submit sitemap to Bing** -- https://www.bing.com/webmasters -> Add sitemap -> https://finda.sale/server-sitemap.xml
 
-**Next session goal: QA batches — eBay + shopper + #336 live AI re-run**
+**Next session goal: QA batches — eBay + shopper + #261 RANGER test**
 
 1. ~~Camera batch QA~~ DONE (S789) -- #319/#325/#328/#340 verified. Photo pipeline fix confirmed.
 
-2. #336 live AI re-run -- upload fresh item, set price field immediately, wait 4.5s debounce, verify AI does NOT overwrite the organizer-set price. Full Chrome flow required.
+2. ~~#336 Intent-Wins~~ DONE (S790) -- verified end-to-end. Price=$45 unchanged after AI completion.
 
 3. QA batch -- eBay features (needs eBay connection for user1): #244, #293, #295, #298
 
 4. QA batch -- shopper features (after re-seed): #266, #184, #261 (after RANGER promotion)
 
-5. QA ceiling -- 12 items in Blocked Queue. Stay QA-only until below 8.
+5. QA ceiling -- 11 items in Blocked Queue. Stay QA-only until below 8.
 
 
 ## Recent Sessions
