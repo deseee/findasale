@@ -45,7 +45,6 @@ import LeaveSaleWarning from '../../components/LeaveSaleWarning'; // Feature #12
 import { useShopperCart } from '../../hooks/useShopperCart'; // Phase 1: Smart Cart
 import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart Cart
 import { useCart } from '../../context/CartContext';
-import ActivityFeed from '../../components/ActivityFeed'; // Feature #51: Activity Feed + HypeMeter
 import HypeMeter from '../../components/HypeMeter'; // Feature #51: Hype Meter (viewer count)
 import SaleRSVPButton from '../../components/SaleRSVPButton';
 import RSVPBadge from '../../components/RSVPBadge';
@@ -120,6 +119,7 @@ interface Sale {
     priceBeforeMarkdown?: number | null; // Feature #91: Auto-Markdown original price
     markdownApplied?: boolean; // Feature #91: Whether auto-markdown has been applied
     roomTag?: string | null; // #416: Floor map room routing
+    rarity?: string | null; // Explorer Guild rarity tier
   }[];
   isAuctionSale: boolean;
   // Feature 35: Front Door Locator
@@ -301,7 +301,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   // Phase 27: Show amber toast when points are awarded
   useEffect(() => {
     if (!id || !user) return;
-    api.post('/api/points/track-visit', { saleId: id })
+    api.post('/points/track-visit', { saleId: id })
       .then((res) => { if (res.data?.awarded === true) showToast('\ud83c\udfc6 +1 pt earned!', 'points'); })
       .catch(() => { /* non-fatal */ });
   }, [id, user]);
@@ -614,7 +614,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <main className="container mx-auto px-4 py-8">
           <Skeleton className="h-5 w-28 mb-6" />
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8"></div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8"><Skeleton className="h-16 w-full" /></div>
           <Skeleton className="h-64 mb-8" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-2">
@@ -1240,7 +1240,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               {sale.photoUrls.map((url, idx) => (
                 <div
                   key={idx}
-                  className="relative flex-shrink-0 rounded-md overflow-hidden cursor-pointer"
+                  className="relative flex-shrink-0 rounded-md overflow-hidden cursor-pointer group"
                   style={{ width: 88, height: 60, outline: idx === currentPhotoIndex ? '2px solid #C8552B' : '1px solid rgba(20,18,14,0.12)', outlineOffset: idx === currentPhotoIndex ? -2 : 0 }}
                   onClick={() => setCurrentPhotoIndex(idx)}
                 >
@@ -1384,9 +1384,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                                 {isToday && <span className="w-1.5 h-1.5 rounded-full bg-[#C8552B] inline-block" />}
                                 {day.label}
                               </span>
-                              <span className={`text-xs ${isToday ? 'text-[#C8552B]' : 'text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]'}`} style={{ fontFamily: 'ui-monospace, monospace' }}>
-                                {format(parseISO(day.date), 'h:mm a')}
-                              </span>
+                              {parseISO(day.date).getUTCHours() !== 0 || parseISO(day.date).getUTCMinutes() !== 0 ? (
+                                <span className={`text-xs ${isToday ? 'text-[#C8552B]' : 'text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]'}`} style={{ fontFamily: 'ui-monospace, monospace' }}>
+                                  {format(parseISO(day.date), 'h:mm a')}
+                                </span>
+                              ) : null}
                             </div>
                           );
                         })}
@@ -1602,8 +1604,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   <span className="text-xs uppercase tracking-widest mr-1 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace' }}>What's there</span>
                   <button
                     onClick={() => setSelectedCategory(null)}
-                    className="px-3 py-1.5 rounded-full text-xs border transition-colors"
-                    style={{ background: selectedCategory === null ? '#1A1814' : 'transparent', color: selectedCategory === null ? '#F4EFE7' : '#1A1814', borderColor: selectedCategory === null ? '#1A1814' : 'rgba(20,18,14,0.18)' }}
+                    className="px-3 py-1.5 rounded-full text-xs border transition-colors dark:text-gray-200"
+                    style={{ background: selectedCategory === null ? '#1A1814' : 'transparent', color: selectedCategory === null ? '#F4EFE7' : undefined, borderColor: selectedCategory === null ? '#1A1814' : 'rgba(20,18,14,0.18)' }}
                   >
                     All
                   </button>
@@ -1611,8 +1613,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                     <button
                       key={i}
                       onClick={() => setSelectedCategory(tag.toLowerCase())}
-                      className="px-3 py-1.5 rounded-full text-xs border transition-colors dark:border-white/14"
-                      style={{ background: selectedCategory === tag.toLowerCase() ? '#1A1814' : 'transparent', color: selectedCategory === tag.toLowerCase() ? '#F4EFE7' : '#1A1814', borderColor: selectedCategory === tag.toLowerCase() ? '#1A1814' : 'rgba(20,18,14,0.18)' }}
+                      className="px-3 py-1.5 rounded-full text-xs border transition-colors dark:border-white/14 dark:text-gray-200"
+                      style={{ background: selectedCategory === tag.toLowerCase() ? '#1A1814' : 'transparent', color: selectedCategory === tag.toLowerCase() ? '#F4EFE7' : undefined, borderColor: selectedCategory === tag.toLowerCase() ? '#1A1814' : 'rgba(20,18,14,0.18)' }}
                     >
                       {tag}
                     </button>
@@ -1741,9 +1743,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                               )}
                             </Link>
                             {/* Rarity badge */}
-                            {item.listingType && ['RARE','ULTRA_RARE','LEGENDARY'].includes((item as any).rarity) && (
-                              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wide" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10, backdropFilter: 'blur(4px)', background: (item as any).rarity === 'LEGENDARY' ? 'rgba(224,168,91,0.18)' : (item as any).rarity === 'ULTRA_RARE' ? 'rgba(196,154,224,0.16)' : 'rgba(157,183,232,0.14)', color: (item as any).rarity === 'LEGENDARY' ? '#E0A85B' : (item as any).rarity === 'ULTRA_RARE' ? '#C49AE0' : '#9DB7E8' }}>
-                                {(item as any).rarity === 'LEGENDARY' ? 'Legendary' : (item as any).rarity === 'ULTRA_RARE' ? 'Ultra rare' : 'Rare'}
+                            {item.listingType && ['RARE','ULTRA_RARE','LEGENDARY'].includes(item.rarity ?? '') && (
+                              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wide" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10, backdropFilter: 'blur(4px)', background: item.rarity === 'LEGENDARY' ? 'rgba(224,168,91,0.18)' : item.rarity === 'ULTRA_RARE' ? 'rgba(196,154,224,0.16)' : 'rgba(157,183,232,0.14)', color: item.rarity === 'LEGENDARY' ? '#E0A85B' : item.rarity === 'ULTRA_RARE' ? '#C49AE0' : '#9DB7E8' }}>
+                                {item.rarity === 'LEGENDARY' ? 'Legendary' : item.rarity === 'ULTRA_RARE' ? 'Ultra rare' : 'Rare'}
                               </div>
                             )}
                             {/* Listing type badge (non-fixed) */}
