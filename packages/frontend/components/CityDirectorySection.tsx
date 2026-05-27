@@ -60,7 +60,7 @@ export function CityDirectorySection({
           Sale Organizers in {cityName}, {cityState}
         </h2>
         <p className="text-slate-600 dark:text-slate-400 mb-8">
-          Estate sale companies, auction houses, and resale organizers operating in this area.
+          Estate sale companies, auction houses, flea market operators, and resale organizers operating in this area.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

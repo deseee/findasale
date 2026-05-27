@@ -139,8 +139,14 @@ export default function SalesPage() {
               )}
             </>
           ) : (
-            <div className="text-center py-12">
-              <p className="text-gray-600 dark:text-gray-400">No sales found.</p>
+            <div className="text-center py-12 px-4">
+              <p className="text-2xl mb-2">🔍</p>
+              <p className="text-warm-800 dark:text-warm-200 font-semibold mb-2">No sales found in your area yet</p>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">Try browsing a different city or exploring by category.</p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <a href="/cities" className="inline-flex items-center justify-center px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium text-sm transition-colors">Browse by City</a>
+                <a href="/categories" className="inline-flex items-center justify-center px-4 py-2 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-600 hover:bg-warm-50 dark:hover:bg-gray-700 text-warm-900 dark:text-warm-100 rounded-lg font-medium text-sm transition-colors">Browse by Category</a>
+              </div>
             </div>
           )}
         </div>

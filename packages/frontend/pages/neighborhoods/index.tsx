@@ -37,12 +37,12 @@ const NeighborhoodsPage = () => {
         <title>Sales by Neighborhood | FindA.Sale</title>
         <meta
           name="description"
-          content="Find estate sales, yard sales, and auctions in neighborhoods near you. Hyper-local sale discovery on FindA.Sale."
+          content="Find estate sales, yard sales, auctions, flea markets, and more in neighborhoods near you. Hyper-local sale discovery on FindA.Sale."
         />
         <meta property="og:title" content="Sales by Neighborhood | FindA.Sale" />
         <meta
           property="og:description"
-          content="Find estate sales, yard sales, and auctions in neighborhoods near you. Hyper-local sale discovery on FindA.Sale."
+          content="Find estate sales, yard sales, auctions, flea markets, and more in neighborhoods near you. Hyper-local sale discovery on FindA.Sale."
         />
         <meta property="og:url" content="https://finda.sale/neighborhoods" />
         <meta property="og:image" content="https://finda.sale/og-image.png" />
@@ -54,7 +54,7 @@ const NeighborhoodsPage = () => {
               '@context': 'https://schema.org',
               '@type': 'CollectionPage',
               name: 'Sales by Neighborhood',
-              description: 'Find estate sales, yard sales, and auctions in neighborhoods near you. Hyper-local sale discovery on FindA.Sale.',
+              description: 'Find estate sales, yard sales, auctions, flea markets, and more in neighborhoods near you. Hyper-local sale discovery on FindA.Sale.',
               url: 'https://finda.sale/neighborhoods',
             }),
           }}

@@ -184,7 +184,7 @@ export default function ClearancePage({
         <title>Clearance & Post-Sale Finds · FindA.Sale</title>
         <meta
           name="description"
-          content="Shop clearance items from recently ended estate sales, yard sales, and more. Contact the organizer to arrange pickup."
+          content="Shop clearance items from recently ended estate sales, auctions, yard sales, and more. Contact the organizer to arrange pickup."
         />
         <script
           type="application/ld+json"

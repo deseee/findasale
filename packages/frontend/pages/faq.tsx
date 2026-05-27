@@ -76,7 +76,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'Who decides the condition rating?',
     answer: (
       <>
-        The estate sale organizer or item seller sets the condition rating based on their professional assessment. If you have questions about a specific item's condition, you can contact the organizer directly through the item's listing to ask for additional photos or details.
+        The sale organizer or item seller sets the condition rating based on their professional assessment. If you have questions about a specific item's condition, you can contact the organizer directly through the item's listing to ask for additional photos or details.
       </>
     ),
   },
