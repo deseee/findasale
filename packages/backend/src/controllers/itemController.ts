@@ -2997,7 +2997,6 @@ export const getCompSummary = async (req: Request, res: Response) => {
   }
 };
 
-/**
  * Get similar items for a given item
  * GET /api/items/:id/similar
  * Returns up to 6 items in the same category from active sales, excluding the current item
@@ -3013,3 +3012,71 @@ export const getSimilarItems = async (req: Request, res: Response) => {
 
     if (!currentItem) {
       return res.status(404).json({ message: 'Item not found' });
+    }
+
+    const similarItems = await prisma.item.findMany({
+      where: {
+        category: currentItem.category,
+        status: { in: ['AVAILABLE', 'PUBLISHED'] },
+        id: { not: itemId },
+        isActive: true,
+        saleId: { not: null },
+      },
+      select: {
+        id: true,
+        title: true,
+        price: true,
+        photoUrls: true,
+        condition: true,
+        saleId: true,
+        sale: {
+          select: {
+            title: true,
+            city: true,
+          },
+        },
+      },
+      take: 6,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const items = similarItems.map(item => ({
+      id: item.id,
+      title: item.title,
+      price: item.price,
+      photoUrl: item.photoUrls[0] ?? null,
+      condition: item.condition,
+      saleId: item.saleId!,
+      sale: item.sale ? { title: item.sale.title, city: item.sale.city } : null,
+    }));
+
+    res.json({ items });
+  } catch (error) {
+    console.error('[getSimilarItems] Error:', error);
+    res.status(500).json({ message: 'Server error fetching similar items' });
+  }
+};
+// SEO: Sitemap items endpoint — returns id + updatedAt for all items in PUBLISHED sales
+// Public, no auth required. Cap at 10,000 to keep response lightweight.
+export const getSitemapItems = async (req: Request, res: Response) => {
+  try {
+    const items = await prisma.item.findMany({
+      where: {
+        sale: {
+          status: 'PUBLISHED',
+        },
+      },
+      select: {
+        id: true,
+        updatedAt: true,
+      },
+      take: 10000,
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    res.json({ items });
+  } catch (error) {
+    console.error('[getSitemapItems] Error:', error);
+    res.status(500).json({ message: 'Server error fetching sitemap items' });
+  }
+};
