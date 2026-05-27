@@ -325,7 +325,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
     <div className="mb-6">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 bg-white border border-warm-300 rounded-lg hover:bg-warm-50 transition-colors flex items-center justify-between text-warm-900 font-medium"
+        className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-between text-warm-900 dark:text-warm-100 font-medium"
       >
         <div className="flex items-center gap-2">
           <span>Filters</span>
@@ -339,7 +339,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
       </button>
 
       {isOpen && (
-        <div className="mt-4 p-4 bg-white border border-warm-200 rounded-lg space-y-4">
+        <div className="mt-4 p-4 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg space-y-4">
           {filterContent}
           {resultCount !== undefined && (
             <p className="text-xs text-warm-500">
