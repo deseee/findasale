@@ -2259,7 +2259,8 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     const sale = await res.json();
 
     if (!sale?.id || !sale?.title) {
-      return { props: { ogData: null, initialData: null, eventSeriesData: null } };
+      // Sale body empty or malformed — treat as deleted/missing → proper HTTP 404
+      return { notFound: true };
     }
 
     const ogData: OGSaleData = {
