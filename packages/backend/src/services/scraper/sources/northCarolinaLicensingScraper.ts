@@ -1,7 +1,8 @@
 /**
  * North Carolina Auctioneer Licensing Board — License Scraper
  * Scrapes licensed auctioneers from NC SALB public directory
- * Source: https://www.ncalb.gov/
+ * Source: https://www.ncalb.org/licensee-information/license-search
+ * (previously ncalb.gov — domain changed to ncalb.org)
  * Public directory with searchable auctioneer records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,7 +12,7 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const NC_SEARCH_URL = 'https://www.ncalb.gov/licensee-search';
+const NC_SEARCH_URL = 'https://www.ncalb.org/licensee-information/license-search';
 
 /**
  * Scrape North Carolina auctioneer licenses from SALB public directory.

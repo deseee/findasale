@@ -71,10 +71,29 @@ export async function getPersonalizedFeed(
     whereClause.lng = { gte: effectiveLng - GEO_DELTA, lte: effectiveLng + GEO_DELTA };
   }
 
-  // Fetch all published sales with organizer data
+  // Fetch published sales — select only SaleWithScore fields (Sentry NODEJS-10: omit scrapedMetadata blobs)
   const findManyOptions: any = {
     where: whereClause,
-    include: {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      startDate: true,
+      endDate: true,
+      address: true,
+      city: true,
+      state: true,
+      zip: true,
+      lat: true,
+      lng: true,
+      photoUrls: true,
+      tags: true,
+      status: true,
+      isAuctionSale: true,
+      qrScanCount: true,
+      organizerId: true,
+      createdAt: true,
+      updatedAt: true,
       organizer: {
         select: {
           id: true,
@@ -89,8 +108,12 @@ export async function getPersonalizedFeed(
     orderBy: [{ startDate: 'asc' }],
   };
 
-  // Add fallback safety limit when no bounding box possible
-  if (effectiveLat === undefined || effectiveLng === undefined) {
+  // Add safety limit regardless of bounding box (Sentry NODEJS-10: unbounded rows)
+  if (effectiveLat !== undefined && effectiveLng !== undefined) {
+    // Bounding box active — tighter cap, index-backed filter
+    findManyOptions.take = 300;
+  } else {
+    // No bounding box — fallback safety limit
     findManyOptions.take = 500;
   }
 
