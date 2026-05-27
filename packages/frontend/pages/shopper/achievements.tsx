@@ -9,7 +9,7 @@ import { AchievementBadge } from '../../components/AchievementBadge';
 const RANKS = [
   { name: 'Initiate', xp: 0, icon: '⭐' },
   { name: 'Scout', xp: 500, icon: '🗺️' },
-  { name: 'Ranger', xp: 2000, icon: '🏹' },
+  { name: 'Ranger', xp: 1200, icon: '🎯' },
   { name: 'Sage', xp: 5000, icon: '📚' },
   { name: 'Grandmaster', xp: 12000, icon: '👑' },
 ];

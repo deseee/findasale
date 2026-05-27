@@ -303,7 +303,7 @@ const ShopperDashboard = () => {
   const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
     INITIATE: 0,
     SCOUT: 500,
-    RANGER: 2000,
+    RANGER: 1200,
     SAGE: 5000,
     GRANDMASTER: 12000,
   };
@@ -311,7 +311,7 @@ const ShopperDashboard = () => {
   // Next rank thresholds (XP required to reach the next rank from current rank)
   const NEXT_RANK_THRESHOLDS: Record<ExplorerRank, number> = {
     INITIATE: 500,
-    SCOUT: 2000,
+    SCOUT: 1200,
     RANGER: 5000,
     SAGE: 12000,
     GRANDMASTER: 12000,
@@ -331,7 +331,7 @@ const ShopperDashboard = () => {
         ctaHref: '/',
       },
       SCOUT: {
-        progressLabel: `${xp} / 2000 XP`,
+        progressLabel: `${xp} / 1200 XP`,
         untilNextRank: `${xpUntilNext} more XP until Ranger`,
         earnTip: 'Make a purchase (+25 XP each)',
         tipDetail: "You're unlocking more perks — keep going.",

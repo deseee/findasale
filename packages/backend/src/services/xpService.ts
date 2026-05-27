@@ -643,10 +643,15 @@ export async function getUserXpProfile(userId: string) {
     const progress = getRankProgress(user.guildXp);
     const spendable = await getSpendableXp(userId);
 
+    // Recalculate rank from guildXp on every profile fetch to guard against
+    // stale DB values (e.g. user spent XP below a rank threshold before the
+    // rank-ratchet logic existed, or direct DB seeding).
+    const freshRank = getRankForXp(user.guildXp);
+
     return {
       guildXp: user.guildXp,
       spendableXp: spendable,
-      explorerRank: user.explorerRank,
+      explorerRank: freshRank,
       huntPassActive: user.huntPassActive,
       huntPassExpiry: user.huntPassExpiry,
       rankProgress: {

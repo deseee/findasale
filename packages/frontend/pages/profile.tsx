@@ -6,6 +6,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
+import useXpProfile from '../hooks/useXpProfile';
 import ReferralWidget from '../components/ReferralWidget';
 import { getItemImageUrl } from '../lib/imageUtils';
 
@@ -45,6 +46,8 @@ interface ShowcaseSlot {
 const ProfilePage = () => {
   const { user } = useAuth();
   const { canAccess } = useOrganizerTier();
+  // Fetch fresh XP profile to get accurate huntPassExpiry (JWT field may be stale/absent)
+  const { data: xpProfile } = useXpProfile(!!user);
   const [showShowcaseModal, setShowShowcaseModal] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
 
@@ -394,7 +397,7 @@ const ProfilePage = () => {
                 <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-1">🎯 Hunt Pass</h2>
                 <p className="text-warm-600 dark:text-warm-400 text-sm">
                   {user.huntPassActive
-                    ? `Active until ${user.huntPassExpiry ? new Date(user.huntPassExpiry).toLocaleDateString() : 'N/A'}`
+                    ? `Active until ${(xpProfile?.huntPassExpiry ?? user.huntPassExpiry) ? new Date((xpProfile?.huntPassExpiry ?? user.huntPassExpiry)!).toLocaleDateString() : 'N/A'}`
                     : 'Unlock 1.5x XP and early access to inventory'}
                 </p>
               </div>
