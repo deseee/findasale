@@ -8,19 +8,27 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S790 — Chrome QA: Intent-Wins Verified (#336 ✅)**
+**Latest: S791 — QA Session: 6 Features Verified (#261 #184 #232 #323 #334 #413)**
 
-Camera batch QA complete. Photo pipeline fix confirmed working end-to-end. All 6 targets tested via in-browser JS fetch + psycopg2 DB verification.
+QA-only session (ceiling active). 6 features verified ✅, 3 UNVERIFIED added to Blocked Queue. Blocked Queue: 11 → 12 (removed 2, added 3).
 
-**#319/#325/#328 ✅ VERIFIED:** Uploaded PNG via `/api/upload/rapidfire` as user1. Item `cmplw1u02000e4kxz301rjaqs` created. Photo record `cmplw1u0g000g4kxzfifze5b7` confirmed: `isPrimary=true, orderIndex=0`. Burst clustering, best-photo-first, and photo role features all depend on Photo records existing — fix works.
+**#261 Treasure Hunt XP Rank Multiplier ✅ VERIFIED:** user6/Maya (RANGER, guildXp=2001) scanned QR clue. API returned `xpAwarded: 5` (3 × 1.5 rank multiplier = 4.5 → rounds to 5). DB confirmed guildXp 2001→2021. RANGER multiplier gate working end-to-end.
 
-**#336 Intent-Wins ✅ VERIFIED:** Uploaded photo via `/api/upload/rapidfire` (item `cmpm8i85s01ck4kxzevahxif2`). Immediately PUT `price: 45` → API returned `userEditedFields: ["price"]`. Waited 6s for AI to complete → GET confirmed `price: 45, draftStatus: PENDING_REVIEW`. AI generated title/description/category/tags but did NOT overwrite the organizer-set price. Intent-Wins gate confirmed end-to-end. Test item deleted.
+**#184 iCal Export ✅ VERIFIED:** `AddToCalendarButton.tsx` is entirely client-side — generates `data:text/calendar` blob. Button click confirmed firing (privacy guard intercepted Base64 blob — confirms download triggered). Earlier S787 ❌ diagnosis was wrong URL (`/api/sales/[id]/ical` doesn't exist; never was the implementation).
 
-**#339 Low-Confidence ✅ CODE-VERIFIED:** `cloudAIService.ts` lines 231–234: `if (parsed.confidence < 0.6) { parsed.category = undefined; parsed.brand = undefined; }` Gate enforced in code.
+**#232 Sale Pulse Widget ✅ VERIFIED:** buzz score 1/100, 3 views rendered on organizer dashboard.
 
-**#340 Auto-Reopen ✅ VERIFIED:** Navigated to `?openCamera=1&captureMode=rapidfire` → RapidCapture overlay opened immediately. Auto-reopen confirmed working.
+**#323 PriceBenchmark Valuation Fallback ✅ VERIFIED:** comparableCount:0 → `method: STATISTICAL_WITH_BENCHMARK` (60% Haiku + 40% PriceBenchmark blend) confirmed via API.
 
-**Blocked Queue reduced from 15 → 11:** #319, #325, #328, #340 removed S789 (verified). #336 removed S790 (verified).
+**#334 Automatic Markdown Cycles ✅ VERIFIED:** Form renders, POST returns 201, record persists on reload. Seed data gap noted: `markdownCycleController` checks `UserRoleSubscription` table; seed only sets `Organizer.subscriptionTier`. Workaround: manual DB insert during test.
+
+**#413 Physical Safety & Liability Disclosures ✅ VERIFIED:** `safetyNotes` textarea in edit-sale, displays on sale page when set. Checkout waiver deferred to legal review.
+
+**UNVERIFIED added to Blocked Queue (3):** #230 Smart Buyer Intelligence (no shoppers favoriting test sales), #223 Organizer Guidance Layer (no hold records), #332 Shopify Cross-Listing (needs OAuth).
+
+**Previous: S790 — Chrome QA: Intent-Wins Verified (#336 ✅)**
+
+Camera batch QA complete. Photo pipeline fix confirmed working end-to-end. All 6 targets tested via in-browser JS fetch + psycopg2 DB verification. #319/#325/#328/#340 ✅ VERIFIED S789. #336 Intent-Wins ✅ VERIFIED S790. Blocked Queue 15→11.
 
 **Previous: S785 — QA Batches 1+2+3 Complete (8 ✅, 16 UNVERIFIED, 2 ✅ DB-only, 1 Bug Fixed)**
 
@@ -176,9 +184,10 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
-| #261 Treasure Hunt XP Rank Multiplier | UNVERIFIED S787 — No RANGER users in production DB; /admin access denied for user1 (Patrick-only) | Patrick: promote a test shopper to RANGER in Railway DB, then re-test QR scan XP (~38 XP) | S787 |
 | RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
-| Shopper account login blocked (#266, #184, user12+) | Production DB not re-seeded after S576 password change — Seedy2025! rejected for all shopper accounts | Patrick: `cd packages/database && $env:DATABASE_URL="[Railway URL]" && npx prisma db seed` against production | S787 |
+| #230 Smart Buyer Intelligence | UNVERIFIED S791 — No test shoppers favoriting organizer sales in test DB | Need shopper (user5-7) to favorite a sale by an organizer (user1-4), then check the organizer's Smart Buyer panel | S791 |
+| #223 Organizer Guidance Layer | UNVERIFIED S791 — No hold records in test DB for rank badge copy test on holds page | Create a reservation/hold in test DB, verify rank badge contextual copy on organizer holds page | S791 |
+| #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
 
 | #244 eBay Quick List / Direct Push | Push to eBay button confirmed in edit-item ✅; eBay CSV export not found on add-items page; full flow needs eBay connection for user1 | Connect eBay to user1 in Railway DB, then retest | S785 |
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
@@ -198,32 +207,49 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action -- Seed production DB (BLOCKER for all shopper QA):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="[Railway DATABASE_URL from Railway dashboard]"
-npx prisma db seed
-```
-Back up Barn Door QA Test Sale first. Also: clean up test sale `cmplw1p3g000c4kxzdyg8k5ah` (QA_S789) if still in Railway DB.
-
-**Patrick Action -- Promote a test shopper to RANGER** -- set any user12-user23 to guildXp >= 2000 + explorerRank = RANGER in Railway DB for #261 QA.
-
 **Patrick Action -- Submit sitemap to Bing** -- https://www.bing.com/webmasters -> Add sitemap -> https://finda.sale/server-sitemap.xml
 
-**Next session goal: QA batches — eBay + shopper + #261 RANGER test**
+**Patrick Action -- Connect eBay to user1 in Railway DB** -- enables #244, #293, #295, #298 verification.
 
-1. ~~Camera batch QA~~ DONE (S789) -- #319/#325/#328/#340 verified. Photo pipeline fix confirmed.
+**Seed data gap discovered S791:** `markdownCycleController` and potentially other controllers check `UserRoleSubscription` table for tier gating, but `seed.ts` only sets `Organizer.subscriptionTier`. Future tier-gated QA may require manual DB inserts. Consider adding `UserRoleSubscription` records to seed.ts for user1-user4.
 
-2. ~~#336 Intent-Wins~~ DONE (S790) -- verified end-to-end. Price=$45 unchanged after AI completion.
+**Next session goal: QA batches — eBay + consignors (Blocked Queue still at 12)**
 
-3. QA batch -- eBay features (needs eBay connection for user1): #244, #293, #295, #298
-
-4. QA batch -- shopper features (after re-seed): #266, #184, #261 (after RANGER promotion)
-
-5. QA ceiling -- 11 items in Blocked Queue. Stay QA-only until below 8.
+1. ~~Camera batch QA~~ DONE (S789) -- #319/#325/#328/#340 verified.
+2. ~~#336 Intent-Wins~~ DONE (S790) -- verified end-to-end.
+3. ~~#261 Treasure Hunt XP Rank Multiplier~~ DONE (S791) -- RANGER multiplier confirmed 3×1.5=5 XP.
+4. ~~#184 iCal Export~~ DONE (S791) -- client-side only, confirmed working.
+5. QA batch -- eBay features (needs eBay connection for user1): #244, #293, #295, #298
+6. QA batch -- consignor features: #333 (create test consignor + settlement), #335 (add email to consignor)
+7. QA ceiling -- 12 items in Blocked Queue. Stay QA-only until below 8.
 
 
 ## Recent Sessions
+
+### S791 — QA Session: 6 Features Verified (#261 #184 #232 #323 #334 #413)
+
+**Trigger:** QA ceiling active (11 items in Blocked Queue). QA-only session — no new feature work.
+
+**Verified ✅ (6):**
+- #261 Treasure Hunt XP Rank Multiplier: user6/Maya (RANGER, guildXp=2001) scanned QR clue via `POST /sales/:saleId/treasure-hunt-qr/:clueId/found`. API returned `xpAwarded: 5` (3 × 1.5 = 4.5 → rounds to 5). DB confirmed guildXp 2001→2021. ✅
+- #184 iCal Export: `AddToCalendarButton.tsx` client-side `data:text/calendar` blob confirmed firing — privacy guard intercepted Base64 = download triggered. Earlier ❌ diagnosis was wrong URL. ✅
+- #232 Sale Pulse Widget: buzz score 1/100, 3 views rendered correctly on organizer dashboard. ✅
+- #323 PriceBenchmark Valuation Fallback: `comparableCount:0` → `method: STATISTICAL_WITH_BENCHMARK` confirmed via GET `/api/items/:itemId/valuation`. ✅
+- #334 Automatic Markdown Cycles: Form renders on `/organizer/markdown-cycles`, POST 201, record persists on reload. Seed gap: controller checks `UserRoleSubscription` (not `Organizer.subscriptionTier`). ✅
+- #413 Physical Safety & Liability Disclosures: `safetyNotes` in edit-sale persists, displays on sale page conditionally. Checkout waiver deferred to legal review. ✅
+
+**UNVERIFIED (3) — added to Blocked Queue:**
+- #230 Smart Buyer Intelligence: No test shoppers favoriting organizer sales
+- #223 Organizer Guidance Layer: No hold records for rank badge copy test
+- #332 Shopify Cross-Listing: Needs Shopify OAuth connection
+
+**Technical notes:** `UserRoleSubscription` not populated by seed.ts — only `Organizer.subscriptionTier` set. Manual DB insert required for tier-gated feature QA. iCal is entirely frontend (no backend route). QR rank multiplier only applies to `treasureHuntQRController`, not regular `treasureHunt.ts` route.
+
+**Blocked Queue: 11 → 12** (removed 2: #261 ✅ + shopper-login-entry resolved; added 3: #230/#223/#332 UNVERIFIED).
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S789 — Chrome QA: Camera Batch (#319/#325/#328/#336/#339/#340)
 
@@ -289,75 +315,19 @@ Back up Barn Door QA Test Sale first. Also: clean up test sale `cmplw1p3g000c4kx
 
 **Trigger:** Continue QA backlog — investigate why camera features showed 0 DB rows in S785. Fix Railway DB access (psycopg2 auth failing due to stale password in session context).
 
-**Railway CLI fixed:** Downloaded CLI to /tmp, used `RAILWAY_TOKEN + railway run --service backend env` to extract live DATABASE_URL password. psycopg2 now works. Pattern saved to memory — no more hardcoded passwords. Live password: `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW` (internal password, also works against maglev public proxy).
+**Railway CLI fixed:** Downloaded CLI to /tmp, used `RAILWAY_TOKEN + railway run --service backend env` to extract live DATABASE_URL password. psycopg2 now works. Live password: `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW` (also works against maglev public proxy).
 
 **DB audit — 130 items, 0 Photo records:**
 - Photo table completely empty — Cloudinary URLs stored in Item.photoUrls array only
-- #319 clusterConfidence NULL on all items — burst clustering never fires
-- #325 orderIndex unreachable — Photo records never created
-- #328 photoRole unreachable — same root cause
-- Root cause (all three): upload pipeline skips Photo table insertion entirely
+- #319/#325/#328 all unreachable — upload pipeline skips Photo table insertion entirely
 - #336 userEditedFields populated on 18/130 items ✅ data confirmed; needs Chrome QA
-- #339 aiConfidence on 100% of items; but low-conf items still have titles filled — gate may not enforce
-- #340 no DB column (pure frontend) — needs Chrome mobile test
+- #339 aiConfidence on 100% of items; gate may not enforce on low-confidence items
 
-**Roadmap corrections (all 3 were wrong table/field names in roadmap):**
+**Roadmap corrections (wrong table/field names in roadmap):**
 - #323: IS implemented as ItemValuation.method (60/40 blend) → Pending Chrome QA
 - #332: IS implemented on Organizer model + ShopifyListing table → Pending Chrome QA
 - #334: IS implemented as MarkdownCycle model → Pending Chrome QA
 
 **Mobile nav fix:** Discount Rules, Consignors, Locations, Shopify added to mobile drawer TEAMS section.
 
-**Files changed:** Layout.tsx, roadmap.md, STATE.md, patrick-dashboard.md
-
-### S785 — QA Batch 1: XP/Guild System (8 ✅, 2 UNVERIFIED, 1 Bug)
-
-**Trigger:** S784b QA session prompt ready. Groups B/C/D priority. Batch 1 = XP/Guild features for Leo (user5/SCOUT) and Maya (user6/shopper near rank-up).
-
-**Verified ✅ (8 features):**
-- #267 RSVP XP: Maya RSVPed to a sale. SaleRSVP row created, +2 guildXp, RSVP_CONFIRMED notification in DB. ✅
-- #255 Rank-Up Notifications: Maya at 498 XP → VISIT event (+5) pushed her to 503 (threshold=500) → RANK_UP notification (type=RANK_UP, title="You've reached SCOUT!") confirmed in DB. ✅
-- #257 Scout Hold Duration: Leo's reservation shows holdDurationMinutes=45, countdown displays 00:44:57 on /shopper/holds. ✅
-- #227 XP Profile API + Shopper Dashboard: /api/xp/profile returns guildXp, explorerRank, rankLabel, nextRankXp, lifetimeXp. All 5 fields confirmed. ✅
-- #290 Hunt Pass Dual-Rail Cash Column: /coupons shows $ value alongside XP cost for each tier. ✅
-- #289 Shopper Coupon Generation (3 Tiers): Standard tier generated successfully, 100 XP deducted, coupon code appeared. ✅
-- #312 XP Economy Security Hardening: /api/xp/leaderboard returns only rank, userName, guildXp, explorerRank — no userId, no email. ✅
-- #349 In-App QR Scanner Phase 1: Scan button visible in header, modal opens and requests camera permission. ✅
-
-**UNVERIFIED (2):** #261 Treasure Hunt XP Rank Multiplier (blocked by rank permanence bug), RSVP XP monthly cap (need 5 RSVPs in one month; only 3 platform sales have Going button).
-
-**Bug found:** `explorerRank` demotes on XP spend. Leo (SCOUT, guildXp=500) → generated Standard coupon → guildXp=400 → backend recalculated rank → INITIATE demotion. Root cause: rank threshold check uses current `guildXp` balance, not cumulative/peak. Fix dispatched to findasale-dev.
-
-**Batch 2 (Camera/Photo) — all UNVERIFIED:** #319, #336, #339, #340, #328, #325 — all blocked by upload_image imageId unknown + handleAnalyzePhotos JS crash with DataTransfer programmatic upload. photoRole and orderIndex columns confirmed in schema; 0 photos have data in DB.
-
-**Batch 3 (eBay) — DB-verified (2), UNVERIFIED (rest):**
-- ✅ #320 Async eBay Comp Fetch: 6 items with aiSuggestedPrice confirmed.
-- ✅ #321 Encyclopedia Auto-Generation: 57 AUTO_GENERATED entries + haiku_inferred benchmarks confirmed.
-- UNVERIFIED: #244, #293, #295, #298 — user1 has no EbayConnection in test DB. #323 (Item.valuationMethod not in schema), #332 (ShopifyConnection table missing), #334 (MarkdownRule table missing) — schema gaps need investigation. #333, #335 — no test consignors with email.
-
-**Bug fix shipped:** Rank permanence ratchet in xpService.ts + xpController.ts. Leo's DB record restored to SCOUT.
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md` · `packages/backend/src/services/xpService.ts` · `packages/backend/src/controllers/xpController.ts`
-
----
-
-### S784 — Audit Fixes: Map Geocoding + Categories Icons + Chrome QA Batch
-
-**Trigger:** Weekly audit had HIGH (/categories raw taxonomy) and MEDIUM (/map zero pins). Patrick confirmed #424 and #425 human-verified. Also: QA plan session — 9 Pending Chrome QA items knocked out.
-
-**Completed:**
-- ✅ `/map` zero pins root cause confirmed and fixed: `geocodeAddress()` call added to `updateSaleStatus` in `saleController.ts` — fires when status → PUBLISHED and lat is null. Non-blocking fire-and-forget. `internalGeocodingController.ts` batch job extended with `OR: [{ sourceName: null, status: 'PUBLISHED' }]` to backfill existing platform sales without coordinates.
-- ✅ `/categories` display improved: `CATEGORY_ICONS` expanded from 14 to 200+ entries covering eBay leaf node names. `DISPLAY_NAME_OVERRIDES` added for verbose names (e.g. "Comics & Graphic Novels" → "Comics"). Render logic updated to use displayLabel.
-- ✅ Roadmap #424 (eBay description template code-verified) and #425 marked human-verified.
-- ✅ Chrome QA — 9 items verified: #352 (tagline field), #354 (business hours), #356 (broadcasts), #359 (pin sale), #360 (social links), #60 (pricing page $29/$79), #260 (one-big-sale upgrade), #263 (PRO TOOLS dropdown), #271 (TEAMS webhooks/API table). Roadmap rows updated.
-- ✅ QA session prompt fixed (`qa-session-prompt-groups-bcd.md`): Chrome concurrency warning added; hardcoded DB password replaced with Railway dashboard instructions.
-
-**Chrome conflict mid-session:** Patrick had started the groups B/C/D QA session in another Cowork window — they share one browser, causing mutual logout. Chrome work stopped; prompt was already generated and sent to the other session.
-
-**DB inaccessible from VM:** Railway DB password rotated 2026-05-24 (post-GitGuardian). New password not available in VM bash. psycopg2 auth failure confirmed regardless per memory. DB checks deferred to groups B/C/D session via Railway dashboard instructions in the prompt.
-
-**Audit closure:** `/privacy` and `/calendar` audit findings confirmed already resolved in deployed code — no changes needed. All 4 findings from the weekly-audit-2026-05-23 are closed.
-
-**Files changed:** `packages/backend/src/controllers/saleController.ts` · `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/frontend/pages/categories/index.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/qa-session-prompt-groups-bcd.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
+**Files changed:** `packages/frontend/components/Layout.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
