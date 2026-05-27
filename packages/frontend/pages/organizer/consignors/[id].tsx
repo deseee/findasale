@@ -66,7 +66,7 @@ const ConsignorDetailPage: React.FC = () => {
   const fetchConsignor = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/api/consignors/${id}`);
+      const response = await api.get(`/consignors/${id}`);
       setConsignor(response.data);
     } catch (error: any) {
       console.error('Error fetching consignor:', error);

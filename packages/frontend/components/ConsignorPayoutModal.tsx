@@ -43,7 +43,7 @@ const ConsignorPayoutModal: React.FC<ConsignorPayoutModalProps> = ({
   const fetchSales = async () => {
     try {
       setLoadingSales(true);
-      const response = await api.get('/api/sales/mine');
+      const response = await api.get('/sales/mine');
       setSales(response.data.sales || []);
     } catch (error: any) {
       console.error('Error fetching sales:', error);
@@ -69,7 +69,7 @@ const ConsignorPayoutModal: React.FC<ConsignorPayoutModalProps> = ({
         notes: notes || undefined,
       };
 
-      const response = await api.post(`/api/consignors/${consignorId}/payout`, payload);
+      const response = await api.post(`/consignors/${consignorId}/payout`, payload);
       setPayoutResult(response.data);
       showToast('Payout created successfully', 'success');
 
