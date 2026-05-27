@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S791 — QA Session Complete: 10 Features Verified + 3 Bugs Fixed + Roadmap Updated (16 rows) | Blocked Queue: 7 (below 8 — new features resume)**
+**Latest: S792 — QA Session: 6 ✅ Chrome-verified (#29 #153 #58 #286 #123⚠️ #199⚠️), 2 UNVERIFIED (#272 #273), P2 rank label bug fixed, P3 Guild nav + Hunt Pass N/A fixed | Blocked Queue: 9 (below 8 ceiling cleared)**
 
 QA-only session (ceiling active). 8 features verified ✅, 1 bug found (#295 ebayNeedsReview missing from select), 3 UNVERIFIED added to Blocked Queue. Blocked Queue: 11 → 10 (removed 4: #261, shopper-login, #244, #298; added 3: #230/#223/#332 UNVERIFIED).
 
@@ -214,6 +214,8 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #230 Smart Buyer Intelligence | UNVERIFIED S791 — No test shoppers favoriting organizer sales in test DB | Need shopper (user5-7) to favorite a sale by an organizer (user1-4), then check the organizer's Smart Buyer panel | S791 |
 | #223 Organizer Guidance Layer | UNVERIFIED S791 — No hold records in test DB for rank badge copy test on holds page | Create a reservation/hold in test DB, verify rank badge contextual copy on organizer holds page | S791 |
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
+| #272 Post-Purchase Share Your Haul | UNVERIFIED S792 — Leo (user5) has no purchase records in test DB | Complete a real purchase as Leo or another shopper, then verify Share Your Haul section on /shopper/checkout-success | S792 |
+| #273 Rank Achievement Share | UNVERIFIED S792 — Leo at 465 XP (Initiate), no rank-up event triggered | Leo needs to cross 500 XP threshold, then verify share button on rank-up notification | S792 |
 
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 
@@ -233,7 +235,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Seed data gap discovered S791:** `markdownCycleController` and potentially other controllers check `UserRoleSubscription` table for tier gating, but `seed.ts` only sets `Organizer.subscriptionTier`. Future tier-gated QA may require manual DB inserts. Consider adding `UserRoleSubscription` records to seed.ts for user1-user4.
 
-**Next session goal: QA batches — remaining items (Blocked Queue at 8). Roadmap fully updated S791 — 16 rows updated.**
+**Next session goal: QA batches — remaining Pending Chrome QA items. Blocked Queue at 9 (below 8 ceiling — new features can resume). P2 rank label + P3 Guild nav + P3 Hunt Pass N/A all fixed in S792 — push block below.**
 
 1. ~~Camera batch QA~~ DONE (S789) -- #319/#325/#328/#340 verified.
 2. ~~#336 Intent-Wins~~ DONE (S790) -- verified end-to-end.
@@ -250,6 +252,36 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 
 ## Recent Sessions
+
+### S792 — QA Batch: 6 Verified, 2 UNVERIFIED, P2 Rank Bug Fixed
+
+**Trigger:** Continue QA backlog. Testing "Pending Chrome QA" items with Leo Thomas (user5, user5@example.com / Seedy2025!).
+
+**Verified ✅ (4):**
+- #29 Loyalty Passport: /coupons loaded with 465 XP, active coupon visible, Initiate→Grandmaster tier names confirmed ✅
+- #153 Basic Organizer Profile: Facebook URL saved to organizer account, persisted on reload ✅
+- #58 Achievement Badges: /shopper/achievements loaded, Sale Explorer badge shown as unlocked ✅
+- #286 Shopper QR Code: QR rendered on /shopper/dashboard with scan instruction for Leo ✅
+
+**Partial ⚠️ (2):**
+- #199 User Profile Page: Hunt Pass section visible, bid status from real DB; P3 bug: Hunt Pass shows "Active until N/A" (expiry null) — fix dispatched and shipped S792 (profile.tsx uses xpProfile.huntPassExpiry)
+- #123 Explorer's Guild Phase 2: Full rank ladder, XP tables, Hunt Pass multiplier docs all confirmed; P2 bug: rank showed "Scout" at 465 XP (should be "Initiate") — root cause in xpService.ts getUserXpProfile() trusting stale DB field instead of recalculating from guildXp; P3: Guild missing from Explore nav dropdown — fixed in AvatarDropdown.tsx. Also fixed: RANGER threshold was 2000 in 4 frontend files, should be 1200.
+
+**UNVERIFIED (2) — added to Blocked Queue:**
+- #272 Post-Purchase Share Your Haul: Leo has no purchase records in test DB
+- #273 Rank Achievement Share: Leo at 465 XP (Initiate), no rank-up event to verify notification share
+
+**Bugs Fixed (dispatched S792):**
+- P2: `xpService.ts` — getUserXpProfile() now recalculates explorerRank from guildXp via getRankForXp() instead of trusting stale DB field
+- P3: RANGER threshold corrected from 2000→1200 in RankHeroSection.tsx, RankLevelingHint.tsx, achievements.tsx, dashboard.tsx
+- P3: AvatarDropdown.tsx — Explorer's Guild added to Explore dropdown
+- P3: profile.tsx — Hunt Pass expiry now uses xpProfile.huntPassExpiry as primary source
+
+**Patrick session restoration note:** Lorene Cook (a1clcook@gmail.com) was accidentally signed in mid-session due to coordinate mismatch in Google account chooser. Fixed by logout + ref-based click (find tool) to select Artifact (artifactmi@gmail.com). Patrick restored before session end.
+
+**Files changed (push block below):** `packages/backend/src/services/xpService.ts` · `packages/frontend/components/RankHeroSection.tsx` · `packages/frontend/components/RankLevelingHint.tsx` · `packages/frontend/pages/shopper/achievements.tsx` · `packages/frontend/pages/shopper/dashboard.tsx` · `packages/frontend/components/AvatarDropdown.tsx` · `packages/frontend/pages/profile.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S791 — QA Session: 6 Features Verified (#261 #184 #232 #323 #334 #413)
 

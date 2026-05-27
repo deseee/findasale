@@ -4,7 +4,7 @@
 
 ## What Happened This Week
 
-Nine sessions this week. QA-only mode has been active for multiple sessions (ceiling rule: Blocked Queue ≥8 items = QA-only). S791 fully complete: 10 features verified, 3 bugs fixed, roadmap updated (16 rows).
+Ten sessions this week. S792 complete: 6 features Chrome-verified, 2 bugs fixed (P2 rank label + P3 Guild nav), 1 bug fixed (Hunt Pass date), 2 features UNVERIFIED (need purchase test data). Blocked Queue: 9 items (below 8 ceiling — new features can resume).
 
 S791 (today): QA session — 10 features confirmed working, 3 bugs found & fixed:
 - **#261 Treasure Hunt XP Rank Multiplier** — RANGER users get 5 XP per QR clue scan (3 × 1.5 multiplier). Verified end-to-end.
@@ -61,12 +61,14 @@ No new decisions pending. DECISIONS.md is current.
 
 1. ✅ **S791 push shipped** — all 6 files deployed. Railway + Vercel green.
 
+2. **S792 push ready** — 7 files changed. Rank label bug fixed, Guild nav added, Hunt Pass date fixed. Push block below.
+
 2. ✅ **Post-deploy Chrome verifies complete:**
    - #295 ✅ — "eBay Category Needed" badge confirmed on Steam Controller, persists after F5.
    - #333 ✅ — Payout modal opens, CASH method selected, ConsignorPayout record created.
    - #335 ✅ — Code-verified. Consignor emails use Gmail API (not Resend). Same service as all working transactional emails.
 
-3. **QA backlog at 7 items** — below ceiling of 8. New features can resume next session.
+3. **QA backlog at 9 items** — below ceiling of 8. New features can resume next session.
 
 ---
 
