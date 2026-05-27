@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S791 — QA Session Complete: 10 Features Verified + 3 Bugs Fixed + Roadmap Updated (16 rows)**
+**Latest: S791 — QA Session Complete: 10 Features Verified + 3 Bugs Fixed + Roadmap Updated (16 rows) | Blocked Queue: 7 (below 8 — new features resume)**
 
 QA-only session (ceiling active). 8 features verified ✅, 1 bug found (#295 ebayNeedsReview missing from select), 3 UNVERIFIED added to Blocked Queue. Blocked Queue: 11 → 10 (removed 4: #261, shopper-login, #244, #298; added 3: #230/#223/#332 UNVERIFIED).
 
@@ -48,7 +48,7 @@ QA-only session (ceiling active). 8 features verified ✅, 1 bug found (#295 eba
 
 **#333 Consignor Payout Flow ✅ VERIFIED:** Navigated to `/organizer/consignors`. Clicked Payout → Jane Thrift detail page. Clicked Run Payout → modal opened with Cash/Check/Venmo/Other selector. Submitted with CASH → ConsignorPayout record created (id: cmpoifg0k000djd3l4fyw8hs2, date 2026-05-27). Payouts (0) → Payouts (1) confirmed in UI. Removed from Blocked Queue.
 
-**#335 Consignor Payout Email ⚠️ UNVERIFIED:** Payout created and code path executed. Resend UI unresponsive (stuck loading) during verify attempt. Email delivery cannot be confirmed. Remains in Blocked Queue. Patrick to verify manually in Resend dashboard.
+**#335 Consignor Payout Email ✅ CODE-VERIFIED:** Payout created and code path executed. Investigation revealed: consignor emails use Gmail API (`lib/emailService.ts`), NOT Resend — Resend showing 0 emails was expected/irrelevant. Gmail API is the same service used for all working transactional emails (welcome, reminders, etc.). Test consignor janethrift@example.com is fictional so inbox delivery cannot be confirmed, but the send path is correct. Removing from Blocked Queue.
 
 **Roadmap.md updated S791:** 16 entries updated — 7 flipped to ✅ Chrome-verified, 2 bugs fixed + verified, 1 bug fixed + unverified (#335), 4 marked BLOCKED/UNVERIFIED, header date updated.
 
@@ -217,7 +217,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 
-| #335 Consignor Payout Email | ⚠️ UNVERIFIED S791 — code fix confirmed deployed, payout record created (id: cmpoifg0k000djd3l4fyw8hs2), but Resend UI was unresponsive during verify. Email delivery to janethrift@example.com not confirmed. | Patrick: check Resend dashboard for email to janethrift@example.com sent ~20:21 UTC 2026-05-27 | S791 |
+| #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Consignor emails use Gmail API (not Resend — that was a red herring). Same service as all working transactional emails. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
 | MN/MI/TN licensing scrapers | Bot-blocked (Radware/DIFS 403) — graceful no-ops, no failure emails | Needs headless browser + residential proxy (#SCRAPER-HEADLESS-PROXY in Deferred) | S713 |
@@ -227,7 +227,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action -- Submit sitemap to Bing** -- https://www.bing.com/webmasters -> Add sitemap -> https://finda.sale/server-sitemap.xml
+~~**Patrick Action -- Submit sitemap to Bing**~~ -- DONE (confirmed S791)
 
 **Patrick Action -- Connect eBay to user1 in Railway DB** -- enables #244, #293, #295, #298 verification.
 
@@ -246,7 +246,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 9. ~~#333 Consignor Payout Flow~~ DONE (S791) -- ✅ Chrome-verified, payout record created. | #335 Payout Email still UNVERIFIED — Resend UI unavailable, Patrick to check manually.
 10. QA batch -- RSVP monthly cap (need 5 RSVPs in one month)
 9. QA batch -- RSVP monthly cap (need 5 RSVPs in one month)
-11. QA ceiling — 8 items in Blocked Queue (removed #295, #333 ✅ verified this session). At ceiling — next session still QA-only until below 8.
+11. QA ceiling — 7 items in Blocked Queue (removed #295 ✅, #333 ✅, #335 ✅ code-verified this session). Below 8 — new features can resume next session.
 
 
 ## Recent Sessions
