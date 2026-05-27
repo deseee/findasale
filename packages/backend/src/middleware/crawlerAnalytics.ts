@@ -19,9 +19,19 @@ function detectCrawler(userAgent: string): string | null {
   return null;
 }
 
+// Only log visits to legitimate page prefixes — drop attack probes and API calls
+const ALLOWED_PATH_PREFIXES = ['/sales/', '/city/', '/this-weekend/', '/organizers/'];
+
+function isAllowedPath(path: string): boolean {
+  return ALLOWED_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
 function extractSaleId(path: string): string | null {
-  const match = path.match(/\/sales\/([a-z0-9]+)/i);
-  return match ? match[1] : null;
+  const match = path.match(/^\/sales\/([^/?]+)/);
+  if (!match) return null;
+  const candidate = match[1];
+  // Only accept CUID-shaped IDs (starts with 'cm', length > 10) to filter junk
+  return candidate.startsWith('cm') && candidate.length > 10 ? candidate : null;
 }
 
 async function sendFirstCrawlNotification(saleId: string): Promise<void> {
@@ -71,6 +81,13 @@ export function crawlerAnalyticsMiddleware(req: Request, _res: Response, next: N
 
   if (crawlerName) {
     const path = req.path;
+
+    // Drop attack probes (/.env, /.git, /api/*, etc.) and non-page visits
+    if (!isAllowedPath(path)) {
+      next();
+      return;
+    }
+
     const saleId = extractSaleId(path);
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip;
 

@@ -126,6 +126,14 @@ export async function getServerSideProps(ctx: any) {
       }
     }
 
+    // /this-weekend/{city-slug} — high-intent "this weekend" discovery pages
+    const thisWeekendUrls = canonicalCitySlugs.map((slug: string) => ({
+      loc: `${baseUrl}/this-weekend/${slug}`,
+      lastmod: new Date().toISOString(),
+      changefreq: 'daily',
+      priority: 0.8,
+    }));
+
     // Generate neighborhood URLs
     const neighborhoodUrls = neighborhoods.map((neighborhood: string) => ({
       loc: `${baseUrl}/neighborhoods/${neighborhood}`,
@@ -214,6 +222,7 @@ export async function getServerSideProps(ctx: any) {
       ...saleUrls,
       ...organizerUrls,
       ...cityCategoryUrls,
+      ...thisWeekendUrls,
       ...neighborhoodUrls,
       ...zipUrls,
       ...tagUrls,
