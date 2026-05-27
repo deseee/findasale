@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
+import { sendConsignorPayout } from '../services/consignorEmailService';
 
 /**
  * Helper: Get organizer workspace from authenticated user
@@ -412,6 +413,18 @@ export const runPayout = async (req: AuthRequest, res: Response) => {
         notes: notes || null,
       },
     });
+
+    // Feature #335: Send payout email if consignor has email
+    if (consignor.email) {
+      sendConsignorPayout({
+        consignorName: consignor.name,
+        consignorEmail: consignor.email,
+        payoutAmount: netPayout.toNumber(),
+        saleName: 'your sale',
+        organizerName: workspace.name || 'your organizer',
+        method: method || undefined,
+      }).catch(err => console.warn('[consignor-email] Payout email failed:', err));
+    }
 
     return res.status(201).json(payout);
   } catch (error) {
