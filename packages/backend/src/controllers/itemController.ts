@@ -2997,6 +2997,7 @@ export const getCompSummary = async (req: Request, res: Response) => {
   }
 };
 
+/**
  * Get similar items for a given item
  * GET /api/items/:id/similar
  * Returns up to 6 items in the same category from active sales, excluding the current item
