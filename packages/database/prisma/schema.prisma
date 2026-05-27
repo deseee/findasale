@@ -922,6 +922,7 @@ model Sale {
   @@index([organizerId, status, endDate]) // Feature #249: Concurrent Sales Gate optimization
   @@index([locationId]) // #311: Multi-Location filter
   @@index([status, endDate]) // Sentry P0: public feed filter (published + not-ended sales)
+  @@index([status, endDate, lat, lng]) // Sentry NODEJS-10: discoveryService bounding box query (6298ms, 49x)
   @@index([city, status, endDate]) // Sentry P0: geo-filtered feed performance
   @@index([status, startDate]) // Sentry P0: upcoming sales ordering
   @@index([sourceUrl]) // Sentry P0: scraper deduplication queries
@@ -4702,36 +4703,4 @@ model CrawlerVisit {
 }
 
 // Feature #453: Unmet Demand Signal Capture
-// Captures search queries that return zero or few results — signals what shoppers want but can't find.
-model UnmetDemandSignal {
-  id          String   @id @default(cuid())
-  query       String   // normalized search query
-  city        String?  // city slug if search was city-filtered
-  state       String?
-  resultCount Int      @default(0) // how many results were returned
-  createdAt   DateTime @default(now())
-
-  @@index([query])
-  @@index([city])
-  @@index([createdAt])
-}
-
-// Feature #455: Shopper Notify Me Waitlist
-// Shoppers request notification when a specific item type goes on sale in their city.
-model ShopperWaitlistEntry {
-  id         String    @id @default(cuid())
-  userId     String
-  itemType   String    // normalized item description ("vintage lamp", "mid-century dresser", etc.)
-  city       String?
-  state      String?
-  isActive   Boolean   @default(true)
-  notifiedAt DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([itemType])
-  @@index([city, isActive])
-}
+// Captures search queries that return zero or few results — signals what sh

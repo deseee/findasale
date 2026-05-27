@@ -1,7 +1,7 @@
 /**
  * Colorado Department of Revenue — Auctioneer License Scraper
  * Scrapes licensed auctioneers from Colorado public license verification system
- * Source: https://apps.colorado.gov/dora/licensing/lookup/LookupsQuestion.aspx
+ * Source: https://apps2.colorado.gov/dora/licensing/lookup/licenselookup.aspx
  * Public directory with auctioneer license records
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
@@ -11,8 +11,8 @@ import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const COLORADO_LICENSE_BASE_URL = 'https://apps.colorado.gov/dora/licensing/lookup';
-const SEARCH_URL = 'https://apps.colorado.gov/dora/licensing/lookup/LookupsQuestion.aspx';
+const COLORADO_LICENSE_BASE_URL = 'https://apps2.colorado.gov/dora/licensing/lookup';
+const SEARCH_URL = 'https://apps2.colorado.gov/dora/licensing/lookup/licenselookup.aspx';
 
 /**
  * Parse an address string into components
