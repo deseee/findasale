@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S791 — QA Session: 8 Features Verified + 2 Bugs Found/Fixed (#295 #335) + Consignor URL Fixes (#333)**
+**Latest: S791 — QA Session Complete: 10 Features Verified + 3 Bugs Fixed + Roadmap Updated (16 rows)**
 
 QA-only session (ceiling active). 8 features verified ✅, 1 bug found (#295 ebayNeedsReview missing from select), 3 UNVERIFIED added to Blocked Queue. Blocked Queue: 11 → 10 (removed 4: #261, shopper-login, #244, #298; added 3: #230/#223/#332 UNVERIFIED).
 
@@ -41,6 +41,16 @@ QA-only session (ceiling active). 8 features verified ✅, 1 bug found (#295 eba
 **#333 Consignor Payout Flow — URL bugs fixed, pending Chrome verify:** Test consignor "Jane Thrift" created in Railway DB (id: `cqa333testjanethrift01`, 70% commission, `janethrift@example.com`). Steam Controller item assigned. Navigated to `/organizer/consignors` → consignor detail → exposed double `/api/` prefix bug (Axios baseURL is `/api`; calls used `/api/consignors/...` = 404). Fixed in two files: `pages/organizer/consignors/[id].tsx` line 69 and `components/ConsignorPayoutModal.tsx` lines 46+72. UNVERIFIED pending Chrome verify post-deploy.
 
 **#335 Automated Consignor Email Notifications — BUG FOUND + FIXED:** `sendConsignorPayout` function exists in `consignorEmailService.ts` and is fully implemented, but was never called from `runPayout` in `consignorController.ts`. Also: no `sendConsignorEmailService` import at top of controller. Fix shipped: import added + fire-and-forget call after `prisma.consignorPayout.create` (skips silently if consignor has no email). TypeScript clean (0 errors). Pending Chrome verify post-deploy.
+
+**Post-compaction Chrome verifies (same session S791):**
+
+**#295 eBay Category Review Badge ✅ VERIFIED:** Navigated to `/organizer/sales/cmom7h73l000hz36wzbruoa64`. Steam Controller shows "eBay Category Needed" badge on load. F5 reload — badge persists. ebayNeedsReview fix confirmed working end-to-end. Removed from Blocked Queue.
+
+**#333 Consignor Payout Flow ✅ VERIFIED:** Navigated to `/organizer/consignors`. Clicked Payout → Jane Thrift detail page. Clicked Run Payout → modal opened with Cash/Check/Venmo/Other selector. Submitted with CASH → ConsignorPayout record created (id: cmpoifg0k000djd3l4fyw8hs2, date 2026-05-27). Payouts (0) → Payouts (1) confirmed in UI. Removed from Blocked Queue.
+
+**#335 Consignor Payout Email ⚠️ UNVERIFIED:** Payout created and code path executed. Resend UI unresponsive (stuck loading) during verify attempt. Email delivery cannot be confirmed. Remains in Blocked Queue. Patrick to verify manually in Resend dashboard.
+
+**Roadmap.md updated S791:** 16 entries updated — 7 flipped to ✅ Chrome-verified, 2 bugs fixed + verified, 1 bug fixed + unverified (#335), 4 marked BLOCKED/UNVERIFIED, header date updated.
 
 **Previous: S790 — Chrome QA: Intent-Wins Verified (#336 ✅)**
 
@@ -206,12 +216,8 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
 
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
-| #295 eBay Category Review Alert Badge | ❌ BUG FOUND S791: `ebayNeedsReview` missing from `getDraftItemsBySaleId` select — badge never shows on page load. FIX SHIPPED: `ebayNeedsReview: true` added to select in itemController.ts. Needs Chrome verification post-deploy. | Deploy fix, then test with an item set to ebayNeedsReview=true | S785 |
 
-
-| #333 Consignor Payout Flow | UNVERIFIED S791 — URL bugs fixed (double /api/ prefix in [id].tsx + ConsignorPayoutModal.tsx). Test consignor 'Jane Thrift' exists in Railway DB. Needs Chrome verify of full payout flow post-deploy | Deploy push block, navigate /organizer/consignors as user1, click Run Payout, verify ConsignorPayout record created | S785 |
-
-| #335 Automated Consignor Email Notifications | BUG FOUND + FIXED S791: sendConsignorPayout was never called from runPayout in consignorController.ts. Fix shipped — import + fire-and-forget call added. Test consignor 'Jane Thrift' has email. Needs Chrome verify of payout email after modal submit | Deploy push block, run payout via modal, check email delivery to janethrift@example.com (Resend test) | S791 |
+| #335 Consignor Payout Email | ⚠️ UNVERIFIED S791 — code fix confirmed deployed, payout record created (id: cmpoifg0k000djd3l4fyw8hs2), but Resend UI was unresponsive during verify. Email delivery to janethrift@example.com not confirmed. | Patrick: check Resend dashboard for email to janethrift@example.com sent ~20:21 UTC 2026-05-27 | S791 |
 | Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
 | directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
 | MN/MI/TN licensing scrapers | Bot-blocked (Radware/DIFS 403) — graceful no-ops, no failure emails | Needs headless browser + residential proxy (#SCRAPER-HEADLESS-PROXY in Deferred) | S713 |
@@ -227,7 +233,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Seed data gap discovered S791:** `markdownCycleController` and potentially other controllers check `UserRoleSubscription` table for tier gating, but `seed.ts` only sets `Organizer.subscriptionTier`. Future tier-gated QA may require manual DB inserts. Consider adding `UserRoleSubscription` records to seed.ts for user1-user4.
 
-**Next session goal: QA batches — consignors + remaining items (Blocked Queue at 10)**
+**Next session goal: QA batches — remaining items (Blocked Queue at 8). Roadmap fully updated S791 — 16 rows updated.**
 
 1. ~~Camera batch QA~~ DONE (S789) -- #319/#325/#328/#340 verified.
 2. ~~#336 Intent-Wins~~ DONE (S790) -- verified end-to-end.
@@ -235,12 +241,12 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 4. ~~#184 iCal Export~~ DONE (S791) -- client-side only, confirmed working.
 5. ~~#244 eBay CSV Export~~ DONE (S791) -- Export to eBay button confirmed ✅.
 6. ~~#298 eBay Default Policies Settings~~ DONE (S791) -- all 8 sections confirmed ✅.
-7. #295 eBay Category Review Badge -- fix shipped (ebayNeedsReview added to select); Chrome-verify post-deploy.
-8. #295 Chrome-verify post-deploy — item with ebayNeedsReview=true should show orange badge after page reload
-9. #333/#335 Chrome-verify post-deploy — payout modal flow + confirm ConsignorPayout record + payout email delivery
+7. ~~#295 eBay Category Review Badge~~ DONE (S791) -- ✅ Chrome-verified, badge persists post-reload.
+8. ~~#295 Chrome-verify post-deploy~~ DONE (S791) -- badge confirmed persisting post-reload ✅
+9. ~~#333 Consignor Payout Flow~~ DONE (S791) -- ✅ Chrome-verified, payout record created. | #335 Payout Email still UNVERIFIED — Resend UI unavailable, Patrick to check manually.
 10. QA batch -- RSVP monthly cap (need 5 RSVPs in one month)
 9. QA batch -- RSVP monthly cap (need 5 RSVPs in one month)
-11. QA ceiling — 10 items in Blocked Queue. Stay QA-only until below 8.
+11. QA ceiling — 8 items in Blocked Queue (removed #295, #333 ✅ verified this session). At ceiling — next session still QA-only until below 8.
 
 
 ## Recent Sessions
