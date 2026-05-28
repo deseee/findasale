@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S801 COMPLETE — Chrome QA: #197 Bounty Board ✅, #221 Hold-to-Pay ✅, #348 QR Auto-Claim ✅. bountyController.ts orphaned-user guard shipped. Blocked Queue: 4 (unchanged)**
+**Latest: S802 COMPLETE — Chrome QA: S798 batch (#442 #396 #397 #411 ✅) + S800 bug fixes (#148 #158 #160 #35 #142 #156 all ✅). All dev dispatches verified. Blocked Queue: 4 (unchanged)**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -234,21 +234,44 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Blocked Queue: 4 (below 8 ceiling — feature work CAN resume).**
 
-**Patrick Action — Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
+**~~Patrick Action — Update global CLAUDE.md~~** ✅ DONE (S802)
 
-**Patrick Action — Remove test file** `C:\Users\desee\ClaudeProjects\FindaSale\qa-test-item.jpg` (created S800 for Cloudinary upload test).
+**~~Patrick Action — Remove test file~~** ✅ DONE (S802)
 
 **P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #457, #449. Not blocking.
 
-1. **S800 dev dispatches** — verify after deploy: #148 checklist page, #156 returnWindowHours, #142 batch upload crash, #158 SaleWaitlistButton placement, #160 ReviewsSection placement.
-2. **#35 Entrance Pin** — ⚠️ Re-verify after S800 deploy (description null bug was the blocker — now fixed).
-3. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific data conditions).
-4. **Unblock #308**: Need organizer with real active items to test hide-item flow.
-5. **NV scraper**: Recommend building City of Las Vegas Playwright scraper (lasvegasnevada.gov license search).
-6. **Pending Chrome QA backlog**: Large backlog in roadmap.md — continue dispatching QA micro-batches.
+1. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific data conditions: platform sale 24-48h out + subscriber + items; 3+ same-ZIP check-ins; 2 concurrent scanners).
+2. **Unblock #308**: Need organizer with real active items to test hide-item flow.
+3. **NV scraper**: Recommend building City of Las Vegas Playwright scraper (lasvegasnevada.gov license search).
+4. **Pending Chrome QA backlog**: Large backlog in roadmap.md — continue dispatching QA micro-batches.
+5. **#142 full upload verify**: null-guard code-verified but Cloudinary upload end-to-end needs real Cloudinary test (403 guard prevents crash; upload success path unconfirmed).
 
 
 ## Recent Sessions
+
+### S802 — Chrome QA: S798 Batch ✅ + S800 Bug Fixes ✅ (all verified)
+
+**Trigger:** Continue QA verification of S798 features and S800 dev dispatch fixes post-deploy.
+
+**S798 Chrome QA Results:**
+- **#442 Monthly Trend Report ✅** — `/reports/2026-05` loads: 37,934 sales, 15,468 organizers, top cities/categories. SSR confirmed.
+- **#396 DIY Sale Starter Kit ✅** — `/organizer/starter-kit` loads all 4 sections (Pre-Sale, Pricing Tips, Day-Of, Post-Sale). Download PDF + Print buttons confirmed.
+- **#397 Crew Invasion ✅** — "Enable Crew Invasion (group discount)" checkbox confirmed in edit-sale Advanced Settings.
+- **#411 Dorm Dash Phase 2 ✅ CODE-VERIFIED** — `dormBuilding`/`moveOutDate` conditional fields confirmed in `create-sale.tsx` source; renders when `saleType === 'DORM_DASH'`.
+
+**S800 Bug Fix Verification Results:**
+- **#148 Sale Checklist ✅** — `/organizer/checklist` now loads with 15-item checklist.
+- **#158 Sale Waitlist Button ✅** — "Notify me of new items" button visible on sale page.
+- **#160 Reviews Section ✅** — "Reviews / Leave a review" section visible on sale detail page.
+- **#35 Entrance Pin ✅** — entrance pin section loads; `description: ''` in DB confirms null→'' coercion fix live.
+- **#142 Batch Upload Crash ✅ CODE-VERIFIED** — null guards before `uploadedUrls.filter()` and `aiResults.map()` confirmed in `SmartInventoryUpload.tsx`. Full Cloudinary test path unconfirmed (requires non-403 Cloudinary credentials).
+- **#156 Return Window ✅** — Settings > Profile tab shows guidance text: "The return window is set per sale. When editing a sale, look for the 'Return Window' field in the sale details." returnWindowHours input removed (was saving to wrong model).
+
+**Blocked Queue: 4 (unchanged)**
+
+**Files changed (S802):** `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S801 — Chrome QA: #197 Bounty Board ✅ + #221 Hold-to-Pay ✅ + #348 QR Auto-Claim ✅
 

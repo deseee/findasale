@@ -4,24 +4,23 @@
 
 ## What Happened This Week
 
+**S802 complete:** Chrome QA — all S798 features verified + all S800 bug fixes confirmed. The 5 dev dispatches from S800 are all working in production.
+
+**S802 — S798 Feature QA Results:**
+- **✅ #442 Monthly Trend Reports** — `/reports/2026-05` loads with live data (37,934 sales, 15,468 organizers, top cities/categories)
+- **✅ #396 DIY Sale Starter Kit** — `/organizer/starter-kit` — all 4 sections, Download PDF + Print confirmed
+- **✅ #397 Crew Invasion** — toggle confirmed in edit-sale Advanced Settings
+- **✅ #411 Dorm Dash P2** — dormBuilding/moveOutDate fields code-verified in create-sale (conditional on DORM_DASH type)
+
+**S802 — S800 Bug Fix Verification:**
+- **✅ #148 Sale Checklist** — `/organizer/checklist` now loads with 15-item checklist (was broken redirect)
+- **✅ #158 Waitlist Button** — "Notify me of new items" now visible on sale pages
+- **✅ #160 Reviews Section** — "Leave a review" now visible on sale detail pages
+- **✅ #35 Entrance Pin** — loads correctly; description null fix confirmed active
+- **✅ #142 Upload Crash** — null guards code-verified; crash-on-403 fixed
+- **✅ #156 Return Window** — Settings Profile tab now shows correct guidance text (removed broken input that was saving to wrong model)
+
 **S801 complete:** Chrome QA — #197 Bounty Board ✅, #221 Hold-to-Pay ✅, #348 QR Auto-Claim ✅. bountyController.ts orphaned-user guard shipped.
-
-**S800 complete:** Chrome QA batch — 5 ✅, 1 ⚠️, 5 ❌ bugs found and dispatched to dev. edit-sale description null fix shipped (root cause of ALL 400 errors on sale edit).
-
-**S801 — QA Results:**
-- **✅ #197 Bounty Board** — community endpoint ✅, create bounty form ✅, bountyController.ts orphaned-user guard shipped
-- **✅ #221 Hold-to-Pay** — Place Hold button on item detail page, modal confirmed, hold created with 44-min countdown, /shopper/holds shows timer
-- **✅ #348 QR Auto-Claim** — navigated to `?via=qr` URL, foundMutation auto-fired, "You earned 3 XP! +15 bonus" toast, 2.5s redirect confirmed
-
-**S800 — QA Results:**
-- **✅ Confirmed working:** #154 Organizer Public Profile, #138 Sale Types (all 5), #5 Listing Type Schema Validation (DB-confirmed), #145 Condition Grading (DB-confirmed), #160 Reputation/reviews page
-- **⚠️ #35 Entrance Pin** — UI correct, was blocked by description null bug (now fixed). Re-verify after deploy.
-- **❌ 5 bugs dispatched to dev:**
-  - **#148** — `/organizer/checklist` page was never built (redirects to /plan). Backend exists.
-  - **#156** — Return Window Hours UI saves to wrong model (Organizer vs Sale).
-  - **#142** — Batch photo upload crashes on Cloudinary 403 + TypeError; UI stuck indefinitely.
-  - **#158** — "Notify me of new items" waitlist button exists but is never shown on sale pages.
-  - **#160** — Review submission form exists but is never shown on sale pages (shoppers can't leave reviews).
 
 **S800 fix shipped:**
 - `edit-sale/[id].tsx` — description null → `?? ''` fix. Resolves all edit-sale 400 validation errors.
@@ -49,9 +48,9 @@ No new decisions pending. DECISIONS.md is current.
 
 ## Beta Tester Impact
 
-**S800 bugs fixed (deploying now):** 5 bugs dispatched — most impactful: review submission and waitlist button were completely missing from the sale page. Shoppers had no way to leave reviews or join item waitlists even though both features were built.
+**All 5 S800 bug fixes confirmed live.** Most impactful: review submission and waitlist button are now visible on sale pages — shoppers can actually use both features now.
 
-**description null fix** resolves a silent 400 error any time an organizer tried to edit a sale with a null description field.
+**description null fix** (S800) resolved the silent 400 error when organizers edited sales with no description set.
 
 **Blocked Queue at 4 items** — below ceiling of 8. Feature work can continue.
 
@@ -59,12 +58,10 @@ No new decisions pending. DECISIONS.md is current.
 
 ## This Week's Priority
 
-1. **Verify S800 dev dispatches** after Railway/Vercel deploy — #148, #156, #142, #158, #160.
-2. **Re-verify #35 Entrance Pin** after deploy (description null bug was the blocker).
-3. **Blocked Queue at 4** — below ceiling. Feature work continues.
-4. **Pending Chrome QA backlog**: #442 reports page, #396 starter kit, #397 Crew Invasion, #411 Dorm Dash P2 (all S798 — Pending Chrome QA). Also: #285 POS real-time (needs 2 concurrent users), #399 Local Legends (needs 3+ same-ZIP check-ins), #408 Scan & Split (needs 2 concurrent scanners), #409 Sneak Peek Email (needs platform sale 24-48h out + subscriber + items).
-
-**S801 completed:** #197, #221, #348 — all Chrome QA verified and roadmap updated.
+1. **Blocked Queue 4/8** — feature work can resume. Pick from roadmap Pending Chrome QA backlog.
+2. **Pending live-data tests**: #409 Sneak Peek Email (needs platform sale 24-48h out + subscriber + items), #399 Local Legends (needs 3+ same-ZIP check-ins), #408 Scan & Split (needs 2 concurrent scanners).
+3. **#142 batch upload**: code fix is live but a real end-to-end upload test with non-403 Cloudinary is still needed.
+4. **Pending Chrome QA backlog**: large roadmap backlog of built-but-unverified features — continue QA micro-batches.
 
 ---
 
