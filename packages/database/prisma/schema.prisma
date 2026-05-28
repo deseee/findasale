@@ -256,6 +256,7 @@ model User {
   saleShareLinkClicks   SaleShareLinkClick[]     @relation("SaleShareLinkClicks")
   // Feature: Shopper Organizer Introductions — organizers this shopper has introduced to FindA.Sale
   shopperIntroductions  ShopperOrganizerIntroduction[] @relation("ShopperIntroductions")
+  shopperWaitlistEntries ShopperWaitlistEntry[]        // Feature #455: Shopper Notify Me Waitlist
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])
