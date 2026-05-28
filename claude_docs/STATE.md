@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S798 — 5 features shipped: #442 trend reports page ✅, #396 starter kit ✅, #397 Crew Invasion ✅ (migration needed), #398 confirmed existing ✅, #411 Dorm Dash P2 ✅ (migration needed). NV scraper: City of Las Vegas Playwright approach recommended. Blocked Queue: 5**
+**Latest: S798 — 5 features shipped + all migrations applied ✅: #442 trend reports page, #396 starter kit, #397 Crew Invasion, #398 confirmed existing, #411 Dorm Dash P2. Schema P1012 fixed (ShopperWaitlistEntry↔User relation). Performance index migration fixed (CONCURRENTLY removed). All 3 migrations deployed to Railway. NV scraper: City of Las Vegas Playwright approach recommended. Blocked Queue: 5**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -237,29 +237,11 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Patrick Action — Restore Chrome session:** Chrome is at finda.sale/login — click "Sign in with Google → artifactmi@gmail.com" to restore your session.
 
-**Patrick Action — Run migration for #409 sneakPeekSentAt field:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-**Patrick Action — Connect eBay to user1 in Railway DB** — enables #293 PostSaleEbayPanel verification.
-
 **Patrick Action — Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
 
 **P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #457, #449. Not blocking.
 
-**Patrick Actions (TWO MIGRATIONS NEEDED — run after push):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-1. **Chrome QA needed**: #442 reports page, #396 starter kit, #397 Crew Invasion, #398 org referral, #411 Dorm Dash P2 — all Pending Chrome QA.
+1. **Chrome QA needed (S798 features)**: #442 reports page, #396 starter kit, #397 Crew Invasion, #398 org referral, #411 Dorm Dash P2 — all Pending Chrome QA. Railway rebuild must complete first.
 2. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split.
 3. **Unblock #416**: Add ≥2 items with different roomTag values to a published sale → verify floor map.
 4. **Unblock #308**: Need organizer with real active items to test hide-item flow.
@@ -282,7 +264,9 @@ npx prisma generate
 
 **Blocked Queue: 5 (unchanged)**
 
-**Files changed:** `packages/backend/src/controllers/reportsController.ts` (new) · `packages/backend/src/routes/reports.ts` (new) · `packages/backend/src/index.ts` · `packages/frontend/pages/reports/[slug].tsx` (new) · `packages/frontend/pages/organizer/starter-kit.tsx` · `packages/frontend/public/downloads/sale-starter-kit.pdf` (new binary) · `packages/database/prisma/schema.prisma` · `packages/database/prisma/migrations/20260528120000_add_dorm_dash_fields/migration.sql` (new) · `packages/database/prisma/migrations/20260628300000_add_crew_invasion/migration.sql` (new) · `packages/backend/src/controllers/saleController.ts` · `packages/frontend/pages/organizer/create-sale.tsx` · `packages/frontend/pages/organizer/edit-sale/[id].tsx` · `packages/backend/src/jobs/markdownCycleCron.ts` · `packages/backend/src/services/crewInvasionService.ts` (new) · `packages/backend/src/services/xpService.ts` · `packages/backend/src/controllers/reservationController.ts` · `packages/frontend/components/Layout.tsx` · `claude_docs/strategy/roadmap.md`
+**Schema fixes (post-push):** schema.prisma truncated by Edit tool after agent edits → repaired twice: (1) restored CrawlerVisit tail + UnmetDemandSignal + ShopperWaitlistEntry (S798 main), (2) added missing `shopperWaitlistEntries` reverse relation on User model (P1012 fix). Performance index migration `20260528000000` fixed: `CONCURRENTLY` removed (can't run in Prisma transaction wrapper). All 3 migrations deployed to Railway ✅.
+
+**Files changed:** `packages/backend/src/controllers/reportsController.ts` (new) · `packages/backend/src/routes/reports.ts` (new) · `packages/backend/src/index.ts` · `packages/frontend/pages/reports/[slug].tsx` (new) · `packages/frontend/pages/organizer/starter-kit.tsx` · `packages/frontend/public/downloads/sale-starter-kit.pdf` (new binary) · `packages/database/prisma/schema.prisma` · `packages/database/prisma/migrations/20260528000000_add_performance_indexes/migration.sql` · `packages/database/prisma/migrations/20260528120000_add_dorm_dash_fields/migration.sql` (new) · `packages/database/prisma/migrations/20260628300000_add_crew_invasion/migration.sql` (new) · `packages/backend/src/controllers/saleController.ts` · `packages/frontend/pages/organizer/create-sale.tsx` · `packages/frontend/pages/organizer/edit-sale/[id].tsx` · `packages/backend/src/jobs/markdownCycleCron.ts` · `packages/backend/src/services/crewInvasionService.ts` (new) · `packages/backend/src/services/xpService.ts` · `packages/backend/src/controllers/reservationController.ts` · `packages/frontend/components/Layout.tsx` · `claude_docs/strategy/roadmap.md`
 
 ---
 
