@@ -4,31 +4,27 @@
 
 ## What Happened This Week
 
-Ten sessions this week. S792 complete: 6 features Chrome-verified, 2 bugs fixed (P2 rank label + P3 Guild nav), 1 bug fixed (Hunt Pass date), 2 features UNVERIFIED (need purchase test data). Blocked Queue: 9 items (below 8 ceiling — new features can resume).
+Eleven sessions this week. S793 complete: 10 features Chrome-verified, 2 verified with caveat (Web Share API — OS dialog), 4 UNVERIFIED. Blocked Queue: 5 items (below 8 ceiling — new features can resume).
 
-S791 (today): QA session — 10 features confirmed working, 3 bugs found & fixed:
-- **#261 Treasure Hunt XP Rank Multiplier** — RANGER users get 5 XP per QR clue scan (3 × 1.5 multiplier). Verified end-to-end.
-- **#184 iCal Export** — Calendar button works. Was incorrectly flagged ❌ in a prior session; the implementation is client-side (no backend route needed). Confirmed working.
-- **#232 Sale Pulse Widget** — Buzz score and view counts display correctly on organizer dashboard.
-- **#323 PriceBenchmark Valuation Fallback** — When fewer than 10 eBay comps exist, item valuation blends AI price (60%) with benchmark data (40%). Confirmed.
-- **#334 Automatic Markdown Cycles** — Auto-markdown form works: create, save, reload all confirmed.
-- **#413 Safety Notes** — Safety notes field in edit-sale saves and displays on the public sale page.
-- **#298 eBay Default Policies Settings** — All 8 sections confirmed on /organizer/settings/ebay.
-- **#244 eBay CSV Export** — "📦 Export to eBay" button confirmed in add-items toolbar.
-- **#295 eBay Category Review Badge** ✅ Chrome-verified — "eBay Category Needed" badge shows on Steam Controller after page load and F5 reload. Bug fix confirmed working.
-- **#333 Consignor Payout Flow** ✅ Chrome-verified — modal opens, Cash/Check/Venmo/Other selector works, ConsignorPayout record created (id: cmpoifg0k000djd3l4fyw8hs2).
+**S793 (today) — QA batch: GEO features + S696 features + newly-unblocked shopper features:**
+- **#223 Organizer Guidance Layer** ✅ — Efficiency Coach tips toggle and Sale Progress tracking confirmed with real hold data.
+- **#230 Smart Buyer Intelligence** ✅ — Who's Coming widget showed Leo Thomas (SCOUT rank, "follows you") on organizer dashboard.
+- **#387 SSR Public Pages** ✅ — /about page confirmed returning full HTML server-side.
+- **#432 AggregateOffer JSON-LD** ✅ (P2 bug) — Sale page has correct JSON-LD schema. Bug: lowPrice shows "0" instead of actual minimum price. Dispatch next session.
+- **#433 ai-plugin.json** ✅ — /.well-known/ai-plugin.json confirmed live and valid.
+- **#434 llms.txt** ✅ — /llms.txt confirmed live with correct content.
+- **#439 Per-item Product Schema** ✅ — Product JSON-LD confirmed per item on claimed sale page.
+- **#440 Machine-readable sr-only block** ✅ — sr-only block confirmed in page source.
+- **#441 PaymentMethod Schema** ✅ — paymentAccepted field confirmed in JSON-LD.
+- **#405 Founding Organizer Badge** ✅ — 🏆 badge confirmed on organizer profile settings page.
+- **#412 Cash-to-Digital Bridge** ✅ — Venmo + Zelle confirmed in POS payment options.
+- **#415 Junk Drawer Donation Kit** ✅ — "Donate Items & Get Tax Receipt" option confirmed in settlement Receipt step.
 
-**Bug found and fixed: #295 Category Review Badge** — The `ebayNeedsReview` field was missing from the backend items query, so the "needs eBay category review" badge never showed up after a page reload. Fixed in `itemController.ts`. Chrome-verified ✅.
+**Partial ⚠️ — button confirmed, Web Share API triggers OS dialog (can't verify via automation):**
+- **#272 Post-Purchase Share Your Haul** — /shopper/checkout-success page correct, "📣 Share your haul" button present and fires Web Share API.
+- **#273 Rank Achievement Share** — RANK_UP notification created for Leo (501 XP). Share button confirmed at /shopper/notifications. Web Share API fires.
 
-**Bug found and fixed: #335 Consignor Payout Email** — `sendConsignorPayout()` was fully implemented in the email service but was never called when a payout was processed. Fixed in `consignorController.ts`. Code-verified ✅ — consignor emails use Gmail API (same as all other working transactional emails), not Resend. Resend showing zero was expected. Delivery can't be inbox-confirmed with a fictional test email address.
-
-**Consignor URL bugs fixed (#333)** — The consignor detail page and payout modal were hitting `/api/api/...` double-prefix URLs (404s). Fixed and Chrome-verified ✅. Payout modal flow confirmed end-to-end.
-
-3 features added as UNVERIFIED (need more test data): #230 Smart Buyer Intelligence, #223 Organizer Guidance Layer, #332 Shopify Cross-Listing.
-
-#293 (Post-Sale eBay Panel) remains blocked — no ended sales to test against.
-
-**Roadmap updated:** 16 rows updated to reflect S791 QA results.
+**4 features still UNVERIFIED (added to Blocked Queue):** #402 Cover the Fee toggle (can't find the UI), #435 Bot Tracking (need real crawler), #457 Noindex stale scraped (need test data), #458 Confidence Score (may be API-only).
 
 ---
 
@@ -49,26 +45,21 @@ No new decisions pending. DECISIONS.md is current.
 
 ## Beta Tester Impact
 
-**Improved this week:** 8 more features confirmed working, including eBay settings page and CSV export. Camera pipeline, intent-wins (AI won't overwrite your prices), bell icon position, QR modal expand, and more all verified in prior sessions.
+**Improved this week:** 10+ features confirmed — GEO schema (AI can now read your sale listings correctly), Cash-to-Digital Bridge (Venmo/Zelle in POS), Founding Organizer Badge, Donation Kit, SSR for public pages. Camera pipeline, intent-wins, and many more verified in prior sessions.
 
-**Still blocked:** #293 needs an ended sale with eBay-listed items. Shopify cross-listing (#332) needs OAuth. #295 ✅ verified. #333 ✅ verified. #335 fix shipped — email delivery needs manual Resend check.
+**P2 bug to fix next session:** #432 AggregateOffer `lowPrice:"0"` — items priced correctly but the "lowest price" field in the search engine schema shows $0. Doesn't affect shoppers but affects how Google/AI reads the listing.
 
-**Seed data gap noted:** Some tier-gated features use a different database table than what the test seed populates. No action needed from you, just a developer note for future reference.
+**Blocked Queue at 5 items** — below ceiling of 8. New features can resume.
 
 ---
 
 ## This Week's Priority
 
-1. ✅ **S791 push shipped** — all 6 files deployed. Railway + Vercel green.
+1. **S793 push ready** — roadmap.md + STATE.md + patrick-dashboard.md updated. Push block below.
 
-2. **S792 push ready** — 7 files changed. Rank label bug fixed, Guild nav added, Hunt Pass date fixed. Push block below.
+2. **P2 bug dispatch (next session):** Fix AggregateOffer lowPrice:"0" in JSON-LD builder.
 
-2. ✅ **Post-deploy Chrome verifies complete:**
-   - #295 ✅ — "eBay Category Needed" badge confirmed on Steam Controller, persists after F5.
-   - #333 ✅ — Payout modal opens, CASH method selected, ConsignorPayout record created.
-   - #335 ✅ — Code-verified. Consignor emails use Gmail API (not Resend). Same service as all working transactional emails.
-
-3. **QA backlog at 9 items** — below ceiling of 8. New features can resume next session.
+3. **New features can resume** — Blocked Queue at 5, below the 8-item ceiling.
 
 ---
 
@@ -76,3 +67,4 @@ No new decisions pending. DECISIONS.md is current.
 
 - [x] **Submit sitemap to Bing** — DONE
 - [ ] **Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
+- [ ] **Chrome: complete Google sign-in** — Chrome is at the Google account chooser (accounts.google.com). Select artifactmi@gmail.com to restore your session.

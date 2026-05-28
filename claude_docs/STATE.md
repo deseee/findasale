@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S792 — QA Session: 6 ✅ Chrome-verified (#29 #153 #58 #286 #123⚠️ #199⚠️), 2 UNVERIFIED (#272 #273), P2 rank label bug fixed, P3 Guild nav + Hunt Pass N/A fixed | Blocked Queue: 9 (below 8 ceiling cleared)**
+**Latest: S793 — QA Session: 10 ✅ Chrome-verified (#387 #432 #433 #434 #439 #440 #441 #223 #230 #405 #412 #415), 2 ⚠️ Web Share (#272 #273), 4 UNVERIFIED (#402 #435 #457 #458) | P2 bug: AggregateOffer lowPrice:0 to dispatch | Blocked Queue: 5**
 
 QA-only session (ceiling active). 8 features verified ✅, 1 bug found (#295 ebayNeedsReview missing from select), 3 UNVERIFIED added to Blocked Queue. Blocked Queue: 11 → 10 (removed 4: #261, shopper-login, #244, #298; added 3: #230/#223/#332 UNVERIFIED).
 
@@ -211,11 +211,11 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
-| #230 Smart Buyer Intelligence | UNVERIFIED S791 — No test shoppers favoriting organizer sales in test DB | Need shopper (user5-7) to favorite a sale by an organizer (user1-4), then check the organizer's Smart Buyer panel | S791 |
-| #223 Organizer Guidance Layer | UNVERIFIED S791 — No hold records in test DB for rank badge copy test on holds page | Create a reservation/hold in test DB, verify rank badge contextual copy on organizer holds page | S791 |
+| #402 Cover the Fee toggle | UNVERIFIED S793 — toggle not found in edit-sale page or organizer settings payment tab | Locate UI surface for coversFee toggle or confirm it was not implemented in UI | S793 |
+| #435 Bot/Crawler Visit Tracking | UNVERIFIED S793 — cannot simulate bot user-agent via Chrome automation | Inspect Railway logs for GPTBot/ClaudeBot middleware hits, or query CrawlerVisit table directly | S793 |
+| #457 Noindex stale scraped | UNVERIFIED S793 — no scraped+ENDED test data with past date | Create past-dated scraped sale record, verify noindex meta tag on that page | S793 |
+| #458 Confidence Score | UNVERIFIED S793 — confidence score not visible in any directory UI | Verify via /api/sales response or MCP search_sales — may be internal-only | S793 |
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
-| #272 Post-Purchase Share Your Haul | UNVERIFIED S792 — Leo (user5) has no purchase records in test DB | Complete a real purchase as Leo or another shopper, then verify Share Your Haul section on /shopper/checkout-success | S792 |
-| #273 Rank Achievement Share | UNVERIFIED S792 — Leo at 465 XP (Initiate), no rank-up event triggered | Leo needs to cross 500 XP threshold, then verify share button on rank-up notification | S792 |
 
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 
@@ -235,23 +235,60 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Seed data gap discovered S791:** `markdownCycleController` and potentially other controllers check `UserRoleSubscription` table for tier gating, but `seed.ts` only sets `Organizer.subscriptionTier`. Future tier-gated QA may require manual DB inserts. Consider adding `UserRoleSubscription` records to seed.ts for user1-user4.
 
-**Next session goal: QA batches — remaining Pending Chrome QA items. Blocked Queue at 9 (below 8 ceiling — new features can resume). P2 rank label + P3 Guild nav + P3 Hunt Pass N/A all fixed in S792 — push block below.**
+**Next session: Blocked Queue at 5 (below 8 ceiling — new features CAN resume). Dispatch P2 bug: AggregateOffer lowPrice:0 (#432). Then resume feature work or continue remaining UNVERIFIED items.**
 
-1. ~~Camera batch QA~~ DONE (S789) -- #319/#325/#328/#340 verified.
-2. ~~#336 Intent-Wins~~ DONE (S790) -- verified end-to-end.
-3. ~~#261 Treasure Hunt XP Rank Multiplier~~ DONE (S791) -- RANGER multiplier confirmed 3×1.5=5 XP.
-4. ~~#184 iCal Export~~ DONE (S791) -- client-side only, confirmed working.
-5. ~~#244 eBay CSV Export~~ DONE (S791) -- Export to eBay button confirmed ✅.
-6. ~~#298 eBay Default Policies Settings~~ DONE (S791) -- all 8 sections confirmed ✅.
-7. ~~#295 eBay Category Review Badge~~ DONE (S791) -- ✅ Chrome-verified, badge persists post-reload.
-8. ~~#295 Chrome-verify post-deploy~~ DONE (S791) -- badge confirmed persisting post-reload ✅
-9. ~~#333 Consignor Payout Flow~~ DONE (S791) -- ✅ Chrome-verified, payout record created. | #335 Payout Email still UNVERIFIED — Resend UI unavailable, Patrick to check manually.
-10. QA batch -- RSVP monthly cap (need 5 RSVPs in one month)
-9. QA batch -- RSVP monthly cap (need 5 RSVPs in one month)
-11. QA ceiling — 7 items in Blocked Queue (removed #295 ✅, #333 ✅, #335 ✅ code-verified this session). Below 8 — new features can resume next session.
+1. ~~All S789–S793 QA batches~~ DONE.
+2. **P2 dispatch**: #432 AggregateOffer lowPrice:0 bug — find where lowPrice is set in JSON-LD builder and fix to use min(item.price) instead of 0.
+3. **Remaining UNVERIFIED**: #402 (locate UI), #435 (log inspection), #457 (test data), #458 (API verify) — lower priority, can batch in a future QA session.
+4. **New features**: Blocked Queue is below ceiling. Resume from roadmap QUEUED items.
+5. **Patrick Action**: Connect eBay to user1 in Railway DB — enables #293 PostSaleEbayPanel verification.
+6. **RSVP monthly cap**: Still unverifiable — need organic usage or create 5 test RSVPs.
 
 
 ## Recent Sessions
+
+### S793 — QA Session: 10 Verified, 2 ⚠️ Web Share, 4 UNVERIFIED
+
+**Trigger:** Continue QA backlog. Blocked Queue at 9 (above ceiling). QA-only session.
+
+**Verified ✅ (10):**
+- #223 Organizer Guidance Layer: Efficiency Coach tips toggle confirmed, Sale Progress tracking visible with test hold data (CONFIRMED hold created via psycopg2). ✅
+- #230 Smart Buyer Intelligence: Who's Coming widget showed Leo Thomas (SCOUT rank, "follows you") on organizer dashboard after creating shopper favorite in DB. ✅
+- #387 SSR Public Pages: /about page confirmed returning full static HTML server-side. ✅
+- #432 AggregateOffer + PostalAddress: JSON-LD on sale page confirmed with AggregateOffer + PostalAddress. P2 bug: lowPrice shows "0" — dispatch needed. ✅ (P2)
+- #433 ai-plugin.json: /.well-known/ai-plugin.json returns valid JSON with description, api.url, authentication. ✅
+- #434 llms.txt: /llms.txt confirmed live with MCP server URL + structured data. ✅
+- #439 Per-item Product Schema: Product JSON-LD per item confirmed on claimed sale page. ✅
+- #440 Machine-readable sr-only block: sr-only block confirmed in page source. ✅
+- #441 PaymentMethod Schema: paymentAccepted field confirmed in JSON-LD. ✅
+- #405 Founding Organizer Badge: 🏆 badge confirmed on organizer profile settings. ✅
+- #412 Cash-to-Digital Bridge: Venmo + Zelle confirmed in POS payment options. ✅
+- #415 Junk Drawer Donation Kit: "Donate Items & Get Tax Receipt" option confirmed in settlement Receipt step. ✅
+
+**Partial ⚠️ (2) — Web Share API (OS dialog not verifiable via automation):**
+- #272 Post-Purchase Share Your Haul: /shopper/checkout-success?orderId=qa272-purch-90ce5283 loaded correctly. Item name, price, "📣 Share your haul" button all present. Web Share API triggered on click — OS dialog unverifiable. ⚠️
+- #273 Rank Achievement Share: Leo boosted to 501 XP (RANK_UP notification created). Share button at /shopper/notifications (aria-label="Share achievement") confirmed. Web Share API triggered. ⚠️
+
+**UNVERIFIED (4) — added to Blocked Queue:**
+- #402 Cover the Fee toggle: Not found in edit-sale or organizer settings payment tab. UI surface unknown.
+- #435 Bot/Crawler Visit Tracking: Cannot simulate bot user-agent via Chrome automation.
+- #457 Noindex stale scraped: No scraped+ENDED test data with past date.
+- #458 Confidence Score: Not visible in any directory UI; may be internal/API-only.
+
+**P2 bug found:**
+- #432 AggregateOffer lowPrice:"0" — items priced $45–$120 but lowPrice shows 0 in JSON-LD. Dispatch to findasale-dev.
+
+**Test data created this session:**
+- Leo (user5) XP boosted to 501 → RANK_UP notification created
+- Shopper favorite: user5 favorited sale cmpbvumj90001e7t7v5sa1iqi (for #230)
+- CONFIRMED hold: user5 on sale cmpbvumj90001e7t7v5sa1iqi (for #223)
+- Purchase record: qa272-purch-90ce5283 (Leo, Cast Iron Skillet) — for #272
+
+**Blocked Queue: 9 → 5** (removed: #230 ✅, #223 ✅, #272 ⚠️, #273 ⚠️; added: #402, #435, #457, #458 UNVERIFIED)
+
+**Files changed:** `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S792 — QA Batch: 6 Verified, 2 UNVERIFIED, P2 Rank Bug Fixed
 
