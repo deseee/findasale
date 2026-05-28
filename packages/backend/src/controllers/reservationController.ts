@@ -343,7 +343,7 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       console.error('[alert] Exception when sending shopper hold notification:', err);
     }
 
-    // Feature #397: Crew Invasion — check if ≥3 shoppers are holding at this sale (non-blocking)
+    // Feature #397: Crew Invasion — check if ≥4 crew members are holding at this sale (non-blocking)
     if (item.saleId) {
       checkCrewInvasion(item.saleId, req.user!.id).catch(err =>
         console.error('[crewInvasion] check error:', err)

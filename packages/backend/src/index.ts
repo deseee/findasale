@@ -161,6 +161,7 @@ import savedSearchRoutes from './routes/savedSearches';         // Saved Searche
 import saleWaitlistRoutes from './routes/saleWaitlist';         // Sale Waitlist (sale-level)
 import treasureHuntRoutes from './routes/treasureHunt';         // Daily Treasure Hunt
 import trendingRoutes from './routes/trending';                 // Trending Items & Sales
+import reportsRoutes from './routes/reports';                   // #442: Monthly trend report pages
 import unsubscribeRoutes from './routes/unsubscribe';           // Unsubscribe / Preferences
 import outreachRoutes from './routes/outreach';                      // Phase 1: Cold outreach email pipeline
 import earningsPdfRoutes from './routes/earningsPdf';           // Payout PDF Export
@@ -594,6 +595,7 @@ app.use('/api/saved-searches', savedSearchRoutes);                     // Saved 
 app.use('/api/sale-waitlist', saleWaitlistRoutes);                     // Sale Waitlist (sale-level)
 app.use('/api/treasure-hunt', treasureHuntRoutes);                     // Daily Treasure Hunt
 app.use('/api/trending', trendingRoutes);                              // Trending Items & Sales
+app.use('/api/reports', reportsRoutes);                                // #442: Monthly trend report pages
 app.use('/api/cities', citiesRoutes);                                  // ADR-074: Metro Sync city pages
 app.use('/api/categories', categoriesRoutes);                          // ADR-074 Phase 2: Category trending items
 app.use('/api/internal', internalRoutes);                              // ADR-076: Internal scraper endpoint

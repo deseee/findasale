@@ -694,6 +694,23 @@ model CrewMember {
   @@index([userId])
 }
 
+// Feature #397: Crew Invasion — tracks active/used discount codes per crew+sale pair
+model CrewInvasionCode {
+  id          String    @id @default(cuid())
+  saleId      String
+  crewId      String
+  code        String    @unique
+  discountPct Int       @default(10)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  sale        Sale      @relation(fields: [saleId], references: [id])
+
+  @@unique([saleId, crewId])
+  @@index([saleId])
+  @@index([crewId])
+}
+
 // Feature #72: Dual-Role Account — Per-role subscription state, tier, and consent
 model UserRoleSubscription {
   id     String @id @default(cuid())
@@ -912,6 +929,12 @@ model Sale {
   bundles                     ItemBundle[]
   // Feature #409: Pre-Sale Sneak Peek Email — timestamp when sneak peek was sent (idempotency guard)
   sneakPeekSentAt             DateTime?
+  // Feature #411: Dorm Dash Phase 2 — dorm-specific fields
+  dormBuilding                String?                  // e.g., "North Hall" — dorm building name
+  moveOutDate                 DateTime?                // When the student must be out (drives urgency + 2x markdown)
+  // Feature #397: Crew Invasion — organizer opt-in for group discount
+  crewInvasionEnabled         Boolean                  @default(false)
+  crewInvasionCodes           CrewInvasionCode[]
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -4693,15 +4716,4 @@ model CrawlerVisit {
   id          String   @id @default(cuid())
   userAgent   String
   crawlerName String   // "GPTBot" | "ClaudeBot" | "PerplexityBot" | "OAI-SearchBot" | "Bytespider" | "GoogleBot" | "BingBot" | "Other"
-  path        String
-  saleId      String?
-  ip          String?
-  createdAt   DateTime @default(now())
-
-  @@index([crawlerName])
-  @@index([saleId])
-  @@index([createdAt])
-}
-
-// Feature #453: Unmet Demand Signal Capture
-// Captures search queries that return zero or few results — signals what sh
+  path        Strin

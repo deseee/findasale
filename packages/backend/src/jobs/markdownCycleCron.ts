@@ -24,7 +24,7 @@ export function scheduleMarkdownCycleCron(): void {
     // Find all active markdown cycles
     const cycles = await prisma.markdownCycle.findMany({
       where: { isActive: true },
-      include: { sale: { select: { id: true, organizerId: true } } },
+      include: { sale: { select: { id: true, organizerId: true, saleType: true, moveOutDate: true } } },
     });
 
     if (cycles.length === 0) {
@@ -52,6 +52,18 @@ export function scheduleMarkdownCycleCron(): void {
             itemFilter.organizerId = cycle.organizerId;
           }
 
+          // Feature #411: Dorm Dash — 2x markdown rate when moveOutDate is within 48 hours
+          const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+          const isDormDashUrgent =
+            cycle.sale?.saleType === 'DORM_DASH' &&
+            cycle.sale?.moveOutDate != null &&
+            new Date(cycle.sale.moveOutDate).getTime() - now.getTime() <= FORTY_EIGHT_HOURS_MS;
+          const dormDashMultiplier = isDormDashUrgent ? 2 : 1;
+
+          if (isDormDashUrgent) {
+            console.log(`[markdown-cycle-cron] DORM_DASH urgency detected for cycle ${cycle.id} — applying 2x markdown rate`);
+          }
+
           // Find items eligible for first markdown (createdAt >= daysUntilFirst days ago, priceBeforeMarkdown is NULL)
           const firstMarkdownItems = await prisma.item.findMany({
             where: {
@@ -65,9 +77,10 @@ export function scheduleMarkdownCycleCron(): void {
           });
 
           if (firstMarkdownItems.length > 0) {
+            const effectiveFirstPct = Math.min(100, cycle.firstPct * dormDashMultiplier);
             const newPrice = Math.max(
               0,
-              firstMarkdownItems[0].price! * (1 - cycle.firstPct / 100)
+              firstMarkdownItems[0].price! * (1 - effectiveFirstPct / 100)
             );
 
             await prisma.item.updateMany({
@@ -76,13 +89,14 @@ export function scheduleMarkdownCycleCron(): void {
               },
               data: {
                 priceBeforeMarkdown: firstMarkdownItems[0].price,
+                price: newPrice,
                 markdownApplied: true,
               },
             });
 
             totalMarkdownsApplied += firstMarkdownItems.length;
             console.log(
-              `[markdown-cycle-cron] Applied first markdown (${cycle.firstPct}% off) to ${firstMarkdownItems.length} items for cycle ${cycle.id}`
+              `[markdown-cycle-cron] Applied first markdown (${effectiveFirstPct}% off${isDormDashUrgent ? ' — 2x DORM_DASH rate' : ''}) to ${firstMarkdownItems.length} items for cycle ${cycle.id}`
             );
           }
 
@@ -102,9 +116,10 @@ export function scheduleMarkdownCycleCron(): void {
             if (secondMarkdownItems.length > 0) {
               // Use original price (priceBeforeMarkdown) for second markdown calculation
               const originalPrice = secondMarkdownItems[0].priceBeforeMarkdown!;
+              const effectiveSecondPct = Math.min(100, cycle.secondPct * dormDashMultiplier);
               const newPrice = Math.max(
                 0,
-                originalPrice * (1 - cycle.secondPct / 100)
+                originalPrice * (1 - effectiveSecondPct / 100)
               );
 
               await prisma.item.updateMany({
@@ -118,7 +133,7 @@ export function scheduleMarkdownCycleCron(): void {
 
               totalMarkdownsApplied += secondMarkdownItems.length;
               console.log(
-                `[markdown-cycle-cron] Applied second markdown (${cycle.secondPct}% off) to ${secondMarkdownItems.length} items for cycle ${cycle.id}`
+                `[markdown-cycle-cron] Applied second markdown (${effectiveSecondPct}% off${isDormDashUrgent ? ' — 2x DORM_DASH rate' : ''}) to ${secondMarkdownItems.length} items for cycle ${cycle.id}`
               );
             }
           }

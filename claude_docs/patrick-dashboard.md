@@ -4,25 +4,19 @@
 
 ## What Happened This Week
 
-Fifteen sessions this week. S797 complete: 8 features Chrome-verified, 2 P2 gaps noted, 1 bug found (#442 missing page), 1 UNVERIFIED (embedding constraint). Blocked Queue: 5 (below 8 ceiling — new features can resume).
+S798 complete: 5 features shipped in one parallel batch. Blocked Queue: 5 (below ceiling — feature work continues).
 
-**S797 (latest) — Chrome QA Batches A/B/C:**
-- **#449 ENDED scraped sale page** ✅ VERIFIED — ENDED scraped sale page loads correctly (not 404).
-- **#350 Bell before QR in nav** ✅ VERIFIED — Bell icon confirmed before QR scanner in nav.
-- **#304 Early Access Cache** ✅ VERIFIED — /shopper/early-access-cache/items loads correctly as Leo Thomas.
-- **#266 Explorer Profile link** ✅ VERIFIED — Avatar dropdown "Explorer Profile" link confirmed.
-- **#448 MCP Tool Wrappers** ✅ VERIFIED — 10 tool wrapper files confirmed in packages/mcp-server/src/tools/.
-- **#444 Peer Referral Bounty** ✅ VERIFIED — /organizer/referrals loads with unique link, stats, "How It Works" explainer.
-- **#447 Crawler Visit Notification UI** ✅ VERIFIED — "SEARCH ENGINE VISIBILITY" card renders on organizer dashboard (Bob Smith). Zero-visit empty state correct.
-- **#453 Unmet Demand Signals** ✅ VERIFIED — "WHAT SHOPPERS ARE LOOKING FOR" card renders with real data (5 terms).
-- **#457 Noindex** ⚠️ P2 — noindex code-confirmed; absent from SSR HTML (next/head is client-side only). Googlebot renders JS so not blocking.
-- **#451 Speakable JSON-LD** ⚠️ P2 — same P2 SSR gap as above.
-- **#442 Monthly Trend Report** ❌ BUG — Email job exists and runs. But /reports/[year]-[month] page is 404 — page file was never built. Needs dispatch.
-- **#308 Item Hide Bug Fix** UNVERIFIED — Code confirmed. Item.embedding NOT NULL pgvector constraint blocks test data creation.
+**S798 (latest) — 5 features shipped:**
+- **#442 Monthly Trend Report page** — `/reports/[year]-[month]` page built with SSR + Article JSON-LD. Was 404; now live (pending deploy). Stat cards: total sales, organizers, top cities, categories, crawlers.
+- **#396 DIY Sale Starter Kit** — `/organizer/starter-kit` with inline checklist + PDF download. Pre-Sale, Pricing Tips, Day-Of, Post-Sale sections.
+- **#397 Crew Invasion** — 4+ crew members holding simultaneously triggers 10% discount code (45min), 75 XP each. Organizer opt-in toggle in edit-sale. **⚠️ Migration needed.**
+- **#398 Organizer Referral Loop** — Confirmed already built: /organizer/referrals, 500 XP reward on first referred org's first sale. Nothing new needed.
+- **#411 Dorm Dash Phase 2** — Dorm Building + Move-Out Date fields on Sale. Shows in create/edit-sale when type = DORM_DASH. Auto-markdown runs 2x within 48h of move-out. **⚠️ Migration needed.**
+- **NV scraper** — opendata.lasvegasnevada.gov still dead. Recommended: build City of Las Vegas License Search Playwright scraper.
 
-**S796 — QA (11 ✅, 4 code-verified):** #288 ✅ #402 ✅ #416 ✅ #363 ✅ #284 ✅ #458 ✅ #351 ✅ #401 ✅ #404 ✅ #395 ✅ #410 ✅. Build error fixed (dashboard.tsx Fragment).
+**S797 — Chrome QA Batches A/B/C (8 ✅, 2 ⚠️, 1 ❌→fixed S798, 1 UNVERIFIED).**
 
-**Previous sessions:** S795: #400 ✅ #406 ✅ + 6 features shipped. S794: 4 features shipped + #432 fix. S793: 10 ✅.
+**Previous sessions:** S796: 11 ✅ + build fix. S795: #400 ✅ #406 ✅ + 6 shipped. S794: 4 shipped + #432 fix.
 
 ---
 
@@ -45,9 +39,9 @@ No new decisions pending. DECISIONS.md is current.
 
 **Improved this week (S797):** 8 more features Chrome-verified. Crawler Visit Notification, Unmet Demand Signals, Peer Referral Bounty, MCP Tool Wrappers, Early Access Cache, Explorer Profile link, Bell nav order, ENDED scraped sale page — all confirmed working.
 
-**Bug found this session:** #442 public reports page (/reports/[year]-[month]) was never built — email job fires but there's no landing page. Dispatch to findasale-dev queued.
+**S798 shipped 5 features.** Two migrations needed (see push block below).
 
-**Blocked Queue at 5 items** — below ceiling of 8. New features can resume.
+**Blocked Queue at 5 items** — below ceiling of 8. Feature work continues next session.
 
 ---
 

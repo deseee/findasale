@@ -114,6 +114,9 @@ interface WizardFormData {
   // Retail
   retailAutoRenewDays: number;
   locationId: string | null;
+  // Feature #411: Dorm Dash Phase 2
+  dormBuilding: string;
+  moveOutDate: string; // date string YYYY-MM-DD
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -217,6 +220,8 @@ const DEFAULT_FORM: WizardFormData = {
   isRecurring: false,
   retailAutoRenewDays: 30,
   locationId: null,
+  dormBuilding: '',
+  moveOutDate: '',
 };
 
 const DRAFT_KEY = 'findasale_create_sale_draft';
@@ -1569,6 +1574,42 @@ function Step4({ c, form, setForm }: Step4Props) {
         </div>
       )}
 
+      {/* DORM DASH extras */}
+      {isDormDash && (
+        <div style={{
+          background: c.surface, border: `1px solid ${c.border}`,
+          borderRadius: 14, padding: 22, marginBottom: 16,
+          display: 'flex', flexDirection: 'column', gap: 16,
+        }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: 'Inter, sans-serif' }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
+              Dorm building{' '}
+              <span style={{ fontSize: 11, color: c.textFaint, fontWeight: 400 }}>e.g., North Hall, Room 204</span>
+            </span>
+            <input
+              type="text"
+              value={form.dormBuilding}
+              onChange={e => setForm(f => ({ ...f, dormBuilding: e.target.value }))}
+              placeholder="e.g., North Hall"
+              maxLength={200}
+              style={inputStyle}
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: 'Inter, sans-serif' }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
+              Move-out deadline{' '}
+              <span style={{ fontSize: 11, color: c.textFaint, fontWeight: 400 }}>When you must be out — shoppers see urgency</span>
+            </span>
+            <input
+              type="date"
+              value={form.moveOutDate}
+              onChange={e => setForm(f => ({ ...f, moveOutDate: e.target.value }))}
+              style={inputStyle}
+            />
+          </label>
+        </div>
+      )}
+
       {/* NOTES */}
       <div style={{
         background: c.surface, border: `1px solid ${c.border}`,
@@ -2124,6 +2165,9 @@ const CreateSalePage: React.FC = () => {
       ...(entranceLng !== null ? { entranceLng } : {}),
       retailAutoRenewDays: form.retailAutoRenewDays,
       isOnlineOnly: form.isOnlineOnly,
+      // Feature #411: Dorm Dash Phase 2
+      ...(form.saleType === 'DORM_DASH' && form.dormBuilding ? { dormBuilding: form.dormBuilding } : {}),
+      ...(form.saleType === 'DORM_DASH' && form.moveOutDate ? { moveOutDate: new Date(`${form.moveOutDate}T23:59:59`).toISOString() } : {}),
       status: 'DRAFT',
     };
   };

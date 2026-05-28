@@ -117,6 +117,9 @@ export const XP_AWARDS = {
 
   // Bounties
   BOUNTY_FULFILLMENT_SHOPPER: 25, // Shopper earns for fulfilling a bounty request
+
+  // Feature #397: Crew Invasion — 75 XP per crew member when invasion triggers
+  CREW_INVASION: 75,
 };
 
 // XP sink costs (per spec Decision 7 — gamedesign S417 full sink table)

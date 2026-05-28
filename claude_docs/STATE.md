@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S797 — Chrome QA batches A/B/C complete (#449 #350 #304 #266 #448 #444 #447 #453 ✅; #457 #451 ⚠️ P2 SSR gap; #442 ❌ public page missing; #308 UNVERIFIED embedding constraint) | Blocked Queue: 5**
+**Latest: S798 — 5 features shipped: #442 trend reports page ✅, #396 starter kit ✅, #397 Crew Invasion ✅ (migration needed), #398 confirmed existing ✅, #411 Dorm Dash P2 ✅ (migration needed). NV scraper: City of Las Vegas Playwright approach recommended. Blocked Queue: 5**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -249,18 +249,42 @@ npx prisma generate
 
 **Patrick Action — Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
 
-**Dispatch needed — #442 missing public reports page:** monthlyTrendReportJob.ts email job exists but /reports/[year]-[month] page returns 404 (page file never built). Spec called for: pages/reports/[year]-[month].tsx with SSR + Article JSON-LD as content moat. Dispatch to findasale-dev.
+**P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #457, #449. Not blocking.
 
-**Dispatch needed — P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #457, #449. Not blocking.
+**Patrick Actions (TWO MIGRATIONS NEEDED — run after push):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-1. **Live verify pending**: #409 Sneak Peek Email (cron fires 09:00 UTC daily — needs platform sale in 24-48h window + subscriber + photo'd items). #399 Local Legends (needs 3+ same-ZIP check-ins). #408 Scan & Split (needs 2 concurrent users).
-2. **Unblock #416**: Add ≥2 items with different roomTag values to a published sale → verify floor map renders on sale page.
-3. **Unblock #308**: Need organizer with real active items to test hide-item flow (embedding constraint prevents DB-only test data creation).
-4. **New features**: #396 DIY Sale Starter Kit, #397 Crew Invasion (needs gamedesign sign-off), #398 Organizer Referral Loop, #411 Dorm Dash Phase 2.
-5. **NV scraper dead**: opendata.lasvegasnevada.gov DNS dead since May 2026. Find replacement Nevada business license source.
+1. **Chrome QA needed**: #442 reports page, #396 starter kit, #397 Crew Invasion, #398 org referral, #411 Dorm Dash P2 — all Pending Chrome QA.
+2. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split.
+3. **Unblock #416**: Add ≥2 items with different roomTag values to a published sale → verify floor map.
+4. **Unblock #308**: Need organizer with real active items to test hide-item flow.
+5. **NV scraper**: Recommend building City of Las Vegas Playwright scraper (lasvegasnevada.gov license search).
 
 
 ## Recent Sessions
+
+### S798 — 5 Features Shipped (#442 #396 #397 #398 #411) + NV Scraper Research
+
+**Trigger:** Patrick: "all" — dispatch all outstanding items.
+
+**Parallel dispatch (6 agents):**
+- **#442 Monthly Trend Report page** ✅ — Built `reportsController.ts` + `routes/reports.ts` + wired `index.ts` + `pages/reports/[slug].tsx` with SSR, Article JSON-LD, stat cards, top cities/sale-types/categories. 0 TS errors. No migration needed.
+- **#396 DIY Sale Starter Kit** ✅ — `/organizer/starter-kit` page with inline 4-section checklist + PDF download (`/public/downloads/sale-starter-kit.pdf`). Nav link already existed. 0 TS errors.
+- **#397 Crew Invasion** ✅ — GameDesign spec: 4 members, 10% off held items, 45min, 75 XP/member, organizer opt-in. Built `crewInvasionService.ts` + `CrewInvasionCode` model + `crewInvasionEnabled` toggle in edit-sale + `CREW_INVASION_TRIGGERED` socket + `xpService.ts` CREW_INVASION:75. **Patrick: run migration 20260628300000.**
+- **#398 Organizer Referral Loop** ✅ — Confirmed already fully implemented (referrals page, referralService.ts, saleController trigger). No new files.
+- **#411 Dorm Dash Phase 2** ✅ — `dormBuilding` + `moveOutDate` on Sale schema. UI in create-sale + edit-sale. markdownCycleCron 2x multiplier within 48h of moveOutDate. **Patrick: run migration 20260528120000.**
+- **NV scraper** — No clean bulk replacement. Recommendation: City of Las Vegas License Search via Playwright scraping (`lasvegasnevada.gov/Business/Business-License/License-Search`). NV SOS sells bulk data (manual purchase). Dead scraper stays disabled.
+
+**Blocked Queue: 5 (unchanged)**
+
+**Files changed:** `packages/backend/src/controllers/reportsController.ts` (new) · `packages/backend/src/routes/reports.ts` (new) · `packages/backend/src/index.ts` · `packages/frontend/pages/reports/[slug].tsx` (new) · `packages/frontend/pages/organizer/starter-kit.tsx` · `packages/frontend/public/downloads/sale-starter-kit.pdf` (new binary) · `packages/database/prisma/schema.prisma` · `packages/database/prisma/migrations/20260528120000_add_dorm_dash_fields/migration.sql` (new) · `packages/database/prisma/migrations/20260628300000_add_crew_invasion/migration.sql` (new) · `packages/backend/src/controllers/saleController.ts` · `packages/frontend/pages/organizer/create-sale.tsx` · `packages/frontend/pages/organizer/edit-sale/[id].tsx` · `packages/backend/src/jobs/markdownCycleCron.ts` · `packages/backend/src/services/crewInvasionService.ts` (new) · `packages/backend/src/services/xpService.ts` · `packages/backend/src/controllers/reservationController.ts` · `packages/frontend/components/Layout.tsx` · `claude_docs/strategy/roadmap.md`
+
+---
 
 ### S797 — Chrome QA Batches A/B/C (12 items: 8 ✅, 2 ⚠️, 1 ❌, 1 UNVERIFIED)
 
