@@ -1183,4 +1183,75 @@ const EditSalePage = () => {
               </p>
               <Link
                 href={`/organizer/inventory?saleId=${id}`}
-                className="inline-blo
+                className="inline-block text-sm font-semibold text-amber-600 hover:text-amber-700 hover:underline"
+              >
+                Manage Item Room Labels →
+              </Link>
+            </div>
+
+            {/* S696 Wave 2: Bundle Pricing — managed in add-items */}
+            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
+              <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Bundle Pricing</h3>
+              <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
+                Group items together and offer them at a fixed bundle price. Bundles are created and managed from the Add Items page.
+              </p>
+              <Link
+                href={`/organizer/add-items/${id}`}
+                className="inline-block text-sm font-semibold text-amber-600 hover:text-amber-700 hover:underline"
+              >
+                Manage Bundles in Add Items →
+              </Link>
+            </div>
+
+            {/* S696 Wave 2: Donation Kit — managed via settlement */}
+            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
+              <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Donation Kit</h3>
+              <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
+                Donate unsold items to charity and generate a tax receipt PDF. Available after your sale ends from the settlement page.
+              </p>
+              <Link
+                href={`/organizer/settlement/${id}`}
+                className="inline-block text-sm font-semibold text-amber-600 hover:text-amber-700 hover:underline"
+              >
+                Go to Settlement &amp; Donation →
+              </Link>
+            </div>
+
+            {/* Feature #85: Treasure Hunt QR Manager */}
+            <TreasureHuntQRManager
+              saleId={id as string}
+              enabled={formData.treasureHuntEnabled}
+              onEnabledChange={(enabled) =>
+                setFormData({ ...formData, treasureHuntEnabled: enabled })
+              }
+            />
+
+            {/* Pickup Scheduling Section */}
+            {id && <div className="mt-4"><PickupSlotManager saleId={id as string} /></div>}
+
+            <button
+              type="submit"
+              disabled={updateMutation.isPending}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50"
+            >
+              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={() => confirmState.onConfirm()}
+        onCancel={() => {
+          setConfirmState(s => ({ ...s, open: false }));
+          setIsTogglingStatus(false);
+        }}
+      />
+    </>
+  );
+};
+
+export default EditSalePage;
