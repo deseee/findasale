@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S800 COMPLETE — Chrome QA batch (11 items tested): 5 ✅, 1 ⚠️, 5 ❌ bugs dispatched to dev. edit-sale description null fix shipped. Blocked Queue: 4 (unchanged)**
+**Latest: S801 COMPLETE — Chrome QA: #197 Bounty Board ✅, #221 Hold-to-Pay ✅, #348 QR Auto-Claim ✅. bountyController.ts orphaned-user guard shipped. Blocked Queue: 4 (unchanged)**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -238,19 +238,39 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Patrick Action — Remove test file** `C:\Users\desee\ClaudeProjects\FindaSale\qa-test-item.jpg` (created S800 for Cloudinary upload test).
 
-**Patrick Action — Run migration if needed** for any new features dispatched this session (check dev agent handoffs below).
-
 **P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #457, #449. Not blocking.
 
-1. **S800 dev dispatches shipping** — 5 bugs fixed: #148 checklist page, #156 returnWindowHours, #142 batch upload crash, #158 SaleWaitlistButton placement, #160 ReviewsSection placement. Verify after Railway/Vercel deploys.
-2. **#35 Entrance Pin** — ⚠️ UI confirmed correct; was blocked by description null bug (FIXED S800, pending deploy). Re-verify after deploy.
+1. **S800 dev dispatches** — verify after deploy: #148 checklist page, #156 returnWindowHours, #142 batch upload crash, #158 SaleWaitlistButton placement, #160 ReviewsSection placement.
+2. **#35 Entrance Pin** — ⚠️ Re-verify after S800 deploy (description null bug was the blocker — now fixed).
 3. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific data conditions).
 4. **Unblock #308**: Need organizer with real active items to test hide-item flow.
 5. **NV scraper**: Recommend building City of Las Vegas Playwright scraper (lasvegasnevada.gov license search).
-6. **Pending Chrome QA backlog**: Large backlog in roadmap.md — dispatch QA micro-batches.
+6. **Pending Chrome QA backlog**: Large backlog in roadmap.md — continue dispatching QA micro-batches.
 
 
 ## Recent Sessions
+
+### S801 — Chrome QA: #197 Bounty Board ✅ + #221 Hold-to-Pay ✅ + #348 QR Auto-Claim ✅
+
+**Trigger:** Continue pending Chrome QA from roadmap — 3 items marked "Pending Chrome QA."
+
+**Chrome QA Results:**
+- **#197 Bounty Board ✅** — `/api/bounties/community` returns 200 with data; create bounty form submits successfully end-to-end. `bountyController.ts` orphaned-user guard (`user: { isNot: null }`) shipped to prevent 500 on deleted-user bounty records.
+- **#221 Hold-to-Pay ✅** — "Place Hold" button on item detail page (`/items/[id]`); modal confirmed; hold created with 44-min countdown (Scout rank = 45min window). `/shopper/holds` page shows active hold with HoldTimer + "Release Hold" button. Rank-gated window confirmed working.
+- **#348 QR Auto-Claim ✅** — Created TreasureHuntQRClue test record via psycopg2 (saleId: cmpbvumj90001e7t7v5sa1iqi). Navigated to `?via=qr` URL as Leo Thomas (user5). `foundMutation` auto-fired on mount. "You earned 3 XP! Complete! +15 bonus" toast shown. Redirected to sale page after 2.5s. End-to-end confirmed.
+
+**Technical notes:**
+- psycopg2 pip install via `--target=/tmp/pypackages` (disk full at `.local`); use `PYTHONPATH=/tmp/pypackages`
+- TreasureHuntQRClue columns: `id`, `saleId`, `clueText`, `hintPhoto`, `category`, `createdAt` (not `clue`/`order`)
+- CSRF 403 on direct backend fetch from Chrome JS — cross-origin. Use psycopg2 for DB-level test data instead
+- Production DB: only user1–7 exist as example.com accounts (user12+ were not seeded to Railway)
+- QR clue test record created: id=`c4d81ec85a6b64fa9b671012`, saleId=`cmpbvumj90001e7t7v5sa1iqi`
+
+**Blocked Queue: 4 (unchanged)**
+
+**Files changed (S801):** `packages/backend/src/controllers/bountyController.ts` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S800 — Chrome QA Batch (11 items: 5 ✅, 1 ⚠️, 5 ❌ bugs) + description null fix
 
@@ -508,86 +528,4 @@ Seeded "Floor Map Test Sale" via psycopg2 (4 items: 2× Living Room, 2× Kitchen
 **UNVERIFIED (3) — added to Blocked Queue:**
 - #230 Smart Buyer Intelligence: No test shoppers favoriting organizer sales
 - #223 Organizer Guidance Layer: No hold records for rank badge copy test
-- #332 Shopify Cross-Listing: Needs Shopify OAuth connection
-
-**Technical notes:** `UserRoleSubscription` not populated by seed.ts — only `Organizer.subscriptionTier` set. Manual DB insert required for tier-gated feature QA. iCal is entirely frontend (no backend route). QR rank multiplier only applies to `treasureHuntQRController`, not regular `treasureHunt.ts` route.
-
-**Blocked Queue: 11 → 12** (removed 2: #261 ✅ + shopper-login-entry resolved; added 3: #230/#223/#332 UNVERIFIED).
-
-**eBay QA (S791 continuation post-compaction):**
-- #298 eBay Default Policies ✅ — all 8 sections on /organizer/settings/ebay confirmed with real eBay connection.
-- #244 eBay CSV Export ✅ — "📦 Export to eBay" button confirmed in add-items toolbar.
-- #293 Post-Sale eBay Panel — BLOCKED (no ended sales in DB).
-- #295 Category Review Badge — ❌ BUG: ebayNeedsReview missing from getDraftItemsBySaleId select. FIX SHIPPED to itemController.ts.
-
-**Blocked Queue: 11 → 10** (removed: #261 ✅, shopper-login resolved, #244 ✅, #298 ✅; added: #230/#223/#332 UNVERIFIED).
-
-**Consignor QA continuation (S791 — post-compaction):**
-- #333 Consignor Payout: Double /api/ URL bug found and fixed in `[id].tsx` and `ConsignorPayoutModal.tsx`. Test consignor created in Railway DB. UNVERIFIED pending Chrome verify.
-- #335 Consignor Email: BUG — sendConsignorPayout never called from runPayout. Fixed: import + fire-and-forget added to `consignorController.ts`. TypeScript clean. UNVERIFIED pending Chrome verify.
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `packages/backend/src/controllers/itemController.ts` · `packages/frontend/pages/organizer/consignors/[id].tsx` · `packages/frontend/components/ConsignorPayoutModal.tsx` · `packages/backend/src/controllers/consignorController.ts`
-
----
-
-### S789 — Chrome QA: Camera Batch (#319/#325/#328/#336/#339/#340)
-
-**Trigger:** Photo pipeline fix shipped (uploadController.ts creates Photo records on rapidfire upload). Camera batch QA — 6 features to verify.
-
-**Verified ✅ (4):**
-- #319/#325/#328 Photo Pipeline: Uploaded PNG via `/api/upload/rapidfire` as user1. Photo record confirmed in DB (`isPrimary=true, orderIndex=0`). Burst clustering, best-photo-first sorting, and photo role features confirmed live. ✅
-- #339 Low-Confidence Refuse-to-Fill: Gate confirmed in `cloudAIService.ts` — `if (parsed.confidence < 0.6)` clears category+brand. ✅ CODE-VERIFIED.
-- #340 Auto-Reopen Camera: Navigated to `?openCamera=1&captureMode=rapidfire` → RapidCapture overlay opened immediately. ✅
-
-**Partial ⚠️ (1):**
-- #336 Intent-Wins: PUT /api/items confirmed `userEditedFields` populated (`["title","price"]`). Code gate in `processRapidDraft.ts` confirmed. Live AI re-run not completed — item was already PENDING_REVIEW.
-
-**Technical highlights:**
-- Live Railway DB password found in `packages/database/.env` (CLAUDE.md had stale value).
-- Upload field name is `image` (not `photos`) — multer `upload.single('image')` on rapidfire route.
-- Real PNG from `/icons/icon-512x512.png` used — tiny synthetic JPEG rejected by Cloudinary.
-- Item `embedding` field requires `[0.0]*768` cast as `%s::float[]` for psycopg2 inserts.
-- Browser JS fetch used for API calls (Railway CLI network-blocked in VM).
-
-**Blocked Queue: 15 → 12.** Removed: #319, #325, #328, #340.
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S788 -- Scraper Incident: GitHub Actions Failures Diagnosed + Fixed
-
-**Trigger:** 9 GitHub Actions workflows failed Monday May 25 (scrapers + SMTP verifier). 3rd+ recurrence of the same root cause.
-
-**Root cause:** Railway DB password rotated S780b (May 24). Railway services auto-rotate via reference variable but GitHub Secrets are static -- DATABASE_URL and DIRECT_URL went stale.
-
-**Fix:** Patrick updated GitHub Secrets. SMTP re-run confirmed working (3m 51s). schema.prisma directUrl now aliases DATABASE_URL (no more DIRECT_URL secret needed). SECURITY.md rotation checklist added. 8 scraper files fixed: AZ new dataset ID, RI field mapping, ID/MO/MN/MT/NV changed from throw to clean exit 0.
-
-**Files changed:** packages/database/prisma/schema.prisma, claude_docs/SECURITY.md, 8x scraper source files, claude_docs/STATE.md, claude_docs/patrick-dashboard.md
-
----
-
-### S787 — QA Session: Shopper Features + Camera + Icon Order + QR Expand/Share
-
-**Trigger:** Continue QA backlog (S787 is QA-ceiling session per §4 rule). Goal: clear shopper batch, camera batch, XP rank.
-
-**Verified ✅ (2):**
-- #7 Shopper Referral Rewards: /shopper/referrals loads, referral link displays, copy button works, stats show signups/XP. ✅ Chrome-verified.
-- #339 Low-Confidence Refuse-to-Fill: Photographed item in dark environment → "Too dark to identify" dialog appeared → AI fields (brand/category) refused to fill, title/description still populated. Low-confidence path confirmed working. ✅
-
-**UNVERIFIED (3):**
-- #340 Auto-Reopen Camera: VM camera too dark to complete item publish; cannot verify auto-reopen behavior.
-- #261 Treasure Hunt XP Rank Multiplier: No RANGER users in production DB; /admin access denied for user1.
-- #266 Explorer Profile Dropdown: Page loads ✅; avatar dropdown UNVERIFIED — shopper accounts (user12+) blocked by re-seed requirement.
-
-**Bugs Fixed + Dispatched:**
-- #350 Nav Icon Order: Bell icon was position 4 (after cart) in desktop and mobile. Layout.tsx surgical edit — bell moved before QR scanner. TypeScript clean.
-- #351 QR Modal Expand + Share: dashboard.tsx and CartDrawer.tsx — added click-to-expand state toggle + Web Share API + clipboard fallback. TypeScript clean.
-
-**Blocker confirmed:** Shopper accounts (user12+) login fails with Seedy2025! — production DB not re-seeded after S576 password change. All shopper-specific tests (#266, #184, etc.) blocked until Patrick runs seed against production Railway DB.
-
-**Files changed:** `packages/frontend/components/Layout.tsx` · `packages/frontend/pages/shopper/dashboard.tsx` · `packages/frontend/components/CartDrawer.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S786 (archived — see session-log-archive.md)
+- #332

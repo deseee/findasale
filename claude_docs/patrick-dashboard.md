@@ -4,7 +4,14 @@
 
 ## What Happened This Week
 
+**S801 complete:** Chrome QA — #197 Bounty Board ✅, #221 Hold-to-Pay ✅, #348 QR Auto-Claim ✅. bountyController.ts orphaned-user guard shipped.
+
 **S800 complete:** Chrome QA batch — 5 ✅, 1 ⚠️, 5 ❌ bugs found and dispatched to dev. edit-sale description null fix shipped (root cause of ALL 400 errors on sale edit).
+
+**S801 — QA Results:**
+- **✅ #197 Bounty Board** — community endpoint ✅, create bounty form ✅, bountyController.ts orphaned-user guard shipped
+- **✅ #221 Hold-to-Pay** — Place Hold button on item detail page, modal confirmed, hold created with 44-min countdown, /shopper/holds shows timer
+- **✅ #348 QR Auto-Claim** — navigated to `?via=qr` URL, foundMutation auto-fired, "You earned 3 XP! +15 bonus" toast, 2.5s redirect confirmed
 
 **S800 — QA Results:**
 - **✅ Confirmed working:** #154 Organizer Public Profile, #138 Sale Types (all 5), #5 Listing Type Schema Validation (DB-confirmed), #145 Condition Grading (DB-confirmed), #160 Reputation/reviews page
@@ -56,6 +63,8 @@ No new decisions pending. DECISIONS.md is current.
 2. **Re-verify #35 Entrance Pin** after deploy (description null bug was the blocker).
 3. **Blocked Queue at 4** — below ceiling. Feature work continues.
 4. **Pending Chrome QA backlog**: #442 reports page, #396 starter kit, #397 Crew Invasion, #411 Dorm Dash P2 (all S798 — Pending Chrome QA). Also: #285 POS real-time (needs 2 concurrent users), #399 Local Legends (needs 3+ same-ZIP check-ins), #408 Scan & Split (needs 2 concurrent scanners), #409 Sneak Peek Email (needs platform sale 24-48h out + subscriber + items).
+
+**S801 completed:** #197, #221, #348 — all Chrome QA verified and roadmap updated.
 
 ---
 
