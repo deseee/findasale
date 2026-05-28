@@ -16,7 +16,6 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useMyWorkspace } from '../../hooks/useWorkspace';
-import useCountUp from '../../hooks/useCountUp';
 import { TierGatedButton } from '../../components/TierGatedNav';
 import WorkspaceInvitationBanner from '../../components/WorkspaceInvitationBanner';
 import SaleCard from '../../components/SaleCard';
@@ -193,8 +192,6 @@ const OrganizerDashboard = () => {
     enabled: !!user?.id && isClient,
   });
 
-  // Feature #79: Count-up animation for earnings total
-  const animatedRevenue = useCountUp(analyticsData?.totalRevenue || 0, 1200);
 
   // Phase 22: Fetch organizer tier + progress data
   const { data: orgProfile } = useQuery({
