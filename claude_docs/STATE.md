@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S796 — Chrome QA batch 1+2 complete (#401 #404 #395 #410 #288 #351 #363 #284 #402 #416 #458 ✅; #285 #408 #399 #409 ⚠️ CODE-VERIFIED) | Blocked Queue: 6**
+**Latest: S797 — Chrome QA batches A/B/C complete (#449 #350 #304 #266 #448 #444 #447 #453 ✅; #457 #451 ⚠️ P2 SSR gap; #442 ❌ public page missing; #308 UNVERIFIED embedding constraint) | Blocked Queue: 5**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -216,9 +216,8 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
 | #402 Cover the Fee toggle | UNVERIFIED S793 — toggle not found in edit-sale page or organizer settings payment tab | Locate UI surface for coversFee toggle or confirm it was not implemented in UI | S793 |
-| #435 Bot/Crawler Visit Tracking | UNVERIFIED S793 — cannot simulate bot user-agent via Chrome automation | Inspect Railway logs for GPTBot/ClaudeBot middleware hits, or query CrawlerVisit table directly | S793 |
+| #308 Item Hide Bug Fix | UNVERIFIED S797 — PUBLIC_ITEM_FILTER code-confirmed (isActive:true). Browser test blocked: Item.embedding NOT NULL pgvector prevents DB test data insertion without valid vector | Need organizer with real items to test hide-item flow end-to-end | S797 |
 | #457 Noindex stale scraped | UNVERIFIED S793 — no scraped+ENDED test data with past date | Create past-dated scraped sale record, verify noindex meta tag on that page | S793 |
-| #458 Confidence Score | UNVERIFIED S793 — confidence score not visible in any directory UI | Verify via /api/sales response or MCP search_sales — may be internal-only | S793 |
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
 
 | #416 Sale Map Internal Routing | UNVERIFIED S794 — SaleFloorMap component built + wired. Renders null when <2 room groups. Test sale has no room-tagged items. | Add ≥2 items with different roomTag values to a published sale, then view sale page | S794 |
@@ -234,21 +233,9 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Patrick Action — Run migration for #409 sneakPeekSentAt field:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+**Blocked Queue: 5 (below 8 ceiling — feature work CAN resume).**
 
-**Patrick Action — Connect eBay to user1 in Railway DB** — enables #293 PostSaleEbayPanel verification.
-
-**Patrick Action — Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
-
-**Next session: Blocked Queue at 6 (below 8 ceiling — feature work CAN resume).**
-
-**Patrick Action — Restore Chrome session:** Click "Artifact / artifactmi@gmail.com" in the Google account chooser currently open in Chrome (Google's OAuth page blocks automated JS clicks).
+**Patrick Action — Restore Chrome session:** Chrome is at finda.sale/login — click "Sign in with Google → artifactmi@gmail.com" to restore your session.
 
 **Patrick Action — Run migration for #409 sneakPeekSentAt field:**
 ```powershell
@@ -262,14 +249,46 @@ npx prisma generate
 
 **Patrick Action — Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
 
-1. **Live verify pending**: #409 Sneak Peek Email (needs platform sale in 24-48h window + subscriber + photo'd items — cron fires 09:00 UTC daily). #399 Local Legends (needs 3+ same-ZIP check-ins). #408 Scan & Split (needs 2 concurrent users).
-2. **Unblock #416**: Add ≥2 items with different roomTag values to a sale → verify floor map renders on sale page.
-3. **New features**: Next QUEUED items from S696 batch: #396 DIY Sale Starter Kit, #397 Crew Invasion (needs gamedesign sign-off first), #398 Organizer Referral Loop, #411 Dorm Dash Phase 2 (needs schema migration for room field on Item).
-4. **Remaining UNVERIFIED**: #402 (locate UI), #435 (log inspection), #457 (test data), #458 (API verify) — batch when convenient.
+**Dispatch needed — #442 missing public reports page:** monthlyTrendReportJob.ts email job exists but /reports/[year]-[month] page returns 404 (page file never built). Spec called for: pages/reports/[year]-[month].tsx with SSR + Article JSON-LD as content moat. Dispatch to findasale-dev.
+
+**Dispatch needed — P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #457, #449. Not blocking.
+
+1. **Live verify pending**: #409 Sneak Peek Email (cron fires 09:00 UTC daily — needs platform sale in 24-48h window + subscriber + photo'd items). #399 Local Legends (needs 3+ same-ZIP check-ins). #408 Scan & Split (needs 2 concurrent users).
+2. **Unblock #416**: Add ≥2 items with different roomTag values to a published sale → verify floor map renders on sale page.
+3. **Unblock #308**: Need organizer with real active items to test hide-item flow (embedding constraint prevents DB-only test data creation).
+4. **New features**: #396 DIY Sale Starter Kit, #397 Crew Invasion (needs gamedesign sign-off), #398 Organizer Referral Loop, #411 Dorm Dash Phase 2.
 5. **NV scraper dead**: opendata.lasvegasnevada.gov DNS dead since May 2026. Find replacement Nevada business license source.
 
 
 ## Recent Sessions
+
+### S797 — Chrome QA Batches A/B/C (12 items: 8 ✅, 2 ⚠️, 1 ❌, 1 UNVERIFIED)
+
+**Trigger:** Continue Chrome QA — verify Pending Chrome QA roadmap items across three batches.
+
+**Chrome QA Batch A (#449 #350 #457 #451 #442):**
+- **#449 ENDED scraped sale page** ✅ — ENDED scraped sale page loads correctly (not 404).
+- **#350 Bell before QR in nav** ✅ — Bell icon confirmed before QR scanner in nav.
+- **#457 Noindex stale scraped** ⚠️ P2 — noindex logic code-confirmed in `[id].tsx`. P2 gap: next/head injects client-side only; noindex absent from SSR HTML. Googlebot renders JS so acceptable.
+- **#451 Speakable JSON-LD** ⚠️ P2 — speakable property confirmed in Event JSON-LD after React hydration. Same P2: JSON-LD injected by next/head client-side only.
+- **#442 Monthly Trend Report Content Moat** ❌ INCOMPLETE — monthlyTrendReportJob.ts email job exists and runs. But /reports/[year]-[month] page returns 404 — page file was never built. Content moat half-missing. Dispatch to findasale-dev.
+
+**Chrome QA Batch B (#304 #266 #308):**
+- **#304 Early Access Cache** ✅ — /shopper/early-access-cache/items loads as Leo Thomas (user5), correct empty state.
+- **#266 Explorer Profile link** ✅ — Avatar dropdown "Explorer Profile" link confirmed via DOM as Leo Thomas (user5).
+- **#308 Item Hide Bug Fix** UNVERIFIED — PUBLIC_ITEM_FILTER code-confirmed (isActive:true in itemQueries.ts). Browser test blocked: Item.embedding NOT NULL pgvector column prevents DB test data insertion.
+
+**Chrome QA Batch C (#448 #444 #447 #453):**
+- **#448 MCP Tool Wrappers** ✅ — 10 tool wrapper files confirmed in packages/mcp-server/src/tools/ (filesystem check).
+- **#444 Peer Referral Bounty** ✅ — /organizer/referrals loads, unique link (REF-7CD8DCC0 for Alice), stats block, "How It Works" 3-step explainer confirmed.
+- **#447 Crawler Visit Notification UI** ✅ — "SEARCH ENGINE VISIBILITY" SmartSearchViewsCard renders on organizer dashboard (Bob Smith, user2). Zero-visit empty state correct.
+- **#453 Unmet Demand Signals** ✅ — "WHAT SHOPPERS ARE LOOKING FOR" card renders with real unmet demand data (5 terms).
+
+**Blocked Queue: 6 → 5** (added #308 UNVERIFIED; removed #435 resolved, #457 reclassified P2, #458 confirmed ✅ S796)
+
+**Files changed:** `claude_docs/strategy/roadmap.md` (12 entries updated) · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S796 — Railway password ✅ + TS Fragment fix + Chrome QA (#401 #404 #395 #410 ✅)
 

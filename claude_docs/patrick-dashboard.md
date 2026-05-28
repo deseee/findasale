@@ -4,27 +4,23 @@
 
 ## What Happened This Week
 
-Fourteen sessions this week. S796 complete: 11 features Chrome-verified, 1 TS build error fixed, 4 code-verified. Blocked Queue: 6 (below 8 ceiling — new features can resume).
+Fifteen sessions this week. S797 complete: 8 features Chrome-verified, 2 P2 gaps noted, 1 bug found (#442 missing page), 1 UNVERIFIED (embedding constraint). Blocked Queue: 5 (below 8 ceiling — new features can resume).
 
-**S796 (latest) — QA batch 2:**
-- **#288 Featured Boost** ✅ VERIFIED — Sale Bump modal confirmed on organizer dashboard; XP and $1.00 Stripe payment options both present.
-- **#402 Cover the Fee** ✅ VERIFIED — "Cover the Platform Fee" checkbox confirmed in edit-sale (appears when sale type = AUCTION).
-- **#416 Sale Floor Map** ✅ VERIFIED — FLOOR GUIDE section auto-generates on sale page with Living Room + Kitchen sections when items have room tags.
-- **#363 Auction Lot Number** ✅ VERIFIED — Lot Number field appears in add-items when listing type = AUCTION.
-- **#284 Feedback Survey** ✅ VERIFIED — OG-5 survey fires on organizer settings profile save; modal appeared and submitted correctly.
-- **#458 Confidence Score** ✅ VERIFIED — `confidenceScore` field confirmed in /api/sales API response (internal API field, no public UI surface needed).
-- **#351 QR Quick-Access Modal** ✅ VERIFIED — My QR tab on shopper dashboard opens full-screen modal; QR image renders; tap to expand/shrink works.
-- **#285 POS In-App Payment** ⚠️ CODE-VERIFIED — POS page + all payment modes confirmed. Real-time notification to shopper needs 2 concurrent users.
+**S797 (latest) — Chrome QA Batches A/B/C:**
+- **#449 ENDED scraped sale page** ✅ VERIFIED — ENDED scraped sale page loads correctly (not 404).
+- **#350 Bell before QR in nav** ✅ VERIFIED — Bell icon confirmed before QR scanner in nav.
+- **#304 Early Access Cache** ✅ VERIFIED — /shopper/early-access-cache/items loads correctly as Leo Thomas.
+- **#266 Explorer Profile link** ✅ VERIFIED — Avatar dropdown "Explorer Profile" link confirmed.
+- **#448 MCP Tool Wrappers** ✅ VERIFIED — 10 tool wrapper files confirmed in packages/mcp-server/src/tools/.
+- **#444 Peer Referral Bounty** ✅ VERIFIED — /organizer/referrals loads with unique link, stats, "How It Works" explainer.
+- **#447 Crawler Visit Notification UI** ✅ VERIFIED — "SEARCH ENGINE VISIBILITY" card renders on organizer dashboard (Bob Smith). Zero-visit empty state correct.
+- **#453 Unmet Demand Signals** ✅ VERIFIED — "WHAT SHOPPERS ARE LOOKING FOR" card renders with real data (5 terms).
+- **#457 Noindex** ⚠️ P2 — noindex code-confirmed; absent from SSR HTML (next/head is client-side only). Googlebot renders JS so not blocking.
+- **#451 Speakable JSON-LD** ⚠️ P2 — same P2 SSR gap as above.
+- **#442 Monthly Trend Report** ❌ BUG — Email job exists and runs. But /reports/[year]-[month] page is 404 — page file was never built. Needs dispatch.
+- **#308 Item Hide Bug Fix** UNVERIFIED — Code confirmed. Item.embedding NOT NULL pgvector constraint blocks test data creation.
 
-**S796 (earlier) — QA batch 1:**
-- **Railway DB password** ✅ Confirmed correct (`luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW` is active).
-- **Vercel build error fixed** — dashboard.tsx had a JSX Fragment missing inside a ternary branch. Now builds clean (0 TS errors).
-- **#401 Sale of the Day** ✅ VERIFIED — "🌟 SALE OF THE DAY" card confirmed live on homepage with real sale data.
-- **#404 First 100 Buyers** ✅ VERIFIED — "🏆 0 / 100 OG Buyers" progress confirmed on organizer dashboard.
-- **#395 CSV Bulk Import** ✅ VERIFIED — 3-step import modal (Upload → Map Columns → Done) confirmed on your active sale's add-items page.
-- **#410 CSV Export Watermark** ✅ VERIFIED — eBay CSV exports confirmed with FindA.Sale watermark embedded in every photo URL.
-- **#408 Scan & Split** ⚠️ CODE-VERIFIED — Full code path confirmed. Cannot auto-test without 2 real users scanning the same item within 60 seconds.
-- **#399 Local Legends** ⚠️ CODE-VERIFIED — Badge system live, conditional rendering confirmed. Need a shopper to attend 3+ sales in same ZIP to see the badge appear.
+**S796 — QA (11 ✅, 4 code-verified):** #288 ✅ #402 ✅ #416 ✅ #363 ✅ #284 ✅ #458 ✅ #351 ✅ #401 ✅ #404 ✅ #395 ✅ #410 ✅. Build error fixed (dashboard.tsx Fragment).
 
 **Previous sessions:** S795: #400 ✅ #406 ✅ + 6 features shipped. S794: 4 features shipped + #432 fix. S793: 10 ✅.
 
@@ -47,18 +43,18 @@ No new decisions pending. DECISIONS.md is current.
 
 ## Beta Tester Impact
 
-**Improved this week (S796):** 11 features Chrome-verified across two QA batches. Featured Boost, Cover the Fee, Sale Floor Map, Auction Lot Number, Feedback Survey, Confidence Score API, QR Quick-Access Modal, Sale of the Day, First 100 Buyers, CSV Bulk Import, CSV Export Watermark — all confirmed working end-to-end.
+**Improved this week (S797):** 8 more features Chrome-verified. Crawler Visit Notification, Unmet Demand Signals, Peer Referral Bounty, MCP Tool Wrappers, Early Access Cache, Explorer Profile link, Bell nav order, ENDED scraped sale page — all confirmed working.
 
-**P2 bug to fix next session:** #432 AggregateOffer `lowPrice:"0"` — items priced correctly but the "lowest price" field in the search engine schema shows $0. Doesn't affect shoppers but affects how Google/AI reads the listing.
+**Bug found this session:** #442 public reports page (/reports/[year]-[month]) was never built — email job fires but there's no landing page. Dispatch to findasale-dev queued.
 
-**Blocked Queue at 6 items** — below ceiling of 8. New features can resume.
+**Blocked Queue at 5 items** — below ceiling of 8. New features can resume.
 
 ---
 
 ## This Week's Priority
 
-1. **Next session**: New features — #396 DIY Starter Kit, #398 Organizer Referral Loop, #397 Crew Invasion (after gamedesign sign-off). Fix #432 AggregateOffer lowPrice:"0" bug.
-2. **Blocked Queue at 6** — below ceiling of 8. Feature work continues.
+1. **Next session**: Dispatch #442 missing reports page to findasale-dev. New features — #396 DIY Starter Kit, #397 Crew Invasion (after gamedesign sign-off), #411 Dorm Dash Phase 2.
+2. **Blocked Queue at 5** — below ceiling of 8. Feature work continues.
 3. **Pending Chrome QA backlog**: #285 POS real-time (needs 2 concurrent users), #399 Local Legends (needs 3+ same-ZIP check-ins), #408 Scan & Split (needs 2 concurrent scanners), #409 Sneak Peek Email (needs platform sale 24-48h out + subscriber + items).
 
 ---
@@ -69,3 +65,4 @@ No new decisions pending. DECISIONS.md is current.
 - [x] **Run #409 migration** — DONE. `sneakPeekSentAt` column confirmed in Railway DB. Cron fired today at 09:00 UTC — 5 eligible sales found, all skipped (scraped, no subscribers). Feature is live and will send when a real platform sale has followers.
 - [ ] **Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
 - [ ] **Chrome: log back in as artifactmi@gmail.com** — Chrome is at finda.sale/login (signed out from test account). Click "Sign in with Google" → select "Artifact / artifactmi@gmail.com" to restore your session.
+- [ ] **Dispatch #442 reports page next session** — /reports/[year]-[month] page was never built; email job runs but has no landing page destination.
