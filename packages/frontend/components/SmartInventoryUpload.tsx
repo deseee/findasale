@@ -185,44 +185,64 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
 
     setUploadProgress(25);
 
-    // Step 1: Upload to Cloudinary
-    const uploadedUrls = await uploadPhotosMutation.mutateAsync(photoFiles);
-    setUploadProgress(50);
+    try {
+      // Step 1: Upload to Cloudinary
+      const uploadedUrls = await uploadPhotosMutation.mutateAsync(photoFiles);
+      setUploadProgress(50);
 
-    // Step 2: Batch AI analysis
-    const aiResults = await batchAnalyzeMutation.mutateAsync(uploadedUrls);
-    setUploadProgress(75);
+      // Guard: uploadedUrls may be undefined/null if Cloudinary returned a 403 or other error
+      if (!uploadedUrls || !Array.isArray(uploadedUrls) || uploadedUrls.length === 0) {
+        showToast('Some photos failed to upload. Please try again.', 'error');
+        setUploadProgress(0);
+        return;
+      }
 
-    // Step 3: Auto-save all successfully analyzed items
-    const failedCount = aiResults.filter((a: AIAnalysis) => a.error).length;
-    const itemsToCreate = aiResults
-      .filter((a: AIAnalysis) => !a.error && a.photoUrl && a.photoUrl !== '(unknown)')
-      .map((a: AIAnalysis) => ({
-        saleId,
-        title: a.suggestedTitle,
-        description: a.suggestedDescription,
-        price: a.suggestedPrice,
-        category: a.suggestedCategory,
-        condition: a.suggestedCondition,
-        photoUrls: [a.photoUrl],
-        tags: a.suggestedTags || [],
-        isAiTagged: true,
-        aiConfidence: a.confidence || 0.5,
-      }));
+      // Step 2: Batch AI analysis
+      const aiResults = await batchAnalyzeMutation.mutateAsync(uploadedUrls);
+      setUploadProgress(75);
 
-    setUploadProgress(100);
-    setTimeout(() => setUploadProgress(0), 500);
+      // Guard: aiResults may be undefined/null if the analysis request failed
+      if (!aiResults || !Array.isArray(aiResults)) {
+        showToast('Some photos failed to upload. Please try again.', 'error');
+        setUploadProgress(0);
+        return;
+      }
 
-    if (itemsToCreate.length === 0) {
-      showToast('No photos could be analyzed — try again', 'error');
-      return;
+      // Step 3: Auto-save all successfully analyzed items
+      const failedCount = aiResults.filter((a: AIAnalysis) => a.error).length;
+      const itemsToCreate = aiResults
+        .filter((a: AIAnalysis) => !a.error && a.photoUrl && a.photoUrl !== '(unknown)')
+        .map((a: AIAnalysis) => ({
+          saleId,
+          title: a.suggestedTitle,
+          description: a.suggestedDescription,
+          price: a.suggestedPrice,
+          category: a.suggestedCategory,
+          condition: a.suggestedCondition,
+          photoUrls: [a.photoUrl],
+          tags: a.suggestedTags || [],
+          isAiTagged: true,
+          aiConfidence: a.confidence || 0.5,
+        }));
+
+      setUploadProgress(100);
+      setTimeout(() => setUploadProgress(0), 500);
+
+      if (itemsToCreate.length === 0) {
+        showToast('No photos could be analyzed — try again', 'error');
+        return;
+      }
+
+      if (failedCount > 0) {
+        showToast(`${failedCount} photo${failedCount !== 1 ? 's' : ''} failed to analyze and will be skipped`, 'info');
+      }
+
+      await createItemsMutation.mutateAsync(itemsToCreate);
+    } catch {
+      // mutateAsync re-throws after onError fires — reset progress so UI doesn't stay stuck
+      showToast('Some photos failed to upload. Please try again.', 'error');
+      setUploadProgress(0);
     }
-
-    if (failedCount > 0) {
-      showToast(`${failedCount} photo${failedCount !== 1 ? 's' : ''} failed to analyze and will be skipped`, 'info');
-    }
-
-    await createItemsMutation.mutateAsync(itemsToCreate);
   };
 
   // Update analysis item

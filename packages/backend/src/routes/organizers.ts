@@ -64,7 +64,6 @@ const organizerProfileSchema = z.object({
   ebayDefaultShippingPolicyId: z.string().nullable().optional(),
   ebayStoreUrl: z.string().url().optional().or(z.literal('')),
   address: z.string().optional(),
-  returnWindowHours: z.number().int().min(0).nullable().optional(),
   // eBay Custom Label append toggles
   skuAppendDate: z.boolean().optional(),
   skuAppendCost: z.boolean().optional(),
@@ -373,10 +372,6 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(skuAppendDate !== undefined && { skuAppendDate }),
         ...(skuAppendCost !== undefined && { skuAppendCost }),
         ...(skuAppendLocation !== undefined && { skuAppendLocation }),
-        // returnWindowHours is a per-Sale field (Sale model) — not an Organizer field.
-        // Removed from Prisma update to prevent P2025 crash. Frontend still sends it
-        // (Zod allows it as optional); it is silently ignored here until an
-        // Organizer-level default field is added to schema.prisma.
       },
     });
 
@@ -550,7 +545,6 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       pickupWindows: (organizer as any).pickupWindows || null,
       timezone: (organizer as any).timezone || null,
       byAppointment: (organizer as any).byAppointment ?? false,
-      returnWindowHours: (organizer as any).returnWindowHours ?? null,
       skuAppendDate: (organizer as any).skuAppendDate ?? false,
       skuAppendCost: (organizer as any).skuAppendCost ?? false,
       skuAppendLocation: (organizer as any).skuAppendLocation ?? false,

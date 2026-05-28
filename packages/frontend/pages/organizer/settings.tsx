@@ -55,7 +55,7 @@ const OrganizerSettingsPage = () => {
   const [venmoHandle, setVenmoHandle] = useState('');
   const [zelleHandle, setZelleHandle] = useState('');
   const [pickupWindows, setPickupWindows] = useState('');
-  const [returnWindowHours, setReturnWindowHours] = useState<string>('');
+
   const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [timezone, setTimezone] = useState('');
@@ -378,7 +378,6 @@ const OrganizerSettingsPage = () => {
           setVenmoHandle(response.data.venmoHandle || '');
           setZelleHandle(response.data.zelleHandle || '');
           setPickupWindows(response.data.pickupWindows || '');
-          setReturnWindowHours(response.data.returnWindowHours != null ? String(response.data.returnWindowHours) : '');
           setAddress(response.data.address || '');
           setStripeConnected(response.data.stripeConnected || false);
           setFoundingOrgBadge(response.data.foundingOrgBadge || false);
@@ -568,7 +567,6 @@ const OrganizerSettingsPage = () => {
         venmoHandle,
         zelleHandle,
         pickupWindows,
-        returnWindowHours: returnWindowHours !== '' ? parseInt(returnWindowHours, 10) : null,
         timezone,
         byAppointment,
         organizerTypes,
@@ -593,7 +591,6 @@ const OrganizerSettingsPage = () => {
         setVenmoHandle(response.data.venmoHandle || '');
         setZelleHandle(response.data.zelleHandle || '');
         setPickupWindows(response.data.pickupWindows || '');
-        setReturnWindowHours(response.data.returnWindowHours != null ? String(response.data.returnWindowHours) : '');
         setTimezone(response.data.timezone || '');
         setByAppointment(response.data.byAppointment || false);
         setOrganizerTypes(response.data.organizerTypes || []);
@@ -1596,17 +1593,9 @@ const OrganizerSettingsPage = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Default Return Window</label>
-                  <p className="text-xs text-warm-500 dark:text-gray-400 mb-1">Hours shoppers have to return an item after pickup. Leave blank for no returns.</p>
-                  <input
-                    type="number"
-                    min={0}
-                    value={returnWindowHours}
-                    onChange={(e) => setReturnWindowHours(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="No returns"
-                  />
+                <div className="rounded-lg border border-warm-200 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/10 px-4 py-3">
+                  <p className="text-xs font-medium text-warm-700 dark:text-gray-300 mb-0.5">Return Window</p>
+                  <p className="text-xs text-warm-500 dark:text-gray-400">The return window is set per sale. When editing a sale, look for the &quot;Return Window&quot; field in the sale details.</p>
                 </div>
 
                 <p className="text-xs text-warm-500 dark:text-gray-400">

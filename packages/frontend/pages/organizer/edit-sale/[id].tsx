@@ -182,7 +182,7 @@ const EditSalePage = () => {
 
     setFormData({
       title: sale.title,
-      description: sale.description,
+      description: sale.description ?? '',
       startDate: formatDate(sale.startDate),
       endDate: formatDate(sale.endDate),
       startTime: formatTime(sale.startDate, '09:00'),
