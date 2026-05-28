@@ -39,6 +39,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { requireOrganizer } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { requireTier } from '../middleware/requireTier'; // Feature #91: PRO tier gate
+import { getSaleOgBuyerCount } from '../services/badgeService'; // Feature #404: OG Buyer count
 
 const router = Router();
 
@@ -445,6 +446,18 @@ router.patch('/:saleId/lifecycle', authenticate, requireOrganizer, async (req: A
     res.json(updated);
   } catch (error) {
     console.error('lifecycle update error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #404: OG Buyer count — for organizer dashboard
+router.get('/:saleId/og-buyer-count', authenticate, requireOrganizer, async (req: AuthRequest, res) => {
+  try {
+    const { saleId } = req.params;
+    const count = await getSaleOgBuyerCount(saleId);
+    res.json({ count: Math.min(count, 100), limit: 100 });
+  } catch (error) {
+    console.error('[og-buyer-count] error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

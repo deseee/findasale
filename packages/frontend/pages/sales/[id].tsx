@@ -1785,6 +1785,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                                 className="shrink-0 p-0.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)] hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
                                 onClick={(e) => {
                                   e.preventDefault();
+                                  e.stopPropagation();
                                   const shareUrl = `${window.location.origin}/items/${item.id}`;
                                   if (navigator.share) {
                                     navigator.share({ title: item.title, url: shareUrl }).catch(() => {});

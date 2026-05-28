@@ -14,6 +14,7 @@ interface CheckInResponse {
   explorerRank?: string;
   rankIncreased?: boolean;
   queuePosition?: number | null;
+  localLegendBadge?: string; // Feature #399: set when Local Legend badge earned
 }
 
 const CheckInPage: React.FC = () => {
@@ -53,6 +54,12 @@ const CheckInPage: React.FC = () => {
           showToast(`Checked in! +${data.xpEarned} XP earned`, 'success');
         } else if (data.alreadyCheckedIn) {
           showToast('Already checked in today', 'info');
+        }
+
+        // Feature #399: Local Legend badge toast
+        if (data.localLegendBadge) {
+          const zip = data.localLegendBadge.replace('LOCAL_LEGEND_', '');
+          showToast(`📍 Local Legend unlocked for ${zip}!`, 'success');
         }
       } catch (err: any) {
         const message = err.response?.data?.message || 'Failed to check in';

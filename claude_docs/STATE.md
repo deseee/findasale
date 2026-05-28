@@ -8,9 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S794 — Mixed session: #432 bug fix (inline), 4 features dispatched (#400 #401 #409 #395), Chrome QA of 4 S696 features (#403 ✅ #411 ✅phase1 #406 UNVERIFIED #416 UNVERIFIED) | Blocked Queue: 7**
+**Latest: S795 — Chrome QA (#400 ✅ #406 ✅) + P3 bug fix + 6 parallel dev dispatches (#399 #404 #396 #397 #410 #408) | Blocked Queue: 6**
 
-S794 dispatched 4 parallel agents (Loot Link, Sale of the Day, Sneak Peek Email, CSV Bulk Import). Fixed #432 lowPrice:0 inline. Chrome QA confirmed #403 Bundle Pricing ✅. #411 Dorm Dash: Phase 1 only (dropdown confirmed, dorm-specific fields not built). #416 + #406 UNVERIFIED — added to Blocked Queue. Patrick must run migration for #409 (sneakPeekSentAt field).
+S795: Chrome-verified #400 Loot Link (24 share buttons on item cards, Web Share API fires without auth modal) and #406 Split-the-Bill POS (full end-to-end with Bob Smith: cart → split evenly → collect → "✓ Split complete"). Added `e.stopPropagation()` to #400 share button (P3 auth-interceptor bug fix). Dispatched 6 parallel dev agents: #399 Local Legends badge + #404 First 100 Buyers badge (new badgeService.ts), #396 scraper upgrades (AK/NY/TX/VA), #397 confirmed all 10 Tier 2 scrapers already exist (NV source URL dead), #410 csvExportController watermark gap fixed, #408 Scan & Split (in-memory tracker + Socket.io SCAN_AND_SPLIT in itemController + POS listener). Blocked Queue 7→6 (#406 removed).
 
 **#261 Treasure Hunt XP Rank Multiplier ✅ VERIFIED:** user6/Maya (RANGER, guildXp=2001) scanned QR clue. API returned `xpAwarded: 5` (3 × 1.5 rank multiplier = 4.5 → rounds to 5). DB confirmed guildXp 2001→2021. RANGER multiplier gate working end-to-end.
 
@@ -217,7 +217,6 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #458 Confidence Score | UNVERIFIED S793 — confidence score not visible in any directory UI | Verify via /api/sales response or MCP search_sales — may be internal-only | S793 |
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
 
-| #406 Split-the-Bill POS | UNVERIFIED S794 — no active sale in POS for Alice (user1). Code confirmed: ⚖️ Split Bill button + panel (even/custom mode) in pos.tsx lines 1741–1855. | Publish a sale with items as Alice, then navigate to /organizer/pos and add items to cart | S794 |
 | #416 Sale Map Internal Routing | UNVERIFIED S794 — SaleFloorMap component built + wired. Renders null when <2 room groups. Test sale has no room-tagged items. | Add ≥2 items with different roomTag values to a published sale, then view sale page | S794 |
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 
@@ -243,16 +242,41 @@ npx prisma generate
 
 **Patrick Action — Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
 
-**Next session: Blocked Queue at 7 (below 8 ceiling — feature work CAN resume).**
+**Next session: Blocked Queue at 6 (below 8 ceiling — feature work CAN resume).**
 
-1. **Chrome QA pending**: #400 Loot Link (share button on sale detail item cards), #401 Sale of the Day (homepage SaleOfTheDayCard), #409 Sneak Peek Email (requires active sale + migration), #395 CSV Bulk Import (modal on add-items page).
-2. **Unblock #406**: Create/activate a sale as Alice with items, navigate to POS → verify ⚖️ Split Bill button + panel.
-3. **Unblock #416**: Add ≥2 items with different roomTag values to a sale → verify floor map renders on sale page.
-4. **New features**: Blocked Queue below ceiling. Next QUEUED items: #404 First 100 Buyers, #408 Scan & Split, #410 Social Export Watermarking, #414 (check roadmap).
-5. **Remaining UNVERIFIED**: #402 (locate UI), #435 (log inspection), #457 (test data), #458 (API verify) — batch when convenient.
+1. **Chrome QA pending**: #401 Sale of the Day (homepage SaleOfTheDayCard), #409 Sneak Peek Email (requires active sale + migration), #395 CSV Bulk Import (modal on add-items page). Also: #399 Local Legends badge + #404 First 100 Buyers + #408 Scan & Split + #410 watermark fix — all shipped this session, need browser verify.
+2. **Unblock #416**: Add ≥2 items with different roomTag values to a sale → verify floor map renders on sale page.
+3. **New features**: Next QUEUED items from S696 batch: #396 DIY Sale Starter Kit, #397 Crew Invasion (needs gamedesign sign-off first), #398 Organizer Referral Loop, #411 Dorm Dash Phase 2 (needs schema migration for room field on Item).
+4. **Remaining UNVERIFIED**: #402 (locate UI), #435 (log inspection), #457 (test data), #458 (API verify) — batch when convenient.
+5. **NV scraper dead**: opendata.lasvegasnevada.gov DNS dead since May 2026. Find replacement Nevada business license source.
 
 
 ## Recent Sessions
+
+### S795 — Chrome QA (#400 ✅ #406 ✅) + P3 fix + 6 parallel dev dispatches
+
+**Trigger:** Continue S795 Chrome QA + dispatch QUEUED roadmap items.
+
+**Chrome QA:**
+- **#400 Loot Link** ✅ — 24 share buttons confirmed on item cards. Web Share API fires without auth modal. P3 bug fixed inline: added `e.stopPropagation()` to prevent click bubbling to auth interceptor for unauthenticated users. `pages/sales/[id].tsx`.
+- **#406 Split-the-Bill POS** ✅ — Full end-to-end verified with Bob Smith (user2, PRO, "Barn Door QA Test Sale"). Cart items added → Split Bill link → Split Evenly panel → Collect buttons per person → progress counter → "✓ Split complete — all 2 paid". Removed from Blocked Queue.
+- **#409 Pre-Sale Sneak Peek Email** — Still BLOCKED. Requires Patrick to run migration for `sneakPeekSentAt` field. Cannot verify until migration deployed.
+
+**Parallel dev dispatched (6 agents):**
+- **#399 Local Legends badge** — `badgeService.ts` (new), `LocalLegendBadge.tsx` (new), `useUserBadges.ts` (new). Badge check in `saleController.ts` check-in. Display on `shopper/achievements.tsx`. `GET /achievements/badges` endpoint added.
+- **#404 First 100 Buyers badge** — `OGBuyerBadge.tsx` (new). Check in `stripeController.ts` payment success. OG buyer count on `organizer/dashboard.tsx`. `GET /sales/:saleId/og-buyer-count` endpoint added.
+- **#396 scrapers (AK/NY/TX/VA)** — `alaskaPhase2Scraper.ts` rewritten (ArcGIS Hub NAICS filter). `newyorkPhase2Scraper.ts` PAGE_LIMIT 5k→50k. `texasPhase2Scraper.ts` expanded to all 14 keywords. `virginiaPhase2Scraper.ts` fixed to set `isStateLicensed=true`.
+- **#397 Tier 2 scrapers** — All 10 already existed (FL/HI/LA/MD/MS/NJ/NV/OH/OK/SC). No changes needed. ⚠️ NV: opendata.lasvegasnevada.gov DNS dead since May 2026 — scraper exits cleanly, needs replacement URL.
+- **#410 Social Export Watermarking** — `csvExportController.ts` gap fixed: was passing `null` organizer + `includeWatermark:false` to `generateCsvExport`. Now passes real organizer + `includeWatermark:true`.
+- **#408 Scan & Split** — `itemController.ts`: in-memory `recentItemScans` tracker (60s TTL), Scan & Split detection in `recordQrScan`, emits `SCAN_AND_SPLIT` via Socket.io to item + sale rooms. `pos.tsx`: `JOIN_SALE_FEED` on connect, `SCAN_AND_SPLIT` listener auto-opens split panel.
+
+**Blocked Queue: 7→6** (#406 verified and removed)
+
+**TS check: 0 errors backend, 0 errors frontend**
+
+**Files changed:** `packages/frontend/pages/sales/[id].tsx` · `packages/backend/src/services/badgeService.ts` (new) · `packages/frontend/components/LocalLegendBadge.tsx` (new) · `packages/frontend/components/OGBuyerBadge.tsx` (new) · `packages/frontend/hooks/useUserBadges.ts` (new) · `packages/backend/src/routes/achievements.ts` · `packages/backend/src/routes/sales.ts` · `packages/backend/src/controllers/saleController.ts` · `packages/backend/src/controllers/stripeController.ts` · `packages/frontend/pages/shopper/achievements.tsx` · `packages/frontend/pages/organizer/dashboard.tsx` · `packages/frontend/pages/sales/[id]/checkin.tsx` · `packages/backend/src/services/scraper/sources/alaskaPhase2Scraper.ts` · `packages/backend/src/services/scraper/sources/newyorkPhase2Scraper.ts` · `packages/backend/src/services/scraper/sources/texasPhase2Scraper.ts` · `packages/backend/src/services/scraper/sources/virginiaPhase2Scraper.ts` · `packages/backend/src/controllers/csvExportController.ts` · `packages/backend/src/controllers/itemController.ts` · `packages/frontend/pages/organizer/pos.tsx` + pre-existing uncommitted: `workspaceController.ts` · `index.ts` · `routes/upload.ts` · `schema.prisma` (2 new indexes)
+
+---
 
 ### S794 — Mixed: #432 fix + 4 dispatched + Chrome QA (1 ✅, 2 UNVERIFIED, 1 partial)
 

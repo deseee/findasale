@@ -15,6 +15,7 @@ import { sendItemSoldAlert } from '../services/saleAlertEmailService';
 import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty Passport
 import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, markHuntPassCancellation } from '../services/xpService'; // Explorer's Guild XP awards
+import { checkAndAwardOgBuyer } from '../services/badgeService'; // Feature #404: OG Buyer badge
 import { referralTrancheService } from '../services/referralTrancheService'; // Feature #XXX: Referral tranche system
 import { awardOrganizerClaimedXp, awardProUpgradeXp } from '../services/referralService'; // Organizer referral XP
 import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
@@ -1146,6 +1147,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
           } catch (err) {
             console.error('[XP] Failed to check organizer referral qualification:', err);
           }
+        }
+
+        // Feature #404: OG Buyer badge — first 100 purchasers at a sale
+        if (purchase.userId && purchase.saleId) {
+          checkAndAwardOgBuyer(purchase.userId, purchase.saleId, purchase.id).catch(err =>
+            console.error('[OG Buyer] Badge award failed:', err)
+          );
         }
 
         // Notify organizer of payment received

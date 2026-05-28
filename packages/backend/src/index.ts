@@ -287,6 +287,9 @@ if (!allowedOrigins.includes('https://www.finda.sale')) {
   allowedOrigins.push('https://www.finda.sale');
 }
 if (!allowedOrigins.includes('https://api.finda.sale')) {
+  // api.finda.sale is the Railway custom domain added S779 (2026-05-21).
+  // Vercel serves pages from this domain; their XHR hits Railway with Origin: https://api.finda.sale.
+  // 38 CORS errors in Sentry (since March 14) were historical — resolved when this line shipped in S780.
   allowedOrigins.push('https://api.finda.sale');
 }
 

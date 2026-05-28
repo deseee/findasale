@@ -32,6 +32,21 @@ import { fetchEbayPriceComps } from './ebayController'; // Bug #326: live listin
 import { composeDescription, stripShippingPhrases, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 
+// Feature #408: Scan & Split — in-memory tracker for simultaneous QR scans on the same item.
+// Maps itemId → array of { userId, scannedAt } entries. TTL: 60 seconds.
+// No Redis needed — single-instance, ephemeral, POS-day-of-sale usage only.
+interface ScanEntry { userId: string; scannedAt: number }
+const recentItemScans = new Map<string, ScanEntry[]>();
+const SCAN_SPLIT_WINDOW_MS = 60_000; // 60-second window for simultaneous scan detection
+
+/** Prune entries older than the window for a given itemId, then return active entries. */
+function getActiveScans(itemId: string): ScanEntry[] {
+  const now = Date.now();
+  const entries = (recentItemScans.get(itemId) || []).filter(e => now - e.scannedAt < SCAN_SPLIT_WINDOW_MS);
+  recentItemScans.set(itemId, entries);
+  return entries;
+}
+
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
   FIXED = 'FIXED',
@@ -2689,11 +2704,12 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     // Verify item exists and fetch sale location for geofencing
+    // Also select sale.id for Feature #408 Scan & Split socket emit
     const item = await prisma.item.findUnique({
       where: { id: itemId },
       include: {
         sale: {
-          select: { lat: true, lng: true },
+          select: { id: true, lat: true, lng: true },
         },
       },
     });
@@ -2819,6 +2835,46 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       },
     });
 
+    // Feature #408: Scan & Split — track this scan and check for simultaneous scans.
+    // If 2+ different users scan the same item within 60s, emit SCAN_AND_SPLIT to the
+    // organizer's POS so the split-bill panel auto-opens with the scanned item pre-filled.
+    let scanAndSplitTriggered = false;
+    try {
+      const activeScans = getActiveScans(itemId);
+      const alreadyInWindow = activeScans.some(e => e.userId === userId);
+      if (!alreadyInWindow) {
+        activeScans.push({ userId, scannedAt: Date.now() });
+        recentItemScans.set(itemId, activeScans);
+      }
+
+      if (activeScans.length >= 2) {
+        // Fetch item title for POS panel context
+        const scannerIds = activeScans.map(e => e.userId);
+        const io = getIO();
+        // Emit to the sale's item room — organizer POS listens on sale room or item room.
+        // Also emit to a broad 'pos:scan_and_split' event on the sale room.
+        io.to(`item:${itemId}`).emit('SCAN_AND_SPLIT', {
+          itemId,
+          scannerIds,
+          scannedAt: Date.now(),
+        });
+        // Also emit to sale room in case organizer POS is listening there
+        if (item.sale?.id) {
+          io.to(`sale:${item.sale.id}`).emit('SCAN_AND_SPLIT', {
+            itemId,
+            scannerIds,
+            scannedAt: Date.now(),
+          });
+        }
+        scanAndSplitTriggered = true;
+        // Clear the window after triggering so repeated fast scans don't re-fire every time
+        recentItemScans.set(itemId, []);
+      }
+    } catch (err) {
+      // Non-critical — never block the scan response
+      console.warn('[Scan & Split] emit error:', err);
+    }
+
     res.json({
       message: 'QR scan recorded successfully.',
       xpAwarded: xpResult?.xpAwarded || 0,
@@ -2826,6 +2882,7 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       rankIncreased: xpResult?.rankIncreased || false,
       totalXp: updatedUser?.guildXp,
       badgeAwarded: !existingBadge ? badge.name : null,
+      scanAndSplitTriggered,
     });
   } catch (error) {
     console.error('QR scan recording error:', error);

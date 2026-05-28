@@ -4,18 +4,19 @@
 
 ## What Happened This Week
 
-Twelve sessions this week. S794 complete: 1 bug fix, 4 features shipped (dispatched to agents), 4 S696 features Chrome QA'd (1 ✅, 2 UNVERIFIED, 1 partial). Blocked Queue: 7 (below 8 ceiling — new features can resume).
+Thirteen sessions this week. S795 complete: 2 Chrome QA verified, 1 P3 bug fixed, 6 features shipped in parallel agents. Blocked Queue: 6 (below 8 ceiling — new features can resume).
 
-**S794 (today):**
-- **#432 AggregateOffer lowPrice fix** ✅ — The "$0 minimum price" JSON-LD bug is fixed. Sale pages now correctly show the actual lowest and highest item prices in structured data (good for Google/AI indexing).
-- **#400 Loot Link** SHIPPED — Per-item share button added to sale detail item cards. Tap → native share sheet or clipboard copy.
-- **#401 Sale of the Day** SHIPPED — Daily featured sale on homepage. Rotates at midnight. Algorithm scores by item count + photo count + description quality.
-- **#409 Pre-Sale Sneak Peek Email** SHIPPED — Auto-emails sale followers 24–48h before your sale opens. ⚠️ Requires you to run the migration (see Action Items below).
-- **#395 CSV Bulk Import** SHIPPED — 2-step wizard: upload CSV → preview + map columns → bulk create items as drafts. Up to 200 items per import. "CSV Import" button on Add Items page.
-- **#403 Bundle Pricing** ✅ — Confirmed on Add Items page. "🛍️ Bundle Pricing" section opens, form works.
-- **#411 Dorm Dash** ⚠️ Phase 1 — DORM_DASH appears in the sale type dropdown. Dorm-specific fields (building, room map, auto-markdown acceleration) are a Phase 2 build.
-- **#406 Split-the-Bill POS** UNVERIFIED — Code is in place but couldn't test because Alice's account had no active sale in POS. Will verify next session.
-- **#416 Sale Floor Map** UNVERIFIED — Component is built and wired. Needs a sale with 2+ room-tagged items to render.
+**S795 (latest):**
+- **#400 Loot Link** ✅ VERIFIED — 24 share buttons confirmed on item cards. Web Share API fires correctly. P3 bug fixed: share button no longer opens the login modal for logged-out users.
+- **#406 Split-the-Bill POS** ✅ VERIFIED — Full end-to-end confirmed with a live sale. Cart → Split Bill → Split Evenly → Collect per person → "✓ Split complete". Removed from blocked queue.
+- **#399 Local Legends badge** SHIPPED — Shoppers who attend 3+ sales in the same ZIP earn a "Local Legend" badge. Shows on achievements page. Pending Chrome QA.
+- **#404 First 100 Buyers badge** SHIPPED — First 100 purchasers at any sale earn an "OG Buyer" badge. Organizer dashboard shows progress (e.g. "47/100 OG Buyers"). Pending Chrome QA.
+- **#408 Scan & Split** SHIPPED — When 2+ shoppers QR-scan the same item within 60 seconds, POS auto-opens the Split Bill panel for that item. Pending Chrome QA.
+- **#410 Social Export Watermarking** SHIPPED — Fixed a gap where CSV exports were bypassing the watermark gate. eBay push was already watermarked. Pending Chrome QA.
+- **#396 AK/NY/TX/VA scrapers** SHIPPED — Alaska rewritten to ArcGIS NAICS filter, NY now pulls full 50k records, TX expanded to all 14 sale types, VA fixed to properly mark records as state-licensed.
+- **#397 Tier 2 scrapers audit** — All 10 already exist. ⚠️ Nevada source URL is dead (DNS gone since May 2026). Needs replacement URL.
+
+**Previous sessions:** S794: #432 fix + 4 features shipped. S793: 10 features verified.
 
 **Previous sessions:** S793 QA: 10 ✅ (GEO schema, Founding Badge, Cash-to-Digital, Donation Kit, etc.), 2 ⚠️ Web Share, 4 UNVERIFIED.
 

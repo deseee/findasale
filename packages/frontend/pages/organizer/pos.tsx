@@ -684,7 +684,23 @@ export default function POSPage() {
         }
       };
 
+      // Join sale room so organizer receives sale-scoped events (e.g., SCAN_AND_SPLIT)
+      if (selectedSaleId) {
+        socketInstance.emit('JOIN_SALE_FEED', selectedSaleId);
+      }
+
       socketInstance.on('POS_PAYMENT_STATUS', handlePaymentStatus);
+
+      // Feature #408: Scan & Split — listen for simultaneous QR scans on the same item
+      socketInstance.on('SCAN_AND_SPLIT', (event: { itemId: string; scannerIds: string[]; scannedAt: number }) => {
+        if (!isMounted) return;
+        // Auto-open the split-bill panel with the scanned item in context
+        setSplitBillOpen(true);
+        setSplitCount(Math.max(2, event.scannerIds.length));
+        setSplitCollected([]);
+        setSplitCustomAmounts(Array(Math.max(2, event.scannerIds.length)).fill(''));
+        showToast('Two shoppers scanned the same item — Split Bill opened', 'info');
+      });
     }).catch((err) => {
       console.error('[pos] Failed to load socket.io-client:', err);
     });
@@ -696,7 +712,7 @@ export default function POSPage() {
         socketInstance.disconnect();
       }
     };
-  }, [user, soundEnabled, playSuccessChime]);
+  }, [user, soundEnabled, playSuccessChime, selectedSaleId, showToast]);
 
   // ─── Today's total summary query (30s polling) ────────────────────────────────────────
 
