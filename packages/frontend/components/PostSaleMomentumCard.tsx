@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import Link from 'next/link';
+import useCountUp from '../hooks/useCountUp';
 
 interface PostSaleMomentumCardProps {
   saleId: string;
@@ -22,6 +23,7 @@ export default function PostSaleMomentumCard({
   totalItems,
   saleType,
 }: PostSaleMomentumCardProps) {
+  const animatedRevenue = useCountUp(totalRevenue, 1200);
   const sellThrough = totalItems > 0 ? Math.round((itemsSold / totalItems) * 100) : 0;
 
   return (
@@ -38,7 +40,7 @@ export default function PostSaleMomentumCard({
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
           <p className="text-lg font-bold text-green-700 dark:text-green-400">
-            ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            ${animatedRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">Revenue</p>
         </div>
