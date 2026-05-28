@@ -4,27 +4,20 @@
 
 ## What Happened This Week
 
-Eleven sessions this week. S793 complete: 10 features Chrome-verified, 2 verified with caveat (Web Share API — OS dialog), 4 UNVERIFIED. Blocked Queue: 5 items (below 8 ceiling — new features can resume).
+Twelve sessions this week. S794 complete: 1 bug fix, 4 features shipped (dispatched to agents), 4 S696 features Chrome QA'd (1 ✅, 2 UNVERIFIED, 1 partial). Blocked Queue: 7 (below 8 ceiling — new features can resume).
 
-**S793 (today) — QA batch: GEO features + S696 features + newly-unblocked shopper features:**
-- **#223 Organizer Guidance Layer** ✅ — Efficiency Coach tips toggle and Sale Progress tracking confirmed with real hold data.
-- **#230 Smart Buyer Intelligence** ✅ — Who's Coming widget showed Leo Thomas (SCOUT rank, "follows you") on organizer dashboard.
-- **#387 SSR Public Pages** ✅ — /about page confirmed returning full HTML server-side.
-- **#432 AggregateOffer JSON-LD** ✅ (P2 bug) — Sale page has correct JSON-LD schema. Bug: lowPrice shows "0" instead of actual minimum price. Dispatch next session.
-- **#433 ai-plugin.json** ✅ — /.well-known/ai-plugin.json confirmed live and valid.
-- **#434 llms.txt** ✅ — /llms.txt confirmed live with correct content.
-- **#439 Per-item Product Schema** ✅ — Product JSON-LD confirmed per item on claimed sale page.
-- **#440 Machine-readable sr-only block** ✅ — sr-only block confirmed in page source.
-- **#441 PaymentMethod Schema** ✅ — paymentAccepted field confirmed in JSON-LD.
-- **#405 Founding Organizer Badge** ✅ — 🏆 badge confirmed on organizer profile settings page.
-- **#412 Cash-to-Digital Bridge** ✅ — Venmo + Zelle confirmed in POS payment options.
-- **#415 Junk Drawer Donation Kit** ✅ — "Donate Items & Get Tax Receipt" option confirmed in settlement Receipt step.
+**S794 (today):**
+- **#432 AggregateOffer lowPrice fix** ✅ — The "$0 minimum price" JSON-LD bug is fixed. Sale pages now correctly show the actual lowest and highest item prices in structured data (good for Google/AI indexing).
+- **#400 Loot Link** SHIPPED — Per-item share button added to sale detail item cards. Tap → native share sheet or clipboard copy.
+- **#401 Sale of the Day** SHIPPED — Daily featured sale on homepage. Rotates at midnight. Algorithm scores by item count + photo count + description quality.
+- **#409 Pre-Sale Sneak Peek Email** SHIPPED — Auto-emails sale followers 24–48h before your sale opens. ⚠️ Requires you to run the migration (see Action Items below).
+- **#395 CSV Bulk Import** SHIPPED — 2-step wizard: upload CSV → preview + map columns → bulk create items as drafts. Up to 200 items per import. "CSV Import" button on Add Items page.
+- **#403 Bundle Pricing** ✅ — Confirmed on Add Items page. "🛍️ Bundle Pricing" section opens, form works.
+- **#411 Dorm Dash** ⚠️ Phase 1 — DORM_DASH appears in the sale type dropdown. Dorm-specific fields (building, room map, auto-markdown acceleration) are a Phase 2 build.
+- **#406 Split-the-Bill POS** UNVERIFIED — Code is in place but couldn't test because Alice's account had no active sale in POS. Will verify next session.
+- **#416 Sale Floor Map** UNVERIFIED — Component is built and wired. Needs a sale with 2+ room-tagged items to render.
 
-**Partial ⚠️ — button confirmed, Web Share API triggers OS dialog (can't verify via automation):**
-- **#272 Post-Purchase Share Your Haul** — /shopper/checkout-success page correct, "📣 Share your haul" button present and fires Web Share API.
-- **#273 Rank Achievement Share** — RANK_UP notification created for Leo (501 XP). Share button confirmed at /shopper/notifications. Web Share API fires.
-
-**4 features still UNVERIFIED (added to Blocked Queue):** #402 Cover the Fee toggle (can't find the UI), #435 Bot Tracking (need real crawler), #457 Noindex stale scraped (need test data), #458 Confidence Score (may be API-only).
+**Previous sessions:** S793 QA: 10 ✅ (GEO schema, Founding Badge, Cash-to-Digital, Donation Kit, etc.), 2 ⚠️ Web Share, 4 UNVERIFIED.
 
 ---
 
@@ -55,16 +48,17 @@ No new decisions pending. DECISIONS.md is current.
 
 ## This Week's Priority
 
-1. **S793 push ready** — roadmap.md + STATE.md + patrick-dashboard.md updated. Push block below.
+1. **S794 push ready** — push block below. 4 new features + 1 inline fix to push.
 
-2. **P2 bug dispatch (next session):** Fix AggregateOffer lowPrice:"0" in JSON-LD builder.
+2. **Chrome QA next session**: #400 Loot Link, #401 Sale of the Day, #409 Sneak Peek, #395 CSV Import (all pending after migration deploy). Plus unblock #406 + #416.
 
-3. **New features can resume** — Blocked Queue at 5, below the 8-item ceiling.
+3. **Blocked Queue at 7** — below ceiling of 8. Feature work continues.
 
 ---
 
 ## Action Items for Patrick
 
 - [x] **Submit sitemap to Bing** — DONE
+- [ ] **Run #409 migration** — `sneakPeekSentAt` field must be deployed before Sneak Peek emails fire. Copy-paste block in STATE.md § Next Session.
 - [ ] **Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
-- [ ] **Chrome: complete Google sign-in** — Chrome is at the Google account chooser (accounts.google.com). Select artifactmi@gmail.com to restore your session.
+- [ ] **Chrome: log back in as artifactmi@gmail.com** — Chrome is still on Alice Johnson's test account after QA. Select artifactmi@gmail.com to restore your session.

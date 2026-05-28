@@ -259,6 +259,199 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// ─── Feature #395: Bulk Import Tool (Phase 1) ────────────────────────────────
+// POST /api/items/:saleId/bulk-import
+// Accepts multipart/form-data with field `file` (CSV)
+// ?confirm=true → performs actual import (createMany)
+// Without confirm → returns preview of first 5 rows + detected column names
+// Max 200 items per import. draftStatus: DRAFT.
+
+const BULK_IMPORT_MAX = 200;
+
+// Supported column names per FindA.Sale field (case-insensitive)
+const FIELD_ALIASES: Record<string, string[]> = {
+  title:       ['title', 'name', 'item name', 'item', 'product', 'product name'],
+  price:       ['price', 'cost', 'amount', 'sale price', 'retail price', 'asking price'],
+  description: ['description', 'desc', 'details', 'notes', 'about'],
+  condition:   ['condition', 'grade', 'quality', 'state'],
+  category:    ['category', 'type', 'genre', 'department'],
+};
+
+const VALID_CONDITIONS = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
+
+function detectColumnMapping(headers: string[]): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  for (const header of headers) {
+    const lower = header.toLowerCase().trim();
+    for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+      if (aliases.includes(lower) && !mapping[field]) {
+        mapping[field] = header;
+        break;
+      }
+    }
+  }
+  return mapping;
+}
+
+export const bulkImportCSV = async (req: AuthRequest, res: Response) => {
+  try {
+    const { saleId } = req.params;
+    const confirm = req.query.confirm === 'true';
+    const file = req.file;
+
+    if (!file) {
+      res.status(400).json({ error: 'No file uploaded. Send a CSV as field "file".' });
+      return;
+    }
+
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      res.status(403).json({ error: 'Organizer access required.' });
+      return;
+    }
+
+    // Verify organizer owns the sale
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: { select: { userId: true } } },
+    });
+    if (!sale) {
+      res.status(404).json({ error: 'Sale not found.' });
+      return;
+    }
+    if (sale.organizer.userId !== req.user.id) {
+      res.status(403).json({ error: 'Access denied. This sale does not belong to you.' });
+      return;
+    }
+
+    // Parse CSV from memory buffer
+    const records: Record<string, string>[] = [];
+    const parser = Readable.from(file.buffer).pipe(
+      parse({ columns: true, skip_empty_lines: true, trim: true })
+    );
+    for await (const record of parser) {
+      records.push(record);
+    }
+
+    if (records.length === 0) {
+      res.status(400).json({ error: 'CSV is empty or has no data rows.' });
+      return;
+    }
+
+    const headers = Object.keys(records[0]);
+
+    // Preview mode: return first 5 rows + detected column mapping
+    if (!confirm) {
+      const preview = records.slice(0, 5);
+      const detectedMapping = detectColumnMapping(headers);
+      res.json({
+        headers,
+        preview,
+        detectedMapping,
+        totalRows: records.length,
+      });
+      return;
+    }
+
+    // Confirm mode: read column mapping from request body
+    // columnMap: { title: 'Title', price: 'Price', ... } (FindA.Sale field → CSV header)
+    const rawMapping = req.body.columnMap;
+    let columnMap: Record<string, string> = {};
+    try {
+      columnMap = typeof rawMapping === 'string' ? JSON.parse(rawMapping) : rawMapping;
+    } catch {
+      res.status(400).json({ error: 'columnMap must be valid JSON: { "title": "YourTitleColumn", "price": "YourPriceColumn" }' });
+      return;
+    }
+
+    if (!columnMap.title) {
+      res.status(400).json({ error: 'columnMap must include a mapping for "title".' });
+      return;
+    }
+    if (!columnMap.price) {
+      res.status(400).json({ error: 'columnMap must include a mapping for "price".' });
+      return;
+    }
+
+    // Cap at 200 items
+    const rowsToProcess = records.slice(0, BULK_IMPORT_MAX);
+    const skippedDueToCap = records.length > BULK_IMPORT_MAX ? records.length - BULK_IMPORT_MAX : 0;
+
+    const itemsToCreate: any[] = [];
+    const errors: { row: number; reason: string }[] = [];
+
+    for (let i = 0; i < rowsToProcess.length; i++) {
+      const record = rowsToProcess[i];
+      const rowNum = i + 2; // +2: 1-indexed + header row
+
+      const rawTitle = columnMap.title ? (record[columnMap.title] ?? '').trim() : '';
+      const rawPrice = columnMap.price ? (record[columnMap.price] ?? '').trim() : '';
+      const rawDescription = columnMap.description ? (record[columnMap.description] ?? '').trim() : '';
+      const rawCondition = columnMap.condition ? (record[columnMap.condition] ?? '').trim().toUpperCase() : '';
+      const rawCategory = columnMap.category ? (record[columnMap.category] ?? '').trim() : '';
+
+      if (!rawTitle) {
+        errors.push({ row: rowNum, reason: 'title is required and cannot be empty' });
+        continue;
+      }
+
+      let price: number | null = null;
+      if (rawPrice) {
+        const parsed = parseFloat(rawPrice.replace(/[^0-9.]/g, ''));
+        if (isNaN(parsed)) {
+          errors.push({ row: rowNum, reason: `price "${rawPrice}" is not a valid number` });
+          continue;
+        }
+        price = parsed;
+      } else {
+        errors.push({ row: rowNum, reason: 'price is required and cannot be empty' });
+        continue;
+      }
+
+      const condition = rawCondition && VALID_CONDITIONS.includes(rawCondition) ? rawCondition : null;
+
+      itemsToCreate.push({
+        saleId,
+        organizerId: sale.organizerId,
+        title: rawTitle,
+        description: rawDescription || '',
+        price,
+        condition,
+        category: rawCategory || null,
+        status: 'AVAILABLE',
+        draftStatus: 'DRAFT',
+        embedding: [],
+      });
+    }
+
+    if (itemsToCreate.length === 0) {
+      res.status(400).json({
+        imported: 0,
+        skipped: records.length,
+        errors,
+        message: 'No valid rows to import.',
+      });
+      return;
+    }
+
+    const result = await prisma.item.createMany({
+      data: itemsToCreate,
+      skipDuplicates: false,
+    });
+
+    res.json({
+      imported: result.count,
+      skipped: errors.length + skippedDueToCap,
+      errors,
+      ...(skippedDueToCap > 0 ? { cappedAt200: true, rowsIgnoredBeyondCap: skippedDueToCap } : {}),
+    });
+  } catch (error: any) {
+    console.error('Bulk import error:', error);
+    res.status(500).json({ error: 'Bulk import failed.', detail: error.message });
+  }
+};
+// ─── End Feature #395 ─────────────────────────────────────────────────────────
+
 export const getItemById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

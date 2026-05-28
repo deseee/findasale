@@ -8,9 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S793 — QA Session: 10 ✅ Chrome-verified (#387 #432 #433 #434 #439 #440 #441 #223 #230 #405 #412 #415), 2 ⚠️ Web Share (#272 #273), 4 UNVERIFIED (#402 #435 #457 #458) | P2 bug: AggregateOffer lowPrice:0 to dispatch | Blocked Queue: 5**
+**Latest: S794 — Mixed session: #432 bug fix (inline), 4 features dispatched (#400 #401 #409 #395), Chrome QA of 4 S696 features (#403 ✅ #411 ✅phase1 #406 UNVERIFIED #416 UNVERIFIED) | Blocked Queue: 7**
 
-QA-only session (ceiling active). 8 features verified ✅, 1 bug found (#295 ebayNeedsReview missing from select), 3 UNVERIFIED added to Blocked Queue. Blocked Queue: 11 → 10 (removed 4: #261, shopper-login, #244, #298; added 3: #230/#223/#332 UNVERIFIED).
+S794 dispatched 4 parallel agents (Loot Link, Sale of the Day, Sneak Peek Email, CSV Bulk Import). Fixed #432 lowPrice:0 inline. Chrome QA confirmed #403 Bundle Pricing ✅. #411 Dorm Dash: Phase 1 only (dropdown confirmed, dorm-specific fields not built). #416 + #406 UNVERIFIED — added to Blocked Queue. Patrick must run migration for #409 (sneakPeekSentAt field).
 
 **#261 Treasure Hunt XP Rank Multiplier ✅ VERIFIED:** user6/Maya (RANGER, guildXp=2001) scanned QR clue. API returned `xpAwarded: 5` (3 × 1.5 rank multiplier = 4.5 → rounds to 5). DB confirmed guildXp 2001→2021. RANGER multiplier gate working end-to-end.
 
@@ -217,6 +217,8 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #458 Confidence Score | UNVERIFIED S793 — confidence score not visible in any directory UI | Verify via /api/sales response or MCP search_sales — may be internal-only | S793 |
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
 
+| #406 Split-the-Bill POS | UNVERIFIED S794 — no active sale in POS for Alice (user1). Code confirmed: ⚖️ Split Bill button + panel (even/custom mode) in pos.tsx lines 1741–1855. | Publish a sale with items as Alice, then navigate to /organizer/pos and add items to cart | S794 |
+| #416 Sale Map Internal Routing | UNVERIFIED S794 — SaleFloorMap component built + wired. Renders null when <2 room groups. Test sale has no room-tagged items. | Add ≥2 items with different roomTag values to a published sale, then view sale page | S794 |
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 
 | #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Consignor emails use Gmail API (not Resend — that was a red herring). Same service as all working transactional emails. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
@@ -229,23 +231,53 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-~~**Patrick Action -- Submit sitemap to Bing**~~ -- DONE (confirmed S791)
+**Patrick Action — Run migration for #409 sneakPeekSentAt field:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-**Patrick Action -- Connect eBay to user1 in Railway DB** -- enables #244, #293, #295, #298 verification.
+**Patrick Action — Connect eBay to user1 in Railway DB** — enables #293 PostSaleEbayPanel verification.
 
-**Seed data gap discovered S791:** `markdownCycleController` and potentially other controllers check `UserRoleSubscription` table for tier gating, but `seed.ts` only sets `Organizer.subscriptionTier`. Future tier-gated QA may require manual DB inserts. Consider adding `UserRoleSubscription` records to seed.ts for user1-user4.
+**Patrick Action — Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
 
-**Next session: Blocked Queue at 5 (below 8 ceiling — new features CAN resume). Dispatch P2 bug: AggregateOffer lowPrice:0 (#432). Then resume feature work or continue remaining UNVERIFIED items.**
+**Next session: Blocked Queue at 7 (below 8 ceiling — feature work CAN resume).**
 
-1. ~~All S789–S793 QA batches~~ DONE.
-2. **P2 dispatch**: #432 AggregateOffer lowPrice:0 bug — find where lowPrice is set in JSON-LD builder and fix to use min(item.price) instead of 0.
-3. **Remaining UNVERIFIED**: #402 (locate UI), #435 (log inspection), #457 (test data), #458 (API verify) — lower priority, can batch in a future QA session.
-4. **New features**: Blocked Queue is below ceiling. Resume from roadmap QUEUED items.
-5. **Patrick Action**: Connect eBay to user1 in Railway DB — enables #293 PostSaleEbayPanel verification.
-6. **RSVP monthly cap**: Still unverifiable — need organic usage or create 5 test RSVPs.
+1. **Chrome QA pending**: #400 Loot Link (share button on sale detail item cards), #401 Sale of the Day (homepage SaleOfTheDayCard), #409 Sneak Peek Email (requires active sale + migration), #395 CSV Bulk Import (modal on add-items page).
+2. **Unblock #406**: Create/activate a sale as Alice with items, navigate to POS → verify ⚖️ Split Bill button + panel.
+3. **Unblock #416**: Add ≥2 items with different roomTag values to a sale → verify floor map renders on sale page.
+4. **New features**: Blocked Queue below ceiling. Next QUEUED items: #404 First 100 Buyers, #408 Scan & Split, #410 Social Export Watermarking, #414 (check roadmap).
+5. **Remaining UNVERIFIED**: #402 (locate UI), #435 (log inspection), #457 (test data), #458 (API verify) — batch when convenient.
 
 
 ## Recent Sessions
+
+### S794 — Mixed: #432 fix + 4 dispatched + Chrome QA (1 ✅, 2 UNVERIFIED, 1 partial)
+
+**Trigger:** Session start with dispatch + QA. Blocked Queue at 5 (below ceiling — feature work resumed).
+
+**Shipped (inline):**
+- **#432 AggregateOffer lowPrice:0** — fixed in `packages/frontend/pages/sales/[id].tsx` (2 IIFE blocks: initialData SSR path + client-side path). lowPrice/highPrice now compute min/max from items array with >0 price filter, fallback to '0'. ~4 lines changed.
+
+**Dispatched (4 parallel agents — SHIPPED, Pending Chrome QA):**
+- **#400 Loot Link** — Per-item share button added to sale detail item cards (Web Share API + clipboard fallback). OG meta on /items/[id] already existed. Files: `sales/[id].tsx`.
+- **#401 Sale of the Day** — Cron + service + route + SaleOfTheDayCard component. Files: `saleOfTheDayJob.ts`, `saleOfTheDayService.ts`, `saleOfTheDay.ts` route, `SaleOfTheDayCard.tsx`, `index.tsx` homepage.
+- **#409 Pre-Sale Sneak Peek Email** — DB-level idempotency via `sneakPeekSentAt` field added to Sale model. Migration: `20260527000000_add_sale_sneak_peek_sent_at`. Files: `schema.prisma`, `presaleSneakPeekEmailService.ts`. **Requires Patrick migration deploy.**
+- **#395 Bulk Import Tool Phase 1** — 2-step CSV import (preview + column mapping → bulk createMany, 200-item cap). Files: `itemController.ts` (bulkImportCSV), `items.ts` route, `CSVImportModal.tsx` (full rewrite).
+
+**Chrome QA (S696 Pending features):**
+- **#403 Bundle Pricing** ✅ — Bundle Pricing section on add-items page confirmed. Form (name/price/description/item selector) + correct empty state.
+- **#411 Dorm Dash** ✅ Phase 1 only — DORM_DASH in dropdown confirmed. ⚠️ Dorm-specific fields (building, move-out, accelerated markdown) not built — enum addition only.
+- **#406 Split-the-Bill POS** UNVERIFIED — code confirmed (pos.tsx lines 1741–1855) but Alice's account shows no active sale in POS.
+- **#416 Sale Floor Map** UNVERIFIED — SaleFloorMap component built + wired. Test sale has no room-tagged items; component renders null.
+
+**Blocked Queue: 5 → 7** (added: #406, #416 UNVERIFIED)
+
+**Files changed:** `packages/frontend/pages/sales/[id].tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` + agent-dispatched files (see push block)
+
+---
 
 ### S793 — QA Session: 10 Verified, 2 ⚠️ Web Share, 4 UNVERIFIED
 
@@ -417,23 +449,4 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ---
 
-### S786 — DB Audit: Camera Feature Root Cause + Railway CLI Fixed + Nav Fix + Roadmap Corrections
-
-**Trigger:** Continue QA backlog — investigate why camera features showed 0 DB rows in S785. Fix Railway DB access (psycopg2 auth failing due to stale password in session context).
-
-**Railway CLI fixed:** Downloaded CLI to /tmp, used `RAILWAY_TOKEN + railway run --service backend env` to extract live DATABASE_URL password. psycopg2 now works. Live password: `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW` (also works against maglev public proxy).
-
-**DB audit — 130 items, 0 Photo records:**
-- Photo table completely empty — Cloudinary URLs stored in Item.photoUrls array only
-- #319/#325/#328 all unreachable — upload pipeline skips Photo table insertion entirely
-- #336 userEditedFields populated on 18/130 items ✅ data confirmed; needs Chrome QA
-- #339 aiConfidence on 100% of items; gate may not enforce on low-confidence items
-
-**Roadmap corrections (wrong table/field names in roadmap):**
-- #323: IS implemented as ItemValuation.method (60/40 blend) → Pending Chrome QA
-- #332: IS implemented on Organizer model + ShopifyListing table → Pending Chrome QA
-- #334: IS implemented as MarkdownCycle model → Pending Chrome QA
-
-**Mobile nav fix:** Discount Rules, Consignors, Locations, Shopify added to mobile drawer TEAMS section.
-
-**Files changed:** `packages/frontend/components/Layout.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+### S786 (archived — see session-log-archive.md)
