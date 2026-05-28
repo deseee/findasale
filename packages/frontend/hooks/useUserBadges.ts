@@ -32,6 +32,6 @@ export const useUserBadges = () => {
       return response.data;
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 0, // always fresh — badges can be awarded at any time
   });
 };
