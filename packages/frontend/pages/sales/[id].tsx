@@ -744,7 +744,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                     '@type': 'AggregateOffer',
                     'url': `https://finda.sale/sales/${initialData.id}`,
                     'priceCurrency': 'USD',
-                    'lowPrice': '0',
+                    'lowPrice': (() => { const ps = (initialData.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.min(...ps)) : '0'; })(),
+                    'highPrice': (() => { const ps = (initialData.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.max(...ps)) : '0'; })(),
                     'offerCount': initialData.items.length || 0
                   }
                 } : {}),
@@ -960,7 +961,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   '@type': 'AggregateOffer',
                   'url': `https://finda.sale/sales/${sale.id}`,
                   'priceCurrency': 'USD',
-                  'lowPrice': '0',
+                  'lowPrice': (() => { const ps = (sale.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.min(...ps)) : '0'; })(),
+                  'highPrice': (() => { const ps = (sale.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.max(...ps)) : '0'; })(),
                   'offerCount': (sale as any)._count?.items || sale.items.length || 0
                 }
               } : {}),
@@ -1773,7 +1775,27 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 
                           {/* Card body */}
                           <div className="p-3 flex flex-col gap-2 flex-1">
-                            <h3 className="text-xs font-medium leading-tight line-clamp-2">{item.title}</h3>
+                            <div className="flex items-start justify-between gap-1">
+                              <h3 className="text-xs font-medium leading-tight line-clamp-2 flex-1">{item.title}</h3>
+                              {/* #400 Loot Link: compact share icon */}
+                              <button
+                                type="button"
+                                title="Share this item"
+                                aria-label="Share this item"
+                                className="shrink-0 p-0.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)] hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  const shareUrl = `${window.location.origin}/items/${item.id}`;
+                                  if (navigator.share) {
+                                    navigator.share({ title: item.title, url: shareUrl }).catch(() => {});
+                                  } else {
+                                    navigator.clipboard.writeText(shareUrl).then(() => showToast('Link copied!', 'success')).catch(() => {});
+                                  }
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                              </button>
+                            </div>
 
                             {/* Status badges */}
                             {(item.category || item.condition) && (

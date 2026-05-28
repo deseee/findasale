@@ -114,6 +114,7 @@ export async function sendPresaleSneakPeekEmails(): Promise<void> {
         status: 'PUBLISHED',
         startDate: { gte: windowStart, lte: windowEnd },
         deletedAt: null,
+        sneakPeekSentAt: null, // idempotency guard — skip sales already sent
       },
       include: {
         organizer: {
@@ -208,6 +209,12 @@ export async function sendPresaleSneakPeekEmails(): Promise<void> {
           saleUrl,
         });
       }
+
+      // Stamp the sale so it won't be picked up on the next cron run (persistent idempotency)
+      await prisma.sale.update({
+        where: { id: sale.id },
+        data: { sneakPeekSentAt: new Date() },
+      });
 
       sent++;
     }

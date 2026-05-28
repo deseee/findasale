@@ -910,6 +910,8 @@ model Sale {
   estatePrivacyMode           Boolean                  @default(false)
   // S696: Item bundles for this sale
   bundles                     ItemBundle[]
+  // Feature #409: Pre-Sale Sneak Peek Email — timestamp when sneak peek was sent (idempotency guard)
+  sneakPeekSentAt             DateTime?
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 

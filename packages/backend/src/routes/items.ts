@@ -11,6 +11,7 @@ import {
   getBids,
   placeBid,
   importItemsFromCSV,
+  bulkImportCSV,
   analyzeItemTags,
   addItemPhoto,
   removeItemPhoto,
@@ -795,9 +796,14 @@ router.post('/:id/photos', authenticate, addItemPhoto);
 router.delete('/:id/photos/:photoIndex', authenticate, removeItemPhoto);
 router.patch('/:id/photos/reorder', authenticate, reorderItemPhotos);
 
-// CSV import endpoint
+// CSV import endpoint (legacy — kept for backward compat)
 // P0-S3: Apply bulk rate limiter (10 ops/hour per user) to CSV import
 router.post('/:saleId/import-items', authenticate, bulkItemsLimiter, upload.single('csv'), importItemsFromCSV);
+
+// Feature #395: Bulk Import Tool (Phase 1) — two-step preview+confirm with column mapping
+// POST /api/items/:saleId/bulk-import           → preview (first 5 rows + detected column mapping)
+// POST /api/items/:saleId/bulk-import?confirm=true → actual import (createMany, draftStatus=DRAFT, max 200)
+router.post('/:saleId/bulk-import', authenticate, bulkItemsLimiter, upload.single('file'), bulkImportCSV);
 
 // CD2 Phase 3: AI Price suggestions
 router.post('/ai/price-suggest', authenticate, async (req, res) => {
