@@ -410,6 +410,7 @@ export const getSale = async (req: Request, res: Response) => {
             status: true, photoUrls: true, category: true, condition: true,
             organizerDiscountAmount: true, organizerDiscountXp: true,
             priceBeforeMarkdown: true, markdownApplied: true,
+            rarity: true, // #57: Shiny/Rare Item Badges
             roomTag: true // #416: Floor map room routing
           }
         }
