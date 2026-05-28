@@ -59,6 +59,7 @@ import useXpProfile from '../../hooks/useXpProfile'; // Rank-Based Early Access:
 import ClaimListingModal from '../../components/ClaimListingModal'; // Feature #361: Claim-This-Listing
 import ClaimListingBanner from '../../components/ClaimListingBanner'; // Feature #443: 1-Click OAuth Claim
 import SaleFloorMap from '../../components/SaleFloorMap'; // #416: Floor Map
+import ReviewsSection from '../../components/ReviewsSection';
 
 
 interface Sale {
@@ -1408,6 +1409,10 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                         {/* Primary CTA — Going */}
                         {user && !saleHasEnded && <SaleRSVPButton saleId={sale.id} />}
                         {!saleHasEnded && <RSVPBadge saleId={sale.id} saleTitle={sale.title} />}
+                        {/* Bug #158: Waitlist — notify me when new items are added */}
+                        {user && (sale.status === 'PUBLISHED' || sale.status === 'ACTIVE') && (
+                          <SaleWaitlistButton saleId={sale.id} />
+                        )}
                       </div>
                     </>
                   )}
@@ -2035,6 +2040,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 <SimilarItems itemId={sale.items[0].id} category={sale.items[0].category || 'general'} />
               </section>
             )}
+
+            {/* Bug #160: Reviews — shoppers can submit a review after the sale */}
+            <ReviewsSection mode="sale" saleId={sale.id} saleStatus={sale.status} />
 
           </div>{/* end MAIN COLUMN */}
 

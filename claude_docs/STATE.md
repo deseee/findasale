@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S799 COMPLETE — #416 Sale Floor Map ✅ Chrome-re-verified. Test sale seeded via psycopg2 (4 items, 2 roomTags). Floor map renders correctly. Blocked Queue: 4**
+**Latest: S800 COMPLETE — Chrome QA batch (11 items tested): 5 ✅, 1 ⚠️, 5 ❌ bugs dispatched to dev. edit-sale description null fix shipped. Blocked Queue: 4 (unchanged)**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -234,19 +234,70 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Blocked Queue: 4 (below 8 ceiling — feature work CAN resume).**
 
-**Patrick Action — Restore Chrome session:** Chrome is at finda.sale/login — click "Sign in with Google → artifactmi@gmail.com" to restore your session.
-
 **Patrick Action — Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
+
+**Patrick Action — Remove test file** `C:\Users\desee\ClaudeProjects\FindaSale\qa-test-item.jpg` (created S800 for Cloudinary upload test).
+
+**Patrick Action — Run migration if needed** for any new features dispatched this session (check dev agent handoffs below).
 
 **P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #457, #449. Not blocking.
 
-1. **Chrome QA needed (S798 features)**: #442 reports page, #396 starter kit, #397 Crew Invasion, #398 org referral, #411 Dorm Dash P2 — all Pending Chrome QA. Railway rebuild must complete first.
-2. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split.
-3. **Unblock #308**: Need organizer with real active items to test hide-item flow.
-4. **NV scraper**: Recommend building City of Las Vegas Playwright scraper (lasvegasnevada.gov license search).
+1. **S800 dev dispatches shipping** — 5 bugs fixed: #148 checklist page, #156 returnWindowHours, #142 batch upload crash, #158 SaleWaitlistButton placement, #160 ReviewsSection placement. Verify after Railway/Vercel deploys.
+2. **#35 Entrance Pin** — ⚠️ UI confirmed correct; was blocked by description null bug (FIXED S800, pending deploy). Re-verify after deploy.
+3. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific data conditions).
+4. **Unblock #308**: Need organizer with real active items to test hide-item flow.
+5. **NV scraper**: Recommend building City of Las Vegas Playwright scraper (lasvegasnevada.gov license search).
+6. **Pending Chrome QA backlog**: Large backlog in roadmap.md — dispatch QA micro-batches.
 
 
 ## Recent Sessions
+
+### S800 — Chrome QA Batch (11 items: 5 ✅, 1 ⚠️, 5 ❌ bugs) + description null fix
+
+**Trigger:** Continue Chrome QA batches without stopping. Running as Bob Smith (user2, PRO organizer) then Leo Thomas (user5, shopper).
+
+**Edit-sale fix shipped (inline — <20 lines):**
+- `pages/organizer/edit-sale/[id].tsx` line 185: `description: sale.description,` → `description: sale.description ?? ''` — root cause of ALL edit-sale 400 errors for sales with null description field. Zod `z.string()` rejects null; `?? ''` coalesces to empty string before validation.
+
+**Chrome QA Results:**
+- **#154 Organizer Public Profile ✅** — Public profile page loads for Bob Smith. Verified end-to-end.
+- **#138 Sale Types ✅** — All 5 sale type cards (YARD, ESTATE, AUCTION, FLEA, CONSIGNMENT) selectable in create-sale.
+- **#5 Listing Type Schema Validation ✅** — FIXED and AUCTION listing types save correctly. DB confirmed AUCTION item with correct `listingType` field via psycopg2.
+- **#145 Condition Grading ✅** — All 8 conditions in dropdown; GOOD condition DB-confirmed after item save.
+- **#160 Organizer Reputation Page ✅** — `/organizer/reputation` loads with reviews summary for Bob Smith.
+- **#35 Entrance Pin ⚠️** — Organizer UI and PUT payload correct; save was previously blocked by description null bug (now fixed). Pending re-verify after deploy.
+- **#148 ❌ BUG** — `/organizer/checklist` redirects to `/plan`. Frontend page never built (backend exists, S412). Dispatched to dev.
+- **#156 ❌ BUG** — `returnWindowHours` UI input in organizer settings saves to `Organizer` model but field lives on `Sale` model — type mismatch. Dispatched to dev.
+- **#142 ❌ BUG** — Batch photo upload crashes with 403 on Cloudinary + unhandled `TypeError: Cannot read properties of undefined (reading 'filter')` in `handleAnalyzePhotos`. UI stuck on "Saving items..." indefinitely. Dispatched to dev.
+- **#158 ❌ BUG** — `SaleWaitlistButton` component fully implemented + imported in `sales/[id].tsx` but never placed in JSX (0 usage). Shoppers can't join waitlist. Dispatched to dev.
+- **#160 shopper ❌ BUG** — `ReviewsSection` component not imported or rendered in `sales/[id].tsx`. Shoppers have no way to submit reviews from sale page. Dispatched to dev.
+
+**Technical notes:**
+- React number inputs require `nativeInputValueSetter` + dispatch `input`+`change` events (form_input tool alone doesn't update React controlled inputs)
+- NextAuth signout: must use in-page user menu Logout button (navigating to /auth/signout doesn't clear session)
+- Production DB only has user1–7 seeded (user13+ in seed.ts but not applied to Railway)
+- `file_upload` tool requires files from workspace folder path — `/sessions/.../mnt/FindaSale/` works
+
+**Dev dispatches (5 bugs, dispatched end of session):**
+- #148: Build `pages/organizer/checklist/index.tsx`
+- #156: Fix `returnWindowHours` — add to Sale schema OR remove UI input
+- #142: Add null check before `.filter()` in `handleAnalyzePhotos`; add user-facing error state on 403
+- #158: Place `<SaleWaitlistButton saleId={sale.id} />` in `pages/sales/[id].tsx`
+- #160: Import + place `<ReviewsSection mode="sale" saleId={sale.id} saleStatus={sale.status} />` in `pages/sales/[id].tsx`
+
+**Blocked Queue: 4 (unchanged)** — no new UNVERIFIED items added.
+
+**Files changed (S800):** `packages/frontend/pages/organizer/edit-sale/[id].tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` + dev agent dispatch files (see push block)
+
+---
+
+### S799 — #416 Sale Floor Map Chrome Re-verified ✅
+
+**Trigger:** Re-verify #416 after PUBLIC_ITEM_FILTER blocker identified.
+
+Seeded "Floor Map Test Sale" via psycopg2 (4 items: 2× Living Room, 2× Kitchen; `isActive=true`, `draftStatus=PUBLISHED`). Chrome-verified: "FLOOR GUIDE — What's where" section renders with room tabs. Room filter chip works. #416 ✅. Blocked Queue: 4.
+
+---
 
 ### S798 — 5 Features Shipped (#442 #396 #397 #398 #411) + NV Scraper Research
 
