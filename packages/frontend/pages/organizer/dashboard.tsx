@@ -1494,7 +1494,8 @@ const OrganizerDashboard = () => {
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
                   <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Real-Time Metrics</h3>
                   {statsData.activeSale.status === 'PUBLISHED' ? (
-                    // Live sale: 4-col metrics
+                    <>
+                    {/* Live sale: 4-col metrics */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <Link href={`/organizer/add-items/${statsData.activeSale.id}`} className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
                         <div className="flex items-center justify-center gap-1 mb-2">
@@ -1532,6 +1533,7 @@ const OrganizerDashboard = () => {
                         <OGBuyerCountBadge count={ogBuyerData.count} limit={ogBuyerData.limit} />
                       </div>
                     )}
+                    </>
                   ) : (
                     // Draft sale: 3-col metrics
                     <div className="grid grid-cols-3 gap-4">
