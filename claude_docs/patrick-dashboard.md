@@ -4,9 +4,12 @@
 
 ## What Happened This Week
 
-S798 complete: 5 features shipped + all 3 migrations applied ✅. Blocked Queue: 5 (below ceiling — feature work continues).
+S799 complete: #416 Sale Floor Map ✅ Chrome-re-verified. Blocked Queue: 4 (below ceiling — feature work continues).
 
-**S798 (latest) — 5 features shipped + fully deployed:**
+**S799 — #416 Floor Map re-verified:**
+- Seeded test sale "Floor Map Test Sale" via psycopg2 (4 items: 2× Living Room, 2× Kitchen). Fixed PUBLIC_ITEM_FILTER blocker (isActive + draftStatus must be PUBLISHED). Chrome-verified: "FLOOR GUIDE — What's where" section renders with room tabs. Room filter chip works. #416 ✅.
+
+**S798 (previous) — 5 features shipped + fully deployed:**
 - **#442 Monthly Trend Report page** — `/reports/[year]-[month]` built with SSR + Article JSON-LD. Stat cards: total sales, organizers, top cities, categories, crawlers. Pending Chrome QA.
 - **#396 DIY Sale Starter Kit** — `/organizer/starter-kit` with inline 4-section checklist + PDF download. Pending Chrome QA.
 - **#397 Crew Invasion** — 4+ crew members holding simultaneously triggers 10% discount (45min), 75 XP each. Organizer opt-in toggle in edit-sale. Migration applied ✅. Pending Chrome QA.
@@ -42,14 +45,14 @@ No new decisions pending. DECISIONS.md is current.
 
 **S798 shipped 5 features, all migrations live.** Next session: Chrome QA for all 5.
 
-**Blocked Queue at 5 items** — below ceiling of 8. Feature work continues.
+**Blocked Queue at 4 items** — below ceiling of 8. Feature work continues.
 
 ---
 
 ## This Week's Priority
 
 1. **Next session**: Chrome QA — #442 reports page, #396 starter kit, #397 Crew Invasion, #398 org referral, #411 Dorm Dash P2. Wait for Railway rebuild to complete first.
-2. **Blocked Queue at 5** — below ceiling of 8. Feature work continues after QA.
+2. **Blocked Queue at 4** — below ceiling of 8. Feature work continues after QA.
 3. **Pending Chrome QA backlog**: #285 POS real-time (needs 2 concurrent users), #399 Local Legends (needs 3+ same-ZIP check-ins), #408 Scan & Split (needs 2 concurrent scanners), #409 Sneak Peek Email (needs platform sale 24-48h out + subscriber + items).
 
 ---

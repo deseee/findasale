@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S798 COMPLETE — 5 features shipped + Chrome-verified ✅: #442 trend reports page ✅, #396 starter kit ✅, #397 Crew Invasion ✅, #398 org referral ✅, #411 Dorm Dash P2 ✅. All 3 migrations applied to Railway. Schema truncation + JSX truncation + CONCURRENTLY migration all repaired. NV scraper: City of Las Vegas Playwright approach recommended. Blocked Queue: 5**
+**Latest: S799 COMPLETE — #416 Sale Floor Map ✅ Chrome-re-verified. Test sale seeded via psycopg2 (4 items, 2 roomTags). Floor map renders correctly. Blocked Queue: 4**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -220,7 +220,6 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #457 Noindex stale scraped | UNVERIFIED S793 — no scraped+ENDED test data with past date | Create past-dated scraped sale record, verify noindex meta tag on that page | S793 |
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
 
-| #416 Sale Map Internal Routing | UNVERIFIED S794 — SaleFloorMap component built + wired. Renders null when <2 room groups. Test sale has no room-tagged items. | Add ≥2 items with different roomTag values to a published sale, then view sale page | S794 |
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 
 | #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Consignor emails use Gmail API (not Resend — that was a red herring). Same service as all working transactional emails. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
@@ -233,7 +232,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Blocked Queue: 5 (below 8 ceiling — feature work CAN resume).**
+**Blocked Queue: 4 (below 8 ceiling — feature work CAN resume).**
 
 **Patrick Action — Restore Chrome session:** Chrome is at finda.sale/login — click "Sign in with Google → artifactmi@gmail.com" to restore your session.
 
@@ -243,9 +242,8 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 1. **Chrome QA needed (S798 features)**: #442 reports page, #396 starter kit, #397 Crew Invasion, #398 org referral, #411 Dorm Dash P2 — all Pending Chrome QA. Railway rebuild must complete first.
 2. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split.
-3. **Unblock #416**: Add ≥2 items with different roomTag values to a published sale → verify floor map.
-4. **Unblock #308**: Need organizer with real active items to test hide-item flow.
-5. **NV scraper**: Recommend building City of Las Vegas Playwright scraper (lasvegasnevada.gov license search).
+3. **Unblock #308**: Need organizer with real active items to test hide-item flow.
+4. **NV scraper**: Recommend building City of Las Vegas Playwright scraper (lasvegasnevada.gov license search).
 
 
 ## Recent Sessions
