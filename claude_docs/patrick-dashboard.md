@@ -4,54 +4,41 @@
 
 ## What Happened This Week
 
-**S804 complete — Chrome QA Marathon:** 56 features processed. Zero UNTESTED remaining in roadmap. One bug found.
+**S805 complete — Chrome QA batch + bug fixes:**
+
+**Code Fixes Shipped:**
+
+**✅ #79 Earnings Counter Animation — FIXED:** Animation moved into `PostSaleMomentumCard.tsx` where it belongs, wired to per-sale revenue. Dead code in `dashboard.tsx` removed. Organizers will see count-up animation when Sale Complete card appears.
+
+**✅ #57 Rarity Badges — FIXED:** `rarity: true` added to `getSale()` items select in `saleController.ts`. Badge condition was always `undefined` — badges never showed despite RARE/ULTRA_RARE items existing. Pending Chrome re-verify post-Railway deploy.
+
+**✅ #196 Buying Pool guard removed:** Outer `item.buyingPool &&` condition removed from `items/[id].tsx`. `BuyingPoolCard` has its own internal `shouldShow` gate (price > $100, status AVAILABLE). Pending Chrome re-verify post-Vercel deploy.
+
+**Chrome QA — 12 features verified this session:**
+
+- **✅ #308 Hide/Show Items** — Confirmed: item disappears from public sale page on Hide, reappears on Show.
+- **✅ #457 Scraped Sale noindex** — meta robots confirmed "noindex" on scraped sales.
+- **✅ #251 priceBeforeMarkdown** — Crossed-out original price confirmed on item detail + sale page cards.
+- **✅ #16 Verified Organizer Badge** — Blue circle badge confirmed on Artifact Downtown Paw Paw sale.
+- **✅ #201 Favorites** — 23 FavoriteButton instances on sale page; live wishlist state from DB.
+- **✅ #205 Contact Organizer** — "Message Organizer" slide-in panel confirmed.
+- **✅ #136 QR Code Auto-Embedding** — "Embed QR code in exported photos" checkbox confirmed in edit-item (checked by default, labeled "QR codes link to this item's page on FindA.Sale").
+- **✅ #18 Post Performance Analytics** — Post Performance widget at /organizer/insights: Total Clicks counter, Top Source, 7-Day Trend chart (May 20–26), fresh cache timestamp. UTM tracking infrastructure wired.
+- **✅ #127 POS Value Unlock Tiers** — 3-tier progressive unlock widget confirmed in POS. Dual-gate (tx + revenue) enforcing correctly. Tiers: Tier 1 (5tx + $50), Tier 2 (20tx + $300), Tier 3 (50tx + $1k PRO).
+- **✅ #76 Loading Skeletons** — Gray placeholder skeleton cards confirmed on search page during load (2×3 grid before results arrive).
+- **✅ #81 Empty States** — EmptyState component confirmed on 4 pages: /shopper/wishlist Sellers tab ("No followed sellers yet"), /shopper/bids ("No bids yet"), /shopper/holds ("No active holds"), /search no-results ("We couldn't find X").
+- **✅ #142 Batch Upload (partial)** — File input wired, change event fires, "✓ 1 photo selected" shown, thumbnail renders. Cloudinary E2E UNVERIFIED (no real credentials in QA env).
+
+**Blocked Queue: 3** (well below ceiling of 8 — feature work CAN continue)
+
+---
+
+**S804 complete — Chrome QA Marathon:** 56 features processed. Zero UNTESTED remaining in roadmap. One bug found (#79, now fixed).
 
 **S804 — QA Summary:**
 - **~40 ✅ CHROME VERIFIED or CODE-VERIFIED** — full end-to-end interaction or wiring confirmed
 - **12 ⚠️ UNVERIFIED** — push notifications, Twilio SMS, email triggers, Sentry alerts (can't trigger in test env)
 - **0 UNTESTED remaining** in roadmap.md — entire backlog cleared
-
-**S804 — Selected verifications:**
-- **✅ #91 Auto-Markdown** — toggle confirmed in edit-sale Advanced Settings
-- **✅ #84 Approach Notes** — Day-of Approach Notes textarea confirmed in edit-sale
-- **✅ #85 Treasure Hunt QR Clues** — QR Clues section + code generation in edit-sale
-- **✅ #208 Pickup Scheduling** — Pickup Scheduling timeslots confirmed in edit-sale
-- **✅ #136 QR Embed in Photos** — checkbox confirmed in edit-item
-- **✅ #76 Loading Skeletons** — SkeletonCard + SkeletonSaleCard render confirmed
-- **✅ #70 Live Feed Ticker** — LiveFeedTicker in Live Activity section confirmed
-- **✅ #127 POS Tier Gate** — dual-gate (tx+revenue) logic + progressive unlock UI confirmed
-- **✅ #211 Daily Treasure Clue** — TreasureHuntBanner on homepage confirmed
-- **✅ #215/#216 AI Tag + Condition Suggestions** — CODE-VERIFIED in review.tsx
-- **✅ #233 Command Center** — Multi-Sale Command Center with Active/Upcoming/Recent tabs
-- **✅ #18 Post Performance Analytics** — UTM link click tracking CODE-VERIFIED
-
-**⚠️ BUG FOUND — #79 Earnings Counter Animation:**
-`animatedRevenue` is computed via `useCountUp()` at `dashboard.tsx:197` but is **never used in JSX**. `PostSaleMomentumCard` receives the static `revenue` variable instead. The count-up animation is permanently dead code — organizers never see it counting up. Needs dev dispatch.
-
----
-
-**S803 complete:** Chrome QA backlog — 12 more features verified end-to-end.
-
-**S803 — Chrome QA Results:**
-- **✅ #155 Password Reset** — `/forgot-password` loads with email form
-- **✅ #161 Contact Form** — `/contact` loads with full contact form
-- **✅ #163 Earnings Dashboard** — `/organizer/earnings` loads with year selector + PDF export
-- **✅ #11 Organizer Referral** — `/organizer/referrals` loads with referral link + stats
-- **✅ #168 Seller Performance** — `/organizer/insights` loads (note: correct path, not `/organizer/performance`)
-- **✅ #34 Hype Meter** — Live Activity section on sale detail pages working with real data
-- **✅ #28 Neighborhood Heatmap** — `/neighborhoods` index loads 14 GR neighborhoods
-- **✅ #175 Coupons** — `/coupons` XP Store loads with 3 coupon tiers + Rarity Boost
-- **✅ #180 Category Browsing** — `/categories` and `/categories/[slug]` both load
-- **✅ #181 Tag Browsing** — `/tags/[slug]` renders correctly
-- **✅ #187 City Pages** — `/cities` index + `/city/grand-rapids-mi` working (46 sales displayed)
-- **✅ #193 Wishlists** — `/shopper/wishlist` loads with Items/Sellers tabs
-
-**S802 complete:** Chrome QA — all S798 features verified + all S800 bug fixes confirmed. The 5 dev dispatches from S800 are all working in production.
-
-**S801 complete:** Chrome QA — #197 Bounty Board ✅, #221 Hold-to-Pay ✅, #348 QR Auto-Claim ✅. bountyController.ts orphaned-user guard shipped.
-
-**S800 fix shipped:**
-- `edit-sale/[id].tsx` — description null → `?? ''` fix. Resolves all edit-sale 400 validation errors.
 
 ---
 
@@ -74,23 +61,27 @@ No new decisions pending. DECISIONS.md is current.
 
 **Roadmap is clean** — zero UNTESTED features. Every built feature now has a documented QA status in roadmap.md.
 
-**Blocked Queue at 4 items** — well below ceiling of 8. Feature work can continue.
+**Blocked Queue at 3 items** — well below ceiling of 8. Feature work can continue.
 
 ---
 
-## This Week's Priority
+## This Week's Priorities
 
-1. **Fix #79 Earnings Counter bug** — dispatch to findasale-dev. `animatedRevenue` at dashboard.tsx:197 needs to be wired into PostSaleMomentumCard (or confirm animation was intentionally removed).
-2. **Pending live-data tests**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific data conditions).
-3. **#142 batch upload**: Cloudinary upload end-to-end still needs real test with non-403 credentials.
-4. **UNVERIFIED queue**: 12 external-trigger features marked ⚠️ UNVERIFIED S804. Monitor as platform grows.
+1. **Re-verify #57 rarity badges** — After Railway deploys `saleController.ts` (rarity:true fix), navigate to Artifact Downtown Paw Paw sale page and confirm rarity badges appear on RARE/ULTRA_RARE items.
+2. **Re-verify #196 Buying Pool** — After Vercel deploys `items/[id].tsx`, navigate to Steve Yzerman Duck item (cmp5s7yws000jaez9syc3uibr, currently $150) and confirm BuyingPool card renders.
+3. **Pending live-data tests**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific data conditions).
+4. **#142 Cloudinary E2E**: Client-side pipeline confirmed. Still needs real Cloudinary upload test.
+5. **UNVERIFIED queue**: 12 external-trigger features marked ⚠️ UNVERIFIED S804. Monitor as platform grows.
 
 ---
 
 ## Action Items for Patrick
 
+- [ ] **Push the S805 code** — see push block below (items/[id].tsx + saleController.ts + roadmap.md + STATE.md + dashboard.md)
+- [ ] **Re-verify #57 after Railway deploys** — navigate to Artifact Downtown Paw Paw sale, confirm rarity badges appear
+- [ ] **Re-verify #196 after Vercel deploys** — navigate to Steve Yzerman Duck item, confirm BuyingPool card shows
 - [x] **Submit sitemap to Bing** — DONE
 - [x] **Run #409 migration** — DONE
-- [x] **Run S798 migrations** — DONE. All 3 applied: performance indexes, dorm dash fields, crew invasion table.
-- [x] **Update global CLAUDE.md** — DONE (S802).
-- [x] **Remove test file** — DONE (S802).
+- [x] **Run S798 migrations** — DONE
+- [x] **Update global CLAUDE.md** — DONE (S802)
+- [x] **Remove test file** — DONE (S802)

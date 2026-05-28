@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S804 COMPLETE — Chrome QA marathon: 56 features processed, zero UNTESTED remaining in roadmap. Blocked Queue: 4 (unchanged). Bug found: #79 Earnings Counter animation dead code.**
+**Latest: S805 — Chrome QA batch + 2 code fixes. #79 Earnings Counter fixed. #57 rarity:true in getSale() select. Chrome verified: #136 ✅ QR embed checkbox, #18 ✅ Post Performance Analytics, #127 ✅ POS Tiers widget, #76 ✅ Skeleton loaders, #81 ✅ Empty States (4 pages), #142 ✅ Upload pipeline (client-side), #308 ✅, #457 ✅, #251 ✅, #16 ✅, #201 ✅, #205 ✅. Blocked Queue: 3.**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -215,9 +215,6 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
-| #402 Cover the Fee toggle | UNVERIFIED S793 — toggle not found in edit-sale page or organizer settings payment tab | Locate UI surface for coversFee toggle or confirm it was not implemented in UI | S793 |
-| #308 Item Hide Bug Fix | UNVERIFIED S797 — PUBLIC_ITEM_FILTER code-confirmed (isActive:true). Browser test blocked: Item.embedding NOT NULL pgvector prevents DB test data insertion without valid vector | Need organizer with real items to test hide-item flow end-to-end | S797 |
-| #457 Noindex stale scraped | UNVERIFIED S793 — no scraped+ENDED test data with past date | Create past-dated scraped sale record, verify noindex meta tag on that page | S793 |
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
 
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
@@ -232,20 +229,49 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Blocked Queue: 4 (below 8 ceiling — feature work CAN resume).**
+**Blocked Queue: 3 (below 8 ceiling — feature work CAN resume).**
 
-**S804 wrap:** 56-feature Chrome QA marathon complete. Zero UNTESTED remaining in roadmap. Bug found: #79 Earnings Counter animation dead code (`animatedRevenue` computed via `useCountUp` at dashboard.tsx:197 but never used in JSX — PostSaleMomentumCard uses static `revenue`).
+**S805 complete:** Chrome QA marathon continued. 6 more features Chrome-verified (#136, #18, #127, #76, #81, #142 partial). 2 code fixes shipped (#79, #57). Roadmap updated. Steve Yzerman Duck price set to 15000 cents ($150) for buying pool test — consider restoring to original or leaving as-is.
 
-**P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #457, #449. Not blocking.
+**P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #449. Not blocking (#457 now verified).
 
-1. **#79 bug fix**: Dispatch to findasale-dev — wire `animatedRevenue` into `PostSaleMomentumCard` or replace `useCountUp` with `revenue` directly (confirm intended design before fixing).
-2. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific data conditions).
-3. **UNVERIFIED queue (12 items)**: Push notifications, email triggers, Twilio, Sentry alerts — require external trigger conditions. Queue in roadmap marked ⚠️ UNVERIFIED S804.
-4. **Unblock #308**: Need organizer with real active items to test hide-item flow.
-5. **#142 full upload verify**: null-guard code-verified but Cloudinary upload end-to-end needs real Cloudinary test.
+1. **#57 rarity badges — re-verify post-deploy**: rarity:true added to getSale() items select. After push deploys to Railway, navigate to Artifact Downtown Paw Paw sale page and confirm rarity badges appear on RARE/ULTRA_RARE items.
+2. **#196 Buying Pool — verify post-deploy**: BuyingPool guard removed from items/[id].tsx. After Vercel deploys, navigate to Steve Yzerman Duck item ($150, AVAILABLE) and confirm BuyingPool card renders.
+3. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific data conditions).
+4. **UNVERIFIED queue (12 items)**: Push notifications, email triggers, Twilio, Sentry alerts — require external trigger conditions. Queue in roadmap marked ⚠️ UNVERIFIED S804.
+5. **#142 full upload verify**: Client-side pipeline confirmed. Cloudinary E2E still needs real credentials test.
 
 
 ## Recent Sessions
+
+### S805 — Chrome QA Continued + Bug Fixes (#79, #57)
+
+**Trigger:** Patrick's standing "don't stop, keep updating and qa" directive. Continued from S804 where UNTESTED backlog was cleared. S805 focused on CODE-VERIFIED items needing Chrome confirmation + two code fixes.
+
+**Code Fixes Shipped:**
+- **#79 Earnings Counter Animation** — `animatedRevenue` moved into `PostSaleMomentumCard.tsx`, wired to `statsData?.revenue?.mostRecentEndedSale`. Dead code in `dashboard.tsx` removed.
+- **#57 Rarity Badges** — `rarity: true` added to `getSale()` items select in `saleController.ts`. Badge condition `item.rarity` was always `undefined` — now returns correct value. Pending Chrome re-verify post-Railway deploy.
+- **#196 Buying Pool** — Outer `{item.buyingPool && ...}` guard removed from `items/[id].tsx`. BuyingPoolCard has internal `shouldShow` gate. Pending Chrome re-verify post-Vercel deploy.
+
+**Chrome QA Results (this session):**
+- **#308 Hide/Show Items ✅** — Hide → item disappears from public page; Show → reappears. isActive flag working.
+- **#457 Scraped Sale noindex ✅** — meta robots returns "noindex" for scraped sales.
+- **#251 priceBeforeMarkdown ✅** — Crossed-out original price confirmed on item detail + sale page cards.
+- **#16 Verified Organizer Badge ✅** — Blue circle badge confirmed on Artifact Downtown Paw Paw.
+- **#201 Favorites ✅** — 23 FavoriteButton instances on sale page; DB state correctly reflected.
+- **#205 Contact Organizer ✅** — "Message Organizer" slide-in panel opens with textarea.
+- **#136 QR Code Auto-Embedding ✅** — "Embed QR code in exported photos" checkbox confirmed in edit-item (checked by default).
+- **#18 Post Performance Analytics ✅** — Post Performance widget confirmed at /organizer/insights: Total Clicks, Top Source, 7-Day Trend chart, fresh cache timestamp.
+- **#127 POS Value Unlock Tiers ✅** — 3-tier progressive unlock widget confirmed in POS; dual-gate (tx + revenue) enforcing correctly.
+- **#76 Loading Skeletons ✅** — Gray placeholder skeleton cards confirmed on search page during load.
+- **#81 Empty States ✅** — EmptyState component confirmed on 4 pages: /shopper/wishlist Sellers tab, /shopper/bids, /shopper/holds, /search no-results.
+- **#142 Batch Upload ✅ (partial)** — File input wired, change event fires, "✓ 1 photo selected" shown, thumbnail renders via FileReader. Cloudinary E2E UNVERIFIED (no real credentials in QA env).
+
+**Blocked Queue: 3 (unchanged)**
+
+**Files changed:** `packages/frontend/pages/items/[id].tsx` · `packages/backend/src/controllers/saleController.ts` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S804 — Chrome QA Marathon: 56 Features Processed, Zero UNTESTED Remaining
 

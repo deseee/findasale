@@ -1075,15 +1075,13 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
             </div>
           )}
 
-          {/* Buying Pool */}
-          {item.buyingPool && (
-            <BuyingPoolCard
-              itemId={item.id}
-              itemPrice={item.price}
-              itemStatus={item.status}
-              userId={user?.id}
-            />
-          )}
+          {/* Buying Pool — BuyingPoolCard has internal shouldShow gate (price > $100, status AVAILABLE) */}
+          <BuyingPoolCard
+            itemId={item.id}
+            itemPrice={item.price}
+            itemStatus={item.status}
+            userId={user?.id}
+          />
         </div>
       </div>
 
