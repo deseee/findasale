@@ -3,7 +3,10 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
 import { useMyAchievements } from '../../hooks/useAchievements';
+import { useUserBadges } from '../../hooks/useUserBadges';
 import { AchievementBadge } from '../../components/AchievementBadge';
+import { LocalLegendBadgeList } from '../../components/LocalLegendBadge';
+import { OGBuyerBadgeList } from '../../components/OGBuyerBadge';
 
 // Explorer Rank definitions — must match RANK_THRESHOLDS in backend xpService.ts
 const RANKS = [
@@ -18,6 +21,7 @@ export default function AchievementsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { data, isLoading, error } = useMyAchievements();
+  const { data: badgesData } = useUserBadges();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -175,6 +179,28 @@ export default function AchievementsPage() {
                   />
                 ))}
               </div>
+            </section>
+          )}
+
+          {/* Feature #399: Local Legend badges — per-ZIP attendance badges */}
+          {badgesData?.localLegend && badgesData.localLegend.length > 0 && (
+            <section className="mb-8">
+              <h2 className="text-2xl font-bold text-emerald-900 dark:text-emerald-300 mb-2">📍 Local Legend</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Earned by attending 3+ sales in the same area
+              </p>
+              <LocalLegendBadgeList badges={badgesData.localLegend} />
+            </section>
+          )}
+
+          {/* Feature #404: OG Buyer badges — first 100 buyers at a sale */}
+          {badgesData?.ogBuyer && badgesData.ogBuyer.length > 0 && (
+            <section className="mb-8">
+              <h2 className="text-2xl font-bold text-emerald-900 dark:text-emerald-300 mb-2">🏆 OG Buyer</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Awarded to the first 100 buyers at a sale
+              </p>
+              <OGBuyerBadgeList badges={badgesData.ogBuyer} />
             </section>
           )}
         </div>

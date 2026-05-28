@@ -46,6 +46,7 @@ const BROADER_TYPES = new Set([
 ]);
 
 // Case-insensitive keywords — any match includes the row (when paired with a broader type)
+// Covers all 14 required sale-type categories
 const SALE_TYPE_KEYWORDS = [
   'pawn',
   'estate sale',
@@ -68,6 +69,9 @@ const SALE_TYPE_KEYWORDS = [
   'preowned',
   'surplus',
   'rummage',
+  'yard sale',
+  'garage sale',
+  'charity sale',
 ];
 
 // False-positive name fragments — exclude row if business name contains any of these

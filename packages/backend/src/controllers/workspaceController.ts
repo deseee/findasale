@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { Prisma } from '@prisma/client';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { TIER_LIMITS } from '../constants/tierLimits';
@@ -797,6 +798,14 @@ export const getMyWorkspaceMemberships = async (req: AuthRequest, res: Response)
 
     return res.json({ memberships: teamWorkspaces });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2023') {
+        return res.status(400).json({ message: 'Invalid ID format' });
+      }
+      if (error.code === 'P2025') {
+        return res.status(404).json({ message: 'Record not found' });
+      }
+    }
     Sentry.captureException(error);
     console.error('Error fetching workspace memberships:', error);
     return res.status(500).json({ message: 'Failed to fetch workspace memberships' });

@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import multer from 'multer';
 import { upload, uploadSalePhotos, uploadItemPhoto, analyzePhotoWithAI, rapidBatchUpload, uploadRapidfire } from '../controllers/uploadController';
 import { batchAnalyzeImages } from '../controllers/batchAnalyzeController';
 import { authenticate } from '../middleware/auth';
@@ -24,7 +25,22 @@ router.post('/analyze-photo', aiAnalyzeLimiter, upload.single('photo'), analyzeP
 router.post('/rapid-batch', uploadLimiter, upload.array('photos', 20), rapidBatchUpload);
 
 // POST /api/upload/rapidfire — Phase 2A: single image, create DRAFT item, queue background AI
-router.post('/rapidfire', upload.single('image'), uploadRapidfire);
+// Multer error handler inline: catches LIMIT_UNEXPECTED_FILE (wrong field name from stale clients)
+// and returns a clean 400 instead of bubbling to Sentry as an unhandled exception.
+// All current frontend call sites send field name 'image' — this guards against stale cached bundles.
+router.post(
+  '/rapidfire',
+  (req: Request, res: Response, next: NextFunction) => {
+    upload.single('image')(req, res, (err: any) => {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_UNEXPECTED_FILE') {
+        res.status(400).json({ message: `Unexpected upload field "${err.field}". Expected field name: "image".` });
+        return;
+      }
+      next(err);
+    });
+  },
+  uploadRapidfire
+);
 
 // POST /api/upload/batch-analyze — CD2 Phase 2: AI analysis for pre-uploaded Cloudinary URLs (5-20 images)
 router.post('/batch-analyze', aiAnalyzeLimiter, batchAnalyzeImages);

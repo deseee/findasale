@@ -10,7 +10,7 @@
  *   Dataset 2 — Active Pawnbroker Licenses (u7z4-p9uq)
  *     All records are pawnbrokers — category: pawnbroker
  *
- * Both APIs paginated with $limit=5000&$offset.
+ * Both APIs paginated with $limit=50000&$offset.
  * Deduplicates across both datasets by normalized name+address.
  * isStateLicensed = true for all records (official NYC license registries).
  * Throws if BOTH datasets return zero total results.
@@ -27,7 +27,7 @@ const SECONDHAND_URL =
 const PAWNBROKER_URL =
   'https://data.cityofnewyork.us/resource/u7z4-p9uq.json';
 
-const PAGE_LIMIT = 5000;
+const PAGE_LIMIT = 50000;
 
 const EXCLUDE_FRAGMENTS = [
   'real estate', 'realty', 'realtor', 'mortgage',

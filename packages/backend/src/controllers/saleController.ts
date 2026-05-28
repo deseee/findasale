@@ -20,6 +20,7 @@ import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Fea
 import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feature #32: Smart Follow
 import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
 import { awardXp, XP_AWARDS, applyHuntPassMultiplier, RANK_EARLY_ACCESS_HOURS } from '../services/xpService'; // Explorer's Guild XP awards
+import { checkAndAwardLocalLegend } from '../services/badgeService'; // Feature #399: Local Legend badge
 import { referralTrancheService } from '../services/referralTrancheService'; // Feature #XXX: Referral tranche system
 import { awardOrgReferralFirstSale } from '../services/referralService'; // Feature #398: Org referral loop
 import { checkCrewVisitBonus } from '../services/crewService'; // Crew visit XP multiplier
@@ -1919,6 +1920,27 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
       // Queue join is best-effort — don't fail the check-in if no line exists
     }
 
+    // Feature #399: Local Legend badge — check after recording check-in
+    // SaleCheckin is the source of truth for unique visits per sale per user
+    let localLegendAwarded: string | null = null;
+    try {
+      // Upsert SaleCheckin record so Local Legend badge can count visits per ZIP
+      await prisma.saleCheckin.upsert({
+        where: { saleId_userId: { saleId, userId } },
+        update: { checkinAt: new Date() },
+        create: {
+          saleId,
+          userId,
+          latitude: 0,
+          longitude: 0,
+          checkinAt: new Date(),
+        },
+      });
+      localLegendAwarded = await checkAndAwardLocalLegend(userId, saleId);
+    } catch (err) {
+      console.error('[Local Legend] Error during badge check:', err);
+    }
+
     res.json({
       success: true,
       xpEarned: finalXp,
@@ -1928,6 +1950,7 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
       explorerRank: awardResult.newRank,
       rankIncreased: awardResult.rankIncreased,
       queuePosition,
+      ...(localLegendAwarded ? { localLegendBadge: localLegendAwarded } : {}),
     });
   } catch (error) {
     console.error('Check-in error:', error);

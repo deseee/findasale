@@ -272,6 +272,7 @@ async function processDporTabDelimited(
       matched++;
 
       const city = (iCity >= 0 ? fields[iCity] || '' : '').trim();
+      const licenseNumber = (iLicense >= 0 ? fields[iLicense] || '' : '').trim();
       const businessCategory = mapCategory(licenseTypeRaw);
 
       const orgId = await getOrCreateScrapedOrganizer(
@@ -286,7 +287,12 @@ async function processDporTabDelimited(
         businessCategory,         // businessCategory
         undefined,                // contactEmail
         undefined,                // phone
-        undefined                 // website
+        undefined,                // website
+        undefined,                // lat
+        undefined,                // lng
+        true,                     // isStateLicensed
+        'VA',                     // licenseState
+        licenseNumber || undefined // licenseNumber
       );
 
       if (orgId) {
@@ -323,6 +329,7 @@ async function processVaOpenDataCsv(
   const iType = col('license type') !== -1 ? col('license type') : col('business type');
   const iCity = col('city');
   const iStatus = col('status') !== -1 ? col('status') : col('license status');
+  const iLicenseOD = col('license number') !== -1 ? col('license number') : col('license no');
 
   let matched = 0;
   let upserted = 0;
@@ -351,6 +358,7 @@ async function processVaOpenDataCsv(
       matched++;
 
       const city = (iCity >= 0 ? fields[iCity] || '' : '').trim();
+      const licenseNumberOD = (iLicenseOD >= 0 ? fields[iLicenseOD] || '' : '').trim();
       const businessCategory = mapCategory(licenseTypeRaw);
 
       const orgId = await getOrCreateScrapedOrganizer(
@@ -365,7 +373,12 @@ async function processVaOpenDataCsv(
         businessCategory,         // businessCategory
         undefined,                // contactEmail
         undefined,                // phone
-        undefined                 // website
+        undefined,                // website
+        undefined,                // lat
+        undefined,                // lng
+        true,                     // isStateLicensed
+        'VA',                     // licenseState
+        licenseNumberOD || undefined // licenseNumber
       );
 
       if (orgId) {

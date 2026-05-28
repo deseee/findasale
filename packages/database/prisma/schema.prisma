@@ -928,6 +928,8 @@ model Sale {
   @@index([status, markdownEnabled]) // Sentry slow query: markdownCron findMany WHERE status=PUBLISHED AND markdownEnabled=true
   @@index([createdAt]) // Sentry NODEJS-2K: adminController sale.count WHERE createdAt >= 7d ago (sparklines + new sales)
   @@index([status, markdownEnabled, startDate]) // Sentry NODEJS-2J: markdownCron findMany WHERE status=PUBLISHED AND markdownEnabled=true AND startDate <= now
+  @@index([organizerId, startDate]) // Sentry slow query A: Review JOIN Sale WHERE Sale.organizerId + ORDER BY startDate
+  @@index([status, startDate, endDate]) // Sentry slow query B: full-table scan Sale WHERE status + date range filters
 }
 
 // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales

@@ -30,10 +30,10 @@ export async function getCsvExportHandler(req: AuthRequest, res: Response) {
       return res.status(400).json({ message: 'format must be one of: ebay, amazon, facebook, quickbooks' });
     }
 
-    // Fetch organizer
+    // Fetch organizer — include removeWatermarkEnabled for watermark gate (#410)
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
-      select: { id: true, subscriptionTier: true },
+      select: { id: true, subscriptionTier: true, removeWatermarkEnabled: true },
     });
 
     if (!organizer) {
@@ -63,6 +63,7 @@ export async function getCsvExportHandler(req: AuthRequest, res: Response) {
     }
 
     // Fetch all items for the sale (include all statuses for historical data)
+    // photoUrls required for watermark overlay (#410)
     const items = await prisma.item.findMany({
       where: { saleId: sale.id },
       select: {
@@ -76,12 +77,15 @@ export async function getCsvExportHandler(req: AuthRequest, res: Response) {
         shippingAvailable: true,
         shippingPrice: true,
         status: true,
+        photoUrls: true,
+        updatedAt: true,
       },
       orderBy: { createdAt: 'asc' },
     });
 
-    // Generate CSV
-    const csvContent = generateCsvExport(items as any, format as ExportFormat);
+    // Generate CSV — pass organizer so watermark gate applies per tier (#410)
+    const includeWatermark = true; // always on; canRemoveWatermark gate inside exportService controls TEAMS opt-out
+    const csvContent = generateCsvExport(items as any, format as ExportFormat, organizer, includeWatermark);
     const filename = generateCsvFilename(sale.title, format as ExportFormat);
 
     // Return as file download

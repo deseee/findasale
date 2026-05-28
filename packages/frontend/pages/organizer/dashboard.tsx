@@ -47,6 +47,7 @@ import WeatherStrip from '../../components/WeatherStrip';
 import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
 import MyTeamsCard from '../../components/MyTeamsCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
+import { OGBuyerCountBadge } from '../../components/OGBuyerBadge'; // Feature #404: OG Buyer
 import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Copy, Store } from 'lucide-react';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
@@ -449,6 +450,17 @@ const OrganizerDashboard = () => {
   };
 
   const activeSale = dashboardState === 'active' ? getActiveSale() : null;
+
+  // Feature #404: OG Buyer count for active sale -- organizer dashboard metric
+  const { data: ogBuyerData } = useQuery({
+    queryKey: ['og-buyer-count', activeSale?.id],
+    queryFn: async () => {
+      const response = await api.get(`/sales/${activeSale!.id}/og-buyer-count`);
+      return response.data as { count: number; limit: number };
+    },
+    enabled: !!activeSale?.id && activeSale.status === 'PUBLISHED' && isClient,
+    staleTime: 60_000,
+  });
 
   // Helper: Check if sale is ending soon (<24h)
   const isEndingSoon = (sale: Sale): boolean => {
@@ -1513,6 +1525,13 @@ const OrganizerDashboard = () => {
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.sold ?? '--'}</p>
                       </Link>
                     </div>
+                    {/* Feature #404: OG Buyer count badge */}
+                    {ogBuyerData != null && (
+                      <div className="mt-4 pt-4 border-t border-warm-100 dark:border-gray-700 flex items-center gap-2">
+                        <span className="text-sm text-warm-600 dark:text-warm-400">OG Buyer progress:</span>
+                        <OGBuyerCountBadge count={ogBuyerData.count} limit={ogBuyerData.limit} />
+                      </div>
+                    )}
                   ) : (
                     // Draft sale: 3-col metrics
                     <div className="grid grid-cols-3 gap-4">
