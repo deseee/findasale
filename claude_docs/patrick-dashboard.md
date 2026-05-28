@@ -4,30 +4,54 @@
 
 ## What Happened This Week
 
+**S804 complete — Chrome QA Marathon:** 56 features processed. Zero UNTESTED remaining in roadmap. One bug found.
+
+**S804 — QA Summary:**
+- **~40 ✅ CHROME VERIFIED or CODE-VERIFIED** — full end-to-end interaction or wiring confirmed
+- **12 ⚠️ UNVERIFIED** — push notifications, Twilio SMS, email triggers, Sentry alerts (can't trigger in test env)
+- **0 UNTESTED remaining** in roadmap.md — entire backlog cleared
+
+**S804 — Selected verifications:**
+- **✅ #91 Auto-Markdown** — toggle confirmed in edit-sale Advanced Settings
+- **✅ #84 Approach Notes** — Day-of Approach Notes textarea confirmed in edit-sale
+- **✅ #85 Treasure Hunt QR Clues** — QR Clues section + code generation in edit-sale
+- **✅ #208 Pickup Scheduling** — Pickup Scheduling timeslots confirmed in edit-sale
+- **✅ #136 QR Embed in Photos** — checkbox confirmed in edit-item
+- **✅ #76 Loading Skeletons** — SkeletonCard + SkeletonSaleCard render confirmed
+- **✅ #70 Live Feed Ticker** — LiveFeedTicker in Live Activity section confirmed
+- **✅ #127 POS Tier Gate** — dual-gate (tx+revenue) logic + progressive unlock UI confirmed
+- **✅ #211 Daily Treasure Clue** — TreasureHuntBanner on homepage confirmed
+- **✅ #215/#216 AI Tag + Condition Suggestions** — CODE-VERIFIED in review.tsx
+- **✅ #233 Command Center** — Multi-Sale Command Center with Active/Upcoming/Recent tabs
+- **✅ #18 Post Performance Analytics** — UTM link click tracking CODE-VERIFIED
+
+**⚠️ BUG FOUND — #79 Earnings Counter Animation:**
+`animatedRevenue` is computed via `useCountUp()` at `dashboard.tsx:197` but is **never used in JSX**. `PostSaleMomentumCard` receives the static `revenue` variable instead. The count-up animation is permanently dead code — organizers never see it counting up. Needs dev dispatch.
+
+---
+
+**S803 complete:** Chrome QA backlog — 12 more features verified end-to-end.
+
+**S803 — Chrome QA Results:**
+- **✅ #155 Password Reset** — `/forgot-password` loads with email form
+- **✅ #161 Contact Form** — `/contact` loads with full contact form
+- **✅ #163 Earnings Dashboard** — `/organizer/earnings` loads with year selector + PDF export
+- **✅ #11 Organizer Referral** — `/organizer/referrals` loads with referral link + stats
+- **✅ #168 Seller Performance** — `/organizer/insights` loads (note: correct path, not `/organizer/performance`)
+- **✅ #34 Hype Meter** — Live Activity section on sale detail pages working with real data
+- **✅ #28 Neighborhood Heatmap** — `/neighborhoods` index loads 14 GR neighborhoods
+- **✅ #175 Coupons** — `/coupons` XP Store loads with 3 coupon tiers + Rarity Boost
+- **✅ #180 Category Browsing** — `/categories` and `/categories/[slug]` both load
+- **✅ #181 Tag Browsing** — `/tags/[slug]` renders correctly
+- **✅ #187 City Pages** — `/cities` index + `/city/grand-rapids-mi` working (46 sales displayed)
+- **✅ #193 Wishlists** — `/shopper/wishlist` loads with Items/Sellers tabs
+
 **S802 complete:** Chrome QA — all S798 features verified + all S800 bug fixes confirmed. The 5 dev dispatches from S800 are all working in production.
-
-**S802 — S798 Feature QA Results:**
-- **✅ #442 Monthly Trend Reports** — `/reports/2026-05` loads with live data (37,934 sales, 15,468 organizers, top cities/categories)
-- **✅ #396 DIY Sale Starter Kit** — `/organizer/starter-kit` — all 4 sections, Download PDF + Print confirmed
-- **✅ #397 Crew Invasion** — toggle confirmed in edit-sale Advanced Settings
-- **✅ #411 Dorm Dash P2** — dormBuilding/moveOutDate fields code-verified in create-sale (conditional on DORM_DASH type)
-
-**S802 — S800 Bug Fix Verification:**
-- **✅ #148 Sale Checklist** — `/organizer/checklist` now loads with 15-item checklist (was broken redirect)
-- **✅ #158 Waitlist Button** — "Notify me of new items" now visible on sale pages
-- **✅ #160 Reviews Section** — "Leave a review" now visible on sale detail pages
-- **✅ #35 Entrance Pin** — loads correctly; description null fix confirmed active
-- **✅ #142 Upload Crash** — null guards code-verified; crash-on-403 fixed
-- **✅ #156 Return Window** — Settings Profile tab now shows correct guidance text (removed broken input that was saving to wrong model)
 
 **S801 complete:** Chrome QA — #197 Bounty Board ✅, #221 Hold-to-Pay ✅, #348 QR Auto-Claim ✅. bountyController.ts orphaned-user guard shipped.
 
 **S800 fix shipped:**
 - `edit-sale/[id].tsx` — description null → `?? ''` fix. Resolves all edit-sale 400 validation errors.
-
-**S799 — #416 Floor Map re-verified ✅**
-
-**S798 — 5 features shipped + fully deployed** (#442 reports, #396 starter kit, #397 Crew Invasion, #398 org referral, #411 Dorm Dash P2). All migrations applied.
 
 ---
 
@@ -48,20 +72,18 @@ No new decisions pending. DECISIONS.md is current.
 
 ## Beta Tester Impact
 
-**All 5 S800 bug fixes confirmed live.** Most impactful: review submission and waitlist button are now visible on sale pages — shoppers can actually use both features now.
+**Roadmap is clean** — zero UNTESTED features. Every built feature now has a documented QA status in roadmap.md.
 
-**description null fix** (S800) resolved the silent 400 error when organizers edited sales with no description set.
-
-**Blocked Queue at 4 items** — below ceiling of 8. Feature work can continue.
+**Blocked Queue at 4 items** — well below ceiling of 8. Feature work can continue.
 
 ---
 
 ## This Week's Priority
 
-1. **Blocked Queue 4/8** — feature work can resume. Pick from roadmap Pending Chrome QA backlog.
-2. **Pending live-data tests**: #409 Sneak Peek Email (needs platform sale 24-48h out + subscriber + items), #399 Local Legends (needs 3+ same-ZIP check-ins), #408 Scan & Split (needs 2 concurrent scanners).
-3. **#142 batch upload**: code fix is live but a real end-to-end upload test with non-403 Cloudinary is still needed.
-4. **Pending Chrome QA backlog**: large roadmap backlog of built-but-unverified features — continue QA micro-batches.
+1. **Fix #79 Earnings Counter bug** — dispatch to findasale-dev. `animatedRevenue` at dashboard.tsx:197 needs to be wired into PostSaleMomentumCard (or confirm animation was intentionally removed).
+2. **Pending live-data tests**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific data conditions).
+3. **#142 batch upload**: Cloudinary upload end-to-end still needs real test with non-403 credentials.
+4. **UNVERIFIED queue**: 12 external-trigger features marked ⚠️ UNVERIFIED S804. Monitor as platform grows.
 
 ---
 
@@ -70,5 +92,5 @@ No new decisions pending. DECISIONS.md is current.
 - [x] **Submit sitemap to Bing** — DONE
 - [x] **Run #409 migration** — DONE
 - [x] **Run S798 migrations** — DONE. All 3 applied: performance indexes, dorm dash fields, crew invasion table.
-- [ ] **Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
-- [ ] **Remove test file** — `C:\Users\desee\ClaudeProjects\FindaSale\qa-test-item.jpg` (created S800 for upload test, no longer needed).
+- [x] **Update global CLAUDE.md** — DONE (S802).
+- [x] **Remove test file** — DONE (S802).
