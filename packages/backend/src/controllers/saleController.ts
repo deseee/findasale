@@ -123,6 +123,9 @@ const saleCreateSchema = z.object({
   coversFee: z.boolean().optional(),
   // Online-only sale flag — sale has no physical location (e.g., shipping-only retail, virtual auction)
   isOnlineOnly: z.boolean().optional(),
+  // Feature #411: Dorm Dash Phase 2 — dorm-specific fields
+  dormBuilding: z.string().max(200).optional().nullable(),
+  moveOutDate: z.string().datetime({ offset: true }).optional().nullable(),
 });
 
 const saleUpdateSchema = saleCreateSchema.partial();

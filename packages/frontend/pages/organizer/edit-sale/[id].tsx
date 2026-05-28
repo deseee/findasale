@@ -82,12 +82,17 @@ const EditSalePage = () => {
     treasureHuntEnabled: true,
     // Feature #121: Allow item holds for this sale
     holdsEnabled: true,
+    // Feature #397: Crew Invasion
+    crewInvasionEnabled: false,
     // Sale times
     startTime: '09:00' as string,
     endTime: '15:00' as string,
     // S696 Wave 2 features
     safetyNotes: '' as string,
     coversFee: false,
+    // Feature #411: Dorm Dash Phase 2
+    dormBuilding: '' as string,
+    moveOutDate: '' as string, // YYYY-MM-DD for date input
   });
 
   // Helper: Compute distance between two lat/lng points (degrees, approx)
@@ -201,9 +206,14 @@ const EditSalePage = () => {
       treasureHuntEnabled: sale.treasureHuntEnabled ?? true,
       // Feature #121: Allow item holds for this sale
       holdsEnabled: sale.holdsEnabled ?? true,
+      // Feature #397: Crew Invasion
+      crewInvasionEnabled: sale.crewInvasionEnabled ?? false,
       // S696 Wave 2 features
       safetyNotes: sale.safetyNotes ?? '',
       coversFee: sale.coversFee ?? false,
+      // Feature #411: Dorm Dash Phase 2
+      dormBuilding: sale.dormBuilding ?? '',
+      moveOutDate: sale.moveOutDate ? new Date(sale.moveOutDate).toISOString().slice(0, 10) : '',
     });
 
     // Auto-trigger geocoding if sale has no coordinates but has address fields
@@ -233,6 +243,8 @@ const EditSalePage = () => {
         ...rest,
         startDate: rest.startDate ? new Date(`${rest.startDate}T${startTime}`).toISOString() : rest.startDate,
         endDate: rest.endDate ? new Date(`${rest.endDate}T${endTime}`).toISOString() : rest.endDate,
+        // Feature #411: Dorm Dash — convert date-only string to ISO datetime for backend
+        moveOutDate: rest.moveOutDate ? new Date(`${rest.moveOutDate}T23:59:59`).toISOString() : undefined,
       };
 
       // First update the sale (includes treasure hunt fields and holdsEnabled)
@@ -1060,6 +1072,26 @@ const EditSalePage = () => {
                   </label>
                 </div>
 
+                {/* Feature #397: Crew Invasion — group discount opt-in */}
+                <div className="flex items-start space-x-3 pt-4">
+                  <input
+                    type="checkbox"
+                    id="crewInvasionEnabled"
+                    name="crewInvasionEnabled"
+                    checked={formData.crewInvasionEnabled}
+                    onChange={(e) => setFormData({ ...formData, crewInvasionEnabled: e.target.checked })}
+                    className="mt-1 w-4 h-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded cursor-pointer"
+                  />
+                  <label htmlFor="crewInvasionEnabled" className="cursor-pointer flex flex-col">
+                    <span className="text-sm font-medium text-warm-700 dark:text-gray-300">
+                      Enable Crew Invasion (group discount)
+                    </span>
+                    <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
+                      When 4 or more crew members hold items simultaneously, each receives a 10% discount code valid for 45 minutes.
+                    </span>
+                  </label>
+                </div>
+
                 {/* S696 Wave 2: Cover the Fee — AUCTION only */}
                 {formData.saleType === 'AUCTION' && (
                   <div className="flex items-start space-x-3 pt-4">
@@ -1105,6 +1137,44 @@ const EditSalePage = () => {
               <p className="text-xs text-warm-400 dark:text-gray-500 mt-1 text-right">{formData.safetyNotes.length}/1000</p>
             </div>
 
+            {/* Feature #411: Dorm Dash Phase 2 — dorm-specific fields */}
+            {formData.saleType === 'DORM_DASH' && (
+              <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
+                <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-4">Dorm Dash Details</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="dormBuilding" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
+                      Dorm Building <span className="text-warm-400 dark:text-gray-500 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="dormBuilding"
+                      name="dormBuilding"
+                      value={formData.dormBuilding}
+                      onChange={(e) => setFormData(prev => ({ ...prev, dormBuilding: e.target.value }))}
+                      placeholder="e.g., North Hall"
+                      maxLength={200}
+                      className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="moveOutDate" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
+                      Move-Out Deadline <span className="text-warm-400 dark:text-gray-500 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="date"
+                      id="moveOutDate"
+                      name="moveOutDate"
+                      value={formData.moveOutDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, moveOutDate: e.target.value }))}
+                      className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-warm-400 dark:text-gray-500 mt-1">When you must be out — shoppers see urgency</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* S696 Wave 2: Sale Floor Map — managed via item room tags */}
             <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
               <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Sale Floor Map</h3>
@@ -1113,75 +1183,4 @@ const EditSalePage = () => {
               </p>
               <Link
                 href={`/organizer/inventory?saleId=${id}`}
-                className="inline-block text-sm font-semibold text-amber-600 hover:text-amber-700 hover:underline"
-              >
-                Manage Item Room Labels →
-              </Link>
-            </div>
-
-            {/* S696 Wave 2: Bundle Pricing — managed in add-items */}
-            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
-              <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Bundle Pricing</h3>
-              <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
-                Group items together and offer them at a fixed bundle price. Bundles are created and managed from the Add Items page.
-              </p>
-              <Link
-                href={`/organizer/add-items/${id}`}
-                className="inline-block text-sm font-semibold text-amber-600 hover:text-amber-700 hover:underline"
-              >
-                Manage Bundles in Add Items →
-              </Link>
-            </div>
-
-            {/* S696 Wave 2: Donation Kit — managed via settlement */}
-            <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
-              <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Donation Kit</h3>
-              <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
-                Donate unsold items to charity and generate a tax receipt PDF. Available after your sale ends from the settlement page.
-              </p>
-              <Link
-                href={`/organizer/settlement/${id}`}
-                className="inline-block text-sm font-semibold text-amber-600 hover:text-amber-700 hover:underline"
-              >
-                Go to Settlement &amp; Donation →
-              </Link>
-            </div>
-
-            {/* Feature #85: Treasure Hunt QR Manager */}
-            <TreasureHuntQRManager
-              saleId={id as string}
-              enabled={formData.treasureHuntEnabled}
-              onEnabledChange={(enabled) =>
-                setFormData({ ...formData, treasureHuntEnabled: enabled })
-              }
-            />
-
-            {/* Pickup Scheduling Section */}
-            {id && <div className="mt-4"><PickupSlotManager saleId={id as string} /></div>}
-
-            <button
-              type="submit"
-              disabled={updateMutation.isPending}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50"
-            >
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <ConfirmDialog
-        isOpen={confirmState.open}
-        title={confirmState.title}
-        message={confirmState.message}
-        onConfirm={() => confirmState.onConfirm()}
-        onCancel={() => {
-          setConfirmState(s => ({ ...s, open: false }));
-          setIsTogglingStatus(false);
-        }}
-      />
-    </>
-  );
-};
-
-export default EditSalePage;
+                className="inline-blo

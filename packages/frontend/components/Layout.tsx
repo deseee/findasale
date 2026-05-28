@@ -200,6 +200,24 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       }
       openCart();
     });
+
+    // Feature #397: Crew Invasion — notify shopper when their crew triggers a group discount
+    socket.on('CREW_INVASION_TRIGGERED', (data: {
+      saleId: string;
+      crewId: string;
+      code: string;
+      discountPct: number;
+      expiresAt: string;
+      memberCount: number;
+    }) => {
+      const expiresDate = new Date(data.expiresAt);
+      const minutesLeft = Math.round((expiresDate.getTime() - Date.now()) / 60000);
+      showToast(
+        `Crew Invasion! Use code ${data.code} for ${data.discountPct}% off your held items — expires in ${minutesLeft} min`,
+        'success'
+      );
+    });
+
     return () => { socket.disconnect(); };
   }, [user?.id, cart.saleId, cart.cartCount]);
 
