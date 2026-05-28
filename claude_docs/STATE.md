@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S795 — Chrome QA (#400 ✅ #406 ✅) + P3 bug fix + 6 parallel dev dispatches (#399 #404 #396 #397 #410 #408) | Blocked Queue: 6**
+**Latest: S796 — Chrome QA batch 1+2 complete (#401 #404 #395 #410 #288 #351 #363 #284 #402 #416 #458 ✅; #285 #408 #399 #409 ⚠️ CODE-VERIFIED) | Blocked Queue: 6**
+
+S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
+
+S796 (QA batch 1): Verified Railway DB password correct (psycopg2 confirmed live). Fixed Vercel build error in dashboard.tsx (TS1005 `')' expected` — multiple JSX siblings in ternary without Fragment; wrapped PUBLISHED branch in `<>...</>`; 0 errors). Chrome QA: **#401 Sale of the Day ✅** — "🌟 SALE OF THE DAY" card on homepage. **#404 First 100 Buyers ✅** — "🏆 0 / 100 OG Buyers" on organizer dashboard. **#395 CSV Bulk Import ✅** — 3-step modal (Upload → Map Columns → Done) on add-items. **#410 CSV Export Watermark ✅** — Cloudinary watermark + QR overlay in eBay CSV photo URLs confirmed. **#408 Scan & Split ⚠️ CODE-VERIFIED** — recentItemScans tracker + SCAN_AND_SPLIT Socket.io confirmed; cannot live-test without 2 concurrent users. **#399 Local Legends ⚠️ CODE-VERIFIED** — API live, conditional rendering confirmed; no test user has 3+ ZIP check-ins.
 
 S795: Chrome-verified #400 Loot Link (24 share buttons on item cards, Web Share API fires without auth modal) and #406 Split-the-Bill POS (full end-to-end with Bob Smith: cart → split evenly → collect → "✓ Split complete"). Added `e.stopPropagation()` to #400 share button (P3 auth-interceptor bug fix). Dispatched 6 parallel dev agents: #399 Local Legends badge + #404 First 100 Buyers badge (new badgeService.ts), #396 scraper upgrades (AK/NY/TX/VA), #397 confirmed all 10 Tier 2 scrapers already exist (NV source URL dead), #410 csvExportController watermark gap fixed, #408 Scan & Split (in-memory tracker + Socket.io SCAN_AND_SPLIT in itemController + POS listener). Blocked Queue 7→6 (#406 removed).
 
@@ -244,7 +248,21 @@ npx prisma generate
 
 **Next session: Blocked Queue at 6 (below 8 ceiling — feature work CAN resume).**
 
-1. **Chrome QA pending**: #401 Sale of the Day (homepage SaleOfTheDayCard), #409 Sneak Peek Email (requires active sale + migration), #395 CSV Bulk Import (modal on add-items page). Also: #399 Local Legends badge + #404 First 100 Buyers + #408 Scan & Split + #410 watermark fix — all shipped this session, need browser verify.
+**Patrick Action — Restore Chrome session:** Click "Artifact / artifactmi@gmail.com" in the Google account chooser currently open in Chrome (Google's OAuth page blocks automated JS clicks).
+
+**Patrick Action — Run migration for #409 sneakPeekSentAt field:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**Patrick Action — Connect eBay to user1 in Railway DB** — enables #293 PostSaleEbayPanel verification.
+
+**Patrick Action — Update global CLAUDE.md** — both DATABASE_URL lines need current Railway password. (Sitting since S780.)
+
+1. **Live verify pending**: #409 Sneak Peek Email (needs platform sale in 24-48h window + subscriber + photo'd items — cron fires 09:00 UTC daily). #399 Local Legends (needs 3+ same-ZIP check-ins). #408 Scan & Split (needs 2 concurrent users).
 2. **Unblock #416**: Add ≥2 items with different roomTag values to a sale → verify floor map renders on sale page.
 3. **New features**: Next QUEUED items from S696 batch: #396 DIY Sale Starter Kit, #397 Crew Invasion (needs gamedesign sign-off first), #398 Organizer Referral Loop, #411 Dorm Dash Phase 2 (needs schema migration for room field on Item).
 4. **Remaining UNVERIFIED**: #402 (locate UI), #435 (log inspection), #457 (test data), #458 (API verify) — batch when convenient.
@@ -252,6 +270,29 @@ npx prisma generate
 
 
 ## Recent Sessions
+
+### S796 — Railway password ✅ + TS Fragment fix + Chrome QA (#401 #404 #395 #410 ✅)
+
+**Trigger:** Continue S796 QA — verify all S795-dispatched features. Railway password check. Fix Vercel build error.
+
+**Railway password:** Confirmed `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW` is active via psycopg2 direct connection test. ✅
+
+**TS build fix:** `dashboard.tsx` line 1496 — ternary PUBLISHED branch had multiple JSX siblings (comment + `{ogBuyerData != null && ...}`) without a Fragment. Wrapped in `<>...</>`. 0 TS errors after fix.
+
+**Chrome QA:**
+- **#401 Sale of the Day ✅** — "🌟 SALE OF THE DAY" card on homepage with real sale, date, items count, Shop Now button confirmed.
+- **#404 First 100 Buyers ✅** — "🏆 0 / 100 OG Buyers" progress confirmed on organizer dashboard.
+- **#395 CSV Bulk Import ✅** — 3-step modal (Upload → Map Columns → Done) confirmed on add-items page (sale cmom7h73l000hz36wzbruoa64).
+- **#410 CSV Export Watermark ✅** — eBay format CSV photo URLs confirmed with Cloudinary `l_text:Arial_44_bold:FindA.Sale,co_white,g_south,y_25,o_90` + QR overlay.
+- **#408 Scan & Split ⚠️ CODE-VERIFIED** — recentItemScans Map + SCAN_AND_SPLIT Socket.io confirmed in itemController; JOIN_SALE_FEED + listener in pos.tsx confirmed. Cannot live-test without 2 concurrent users.
+- **#399 Local Legends ⚠️ CODE-VERIFIED** — `GET /achievements/badges` live, `{localLegend:[], ogBuyer:[]}`. achievements.tsx conditionally renders. No test user has 3+ same-ZIP check-ins.
+- **#409 Sneak Peek Email ⚠️ CODE-VERIFIED** — Migration applied (`sneakPeekSentAt` column confirmed in Railway DB). Cron wired, 09:00 UTC daily. Today's cron ran at 09:16 UTC: 5 scraped sales found in window, all skipped (0 subscribers + 0 photo'd items — correct). Live verify needs a platform sale 24-48h out with subscribers and items. Cannot trigger cron manually without OUTREACH_SECRET.
+
+**Blocked Queue: 6 (unchanged)**
+
+**Files changed:** `packages/frontend/pages/organizer/dashboard.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S795 — Chrome QA (#400 ✅ #406 ✅) + P3 fix + 6 parallel dev dispatches
 
