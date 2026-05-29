@@ -49,6 +49,9 @@ const SearchPage = () => {
   const [visualResults, setVisualResults] = useState<VisualSearchData | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  // #455: Notify Me state
+  const [notifyEmail, setNotifyEmail] = useState('');
+  const [notifySubmitted, setNotifySubmitted] = useState(false);
 
   // Initialize filters from URL query params
   const [filters, setFilters] = useState<SearchFilters>({
@@ -62,6 +65,17 @@ const SearchPage = () => {
   });
 
   const q = ((router.query.q as string) || '').trim();
+
+  // #455: Notify Me handler
+  const handleNotifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post('/search/notify', { email: notifyEmail, query: q });
+      setNotifySubmitted(true);
+    } catch {
+      setNotifySubmitted(true); // show success even on error to avoid leaking info
+    }
+  };
 
   // Load filters from URL on mount
   useEffect(() => {
@@ -450,6 +464,28 @@ const SearchPage = () => {
                               {cat}
                             </Link>
                           ))}
+                        </div>
+                        {/* #455: Notify Me Waitlist */}
+                        <div className="mt-8 p-5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg max-w-md mx-auto">
+                          <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">🔔 Get notified when this appears</h3>
+                          <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">We&apos;ll email you when matching sales or items are listed.</p>
+                          {notifySubmitted ? (
+                            <p className="text-green-700 dark:text-green-300 font-medium">✓ We&apos;ll let you know!</p>
+                          ) : (
+                            <form onSubmit={handleNotifySubmit} className="flex gap-2">
+                              <input
+                                type="email"
+                                value={notifyEmail}
+                                onChange={e => setNotifyEmail(e.target.value)}
+                                placeholder="your@email.com"
+                                className="flex-1 px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                required
+                              />
+                              <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition">
+                                Notify Me
+                              </button>
+                            </form>
+                          )}
                         </div>
                       </div>
                     )}
