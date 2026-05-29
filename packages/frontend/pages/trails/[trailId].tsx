@@ -32,6 +32,7 @@ interface Trail {
   id: string;
   name: string;
   description?: string;
+  shareToken?: string;
   minStopsRequired: number;
   stops: TrailStop[];
   isFeatured?: boolean;
@@ -355,9 +356,34 @@ export default function TrailDetailPage() {
             <p className="text-lg font-bold text-green-900 dark:text-green-100 mb-2">
               🎉 Trail Complete!
             </p>
-            <p className="text-green-800 dark:text-green-200">
+            <p className="text-green-800 dark:text-green-200 mb-4">
               You earned <strong>{totalXpEarned} XP</strong> total on this trail.
             </p>
+            <button
+              onClick={async () => {
+                const trailUrl = `https://finda.sale/trails/${trail.shareToken || trail.id}`;
+                const shareText = `I just completed the ${trail.name} trail on FindA.Sale and earned ${totalXpEarned} XP! 🎉`;
+                try {
+                  if (navigator.share) {
+                    await navigator.share({ title: trail.name, text: shareText, url: trailUrl });
+                  } else {
+                    await navigator.clipboard.writeText(shareText + '\n\n' + trailUrl);
+                    showToast('Share text copied to clipboard!', 'success');
+                  }
+                } catch (err) {
+                  console.error('Share error:', err);
+                  try {
+                    await navigator.clipboard.writeText(shareText + '\n\n' + trailUrl);
+                    showToast('Share text copied to clipboard!', 'success');
+                  } catch (clipErr) {
+                    console.error('Clipboard error:', clipErr);
+                  }
+                }
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-800 dark:bg-green-800 dark:hover:bg-green-900 text-white font-semibold rounded-lg transition text-sm"
+            >
+              🏆 Share Your Achievement
+            </button>
           </div>
         )}
 
