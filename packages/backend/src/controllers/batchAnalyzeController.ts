@@ -295,6 +295,26 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             }
           }
 
+          // #319/#325/#328: Backfill Photo.orderIndex from Vision quality scores (fire-and-forget)
+          // analyzeItemImages() returns photoOrderIndices sorted by Vision label confidence.
+          // Map each sorted position back to the original URL and write orderIndex + isPrimary.
+          if (analysis?.photoOrderIndices && analysis.photoOrderIndices.length > 0) {
+            const orderIndices: number[] = analysis.photoOrderIndices;
+            Promise.all(
+              orderIndices.map((origPhotoIdx, sortedPosition) => {
+                const photoUrl = downloadedImages[photoIndices[origPhotoIdx]]?.url;
+                if (!photoUrl) return Promise.resolve();
+                return prisma.photo.updateMany({
+                  where: { itemId, url: photoUrl },
+                  data: {
+                    orderIndex: sortedPosition,
+                    isPrimary: sortedPosition === 0,
+                  },
+                });
+              })
+            ).catch(err => console.warn(`[Photo sync] orderIndex backfill failed for item ${itemId}:`, err));
+          }
+
           // Build cluster summary
           const summary: ClusterSummary = {
             itemId,

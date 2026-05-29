@@ -123,6 +123,26 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         return;
       }
 
+      // #319/#325/#328: Backfill Photo.orderIndex from Vision quality scores (fire-and-forget)
+      // analyzeItemImages() returns photoOrderIndices sorted by Vision label confidence.
+      // Write orderIndex + isPrimary to Photo rows so #325 Best-Photo-First sorting is persisted.
+      if (aiResult.photoOrderIndices && aiResult.photoOrderIndices.length > 0) {
+        const orderIndices: number[] = aiResult.photoOrderIndices;
+        Promise.all(
+          orderIndices.map((origPhotoIdx, sortedPosition) => {
+            const photoUrl = item.photoUrls[origPhotoIdx];
+            if (!photoUrl) return Promise.resolve();
+            return prisma.photo.updateMany({
+              where: { itemId, url: photoUrl },
+              data: {
+                orderIndex: sortedPosition,
+                isPrimary: sortedPosition === 0,
+              },
+            });
+          })
+        ).catch(err => console.warn(`[Photo sync] orderIndex backfill failed for item ${itemId}:`, err));
+      }
+
       // Comp-based price refinement: use detected category to fetch recent sold comps
       // and override the raw AI price with a market-grounded suggestion
       let refinedPrice = aiResult.suggestedPrice;
