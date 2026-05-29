@@ -800,6 +800,19 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700">
                       <Tag size={14} className="text-amber-500" /> Clearance
                     </Link>
+                    <hr className="my-1 border-warm-100 dark:border-gray-700" />
+                    <Link href="/categories" onClick={() => setExploreOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700">
+                      <Tag size={14} className="text-amber-500" /> Categories
+                    </Link>
+                    <Link href="/encyclopedia" onClick={() => setExploreOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700">
+                      <BookOpen size={14} className="text-amber-500" /> Encyclopedia
+                    </Link>
+                    <Link href="/guides" onClick={() => setExploreOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700">
+                      <FileText size={14} className="text-amber-500" /> Guides
+                    </Link>
                   </div>
                 )}
               </div>
@@ -1835,7 +1848,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       {!noFooter && (
       <footer className="bg-warm-800 dark:bg-gray-950 text-white py-8">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <h3 className="text-lg font-bold mb-4">FindA.Sale</h3>
               <p className="text-warm-400 mb-4">
@@ -1870,6 +1883,18 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <li><Link href="/guide" className="text-warm-400 hover:text-white">Organizer Guide</Link></li>
                   </>
                 )}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold mb-4">Discover</h3>
+              <ul className="space-y-2">
+                <li><Link href="/map" className="text-warm-400 hover:text-white">Map</Link></li>
+                <li><Link href="/trending" className="text-warm-400 hover:text-white">Trending Sales</Link></li>
+                <li><Link href="/search" className="text-warm-400 hover:text-white">Search</Link></li>
+                <li><Link href="/categories" className="text-warm-400 hover:text-white">Browse by Category</Link></li>
+                <li><Link href="/cities" className="text-warm-400 hover:text-white">Browse by City</Link></li>
+                <li><Link href="/encyclopedia" className="text-warm-400 hover:text-white">Encyclopedia</Link></li>
+                <li><Link href="/guides" className="text-warm-400 hover:text-white">Guides</Link></li>
               </ul>
             </div>
             <div>
