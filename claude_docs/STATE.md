@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S806 — Major QA + feature build session. QA batch 1: #256 ✅ CHROME VERIFIED, #254/#278/#268/#281 ⚠️ CODE-VERIFIED. #274 share button bug fixed + deployed. QA batch 2: #450 EventSeries ✅ CHROME VERIFIED. #445 Buyer Referral Link BUILT + ✅ CHROME VERIFIED ("Know someone who runs sales?" card on checkout-success). #455 Notify Me Waitlist BUILT + ✅ UI CHROME VERIFIED (SearchNotification model + /search/notify endpoint + zero-result widget). ⚠️ #455 backend pending migration 20260529120000_add_search_notification. Blocked Queue: 3.**
+**Latest: S807 — P0 incident + QA. Railway DB credentials drifted after S780b rotation: Postgres DATABASE_URL had stale hardcoded password; backend returning 500 on all queries from ~12:36 UTC. Fixed via railway-agent: POSTGRES_PASSWORD/DATABASE_URL/DATABASE_PUBLIC_URL updated to actual DB password; backend redeployed ~13:35 UTC. QA resumed: #186 QR Scan Analytics ✅ CHROME VERIFIED (/organizer/qr-codes — 3 KPI tiles, Scanner Funnel, Sales Breakdown). #192 Price History Tracking ✅ CHROME VERIFIED (ItemPriceHistoryChart on edit-item — Recharts line chart with seeded data confirmed). Blocked Queue: 3. ⚠️ Global CLAUDE.md password field stale — needs update (file not accessible from VM; see packages/database/.env for current value).**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -248,6 +248,21 @@ npx prisma generate
 
 
 ## Recent Sessions
+
+### S807 — P0 Incident Fix + QA (#186 #192)
+
+**Trigger:** "continue qa" — QA session interrupted by P0 production outage.
+
+**P0 Incident (Railway DB auth failure, ~12:36–13:35 UTC):**
+Root cause: During S780b password rotation, Railway Postgres `DATABASE_URL` variable became hardcoded with stale credentials while `POSTGRES_PASSWORD` was updated. When today's backend redeployment pulled the stale `${{Postgres.DATABASE_URL}}` reference, all DB queries failed with "Authentication failed". Fix: via railway-agent, updated `POSTGRES_PASSWORD` + `DATABASE_URL` + `DATABASE_PUBLIC_URL` in Postgres service to correct credentials (from `packages/database/.env`); backend redeployed. Backend online ~13:35 UTC. Note: global CLAUDE.md credential field is still stale — file not accessible from VM session; current password is in `packages/database/.env`.
+
+**Chrome QA Results:**
+- **#186 QR Scan Analytics ✅** — Navigated to `/organizer/qr-codes` as Bob Smith. "QR Scan Analytics" page: 3 KPI tiles (Total Lifetime/Active Sale/Sales-with-scans), Scanner Funnel (Last 7 Days) with empty state, Sales Breakdown table with "Print Labels →" action. Full page confirmed.
+- **#192 Price History Tracking ✅** — Seeded 2 `ItemPriceHistory` records ($20→$15, May 22→May 29). Navigated to edit-item. `ItemPriceHistoryChart` rendered below Price Research section: Recharts line chart with orange data points, $22/$16.5/$13.5 Y-axis, May 22/May 29 X-axis. API `/api/items/:id/price-history` confirmed returning data.
+
+**Blocked Queue: 3 (unchanged)**
+
+---
 
 ### S806 — QA Batch + 3 Features Built (#274 #445 #455)
 
