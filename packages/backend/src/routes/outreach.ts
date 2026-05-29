@@ -167,6 +167,29 @@ router.get('/unsubscribe', handleUnsubscribe);
 // Rate limiting applied to POST to prevent abuse via forged requests.
 router.post('/unsubscribe', unsubscribeLimiter, express.urlencoded({ extended: false }), handleUnsubscribe);
 
+router.post('/page-view', async (req, res) => {
+  try {
+    const { organizerId, touchNumber, tier } = req.body;
+    if (!organizerId || typeof organizerId !== 'string' || organizerId.trim() === '') {
+      return res.status(400).json({ error: 'organizerId is required' });
+    }
+
+    await prisma.outreachAuditLog.create({
+      data: {
+        organizerId: organizerId.trim(),
+        event: 'ORGANIZER_PAGE_VIEWED',
+        touchNumber: typeof touchNumber === 'number' ? touchNumber : null,
+        metadata: tier ? { tier } : null,
+      },
+    });
+
+    res.status(200).json({ ok: true });
+  } catch (err: any) {
+    console.error('[OutreachPageView] Error:', err.message);
+    res.status(500).json({ error: 'Tracking error' });
+  }
+});
+
 router.post('/resend-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
     const secret = process.env.RESEND_WEBHOOK_SECRET;

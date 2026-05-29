@@ -4711,6 +4711,7 @@ enum OutreachAuditEvent {
   BOUNCED
   OPTED_OUT
   SUPPRESSED
+  ORGANIZER_PAGE_VIEWED
 }
 
 model CrawlerVisit {
