@@ -313,6 +313,40 @@ const CheckoutSuccessPage = () => {
             </div>
           </div>
 
+          {/* #445: Organizer Referral Card */}
+          <div className="mb-10 p-6 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800 rounded-lg">
+            <div className="flex items-start gap-4">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Know someone who runs sales?
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                  Invite them to list on FindA.Sale for free — it takes 5 minutes.
+                </p>
+                <button
+                  onClick={async () => {
+                    const shareUrl = 'https://finda.sale/register';
+                    const shareText = 'I just found something great on FindA.Sale! If you run yard sales, estate sales, or similar events, you can list for free at https://finda.sale/register';
+                    try {
+                      if (navigator.share) {
+                        await navigator.share({ title: 'List your sale on FindA.Sale', text: shareText, url: shareUrl });
+                      } else {
+                        await navigator.clipboard.writeText(shareText);
+                        showToast('Invite link copied to clipboard!', 'success');
+                      }
+               
+                    } catch (err) {
+                      console.error('Share failed:', err);
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold rounded-lg transition"
+                >
+                  Invite an organizer
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* CTAs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Link
