@@ -559,6 +559,9 @@ Before ending any session:
 **File placement pre-check (fires before doc update):**
 If any new file was created in `claude_docs/` this session: verify each file's path against `claude_docs/operations/file-creation-schema.md`. Files in the wrong location must be noted in the push block comment. Files that belong in a subdirectory must NOT be left in `claude_docs/` root. This check prevents the accumulating root-violation debt documented in monthly retrospectives.
 
+**CREDENTIAL BLACKOUT (HARD RULE — survives compression):**
+STATE.md session summaries MUST NEVER contain passwords, connection strings, tokens, or any credential value. This includes DATABASE_URL, PGPASSWORD, API keys, and JWT secrets. If a session verifies a password works, write "Railway password confirmed active ✅" — never write the value. Two GitGuardian incidents (S776, S796) were caused by session wrap copying live passwords into STATE.md which is committed to a PUBLIC repo. Third violation is unacceptable.
+
 **Doc Update Order (mandatory at every session wrap — in this exact order):**
 1. Update STATE.md (source of truth for session state; now includes "## Recent Sessions" section with 5 most recent entries and "## Next Session" section)
 2. Update patrick-dashboard.md (Patrick-readable status summary)
