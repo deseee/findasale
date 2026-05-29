@@ -2173,6 +2173,43 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
           </aside>
         </div>{/* end two-col grid */}
 
+      {/* SEO Internal Links — city + sale-type discovery (helps Google index /city/* pages) */}
+      {sale?.city && sale?.state && (() => {
+        const citySlug = `${sale.city}-${sale.state}`.toLowerCase().replace(/[\s.]+/g, '-').replace(/[^a-z0-9-]/g, '');
+        const saleTypes = [
+          { label: 'Estate Sales', slug: 'estate-sales' },
+          { label: 'Yard Sales', slug: 'yard-sales' },
+          { label: 'Auctions', slug: 'auctions' },
+          { label: 'Flea Markets', slug: 'flea-markets' },
+        ];
+        return (
+          <div className="border-t border-warm-200 dark:border-gray-700 bg-warm-50 dark:bg-gray-900 py-6 px-4 mt-4">
+            <div className="max-w-4xl mx-auto">
+              <p className="text-xs font-semibold uppercase tracking-wider text-warm-400 dark:text-gray-500 mb-3">
+                More in {sale.city}, {sale.state}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={`/city/${citySlug}`}
+                  className="text-xs px-3 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 text-warm-700 dark:text-gray-300 hover:border-amber-400 hover:text-amber-700 dark:hover:text-amber-400 transition-colors"
+                >
+                  All sales in {sale.city}
+                </Link>
+                {saleTypes.map(({ label, slug }) => (
+                  <Link
+                    key={slug}
+                    href={`/city/${citySlug}/${slug}`}
+                    className="text-xs px-3 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 text-warm-700 dark:text-gray-300 hover:border-amber-400 hover:text-amber-700 dark:hover:text-amber-400 transition-colors"
+                  >
+                    {label} in {sale.city}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       </main>
       )}{/* end !isSaleLocked */}
 
