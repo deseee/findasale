@@ -283,6 +283,19 @@ function UTMCapture() {
       return;
     }
 
+    // Always persist UTM params to sessionStorage so any page can read them
+    try {
+      sessionStorage.setItem('fsa_utm', JSON.stringify({
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        utm_content,
+        ref: router.query.ref,
+        captured_at: new Date().toISOString(),
+      }));
+    } catch {}
+
+    // Only fire the link-clicks pixel when saleId is also present (existing behaviour)
     if (!saleId || typeof saleId !== 'string') {
       return;
     }

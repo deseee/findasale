@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { track } from '@vercel/analytics';
 import { GetServerSideProps } from 'next';
 import api from '../../lib/api';
 import { getSaleImageUrl } from '../../lib/imageUtils';
@@ -108,8 +110,25 @@ interface OrganizerPageProps {
 }
 
 const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
+  const router = useRouter();
   const [stickyVisible, setStickyVisible] = useState(false);
   const claimBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Log organizer page view to backend when arriving from outreach email
+  useEffect(() => {
+    if (router.query.ref !== 'outreach' || !organizer?.id) return;
+    fetch('/api/outreach/page-view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        organizerId: organizer.id,
+        touchNumber: router.query.utm_campaign
+          ? parseInt((router.query.utm_campaign as string).replace('touch', '')) || null
+          : null,
+        tier: (router.query.utm_content as string) || null,
+      }),
+    }).catch(() => {}); // fire-and-forget
+  }, [organizer?.id, router.query.ref]);
 
   useEffect(() => {
     if (!organizer?.isUnmanagedListing || !claimBtnRef.current) return;
@@ -437,7 +456,14 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                   )}
                   <button
                     ref={claimBtnRef}
-                    onClick={() => { window.location.href = `/register?claim=${organizer.id}`; }}
+                    onClick={() => {
+                      track('claim_profile_click', {
+                        organizerId: organizer.id,
+                        source: (router.query.ref as string) || 'direct',
+                        tier: (router.query.utm_content as string) || undefined,
+                      });
+                      window.location.href = `/register?claim=${organizer.id}`;
+                    }}
                     className="w-full bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white text-base font-bold py-3.5 rounded-xl transition-colors mb-2"
                   >
                     Claim This Profile — It&apos;s Free
@@ -499,7 +525,15 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                 <span className="text-2xl">🔒</span>
                 <p className="text-sm text-gray-700 dark:text-gray-300 text-center px-6 leading-snug">
                   Shoppers are already finding you.{' '}
-                  <Link href={`/register?claim=${organizer.id}`} className="text-orange-500 font-semibold underline">
+                  <Link
+                    href={`/register?claim=${organizer.id}`}
+                    className="text-orange-500 font-semibold underline"
+                    onClick={() => track('claim_profile_click', {
+                      organizerId: organizer.id,
+                      source: (router.query.ref as string) || 'direct',
+                      tier: (router.query.utm_content as string) || undefined,
+                    })}
+                  >
                     Claim your profile
                   </Link>{' '}
                   to see the full breakdown.
@@ -614,7 +648,15 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
               </div>
               <p className="relative z-20 mt-4 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
                 We&apos;ve been building your sale history from public listings. Claim your profile to display your{' '}
-                <Link href={`/register?claim=${organizer.id}`} className="text-orange-500 font-semibold">
+                <Link
+                  href={`/register?claim=${organizer.id}`}
+                  className="text-orange-500 font-semibold"
+                  onClick={() => track('claim_profile_click', {
+                    organizerId: organizer.id,
+                    source: (router.query.ref as string) || 'direct',
+                    tier: (router.query.utm_content as string) || undefined,
+                  })}
+                >
                   {formatBusinessCategory(organizer.businessCategory) ?? 'Specialist'} Badge
                 </Link>{' '}
                 and turn your track record into trust.
@@ -634,6 +676,11 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
           <Link
             href={`/register?claim=${organizer.id}`}
             className="bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors flex-shrink-0"
+            onClick={() => track('claim_profile_click', {
+              organizerId: organizer.id,
+              source: (router.query.ref as string) || 'direct',
+              tier: (router.query.utm_content as string) || undefined,
+            })}
           >
             Claim Free
           </Link>

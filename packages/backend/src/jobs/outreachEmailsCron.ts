@@ -418,7 +418,8 @@ export const sendOutreachEmails = async (): Promise<void> => {
         const tier = (record.organizer.leadTier || 'COLD').toUpperCase();
         const tierTemplates = TEMPLATES[tier] ?? TEMPLATES['COLD'];
         const template = tierTemplates[`touch${touchNum}`];
-        const previewLink = `${frontendUrl}/organizers/${record.organizerId}`;
+        const previewLinkRaw = `${frontendUrl}/organizers/${record.organizerId}?utm_source=outreach&utm_medium=email&utm_campaign=touch${touchNum}&utm_content=${tier.toLowerCase()}&ref=outreach`;
+        const previewLink = previewLinkRaw;
         const videoLink = `${frontendUrl}/video`;
         const previewHref = `${backendUrl}/api/outreach/click?trackingId=${encodeURIComponent(trackingToken)}&original=${encodeURIComponent(previewLink)}`;
         const videoHref = `${backendUrl}/api/outreach/click?trackingId=${encodeURIComponent(trackingToken)}&original=${encodeURIComponent(videoLink)}`;
