@@ -662,3 +662,11 @@ Seeded "Floor Map Test Sale" via psycopg2 (4 items: 2× Living Room, 2× Kitchen
 - P3: RANGER threshold corrected from 2000→1200 in RankHeroSection.tsx, RankLevelingHint.tsx, achievements.tsx, dashboard.tsx
 - P3: AvatarDropdown.tsx — Explorer's Guild added to Explore dropdown
 - P3: profile.tsx — Hunt Pass expiry now uses xpProfile.huntPassExpiry as primary source
+
+**Blocked Queue: 9 → 5** (removed: #230 ✅, #223 ✅, #272 ⚠️, #273 ⚠️; added: #402, #435, #457, #458 UNVERIFIED)
+
+**Patrick session restoration note:** Lorene Cook (a1clcook@gmail.com) was accidentally signed in mid-session due to coordinate mismatch in Google account chooser. Fixed via ref-based click to reselect Artifact (artifactmi@gmail.com). Patrick restored before session end.
+
+**Files changed (push block below):** `packages/backend/src/services/xpService.ts` · `packages/frontend/components/RankHeroSection.tsx` · `packages/frontend/components/RankLevelingHint.tsx` · `packages/frontend/pages/shopper/achievements.tsx` · `packages/frontend/pages/shopper/dashboard.tsx` · `packages/frontend/components/AvatarDropdown.tsx` · `packages/frontend/pages/profile.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
