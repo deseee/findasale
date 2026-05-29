@@ -214,8 +214,8 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
         </div>
       )}
 
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <Link href="/" className="inline-flex items-center text-amber-600 hover:text-amber-800 mb-6">
+      <main className="container mx-auto px-4 py-4 sm:py-8 max-w-4xl">
+        <Link href="/" className="inline-flex items-center text-amber-600 hover:text-amber-800 mb-4 sm:mb-6">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
           </svg>
@@ -223,21 +223,21 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
         </Link>
 
         {/* Organizer header */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6 mb-6 sm:mb-8">
           <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-start gap-4 mb-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-3 mb-2">
                 {organizer.profilePhoto && (
                   <img
                     src={getSaleImageUrl(organizer.profilePhoto) ?? organizer.profilePhoto}
                     alt={`${organizer.businessName} logo`}
-                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg object-cover border border-warm-200 dark:border-gray-700 flex-shrink-0"
+                    className="w-14 h-14 sm:w-20 sm:h-20 rounded-lg object-cover border border-warm-200 dark:border-gray-700 flex-shrink-0"
                     loading="lazy"
                   />
                 )}
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100">{organizer.businessName}</h1>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-warm-900 dark:text-gray-100 break-words">{organizer.businessName}</h1>
                     {!organizer.isUnmanagedListing && <ReputationTier tier={organizer.reputationTier} size="sm" />}
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
                       🏷️ {organizer.sales.length} sale{organizer.sales.length !== 1 ? 's' : ''}
@@ -264,7 +264,7 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                   )}
                 </div>
                 {organizer.isUnmanagedListing && (
-                  <div className="flex-shrink-0 flex flex-col items-center gap-1 ml-2">
+                  <div className="hidden sm:flex flex-shrink-0 flex-col items-center gap-1 ml-2">
                     <div className="relative w-14 h-14 flex items-center justify-center">
                       <svg className="-rotate-90 w-14 h-14" viewBox="0 0 56 56" fill="none">
                         <circle cx="28" cy="28" r="22" stroke="#3f3f46" strokeWidth="5" />
@@ -536,9 +536,9 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
 
         {/* Upcoming sales */}
         {upcomingSales.length > 0 && (
-          <section className="mb-8">
+          <section className="mb-6 sm:mb-8">
             <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-4">Upcoming &amp; Active Sales</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               {upcomingSales.map(sale => (
                 <SaleCard key={sale.id} sale={sale} />
               ))}
@@ -550,7 +550,7 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
         {pastSales.length > 0 && (
           <section>
             <h2 className="text-xl font-bold text-warm-500 dark:text-warm-400 mb-4">Past Sales</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 opacity-75">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 opacity-75">
               {pastSales.map(sale => (
                 <SaleCard key={sale.id} sale={sale} />
               ))}
@@ -559,7 +559,7 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
         )}
 
         {organizer.sales.length === 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 sm:p-8 text-center">
             <p className="text-warm-500 dark:text-warm-400">No sales listed yet.</p>
             <p className="text-sm text-warm-400 dark:text-warm-500 mt-2">Check back soon for upcoming sales.</p>
           </div>
