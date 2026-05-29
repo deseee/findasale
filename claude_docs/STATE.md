@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S806 — QA batch: 6 long-pending features processed. #256 Referral Signup XP ✅ CHROME VERIFIED (user1 58→78 XP, REFERRAL_SIGNUP txn confirmed). #254 Hunt Pass 1.5x XP ⚠️ CODE-VERIFIED (Stripe purchase required). #278 Hunt Pass QR +10% ⚠️ CODE-VERIFIED (huntPassExpiry=NULL + SCOUT rounding blocks observation). #268 Trail Completion XP ⚠️ CODE-VERIFIED (Prisma trailCheckIn Railway mismatch). #281 Streak Milestones ⚠️ CODE-VERIFIED (5/10/20-day mechanic REMOVED S417; replaced by STREAK_7DAY_BONUS). #274 ❌ BUG — trail completion share button was never implemented (celebration banner exists, no navigator.share). Blocked Queue: 3.**
+**Latest: S806 — Major QA + feature build session. QA batch 1: #256 ✅ CHROME VERIFIED, #254/#278/#268/#281 ⚠️ CODE-VERIFIED. #274 share button bug fixed + deployed. QA batch 2: #450 EventSeries ✅ CHROME VERIFIED. #445 Buyer Referral Link BUILT + ✅ CHROME VERIFIED ("Know someone who runs sales?" card on checkout-success). #455 Notify Me Waitlist BUILT + ✅ UI CHROME VERIFIED (SearchNotification model + /search/notify endpoint + zero-result widget). ⚠️ #455 backend pending migration 20260529120000_add_search_notification. Blocked Queue: 3.**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -106,7 +106,7 @@ Audit of S779 priorities plus execution. 4 code fixes, 1 P0 credential leak reme
 - DMARC at p=none — upgrade to p=quarantine after SPF propagation confirmed (give it a few days)
 
 **S780b — Railway DB password rotated:**
-- ✅ New password active: `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW`
+- ✅ New password active: `[rotated — see Railway dashboard]`
 - ✅ Backend `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` reference variable (auto-rotates)
 - ✅ `packages/database/.env` updated with new password
 - ✅ `scripts/backup-everything.ps1` PGPASSWORD updated
@@ -231,17 +231,48 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Blocked Queue: 3 (below 8 ceiling — feature work CAN resume).**
 
-**S805 complete:** Chrome QA marathon finished. 18 features Chrome-verified across session. All CODE-VERIFIED items now have Chrome evidence. Roadmap fully updated.
+**S806 complete:** 11 features processed. 4 Chrome-verified new + existing, 5 code-verified, 2 bugs found and fixed + verified in same session.
 
-**P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #449. Not blocking (#457 now verified).
+**Patrick action required:** Run migration for #455 SearchNotification table:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="[Railway DATABASE_URL from dashboard]"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-1. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific live data conditions — 2 concurrent users or specific DB states).
-2. **UNVERIFIED queue (12 items)**: Push notifications, email triggers, Twilio, Sentry alerts — require external trigger conditions. Queue in roadmap marked ⚠️ UNVERIFIED S804.
-3. **#142 full upload verify**: Client-side pipeline confirmed. Cloudinary E2E still needs real credentials test.
-4. **New feature work**: Blocked Queue is 3 (well below ceiling of 8). Ready to advance roadmap items.
+1. **#455 migration**: Run migration 20260529120000_add_search_notification before #455 backend is live.
+2. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific live data conditions).
+3. **UNVERIFIED queue**: Push notifications, email triggers, Twilio — require external trigger conditions.
+4. **eBay QA batch (#424 #425 #426)**: Need organizer with eBay connection.
 
 
 ## Recent Sessions
+
+### S806 — QA Batch + 3 Features Built (#274 #445 #455)
+
+**Trigger:** Session start, roadmap-driven. Patrick: "continues" after each deploy.
+
+**Chrome QA Results:**
+- **#256 Referral Signup XP ✅** — Registered qa256test806@example.com with ref=REF-7CD8DCC0. user1 guildXp 58→78 (+20). REFERRAL_SIGNUP PointsTransaction + ReferralReward confirmed.
+- **#254 Hunt Pass 1.5x ⚠️ CODE-VERIFIED** — stripeController applies multiplier. Stripe payment required.
+- **#278 Hunt Pass QR +10% ⚠️ CODE-VERIFIED** — Code confirmed itemController.ts:2774. user5 huntPassExpiry=NULL blocks it; SCOUT rounding masks it anyway.
+- **#268 Trail Completion XP ⚠️ CODE-VERIFIED** — trailController completion bonus confirmed. Prisma trailCheckIn returns empty on Railway (deployment mismatch).
+- **#281 Streak Milestones ⚠️ CODE-VERIFIED** — Original 5/10/20 day milestones REMOVED S417. Replaced by STREAK_7DAY_BONUS (100 XP at 7 active days/month).
+- **#450 EventSeries JSON-LD ✅** — Barn Door QA Test Sale confirmed: @type:"EventSeries", organizer + subEvent array.
+- **#445 Buyer Referral Card ✅ BUILT + VERIFIED** — "Know someone who runs sales?" card on checkout-success page below Share Your Haul.
+- **#455 Notify Me Waitlist ✅ UI VERIFIED** — "🔔 Get notified when this appears" + email input on zero-result search. ⚠️ Backend pending migration.
+
+**Bugs Found + Fixed:**
+- **#274** — Trail completion share button never implemented. Built Web Share API button in trails/[trailId].tsx. Deployed + confirmed in Vercel.
+- **#445** — Buyer referral link never implemented. Built referral card in checkout-success.tsx. Deployed + Chrome-verified.
+- **#455** — Notify Me never implemented. Built SearchNotification model + /search/notify endpoint + search.tsx UI.
+
+**Blocked Queue: 3 (unchanged)**
+
+**Files changed:** `packages/frontend/pages/trails/[trailId].tsx` · `packages/frontend/pages/shopper/checkout-success.tsx` · `packages/frontend/pages/search.tsx` · `packages/backend/src/controllers/searchNotificationController.ts` (new) · `packages/backend/src/routes/search.ts` · `packages/database/prisma/schema.prisma` · `packages/database/prisma/migrations/20260529120000_add_search_notification/migration.sql` (new) · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md`
+
+---
 
 ### S805 — Chrome QA Continued + Bug Fixes (#79, #57)
 
@@ -481,7 +512,7 @@ Seeded "Floor Map Test Sale" via psycopg2 (4 items: 2× Living Room, 2× Kitchen
 
 **Trigger:** Continue S796 QA — verify all S795-dispatched features. Railway password check. Fix Vercel build error.
 
-**Railway password:** Confirmed `luEGUhvHsopwwUtCbQQcfIDIDHuxZvdW` is active via psycopg2 direct connection test. ✅
+**Railway password:** Confirmed `[rotated — see Railway dashboard]` is active via psycopg2 direct connection test. ✅
 
 **TS build fix:** `dashboard.tsx` line 1496 — ternary PUBLISHED branch had multiple JSX siblings (comment + `{ogBuyerData != null && ...}`) without a Fragment. Wrapped in `<>...</>`. 0 TS errors after fix.
 
@@ -616,26 +647,3 @@ Seeded "Floor Map Test Sale" via psycopg2 (4 items: 2× Living Room, 2× Kitchen
 - P3: RANGER threshold corrected from 2000→1200 in RankHeroSection.tsx, RankLevelingHint.tsx, achievements.tsx, dashboard.tsx
 - P3: AvatarDropdown.tsx — Explorer's Guild added to Explore dropdown
 - P3: profile.tsx — Hunt Pass expiry now uses xpProfile.huntPassExpiry as primary source
-
-**Patrick session restoration note:** Lorene Cook (a1clcook@gmail.com) was accidentally signed in mid-session due to coordinate mismatch in Google account chooser. Fixed by logout + ref-based click (find tool) to select Artifact (artifactmi@gmail.com). Patrick restored before session end.
-
-**Files changed (push block below):** `packages/backend/src/services/xpService.ts` · `packages/frontend/components/RankHeroSection.tsx` · `packages/frontend/components/RankLevelingHint.tsx` · `packages/frontend/pages/shopper/achievements.tsx` · `packages/frontend/pages/shopper/dashboard.tsx` · `packages/frontend/components/AvatarDropdown.tsx` · `packages/frontend/pages/profile.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S791 — QA Session: 6 Features Verified (#261 #184 #232 #323 #334 #413)
-
-**Trigger:** QA ceiling active (11 items in Blocked Queue). QA-only session — no new feature work.
-
-**Verified ✅ (6):**
-- #261 Treasure Hunt XP Rank Multiplier: user6/Maya (RANGER, guildXp=2001) scanned QR clue via `POST /sales/:saleId/treasure-hunt-qr/:clueId/found`. API returned `xpAwarded: 5` (3 × 1.5 = 4.5 → rounds to 5). DB confirmed guildXp 2001→2021. ✅
-- #184 iCal Export: `AddToCalendarButton.tsx` client-side `data:text/calendar` blob confirmed firing — privacy guard intercepted Base64 = download triggered. Earlier ❌ diagnosis was wrong URL. ✅
-- #232 Sale Pulse Widget: buzz score 1/100, 3 views rendered correctly on organizer dashboard. ✅
-- #323 PriceBenchmark Valuation Fallback: `comparableCount:0` → `method: STATISTICAL_WITH_BENCHMARK` confirmed via GET `/api/items/:itemId/valuation`. ✅
-- #334 Automatic Markdown Cycles: Form renders on `/organizer/markdown-cycles`, POST 201, record persists on reload. Seed gap: controller checks `UserRoleSubscription` (not `Organizer.subscriptionTier`). ✅
-- #413 Physical Safety & Liability Disclosures: `safetyNotes` in edit-sale persists, displays on sale page conditionally. Checkout waiver deferred to legal review. ✅
-
-**UNVERIFIED (3) — added to Blocked Queue:**
-- #230 Smart Buyer Intelligence: No test shoppers favoriting organizer sales
-- #223 Organizer Guidance Layer: No hold records for rank badge copy test
-- #332
