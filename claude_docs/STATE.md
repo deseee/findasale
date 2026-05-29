@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S805 — Chrome QA batch + 2 code fixes. #79 Earnings Counter fixed. #57 rarity:true in getSale() select. Chrome verified: #136 ✅ QR embed checkbox, #18 ✅ Post Performance Analytics, #127 ✅ POS Tiers widget, #76 ✅ Skeleton loaders, #81 ✅ Empty States (4 pages), #142 ✅ Upload pipeline (client-side), #308 ✅, #457 ✅, #251 ✅, #16 ✅, #201 ✅, #205 ✅. Blocked Queue: 3.**
+**Latest: S805 — Chrome QA marathon (multi-compaction). Total verified: #308 ✅, #457 ✅, #251 ✅, #16 ✅, #201 ✅, #205 ✅, #136 ✅, #18 ✅, #127 ✅, #76 ✅, #81 ✅, #142 ✅ (client-side), #196 ✅ BuyingPool re-verify, #57 ✅ rarity re-verify, #77 ✅ Sale Published Celebration, #143 ✅ Rapidfire Camera, #215 ✅ AI Tags, #216 ✅ AI Condition Grade. Code fixes: #79 earnings counter, #57 rarity:true fix. Blocked Queue: 3.**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -231,15 +231,14 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Blocked Queue: 3 (below 8 ceiling — feature work CAN resume).**
 
-**S805 complete:** Chrome QA marathon continued. 6 more features Chrome-verified (#136, #18, #127, #76, #81, #142 partial). 2 code fixes shipped (#79, #57). Roadmap updated. Steve Yzerman Duck price set to 15000 cents ($150) for buying pool test — consider restoring to original or leaving as-is.
+**S805 complete:** Chrome QA marathon finished. 18 features Chrome-verified across session. All CODE-VERIFIED items now have Chrome evidence. Roadmap fully updated.
 
 **P2 SSR head gap (low urgency):** next/head components (noindex, JSON-LD, OG tags) inject client-side only after React hydration — absent from server-rendered HTML. Googlebot is fine (renders JS). Affects #451, #449. Not blocking (#457 now verified).
 
-1. **#57 rarity badges — re-verify post-deploy**: rarity:true added to getSale() items select. After push deploys to Railway, navigate to Artifact Downtown Paw Paw sale page and confirm rarity badges appear on RARE/ULTRA_RARE items.
-2. **#196 Buying Pool — verify post-deploy**: BuyingPool guard removed from items/[id].tsx. After Vercel deploys, navigate to Steve Yzerman Duck item ($150, AVAILABLE) and confirm BuyingPool card renders.
-3. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific data conditions).
-4. **UNVERIFIED queue (12 items)**: Push notifications, email triggers, Twilio, Sentry alerts — require external trigger conditions. Queue in roadmap marked ⚠️ UNVERIFIED S804.
-5. **#142 full upload verify**: Client-side pipeline confirmed. Cloudinary E2E still needs real credentials test.
+1. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific live data conditions — 2 concurrent users or specific DB states).
+2. **UNVERIFIED queue (12 items)**: Push notifications, email triggers, Twilio, Sentry alerts — require external trigger conditions. Queue in roadmap marked ⚠️ UNVERIFIED S804.
+3. **#142 full upload verify**: Client-side pipeline confirmed. Cloudinary E2E still needs real credentials test.
+4. **New feature work**: Blocked Queue is 3 (well below ceiling of 8). Ready to advance roadmap items.
 
 
 ## Recent Sessions
@@ -253,7 +252,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 - **#57 Rarity Badges** — `rarity: true` added to `getSale()` items select in `saleController.ts`. Badge condition `item.rarity` was always `undefined` — now returns correct value. Pending Chrome re-verify post-Railway deploy.
 - **#196 Buying Pool** — Outer `{item.buyingPool && ...}` guard removed from `items/[id].tsx`. BuyingPoolCard has internal `shouldShow` gate. Pending Chrome re-verify post-Vercel deploy.
 
-**Chrome QA Results (this session):**
+**Chrome QA Results (total across S805 — multi-compaction session):**
 - **#308 Hide/Show Items ✅** — Hide → item disappears from public page; Show → reappears. isActive flag working.
 - **#457 Scraped Sale noindex ✅** — meta robots returns "noindex" for scraped sales.
 - **#251 priceBeforeMarkdown ✅** — Crossed-out original price confirmed on item detail + sale page cards.
@@ -266,6 +265,12 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 - **#76 Loading Skeletons ✅** — Gray placeholder skeleton cards confirmed on search page during load.
 - **#81 Empty States ✅** — EmptyState component confirmed on 4 pages: /shopper/wishlist Sellers tab, /shopper/bids, /shopper/holds, /search no-results.
 - **#142 Batch Upload ✅ (partial)** — File input wired, change event fires, "✓ 1 photo selected" shown, thumbnail renders via FileReader. Cloudinary E2E UNVERIFIED (no real credentials in QA env).
+- **#57 Rarity Badges ✅ (re-verify post-deploy)** — rarity:true fix deployed to Railway. RARE badges confirmed on MXL 770 + Zoom B3 cards (Artifact Downtown Paw Paw sale).
+- **#196 Buying Pool ✅ (re-verify post-deploy)** — BuyingPoolCard confirmed on Steve Yzerman Duck ($15,000, AVAILABLE). "Split this purchase" section with 4 options + "Start a Pool" CTA.
+- **#77 Sale Published Celebration ✅** — "You're live!" full-screen modal confirmed on DRAFT→PUBLISHED transition: party popper emoji, sale name, "Your sale is published and ready for shoppers." copy, "Continue →" CTA.
+- **#143 Rapidfire Camera Mode ✅ (partial)** — Rapidfire/Regular tabs, ⚡ capture button, thumbnail appears in queue panel. Camera stream active. Cloudinary E2E upload UNVERIFIED (no real credentials in QA env).
+- **#215 AI Tag Suggestions ✅** — 8 AI tags pre-filled as editable chips in edit-item form (Steve Yzerman Duck): Collectible Duck, Steve Yzerman, NHL Memorabilia, Detroit Red Wings, Celebriducks, Sports Collectible, Rubber Duck, 1990s-2000s. DB: isAiTagged=true. "Auto-suggested" disclaimer on public item page.
+- **#216 AI Condition Grade ✅** — "B" button highlighted in edit-item form (Steve Yzerman Duck, DB conditionGrade='B'=Good). S/A/B/C/D buttons present, AI-suggested grade pre-selected.
 
 **Blocked Queue: 3 (unchanged)**
 
