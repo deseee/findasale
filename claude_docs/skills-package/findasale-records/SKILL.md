@@ -310,7 +310,7 @@ At the end of any meaningful work session, run these steps in **this exact order
 1. **Update STATE.md** — source of truth for session state. This file now contains three sections:
    - Current state of work ("In Progress", "Known Gotchas", etc.)
    - "## Recent Sessions" section (5 most recent session summaries, replaces separate session-log.md)
-   - "## Next Session" section (pending Patrick actions + what comes next, replaces separate next-session-prompt.md)
+   - "## Next Session" section (pending Patrick actions + what comes next, replaces separate next-session-prompt.md). **CRITICAL FORMAT — dispatch-stub, not to-do list.** Every queue entry must include: agent name, confirmed root cause or context, and expected output. Wrong: "Priority 1 — fix photo pipeline." Right: "`Skill('findasale-dev')` → photo upload pipeline (#319/#325/#328). Root cause confirmed: upload writes Item.photoUrls but never creates Photo records. Expected output: Photo record creation added alongside photoUrls update + push block." A to-do list entry gives Claude permission to start a planning loop. A dispatch stub removes that ambiguity — the next session dispatches immediately.
    Move completed items to appropriate sections. Update "Last Updated" timestamp. Add new Known Gotchas; remove resolved ones.
 2. **Update patrick-dashboard.md** — Patrick-readable status summary with build status, pending actions, next decisions.
 3. **Provide Patrick the `.\push.ps1` block** — both STATE.md and patrick-dashboard.md must be in it.

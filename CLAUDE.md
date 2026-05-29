@@ -1,5 +1,10 @@
 # CLAUDE.md
 
+> ⚡ **HARD RULES — apply before reading any other section:**
+> 1. Dispatch everything identified now. No deferring P2/P3. No "want me to fix these?" No partial passes.
+> 2. Code changes >20 lines → `Skill('findasale-dev')`. No inline implementation.
+> 3. Declare session type (QA / DEV / BUG / RESEARCH / WRAP) at session start and apply the matching **Session Type Rules** section below.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ---
@@ -125,6 +130,47 @@ equivalents. Custom skills have project context; generics don't.
 **Friction gate (fires before asking Patrick for ANYTHING):** Can you find it yourself in .env files, the codebase, memory, STATE.md, or any accessible file in under 60 seconds? If yes, find it. Do not ask Patrick. Asking for information you can retrieve is friction and erodes trust. The .env files are accessible. The codebase is accessible. Memory is accessible. Use them.
 
 **Roadmap is the work queue — not documentation.** Every session must advance at least one roadmap item. Every item touched must have its roadmap row updated before wrap. Findings from audits go into the roadmap immediately, not into session summaries that get rotated out.
+
+---
+
+## Session Type Rules (Compression-Surviving — Declare at Session Start)
+
+**At session start, state the session type. Apply matching rules for the entire session. These survive compression because they are in-file, not in memory.**
+
+### QA MODE
+1. No ✅ without browser interaction. Code-on-GitHub ≠ verified.
+2. Evidence required: "Navigated [URL] as [user]. Clicked [element]. Saw [outcome]. Refreshed — [result]."
+3. UNVERIFIED is valid and honest. Never fabricate ✅ to clear a queue.
+4. One feature per QA dispatch. Chrome agents run SEQUENTIALLY — parallel Chrome agents share one browser and conflict.
+5. Login once per account batch. No bash-auth. No login retries.
+6. Plan before Chrome: read credentials → batch by account → write test order → then open browser.
+
+### DEV MODE
+1. Code change >20 lines → `Skill('findasale-dev')`. No inline. No exceptions.
+2. Dispatch ALL identified work. No "highest leverage subset." No deferring P2/P3.
+3. Full implementation: all states (empty, error, loading), edge cases, mobile viewport.
+4. Schema preflight: every referenced field must exist in schema.prisma before any code is written.
+5. TS check gate: zero errors required before returning output to main session.
+6. Write push block immediately after dev returns — do not wait for Patrick to ask.
+
+### BUG MODE
+1. STOP. Read the relevant file first. No diagnosis until you have read the actual code. Speculation without reading is prohibited.
+2. Fix everything found: P0–P3, all in same dispatch batch when no file conflict exists.
+3. Root cause first. Symptom fix without root cause creates a new bug.
+4. After dispatch: provide push block + queue Chrome verification in STATE.md Next Session.
+
+### RESEARCH / CREATIVE MODE
+1. National scale by default. Never propose single-metro or local-pilot as Phase 1.
+2. Full assignment: examine every item in scope, not just the most obvious ones.
+3. Every recommendation → roadmap entry or explicit rejection. No orphaned research docs.
+4. No "AI" in copy. No founder voice. Sender = "The FindA.Sale Team."
+
+### WRAP MODE
+1. Update STATE.md and patrick-dashboard.md before reporting the session complete.
+2. Update roadmap rows for every feature touched this session — no deferred row updates.
+3. Push block must include STATE.md, patrick-dashboard.md, and roadmap.md if any row changed.
+4. No "next session" deferrals for items completed this session — finish the wrap docs now.
+5. **Next Session queue format (dispatch-stub, not to-do list):** Each item must name the agent, state the confirmed root cause or context, and specify the expected output. Example: "`Skill('findasale-dev')` → photo upload pipeline (#319/#325/#328). Root cause confirmed: upload writes Item.photoUrls but never creates Photo records. Expected output: Photo record creation added alongside photoUrls update + push block."
 
 ---
 
