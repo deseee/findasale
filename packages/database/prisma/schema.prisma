@@ -4760,3 +4760,18 @@ model ShopperWaitlistEntry {
   @@index([itemType])
   @@index([city, isActive])
 }
+
+// Feature #455: Anonymous search-query email alerts — "Notify Me when this appears"
+model SearchNotification {
+  id          String    @id @default(cuid())
+  email       String
+  searchQuery String
+  city        String?
+  isActive    Boolean   @default(true)
+  notifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([email, searchQuery])
+  @@index([searchQuery, isActive])
+  @@index([email])
+}

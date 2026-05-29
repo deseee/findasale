@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { getVisionLabels } from '../services/cloudAIService';
 import { upload } from '../controllers/uploadController';
+import { notifyOnSearch } from '../controllers/searchNotificationController'; // #455
 import { searchItems } from '../services/itemSearchService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { searchLimiter } from '../middleware/rateLimiter';
@@ -521,5 +522,8 @@ router.post('/visual', upload.single('photo'), async (req: Request, res: Respons
     res.status(500).json({ error: 'Visual search failed' });
   }
 });
+
+// #455: Anonymous search-query email alert
+router.post('/notify', notifyOnSearch);
 
 export default router;
