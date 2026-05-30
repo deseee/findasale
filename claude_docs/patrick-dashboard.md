@@ -2,7 +2,24 @@
 
 ---
 
-## What Happened This Session (S809 — Maintenance)
+## What Happened This Session (S810 — Cleanup + Widget Triage)
+
+**Verified last session's work landed, sped up public pages, and cleaned up hidden widgets.**
+
+**Indexes confirmed live.** The 7 database speed-up indexes from S809 (including the fix for the 4-second review-loading query) are confirmed in the production database. The earlier worry that the migration didn't apply was a false alarm — the verification query was just looking for the wrong naming pattern.
+
+**Public pages hardened.** Six public pages were loading entire database tables into memory to do small calculations — the worst loaded every single review just to show a star rating. All six now have sensible limits. No visible change for users; the pages just won't choke as the database grows. Pushed and live.
+
+**The hidden-widget question is resolved.** You reviewed the list and decided: turn on 4, cut 3.
+- **Now showing on the shopper dashboard:** a visit-streak tracker, notification preferences (with a dark-mode text bug fixed), "My Pickup Appointments," and a rank-benefits card. These were built but never wired in — shoppers can finally see them.
+- **Cut:** a duplicate points badge, a duplicate location map (we already show a map on that page), and a duplicate "subscribe to this sale" box (the page already has "Notify me" + "Remind me" buttons).
+- **Left alone:** the pickup-booking card stays on the checkout page where it belongs (you book a pickup *after* you buy, not before).
+
+Heads-up for next session: those 4 newly-shown widgets need a quick Chrome check to confirm they look right (dark mode, mobile, empty states). Also corrected a stale note in our records that claimed the streak widget was already visible — it wasn't until today.
+
+---
+
+## Previous: S809 — Maintenance
 
 **Sentry cleaned up. Slow queries fixed. Migration deployed.**
 
@@ -39,7 +56,7 @@ Also silenced a noisy Sentry alert about photo uploads — the backend was alrea
 
 ## Pending decision for you
 
-**~17 widgets are built but not showing.** During the bug sweep we found about 17 dashboard/sale-page widgets that exist in the code but were never wired into the pages, so nobody can see them. These won't be removed without your call — for each one you decide: turn it on, or cut it. We'll bring you the list.
+**✅ RESOLVED S810 — hidden-widget triage done.** You decided: rendered 4, cut 3, left 1 on its correct page. 11 leftover dead imports of still-live components remain as optional lint cleanup (low priority, your call when convenient).
 
 ---
 
@@ -95,7 +112,7 @@ Remaining open audit issues:
 
 1. **Mark Sold default:** Recommended — pick the settlement mode automatically by sale type (overridable each time). Confirm and we'll Chrome QA all three modes.
 2. **#239 legal gate:** Get attorney + CPA answers on merchant-of-record (Model B recommended) and 1099 handling before we turn on real consignor payouts.
-3. **Dead-widget triage:** ~17 built-but-hidden widgets — render or cut, your call per widget.
+3. ~~Dead-widget triage~~ — ✅ DONE S810.
 
 ---
 
@@ -118,7 +135,7 @@ Remaining open audit issues:
 
 ## Action Items for Patrick
 
-- [ ] **Push S809 wrap** — STATE.md + patrick-dashboard.md. See push block below.
+- [ ] **Push S810 wrap** — STATE.md + patrick-dashboard.md + roadmap.md + SaleSubscription cut. See push block below.
 - [ ] **Update global CLAUDE.md** — Railway password field is stale. Update the `DATABASE_URL (public proxy)` line with the current password.
 - [ ] **Create GitGuardian personal access token** — go to dashboard.gitguardian.com → API → Personal access tokens → create with `incidents:read` scope. Share the value next session so we can wire it into the daily health check.
 - [ ] **Confirm Mark Sold default** (smart-by-sale-type) so we can Chrome QA the three modes.
