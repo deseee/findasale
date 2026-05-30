@@ -77,11 +77,26 @@ const SHIPS_FROM_COUNTRY = 'US';
 const MAX_HANDLING_TIME = '3';
 
 /**
+ * Standard parcel bucket (oz) — the universal fallback for any item whose
+ * category does not match a specific small-flat or heavier bucket. This is the
+ * default for unmapped, null, undefined, or empty categories: an unknown
+ * category is treated as a normal parcel-shippable good, never dropped.
+ */
+const STANDARD_PARCEL_OZ = 12;
+
+/**
  * Estimate package weight (oz) from category for items with no explicit
  * packageWeightOz. Buckets: small flats ~3oz, standard collectibles ~12oz,
- * heavier small goods ~32oz. Default to the standard bucket when unknown.
+ * heavier small goods ~32oz.
+ *
+ * CONTRACT: this function ALWAYS returns a sane, positive ounce value. It never
+ * returns null/0/undefined. Any category that does not match a specific bucket —
+ * including null, undefined, or empty — falls back to the standard parcel bucket
+ * (12 oz). This guarantees rule (e) in computeItemShipping can always derive a
+ * ladder price for a configured organizer, so no no-weight item is dropped from
+ * the feed merely because its category isn't in this map.
  */
-export function estimateWeightOzFromCategory(category: string | null): number {
+export function estimateWeightOzFromCategory(category: string | null | undefined): number {
   const c = (category || '').toLowerCase();
 
   // Small flats (~3 oz): coins, comics, cards, magazines, paper ephemera
@@ -92,8 +107,9 @@ export function estimateWeightOzFromCategory(category: string | null): number {
   const HEAVY_SMALL = ['tin', 'lighter', 'golf', 'tool', 'cast iron', 'cast-iron', 'flatware', 'silverware', 'kitchenware', 'stoneware'];
   if (HEAVY_SMALL.some((k) => c.includes(k))) return 32;
 
-  // Standard collectibles / books / media / small electronics (~12 oz)
-  return 12;
+  // FALLBACK — standard collectibles / books / media / small electronics, and
+  // every unmapped/null/undefined/empty category. Never returns null or 0.
+  return STANDARD_PARCEL_OZ;
 }
 
 /**

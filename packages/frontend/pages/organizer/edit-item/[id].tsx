@@ -1407,11 +1407,11 @@ const EditItemPage = () => {
                         className="h-4 w-4 rounded border-gray-300 accent-blue-600"
                       />
                       <label htmlFor="local-pickup" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-                        Local pickup only (no shipping on eBay)
+                        Local pickup only (no shipping)
                       </label>
                     </div>
                     <p className="text-xs text-gray-500 mt-1 ml-6">
-                      When checked, this item will use a local pickup fulfillment policy on eBay instead of calculated/flat-rate shipping.
+                      When checked, this item uses a local pickup policy on eBay and is hidden from Google Shopping, instead of calculated/flat-rate shipping.
                     </p>
                     {showLocalPickupNudge && formData.ebayShippingOverride !== 'LOCAL_PICKUP_ONLY' && (
                       <div className="mt-2 flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-700 dark:text-blue-300">

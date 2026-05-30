@@ -38,6 +38,8 @@ You can run a complete sale on Simple — create it, add items, publish, sell, a
 
 **Best for:** Full-time organizers, estate liquidators, auctioneers, and anyone running more than one or two sales per month. The eBay cross-listing alone covers the monthly fee if you move a handful of higher-value items.
 
+On top of eBay, your shippable items are also surfaced on **Google Shopping** through an automatic product feed — included on every plan, with no per-item work. Once a sale is published, its shippable items can appear in Google's free product listings. (Items marked Local Pickup Only are excluded, since Google Shopping is for items that can be delivered.)
+
 The markdown cycles feature is worth calling out separately. You set price-reduction rules (drop 20% on day two, drop another 20% on day three), and the system handles it automatically. No manual re-pricing on sale day.
 
 ---

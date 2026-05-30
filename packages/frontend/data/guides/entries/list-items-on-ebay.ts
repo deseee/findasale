@@ -88,6 +88,24 @@ If it sells at your sale first — in-person or through FindA.Sale — the eBay 
 
 ---
 
+## Bonus: your items also show up on Google Shopping — automatically
+
+eBay isn't the only place your shippable items get discovered. FindA.Sale also sends them to **Google Shopping** through an automatic product feed — no per-item work, no extra button to push.
+
+Here's how it works:
+
+- Once a sale is published, every shippable item in it is included in FindA.Sale's nightly product feed to Google.
+- Those items can then appear in Google's **free product listings** when shoppers search Google for what you're selling.
+- It happens on its own. You don't connect an account, fill in anything extra, or push items one at a time the way you do with eBay.
+
+**What's included:** items from published sales that can ship — the same kind of items worth putting on eBay. The feed uses your item's title, photos, price, and condition, and works out a shipping estimate from the weight tiers you've already set up for eBay.
+
+**What's excluded:** anything marked **Local Pickup Only** is left out of the Google feed — Google Shopping is for items a shopper can buy and have delivered, so pickup-only inventory doesn't belong there. Genuinely oversized or freight-only items are excluded too.
+
+So the shipping details you enter for eBay do double duty: they make your items eligible for Google Shopping at the same time, with no extra steps.
+
+---
+
 ## Common errors and fixes
 
 **"Weight required"**
@@ -120,6 +138,9 @@ You can push to eBay and Shopify independently. They're separate actions.
 
 **What if a buyer on eBay wants to negotiate?**
 That happens through eBay's messaging system directly. FindA.Sale doesn't see eBay messages.
+
+**Do my items show up anywhere besides eBay and my sale page?**
+Yes — shippable items from published sales are also sent to Google Shopping through an automatic nightly product feed, so they can appear in Google's free product listings. There's nothing to set up and no per-item push; it runs on its own. Items marked Local Pickup Only are excluded, since Google Shopping is for items that can be delivered.
 
 **My item is sitting at yellow — should I fix it before pushing?**
 Yellow means the listing will go live but something optional is missing. A short description or only one photo won't block the listing — but items with two or more photos and a decent description sell faster. Fix it if you have 30 seconds.
