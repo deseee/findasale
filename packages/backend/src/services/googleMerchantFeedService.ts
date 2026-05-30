@@ -66,6 +66,7 @@ async function fetchFeedItems(): Promise<FeedItem[]> {
     },
     select: {
       id: true,
+      saleId: true,
       title: true,
       description: true,
       price: true,
@@ -83,10 +84,28 @@ async function fetchFeedItems(): Promise<FeedItem[]> {
       deletedAt: true,
       draftStatus: true,
       listingType: true,
+      // Feature #463 shipping inputs
+      tags: true,
+      ebayShippingOverride: true,
+      packageWeightOz: true,
       sale: {
         select: {
           status: true,
           deletedAt: true,
+          // Organizer's existing eBay shipping config drives per-item shipping.
+          organizer: {
+            select: {
+              ebayPolicyMapping: {
+                select: {
+                  weightTierMappings: true,
+                  categoryOverrides: true,
+                  heavyOversizedPolicyId: true,
+                  fragilePolicyId: true,
+                  unknownPolicyId: true,
+                },
+              },
+            },
+          },
         },
       },
     },
