@@ -1340,7 +1340,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
           <span className="mx-2">/</span>
           <Link href="/trending" className="hover:underline">Sales</Link>
           <span className="mx-2">/</span>
-          <span style={{ color: '#1A1814' }} className="dark:text-[#F2F0EA]">{sale.title}</span>
+          <span className="text-[#1A1814] dark:text-[#F2F0EA]">{sale.title}</span>
         </div>
 
 

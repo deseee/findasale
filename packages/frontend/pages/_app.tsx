@@ -1,4 +1,11 @@
 import '../styles/globals.css';
+// Leaflet base stylesheet — imported globally so it is present in the bundle BEFORE
+// the map ever mounts. Previously loaded via an async <link> inside SaleMapInner,
+// which race-loaded: Leaflet would init the map before .leaflet-map-pane got its
+// CSS, leaving the pane stuck at the identity transform so markers projected
+// thousands of px off-screen (H-002 attempt 2). A static import guarantees the CSS
+// is applied before _resetView runs.
+import 'leaflet/dist/leaflet.css';
 import type { AppProps } from 'next/app';
 import dynamic from 'next/dynamic';
 // SSR-skip these — @vercel/analytics 1.6.1 ESM build does `import { useEffect } from "react"`,

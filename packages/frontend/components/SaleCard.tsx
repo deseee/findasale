@@ -68,12 +68,22 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
   const [imgError, setImgError] = useState(false);
   const { isLowBandwidth } = useNetworkQuality();
 
-  const hasPhoto = sale.photoUrls && sale.photoUrls.length > 0;
-  const photoUrl = hasPhoto ? sale.photoUrls[0] : null;
+  // L-004 edge: treat empty-string / whitespace-only photo URLs as "no photo".
+  // Scraped sales can ship photoUrls[0] === "" or "   ", which previously rendered
+  // an <img> with an empty/whitespace src — a blank dark rectangle instead of the
+  // branded placeholder. Trim and require real content before using the URL.
+  const rawPhotoUrl =
+    sale.photoUrls && sale.photoUrls.length > 0 ? sale.photoUrls[0] : null;
+  const photoUrl =
+    typeof rawPhotoUrl === 'string' && rawPhotoUrl.trim().length > 0
+      ? rawPhotoUrl
+      : null;
   const lqipUrl = photoUrl ? getLqipUrl(photoUrl) : null;
   const imageQuality = isLowBandwidth ? 40 : 75;
   // getSaleImageUrl handles both Cloudinary optimization AND scraped CDN proxying
   const optimizedUrl = photoUrl ? getSaleImageUrl(photoUrl, imageQuality) : null;
+  // Render the <img> only when we have a usable URL AND it hasn't errored.
+  const hasPhoto = !!photoUrl && !!optimizedUrl && optimizedUrl.trim().length > 0 && !imgError;
 
   useEffect(() => {
     setImgLoaded(false);
@@ -149,7 +159,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
           <Skeleton className="absolute inset-0 rounded-none bg-warm-200/60 dark:bg-gray-600/60" />
         )}
 
-        {photoUrl && !imgError ? (
+        {hasPhoto ? (
           <img
             key={optimizedUrl}
             src={optimizedUrl!}
@@ -161,7 +171,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
             onError={() => setImgError(true)}
             loading={priority ? 'eager' : 'lazy'}
           />
-        ) : (!photoUrl || imgError) ? (
+        ) : (
           // Branded no-photo placeholder — tinted tile + FindA.Sale pin (L-004 audit 2026-05-30)
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-warm-100 to-warm-200 dark:from-gray-700 dark:to-gray-800">
             <svg
@@ -182,7 +192,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
               FindA.Sale
             </span>
           </div>
-        ) : null}
+        )}
 
         {(badge || showMarkdownBadge) && (
           <div className="absolute top-2 left-2 flex flex-col gap-1">

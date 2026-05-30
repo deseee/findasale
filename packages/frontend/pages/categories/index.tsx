@@ -118,10 +118,10 @@ const CATEGORY_ICONS: Record<string, string> = {
   'cast iron': '🍳',
 
   // --- Coins & stamps ---
-  'coins': '🪙',
-  'us coins': '🪙',
-  'world coins': '🪙',
-  'coin collections': '🪙',
+  'coins': '💰',
+  'us coins': '💰',
+  'world coins': '💰',
+  'coin collections': '💰',
   'stamps': '✉️',
   'us stamps': '✉️',
   'world stamps': '✉️',
@@ -329,18 +329,18 @@ const CATEGORY_ICONS: Record<string, string> = {
   'pipe fittings': '🔧',
   'tins': '🥫',
   'ashtrays': '🚬',
-  'signs': '🪧',
+  'signs': '📢',
   'manuals, inserts & box art': '📄',
   'manuals & inserts': '📄',
   'box art': '📄',
-  'other retail store ads': '🪧',
-  'retail store ads': '🪧',
+  'other retail store ads': '📢',
+  'retail store ads': '📢',
   'tracksuits & sets': '🩳',
   'tracksuits': '🩳',
   'other us politics collectibles': '🎗️',
   'us politics collectibles': '🎗️',
   'political memorabilia': '🎗️',
-  'coins & currency': '🪙',
+  'coins & currency': '💰',
 };
 
 /**
@@ -351,12 +351,12 @@ const CATEGORY_ICONS: Record<string, string> = {
  * category path.
  */
 const PARENT_FALLBACK_ICONS: Array<[RegExp, string]> = [
-  [/coin|numismat|currency|paper money|bullion/i, '🪙'],
+  [/coin|numismat|currency|paper money|bullion/i, '💰'],
   [/stamp/i, '✉️'],
   [/comic|graphic novel|manga/i, '🦸'],
   [/card/i, '🃏'],
   [/politic|campaign|election/i, '🎗️'],
-  [/advertis|\bads?\b|sign|poster/i, '🪧'],
+  [/advertis|\bads?\b|sign|poster/i, '📢'],
   [/book|magazine|manual|paper|ephemera/i, '📚'],
   [/jewelry|jewellery|ring|necklace|bracelet|earring/i, '💎'],
   [/cloth|apparel|shirt|pant|dress|tracksuit|jacket|coat/i, '👕'],
@@ -528,148 +528,4 @@ const CategoriesIndexPage = () => {
       const existing = grouped.get(groupKey);
       if (existing) {
         // M-008: identical leaf names (case/whitespace) merge into one card
-        // with a summed item count. Keep the first (highest-count) member's href.
-        existing.count += count;
-      } else {
-        grouped.set(groupKey, {
-          displayLabel,
-          count,
-          href,
-          icon: resolveIcon(displayLabel, groupKey, rawCat),
-        });
-      }
-    }
-  }
-
-  // Sort by summed count descending so most-stocked categories appear first.
-  const entries: GroupedCategory[] = Array.from(grouped.values()).sort(
-    (a, b) => b.count - a.count,
-  );
-
-  return (
-    <>
-      <Head>
-        <title>Browse by Category — FindA.Sale</title>
-        <meta
-          name="description"
-          content="Shop antiques, furniture, jewelry, tools, collectibles, and more from estate sales, auctions, and yard sales near you."
-        />
-        <meta property="og:title" content="Browse by Category — FindA.Sale" />
-        <meta
-          property="og:description"
-          content="Shop antiques, furniture, jewelry, tools, collectibles, and more from estate sales, auctions, and yard sales near you."
-        />
-        <meta property="og:url" content="https://finda.sale/categories" />
-        <meta property="og:image" content="https://finda.sale/og-image.png" />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'CollectionPage',
-              name: 'Browse by Category',
-              description: 'Shop antiques, furniture, jewelry, tools, collectibles, and more from estate sales, auctions, and yard sales near you.',
-              url: 'https://finda.sale/categories',
-            }),
-          }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'BreadcrumbList',
-              itemListElement: [
-                {
-                  '@type': 'ListItem',
-                  position: 1,
-                  name: 'Home',
-                  item: 'https://finda.sale',
-                },
-                {
-                  '@type': 'ListItem',
-                  position: 2,
-                  name: 'Categories',
-                  item: 'https://finda.sale/categories',
-                },
-              ],
-            }),
-          }}
-        />
-      </Head>
-
-      <main className="container mx-auto px-4 py-8">
-        {/* Breadcrumb */}
-        <nav className="text-sm text-warm-400 mb-6 flex items-center gap-2">
-          <Link href="/" className="hover:text-amber-600">
-            Home
-          </Link>
-          <span>›</span>
-          <span className="text-warm-900 dark:text-warm-100 font-medium">Categories</span>
-        </nav>
-
-        <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Browse by Category</h1>
-        <p className="text-warm-500 dark:text-warm-400 mb-8">
-          Find what you're looking for across all active sales.
-        </p>
-
-        {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-6 animate-pulse">
-                <div className="w-10 h-10 bg-warm-200 rounded-full mb-3" />
-                <div className="h-4 bg-warm-200 rounded w-2/3 mb-2" />
-                <div className="h-3 bg-warm-200 rounded w-1/3" />
-              </div>
-            ))}
-          </div>
-        ) : isError ? (
-          <div className="text-center py-16">
-            <p className="text-5xl mb-4">😕</p>
-            <p className="text-warm-700 dark:text-warm-300 text-lg mb-4">Failed to load categories.</p>
-            <Link
-              href="/"
-              className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              Browse All Sales
-            </Link>
-          </div>
-        ) : entries.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-5xl mb-4">📦</p>
-            <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No items listed yet</h3>
-            <p className="text-warm-600 dark:text-warm-400 mb-6">
-              Check back soon — new sales go live every week.
-            </p>
-            <Link
-              href="/"
-              className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-            >
-              Browse All Sales
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {entries.map(({ displayLabel, count, href, icon }) => (
-              <Link
-                key={displayLabel}
-                href={href}
-                className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start gap-2 border border-warm-100 hover:border-amber-200"
-              >
-                <span className="text-3xl" role="img" aria-label={displayLabel}>
-                  {icon}
-                </span>
-                <span className="font-semibold text-warm-900 dark:text-warm-100 text-base">{displayLabel}</span>
-                <span className="text-sm text-warm-500 dark:text-warm-400">
-                  {count.toLocaleString()} item{count !== 1 ? 's' : ''}
-                </span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </main>
-    </>
-  );
-};
-
-export default CategoriesIndexPage;
+        // with a summed
