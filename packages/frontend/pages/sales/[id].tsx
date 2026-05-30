@@ -11,7 +11,6 @@ import CheckoutModal from '../../components/CheckoutModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useToast } from '../../components/ToastContext';
 import { format, parseISO } from 'date-fns';
-import SaleSubscription from '../../components/SaleSubscription';
 import FavoriteButton from '../../components/FavoriteButton';
 import CSVImportModal from '../../components/CSVImportModal';
 import SaleShareButton from '../../components/SaleShareButton';
@@ -60,6 +59,56 @@ import ClaimListingBanner from '../../components/ClaimListingBanner'; // Feature
 import SaleFloorMap from '../../components/SaleFloorMap'; // #416: Floor Map
 import ReviewsSection from '../../components/ReviewsSection';
 
+// M-005: Sale-type display labels (shared by badge + meta copy)
+const SALE_TYPE_LABELS: Record<string, string> = {
+  ESTATE: 'Estate Sale', ESTATE_SALE: 'Estate Sale', YARD: 'Yard Sale', YARD_SALE: 'Yard Sale',
+  GARAGE: 'Garage Sale', MOVING: 'Moving Sale', DOWNSIZING: 'Downsizing Sale', AUCTION: 'Auction',
+  FLEA_MARKET: 'Flea Market', SWAP_MEET: 'Swap Meet', POPUP: 'Pop-Up Sale',
+  LIQUIDATION: 'Liquidation Sale', CHARITY: 'Charity Sale', RETAIL: 'Retail Store',
+  ONLINE: 'Online Sale', CONSIGNMENT: 'Consignment Sale', BOOTH: 'Vendor Booth',
+  BUSINESS_CORPORATE: 'Corporate Sale', DORM_DASH: 'Dorm Dash',
+};
+
+// M-005: Infer a sale type from the title when the stored type is missing or untrusted.
+// Order matters — more specific keywords first. Returns null when nothing matches.
+function inferSaleTypeFromTitle(title?: string | null): string | null {
+  if (!title) return null;
+  const t = title.toLowerCase();
+  if (t.includes('auction')) return 'AUCTION';
+  if (t.includes('estate')) return 'ESTATE';
+  if (t.includes('flea')) return 'FLEA_MARKET';
+  if (t.includes('consign')) return 'CONSIGNMENT';
+  if (t.includes('moving')) return 'MOVING';
+  if (t.includes('downsiz')) return 'DOWNSIZING';
+  if (t.includes('garage')) return 'GARAGE';
+  if (t.includes('yard')) return 'YARD';
+  if (t.includes('liquidat')) return 'LIQUIDATION';
+  if (t.includes('charity') || t.includes('benefit')) return 'CHARITY';
+  if (t.includes('pop-up') || t.includes('pop up') || t.includes('popup')) return 'POPUP';
+  return null;
+}
+
+// M-005: Resolve the sale type to DISPLAY. Organizer intent always wins — a real
+// organizer-set type is never overridden. Title inference is used only when:
+//   (a) no stored type at all, or the stored value is a generic UNKNOWN, OR
+//   (b) the listing is a scraped/unmanaged directory record (untrusted default) AND
+//       the title clearly implies a different, more specific type than what's stored.
+// Never lets an auction/estate sale fall back to "Yard Sale".
+function resolveSaleType(
+  storedType: string | null | undefined,
+  title: string | null | undefined,
+  isUnmanaged: boolean | undefined
+): string | null {
+  const stored = storedType ? storedType.toUpperCase() : null;
+  const inferred = inferSaleTypeFromTitle(title);
+  // No stored type, or explicit UNKNOWN → use inference if available.
+  if (!stored || stored === 'UNKNOWN') return inferred ?? stored ?? null;
+  // Scraped listing with an untrusted default: if the title strongly implies a
+  // different type, prefer the inferred one. (Organizer intent does not apply to
+  // unmanaged scraped records — there is no organizer-set value to respect.)
+  if (isUnmanaged && inferred && inferred !== stored) return inferred;
+  return stored;
+}
 
 interface Sale {
   id: string;
@@ -660,6 +709,17 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   const saleHasStarted = now >= saleStartDate;
   const saleHasEnded = now >= saleEndDate;
 
+  // M-005: Type used for the display badge + meta copy. Organizer intent wins;
+  // scraped listings with an untrusted default get title-based inference.
+  const displaySaleType = resolveSaleType(
+    sale.saleType,
+    sale.title,
+    sale.organizer?.isUnmanagedListing
+  );
+  const displaySaleTypeLabel = displaySaleType
+    ? (SALE_TYPE_LABELS[displaySaleType] ?? displaySaleType.replace(/_/g, ' '))
+    : null;
+
   // Feature #43: OG Image Generator — transform photoUrls to photos format for SaleOGMeta
   const saleForOGMeta = sale ? {
     ...sale,
@@ -897,7 +957,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
           <Head>
             <title>{sale.title} – FindA.Sale</title>
             <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} />
-            <meta name="description" content={`${sale.saleType || 'Sale'} in ${sale.city}, ${sale.state} — browse items and get directions on FindA.Sale.`} />
+            <meta name="description" content={`${displaySaleTypeLabel || 'Sale'} in ${sale.city}, ${sale.state} — browse items and get directions on FindA.Sale.`} />
             <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
             <meta property="og:description" content={sale.description} />
             <meta property="og:image" content={sale.photoUrls?.[0] || ''} />
@@ -1190,17 +1250,10 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   </span>
                 );
               })()}
-              {/* Sale type pill */}
-              {sale.saleType && (
+              {/* Sale type pill — M-005: inferred display type (organizer intent wins) */}
+              {displaySaleTypeLabel && (
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={{ background: 'rgba(255,255,255,0.12)', color: '#F2F0EA', border: '1px solid rgba(255,255,255,0.18)' }}>
-                  {({
-                    ESTATE: 'Estate Sale', YARD: 'Yard Sale', GARAGE: 'Garage Sale',
-                    MOVING: 'Moving Sale', DOWNSIZING: 'Downsizing Sale', AUCTION: 'Auction',
-                    FLEA_MARKET: 'Flea Market', SWAP_MEET: 'Swap Meet', POPUP: 'Pop-Up Sale',
-                    LIQUIDATION: 'Liquidation Sale', CHARITY: 'Charity Sale', RETAIL: 'Retail Store',
-                    ONLINE: 'Online Sale', CONSIGNMENT: 'Consignment Sale', BOOTH: 'Vendor Booth',
-                    BUSINESS_CORPORATE: 'Corporate Sale', DORM_DASH: 'Dorm Dash',
-                  } as Record<string, string>)[sale.saleType] ?? sale.saleType.replace(/_/g, ' ')}
+                  {displaySaleTypeLabel}
                 </span>
               )}
             </div>
@@ -1225,7 +1278,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               <div className="mt-3 flex flex-wrap items-center gap-4 text-sm" style={{ color: 'rgba(242,240,234,0.85)' }}>
                 <span className="flex items-center gap-1.5">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
-                  {sale.saleType === 'RETAIL' ? 'Permanent storefront' : `${format(parseISO(sale.startDate), 'MMM d')}–${format(parseISO(sale.endDate), 'MMM d, yyyy')}`}
+                  {displaySaleType === 'RETAIL' ? 'Permanent storefront' : `${format(parseISO(sale.startDate), 'MMM d')}–${format(parseISO(sale.endDate), 'MMM d, yyyy')}`}
                 </span>
                 <span className="w-px h-3 bg-white/20" />
                 <span className="flex items-center gap-1.5">
@@ -1483,6 +1536,17 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   entrancePin={sale.entranceLat && sale.entranceLng ? { lat: sale.entranceLat, lng: sale.entranceLng, note: sale.entranceNote } : undefined}
                   height="160px"
                 />
+              ) : (sale.address || sale.city) ? (
+                /* M-006: No coords but we have an address — offer a maps link instead of a dead "Location not available" box */
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sale.address ? `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip || ''}`.trim() : `${sale.city}, ${sale.state}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-32 bg-black/5 dark:bg-white/5 flex flex-col items-center justify-center gap-1.5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s-7-7.5-7-12a7 7 0 0114 0c0 4.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                  <span className="text-xs font-medium">Get directions</span>
+                </a>
               ) : (
                 <div className="h-32 bg-black/5 dark:bg-white/5 flex items-center justify-center">
                   <span className="text-xs text-[rgba(26,24,20,0.3)] dark:text-[rgba(242,240,234,0.3)]">Location not available</span>
@@ -2062,6 +2126,17 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   entrancePin={sale.entranceLat && sale.entranceLng ? { lat: sale.entranceLat, lng: sale.entranceLng, note: sale.entranceNote } : undefined}
                   height="160px"
                 />
+              ) : (sale.address || sale.city) ? (
+                /* M-006: No coords but we have an address — offer a maps link instead of a dead "Location not available" box */
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sale.address ? `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip || ''}`.trim() : `${sale.city}, ${sale.state}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-32 bg-black/5 dark:bg-white/5 flex flex-col items-center justify-center gap-1.5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s-7-7.5-7-12a7 7 0 0114 0c0 4.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                  <span className="text-xs font-medium">Get directions</span>
+                </a>
               ) : (
                 <div className="h-32 bg-black/5 dark:bg-white/5 flex items-center justify-center">
                   <span className="text-xs text-[rgba(26,24,20,0.3)] dark:text-[rgba(242,240,234,0.3)]">Location not available</span>
