@@ -99,6 +99,39 @@ const FlyToUser = ({ lat, lng }: { lat: number; lng: number }) => {
   return null;
 };
 
+// Helper: force Leaflet to recompute its pixel origin once the container has its
+// final dimensions. Without this, markers added before the container settles get
+// projected against a stale/zero-size origin and render thousands of px off-screen
+// (tiles look fine because the tile pane re-projects on the first move, but the
+// marker pane keeps the stale offset). invalidateSize() on mount + on resize fixes it.
+const InvalidateMapSize = () => {
+  const map = useMap();
+  useEffect(() => {
+    if (!map) return;
+
+    // Run on the next frame and again after a short delay — covers the case where
+    // the parent's height (calc(100vh - 200px)) is still being laid out at mount.
+    const raf = requestAnimationFrame(() => map.invalidateSize());
+    const t = setTimeout(() => map.invalidateSize(), 250);
+
+    // Keep the projection correct if the container is resized (orientation change,
+    // panel toggles, window resize) after the initial mount.
+    let ro: ResizeObserver | undefined;
+    const container = map.getContainer();
+    if (typeof ResizeObserver !== 'undefined' && container) {
+      ro = new ResizeObserver(() => map.invalidateSize());
+      ro.observe(container);
+    }
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+      ro?.disconnect();
+    };
+  }, [map]);
+  return null;
+};
+
 interface SaleMapInnerProps {
   pins?: SalePin[];
   center?: [number, number];
@@ -182,6 +215,10 @@ const SaleMapInner = ({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
+        {/* Recompute pixel origin once the container has its final size (fixes
+            markers rendering off-screen — H-002) */}
+        <InvalidateMapSize />
 
         {/* Fly to user location if provided */}
         {userLocation && <FlyToUser lat={userLocation.lat} lng={userLocation.lng} />}
