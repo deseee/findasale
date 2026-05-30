@@ -22,6 +22,118 @@ import { emailService } from '../lib/emailService';
 
 const stripe = () => getStripe();
 
+// ─── Reusable internals ─────────────────────────────────────────────────────────
+
+/**
+ * Settlement router (markSold Decision A) — reusable Stripe Payment Link + QR generator.
+ *
+ * Extracted from createPaymentLink so the markSold settlement router
+ * (reservationController.batchUpdateHolds, CHECKOUT_LINK mode) can reuse the exact
+ * same Stripe code instead of rebuilding it. createPaymentLink delegates here too.
+ *
+ * IMPORTANT: This NEVER flips item status to SOLD. Items flip to SOLD only via the
+ * Stripe webhook (checkout.session.completed → payment_link path). Callers that need
+ * an intermediate state set Item.status = 'INVOICE_ISSUED' themselves.
+ *
+ * @returns { linkId, paymentLinkUrl, qrCodeDataUrl, amount } or throws on Stripe failure.
+ */
+export async function createPaymentLinkInternal(opts: {
+  organizerId: string;
+  stripeConnectId: string | null;
+  subscriptionTier: string | null;
+  saleId: string;
+  itemIds: string[];
+  amount: number; // dollars
+  buyerEmail?: string;
+}): Promise<{ linkId: string; paymentLinkUrl: string; qrCodeDataUrl?: string; amount: number }> {
+  const { organizerId, stripeConnectId, subscriptionTier, saleId, itemIds, amount, buyerEmail } = opts;
+
+  const items = itemIds.length > 0
+    ? await prisma.item.findMany({
+        where: { id: { in: itemIds }, saleId },
+        select: { id: true, title: true, price: true },
+      })
+    : [];
+
+  const amountCents = Math.round(amount * 100);
+
+  const feeRate = getPlatformFeeRate(subscriptionTier as SubscriptionTier);
+  const platformFeeAmount = Math.round(amountCents * feeRate);
+
+  const genericProductId = process.env.STRIPE_GENERIC_ITEM_PRODUCT_ID;
+  const adHocPrice = await stripe().prices.create({
+    currency: 'usd',
+    unit_amount: amountCents,
+    ...(genericProductId
+      ? { product: genericProductId }
+      : {
+          product_data: {
+            name: `FindA.Sale — ${items.map(i => i.title).join(', ').slice(0, 200) || 'Item Sale'}`,
+          },
+        }),
+  });
+
+  const paymentLink = await stripe().paymentLinks.create({
+    line_items: [{ price: adHocPrice.id, quantity: 1 }],
+    after_completion: {
+      type: 'hosted_confirmation' as const,
+    },
+    ...(stripeConnectId && stripeConnectId.length >= 21 ? {
+      application_fee_amount: platformFeeAmount,
+      transfer_data: { destination: stripeConnectId },
+    } as any : {}),
+  });
+
+  const paymentLinkUrl = paymentLink.url;
+  const stripePaymentLinkId = paymentLink.id;
+
+  let qrCodeDataUrl: string | undefined;
+  try {
+    const qrcode = require('qrcode');
+    qrCodeDataUrl = await qrcode.toDataURL(paymentLinkUrl);
+  } catch (qrErr) {
+    console.warn('[pos] QR code generation failed:', qrErr);
+  }
+
+  const posPaymentLink = await prisma.pOSPaymentLink.create({
+    data: {
+      organizerId,
+      saleId,
+      stripePaymentLinkId,
+      stripePaymentLinkUrl: paymentLinkUrl,
+      qrCodeDataUrl,
+      amount: amountCents,
+      itemIds,
+      status: 'ACTIVE',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  });
+
+  if (buyerEmail) {
+    try {
+      const { buildEmail } = await import('../services/emailTemplateService');
+      const html = buildEmail({
+        preheader: `Your payment link for $${amount.toFixed(2)}`,
+        headline: `Your Payment Link`,
+        body: `<p>Your organizer has sent you a payment link for <strong>$${amount.toFixed(2)}</strong>. Click below to pay securely via Stripe.</p>`,
+        ctaText: 'Pay Now',
+        ctaUrl: paymentLinkUrl,
+        accentColor: '#10b981',
+      });
+      await emailService.emails.send({
+        from: process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale',
+        to: buyerEmail,
+        subject: `Payment link: $${amount.toFixed(2)}`,
+        html,
+      });
+    } catch (emailErr) {
+      console.warn('[pos] Failed to send payment link email:', emailErr);
+    }
+  }
+
+  return { linkId: posPaymentLink.id, paymentLinkUrl, qrCodeDataUrl, amount };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -246,15 +358,6 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'amount must be positive number (in dollars)' });
     }
 
-    // Look up item titles for the payment link label (soft check — don't block on status)
-    // Items may already be mid-sale when QR is generated; we still need to collect payment
-    const items = itemIds.length > 0
-      ? await prisma.item.findMany({
-          where: { id: { in: itemIds }, saleId },
-          select: { id: true, title: true, price: true },
-        })
-      : [];
-
     // Verify sale belongs to organizer
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
@@ -265,110 +368,29 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Sale does not belong to your account' });
     }
 
-    // Convert amount to cents for Stripe
-    const amountCents = Math.round(amount * 100);
-
-    // Create Stripe Payment Link
-    let paymentLinkUrl = '';
-    let stripePaymentLinkId = '';
-
+    // Delegate to the shared internal — same Stripe Payment Link + QR logic the
+    // markSold settlement router (CHECKOUT_LINK mode) reuses. Never flips items to SOLD.
+    let result;
     try {
-      // Payment Links require a pre-created Price object (price_data not supported)
-      // Use platform-side pricing + destination charges (matching PaymentIntent pattern)
-      const feeRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
-      const platformFeeAmount = Math.round(amountCents * feeRate);
-
-      // Use a shared generic product when configured to avoid cluttering the Stripe catalog.
-      // Patrick: create a "FindA.Sale — Item Sale" product in Stripe Dashboard, then add
-      // STRIPE_GENERIC_ITEM_PRODUCT_ID to Railway env vars to activate this path.
-      const genericProductId = process.env.STRIPE_GENERIC_ITEM_PRODUCT_ID;
-      const adHocPrice = await stripe().prices.create({
-        currency: 'usd',
-        unit_amount: amountCents,
-        ...(genericProductId
-          ? { product: genericProductId }
-          : {
-              product_data: {
-                name: `FindA.Sale — ${items.map(i => i.title).join(', ').slice(0, 200)}`,
-              },
-            }),
+      result = await createPaymentLinkInternal({
+        organizerId: organizer.id,
+        stripeConnectId: organizer.stripeConnectId,
+        subscriptionTier: organizer.subscriptionTier,
+        saleId,
+        itemIds,
+        amount,
+        buyerEmail,
       });
-
-      const paymentLink = await stripe().paymentLinks.create({
-        line_items: [{ price: adHocPrice.id, quantity: 1 }],
-        after_completion: {
-          type: 'hosted_confirmation' as const,
-        },
-        // For Payment Links + Connect: application_fee_amount AND transfer_data both go at top level
-        // Only apply when organizer has a real Stripe Connect account (real IDs are acct_ + 16 chars = 21+)
-        // Seed/test data uses short fake IDs that Stripe rejects — skip fee gracefully for those
-        ...(organizer.stripeConnectId && organizer.stripeConnectId.length >= 21 ? {
-          application_fee_amount: platformFeeAmount,
-          transfer_data: { destination: organizer.stripeConnectId },
-        } as any : {}),
-      });
-
-      stripePaymentLinkId = paymentLink.id;
-      paymentLinkUrl = paymentLink.url;
     } catch (stripeErr) {
       console.error('[pos] Stripe payment link creation failed:', stripeErr);
       return res.status(500).json({ message: 'Failed to create payment link' });
     }
 
-    // Generate QR code as base64 data URL
-    let qrCodeDataUrl: string | undefined;
-    try {
-      const qrcode = require('qrcode');
-      qrCodeDataUrl = await qrcode.toDataURL(paymentLinkUrl);
-    } catch (qrErr) {
-      console.warn('[pos] QR code generation failed:', qrErr);
-      // Graceful degradation — don't fail if QR fails
-    }
-
-    // Create POSPaymentLink record
-    const posPaymentLink = await prisma.pOSPaymentLink.create({
-      data: {
-        organizerId: organizer.id,
-        saleId,
-        stripePaymentLinkId,
-        stripePaymentLinkUrl: paymentLinkUrl,
-        qrCodeDataUrl,
-        amount: amountCents,
-        itemIds,
-        status: 'ACTIVE',
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
-      },
-    });
-
-    // Send payment link via email if buyer email provided
-    if (true) {
-      try {
-        const { buildEmail } = await import('../services/emailTemplateService');
-        
-        const html = buildEmail({
-          preheader: `Your payment link for $${amount.toFixed(2)}`,
-          headline: `Your Payment Link`,
-          body: `<p>Your organizer has sent you a payment link for <strong>$${amount.toFixed(2)}</strong>. Click below to pay securely via Stripe.</p>`,
-          ctaText: 'Pay Now',
-          ctaUrl: paymentLinkUrl,
-          accentColor: '#10b981',
-        });
-        await emailService.emails.send({
-          from: process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale',
-          to: buyerEmail,
-          subject: `Payment link: $${amount.toFixed(2)}`,
-          html,
-        });
-      } catch (emailErr) {
-        console.warn('[pos] Failed to send payment link email:', emailErr);
-      }
-    }
-
     res.json({
-      linkId: posPaymentLink.id,
-      paymentLinkUrl,
-      qrCodeDataUrl,
-      amount,
+      linkId: result.linkId,
+      paymentLinkUrl: result.paymentLinkUrl,
+      qrCodeDataUrl: result.qrCodeDataUrl,
+      amount: result.amount,
     });
   } catch (error) {
     console.error('[pos] createPaymentLink error:', error);

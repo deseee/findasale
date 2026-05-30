@@ -79,6 +79,7 @@ import organizerRoutes from './routes/organizers';
 import contactRoutes from './routes/contact';
 import pushRoutes from './routes/push';
 import feedRoutes from './routes/feed'; // Phase 28: personalized activity feed
+import googleMerchantRoutes from './routes/googleMerchant'; // Feature #463: Google Merchant Center product feed
 import searchRoutes from './routes/search'; // Phase 29: Discovery + search
 import reviewRoutes from './routes/reviews'; // Phase 15: Review + rating system
 import messageRoutes from './routes/messages'; // Phase 20: Shopper messaging
@@ -172,6 +173,7 @@ import xpController from './controllers/xpController';          // Phase 2a: Exp
 import supportRoutes from './routes/support';                  // #128: Automated Support Stack
 import posTiersRoutes from './routes/posTiers';               // POS Tier Status tracking
 import settlementRoutes from './routes/settlement';           // Feature #228: Settlement Hub
+import consignorSettlementRoutes from './routes/consignorSettlement'; // Feature #239: Multi-Consignor Estate Settlement
 import posRoutes from './routes/pos';                         // POS Upgrade: Open Cart & Payment Links
 import ebayRoutes from './routes/ebay';                       // eBay Marketplace Account Deletion
 import ebayTaxonomyRoutes from './routes/ebayTaxonomy';       // Phase C: eBay Taxonomy, Catalog, AI Suggest
@@ -225,6 +227,7 @@ import { scheduleWebhookEventPruneJob } from './jobs/webhookEventPruneJob'; // W
 import { scheduleArchivalCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly)
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
 import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
+import { scheduleGoogleMerchantFeedCron } from './jobs/googleMerchantFeedCron'; // Feature #463: Google Merchant Center feed
 import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jobs/pricingEngineCron'; // Phase S574: Pricing engine quota + recovery
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
@@ -512,6 +515,7 @@ app.use('/api/organizers', organizerRoutes);
 app.use('/api/contact', contactLimiter, contactRoutes); // M3: dedicated contact spam limiter
 app.use('/api/push', pushRoutes);
 app.use('/api/feed', feedRoutes); // Phase 28: personalized activity feed
+app.use('/api/google-merchant', googleMerchantRoutes); // Feature #463: Google Merchant Center product feed (TSV)
 app.use('/api/search', searchRoutes); // Phase 29: Discovery + search
 app.use('/api/reviews', reviewRoutes); // Phase 15: Review + rating system
 app.use('/api/messages', messageRoutes); // Phase 20: Shopper messaging
@@ -618,6 +622,7 @@ app.use('/api/bids', bidsRoutes);                                      // Shoppe
 app.use('/api/xp', xpController);                                      // Phase 2a: Explorer's Guild XP system
 app.use('/api/support', supportRoutes);                                 // #128: Automated Support Stack
 app.use('/api/sales', settlementRoutes);                                   // Feature #228: Settlement Hub
+app.use('/api/consignor-settlements', consignorSettlementRoutes);          // Feature #239: Multi-Consignor Estate Settlement
 app.use('/api/ebay', ebayRoutes);                                          // eBay Marketplace Account Deletion
 app.use('/api/ebay', ebayTaxonomyRoutes);                                  // Phase C: eBay Taxonomy + Catalog + AI Suggest
 app.use('/api/barcode', barcodeRoutes);                                    // Barcode scan -> eBay Catalog product enrichment
@@ -733,6 +738,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // Feature #91: Register auto-markdown cron
   scheduleMarkdownCron();
   scheduleMarkdownCycleCron();
+
+  // Feature #463: Register Google Merchant Center feed cron (3:30 AM UTC daily)
+  scheduleGoogleMerchantFeedCron();
 
   // Feature #XXX: Register retail auto-renewal cron (daily at 1 AM UTC)
   scheduleRetailAutoRenewCron();

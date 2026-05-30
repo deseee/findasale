@@ -82,6 +82,11 @@ const OrganizerHoldsPage = () => {
   const [sortBy, setSortBy] = useState<'expiry' | 'created'>('expiry');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // markSold settlement router (Decision A): how to settle when "Mark Sold" is clicked.
+  // 'AUTO' lets the server pick the best mode for the sale type.
+  type SettlementChoice = 'AUTO' | 'RECORD' | 'POS_CART' | 'CHECKOUT_LINK';
+  const [settlementMode, setSettlementMode] = useState<SettlementChoice>('AUTO');
+
   // Hold-to-Pay modal state (#221)
   const [showPayModal, setShowPayModal] = useState(false);
   const [payModalHold, setPayModalHold] = useState<HoldItem | null>(null);
@@ -134,14 +139,26 @@ const OrganizerHoldsPage = () => {
     },
   });
 
-  // Batch mutation
+  // Batch mutation — also carries the markSold settlement mode (Decision A)
   const batchMutation = useMutation({
-    mutationFn: ({ ids, action }: { ids: string[]; action: string }) =>
-      api.post('/reservations/batch', { ids, action }),
+    mutationFn: ({ ids, action, settlementMode: mode }: { ids: string[]; action: string; settlementMode?: SettlementChoice }) => {
+      const body: { ids: string[]; action: string; settlementMode?: string } = { ids, action };
+      // 'AUTO' = omit so the server resolves the default for the sale type
+      if (mode && mode !== 'AUTO') body.settlementMode = mode;
+      return api.post('/reservations/batch', body);
+    },
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
       setSelectedIds(new Set());
-      showToast(`${res.data.updated} hold(s) updated`, 'success');
+      const data = res.data || {};
+      if (data.settlementMode === 'CHECKOUT_LINK' && data.paymentLinkUrl) {
+        showToast('Checkout link created and sent to the shopper.', 'success');
+        window.open(data.paymentLinkUrl, '_blank', 'noopener');
+      } else if (data.settlementMode === 'POS_CART') {
+        showToast(`Added to POS cart (${data.cartCount} item${data.cartCount === 1 ? '' : 's'}). Finish at checkout.`, 'success');
+      } else {
+        showToast(`${data.updated ?? 0} hold(s) updated`, 'success');
+      }
     },
     onError: (err: any) => {
       showToast(err.response?.data?.message || 'Batch update failed', 'error');
@@ -181,13 +198,9 @@ const OrganizerHoldsPage = () => {
   const handleBatch = (action: 'release' | 'extend' | 'markSold') => {
     if (selectedIds.size === 0) return;
     if (action === 'markSold') {
-      // Hold-to-Pay: open modal for the first selected hold (#221)
-      const firstId = Array.from(selectedIds)[0];
-      const hold = holds.find((h) => h.id === firstId) ?? null;
-      if (hold) {
-        setPayModalHold(hold);
-        setShowPayModal(true);
-      }
+      // Settlement router (Decision A): route through the batch endpoint with the
+      // chosen settlement mode. The server resolves the default when mode is 'AUTO'.
+      batchMutation.mutate({ ids: Array.from(selectedIds), action, settlementMode });
       return;
     }
     batchMutation.mutate({ ids: Array.from(selectedIds), action });
@@ -305,6 +318,19 @@ const OrganizerHoldsPage = () => {
                 >
                   Extend
                 </button>
+                <select
+                  value={settlementMode}
+                  onChange={(e) => setSettlementMode(e.target.value as SettlementChoice)}
+                  disabled={batchMutation.isPending}
+                  title="How to settle these items when marked sold"
+                  aria-label="Settlement method"
+                  className="text-sm bg-white dark:bg-warm-800 border border-warm-300 dark:border-warm-600 text-warm-700 dark:text-warm-200 px-2 py-1.5 rounded-md disabled:opacity-50"
+                >
+                  <option value="AUTO">Auto (recommended)</option>
+                  <option value="RECORD">Record cash sale</option>
+                  <option value="POS_CART">Add to POS cart</option>
+                  <option value="CHECKOUT_LINK">Send checkout link</option>
+                </select>
                 <button
                   onClick={() => handleBatch('markSold')}
                   disabled={batchMutation.isPending}

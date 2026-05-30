@@ -907,6 +907,8 @@ model Sale {
   location                    Location?                @relation("LocationSales", fields: [locationId], references: [id], onDelete: SetNull)
   // #309: Consignor Portal payouts linked to this sale
   consignorPayouts            ConsignorPayout[]        @relation("ConsignorPayouts")
+  // #239: Multi-Consignor Settlement batches for this sale
+  settlementBatches           ConsignorSettlementBatch[] @relation("SaleSettlementBatches")
   // QR Scanner Phase 2: scan analytics
   qrScannerEvents             QRScannerEvent[]
   // Feature #XXX: Automatic Markdown Cycles (PRO Tier) — time-based price reductions
@@ -2457,6 +2459,8 @@ model OrganizerWorkspace {
   consignors       Consignor[]                 @relation("WorkspaceConsignors")
   discountRules    DiscountRule[]              @relation("WorkspaceDiscountRules")
   locations        Location[]                  @relation("WorkspaceLocations")
+  // #239: Multi-Consignor Settlement batches owned by this workspace
+  settlementBatches ConsignorSettlementBatch[] @relation("WorkspaceSettlementBatches")
 }
 
 model WorkspaceMember {
@@ -4310,13 +4314,42 @@ model ConsignorPayout {
   totalSales       Decimal    @db.Decimal(10, 2) // sum of sold item prices for this consignor
   commissionAmount Decimal    @db.Decimal(10, 2) // totalSales * commissionRate / 100
   netPayout        Decimal    @db.Decimal(10, 2) // = commissionAmount (extensible for future deductions)
-  method           String?    // "CASH" | "CHECK" | "VENMO" | "OTHER"
+  method           String?    // "CASH" | "CHECK" | "VENMO" | "ACH" | "OTHER"
   paidAt           DateTime?
   notes            String?
   createdAt        DateTime   @default(now())
+  // Stripe Connect ACH: transfer object ID (DB column already exists via add_stripe_connect_ach migration — schema drift reconciled S-NEW)
+  stripeTransferId String?
+  // #239 Multi-Consignor Settlement: batch membership + per-payout status
+  settlementBatchId String?
+  settlementBatch   ConsignorSettlementBatch? @relation(fields: [settlementBatchId], references: [id], onDelete: SetNull)
+  status            String   @default("PENDING") // PENDING | SIMULATED | COMPLETED | FAILED | MANUAL_CASH_CHECK
+  failureReason     String?
 
   @@index([consignorId])
   @@index([saleId])
+  @@index([settlementBatchId])
+}
+
+// #239 Multi-Consignor Estate Settlement — Phase 1
+// A settlement batch groups all consignor payouts for a single sale into one
+// reviewable/approvable unit. Live money movement is gated behind the
+// STRIPE_CONNECT_LIVE_TRANSFERS env flag (defaults OFF — test/simulation mode).
+model ConsignorSettlementBatch {
+  id                    String            @id @default(cuid())
+  saleId                String
+  sale                  Sale              @relation("SaleSettlementBatches", fields: [saleId], references: [id], onDelete: Cascade)
+  workspaceId           String
+  workspace             OrganizerWorkspace @relation("WorkspaceSettlementBatches", fields: [workspaceId], references: [id], onDelete: Cascade)
+  status                String            @default("DRAFT") // DRAFT | APPROVED | PROCESSING | PARTIAL | COMPLETED | FAILED
+  totalGross            Decimal           @db.Decimal(10, 2) @default(0) // sum of SOLD item prices across all consignors
+  totalConsignorPayouts Decimal           @db.Decimal(10, 2) @default(0) // sum of net amounts owed to consignors
+  payouts               ConsignorPayout[]
+  createdAt             DateTime          @default(now())
+  approvedAt            DateTime?
+
+  @@index([saleId])
+  @@index([status])
 }
 
 // #310: Color-tagged Discount Rules

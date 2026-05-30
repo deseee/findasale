@@ -11,6 +11,25 @@ import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature #397: Crew Invasion flash discount
 import { emailService } from '../lib/emailService';
+import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
+
+// markSold settlement router (Decision A): settlement modes
+type SettlementMode = 'RECORD' | 'POS_CART' | 'CHECKOUT_LINK';
+
+/**
+ * Resolve the default settlement mode server-side from the sale (Decision A2).
+ * AUCTION and high-volume FLEA_MARKET/YARD → POS_CART.
+ * Online-only sales (and ESTATE) → CHECKOUT_LINK.
+ * Everything else → RECORD.
+ */
+function resolveDefaultSettlementMode(sale: { saleType?: string | null; isOnlineOnly?: boolean | null } | null | undefined): SettlementMode {
+  if (sale?.isOnlineOnly) return 'CHECKOUT_LINK';
+  const t = (sale?.saleType ?? '').toUpperCase();
+  if (t === 'AUCTION' || t === 'FLEA_MARKET' || t === 'YARD' || t === 'BOOTH') return 'POS_CART';
+  if (t === 'ESTATE') return 'CHECKOUT_LINK';
+  return 'RECORD';
+}
 
 const DEFAULT_HOLD_MINUTES = 30; // Feature #121: fallback hold duration in minutes
 const EN_ROUTE_RADIUS_M = 16093; // 10 miles in meters — en route grace zone
@@ -538,7 +557,11 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
     if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
 
-    const { ids, action } = req.body as { ids: string[]; action: string };
+    const { ids, action, settlementMode: requestedMode } = req.body as {
+      ids: string[];
+      action: string;
+      settlementMode?: SettlementMode;
+    };
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ message: 'ids array is required' });
     }
@@ -548,9 +571,172 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
     if (!['release', 'extend', 'markSold'].includes(action)) {
       return res.status(400).json({ message: 'action must be release, extend, or markSold' });
     }
+    if (requestedMode && !['RECORD', 'POS_CART', 'CHECKOUT_LINK'].includes(requestedMode)) {
+      return res.status(400).json({ message: 'settlementMode must be RECORD, POS_CART, or CHECKOUT_LINK' });
+    }
 
     const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
     if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
+
+    // ─── markSold settlement router (Decision A) ──────────────────────────────
+    // POS_CART and CHECKOUT_LINK are handled here (they need Stripe / session work
+    // outside the simple status transaction). RECORD falls through to the existing
+    // transaction below, which is the only path that flips AVAILABLE→SOLD directly.
+    if (action === 'markSold') {
+      // Fetch holds + sale context to resolve the default settlement mode and verify ownership.
+      const routedHolds = await prisma.itemReservation.findMany({
+        where: { id: { in: ids }, status: { in: ['PENDING', 'CONFIRMED'] } },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          item: { include: { sale: true } },
+        },
+      });
+      const validRouted = routedHolds.filter((h) => h.item.sale?.organizerId === organizer.id);
+      if (validRouted.length === 0) {
+        return res.status(404).json({ message: 'No valid holds found' });
+      }
+
+      // Resolve mode: explicit request wins; otherwise default from the (first) sale.
+      const settlementMode: SettlementMode =
+        requestedMode ?? resolveDefaultSettlementMode(validRouted[0].item.sale);
+
+      // ── POS_CART: do NOT finalize. Add items to the active POS cart (HOLD_IN_CART). ──
+      // Item status is unchanged until POS checkout completes. Never flips to SOLD here.
+      if (settlementMode === 'POS_CART') {
+        const saleId = validRouted[0].item.saleId;
+        if (!saleId) return res.status(400).json({ message: 'Holds are not attached to a sale' });
+
+        // All selected holds must belong to the same sale (POS cart is sale-scoped).
+        const mismatched = validRouted.find((h) => h.item.saleId !== saleId);
+        if (mismatched) {
+          return res.status(400).json({ message: 'POS cart requires all holds to be from the same sale' });
+        }
+        // Cannot re-cart an already-invoiced hold.
+        const invoiced = validRouted.find((h) => h.invoiceId);
+        if (invoiced) {
+          return res.status(409).json({ message: 'One or more holds already have an invoice' });
+        }
+
+        // Find (or create) the active OPEN POS session for this sale + shopper.
+        const shopperId = validRouted[0].userId;
+        let posSession = await prisma.pOSSession.findFirst({
+          where: {
+            saleId,
+            shopperId,
+            status: { in: ['OPEN', 'PULLED'] },
+            expiresAt: { gt: new Date() },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (!posSession) {
+          posSession = await prisma.pOSSession.create({
+            data: {
+              organizerId: organizer.id,
+              saleId,
+              shopperId,
+              cartItems: [],
+              status: 'OPEN',
+              expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+            },
+          });
+        }
+
+        // Transition reservations to HOLD_IN_CART (reuses pullHoldsToCart semantics).
+        const validIds = validRouted.map((h) => h.id);
+        await prisma.itemReservation.updateMany({
+          where: { id: { in: validIds } },
+          data: { status: 'HOLD_IN_CART' },
+        });
+
+        const cartCount = await prisma.itemReservation.count({
+          where: {
+            item: { saleId },
+            userId: shopperId,
+            status: 'HOLD_IN_CART',
+          },
+        });
+
+        return res.json({
+          settlementMode,
+          sessionId: posSession.id,
+          cartCount,
+          updated: validRouted.length,
+          failed: ids.length - validRouted.length,
+        });
+      }
+
+      // ── CHECKOUT_LINK: generate Stripe Payment Link + QR. Set INVOICE_ISSUED. ──
+      // Item flips to SOLD ONLY via the Stripe webhook — never here.
+      if (settlementMode === 'CHECKOUT_LINK') {
+        const saleId = validRouted[0].item.saleId;
+        if (!saleId) return res.status(400).json({ message: 'Holds are not attached to a sale' });
+        const mismatched = validRouted.find((h) => h.item.saleId !== saleId);
+        if (mismatched) {
+          return res.status(400).json({ message: 'Checkout link requires all holds to be from the same sale' });
+        }
+
+        const itemIds = validRouted.map((h) => h.item.id);
+        const amount = validRouted.reduce((sum, h) => sum + (h.item.price || 0), 0);
+        if (amount <= 0) {
+          return res.status(400).json({ message: 'Cannot create a checkout link for $0' });
+        }
+
+        let linkResult;
+        try {
+          linkResult = await createPaymentLinkInternal({
+            organizerId: organizer.id,
+            stripeConnectId: (organizer as any).stripeConnectId ?? null,
+            subscriptionTier: (organizer as any).subscriptionTier ?? null,
+            saleId,
+            itemIds,
+            amount,
+            buyerEmail: validRouted[0].user.email,
+          });
+        } catch (stripeErr: any) {
+          console.error('[settlement] CHECKOUT_LINK payment link creation failed:', stripeErr);
+          return res.status(400).json({
+            message: 'Failed to create checkout link',
+            error: stripeErr?.message,
+          });
+        }
+
+        // Set items to INVOICE_ISSUED (intermediate). Webhook flips to SOLD on payment.
+        await prisma.item.updateMany({
+          where: { id: { in: itemIds } },
+          data: { status: 'INVOICE_ISSUED' },
+        });
+
+        // Notify the shopper an invoice/checkout link is ready.
+        try {
+          await prisma.notification.create({
+            data: {
+              userId: validRouted[0].userId,
+              type: 'invoice_sent',
+              title: 'Payment requested',
+              body: `Payment requested for ${itemIds.length > 1 ? `${itemIds.length} items` : `"${validRouted[0].item.title}"`}. Tap to pay securely.`,
+              link: `/items/${itemIds[0]}`,
+              notificationChannel: 'IN_APP',
+              channel: 'OPERATIONAL',
+            },
+          });
+        } catch (notifErr) {
+          console.warn('[settlement] Failed to create checkout notification:', notifErr);
+        }
+
+        return res.json({
+          settlementMode,
+          linkId: linkResult.linkId,
+          paymentLinkUrl: linkResult.paymentLinkUrl,
+          qrCodeDataUrl: linkResult.qrCodeDataUrl,
+          amount: linkResult.amount,
+          itemCount: itemIds.length,
+          updated: validRouted.length,
+          failed: ids.length - validRouted.length,
+        });
+      }
+
+      // settlementMode === 'RECORD' falls through to the transaction below.
+    }
 
     // P1 Bug 2: Wrap verification + update in transaction with re-verification on each hold
     const result = await prisma.$transaction(async (tx) => {
@@ -625,6 +811,9 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           })),
         });
       } else if (action === 'markSold') {
+        // RECORD settlement mode (Decision A): the ONLY path that flips AVAILABLE→SOLD
+        // directly (the other direct-SOLD writer is the Stripe webhook). Records the
+        // sale as a cash/in-person Purchase for each item.
         await tx.itemReservation.updateMany({
           where: {
             id: { in: validIds },
@@ -635,6 +824,18 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         await tx.item.updateMany({
           where: { id: { in: validItemIds } },
           data: { status: 'SOLD' },
+        });
+        // Record the cash transaction for each sold item (RECORD mode).
+        await tx.purchase.createMany({
+          data: validHolds.map((h) => ({
+            itemId: h.item.id,
+            saleId: h.item.saleId,
+            userId: h.userId,
+            amount: h.item.price || 0,
+            platformFeeAmount: 0, // RECORD = cash/in-person; platform takes no fee
+            status: 'PAID',
+            source: 'POS',
+          })),
         });
         // Notify each shopper their reserved item was marked sold
         await tx.notification.createMany({
