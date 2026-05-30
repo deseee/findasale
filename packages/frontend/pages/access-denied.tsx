@@ -5,7 +5,7 @@ import { useAuth } from '../components/AuthContext';
 const AccessDenied = () => {
   const { user } = useAuth();
 
-  // Determine context-appropriate messaging based on user role
+  // Determine context-appropriate messaging based on user role (L-006)
   const isOrganizer = user?.roles?.includes('ORGANIZER');
   const isShopper = user?.role === 'USER';
 

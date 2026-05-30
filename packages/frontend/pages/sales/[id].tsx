@@ -59,7 +59,7 @@ import ClaimListingBanner from '../../components/ClaimListingBanner'; // Feature
 import SaleFloorMap from '../../components/SaleFloorMap'; // #416: Floor Map
 import ReviewsSection from '../../components/ReviewsSection';
 
-// M-005: Sale-type display labels (shared by badge + meta copy)
+// M-005: Sale-type display labels (shared by badge + meta copy) — audit 2026-05-30
 const SALE_TYPE_LABELS: Record<string, string> = {
   ESTATE: 'Estate Sale', ESTATE_SALE: 'Estate Sale', YARD: 'Yard Sale', YARD_SALE: 'Yard Sale',
   GARAGE: 'Garage Sale', MOVING: 'Moving Sale', DOWNSIZING: 'Downsizing Sale', AUCTION: 'Auction',

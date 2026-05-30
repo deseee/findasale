@@ -103,7 +103,7 @@ const FlyToUser = ({ lat, lng }: { lat: number; lng: number }) => {
 // final dimensions. Without this, markers added before the container settles get
 // projected against a stale/zero-size origin and render thousands of px off-screen
 // (tiles look fine because the tile pane re-projects on the first move, but the
-// marker pane keeps the stale offset). invalidateSize() on mount + on resize fixes it.
+// marker pane keeps the stale offset). invalidateSize() on mount + on resize fixes it. (H-002)
 const InvalidateMapSize = () => {
   const map = useMap();
   useEffect(() => {
