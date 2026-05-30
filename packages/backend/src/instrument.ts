@@ -14,4 +14,20 @@ Sentry.init({
   environment: process.env.NODE_ENV || 'development',
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 0,
   enabled: !!process.env.SENTRY_DSN,
+  beforeSend(event, hint) {
+    // Drop MulterError: Unexpected field — this is a handled 400 (stale client sending wrong
+    // field name to POST /upload/rapidfire). Sentry v8 OTEL instrumentation captures it at
+    // the HTTP layer before Express's inline multer error guard can suppress it. The route
+    // already returns a clean 400 JSON response; this event is noise, not a bug.
+    const err = hint?.originalException;
+    if (
+      err &&
+      typeof err === 'object' &&
+      (err as any).name === 'MulterError' &&
+      (err as any).code === 'LIMIT_UNEXPECTED_FILE'
+    ) {
+      return null;
+    }
+    return event;
+  },
 });
