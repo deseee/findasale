@@ -109,10 +109,24 @@ const InvalidateMapSize = () => {
   useEffect(() => {
     if (!map) return;
 
+    // invalidateSize() alone re-reads the container dimensions but does NOT always
+    // re-run Leaflet's _resetView — if the map-pane transform was committed as the
+    // identity matrix at init (CSS not yet applied, container size still zero), the
+    // pane stays at translate3d(0,0,0) and every marker renders at its raw layer
+    // point, thousands of px off-screen. Forcing setView(center, zoom) after the
+    // size is corrected makes Leaflet call _resetView, which recomputes the pixel
+    // origin and writes the correct non-identity translate3d to .leaflet-map-pane,
+    // bringing markers back on-screen. (H-002 attempt 2)
+    const resetProjection = () => {
+      map.invalidateSize();
+      // Re-anchor the pane to the current view. animate:false avoids a visible pan.
+      map.setView(map.getCenter(), map.getZoom(), { animate: false });
+    };
+
     // Run on the next frame and again after a short delay — covers the case where
     // the parent's height (calc(100vh - 200px)) is still being laid out at mount.
-    const raf = requestAnimationFrame(() => map.invalidateSize());
-    const t = setTimeout(() => map.invalidateSize(), 250);
+    const raf = requestAnimationFrame(resetProjection);
+    const t = setTimeout(resetProjection, 250);
 
     // Keep the projection correct if the container is resized (orientation change,
     // panel toggles, window resize) after the initial mount.
@@ -198,13 +212,10 @@ const SaleMapInner = ({
 
   return (
     <>
-      {/* Leaflet CSS — must be loaded in browser context */}
-      <link
-        rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-        crossOrigin=""
-      />
+      {/* Leaflet CSS is imported globally in pages/_app.tsx (`leaflet/dist/leaflet.css`)
+          so the pane positioning styles are present BEFORE the map mounts. Do NOT
+          re-add an async <link> here — that race-loaded the CSS and left the
+          .leaflet-map-pane stuck at the identity transform (H-002). */}
       <MapContainer
         center={singlePin ? [singlePin.lat, singlePin.lng] : center}
         zoom={singlePin ? 15 : zoom}

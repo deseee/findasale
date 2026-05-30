@@ -2,7 +2,29 @@
 
 ---
 
-## What Happened This Session (S810 — Cleanup + Widget Triage)
+## What Happened This Session (S811 — Weekly Audit + Fixes + QA)
+
+**Ran the weekly site audit, fixed everything it found, and verified the fixes on the live site.**
+
+Good news first: **4 of last week's 6 issues were already fixed** (categories no longer show raw eBay paths, the privacy typo, the calendar flooding, the search label).
+
+The new findings were all fixed and pushed the same session, and I checked them live in the browser:
+- ✅ An estate auction that was mislabeled "Yard Sale" now correctly says "Auction."
+- ✅ "Location not available" (shown next to a real address) is now a working "Get directions" link.
+- ✅ The sale-page breadcrumb now shows the sale name.
+- ✅ The duplicate "Tins" category is merged into one card; coin-grading labels like "Eisenhower (1971-78)" now roll up under "Coins & Currency."
+- ✅ Photoless sale cards show a branded placeholder instead of a broken image.
+- ✅ The blank icon on the Pricing page's QR feature is fixed.
+
+**The map is the one still-open item.** The first fix didn't work — I confirmed in the browser that the map still showed no pins (all 197 were being drawn thousands of pixels off-screen). I found the real cause: the map's stylesheet was loading too late, so the map never positioned itself. The second fix (loading that stylesheet up front + forcing the map to re-center) is pushed and needs one more live check after it deploys.
+
+**One thing worth your attention (not a bug):** 98% of the scraped "directory" sales have no photos at all — they come in that way from public records. The placeholder makes them look intentional, but a catalog that's almost entirely image-less is a real shopper-appeal question worth deciding on later.
+
+Two small follow-ups also fixed and pending a live check: a couple of category icons were showing as empty squares (too-new emoji, swapped for reliable ones), and the breadcrumb sale-name was hard to read in dark mode.
+
+---
+
+## Previous: S810 — Cleanup + Widget Triage
 
 **Verified last session's work landed, sped up public pages, and cleaned up hidden widgets.**
 
