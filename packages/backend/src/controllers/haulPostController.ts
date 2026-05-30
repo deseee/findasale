@@ -118,6 +118,7 @@ export const getSaleHaulPosts = async (req: Request, res: Response) => {
         { createdAt: 'desc' }
       ],
       include: { user: { select: { id: true, name: true } } },
+      take: 100, // P2: bound unbounded public findMany — cap haul posts per sale
     });
     res.json(hauls);
   } catch (error) {

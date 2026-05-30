@@ -46,6 +46,11 @@ export const getPopularTags = async (_req: Request, res: Response) => {
       select: {
         tags: true,
       },
+      // P2: bound unbounded public findMany. This is an in-memory tag-popularity
+      // aggregation; sampling the most recent published items keeps the ranking
+      // signal intact while capping worst-case rows as the item table grows.
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
     });
 
     // Count occurrences of each curated tag

@@ -137,6 +137,7 @@ export const getActiveFlashDeals = async (req: Request | AuthRequest, res: Respo
         },
       },
       orderBy: { endsAt: 'asc' },
+      take: 200, // P2: bound unbounded public findMany — active-deal window keeps this small in practice
     });
 
     // Get user's rank and Hunt Pass status if authenticated

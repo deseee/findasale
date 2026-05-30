@@ -97,7 +97,9 @@ export async function listEntries(
   params: { page?: number; limit?: number; category?: string; search?: string; sort?: 'recent' | 'popular' | 'trending' },
   _userId?: string
 ): Promise<{ entries: any[]; total: number }> {
-  const { page = 1, limit = 20, category, search, sort = 'recent' } = params;
+  const { page = 1, sort = 'recent', category, search } = params;
+  // P2: hard-cap the public-facing page size to bound unbounded findMany
+  const limit = Math.min(Math.max(1, params.limit ?? 20), 100);
   const skip = (page - 1) * limit;
 
   const where: any = { status: 'PUBLISHED' };
