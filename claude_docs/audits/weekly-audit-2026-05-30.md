@@ -1,6 +1,6 @@
 # Weekly Comprehensive Site Audit — 2026-05-30
 
-**Type:** Automated scheduled task (weekly full-site audit)
+**Type:** Automated scheduled task (weekly full-site audit) — fixes dispatched same session
 **Auditor:** Claude (automated)
 **Baseline:** DECISIONS.md D-001 through D-010, Brand Voice Guide
 **Browser:** Chrome MCP, logged in as shopper test account (Bob Smith / Initiate Explorer)

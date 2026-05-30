@@ -162,7 +162,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
             loading={priority ? 'eager' : 'lazy'}
           />
         ) : (!photoUrl || imgError) ? (
-          // Branded no-photo placeholder — tinted tile + FindA.Sale pin (L-004)
+          // Branded no-photo placeholder — tinted tile + FindA.Sale pin (L-004 audit 2026-05-30)
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-warm-100 to-warm-200 dark:from-gray-700 dark:to-gray-800">
             <svg
               className="w-10 h-10 text-amber-500/70 dark:text-amber-400/70"

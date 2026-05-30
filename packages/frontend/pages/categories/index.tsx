@@ -326,7 +326,6 @@ const CATEGORY_ICONS: Record<string, string> = {
   'stoneware': '🏺',
 
   // --- L-002: long-tail leaf names that previously fell through to 📦 ---
-  'magazines': '📰',
   'pipe fittings': '🔧',
   'tins': '🥫',
   'ashtrays': '🚬',

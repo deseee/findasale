@@ -365,7 +365,7 @@ const PricingPage = () => {
                 </p>
               </div>
 
-              {/* QR codes */}
+              {/* QR codes (L-005 icon fix) */}
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow">
                 <div className="text-3xl mb-3">📲</div>
                 <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">
