@@ -1,20 +1,27 @@
-# Patrick's Dashboard — Week of May 28, 2026
+# Patrick's Dashboard — Week of May 30, 2026
 
 ---
 
-## Audit Alerts
+## What Happened This Session (S809 — Maintenance)
 
-**Weekly site audit ran 2026-05-30 (automated).** Good news first: **4 of last week's 6 findings are fixed** — the categories page (no more raw eBay paths), the privacy-page typo, the calendar (long sales no longer flood every day), and the search-page label are all resolved.
+**Sentry cleaned up. Slow queries fixed. Migration deployed.**
 
-**1 HIGH issue needs a dev fix — the map (overdue, 2 weeks running):** The map page says "200 sales near you" but shows **no pins**. I confirmed at the code level this isn't a missing-data problem — all 197 pins actually exist on the page, they're just being drawn ~13,000 pixels off-screen (a Leaflet map bug where pins get placed before the map knows its size). The map's whole point — seeing sales on a map — is broken until this is fixed. Recommend dispatching `findasale-dev` first thing.
+The daily health check surfaced 25 unresolved Sentry issues. Here's what was done with all of them:
 
-**A few MEDIUM polish items, mostly on scraped "directory" listings:** an estate-auction sale showing a "Yard Sale" badge, a "Location not available" message sitting right next to a full address, a breadcrumb missing the sale name, and a duplicate "Tins" category tile. One backend pass on scraped-sale cleanup would clear most of these.
+**Closed for good (8 issues):** 5 database connection errors from the S807 credential rotation (no new occurrences — confirmed safe to close), 2 backend crash events from a bad deploy on May 27 that self-healed (backend has been clean since), and the Colorado/Washington scraper 404s (the state government websites changed their URLs — low urgency, ignored permanently).
 
-Full report: `claude_docs/audits/weekly-audit-2026-05-30.md`. Note: this run only tested the shopper side (the browser was logged in as a shopper) — the organizer pages should get a dedicated audit next cycle.
+**Fixed in code:** 7 new database indexes added covering the slowest queries (1–6 second queries on Organizer, Sale, Review, and DirectoryClaimEmail tables). The worst was a 4+ second query every time organizer reviews were loaded — fixed by adding a direct link from reviews to their organizer, eliminating a slow table join. Migration deployed to Railway successfully.
+
+Also silenced a noisy Sentry alert about photo uploads — the backend was already handling it correctly with a 400 error; Sentry was just logging it as an issue unnecessarily.
+
+**Still open / needs attention:**
+- **Geocoding: Facebook Events always fails** — expected. Facebook Events don't provide real addresses so they can't be geocoded. Not a bug.
+- **GitGuardian monitoring: not working yet** — the API key you created is configured in Railway, but the daily health check runs in a different environment and can't see it. Next session will wire this up. You need to create a GitGuardian personal access token with the `incidents:read` permission scope (not the `scan` scope you set up last time).
+- **Your private CLAUDE.md password is stale** — the Railway database password stored in your global Claude settings is outdated. You need to update that manually.
 
 ---
 
-## What Happened This Week
+## Previous: S808 — 4 Features Shipped
 
 **S808 complete — 4 features shipped + strategy + bug sweep.**
 
@@ -111,10 +118,11 @@ Remaining open audit issues:
 
 ## Action Items for Patrick
 
-- [ ] **Push the S808 wrap** — roadmap.md + STATE.md + patrick-dashboard.md + the two guide files (list-items-on-ebay.ts, choose-a-plan.ts). See push block.
+- [ ] **Push S809 wrap** — STATE.md + patrick-dashboard.md. See push block below.
+- [ ] **Update global CLAUDE.md** — Railway password field is stale. Update the `DATABASE_URL (public proxy)` line with the current password.
+- [ ] **Create GitGuardian personal access token** — go to dashboard.gitguardian.com → API → Personal access tokens → create with `incidents:read` scope. Share the value next session so we can wire it into the daily health check.
 - [ ] **Confirm Mark Sold default** (smart-by-sale-type) so we can Chrome QA the three modes.
 - [ ] **Get attorney + CPA answers** for #239 before real consignor payouts go live.
 - [ ] **Confirm Google approves** the ~52 products after the 3-day Merchant Center review.
-- [x] **#463 code + migration #239 (20260529210000)** — pushed/deployed; migrate deploy + generate run during S808.
-- [x] **S805–S807 wraps** — DONE
-- [x] **Update global CLAUDE.md** — DONE (S802)
+- [x] **S809 migration (20260530000001)** — deployed this session.
+- [x] **S808 wrap** — DONE
