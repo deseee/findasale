@@ -88,6 +88,9 @@ async function fetchFeedItems(): Promise<FeedItem[]> {
       tags: true,
       ebayShippingOverride: true,
       packageWeightOz: true,
+      packageLengthIn: true,
+      packageWidthIn: true,
+      packageHeightIn: true,
       sale: {
         select: {
           status: true,

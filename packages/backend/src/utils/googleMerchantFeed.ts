@@ -25,7 +25,9 @@
  * Feature #463 (shipping): per-item shipping is sourced from the organizer's
  * existing eBay shipping config via computeItemShipping(). Shippability is
  * opt-in per organizer — items the organizer cannot ship (no config, local-pickup,
- * heavy/oversized/fragile, no parseable rate) are DROPPED, never given a flat default.
+ * genuine freight/LTL by weight/dimensions, no parseable rate) are DROPPED, never
+ * given a flat default. Almost everything parcel-ships; only true pallet/freight
+ * items are excluded by weight/dimension.
  */
 
 import {
@@ -85,6 +87,10 @@ export interface FeedItem {
   tags: string[];
   ebayShippingOverride: string | null;
   packageWeightOz: number | null;
+  // Package dimensions (inches) — drive the freight/oversize exclusion check.
+  packageLengthIn: number | null;
+  packageWidthIn: number | null;
+  packageHeightIn: number | null;
   sale: {
     status: string;
     deletedAt: Date | null;
@@ -166,7 +172,8 @@ function pickGtin(item: FeedItem): string | null {
  *
  * Returns null when the item must be EXCLUDED for shipping reasons (Feature #463):
  * the organizer cannot ship it (no eBay config, local-pickup-only, don't-list,
- * heavy/oversized/fragile, or no parseable rate). Null rows never reach the TSV.
+ * genuine freight/LTL by weight/dimensions, or no parseable rate). Null rows never
+ * reach the TSV.
  */
 export function buildFeedRow(item: FeedItem): string[] | null {
   // Feature #463: per-item shipping from the organizer's eBay config.
@@ -178,6 +185,9 @@ export function buildFeedRow(item: FeedItem): string[] | null {
       tags: item.tags || [],
       ebayShippingOverride: item.ebayShippingOverride,
       packageWeightOz: item.packageWeightOz,
+      packageLengthIn: item.packageLengthIn,
+      packageWidthIn: item.packageWidthIn,
+      packageHeightIn: item.packageHeightIn,
     },
     policyMapping
   );
