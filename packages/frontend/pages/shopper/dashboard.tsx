@@ -39,7 +39,6 @@ import useXpProfile from '../../hooks/useXpProfile';
 import RankBadge, { ExplorerRank } from '../../components/RankBadge';
 import RankProgressBar from '../../components/RankProgressBar';
 import RankBenefitsCard from '../../components/RankBenefitsCard';
-import PointsBadge from '../../components/PointsBadge';
 import MyTeamsCard from '../../components/MyTeamsCard';
 import RankHeroSection from '../../components/RankHeroSection';
 import ActionBar from '../../components/ActionBar';
@@ -509,6 +508,11 @@ const ShopperDashboard = () => {
           {/* 2. Action buttons row (Browse Sales, Collections, Purchase History, Treasure Trails, My QR) */}
           <ActionBar className="mb-8" onQrClick={() => setShowQrModal(true)} />
 
+          {/* 2a. Streak / XP / Hunt Pass quick strip */}
+          <div className="mb-8">
+            <StreakWidget />
+          </div>
+
           {/* 4. Hunt Pass CTA strip (keep it slim) */}
           {user && xpProfile && !user.huntPassActive && xpProfile.explorerRank !== 'GRANDMASTER' && (
             <div className="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg px-4 py-3 mb-6">
@@ -633,6 +637,11 @@ const ShopperDashboard = () => {
               {/* My Teams Card */}
               <MyTeamsCard />
 
+              {/* Rank Benefits — what the shopper's current rank unlocks */}
+              {xpProfile && !xpLoading && (
+                <RankBenefitsCard rank={xpProfile.explorerRank} />
+              )}
+
               {/* Hunt Pass Active Badge */}
               {user && user.huntPassActive && (
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
@@ -657,6 +666,9 @@ const ShopperDashboard = () => {
               {false && <SalesNearYou />}
 
               <FlashDealsBanner />
+
+              {/* Notification preferences */}
+              <NotificationPreferences userPrefs={userData?.notificationPrefs} />
             </div>
           )}
 
@@ -715,7 +727,11 @@ const ShopperDashboard = () => {
 
           {/* Pickups Tab */}
           {activeTab === 'pickups' && (
-            <div>
+            <div className="space-y-8">
+              {/* Booked pickup appointments (time-slot bookings) */}
+              <MyPickupAppointments />
+
+              {/* Active holds */}
               {holdsLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}

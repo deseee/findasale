@@ -51,7 +51,6 @@ import RSVPBadge from '../../components/RSVPBadge';
 import SaleWaitlistButton from '../../components/SaleWaitlistButton';
 import SimilarItems from '../../components/SimilarItems';
 import AddToCalendarButton from '../../components/AddToCalendarButton';
-import LocationMap from '../../components/LocationMap';
 import SocialProofBadge from '../../components/SocialProofBadge';
 import { useSaleSocialProof } from '../../hooks/useSocialProof';
 import ColorKeyLegend from '../../components/ColorKeyLegend'; // Feature #310: Color-tagged discount rules

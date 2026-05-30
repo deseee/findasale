@@ -45,7 +45,7 @@ const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userP
 
   return (
     <div className="card p-6">
-      <h3 className="text-lg font-semibold text-warm-900 mb-4">Notification Settings</h3>
+      <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Notification Settings</h3>
       <div className="space-y-4">
         {/* Email: New sales from followed organizers */}
         <label className="flex items-center cursor-pointer">
@@ -56,7 +56,7 @@ const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userP
             disabled={updateMutation.isPending}
             className="w-4 h-4 text-amber-600 rounded focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
           />
-          <span className="ml-3 text-sm text-warm-900">
+          <span className="ml-3 text-sm text-warm-900 dark:text-warm-200">
             Email: New sales from organizers I follow
           </span>
         </label>
@@ -70,7 +70,7 @@ const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userP
             disabled={updateMutation.isPending}
             className="w-4 h-4 text-amber-600 rounded focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
           />
-          <span className="ml-3 text-sm text-warm-900">
+          <span className="ml-3 text-sm text-warm-900 dark:text-warm-200">
             Email: Flash deals on my saved items
           </span>
         </label>
@@ -84,7 +84,7 @@ const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userP
             disabled={updateMutation.isPending}
             className="w-4 h-4 text-amber-600 rounded focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
           />
-          <span className="ml-3 text-sm text-warm-900">
+          <span className="ml-3 text-sm text-warm-900 dark:text-warm-200">
             Email: Weekly digest of curated sales
           </span>
         </label>
@@ -98,7 +98,7 @@ const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userP
             disabled={updateMutation.isPending}
             className="w-4 h-4 text-amber-600 rounded focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
           />
-          <span className="ml-3 text-sm text-warm-900">
+          <span className="ml-3 text-sm text-warm-900 dark:text-warm-200">
             Push notifications: New sales near me
           </span>
         </label>
