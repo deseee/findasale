@@ -24,8 +24,10 @@ router.get('/feed', async (_req: Request, res: Response) => {
       'Content-Disposition',
       'inline; filename="google-merchant-feed.tsv"'
     );
-    // Cache at the CDN/edge for an hour; the cron refreshes nightly.
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    // Short edge cache so feed edits propagate quickly. The backend's in-memory
+    // cache (6h TTL) and the nightly cron still shield it from rebuild cost, so a
+    // low max-age is cheap — it only controls how fast changes reach edges/Google.
+    res.setHeader('Cache-Control', 'public, max-age=60');
     return res.status(200).send(entry.tsv);
   } catch (err) {
     console.error('[google-merchant] Feed request failed:', err);
