@@ -1351,7 +1351,7 @@ export default function POSPage() {
       onConfirm: async () => {
         setCancellingSalesId(hold.reservationId);
         try {
-          await api.delete(`/api/reservations/${hold.reservationId}`);
+          await api.delete(`/reservations/${hold.reservationId}`);
           // Remove from holds list
           setHolds(prev => prev.filter(h => h.reservationId !== hold.reservationId));
           // Clear loaded hold if this was the one
