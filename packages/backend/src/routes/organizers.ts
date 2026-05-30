@@ -959,6 +959,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
             buyersPremiumPct: true,
             scrapedMetadata: true,
           },
+          take: 200, // P2: bound unbounded public storefront sales list
         },
         broadcasts: {
           orderBy: { sentAt: 'desc' },
@@ -1023,6 +1024,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
               buyersPremiumPct: true,
               scrapedMetadata: true,
             },
+            take: 200, // P2: bound unbounded public storefront sales list
           },
           broadcasts: {
             orderBy: { sentAt: 'desc' },
@@ -1054,15 +1056,18 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
     }
 
     // Fetch review count and average rating
-    const reviews = await prisma.review.findMany({
+    // P2: bound unbounded public findMany — DB-side aggregate instead of loading
+    // every review row into memory (was prisma.review.findMany with no take).
+    const reviewAgg = await prisma.review.aggregate({
       where: {
         sale: { organizerId: organizer.id }
       },
+      _count: true,
+      _avg: { rating: true },
     });
 
-    const avgRating = reviews.length > 0
-      ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
-      : 0;
+    const reviewCount = reviewAgg._count;
+    const avgRating = reviewAgg._avg.rating ?? 0;
 
     // Check if requesting user follows this organizer
     let isFollowing = false;
@@ -1137,7 +1142,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
         name: intro.shopper.name,
         introducedAt: intro.introducedAt,
       })) || [],
-      reviewCount: reviews.length,
+      reviewCount: reviewCount,
       avgRating: Math.round(avgRating * 10) / 10,
       followerCount: (organizer as any)._count?.followers ?? 0,
       isFollowing,

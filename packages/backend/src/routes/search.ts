@@ -204,6 +204,7 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
             endDate: { gte: new Date() },
           },
           select: { id: true },
+          take: 200, // P2: bound unbounded public findMany — final result is sliced to `limit` anyway
         });
         salesByOrganizer.forEach((sale) => saleIdsToFetch.add(sale.id));
       }
