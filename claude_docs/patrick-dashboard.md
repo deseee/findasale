@@ -2,6 +2,18 @@
 
 ---
 
+## Audit Alerts
+
+**Weekly site audit ran 2026-05-30 (automated).** Good news first: **4 of last week's 6 findings are fixed** — the categories page (no more raw eBay paths), the privacy-page typo, the calendar (long sales no longer flood every day), and the search-page label are all resolved.
+
+**1 HIGH issue needs a dev fix — the map (overdue, 2 weeks running):** The map page says "200 sales near you" but shows **no pins**. I confirmed at the code level this isn't a missing-data problem — all 197 pins actually exist on the page, they're just being drawn ~13,000 pixels off-screen (a Leaflet map bug where pins get placed before the map knows its size). The map's whole point — seeing sales on a map — is broken until this is fixed. Recommend dispatching `findasale-dev` first thing.
+
+**A few MEDIUM polish items, mostly on scraped "directory" listings:** an estate-auction sale showing a "Yard Sale" badge, a "Location not available" message sitting right next to a full address, a breadcrumb missing the sale name, and a duplicate "Tins" category tile. One backend pass on scraped-sale cleanup would clear most of these.
+
+Full report: `claude_docs/audits/weekly-audit-2026-05-30.md`. Note: this run only tested the shopper side (the browser was logged in as a shopper) — the organizer pages should get a dedicated audit next cycle.
+
+---
+
 ## What Happened This Week
 
 **S808 complete — 4 features shipped + strategy + bug sweep.**
