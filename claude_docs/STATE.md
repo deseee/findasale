@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S807 — P0 incident + QA. Railway DB credentials drifted after S780b rotation: Postgres DATABASE_URL had stale hardcoded password; backend returning 500 on all queries from ~12:36 UTC. Fixed via railway-agent: POSTGRES_PASSWORD/DATABASE_URL/DATABASE_PUBLIC_URL updated to actual DB password; backend redeployed ~13:35 UTC. QA resumed: #186 QR Scan Analytics ✅ CHROME VERIFIED (/organizer/qr-codes — 3 KPI tiles, Scanner Funnel, Sales Breakdown). #192 Price History Tracking ✅ CHROME VERIFIED (ItemPriceHistoryChart on edit-item — Recharts line chart with seeded data confirmed). Blocked Queue: 3. ⚠️ Global CLAUDE.md password field stale — needs update (file not accessible from VM; see packages/database/.env for current value).**
+**Latest: S808 — Parallel strategy + bug sweep + 4 features shipped. (1) #463 Google Merchant Center feed BUILT + LIVE: backend /api/google-merchant/feed (TSV per Google spec) + nightly cron (3:30 AM UTC) + per-item parcel shipping from organizer eBay weight-tier policies; freight/oversized + Local-Pickup-Only excluded; opt-in (no shipping config → zero products). Merchant Center account created (Patrick), feed registered US+CA, ~52 products in Google's 3-day initial review. (2) markSold settlement ROUTER built (RECORD / POS_CART / CHECKOUT_LINK; smart default by sale type; item flips SOLD only on real payment/webhook) — pushed, NEEDS Chrome QA. (3) #239 Multi-Consignor Estate Settlement Phase 1 built in Stripe TEST mode: ConsignorSettlementBatch model + migration 20260529210000 (Patrick ran migrate deploy + generate); per-consignor split + approval-gate UI; live transfers gated behind OFF-by-default env STRIPE_CONNECT_LIVE_TRANSFERS; legal recommends Model B (organizer = merchant of record), attorney+CPA question list produced, live money BLOCKED pending legal sign-off. (4) P1 POS hold-release double-/api/ 404 FIXED (pos.tsx) — pushed/deployed. Data cleanup: restored Yzerman duck price $15,000→$21.50 (QA test mutation on Artifact's real account; only QA-jacked item). Bug sweep also found ~17 built-but-unrendered widgets across organizer/shopper dashboards + public sale page (DECISION NEEDED from Patrick — render vs cut, do NOT auto-remove) + P2 unbounded findMany on public endpoints (e.g. citiesController); Sentry clean except transient DB-auth cluster from the S807 rotation. Recruitment: beta outreach reframed HOT-first (live pool has 5,517 addressable HOT orgs); funnel ~22% open / 0% click is likely a sent-before-tracking artifact (click path wired correctly). Blocked Queue: 3 (+1 markSold QA, +1 #239 legal/QA noted below). ⚠️ Global CLAUDE.md password field stale — needs update (file not accessible from VM; see packages/database/.env).**
+
+**Previous: S807 — P0 incident + QA. Railway DB credentials drifted after S780b rotation: Postgres DATABASE_URL had stale hardcoded password; backend returning 500 on all queries from ~12:36 UTC. Fixed via railway-agent: POSTGRES_PASSWORD/DATABASE_URL/DATABASE_PUBLIC_URL updated to actual DB password; backend redeployed ~13:35 UTC. QA resumed: #186 QR Scan Analytics ✅ CHROME VERIFIED (/organizer/qr-codes — 3 KPI tiles, Scanner Funnel, Sales Breakdown). #192 Price History Tracking ✅ CHROME VERIFIED (ItemPriceHistoryChart on edit-item — Recharts line chart with seeded data confirmed). Blocked Queue: 3.**
 
 S796 (QA batch 2): Chrome-verified 7 additional features using test accounts (user1-4 organizers, user5-7 shoppers; Railway DB passwords + emailVerified fixed via psycopg2). **#288 Featured Boost ✅** — Sale Bump modal confirmed on dashboard; XP + $1.00 Stripe payment options both present. **#402 Cover the Fee ✅** — AUCTION-gated checkbox confirmed in edit-sale when sale type = AUCTION. **#416 Sale Floor Map ✅** — FLOOR GUIDE auto-generated with Living Room + Kitchen sections on Barn Door QA Test Sale (room tags set via DB). **#363 Auction Lot Number ✅** — Lot Number field appears in add-items when listingType = AUCTION. **#284 Feedback Survey ✅** — OG-5 triggered on settings profile save, modal appeared with correct copy + submitted. **#458 Confidence Score ✅** — confidenceScore field confirmed in /api/sales API response (null for uncalculated entries; internal-only, no UI surface needed). **#351 QR Quick-Access ✅** — My QR tab on shopper dashboard opens full-screen modal, QR renders, tap to expand/shrink works. **#285 POS In-App Payment ⚠️ CODE-VERIFIED** — POS at /organizer/pos confirmed; all payment modes visible + cart works; real-time shopper notification requires concurrent users to verify. Chrome left at finda.sale/login — Patrick must click "Sign in with Google → Artifact / artifactmi@gmail.com" to restore session.
 
@@ -211,6 +213,8 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | Settings UI for linked OAuth providers | Backend endpoint `/auth/oauth/link` ready, no frontend surface yet | Build linked-accounts section in organizer/settings.tsx (deferred — security hole closed by backend rejection alone) | S723 |
+| #465 markSold Settlement Router | Built S808, pushed/deployed — not yet Chrome-tested | Chrome QA the three settlement modes (RECORD / POS_CART / CHECKOUT_LINK); confirm smart-by-sale-type default with Patrick first | S808 |
+| #239 Multi-Consignor Settlement (test-mode flow) | Built S808 in Stripe TEST mode; live transfers OFF (STRIPE_CONNECT_LIVE_TRANSFERS) pending legal | Chrome QA the test-mode per-consignor approval flow; live money BLOCKED until attorney + CPA answer merchant-of-record / 1099 questions | S808 |
 
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
@@ -229,25 +233,58 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Blocked Queue: 3 (below 8 ceiling — feature work CAN resume).**
+**Blocked Queue: 5 (below 8 ceiling — feature work CAN resume).**
 
-**S806 complete:** 11 features processed. 4 Chrome-verified new + existing, 5 code-verified, 2 bugs found and fixed + verified in same session.
+**S808 complete:** 4 features shipped (#463 Google Merchant feed LIVE, markSold settlement router, #239 multi-consignor Phase 1 test-mode, #466 POS hold-release P1 fix). Strategy: HOT-first beta recruitment reframe + outreach funnel finding. Bug sweep surfaced a dead-widget triage decision and P2 unbounded-findMany cleanup.
 
-**Patrick action required:** Run migration for #455 SearchNotification table:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="[Railway DATABASE_URL from dashboard]"
-npx prisma migrate deploy
-npx prisma generate
-```
+**Patrick decisions / actions required:**
 
-1. **#455 migration**: Run migration 20260529120000_add_search_notification before #455 backend is live.
-2. **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific live data conditions).
-3. **UNVERIFIED queue**: Push notifications, email triggers, Twilio — require external trigger conditions.
-4. **eBay QA batch (#424 #425 #426)**: Need organizer with eBay connection.
+1. **markSold default mode (#465):** Recommended smart-by-sale-type. Patrick: confirm. Then Chrome QA the three settlement modes.
+2. **#239 legal gate:** Get attorney + CPA answers on merchant-of-record (Model B recommended) / 1099 before flipping `STRIPE_CONNECT_LIVE_TRANSFERS` on. Then Chrome QA the test-mode approval flow.
+3. **Dead-widget triage (DECISION NEEDED, not a bug):** ~17 built-but-unrendered widgets across organizer dashboard / shopper dashboard / public sale page. Patrick decides render vs cut per widget — do NOT auto-remove.
+4. **#463 follow-up:** Confirm Google approves products after the 3-day review. Optional later: organizers entering real package weights for shipping accuracy; Google local-listings for pickup-only inventory.
+
+**Dispatch stubs for next session:**
+- `Skill('findasale-dev')` → P2 unbounded findMany cleanup on public endpoints (e.g. citiesController). Root cause: public list endpoints call findMany with no take/cursor. Expected output: bounded queries (take + cursor/limit) + push block.
+- Chrome QA (main session, sequential) → #465 markSold three modes + #466 POS hold-release + #239 test-mode approval flow. Run after Patrick confirms markSold default.
+
+**Carryover from S806/S807:**
+- **#455 migration** (if not already run): `20260529120000_add_search_notification` before #455 backend is live.
+- **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split (require specific live data conditions).
+- **eBay QA batch (#424 #425 #426)**: Need organizer with eBay connection.
 
 
 ## Recent Sessions
+
+### S808 — Parallel Strategy + Bug Sweep + 4 Features Shipped (#463 #465 #239 #466)
+
+**Trigger:** Parallel tracks — beta recruitment plan, systemic bug sweep, architecture specs (markSold / #239 / #463).
+
+**Features shipped:**
+- **#463 Google Merchant Center Feed ✅ BUILT + LIVE** — backend `GET /api/google-merchant/feed` (TSV per Google spec) + nightly cron (3:30 AM UTC). Per-item parcel shipping derived from the organizer's eBay weight-tier policies; parcel-vs-freight by weight/dims; guaranteed category-estimate fallback so unmapped categories aren't dropped. Genuine freight/oversized + explicit Local-Pickup-Only items excluded; organizers with no shipping config contribute zero products (opt-in). Local Pickup checkbox copy (edit-item) updated to note it also hides from Google Shopping. Patrick created Merchant Center account (5799116433, artifactmi@gmail.com), registered feed (US + Canada); ~52 products ingested, in Google's 3-day initial review. Pushed/deployed.
+- **#465 markSold Settlement Router ✅ BUILT** — RECORD / POS_CART / CHECKOUT_LINK modes; smart default by sale type, overridable per action; item flips SOLD only on real payment/webhook (not on intent). Pushed/deployed. NEEDS Chrome QA. Supersedes the markSold→POS/Invoice evolution scoping note.
+- **#239 Multi-Consignor Estate Settlement Phase 1 ✅ BUILT (Stripe TEST mode)** — new `ConsignorSettlementBatch` model + migration `20260529210000` (Patrick ran migrate deploy + generate). Per-consignor split + approval-gate UI. Live transfers gated behind OFF-by-default env `STRIPE_CONNECT_LIVE_TRANSFERS`. Legal review recommends Model B (organizer = merchant of record); attorney + CPA question list produced. Live money BLOCKED pending legal sign-off. Pushed/deployed.
+- **#466 POS Hold-Release Double-/api/ 404 ✅ FIXED (P1)** — release call hit `/api/...` on an Axios baseURL already set to `/api` → double prefix → 404. Fixed in `pos.tsx`. Pushed/deployed.
+
+**Bug sweep findings (beyond #466):**
+- **~17 built-but-unrendered widgets** across organizer dashboard / shopper dashboard / public sale page. **DECISION NEEDED from Patrick — render vs cut per widget. NOT auto-removed** (Removal Gate).
+- **P2 unbounded findMany** on public endpoints (e.g. citiesController) — queued for dev.
+- **Sentry:** clean except a transient DB-auth cluster traced to the S807 credential rotation.
+
+**Strategy:**
+- **Beta recruitment reframed HOT-first** — live pool has 5,517 addressable HOT orgs (not 0 as previously framed).
+- **Outreach funnel finding** — ~22% open / 0% click. Tracking was added recently; audit found the click path is wired correctly → likely a sent-before-tracking artifact, not a broken link.
+- **Architecture specs** produced for markSold, #239, and #463.
+
+**Data cleanup:** Restored the Yzerman duck price $15,000 → $21.50 (a QA test mutation on Artifact's real account); verified it was the only QA-jacked item.
+
+**Docs (user-facing Google Shopping mentions):** Added a Google Shopping section + FAQ entry to the eBay listing guide and a parallel mention to the choose-a-plan guide (automatic product feed, shippable-only, pickup-only excluded; no "AI" language). TS check clean.
+
+**Blocked Queue: 3 → 5** (added #465 markSold QA, #239 test-mode QA + legal gate).
+
+**Files changed (S808 docs/this wrap):** `packages/frontend/data/guides/entries/list-items-on-ebay.ts` · `packages/frontend/data/guides/entries/choose-a-plan.ts` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`. (Code files for #463/#465/#239/#466 were pushed/deployed during the session — see those push blocks.)
+
+---
 
 ### S807 — P0 Incident Fix + QA (#186 #192)
 

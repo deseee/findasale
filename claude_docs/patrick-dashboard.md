@@ -4,7 +4,27 @@
 
 ## What Happened This Week
 
-**S805 complete — Chrome QA Marathon (multi-compaction). 18 features Chrome-verified total.**
+**S808 complete — 4 features shipped + strategy + bug sweep.**
+
+**✅ #463 Google Shopping feed — LIVE.** Your shippable items now flow to Google automatically. Backend feed + nightly refresh built. You created the Merchant Center account and registered the feed (US + Canada); ~52 products are ingested and in Google's standard 3-day initial review. No per-item work for organizers — pickup-only items are excluded automatically.
+
+**✅ Mark Sold settlement router — built (needs Chrome QA).** Marking an item sold now offers three paths: just record it (cash/external), drop it into the in-app POS cart, or generate a Stripe checkout link. It picks a smart default based on sale type. Items only flip to "Sold" on a real payment.
+
+**✅ Multi-Consignor Estate Settlement (Phase 1) — built in Stripe test mode.** Per-consignor split + an approval step before any payout. Real money is OFF behind a safety switch until your attorney + CPA sign off on who's the "merchant of record" and how 1099s work. Legal recommends Model B (you, the organizer, are the merchant of record).
+
+**✅ POS bug fixed.** Releasing a hold from the POS was 404-ing. Fixed and deployed.
+
+**Cleanup:** Restored the Yzerman duck price ($15,000 → $21.50) — that was a leftover QA test edit on your live account. It was the only one.
+
+---
+
+## Pending decision for you
+
+**~17 widgets are built but not showing.** During the bug sweep we found about 17 dashboard/sale-page widgets that exist in the code but were never wired into the pages, so nobody can see them. These won't be removed without your call — for each one you decide: turn it on, or cut it. We'll bring you the list.
+
+---
+
+**Previous: S805 — Chrome QA Marathon (multi-compaction). 18 features Chrome-verified total.**
 
 **Code Fixes Shipped:**
 
@@ -54,7 +74,9 @@ Remaining open audit issues:
 
 ## Pending Decisions
 
-No new decisions pending. DECISIONS.md is current.
+1. **Mark Sold default:** Recommended — pick the settlement mode automatically by sale type (overridable each time). Confirm and we'll Chrome QA all three modes.
+2. **#239 legal gate:** Get attorney + CPA answers on merchant-of-record (Model B recommended) and 1099 handling before we turn on real consignor payouts.
+3. **Dead-widget triage:** ~17 built-but-hidden widgets — render or cut, your call per widget.
 
 ---
 
@@ -77,12 +99,10 @@ No new decisions pending. DECISIONS.md is current.
 
 ## Action Items for Patrick
 
-- [ ] **Push the S805 wrap** — see push block below (roadmap.md + STATE.md + dashboard.md — no code changes this sub-session)
-- [x] **S805 code push done** — items/[id].tsx + saleController.ts previously pushed
-- [x] **Re-verify #57 after Railway deploys** — DONE ✅
-- [x] **Re-verify #196 after Vercel deploys** — DONE ✅
-- [x] **Submit sitemap to Bing** — DONE
-- [x] **Run #409 migration** — DONE
-- [x] **Run S798 migrations** — DONE
+- [ ] **Push the S808 wrap** — roadmap.md + STATE.md + patrick-dashboard.md + the two guide files (list-items-on-ebay.ts, choose-a-plan.ts). See push block.
+- [ ] **Confirm Mark Sold default** (smart-by-sale-type) so we can Chrome QA the three modes.
+- [ ] **Get attorney + CPA answers** for #239 before real consignor payouts go live.
+- [ ] **Confirm Google approves** the ~52 products after the 3-day Merchant Center review.
+- [x] **#463 code + migration #239 (20260529210000)** — pushed/deployed; migrate deploy + generate run during S808.
+- [x] **S805–S807 wraps** — DONE
 - [x] **Update global CLAUDE.md** — DONE (S802)
-- [x] **Remove test file** — DONE (S802)
