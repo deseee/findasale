@@ -20,7 +20,7 @@ const AccessDenied = () => {
     primaryLink = { href: '/shopper/dashboard', label: 'Go to Shopper Dashboard' };
   } else if (isOrganizer) {
     title = 'Access Denied';
-    message = "You don't have permission to access this page. You may need to upgrade your subscription.";
+    message = "You don't have permission to view this page.";
   } else {
     // Not logged in
     title = 'Log In Required';

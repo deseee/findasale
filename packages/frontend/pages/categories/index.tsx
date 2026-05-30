@@ -324,7 +324,116 @@ const CATEGORY_ICONS: Record<string, string> = {
   'glassware': '🥂',
   'crystal': '🥂',
   'stoneware': '🏺',
+
+  // --- L-002: long-tail leaf names that previously fell through to 📦 ---
+  'magazines': '📰',
+  'pipe fittings': '🔧',
+  'tins': '🥫',
+  'ashtrays': '🚬',
+  'signs': '🪧',
+  'manuals, inserts & box art': '📄',
+  'manuals & inserts': '📄',
+  'box art': '📄',
+  'other retail store ads': '🪧',
+  'retail store ads': '🪧',
+  'tracksuits & sets': '🩳',
+  'tracksuits': '🩳',
+  'other us politics collectibles': '🎗️',
+  'us politics collectibles': '🎗️',
+  'political memorabilia': '🎗️',
+  'coins & currency': '🪙',
 };
+
+/**
+ * L-002: Per-parent fallback icons. When a leaf label has no exact match in
+ * CATEGORY_ICONS, we look at the parent segment(s) of the original eBay path
+ * (colon-delimited) and fall back to a sensible parent icon instead of the
+ * generic 📦 box. Keys are lowercase substrings tested against the full raw
+ * category path.
+ */
+const PARENT_FALLBACK_ICONS: Array<[RegExp, string]> = [
+  [/coin|numismat|currency|paper money|bullion/i, '🪙'],
+  [/stamp/i, '✉️'],
+  [/comic|graphic novel|manga/i, '🦸'],
+  [/card/i, '🃏'],
+  [/politic|campaign|election/i, '🎗️'],
+  [/advertis|\bads?\b|sign|poster/i, '🪧'],
+  [/book|magazine|manual|paper|ephemera/i, '📚'],
+  [/jewelry|jewellery|ring|necklace|bracelet|earring/i, '💎'],
+  [/cloth|apparel|shirt|pant|dress|tracksuit|jacket|coat/i, '👕'],
+  [/shoe|sneaker|boot|footwear/i, '👟'],
+  [/toy|doll|figure|lego|game/i, '🧸'],
+  [/kitchen|cookware|dish|glass|flatware/i, '🍳'],
+  [/electronic|camera|phone|computer|audio|video/i, '💻'],
+  [/furniture|chair|table|sofa|desk|dresser/i, '🪑'],
+  [/tool|hardware|fitting|fastener/i, '🔧'],
+  [/military|militaria/i, '🎖️'],
+  [/art|painting|print|sculpture/i, '🎨'],
+  [/tin|canister/i, '🥫'],
+];
+
+/**
+ * L-003: Hyper-specific numismatic / grading leaf labels (e.g. coin-year ranges
+ * like "Eisenhower (1971-78)") should not surface as top-level categories next
+ * to clean labels like "Comics". We roll them up under a "Coins & Currency"
+ * parent. Detection: a year-range in parentheses "(YYYY-YY)" or "(YYYY-YYYY)",
+ * or known numismatic series names paired with a parenthetical date.
+ *
+ * Returns the rollup label if the leaf should be rolled up, otherwise null.
+ */
+const COIN_YEAR_RANGE = /\(\s*\d{4}\s*[-–]\s*\d{2,4}\s*\)/;
+const NUMISMATIC_SERIES = /(eisenhower|morgan|peace dollar|sacagawea|kennedy half|franklin half|walking liberty|barber|seated liberty|mercury dime|roosevelt dime|washington quarter|standing liberty|buffalo nickel|jefferson nickel|lincoln cent|wheat (cent|penny)|indian head|flying eagle|liberty head|saint[- ]gaudens|double eagle|gold eagle|silver eagle|draped bust|capped bust|large cent|half cent|two cent|three cent|twenty cent|trade dollar)/i;
+
+interface Rollup {
+  label: string;
+  /** Where the rolled-up card should link, since no single raw category holds all members. */
+  href: string;
+}
+
+function rollupLabel(rawCategory: string, formattedLabel: string): Rollup | null {
+  // A parenthetical year-range is the strongest grading/series signal; a known
+  // coin series name (with or without a date) is also numismatic noise at top level.
+  if (
+    COIN_YEAR_RANGE.test(formattedLabel) ||
+    COIN_YEAR_RANGE.test(rawCategory) ||
+    NUMISMATIC_SERIES.test(formattedLabel) ||
+    NUMISMATIC_SERIES.test(rawCategory)
+  ) {
+    // No single raw DB category aggregates every coin series, so link the
+    // rolled-up parent card to a full-text search that surfaces all of them.
+    return { label: 'Coins & Currency', href: '/search?q=coins' };
+  }
+  return null;
+}
+
+/**
+ * M-008: Normalize a label for dedupe/grouping. Trims, lowercases, and collapses
+ * internal whitespace so "Tins", "tins ", and "Tins  " all map to one group.
+ */
+function normalizeKey(s: string): string {
+  return s.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+/** Resolve the emoji for a grouped category, with per-parent fallback (L-002). */
+function resolveIcon(displayLabel: string, normalizedDisplay: string, rawCategory: string): string {
+  const direct =
+    CATEGORY_ICONS[normalizeKey(displayLabel)] ??
+    CATEGORY_ICONS[normalizedDisplay] ??
+    CATEGORY_ICONS[normalizeKey(rawCategory)];
+  if (direct) return direct;
+  // Per-parent fallback: test the full raw eBay path (carries parent segments).
+  for (const [pattern, icon] of PARENT_FALLBACK_ICONS) {
+    if (pattern.test(rawCategory) || pattern.test(displayLabel)) return icon;
+  }
+  return '📦';
+}
+
+interface GroupedCategory {
+  displayLabel: string;
+  count: number;
+  href: string; // fully-resolved href (already path-encoded) for the card link
+  icon: string;
+}
 
 /**
  * Shorter display names for verbose eBay leaf node labels.
@@ -398,10 +507,45 @@ const CategoriesIndexPage = () => {
     staleTime: 5 * 60_000,
   });
 
-  // Sort by count descending so most-stocked categories appear first
-  const entries: [string, number][] = data
-    ? Object.entries(data.categories).sort(([, a], [, b]) => b - a)
-    : [];
+  // M-008 + L-003: Dedupe identical leaf names (case/whitespace) and roll up
+  // hyper-specific numismatic/grading labels under a "Coins & Currency" parent.
+  // Group by a normalized key, sum counts, keep a clean display label, and pick
+  // a representative raw category for the detail-page link.
+  const grouped = new Map<string, GroupedCategory>();
+
+  if (data) {
+    for (const [rawCat, count] of Object.entries(data.categories)) {
+      const label = formatCategoryLabel(rawCat);
+      const normalizedLabel = normalizeKey(label);
+      // Apply display-name override, then check for numismatic rollup (L-003).
+      const overridden = DISPLAY_NAME_OVERRIDES[normalizedLabel] ?? label;
+      const rolledUp = rollupLabel(rawCat, overridden);
+      const displayLabel = rolledUp ? rolledUp.label : overridden;
+      const groupKey = normalizeKey(displayLabel);
+      // Rolled-up groups link to an aggregate search; normal cards link to the
+      // raw category detail page (matched case-insensitively by the backend).
+      const href = rolledUp ? rolledUp.href : `/categories/${encodeURIComponent(rawCat)}`;
+
+      const existing = grouped.get(groupKey);
+      if (existing) {
+        // M-008: identical leaf names (case/whitespace) merge into one card
+        // with a summed item count. Keep the first (highest-count) member's href.
+        existing.count += count;
+      } else {
+        grouped.set(groupKey, {
+          displayLabel,
+          count,
+          href,
+          icon: resolveIcon(displayLabel, groupKey, rawCat),
+        });
+      }
+    }
+  }
+
+  // Sort by summed count descending so most-stocked categories appear first.
+  const entries: GroupedCategory[] = Array.from(grouped.values()).sort(
+    (a, b) => b.count - a.count,
+  );
 
   return (
     <>
@@ -507,28 +651,21 @@ const CategoriesIndexPage = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {entries.map(([cat, count]) => {
-              const label = formatCategoryLabel(cat);
-              const normalizedLabel = label.toLowerCase().trim();
-              const displayLabel = DISPLAY_NAME_OVERRIDES[normalizedLabel] ?? label;
-              const iconKey = (DISPLAY_NAME_OVERRIDES[normalizedLabel] ?? label).toLowerCase().trim();
-              const icon = CATEGORY_ICONS[iconKey] ?? CATEGORY_ICONS[normalizedLabel] ?? CATEGORY_ICONS[cat.toLowerCase().trim()] ?? '📦';
-              return (
-                <Link
-                  key={cat}
-                  href={`/categories/${encodeURIComponent(cat)}`}
-                  className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start gap-2 border border-warm-100 hover:border-amber-200"
-                >
-                  <span className="text-3xl" role="img" aria-label={displayLabel}>
-                    {icon}
-                  </span>
-                  <span className="font-semibold text-warm-900 dark:text-warm-100 text-base">{displayLabel}</span>
-                  <span className="text-sm text-warm-500 dark:text-warm-400">
-                    {count.toLocaleString()} item{count !== 1 ? 's' : ''}
-                  </span>
-                </Link>
-              );
-            })}
+            {entries.map(({ displayLabel, count, href, icon }) => (
+              <Link
+                key={displayLabel}
+                href={href}
+                className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start gap-2 border border-warm-100 hover:border-amber-200"
+              >
+                <span className="text-3xl" role="img" aria-label={displayLabel}>
+                  {icon}
+                </span>
+                <span className="font-semibold text-warm-900 dark:text-warm-100 text-base">{displayLabel}</span>
+                <span className="text-sm text-warm-500 dark:text-warm-400">
+                  {count.toLocaleString()} item{count !== 1 ? 's' : ''}
+                </span>
+              </Link>
+            ))}
           </div>
         )}
       </main>

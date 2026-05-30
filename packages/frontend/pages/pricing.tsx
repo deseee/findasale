@@ -367,7 +367,7 @@ const PricingPage = () => {
 
               {/* QR codes */}
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow">
-                <div className="text-3xl mb-3">🔲</div>
+                <div className="text-3xl mb-3">📲</div>
                 <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">
                   QR codes on every item
                 </h3>
