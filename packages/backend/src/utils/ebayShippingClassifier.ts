@@ -23,6 +23,16 @@ const HEAVY_KEYWORDS = [
   'dryer',
   'piano',
   'organ',
+  // Feature #463: real non-shippable categories seen in production data —
+  // large advertising signs, tanks, plumbing/pipe goods are not safely shippable
+  'sign',
+  'advertising sign',
+  'tobacciana sign',
+  'tank',
+  'expansion tank',
+  'pipe',
+  'plumbing',
+  'lantern',
 ];
 
 // Keywords that indicate fragile items

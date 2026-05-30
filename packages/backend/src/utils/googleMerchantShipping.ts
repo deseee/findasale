@@ -1,0 +1,162 @@
+/**
+ * googleMerchantShipping.ts — Feature #463: per-item shipping for the Google Merchant feed
+ *
+ * Sources shipping from the organizer's EXISTING eBay shipping config
+ * (EbayPolicyMapping.weightTierMappings). Shippability is OPT-IN per organizer:
+ * if there is no usable config, the item is DROPPED from the feed entirely —
+ * we never promise shipping a seller can't honor and never emit a flat default.
+ *
+ * computeItemShipping(item, policyMapping) returns the shipping cells for the row,
+ * or null to signal the item must be EXCLUDED from the feed.
+ *
+ * Decision order (first match wins):
+ *   a. ebayShippingOverride ∈ {LOCAL_PICKUP_ONLY, DONT_LIST} → null (exclude)
+ *   b. classifier(category, tags) ∈ {HEAVY_OVERSIZED, FRAGILE} → null (exclude)
+ *   c. no usable shipping config (no mapping, or ladder yields no parseable price) → null (exclude)
+ *   d. packageWeightOz set → matchWeightTier → parsePriceFromPolicyName → US::Standard:<price> USD, label "flat"
+ *   e. else category→estimated oz → SAME weight ladder → parse price → emit, label "estimated"
+ */
+
+import { classifyEbayShipping } from './ebayShippingClassifier';
+import {
+  matchWeightTier,
+  parsePriceFromPolicyName,
+  WeightTierMapping,
+} from './ebayPolicyParser';
+
+/**
+ * Minimal organizer EbayPolicyMapping shape needed for feed shipping.
+ * weightTierMappings is stored as Json — we accept the parsed array form.
+ */
+export interface FeedPolicyMapping {
+  weightTierMappings: WeightTierMapping[] | unknown;
+  categoryOverrides?: unknown;
+  heavyOversizedPolicyId?: string | null;
+  fragilePolicyId?: string | null;
+  unknownPolicyId?: string | null;
+}
+
+/** Item fields needed to compute shipping. */
+export interface ShippingFeedItem {
+  category: string | null;
+  tags: string[];
+  ebayShippingOverride: string | null;
+  packageWeightOz: number | null;
+}
+
+export interface ComputedShipping {
+  shipping: string; // e.g. "US::Standard:6.99 USD"
+  shippingLabel: string; // "flat" | "estimated"
+  shippingWeight?: string; // e.g. "12 oz"
+  shipsFromCountry: string; // "US"
+  maxHandlingTime: string; // "3"
+}
+
+const SHIPS_FROM_COUNTRY = 'US';
+const MAX_HANDLING_TIME = '3';
+
+/**
+ * Estimate package weight (oz) from category for items with no explicit
+ * packageWeightOz. Buckets: small flats ~3oz, standard collectibles ~12oz,
+ * heavier small goods ~32oz. Default to the standard bucket when unknown.
+ */
+export function estimateWeightOzFromCategory(category: string | null): number {
+  const c = (category || '').toLowerCase();
+
+  // Small flats (~3 oz): coins, comics, cards, magazines, paper ephemera
+  const SMALL_FLAT = ['coin', 'comic', 'card', 'magazine', 'paper', 'stamp', 'postcard', 'photograph', 'ephemera', 'currency', 'banknote'];
+  if (SMALL_FLAT.some((k) => c.includes(k))) return 3;
+
+  // Heavier small goods (~32 oz): tins, lighters, golf, tools, glassware-blocks
+  const HEAVY_SMALL = ['tin', 'lighter', 'golf', 'tool', 'cast iron', 'cast-iron', 'flatware', 'silverware', 'kitchenware', 'stoneware'];
+  if (HEAVY_SMALL.some((k) => c.includes(k))) return 32;
+
+  // Standard collectibles / books / media / small electronics (~12 oz)
+  return 12;
+}
+
+/**
+ * Normalize the JSON weightTierMappings into a typed WeightTierMapping[].
+ * Tolerates missing/garbage shapes (returns []).
+ */
+function normalizeWeightTiers(raw: unknown): WeightTierMapping[] {
+  if (!Array.isArray(raw)) return [];
+  const tiers: WeightTierMapping[] = [];
+  for (const entry of raw) {
+    if (
+      entry &&
+      typeof entry === 'object' &&
+      typeof (entry as any).maxOz === 'number' &&
+      typeof (entry as any).policyId === 'string' &&
+      typeof (entry as any).policyName === 'string'
+    ) {
+      tiers.push({
+        maxOz: (entry as any).maxOz,
+        policyId: (entry as any).policyId,
+        policyName: (entry as any).policyName,
+      });
+    }
+  }
+  return tiers;
+}
+
+/**
+ * Run a weight (oz) through the ladder and return the parsed dollar price,
+ * or null if no tier matches or the matched tier name has no parseable price.
+ */
+function priceForWeight(weightOz: number, tiers: WeightTierMapping[]): number | null {
+  const tier = matchWeightTier(weightOz, tiers);
+  if (!tier) return null;
+  return parsePriceFromPolicyName(tier.policyName);
+}
+
+/**
+ * Compute the per-item shipping for the Google Merchant feed.
+ * Returns null when the item must be EXCLUDED from the feed.
+ */
+export function computeItemShipping(
+  item: ShippingFeedItem,
+  policyMapping: FeedPolicyMapping | null | undefined
+): ComputedShipping | null {
+  // (a) explicit non-ship overrides → exclude
+  const override = item.ebayShippingOverride;
+  if (override === 'LOCAL_PICKUP_ONLY' || override === 'DONT_LIST') {
+    return null;
+  }
+
+  // (b) classifier non-shippable tiers → exclude
+  const classification = classifyEbayShipping(item.category, item.tags || []);
+  if (classification === 'HEAVY_OVERSIZED' || classification === 'FRAGILE') {
+    return null;
+  }
+
+  // (c) no usable shipping config → exclude (opt-in; never default a flat rate)
+  if (!policyMapping) return null;
+  const tiers = normalizeWeightTiers(policyMapping.weightTierMappings);
+  if (tiers.length === 0) return null;
+
+  // (d) explicit package weight → exact ladder price, label "flat"
+  if (typeof item.packageWeightOz === 'number' && item.packageWeightOz > 0) {
+    const price = priceForWeight(item.packageWeightOz, tiers);
+    if (price === null) return null; // ladder yields no parseable price → exclude
+    return {
+      shipping: `${SHIPS_FROM_COUNTRY}::Standard:${price.toFixed(2)} USD`,
+      shippingLabel: 'flat',
+      shippingWeight: `${item.packageWeightOz} oz`,
+      shipsFromCountry: SHIPS_FROM_COUNTRY,
+      maxHandlingTime: MAX_HANDLING_TIME,
+    };
+  }
+
+  // (e) category estimate → same ladder, label "estimated"
+  const estOz = estimateWeightOzFromCategory(item.category);
+  const estPrice = priceForWeight(estOz, tiers);
+  if (estPrice === null) return null; // exclude per rule (c)
+  return {
+    shipping: `${SHIPS_FROM_COUNTRY}::Standard:${estPrice.toFixed(2)} USD`,
+    shippingLabel: 'estimated',
+    shippingWeight: `${estOz} oz`,
+    shipsFromCountry: SHIPS_FROM_COUNTRY,
+    maxHandlingTime: MAX_HANDLING_TIME,
+  };
+}

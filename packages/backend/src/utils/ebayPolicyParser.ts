@@ -170,3 +170,23 @@ export function toOunces(weight: number | { lb?: number; oz?: number }): number 
   if (typeof weight === 'number') return weight;
   return (weight.lb || 0) * 16 + (weight.oz || 0);
 }
+
+/**
+ * Extract the dollar amount embedded in a policy name.
+ * Returns the numeric price, or null when the name has no parseable amount.
+ *
+ * Examples:
+ *   "8oz Ground Advantage $6.99"  → 6.99
+ *   "1+ lb Ground Advantage $12.49" → 12.49
+ *   "FEDEX GUITAR $34.99"         → 34.99
+ *   "Flat Rate $7"                → 7
+ *   "Media Mail Calculated"       → null
+ *   "Local Pickup ONLY"           → null
+ */
+export function parsePriceFromPolicyName(name: string): number | null {
+  if (!name) return null;
+  const match = name.match(/\$(\d+(?:\.\d{2})?)/);
+  if (!match) return null;
+  const value = parseFloat(match[1]);
+  return Number.isFinite(value) ? value : null;
+}

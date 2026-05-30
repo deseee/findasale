@@ -21,7 +21,17 @@
  *   - listingType is AUCTION or REVERSE_AUCTION (Merchant Center is fixed-price only)
  *
  * Never emits a 0-byte feed — when no items qualify, a header-only TSV is returned.
+ *
+ * Feature #463 (shipping): per-item shipping is sourced from the organizer's
+ * existing eBay shipping config via computeItemShipping(). Shippability is
+ * opt-in per organizer — items the organizer cannot ship (no config, local-pickup,
+ * heavy/oversized/fragile, no parseable rate) are DROPPED, never given a flat default.
  */
+
+import {
+  computeItemShipping,
+  FeedPolicyMapping,
+} from './googleMerchantShipping';
 
 const SITE_BASE_URL = 'https://finda.sale';
 
@@ -41,6 +51,11 @@ export const GOOGLE_MERCHANT_COLUMNS = [
   'mpn',
   'identifier_exists',
   'product_type',
+  'shipping',
+  'shipping_label',
+  'shipping_weight',
+  'ships_from_country',
+  'max_handling_time',
 ] as const;
 
 /**
@@ -66,9 +81,17 @@ export interface FeedItem {
   deletedAt: Date | null;
   draftStatus: string;
   listingType: string;
+  // Feature #463 shipping inputs
+  tags: string[];
+  ebayShippingOverride: string | null;
+  packageWeightOz: number | null;
   sale: {
     status: string;
     deletedAt: Date | null;
+    // Organizer's eBay shipping config — null when organizer has no EbayPolicyMapping.
+    organizer: {
+      ebayPolicyMapping: FeedPolicyMapping | null;
+    } | null;
   } | null;
 }
 
@@ -140,8 +163,26 @@ function pickGtin(item: FeedItem): string | null {
 /**
  * Build a single Google Merchant TSV row (array of cell strings, column order)
  * for an item assumed to already be eligible.
+ *
+ * Returns null when the item must be EXCLUDED for shipping reasons (Feature #463):
+ * the organizer cannot ship it (no eBay config, local-pickup-only, don't-list,
+ * heavy/oversized/fragile, or no parseable rate). Null rows never reach the TSV.
  */
-export function buildFeedRow(item: FeedItem): string[] {
+export function buildFeedRow(item: FeedItem): string[] | null {
+  // Feature #463: per-item shipping from the organizer's eBay config.
+  // null → exclude the item entirely (opt-in shippability; no flat default).
+  const policyMapping = item.sale?.organizer?.ebayPolicyMapping ?? null;
+  const shipping = computeItemShipping(
+    {
+      category: item.category,
+      tags: item.tags || [],
+      ebayShippingOverride: item.ebayShippingOverride,
+      packageWeightOz: item.packageWeightOz,
+    },
+    policyMapping
+  );
+  if (!shipping) return null;
+
   const title = tsvCell(item.title).substring(0, 150);
 
   const strippedDescription = stripHtml(item.description);
@@ -189,6 +230,11 @@ export function buildFeedRow(item: FeedItem): string[] {
     mpn,
     identifierExists,
     productType,
+    tsvCell(shipping.shipping),
+    tsvCell(shipping.shippingLabel),
+    tsvCell(shipping.shippingWeight || ''),
+    tsvCell(shipping.shipsFromCountry),
+    tsvCell(shipping.maxHandlingTime),
   ];
 }
 
@@ -202,7 +248,11 @@ export function buildGoogleMerchantTsv(items: FeedItem[]): string {
 
   for (const item of items) {
     if (!isFeedEligible(item)) continue;
-    rows.push(buildFeedRow(item).join('\t'));
+    const row = buildFeedRow(item);
+    // Feature #463: null row → item excluded for shipping reasons. Skip it so
+    // unshippable items never reach the TSV.
+    if (!row) continue;
+    rows.push(row.join('\t'));
   }
 
   // Trailing newline so the file is well-formed even when header-only.
