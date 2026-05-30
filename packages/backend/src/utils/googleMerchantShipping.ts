@@ -10,19 +10,35 @@
  * or null to signal the item must be EXCLUDED from the feed.
  *
  * Decision order (first match wins):
- *   a. ebayShippingOverride ∈ {LOCAL_PICKUP_ONLY, DONT_LIST} → null (exclude)
- *   b. classifier(category, tags) ∈ {HEAVY_OVERSIZED, FRAGILE} → null (exclude)
+ *   a. ebayShippingOverride ∈ {LOCAL_PICKUP_ONLY, DONT_LIST} → null (exclude — organizer's explicit pickup-only call)
+ *   b. FREIGHT check → null ONLY for genuine freight/LTL items, judged by REAL
+ *      package data (weight > 150 lb, or oversized dimensions). Unknown weight/dims
+ *      never excludes here — almost everything parcel-ships. (Replaces the old eBay
+ *      HEAVY_OVERSIZED/FRAGILE classifier exclusion, which wrongly dropped shippable
+ *      signs, lanterns, and fragile-but-paddable porcelain.)
  *   c. no usable shipping config (no mapping, or ladder yields no parseable price) → null (exclude)
- *   d. packageWeightOz set → matchWeightTier → parsePriceFromPolicyName → US::Standard:<price> USD, label "flat"
+ *   d. packageWeightOz set (≤ freight limit) → matchWeightTier → parsePriceFromPolicyName → US::Standard:<price> USD, label "flat"
  *   e. else category→estimated oz → SAME weight ladder → parse price → emit, label "estimated"
  */
 
-import { classifyEbayShipping } from './ebayShippingClassifier';
 import {
   matchWeightTier,
   parsePriceFromPolicyName,
   WeightTierMapping,
 } from './ebayPolicyParser';
+
+/**
+ * Parcel-carrier ceiling: 150 lb = 2400 oz. Anything heavier genuinely requires
+ * freight/LTL (pallet) and is excluded from the parcel-shipping feed.
+ */
+const FREIGHT_WEIGHT_OZ = 2400;
+
+/**
+ * UPS/parcel oversize limits. A package is "oversized" (freight) when any single
+ * dimension exceeds 108 in, OR length + 2*(width+height) exceeds 165 in.
+ */
+const MAX_SINGLE_DIMENSION_IN = 108;
+const MAX_LENGTH_PLUS_GIRTH_IN = 165;
 
 /**
  * Minimal organizer EbayPolicyMapping shape needed for feed shipping.
@@ -42,6 +58,11 @@ export interface ShippingFeedItem {
   tags: string[];
   ebayShippingOverride: string | null;
   packageWeightOz: number | null;
+  // Package dimensions (inches) — used for the freight/oversize check. Prisma
+  // Decimal columns may arrive as Decimal objects, so we coerce defensively.
+  packageLengthIn: number | null;
+  packageWidthIn: number | null;
+  packageHeightIn: number | null;
 }
 
 export interface ComputedShipping {
@@ -111,6 +132,44 @@ function priceForWeight(weightOz: number, tiers: WeightTierMapping[]): number | 
 }
 
 /**
+ * Coerce a possibly-Decimal/string value to a finite number, or null.
+ */
+function toNum(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * True ONLY for genuine freight/LTL items, judged by real package data:
+ *   - weight is known AND exceeds the parcel ceiling (150 lb / 2400 oz), OR
+ *   - dimensions are known AND oversized (any dim > 108 in, or length+girth > 165 in).
+ * Unknown weight/dims do NOT make an item freight — default to parcel-shippable.
+ */
+function isFreightItem(item: ShippingFeedItem): boolean {
+  // Weight test — only when weight is actually set.
+  if (typeof item.packageWeightOz === 'number' && item.packageWeightOz > FREIGHT_WEIGHT_OZ) {
+    return true;
+  }
+
+  // Dimension test — only when all three dimensions are known.
+  const l = toNum(item.packageLengthIn);
+  const w = toNum(item.packageWidthIn);
+  const h = toNum(item.packageHeightIn);
+  if (l !== null && w !== null && h !== null) {
+    const maxDim = Math.max(l, w, h);
+    // length + girth: longest side + 2*(sum of the other two sides).
+    const sides = [l, w, h].sort((a, b) => b - a);
+    const lengthPlusGirth = sides[0] + 2 * (sides[1] + sides[2]);
+    if (maxDim > MAX_SINGLE_DIMENSION_IN || lengthPlusGirth > MAX_LENGTH_PLUS_GIRTH_IN) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Compute the per-item shipping for the Google Merchant feed.
  * Returns null when the item must be EXCLUDED from the feed.
  */
@@ -118,15 +177,16 @@ export function computeItemShipping(
   item: ShippingFeedItem,
   policyMapping: FeedPolicyMapping | null | undefined
 ): ComputedShipping | null {
-  // (a) explicit non-ship overrides → exclude
+  // (a) explicit non-ship overrides → exclude (organizer's pickup-only call)
   const override = item.ebayShippingOverride;
   if (override === 'LOCAL_PICKUP_ONLY' || override === 'DONT_LIST') {
     return null;
   }
 
-  // (b) classifier non-shippable tiers → exclude
-  const classification = classifyEbayShipping(item.category, item.tags || []);
-  if (classification === 'HEAVY_OVERSIZED' || classification === 'FRAGILE') {
+  // (b) genuine freight/LTL (by real weight/dimensions) → exclude.
+  // Unknown weight/dims default to parcel-shippable, so signs/lanterns/porcelain
+  // stay in the feed and only true pallet items (e.g. a 300 lb tank) drop out.
+  if (isFreightItem(item)) {
     return null;
   }
 
