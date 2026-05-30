@@ -457,6 +457,8 @@ model Organizer {
   shopperIntroductions     ShopperOrganizerIntroduction[] @relation("OrganizerIntroductions")
   // CAN-SPAM Compliance: Audit log for outreach events
   outreachAuditLogs        OutreachAuditLog[] @relation("OutreachAuditLogs")
+  // Sentry slow query fix 2026-05-30: denormalized backrelation for Review.organizerId
+  reviews                  Review[]           @relation("OrganizerReviews")
 
   // Corroboration fields — merge conflict resolution
   sourceCount       Int      @default(1)
@@ -519,6 +521,8 @@ model Organizer {
   @@index([isUnmanagedListing, createdAt]) // Sentry NODEJS-1P: adminController organizer findMany WHERE isUnmanagedListing=false ORDER BY createdAt DESC (real-organizers + recent additions)
   @@index([createdAt]) // Sentry NODEJS-1P: adminController recentAdditions ORDER BY createdAt DESC on large organizer table
   @@index([directoryConfidenceScore]) // Feature #458: minConfidence filter on public sale search
+  @@index([contactEmail]) // Sentry slow query fix 2026-05-30: emailDiscoveryJob WHERE contactEmail IS NULL AND website IS NOT NULL (1020ms)
+  @@index([isClaimed, isUnmanagedListing]) // Sentry slow query fix 2026-05-30: OR predicate on isClaimed/isUnmanagedListing prevents individual index use (1460ms)
 }
 
 // Feature #354: OrganizerHours — business hours per day of week
@@ -956,6 +960,9 @@ model Sale {
   @@index([status, markdownEnabled, startDate]) // Sentry NODEJS-2J: markdownCron findMany WHERE status=PUBLISHED AND markdownEnabled=true AND startDate <= now
   @@index([organizerId, startDate]) // Sentry slow query A: Review JOIN Sale WHERE Sale.organizerId + ORDER BY startDate
   @@index([status, startDate, endDate]) // Sentry slow query B: full-table scan Sale WHERE status + date range filters
+  @@index([organizerId, status]) // Sentry slow query fix 2026-05-30: COUNT Sale WHERE organizerId + status (1577ms) — dedicated composite for count queries
+  @@index([lastScrapedAt]) // Sentry slow query fix 2026-05-30: scraper deduplication queries + UPDATE lastScrapedAt WHERE id (4225ms) — helps scraper dedup; UPDATE latency may need VACUUM ANALYZE for table bloat
+  @@index([city]) // Sentry slow query fix 2026-05-30: Sale SELECT (6298ms) — ILIKE city queries; note leading-wildcard ILIKE won't use index, but prefix matches benefit
 }
 
 // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
@@ -1343,6 +1350,8 @@ model Review {
   user             User         @relation(fields: [userId], references: [id])
   saleId           String
   sale             Sale         @relation(fields: [saleId], references: [id])
+  organizerId      String? // Sentry slow query fix 2026-05-30: denormalized for JOIN Review→Sale WHERE Sale.organizerId (4300ms) — nullable, backfill via migration
+  organizer        Organizer?   @relation("OrganizerReviews", fields: [organizerId], references: [id])
   rating           Int
   comment          String?
   response         String?
@@ -1359,6 +1368,7 @@ model Review {
   @@index([userId]) // dedup findFirst({ where: { userId, saleId } }) in createReview
   @@index([saleId, moderationStatus, createdAt(sort: Desc)]) // getSaleReviews hot path: WHERE saleId+moderationStatus ORDER BY createdAt DESC
   @@index([reviewerIp]) // bulk-review IP count query in createReview anomaly detection
+  @@index([organizerId, saleId]) // Sentry slow query fix 2026-05-30: Review JOIN Sale WHERE Sale.organizerId (4300ms) — eliminates JOIN via denormalized organizerId
 }
 
 model ReviewVote {
@@ -4534,6 +4544,7 @@ model DirectoryClaimEmail {
   trackingToken       String?   @unique
 
   @@index([organizerId])
+  @@index([organizerId, sentAt]) // Sentry slow query fix 2026-05-30: SELECT WHERE organizerId ORDER BY sentAt DESC (2113ms) — composite for sort elimination
   @@index([status, nextAttemptAt])
   @@index([emailAddress])
   @@index([touch1SentAt, touch1Opened, touch1Clicked])
