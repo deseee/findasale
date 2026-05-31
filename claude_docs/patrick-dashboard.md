@@ -2,7 +2,39 @@
 
 ---
 
-## What Happened This Session (S812 — QA + P0 Fix)
+## What Happened This Session (S813 — eBay QA + Map Pins Fix)
+
+**The short version: finished the eBay QA batch and found the actual root cause of the empty map — it's a code bug, not a data gap.**
+
+### eBay QA — all three done
+
+- **#424 Description Template:** You confirmed it works. ✅
+- **#425 Push from Review Queue:** Tested live on the Steam Controller in your Artifact Downtown Paw Paw sale. Checked the "Also push to eBay" box in the review queue, clicked Approve, and the item appeared on eBay (confirmed by the green "Live on eBay" badge + "View on eBay" button in edit-item). ✅
+- **#426 Best Offers UI:** The toggle is there in edit-item for eBay-connected accounts. When you turn it on, auto-accept and auto-decline percentage fields expand. ✅
+
+### Map pins — real bug found and fixed
+
+The map appearing empty is a code bug, not missing data. Here's what was happening:
+
+Your Artifact Downtown Paw Paw sale actually **does** have GPS coordinates on it (lat 42.22, lng -85.89 — correctly geocoded to Paw Paw). The pins aren't missing from the database.
+
+The problem was in how the feed works for logged-in users. For anonymous visitors, the feed limits results to sales within ~100 miles of Grand Rapids. For logged-in users, that limit was accidentally removed — so the feed pulled from the entire country and sorted by personalization score. The highest-scoring results happened to be scraped sale data from Tennessee and North Carolina. Those have coordinates, but they're 800 miles south of Grand Rapids, so the map showed them off-screen.
+
+The fix was two lines: apply the same regional limit for logged-in users as anonymous users. Your own Paw Paw sale will now show up on the homepage map once Railway deploys the change (usually a few minutes after the push).
+
+---
+
+## Pending: Your Actions
+
+1. **Update your private global Claude settings** — the Railway database password stored there is still the old one. Update the `Railway DATABASE_URL (public proxy)` line manually (Railway dashboard → findasale-db → Variables).
+2. **Create a GitGuardian API token** — dashboard.gitguardian.com → API → Personal access tokens, `incidents:read` scope.
+3. **#239 legal gate** — attorney + CPA answers needed before enabling real consignor payouts.
+4. **#463 Google Merchant** — confirm Google approved the ~52 products after the 3-day review window.
+5. **Map smoke test** — after Railway deploys, load finda.sale while logged in and confirm pins appear near Paw Paw/GR.
+
+---
+
+## What Happened Last Session (S812 — QA + P0 Fix)
 
 **The short version: the shopper dashboard was broken for every logged-in shopper, I found the cause and fixed it. Also verified all the outstanding QA items from recent sessions.**
 
