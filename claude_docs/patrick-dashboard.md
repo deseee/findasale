@@ -2,49 +2,44 @@
 
 ---
 
-## What Happened This Session (S817 — QA Session: 7 Features Tested)
+## What Happened This Session (S818 — QA/Fix: Chrome Verifications + 3 P2 Bugs)
 
-**6 ✅ verified, 1 ⚠️ partial, 2 P2 bugs found.** This was the first session running the new S816 QA workflow (evidence gates, screenshot IDs, immediate staging).
+**Applied S817 Chrome verifications to roadmap.md + fixed all 3 P2 bugs from S817.**
 
-**Verified:**
-- **Map pins** — S813 fix works. Authenticated users now see Michigan-area sales (Wayland, Lansing, Kalamazoo), not Tennessee/Texas scraper data.
-- **GA4** — Fires correctly on finda.sale. G-VSD9YR4D28, consent-safe defaults.
-- **#467 Sold Item UX** — "Already sold." amber banner + SimilarItemsGrid both working on sold item pages.
-- **#466 POS Hold-Release** — Cancel hold from POS fires correctly (DELETE /reservations/{id}, no 404, confirmed by S808 fix in source + live browser test).
-- **#465 Mark Sold RECORD mode** — item.status→SOLD confirmed in DB.
-- **#465 Mark Sold POS_CART mode** — reservation.status→HOLD_IN_CART confirmed in DB.
+**Roadmap updated (7 rows):**
+- Map Pins (S813 fix) ✅, GA4 ✅, #467 Sold Item UX ✅, #466 POS Hold-Release ✅, #465 Mark Sold RECORD ✅, #465 Mark Sold POS_CART ✅⚠️P2, #59 StreakWidget ✅⚠️P2
 
-**Partial / bugs:**
-- **#59 StreakWidget** — Renders on /shopper/dashboard ✅, but XP shows 0 while XP Store shows 268 (P2 discrepancy). Also: /shopper/loyalty redirects to /coupons — no dedicated loyalty page.
-- **#465 P2 UX bug** — Mark Sold action bar visually deselects immediately after clicking (z-index conflict with accordion toggle). API fires correctly but no success toast visible. Needs a CSS/z-index fix.
+**Bugs fixed (all 0 TS errors, ready to push):**
+- **StreakWidget XP:0** — Was reading a legacy `streakPoints` field (always 0). Now reads `guildXp` (your actual 268). Fixed in `streaks.ts` + `StreakWidget.tsx`.
+- **#465 Mark Sold toast + action bar** — Action bar now stays on top (z-index fix). Success toast now fires correctly for RECORD and POS_CART modes.
+- **/coupons missing StreakWidget** — StreakWidget now appears at the top of the coupons page when you navigate from /shopper/loyalty.
 
 ---
 
-## Your Actions
+## Your Action (One Push Block for S816 + S817 + S818)
 
-1. **Push STATE.md + patrick-dashboard.md** (S817 QA findings):
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
-   git commit -m "docs: S817 QA findings — map pins, GA4, #467 #466 #465 verified"
-   .\push.ps1
-   ```
-2. **Push CLAUDE.md** (from S816 — still pending):
-   ```powershell
-   git add CLAUDE.md
-   git commit -m "docs: 9 structural QA enforcement fixes"
-   .\push.ps1
-   ```
-3. **GBP phone verification** — business.google.com → "Verify now" → phone code.
-4. **Business insurance** — Next Insurance or your bank. ~$500–1,500/yr.
-5. **#239 consignor payouts** — blocked on attorney + CPA answers.
-6. **#463 Google Merchant** — confirm Google approved ~52 products after 3-day review.
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add CLAUDE.md
+git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
+git add packages/backend/src/routes/streaks.ts
+git add packages/frontend/components/StreakWidget.tsx
+git add packages/frontend/pages/organizer/holds.tsx
+git add packages/frontend/pages/coupons.tsx
+git commit -m "fix: StreakWidget XP, holds z-index/toast, coupons StreakWidget; docs: S818 wrap + roadmap Chrome verifications"
+.\push.ps1
+```
+
+**Other open items:**
+- **GBP phone verification** — business.google.com → "Verify now" → enter phone code
+- **#239 consignor payouts** — blocked on attorney + CPA answers
+- **#463 Google Merchant** — confirm Google approved ~52 products after 3-day review
 
 ---
 
-## What Happened Last Session (S816 — QA Integrity Audit)
+## What Happened Last Session (S817 — QA Session)
 
-9 structural CLAUDE.md enforcement fixes + 3 skill installs. No code changes. Audit found 12-row Blocked Queue (previously declared as 2), documented rubber-stamping patterns back to S222.
+7 features tested. 6 ✅ verified (map pins, GA4, #467, #466, #465 RECORD/POS_CART), 1 ⚠️ partial (#59 StreakWidget — XP:0 bug), 2 P2 bugs found. Both bugs fixed this session (S818).
 
 ---
 
@@ -53,5 +48,5 @@
 - **Frontend (Vercel):** ✅ Live at finda.sale
 - **Backend (Railway):** ✅ Online
 - **Database (Railway PostgreSQL):** ✅ Connected
-- **Blocked Queue:** 12 rows (row-count script will determine session type at next start)
-- **Next session:** May be QA-only — run the row-count script first
+- **Blocked Queue:** 12 rows (QA-ONLY ceiling still active)
+- **Next session:** QA-ONLY — verify the 3 S818 bug fixes in Chrome + QA #239 consignor flow

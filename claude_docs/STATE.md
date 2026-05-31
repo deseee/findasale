@@ -246,54 +246,67 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Pending Chrome Verifications
 
-Staged S817 — apply to roadmap.md at START of next session (findasale-records).
-
-| # | Feature | Evidence | Session |
-|---|---------|----------|---------|
-| Map Pins (S813 fix) | Navigated https://finda.sale as Artifact MI (logged in). Fetched /api/sales — all 10 sampled results Michigan cities (Wayland, Lansing, Kalamazoo, lat 42-43°N, not 32-36°N scraper data). 20 active map markers visible in GR/SW-MI area — ss_6981mw6dx. | S817 |
-| GA4 (S814) | Navigated https://finda.sale as Artifact MI. window.dataLayer confirmed: gtag js init, consent default (analytics_storage:denied), config G-VSD9YR4D28 page_path:/, consent update (analytics_storage:granted). Tag firing correctly — ss_6981mw6dx. | S817 |
-| #59 StreakWidget | Navigated /shopper/dashboard as Artifact MI. StreakWidget renders: 🔥 Streak:6, ⭐ XP:0, Upgrade button — ss_7828jgral. ⚠️ XP shows 0 but XP Store shows 268 guildXp (P2 metric mismatch). /shopper/loyalty → redirects to /coupons (no dedicated page). | S817 |
-| #467 Sold Item UX | Navigated /items/cmo3eu2720075jqsued3xp8vn as Artifact MI. SOLD stamp on photo — ss_83666qqfy. Amber banner "Already sold." + "See what's left at Artifact Downtown Paw Paw →" CTA. SimilarItemsGrid: 3 real magazine items with photos/prices — ss_28729zeub. | S817 |
-| #466 POS Hold-Release | Navigated /organizer/pos as Artifact MI. Invoice panel → Leo Thomas hold (Steam Controller $42.50) — ss_9439ujvbx. Load Hold → loaded. Cancel Hold → confirmation dialog — ss_95612zgzq. Confirm → "Hold cancelled" toast, hold removed, "No active holds" empty state — ss_37228u0ka. No 404. | S817 |
-| #465 Mark Sold RECORD | Navigated /organizer/holds as Artifact MI. Selected Yzerman duck hold (Leo Thomas). Set "Record cash sale" → Mark Sold → POST /api/reservations/batch 200 — ss_3184fbljj. DB confirmed item.status=SOLD. | S817 |
-| #465 Mark Sold POS_CART | Same session, same hold. Set "Add to POS cart" → Mark Sold → POST /api/reservations/batch 200. DB confirmed reservation.status=HOLD_IN_CART. ⚠️ P2: action bar visually deselects after click (z-index conflict with accordion toggle), no success toast visible. | S817 |
+_None — S817 verifications applied to roadmap.md at S818 start (findasale-records)._
 
 ---
 
 ## Next Session
 
-**Blocked Queue: 12 rows in table (row-count script will compute actual count at session start — QA ceiling may trigger).**
+**Blocked Queue: 12 rows (QA-ONLY ceiling still active — no items resolved S818).**
 
-**S817 complete:** QA session. 7 features tested. 6 ✅ (map pins, GA4, #467, #466, #465 RECORD, #465 POS_CART), 1 ⚠️ PARTIAL (#59 StreakWidget — XP:0 vs 268 guildXp discrepancy + /shopper/loyalty redirect). 2 P2 bugs found. Pending Chrome Verifications staged above.
-
-**S816 complete:** Integrity audit + 9 structural CLAUDE.md fixes + 3 skill installs. No code changes.
+**S818 complete:** Applied S817 Chrome verifications to roadmap.md + 3 P2 bugs fixed. All code verified 0 TS errors.
 
 **Patrick actions required:**
 
-1. **Push CLAUDE.md** (from S816) — 9 structural enforcement fixes:
+1. **Single push block for S816+S817+S818** (all pending):
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
    git add CLAUDE.md
-   git commit -m "docs: 9 structural QA enforcement fixes — CODE-ONLY, dev/QA separation, aging, audit pipeline, staging, validation"
+   git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
+   git add packages/backend/src/routes/streaks.ts
+   git add packages/frontend/components/StreakWidget.tsx
+   git add packages/frontend/pages/organizer/holds.tsx
+   git add packages/frontend/pages/coupons.tsx
+   git commit -m "fix: StreakWidget XP, holds z-index/toast, coupons StreakWidget; docs: S818 wrap + roadmap Chrome verifications"
    .\push.ps1
    ```
-2. **Push STATE.md** (from S817 QA):
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
-   git commit -m "docs: S817 QA findings staged — map pins, GA4, #467, #466, #465"
-   .\push.ps1
-   ```
-3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-4. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
-5. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
+2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
+4. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
 
 **Dispatch stubs for next session:**
-- **SESSION START FIRST:** Run Blocked Queue row-count script (§0 step 2) — table has 12 rows, QA-only session will trigger again.
-- **findasale-records:** Apply Pending Chrome Verifications table to roadmap.md (map pins, GA4, #467, #466, #465, #59).
-- **P2 bugs to fix (dispatch to findasale-dev):** (1) #59 StreakWidget XP shows 0 vs 268 actual guildXp; (2) #465 Mark Sold action bar z-index conflict with accordion toggle (no success toast visible); (3) /shopper/loyalty → /coupons redirect with no StreakWidget on that page.
-- **`Skill('findasale-dev')`** → **Session idle timeout (#476):** 30min warning → 45min auto-signout.
+- **SESSION START FIRST:** Run Blocked Queue row-count script (§0 step 2) — 12 rows, QA-ONLY will trigger again.
+- **QA:** Chrome-verify the 3 S818 bug fixes (StreakWidget XP on /shopper/dashboard, Mark Sold toast on /organizer/holds, StreakWidget on /coupons).
+- **QA:** Chrome-verify #239 Multi-Consignor Settlement test-mode flow (non-stale Blocked Queue item).
+- **DEV (Patrick sign-off needed for new feature in QA-ONLY):** `Skill('findasale-dev')` → Session idle timeout (#476): 30min warning → 45min auto-signout.
 ## Recent Sessions
+
+### S818 — QA/Fix: S817 Chrome Verifications Applied + 3 P2 Bugs Fixed
+
+**Trigger:** S818 QA-ONLY (12-row Blocked Queue). Dispatch stubs from S817 Next Session executed in parallel.
+
+**findasale-records:** Applied S817 Pending Chrome Verifications to roadmap.md — 7 rows updated: Map Pins (S813 fix) ✅, GA4 ✅, #59 StreakWidget ✅⚠️P2, #467 Sold Item UX ✅, #466 POS Hold-Release ✅, #465 Mark Sold RECORD ✅, #465 Mark Sold POS_CART ✅⚠️P2.
+
+**3 P2 bugs fixed (parallel dev agents, 0 TS errors each):**
+- **StreakWidget XP:0 root cause:** Widget read `profile.streakPoints` (legacy counter, always 0 for most users) instead of `profile.guildXp` (268 for Artifact MI). Fix: `streaks.ts` — added `guildXp` to Prisma select + response JSON. `StreakWidget.tsx` — added `guildXp: number` to interface, changed display from `profile.streakPoints` → `profile.guildXp`.
+- **#465 action bar z-index + missing toast root causes:** (1) Action bar div had no stacking context — buyer accordion cards created new stacking contexts above it. Fix: added `relative z-50` to action bar container. (2) `onSuccess` handler used stale `selectedIds.size` after `setSelectedIds(new Set())` ran. Fix: added `variables` param (`onSuccess(data, variables)`), derived `count` from `variables.ids.length`. Added explicit RECORD branch toast ("N item(s) marked as sold."), hardened POS_CART detection.
+- **/coupons StreakWidget:** `/shopper/loyalty` intentionally redirects to `/coupons` (correct, left untouched). `/coupons` had no StreakWidget. Fix: added import + `<StreakWidget />` render above XP Balance Card in `coupons.tsx`.
+
+**Blocked Queue: 12 (unchanged — no Blocked Queue items resolved this session).**
+
+**Files changed (S818):** `packages/backend/src/routes/streaks.ts` · `packages/frontend/components/StreakWidget.tsx` · `packages/frontend/pages/organizer/holds.tsx` · `packages/frontend/pages/coupons.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
+
+### S817 — QA Session: 7 Features Tested, 2 P2 Bugs Found
+
+**Trigger:** S817 QA-ONLY session (12-row Blocked Queue). First session using new S816 QA workflow (evidence gates, screenshot IDs, immediate staging).
+
+**Results:** 6 ✅ (map pins, GA4, #467, #466, #465 RECORD, #465 POS_CART), 1 ⚠️ partial (#59 StreakWidget renders but XP:0 vs 268 actual guildXp), 2 P2 bugs identified (#465 action bar z-index + no toast, /shopper/loyalty redirects to /coupons with no StreakWidget). Pending Chrome Verifications staged for S818 application.
+
+**Files changed (S817):** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S816 — QA Integrity Audit + 9 Structural Enforcement Fixes
 
@@ -326,435 +339,3 @@ Staged S817 — apply to roadmap.md at START of next session (findasale-records)
 **To update global instructions going forward:** Edit `CLAUDE_MASTER.md`, then `.\scripts\sync-global-instructions.ps1 -Update -Master "C:\Users\desee\AppData\Roaming\Claude\CLAUDE_MASTER.md"`, restart open Cowork sessions.
 
 **Files changed (S815):** `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/frontend/pages/organizer/create-sale.tsx` · `scripts/sync-global-instructions.ps1` (new) · dev-environment skill · memory/reference_claude_config_location.md · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S813 — eBay QA Batch (#424/#425/#426) + Map Pins Root Cause Fixed
-
-**Trigger:** "what's next?" → DEV/QA session. eBay QA batch + map pins investigation.
-
-**eBay QA (all 3 verified):**
-- **#424 ✅ Patrick-verified** — description template fix confirmed working by Patrick directly.
-- **#425 ✅ Chrome-verified** — Navigated review queue as Artifact MI. Checked "Also push to eBay" on Steam Controller (16oz, 12×8×4" shipping). Clicked Approve → "Item published!" toast. edit-item confirmed "Live on eBay" badge + "View on eBay" + "Re-push to eBay" buttons. eBay push fires correctly from review queue on individual item approval.
-- **#426 ✅ Chrome-verified** — "Best Offers" section renders in edit-item for eBay-connected account. "Accept Best Offers on eBay" checkbox present and toggles. When checked: auto-accept % input + auto-decline % input expand correctly.
-
-**Map pins root cause + fix:**
-Patrick reported map pins not showing despite S812 marking H-002 as CODE-VERIFIED. Investigation revealed: the `getPersonalizedFeed` function in `discoveryService.ts` applied a regional bounding box (GR ±1.5° ≈ 100 miles) only for anonymous users — authenticated users got a global unbounded query (take:500), and the top-20 by personalization score were scraper data from TN/NC/TX with coordinates 1000+ miles south of GR. The map rendered them but they were off-screen. The Artifact Downtown Paw Paw sale actually has lat=42.22/lng=-85.89 (correctly geocoded) but was buried below national sales. Fix: remove the `userId ? undefined : regionConfig.centerLat` ternary — always fall back to GR center for both auth states. 2-line change. Pushed green.
-
-**Files changed (S813):** `packages/backend/src/services/discoveryService.ts` · `claude_docs/strategy/roadmap.md` (#424/#425/#426 rows) · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S812 — QA Session: P0 Dashboard Fix + H-002 + S811 Polish + 4 Widgets + #465 markSold
-
-**Trigger:** "what's next? qa?" — QA session following S811 deploy.
-
-**P0 Found + Fixed (shopper dashboard crash — all shoppers, since S810):**
-Root cause diagnosed via React fiber inspection (`stateNode.state.errorMessage`): `Cannot read properties of null (reading 'emailNewSalesFromFollowed')`. Two bugs in `dashboard.tsx`/`NotificationPreferences.tsx`:
-1. **Rules of Hooks violation** — `useQuery`/`useFollows`/`useXpProfile` hooks were called AFTER `if (!isLoading && !user) { return null }` conditional at line 246. On SSR: server renders null (no hooks called). On client: hooks called → React 18 hydration mismatch → global error boundary fires. Fix: moved all 6 hook calls to BEFORE the conditional. First deploy had a Leaflet TS error (`reset` not in `ZoomPanOptions`) — patched inline with `as any` cast. Second build: green.
-2. **Null notificationPrefs crash** — `NotificationPreferences` received `userPrefs={null}` (API returns `null` for the field, not `undefined`). Default param `= {}` only fires for `undefined`. Fix: `const userPrefs = rawUserPrefs ?? {}`.
-
-**QA Results:**
-- **H-002 map pins attempt 2 ✅ CODE-VERIFIED** — Pane transform = `matrix(-109, -55)` (non-identity, CSS loading correctly). All 197 markers at correct geographic coordinates (lat 32-36°N southern US scraper data). Zero GR-area sales in `/api/sales?limit=200` response, so no pins visible near map center — but the Leaflet mechanism is confirmed working.
-- **S811 polish ✅ ALL 3 VERIFIED** — L-002 (💰/📢 emojis on /categories), M-007 (breadcrumb `color: rgb(242,240,234)` on `rgb(18,24,38)` — high contrast), L-004 (branded gold pin placeholder on all photoless cards).
-- **Shopper dashboard 4 widgets ✅ ALL VERIFIED** — StreakWidget (🔥 Streak, ⭐ XP, Upgrade button), RankBenefitsCard (Scout Unlocks perks list), NotificationPreferences (4 checkboxes, dark mode correct), MyPickupAppointments (empty state rendered).
-- **#465 markSold ✅ RECORD + POS_CART, ⚠️ CHECKOUT_LINK code-verified** — RECORD: item.status → SOLD (DB confirmed). POS_CART: hold.status → HOLD_IN_CART (DB confirmed). CHECKOUT_LINK: API fires, Stripe returns "No such destination: acct_1TF0UsLTUdLTeyio" (Bob's prod Stripe account not in test env). UI dropdown shows all 4 modes (AUTO, RECORD, POS_CART, CHECKOUT_LINK).
-
-**Files changed (S812):** `packages/frontend/pages/shopper/dashboard.tsx` · `packages/frontend/components/NotificationPreferences.tsx` · `packages/frontend/components/SaleMapInner.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S810 — Index Verification + P2 findMany Cleanup + Widget Triage
-
-**Trigger:** "verify the 7 indexes actually landed in Railway, then pick up the roadmap where S808 left off."
-
-**Index verification (PASS):** psycopg2 against Railway public proxy confirmed all 7 S809 indexes + the Review.organizerId column. Migration `20260530000001_slow_query_indexes` recorded finished 18:41 UTC. The S809 dispatch stub's `LIKE '%2026%'` query returned 0 rows — false alarm: Prisma names indexes by field (`Organizer_contactEmail_idx`), never by date. Migration applied cleanly. (psycopg2 install needed `--target=/tmp/pylibs` — /sessions partition was 100% full; /tmp is on sda1 with headroom.)
-
-**P2 unbounded findMany cleanup (shipped + pushed):** Dev agent bounded 6 genuinely-unbounded public endpoints. Headline: `getOrganizerProfile` was loading every review row just to compute count+avg → converted to `prisma.review.aggregate` (same query S809 denormalized). Plus: organizer-profile sales `take:200`, encyclopedia `limit` hard-capped 100, popular-tags `take:5000` sample, flash-deals `take:200`, haul-posts `take:100`, search-by-organizer `take:200`. Sitemap/feed generators + cached city-heat aggregations deliberately left exhaustive. `citiesController` was already bounded (stale brief). Backend TS clean; confirmed on origin/main via GitHub MCP.
-
-**Widget triage (Patrick decisions executed):** Investigation found 19 unused imports across organizer dash / shopper dash / public sale page — 8 genuine product orphans, 11 dead imports of still-live components. Patrick: render 1–5, cut 7–8, leave 6.
-- RENDERED on shopper dashboard: StreakWidget, NotificationPreferences (+ dark-mode text-contrast bug fixed in the component), MyPickupAppointments, RankBenefitsCard.
-- CUT: PointsBadge (dup of RankHeroSection), LocationMap (dup of SaleMap + locked-down Google Maps billing), SaleSubscription (dup of SaleWaitlistButton + RemindMeButton — agent caught the overlap, flagged instead of stacking a redundant control; Patrick confirmed cut).
-- LEFT: PickupBookingCard stays on checkout-success (pickup is post-purchase; sale-page placement would create phantom slot bookings).
-- 11 dead imports left as optional lint cleanup (Removal Gate — not auto-stripped).
-
-**Stale fact corrected:** roadmap #59 claimed StreakWidget rendered on /shopper/dashboard since S346. It did not — was imported-not-rendered until S810. Row note updated.
-
-**Process note:** AskUserQuestion tool broke again (stream-closed error) — Patrick reaffirmed: never use it, ask in plain text. Memory updated.
-
-**Blocked Queue: 5 (unchanged).**
-
-**Files changed (S810):** `packages/backend/src/routes/organizers.ts` · `packages/backend/src/services/encyclopediaService.ts` · `packages/backend/src/controllers/tagController.ts` · `packages/backend/src/controllers/flashDealController.ts` · `packages/backend/src/controllers/haulPostController.ts` · `packages/backend/src/routes/search.ts` · `packages/frontend/pages/shopper/dashboard.tsx` · `packages/frontend/components/NotificationPreferences.tsx` · `packages/frontend/pages/sales/[id].tsx` · (deleted) `packages/frontend/components/PointsBadge.tsx` · `packages/frontend/components/LocationMap.tsx` · `packages/frontend/components/SaleSubscription.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S808 — Parallel Strategy + Bug Sweep + 4 Features Shipped (#463 #465 #239 #466)
-
-**Trigger:** Parallel tracks — beta recruitment plan, systemic bug sweep, architecture specs (markSold / #239 / #463).
-
-**Features shipped:**
-- **#463 Google Merchant Center Feed ✅ BUILT + LIVE** — backend `GET /api/google-merchant/feed` (TSV per Google spec) + nightly cron (3:30 AM UTC). Per-item parcel shipping derived from the organizer's eBay weight-tier policies; parcel-vs-freight by weight/dims; guaranteed category-estimate fallback so unmapped categories aren't dropped. Genuine freight/oversized + explicit Local-Pickup-Only items excluded; organizers with no shipping config contribute zero products (opt-in). Local Pickup checkbox copy (edit-item) updated to note it also hides from Google Shopping. Patrick created Merchant Center account (5799116433, artifactmi@gmail.com), registered feed (US + Canada); ~52 products ingested, in Google's 3-day initial review. Pushed/deployed.
-- **#465 markSold Settlement Router ✅ BUILT** — RECORD / POS_CART / CHECKOUT_LINK modes; smart default by sale type, overridable per action; item flips SOLD only on real payment/webhook (not on intent). Pushed/deployed. NEEDS Chrome QA. Supersedes the markSold→POS/Invoice evolution scoping note.
-- **#239 Multi-Consignor Estate Settlement Phase 1 ✅ BUILT (Stripe TEST mode)** — new `ConsignorSettlementBatch` model + migration `20260529210000` (Patrick ran migrate deploy + generate). Per-consignor split + approval-gate UI. Live transfers gated behind OFF-by-default env `STRIPE_CONNECT_LIVE_TRANSFERS`. Legal review recommends Model B (organizer = merchant of record); attorney + CPA question list produced. Live money BLOCKED pending legal sign-off. Pushed/deployed.
-- **#466 POS Hold-Release Double-/api/ 404 ✅ FIXED (P1)** — release call hit `/api/...` on an Axios baseURL already set to `/api` → double prefix → 404. Fixed in `pos.tsx`. Pushed/deployed.
-
-**Bug sweep findings (beyond #466):**
-- **~17 built-but-unrendered widgets** across organizer dashboard / shopper dashboard / public sale page. **DECISION NEEDED from Patrick — render vs cut per widget. NOT auto-removed** (Removal Gate).
-- **P2 unbounded findMany** on public endpoints (e.g. citiesController) — queued for dev.
-- **Sentry:** clean except a transient DB-auth cluster traced to the S807 credential rotation.
-
-**Strategy:**
-- **Beta recruitment reframed HOT-first** — live pool has 5,517 addressable HOT orgs (not 0 as previously framed).
-- **Outreach funnel finding** — ~22% open / 0% click. Tracking was added recently; audit found the click path is wired correctly → likely a sent-before-tracking artifact, not a broken link.
-- **Architecture specs** produced for markSold, #239, and #463.
-
-**Data cleanup:** Restored the Yzerman duck price $15,000 → $21.50 (a QA test mutation on Artifact's real account); verified it was the only QA-jacked item.
-
-**Docs (user-facing Google Shopping mentions):** Added a Google Shopping section + FAQ entry to the eBay listing guide and a parallel mention to the choose-a-plan guide (automatic product feed, shippable-only, pickup-only excluded; no "AI" language). TS check clean.
-
-**Blocked Queue: 3 → 5** (added #465 markSold QA, #239 test-mode QA + legal gate).
-
-**Files changed (S808 docs/this wrap):** `packages/frontend/data/guides/entries/list-items-on-ebay.ts` · `packages/frontend/data/guides/entries/choose-a-plan.ts` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`. (Code files for #463/#465/#239/#466 were pushed/deployed during the session — see those push blocks.)
-
----
-
-### S807 — P0 Incident Fix + QA (#186 #192)
-
-**Trigger:** "continue qa" — QA session interrupted by P0 production outage.
-
-**P0 Incident (Railway DB auth failure, ~12:36–13:35 UTC):**
-Root cause: During S780b password rotation, Railway Postgres `DATABASE_URL` variable became hardcoded with stale credentials while `POSTGRES_PASSWORD` was updated. When today's backend redeployment pulled the stale `${{Postgres.DATABASE_URL}}` reference, all DB queries failed with "Authentication failed". Fix: via railway-agent, updated `POSTGRES_PASSWORD` + `DATABASE_URL` + `DATABASE_PUBLIC_URL` in Postgres service to correct credentials (from `packages/database/.env`); backend redeployed. Backend online ~13:35 UTC. Note: global CLAUDE.md credential field is still stale — file not accessible from VM session; current password is in `packages/database/.env`.
-
-**Chrome QA Results:**
-- **#186 QR Scan Analytics ✅** — Navigated to `/organizer/qr-codes` as Bob Smith. "QR Scan Analytics" page: 3 KPI tiles (Total Lifetime/Active Sale/Sales-with-scans), Scanner Funnel (Last 7 Days) with empty state, Sales Breakdown table with "Print Labels →" action. Full page confirmed.
-- **#192 Price History Tracking ✅** — Seeded 2 `ItemPriceHistory` records ($20→$15, May 22→May 29). Navigated to edit-item. `ItemPriceHistoryChart` rendered below Price Research section: Recharts line chart with orange data points, $22/$16.5/$13.5 Y-axis, May 22/May 29 X-axis. API `/api/items/:id/price-history` confirmed returning data.
-
-**Blocked Queue: 3 (unchanged)**
-
----
-
-### S806 — QA Batch + 3 Features Built (#274 #445 #455)
-
-**Trigger:** Session start, roadmap-driven. Patrick: "continues" after each deploy.
-
-**Chrome QA Results:**
-- **#256 Referral Signup XP ✅** — Registered qa256test806@example.com with ref=REF-7CD8DCC0. user1 guildXp 58→78 (+20). REFERRAL_SIGNUP PointsTransaction + ReferralReward confirmed.
-- **#254 Hunt Pass 1.5x ⚠️ CODE-VERIFIED** — stripeController applies multiplier. Stripe payment required.
-- **#278 Hunt Pass QR +10% ⚠️ CODE-VERIFIED** — Code confirmed itemController.ts:2774. user5 huntPassExpiry=NULL blocks it; SCOUT rounding masks it anyway.
-- **#268 Trail Completion XP ⚠️ CODE-VERIFIED** — trailController completion bonus confirmed. Prisma trailCheckIn returns empty on Railway (deployment mismatch).
-- **#281 Streak Milestones ⚠️ CODE-VERIFIED** — Original 5/10/20 day milestones REMOVED S417. Replaced by STREAK_7DAY_BONUS (100 XP at 7 active days/month).
-- **#450 EventSeries JSON-LD ✅** — Barn Door QA Test Sale confirmed: @type:"EventSeries", organizer + subEvent array.
-- **#445 Buyer Referral Card ✅ BUILT + VERIFIED** — "Know someone who runs sales?" card on checkout-success page below Share Your Haul.
-- **#455 Notify Me Waitlist ✅ UI VERIFIED** — "🔔 Get notified when this appears" + email input on zero-result search. ⚠️ Backend pending migration.
-
-**Bugs Found + Fixed:**
-- **#274** — Trail completion share button never implemented. Built Web Share API button in trails/[trailId].tsx. Deployed + confirmed in Vercel.
-- **#445** — Buyer referral link never implemented. Built referral card in checkout-success.tsx. Deployed + Chrome-verified.
-- **#455** — Notify Me never implemented. Built SearchNotification model + /search/notify endpoint + search.tsx UI.
-
-**Blocked Queue: 3 (unchanged)**
-
-**Files changed:** `packages/frontend/pages/trails/[trailId].tsx` · `packages/frontend/pages/shopper/checkout-success.tsx` · `packages/frontend/pages/search.tsx` · `packages/backend/src/controllers/searchNotificationController.ts` (new) · `packages/backend/src/routes/search.ts` · `packages/database/prisma/schema.prisma` · `packages/database/prisma/migrations/20260529120000_add_search_notification/migration.sql` (new) · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md`
-
----
-
-### S805 — Chrome QA Continued + Bug Fixes (#79, #57)
-
-**Trigger:** Patrick's standing "don't stop, keep updating and qa" directive. Continued from S804 where UNTESTED backlog was cleared. S805 focused on CODE-VERIFIED items needing Chrome confirmation + two code fixes.
-
-**Code Fixes Shipped:**
-- **#79 Earnings Counter Animation** — `animatedRevenue` moved into `PostSaleMomentumCard.tsx`, wired to `statsData?.revenue?.mostRecentEndedSale`. Dead code in `dashboard.tsx` removed.
-- **#57 Rarity Badges** — `rarity: true` added to `getSale()` items select in `saleController.ts`. Badge condition `item.rarity` was always `undefined` — now returns correct value. Pending Chrome re-verify post-Railway deploy.
-- **#196 Buying Pool** — Outer `{item.buyingPool && ...}` guard removed from `items/[id].tsx`. BuyingPoolCard has internal `shouldShow` gate. Pending Chrome re-verify post-Vercel deploy.
-
-**Chrome QA Results (total across S805 — multi-compaction session):**
-- **#308 Hide/Show Items ✅** — Hide → item disappears from public page; Show → reappears. isActive flag working.
-- **#457 Scraped Sale noindex ✅** — meta robots returns "noindex" for scraped sales.
-- **#251 priceBeforeMarkdown ✅** — Crossed-out original price confirmed on item detail + sale page cards.
-- **#16 Verified Organizer Badge ✅** — Blue circle badge confirmed on Artifact Downtown Paw Paw.
-- **#201 Favorites ✅** — 23 FavoriteButton instances on sale page; DB state correctly reflected.
-- **#205 Contact Organizer ✅** — "Message Organizer" slide-in panel opens with textarea.
-- **#136 QR Code Auto-Embedding ✅** — "Embed QR code in exported photos" checkbox confirmed in edit-item (checked by default).
-- **#18 Post Performance Analytics ✅** — Post Performance widget confirmed at /organizer/insights: Total Clicks, Top Source, 7-Day Trend chart, fresh cache timestamp.
-- **#127 POS Value Unlock Tiers ✅** — 3-tier progressive unlock widget confirmed in POS; dual-gate (tx + revenue) enforcing correctly.
-- **#76 Loading Skeletons ✅** — Gray placeholder skeleton cards confirmed on search page during load.
-- **#81 Empty States ✅** — EmptyState component confirmed on 4 pages: /shopper/wishlist Sellers tab, /shopper/bids, /shopper/holds, /search no-results.
-- **#142 Batch Upload ✅ (partial)** — File input wired, change event fires, "✓ 1 photo selected" shown, thumbnail renders via FileReader. Cloudinary E2E UNVERIFIED (no real credentials in QA env).
-- **#57 Rarity Badges ✅ (re-verify post-deploy)** — rarity:true fix deployed to Railway. RARE badges confirmed on MXL 770 + Zoom B3 cards (Artifact Downtown Paw Paw sale).
-- **#196 Buying Pool ✅ (re-verify post-deploy)** — BuyingPoolCard confirmed on Steve Yzerman Duck ($15,000, AVAILABLE). "Split this purchase" section with 4 options + "Start a Pool" CTA.
-- **#77 Sale Published Celebration ✅** — "You're live!" full-screen modal confirmed on DRAFT→PUBLISHED transition: party popper emoji, sale name, "Your sale is published and ready for shoppers." copy, "Continue →" CTA.
-- **#143 Rapidfire Camera Mode ✅ (partial)** — Rapidfire/Regular tabs, ⚡ capture button, thumbnail appears in queue panel. Camera stream active. Cloudinary E2E upload UNVERIFIED (no real credentials in QA env).
-- **#215 AI Tag Suggestions ✅** — 8 AI tags pre-filled as editable chips in edit-item form (Steve Yzerman Duck): Collectible Duck, Steve Yzerman, NHL Memorabilia, Detroit Red Wings, Celebriducks, Sports Collectible, Rubber Duck, 1990s-2000s. DB: isAiTagged=true. "Auto-suggested" disclaimer on public item page.
-- **#216 AI Condition Grade ✅** — "B" button highlighted in edit-item form (Steve Yzerman Duck, DB conditionGrade='B'=Good). S/A/B/C/D buttons present, AI-suggested grade pre-selected.
-
-**Blocked Queue: 3 (unchanged)**
-
-**Files changed:** `packages/frontend/pages/items/[id].tsx` · `packages/backend/src/controllers/saleController.ts` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S804 — Chrome QA Marathon: 56 Features Processed, Zero UNTESTED Remaining
-
-**Trigger:** "don't stop, keep updating and qa" — Patrick's standing instruction to continue Chrome QA through entire UNTESTED backlog in roadmap.md.
-
-**Scope:** All UNTESTED / Pending Chrome QA entries in roadmap.md. Cleared every single one.
-
-**Results Summary:**
-- **56 features processed** (17 pre-compaction written to roadmap at session start + 39 verified live in Chrome)
-- **~40 ✅ CHROME VERIFIED or CODE-VERIFIED** — full end-to-end Chrome interaction or code wiring confirmed
-- **12 ⚠️ UNVERIFIED** — external-trigger features (push notifications, Twilio SMS, email sends, Sentry alerts) that require conditions not reproducible in test environment
-- **1 ⚠️ CODE-BUG** — #79 Earnings Counter: `animatedRevenue` computed via `useCountUp(dashboard.tsx:197)` but never wired into PostSaleMomentumCard JSX (uses static `revenue`); animation permanently invisible to users
-- **0 UNTESTED remaining** in roadmap.md
-
-**Selected Chrome verifications (new this session):**
-- **#91 Auto-Markdown ✅** — "Enable Auto-Markdown" checkbox confirmed in edit-sale Advanced Settings
-- **#84 Approach Notes ✅** — "Day-of Approach Notes" field confirmed in edit-sale
-- **#85 Treasure Hunt QR Clues ✅** — QR Clues section + QR code generation confirmed in edit-sale
-- **#208 Pickup Scheduling ✅** — Pickup Scheduling section with timeslots confirmed in edit-sale
-- **#136 QR Embed in Photos ✅** — "Embed QR code in exported photos" checkbox confirmed in edit-item
-- **#76 Loading Skeletons ✅** — SkeletonCard + SkeletonSaleCard confirmed in SkeletonCards.tsx; renders during load
-- **#70 Live Feed Ticker ✅** — LiveFeedTicker confirmed at sales/[id].tsx:1509 in Live Activity section
-- **#127 POS Tier Gate ✅** — PosTierGates.tsx dual-gate (tx+revenue) logic confirmed; progressive unlock UI confirmed
-- **#192 Price History Graph ⚠️ UNVERIFIED** — PriceHistoryChart component exists but no test items have price history data
-- **#211 Daily Treasure Clue ✅** — TreasureHuntBanner confirmed at index.tsx:420 on homepage
-- **#215/#216 AI Tag + Condition Suggestions ✅ CODE-VERIFIED** — suggestedTags + suggestedConditionGrade in review.tsx; renders conditionally on AI response
-- **#18 Post Performance Analytics ✅ CODE-VERIFIED** — linkClickController UTM tracking confirmed
-- **#233 Command Center ✅** — Multi-Sale Command Center confirmed at /organizer/command-center with Active/Upcoming/Recent tabs
-
-**Blocked Queue: 4 (unchanged)**
-
-**Files changed (S804):** `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S803 — Chrome QA Backlog: 12 Features Verified
-
-**Trigger:** Continue Chrome QA of Pending Chrome QA backlog in roadmap.md.
-
-**Chrome QA Results:**
-- **#155 Password Reset ✅** — `/forgot-password` loads with email form + Send Reset Link button.
-- **#161 Contact Form ✅** — `/contact` loads with name/email/subject/message form.
-- **#163 Earnings Dashboard ✅** — `/organizer/earnings` loads with year selector + PDF export button.
-- **#11 Organizer Referral ✅** — `/organizer/referrals` loads with referral link, 3-step instructions, 0/0/0 stats. (note: `/organizer/referral` singular is 404 — correct path is `/organizer/referrals`)
-- **#168 Seller Performance ✅** — `/organizer/insights` loads with Insights heading + Sales Analytics content. (note: `/organizer/performance` is 404 — correct path is `/organizer/insights`)
-- **#34 Hype Meter ✅** — Sale detail page shows Live Activity section with real activity feed + 18/0/0 view/save/question counts.
-- **#28 Neighborhood Heatmap ✅** — `/neighborhoods` index loads 14 GR neighborhoods; `/neighborhoods/[slug]` renders correctly with empty state.
-- **#175 Coupons ✅** — `/coupons` XP Store loads Standard/Deluxe/Premium coupon tiers + Rarity Boost. Organizer tab present but content did not visibly switch on click. (⚠️ minor: organizer coupon creation tab may not be filtering content correctly)
-- **#180 Category Browsing ✅** — `/categories` loads with items by category; `/categories/[slug]` renders correctly.
-- **#181 Tag Browsing ✅** — `/tags/[slug]` renders correctly with correct page structure and empty state.
-- **#187 City Pages ✅** — `/cities` index loads 200+ cities with counts; `/city/grand-rapids-mi` shows "Grand Rapids, MI" + 46 sales. URL format: `/city/{city-slug}-{state}` (e.g. `grand-rapids-mi`). Note: `/city/grand-rapids` (missing state suffix) shows incorrectly — not a bug, just wrong URL.
-- **#193 Wishlists ✅** — `/shopper/wishlist` loads with Items/Sellers tabs + New Collection + New Alert buttons.
-
-**Blocked Queue: 4 (unchanged)**
-
-**Files changed (S803):** `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S802 — Chrome QA: S798 Batch ✅ + S800 Bug Fixes ✅ (all verified)
-
-**Trigger:** Continue QA verification of S798 features and S800 dev dispatch fixes post-deploy.
-
-**S798 Chrome QA Results:**
-- **#442 Monthly Trend Report ✅** — `/reports/2026-05` loads: 37,934 sales, 15,468 organizers, top cities/categories. SSR confirmed.
-- **#396 DIY Sale Starter Kit ✅** — `/organizer/starter-kit` loads all 4 sections (Pre-Sale, Pricing Tips, Day-Of, Post-Sale). Download PDF + Print buttons confirmed.
-- **#397 Crew Invasion ✅** — "Enable Crew Invasion (group discount)" checkbox confirmed in edit-sale Advanced Settings.
-- **#411 Dorm Dash Phase 2 ✅ CODE-VERIFIED** — `dormBuilding`/`moveOutDate` conditional fields confirmed in `create-sale.tsx` source; renders when `saleType === 'DORM_DASH'`.
-
-**S800 Bug Fix Verification Results:**
-- **#148 Sale Checklist ✅** — `/organizer/checklist` now loads with 15-item checklist.
-- **#158 Sale Waitlist Button ✅** — "Notify me of new items" button visible on sale page.
-- **#160 Reviews Section ✅** — "Reviews / Leave a review" section visible on sale detail page.
-- **#35 Entrance Pin ✅** — entrance pin section loads; `description: ''` in DB confirms null→'' coercion fix live.
-- **#142 Batch Upload Crash ✅ CODE-VERIFIED** — null guards before `uploadedUrls.filter()` and `aiResults.map()` confirmed in `SmartInventoryUpload.tsx`. Full Cloudinary test path unconfirmed (requires non-403 Cloudinary credentials).
-- **#156 Return Window ✅** — Settings > Profile tab shows guidance text: "The return window is set per sale. When editing a sale, look for the 'Return Window' field in the sale details." returnWindowHours input removed (was saving to wrong model).
-
-**Blocked Queue: 4 (unchanged)**
-
-**Files changed (S802):** `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S801 — Chrome QA: #197 Bounty Board ✅ + #221 Hold-to-Pay ✅ + #348 QR Auto-Claim ✅
-
-**Trigger:** Continue pending Chrome QA from roadmap — 3 items marked "Pending Chrome QA."
-
-**Chrome QA Results:**
-- **#197 Bounty Board ✅** — `/api/bounties/community` returns 200 with data; create bounty form submits successfully end-to-end. `bountyController.ts` orphaned-user guard (`user: { isNot: null }`) shipped to prevent 500 on deleted-user bounty records.
-- **#221 Hold-to-Pay ✅** — "Place Hold" button on item detail page (`/items/[id]`); modal confirmed; hold created with 44-min countdown (Scout rank = 45min window). `/shopper/holds` page shows active hold with HoldTimer + "Release Hold" button. Rank-gated window confirmed working.
-- **#348 QR Auto-Claim ✅** — Created TreasureHuntQRClue test record via psycopg2 (saleId: cmpbvumj90001e7t7v5sa1iqi). Navigated to `?via=qr` URL as Leo Thomas (user5). `foundMutation` auto-fired on mount. "You earned 3 XP! Complete! +15 bonus" toast shown. Redirected to sale page after 2.5s. End-to-end confirmed.
-
-**Technical notes:**
-- psycopg2 pip install via `--target=/tmp/pypackages` (disk full at `.local`); use `PYTHONPATH=/tmp/pypackages`
-- TreasureHuntQRClue columns: `id`, `saleId`, `clueText`, `hintPhoto`, `category`, `createdAt` (not `clue`/`order`)
-- CSRF 403 on direct backend fetch from Chrome JS — cross-origin. Use psycopg2 for DB-level test data instead
-- Production DB: only user1–7 exist as example.com accounts (user12+ were not seeded to Railway)
-- QR clue test record created: id=`c4d81ec85a6b64fa9b671012`, saleId=`cmpbvumj90001e7t7v5sa1iqi`
-
-**Blocked Queue: 4 (unchanged)**
-
-**Files changed (S801):** `packages/backend/src/controllers/bountyController.ts` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S800 — Chrome QA Batch (11 items: 5 ✅, 1 ⚠️, 5 ❌ bugs) + description null fix
-
-**Trigger:** Continue Chrome QA batches without stopping. Running as Bob Smith (user2, PRO organizer) then Leo Thomas (user5, shopper).
-
-**Edit-sale fix shipped (inline — <20 lines):**
-- `pages/organizer/edit-sale/[id].tsx` line 185: `description: sale.description,` → `description: sale.description ?? ''` — root cause of ALL edit-sale 400 errors for sales with null description field. Zod `z.string()` rejects null; `?? ''` coalesces to empty string before validation.
-
-**Chrome QA Results:**
-- **#154 Organizer Public Profile ✅** — Public profile page loads for Bob Smith. Verified end-to-end.
-- **#138 Sale Types ✅** — All 5 sale type cards (YARD, ESTATE, AUCTION, FLEA, CONSIGNMENT) selectable in create-sale.
-- **#5 Listing Type Schema Validation ✅** — FIXED and AUCTION listing types save correctly. DB confirmed AUCTION item with correct `listingType` field via psycopg2.
-- **#145 Condition Grading ✅** — All 8 conditions in dropdown; GOOD condition DB-confirmed after item save.
-- **#160 Organizer Reputation Page ✅** — `/organizer/reputation` loads with reviews summary for Bob Smith.
-- **#35 Entrance Pin ⚠️** — Organizer UI and PUT payload correct; save was previously blocked by description null bug (now fixed). Pending re-verify after deploy.
-- **#148 ❌ BUG** — `/organizer/checklist` redirects to `/plan`. Frontend page never built (backend exists, S412). Dispatched to dev.
-- **#156 ❌ BUG** — `returnWindowHours` UI input in organizer settings saves to `Organizer` model but field lives on `Sale` model — type mismatch. Dispatched to dev.
-- **#142 ❌ BUG** — Batch photo upload crashes with 403 on Cloudinary + unhandled `TypeError: Cannot read properties of undefined (reading 'filter')` in `handleAnalyzePhotos`. UI stuck on "Saving items..." indefinitely. Dispatched to dev.
-- **#158 ❌ BUG** — `SaleWaitlistButton` component fully implemented + imported in `sales/[id].tsx` but never placed in JSX (0 usage). Shoppers can't join waitlist. Dispatched to dev.
-- **#160 shopper ❌ BUG** — `ReviewsSection` component not imported or rendered in `sales/[id].tsx`. Shoppers have no way to submit reviews from sale page. Dispatched to dev.
-
-**Technical notes:**
-- React number inputs require `nativeInputValueSetter` + dispatch `input`+`change` events (form_input tool alone doesn't update React controlled inputs)
-- NextAuth signout: must use in-page user menu Logout button (navigating to /auth/signout doesn't clear session)
-- Production DB only has user1–7 seeded (user13+ in seed.ts but not applied to Railway)
-- `file_upload` tool requires files from workspace folder path — `/sessions/.../mnt/FindaSale/` works
-
-**Dev dispatches (5 bugs, dispatched end of session):**
-- #148: Build `pages/organizer/checklist/index.tsx`
-- #156: Fix `returnWindowHours` — add to Sale schema OR remove UI input
-- #142: Add null check before `.filter()` in `handleAnalyzePhotos`; add user-facing error state on 403
-- #158: Place `<SaleWaitlistButton saleId={sale.id} />` in `pages/sales/[id].tsx`
-- #160: Import + place `<ReviewsSection mode="sale" saleId={sale.id} saleStatus={sale.status} />` in `pages/sales/[id].tsx`
-
-**Blocked Queue: 4 (unchanged)** — no new UNVERIFIED items added.
-
-**Files changed (S800):** `packages/frontend/pages/organizer/edit-sale/[id].tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` + dev agent dispatch files (see push block)
-
----
-
-### S799 — #416 Sale Floor Map Chrome Re-verified ✅
-
-**Trigger:** Re-verify #416 after PUBLIC_ITEM_FILTER blocker identified.
-
-Seeded "Floor Map Test Sale" via psycopg2 (4 items: 2× Living Room, 2× Kitchen; `isActive=true`, `draftStatus=PUBLISHED`). Chrome-verified: "FLOOR GUIDE — What's where" section renders with room tabs. Room filter chip works. #416 ✅. Blocked Queue: 4.
-
----
-
-### S798 — 5 Features Shipped (#442 #396 #397 #398 #411) + NV Scraper Research
-
-**Trigger:** Patrick: "all" — dispatch all outstanding items.
-
-**Parallel dispatch (6 agents):**
-- **#442 Monthly Trend Report page** ✅ — Built `reportsController.ts` + `routes/reports.ts` + wired `index.ts` + `pages/reports/[slug].tsx` with SSR, Article JSON-LD, stat cards, top cities/sale-types/categories. 0 TS errors. No migration needed.
-- **#396 DIY Sale Starter Kit** ✅ — `/organizer/starter-kit` page with inline 4-section checklist + PDF download (`/public/downloads/sale-starter-kit.pdf`). Nav link already existed. 0 TS errors.
-- **#397 Crew Invasion** ✅ — GameDesign spec: 4 members, 10% off held items, 45min, 75 XP/member, organizer opt-in. Built `crewInvasionService.ts` + `CrewInvasionCode` model + `crewInvasionEnabled` toggle in edit-sale + `CREW_INVASION_TRIGGERED` socket + `xpService.ts` CREW_INVASION:75. **Patrick: run migration 20260628300000.**
-- **#398 Organizer Referral Loop** ✅ — Confirmed already fully implemented (referrals page, referralService.ts, saleController trigger). No new files.
-- **#411 Dorm Dash Phase 2** ✅ — `dormBuilding` + `moveOutDate` on Sale schema. UI in create-sale + edit-sale. markdownCycleCron 2x multiplier within 48h of moveOutDate. **Patrick: run migration 20260528120000.**
-- **NV scraper** — No clean bulk replacement. Recommendation: City of Las Vegas License Search via Playwright scraping (`lasvegasnevada.gov/Business/Business-License/License-Search`). NV SOS sells bulk data (manual purchase). Dead scraper stays disabled.
-
-**Blocked Queue: 5 (unchanged)**
-
-**Schema fixes (post-push):** schema.prisma truncated by Edit tool after agent edits → repaired twice: (1) restored CrawlerVisit tail + UnmetDemandSignal + ShopperWaitlistEntry (S798 main), (2) added missing `shopperWaitlistEntries` reverse relation on User model (P1012 fix). Performance index migration `20260528000000` fixed: `CONCURRENTLY` removed (can't run in Prisma transaction wrapper). All 3 migrations deployed to Railway ✅.
-
-**Files changed:** `packages/backend/src/controllers/reportsController.ts` (new) · `packages/backend/src/routes/reports.ts` (new) · `packages/backend/src/index.ts` · `packages/frontend/pages/reports/[slug].tsx` (new) · `packages/frontend/pages/organizer/starter-kit.tsx` · `packages/frontend/public/downloads/sale-starter-kit.pdf` (new binary) · `packages/database/prisma/schema.prisma` · `packages/database/prisma/migrations/20260528000000_add_performance_indexes/migration.sql` · `packages/database/prisma/migrations/20260528120000_add_dorm_dash_fields/migration.sql` (new) · `packages/database/prisma/migrations/20260628300000_add_crew_invasion/migration.sql` (new) · `packages/backend/src/controllers/saleController.ts` · `packages/frontend/pages/organizer/create-sale.tsx` · `packages/frontend/pages/organizer/edit-sale/[id].tsx` · `packages/backend/src/jobs/markdownCycleCron.ts` · `packages/backend/src/services/crewInvasionService.ts` (new) · `packages/backend/src/services/xpService.ts` · `packages/backend/src/controllers/reservationController.ts` · `packages/frontend/components/Layout.tsx` · `claude_docs/strategy/roadmap.md`
-
----
-
-### S797 — Chrome QA Batches A/B/C (12 items: 8 ✅, 2 ⚠️, 1 ❌, 1 UNVERIFIED)
-
-**Trigger:** Continue Chrome QA — verify Pending Chrome QA roadmap items across three batches.
-
-**Chrome QA Batch A (#449 #350 #457 #451 #442):**
-- **#449 ENDED scraped sale page** ✅ — ENDED scraped sale page loads correctly (not 404).
-- **#350 Bell before QR in nav** ✅ — Bell icon confirmed before QR scanner in nav.
-- **#457 Noindex stale scraped** ⚠️ P2 — noindex logic code-confirmed in `[id].tsx`. P2 gap: next/head injects client-side only; noindex absent from SSR HTML. Googlebot renders JS so acceptable.
-- **#451 Speakable JSON-LD** ⚠️ P2 — speakable property confirmed in Event JSON-LD after React hydration. Same P2: JSON-LD injected by next/head client-side only.
-- **#442 Monthly Trend Report Content Moat** ❌ INCOMPLETE — monthlyTrendReportJob.ts email job exists and runs. But /reports/[year]-[month] page returns 404 — page file was never built. Content moat half-missing. Dispatch to findasale-dev.
-
-**Chrome QA Batch B (#304 #266 #308):**
-- **#304 Early Access Cache** ✅ — /shopper/early-access-cache/items loads as Leo Thomas (user5), correct empty state.
-- **#266 Explorer Profile link** ✅ — Avatar dropdown "Explorer Profile" link confirmed via DOM as Leo Thomas (user5).
-- **#308 Item Hide Bug Fix** UNVERIFIED — PUBLIC_ITEM_FILTER code-confirmed (isActive:true in itemQueries.ts). Browser test blocked: Item.embedding NOT NULL pgvector column prevents DB test data insertion.
-
-**Chrome QA Batch C (#448 #444 #447 #453):**
-- **#448 MCP Tool Wrappers** ✅ — 10 tool wrapper files confirmed in packages/mcp-server/src/tools/ (filesystem check).
-- **#444 Peer Referral Bounty** ✅ — /organizer/referrals loads, unique link (REF-7CD8DCC0 for Alice), stats block, "How It Works" 3-step explainer confirmed.
-- **#447 Crawler Visit Notification UI** ✅ — "SEARCH ENGINE VISIBILITY" SmartSearchViewsCard renders on organizer dashboard (Bob Smith, user2). Zero-visit empty state correct.
-- **#453 Unmet Demand Signals** ✅ — "WHAT SHOPPERS ARE LOOKING FOR" card renders with real unmet demand data (5 terms).
-
-**Blocked Queue: 6 → 5** (added #308 UNVERIFIED; removed #435 resolved, #457 reclassified P2, #458 confirmed ✅ S796)
-
-**Files changed:** `claude_docs/strategy/roadmap.md` (12 entries updated) · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S796 — Railway password ✅ + TS Fragment fix + Chrome QA (#401 #404 #395 #410 ✅)
-
-**Trigger:** Continue S796 QA — verify all S795-dispatched features. Railway password check. Fix Vercel build error.
-
-**Railway password:** Confirmed `[rotated — see Railway dashboard]` is active via psycopg2 direct connection test. ✅
-
-**TS build fix:** `dashboard.tsx` line 1496 — ternary PUBLISHED branch had multiple JSX siblings (comment + `{ogBuyerData != null && ...}`) without a Fragment. Wrapped in `<>...</>`. 0 TS errors after fix.
-
-**Chrome QA:**
-- **#401 Sale of the Day ✅** — "🌟 SALE OF THE DAY" card on homepage with real sale, date, items count, Shop Now button confirmed.
-- **#404 First 100 Buyers ✅** — "🏆 0 / 100 OG Buyers" progress confirmed on organizer dashboard.
-- **#395 CSV Bulk Import ✅** — 3-step modal (Upload → Map Columns → Done) confirmed on add-items page (sale cmom7h73l000hz36wzbruoa64).
-- **#410 CSV Export Watermark ✅** — eBay format CSV photo URLs confirmed with Cloudinary `l_text:Arial_44_bold:FindA.Sale,co_white,g_south,y_25,o_90` + QR overlay.
-- **#408 Scan & Split ⚠️ CODE-VERIFIED** — recentItemScans Map + SCAN_AND_SPLIT Socket.io confirmed in itemController; JOIN_SALE_FEED + listener in pos.tsx confirmed. Cannot live-test without 2 concurrent users.
-- **#399 Local Legends ⚠️ CODE-VERIFIED** — `GET /achievements/badges` live, `{localLegend:[], ogBuyer:[]}`. achievements.tsx conditionally renders. No test user has 3+ same-ZIP check-ins.
-- **#409 Sneak Peek Email ⚠️ CODE-VERIFIED** — Migration applied (`sneakPeekSentAt` column confirmed in Railway DB). Cron wired, 09:00 UTC daily. Today's cron ran at 09:16 UTC: 5 scraped sales found in window, all skipped (0 subscribers + 0 photo'd items — correct). Live verify needs a platform sale 24-48h out with subscribers and items. Cannot trigger cron manually without OUTREACH_SECRET.
-
-**Blocked Queue: 6 (unchanged)**
-
-**Files changed:** `packages/frontend/pages/organizer/dashboard.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S795 — Chrome QA (#400 ✅ #406 ✅) + P3 fix + 6 parallel dev dispatches
-
-**Trigger:** Continue S795 Chrome QA + dispatch QUEUED roadmap items.
-
-**Chrome QA:**
-- **#400 Loot Link** ✅ — 24 share buttons confirmed on item cards. Web Share API fires without auth modal. P3 bug fixed inline: added `e.stopPropagation()` to prevent click bubbling to auth interceptor for unauthenticated users. `pages/sales/[id].tsx`.
-- **#406 Split-the-Bill POS** ✅ — Full end-to-end verified with Bob Smith (user2, PRO, "Barn Door QA Test Sale"). Cart items added → Split Bill link → Split Evenly panel → Collect buttons per person → progress counter → "✓ Split complete — all 2 paid". Removed from Blocked Queue.
-- **#409 Pre-Sale Sneak Peek Email** — Still BLOCKED. Requires Patrick to run migration for `sneakPeekSentAt` field. Cannot verify until migration deployed.
-
-**Parallel dev dispatched (6 agents):**
-- **#399 Local Legends badge** — `badgeService.ts` (new), `LocalLegendBadge.tsx` (new), `useUserBadges.ts` (new). Badge check in `saleController.ts` check-in. Display on `shopper/achievements.tsx`. `GET /achievements/badges` endpoint added.
-- **#404 First 100 Buyers badge** — `OGBuyerBadge.tsx` (new). Check in `stripeController.ts` payment success. OG buyer count on `organizer/dashboard.tsx`. `GET /sales/:saleId/og-buyer-count` endpoint added.
-- **#396 scrapers (AK/NY/TX/VA)** — `alaskaPhase2Scraper.ts` rewritten (ArcGIS Hub NAICS filter). `newyorkPhase2Scraper.ts` PAGE_LIMIT 5k→50k. `texasPhase2Scraper.ts` expanded to all 14 keywords. `virginiaPhase2Scraper.ts` fixed to set `isStateLicensed=true`.
-- **#397 Tier 2 scrapers** — All 10 already existed (FL/HI/LA/MD/MS/NJ/NV/OH/OK/SC). No changes needed. ⚠️ NV: opendata.lasvegasnevada.gov DNS dead since May 2026 — scraper exits cleanly, needs replacement URL.
-- **#410 Social Export Watermarking** — `csvExportController.ts` gap fixed: was passing `null` organizer + `includeWatermark:false` to `generateCsvExport`. Now passes real organizer + `includeWatermark:true`.
-- **#408 Scan & Split** — `itemController.ts`: in-memory `recentItemScans` tracker (60s TTL), Scan & Split detection in `recordQrScan`, emits `SCAN_AND_SPLIT` via Socket.io to item + sale rooms. `pos.tsx`: `JOIN_SALE_FEED` on connect, `SCAN_AND_SPLIT` listener auto-opens split panel.
-
-**Blocked Queue: 7→6** (#406 verified and removed)
-
-**TS check: 0 errors backend, 0 errors frontend**
-
-**Files changed:** `packages/frontend/pages/sales/[id].tsx` · `packages/backend/src/services/badgeService.ts` (new) · `packages/frontend/components/LocalLegendBadge.tsx` (new) · `packages/frontend/components/OGBuyerBadge.tsx` (new) · `packages/frontend/hooks/useUserBadges.ts` (new) · `packages/backend/src/routes/achievements.ts` · `packages/backend/src/routes/sales.ts` · `packages/backend/src/controllers/saleController.ts` · `packages/backend/src/controllers/stripeController.ts` · `packages/frontend/pages/shopper/achievements.tsx` · `packages/frontend/pages/organizer/dashboard.tsx` · `packages/frontend/pages/sales/[id]/checkin.tsx` · `packages/backend/src/services/scraper/sources/alaskaPhase2Scraper.ts` · `packages/backend/src/services/scraper/sources/newyorkPhase2Scraper.ts` · `packages/backend/src/services/scraper/sources/texasPhase2Scraper.ts` · `packages/backend/src/services/scraper/sources/virginiaPhase2Scraper.ts` · `packages/backend/src/controllers/csvExportController.ts` · `packages/backend/src/controllers/itemController.ts` · `packages/frontend/pages/organizer/pos.tsx` + pre-existing uncommitted: `workspaceController.ts` · `index.ts` · `routes/upload.ts` · `schema.prisma` (2 new indexes)
-
----
-
-### S794 — Mixed: #432 fix + 4 dispatched + Chrome QA (1 ✅, 2 UNVERIFIED, 1 partial)
-
-**Trigger:** Session start with dispatch + QA. Blocked Queue at 5 (below ceiling — feature work resumed).
-
-**Shipped (inline):**
-- **#432 AggregateOffer lowPrice:0** — fixed in `packages/frontend/pages/sales/[id].tsx` (2 IIFE blocks: initialData SSR path + client-side path). lowPrice/highPrice now compute min/max from items array with >0 price filter, fallback to '0'. ~4 lines changed.
-
-**Dispatched (4 parallel agents — SHIPPED, Pending Chrome QA):**
-- **#400 Loot Link** — Per-item share button added to sale detail item cards (Web Share API + clipboard fallback). OG meta on /items/[id] already existed. Files: `sales/[id].tsx`.
-- **#401 Sale of the Day** — Cron + service + route + SaleOfTheDayCard component. Files: `saleOfTheDayJob.ts`, `saleOfTheDayService.ts`, `saleOfTheDay.ts` route, `SaleOfTheDayCard.tsx`, `index.tsx` homepage.
-- **#409 Pre-Sale Sneak Peek Email** — DB-level idempotency via `sneakPeekSentAt` field added to Sale model. Migration: `20260527000000_add_sale_sneak_peek_sent_at`. Files: `schema.prisma`, `presaleSneakPeekEmailService.ts`. **Requires Patrick migration deploy.**
-- **#395 Bulk Import Tool Phase 1** — 2-step CSV import (preview + column mapping → bulk createMany, 200-item cap). Files: `itemController.ts` (bulkImportCSV), `items.ts` route, `CSVImportModal.tsx` (full rewrite).
-
-**Chrome QA (S696 Pending features):**
-- **#403 Bundle Pricing** ✅ — Bundle Pricing section on add-items page confirmed. Form (name/price/description/item selector) + correct empty state.
-- **#411 Dorm Dash** ✅ Phase 1 only — DORM_DASH in dropdown confirmed. ⚠️ Dorm-specific fields (building, move-out, accelerated markdown) not built — enum addition only.
-- **#406 Split-the-Bill POS** UNVERIFIED — code confirmed (pos.tsx lines 1741–1855) but Alice's account shows no active sale in POS.
-- **#41

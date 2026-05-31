@@ -7,6 +7,7 @@ interface StreakProfile {
   userId: string;
   name: string;
   streakPoints: number;
+  guildXp: number;
   visitStreak: number;
   huntPassActive: boolean;
   huntPassExpiry: string | null;
@@ -64,7 +65,7 @@ const StreakWidget: React.FC = () => {
         <span className="text-lg">⭐</span>
         <div className="flex flex-col">
           <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">XP</span>
-          <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{profile.streakPoints}</span>
+          <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{profile.guildXp}</span>
         </div>
       </div>
 
