@@ -45,7 +45,7 @@ export async function getBatchOfUngeocodedSales(req: Request, res: Response): Pr
         : {
             OR: [
               // Scraped sources that never provide coordinates
-              { sourceName: { in: ['GarageSaleFinder', 'FacebookEvents'] } },
+              { sourceName: { in: ['GarageSaleFinder', 'Facebook Events'] } },
               // Platform sales (organizer-created) that were published without geocoding
               { sourceName: null, status: 'PUBLISHED' },
             ],
