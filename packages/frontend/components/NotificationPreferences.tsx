@@ -14,7 +14,8 @@ interface NotificationPreferencesProps {
   userPrefs?: NotificationPrefs;
 }
 
-const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userPrefs = {} }) => {
+const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userPrefs: rawUserPrefs = {} }) => {
+  const userPrefs = rawUserPrefs ?? {}; // guard against null (API can return null for notificationPrefs)
   const [prefs, setPrefs] = useState<NotificationPrefs>({
     emailNewSalesFromFollowed: userPrefs.emailNewSalesFromFollowed ?? true,
     emailFlashDeals: userPrefs.emailFlashDeals ?? true,
