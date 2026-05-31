@@ -14,23 +14,6 @@ import Link from 'next/link';
 import { usePublicPassport } from '@/hooks/useCollectorPassport';
 import { RankBadge, ExplorerRank } from '@/components/RankBadge';
 
-/**
- * Calculate Explorer rank based on totalFinds (proxy for XP)
- * Threshold mapping from xpService.ts adapted to totalFinds:
- * - INITIATE: 0-9 finds
- * - SCOUT: 10-29 finds
- * - RANGER: 30-79 finds
- * - SAGE: 80-199 finds
- * - GRANDMASTER: 200+ finds
- */
-function getRankFromFinds(totalFinds: number): ExplorerRank {
-  if (totalFinds >= 200) return 'GRANDMASTER';
-  if (totalFinds >= 80) return 'SAGE';
-  if (totalFinds >= 30) return 'RANGER';
-  if (totalFinds >= 10) return 'SCOUT';
-  return 'INITIATE';
-}
-
 interface PublicProfile {
   id: string;
   bio: string | null;
@@ -42,6 +25,8 @@ interface PublicProfile {
   user: {
     id: string;
     name: string;
+    explorerRank: ExplorerRank;
+    guildXp: number;
   };
 }
 
@@ -53,9 +38,10 @@ export default function ShopperProfilePage() {
     typeof userId === 'string' ? userId : null
   );
 
+  // Use actual explorerRank from User model (driven by guildXp) — not derived from totalFinds
   const explorerRank = useMemo(() => {
     if (!profile) return 'INITIATE' as ExplorerRank;
-    return getRankFromFinds(profile.totalFinds);
+    return profile.user.explorerRank;
   }, [profile]);
 
   if (isLoading) {
