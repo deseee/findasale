@@ -2,94 +2,45 @@
 
 ---
 
-## What Happened This Session (S813 — eBay QA + Map Pins Fix)
+## What Happened This Session (S814 — Table Stakes Audit)
 
-**The short version: finished the eBay QA batch and found the actual root cause of the empty map — it's a code bug, not a data gap.**
+**The short version: we audited everything a real business needs and either built it or set it up. GA4 is now live, the legal docs are solid, and FindA.Sale has a Google Business Profile.**
 
-### eBay QA — all three done
+### What shipped
 
-- **#424 Description Template:** You confirmed it works. ✅
-- **#425 Push from Review Queue:** Tested live on the Steam Controller in your Artifact Downtown Paw Paw sale. Checked the "Also push to eBay" box in the review queue, clicked Approve, and the item appeared on eBay (confirmed by the green "Live on eBay" badge + "View on eBay" button in edit-item). ✅
-- **#426 Best Offers UI:** The toggle is there in edit-item for eBay-connected accounts. When you turn it on, auto-accept and auto-decline percentage fields expand. ✅
-
-### Map pins — real bug found and fixed
-
-The map appearing empty is a code bug, not missing data. Here's what was happening:
-
-Your Artifact Downtown Paw Paw sale actually **does** have GPS coordinates on it (lat 42.22, lng -85.89 — correctly geocoded to Paw Paw). The pins aren't missing from the database.
-
-The problem was in how the feed works for logged-in users. For anonymous visitors, the feed limits results to sales within ~100 miles of Grand Rapids. For logged-in users, that limit was accidentally removed — so the feed pulled from the entire country and sorted by personalization score. The highest-scoring results happened to be scraped sale data from Tennessee and North Carolina. Those have coordinates, but they're 800 miles south of Grand Rapids, so the map showed them off-screen.
-
-The fix was two lines: apply the same regional limit for logged-in users as anonymous users. Your own Paw Paw sale will now show up on the homepage map once Railway deploys the change (usually a few minutes after the push).
+- **robots.txt** — search engines and scrapers now know which routes are private. First time FindA.Sale has had one.
+- **DMCA page at /dmca** — legally required if users can upload content. Takedown procedure, counter-notice, repeat infringer policy, all done.
+- **Google Analytics (GA4)** — property created, measurement ID added to Vercel, redeployed. Data starts flowing within 24-48 hours. You'll see traffic at analytics.google.com.
+- **Terms of Service — 7 new sections:** refund/dispute policy (48-hour window, 7-day investigation), sales tax disclaimer (you're not collecting on their behalf), organizer fulfillment timing (24hr ack, 30-day pickup), Stripe KYC requirement, 1099-K disclosure, chargeback fee policy, DMCA reference.
+- **Privacy Policy — 4 new sections:** GDPR legal basis (for EU users), data deletion timeline (30 days), breach notification promise (72 hours), transparency about auto-suggested content.
+- **3 internal SOPs:** step-by-step guides for handling account deletion requests, Stripe chargebacks, and security breaches. All in claude_docs/operations/.
+- **Google Business Profile** — FindA.Sale is now in Google's system as an E-commerce service in Paw Paw, MI with the finda.sale URL. Needs one more step from you (see below).
 
 ---
 
-## Pending: Your Actions
+## Your Actions (2 required, 1 optional check)
 
-1. **Update your private global Claude settings** — the Railway database password stored there is still the old one. Update the `Railway DATABASE_URL (public proxy)` line manually (Railway dashboard → findasale-db → Variables).
-2. **Create a GitGuardian API token** — dashboard.gitguardian.com → API → Personal access tokens, `incidents:read` scope.
-3. **#239 legal gate** — attorney + CPA answers needed before enabling real consignor payouts.
-4. **#463 Google Merchant** — confirm Google approved the ~52 products after the 3-day review window.
-5. **Map smoke test** — after Railway deploys, load finda.sale while logged in and confirm pins appear near Paw Paw/GR.
+1. **Verify Google Business Profile** — go to business.google.com, click "Verify now," enter your phone number for a verification code. Takes 2 minutes. Profile won't be visible to Google Search/Maps until this is done.
 
----
+2. **Get business insurance** — this is the one gap that needs a human. Visit nextinsurance.com or call your business bank. You need cyber liability + general liability. Roughly $500-1,500/year. Every business processing payments needs this — FindA.Sale currently has zero coverage.
 
-## What Happened Last Session (S812 — QA + P0 Fix)
-
-**The short version: the shopper dashboard was broken for every logged-in shopper, I found the cause and fixed it. Also verified all the outstanding QA items from recent sessions.**
-
-### The P0 crash (shopper dashboard)
-
-After the S810 widget-rendering work, every shopper account was hitting "Something went wrong" on `/shopper/dashboard`. Took some deep debugging to find it — production React suppresses error details — but I extracted the actual error message directly from the React component tree:
-
-> `Cannot read properties of null (reading 'emailNewSalesFromFollowed')`
-
-Two bugs, both introduced by S810:
-
-1. **React hook ordering violation:** Six data-fetch hooks were being called *after* a "not logged in → redirect" guard. React 18 is strict about this — the server renders the page one way (no hooks called) and the client renders it another way (hooks called), and it crashes at hydration. Fix: moved all hooks above the redirect guard.
-
-2. **Null vs. undefined:** The Notification Preferences widget received `null` from the API (instead of `undefined`). JavaScript default parameters (`= {}`) only kick in for `undefined` — so `null` passed straight through, and `null.emailNewSalesFromFollowed` threw. Fix: added `?? {}` as an explicit null coalesce.
-
-Both fixes shipped and verified. Dashboard loads correctly for Leo Thomas and all other test accounts.
-
-### QA results
-
-Everything from the S811 backlog cleared:
-
-- ✅ **Map pins (H-002):** The Leaflet CSS fix is working — the map pane now positions itself correctly. The reason no pins appear near Grand Rapids is data, not code: the top-200 sales from the API are all scraped national data (Texas, North Carolina, Arkansas). When an organizer publishes a real sale, its pin will appear correctly.
-- ✅ **S811 polish:** Category emojis (💰, 📢), sale breadcrumb contrast in dark mode, branded placeholder on photoless sale cards — all confirmed live.
-- ✅ **4 new shopper widgets:** Streak tracker, rank benefits card, notification preferences, and pickup appointments — all rendering correctly in dark mode.
-- ✅ **markSold RECORD mode:** Organizer selects a hold → chooses "Record cash sale" → item immediately flips to SOLD in the database.
-- ✅ **markSold POS_CART mode:** Hold moves into the POS cart (status: HOLD_IN_CART) — item stays AVAILABLE until the organizer processes payment through the POS screen.
-- ⚠️ **markSold CHECKOUT_LINK:** The code path fires correctly, but the Stripe test environment doesn't recognize Bob's production Stripe account. This will work with a real Stripe test account connected.
+3. **Check GA4 in 24-48 hours** (optional) — visit analytics.google.com → FindA.Sale → Realtime report. You should see traffic.
 
 ---
 
-## Pending: Your Actions
+## What's Still Pending (carried from S813)
 
-1. **Update your private global Claude settings** — the Railway database password stored there is still the old one. Update the `Railway DATABASE_URL (public proxy)` line manually (get the current password from Railway dashboard → findasale-db → Variables).
-
-2. **Create a GitGuardian API token** — go to dashboard.gitguardian.com → API → Personal access tokens, create one with `incidents:read` scope. The daily health check is waiting for it.
-
-3. **#239 legal sign-off** — the multi-consignor settlement is built and waiting. Once your attorney + CPA answer the merchant-of-record / 1099 questions, we can turn on live transfers and do the final QA.
-
-4. **Google Merchant Center** — check if the ~52 products from the shopping feed have been approved (the 3-day review window should be up soon if not already).
+- **#239 consignor payouts** — still blocked on attorney + CPA answers before live money can flow.
+- **#463 Google Merchant** — check if Google approved your ~52 products (3-day review window started when you registered the feed in S808).
+- **Map pins smoke test** — log into finda.sale and confirm pins show up near Paw Paw/GR (the fix shipped in S813).
 
 ---
 
-## System Health
+## What Happened Last Session (S813 — eBay QA + Map Pins Fix)
 
-- **Blocked queue: 2 active items** (well below the 8-item ceiling — feature work is cleared to resume)
-- **Build status:** ✅ Vercel green, Railway healthy
-- **Dashboard:** ✅ Shopper dashboard P0 resolved
-- **Sentry:** 4 unresolved issues (all slow DB query warnings from recent crons — non-critical)
+**The short version: finished the eBay QA batch and fixed the root cause of the empty map.**
 
----
-
-## What's Next
-
-Next session the focus is:
-- Verify the streak widget also shows up on the `/shopper/loyalty` page (we only checked the dashboard)
-- QA the consignor settlement flow once legal clears
-- Continue QA carryover: Sneak Peek Email, Local Legends badge, Scan & Split (all need specific conditions to trigger)
-- Feature work: blocked queue is low enough to pick up new roadmap items
+- **#424 Description Template ✅** — confirmed by you directly.
+- **#425 Push from Review Queue ✅** — Steam Controller pushed to eBay from the review queue. "Live on eBay" badge confirmed.
+- **#426 Best Offers UI ✅** — toggle renders in edit-item, auto-accept/decline fields expand correctly.
+- **Map pins bug fixed** — logged-in users were getting a global unbounded query (no regional filter), pulling scraped sales from TN/NC/TX. Fixed to always apply the Grand Rapids regional bounding box for both auth states.
