@@ -36,7 +36,7 @@ export interface PublicExplorerPassport {
     id: string;
     name: string;
     collectorTitle: string | null;
-    explorerRank: string;
+    explorerRank: 'INITIATE' | 'SCOUT' | 'RANGER' | 'SAGE' | 'GRANDMASTER';
     guildXp: number;
   };
 }
