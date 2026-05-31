@@ -120,7 +120,8 @@ const InvalidateMapSize = () => {
     const resetProjection = () => {
       map.invalidateSize();
       // Re-anchor the pane to the current view. animate:false avoids a visible pan.
-      map.setView(map.getCenter(), map.getZoom(), { animate: false, reset: true });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      map.setView(map.getCenter(), map.getZoom(), { animate: false, reset: true } as any);
     };
 
     // Run on the next frame and again after a short delay — covers the case where
