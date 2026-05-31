@@ -87,3 +87,12 @@ export function runListingEnrichmentBatch(req: Request, res: Response): void {
     console.error('[enrichment] background error:', err);
   });
 }
+
+/**
+ * Cron-callable entry point (no HTTP context).
+ * Uses AI_ENRICHMENT_BATCH_SIZE env var (default: 50 for nightly runs).
+ */
+export async function runListingEnrichmentCronBatch(): Promise<void> {
+  const batchSize = parseInt(process.env.AI_ENRICHMENT_BATCH_SIZE || '50', 10);
+  await _runEnrichmentBatch(batchSize);
+}

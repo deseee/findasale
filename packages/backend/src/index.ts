@@ -238,6 +238,7 @@ import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJ
 import { scheduleFoundingOrgBadgeCron } from './jobs/foundingOrgBadgeJob'; // Feature #405: Founding Organizer Badge — nightly award
 import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature #XXX: Retail Mode auto-renewal
 import { scheduleConsignorExpiryNoticeCron } from './jobs/consignorExpiryNoticeJob'; // Feature #309: Consignor expiry notices
+import { scheduleListingEnrichmentCron } from './jobs/listingEnrichmentCron'; // Feature #651: Nightly AI enrichment for scraped listings (4 AM UTC)
 import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feature #XXX: Referral reputation score recomputation
 import './jobs/curatorReviewJob'; // ADR-069 Phase 2: Automated curator review for AUTO_GENERATED Encyclopedia entries
 import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Phase 1: Backfill PriceBenchmark from Items with aiSuggestedPrice
@@ -750,6 +751,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #309: Register consignor expiry notice cron (daily at 2 AM UTC)
   scheduleConsignorExpiryNoticeCron();
+
+  // Feature #651: Register nightly AI listing enrichment cron (daily at 4 AM UTC)
+  scheduleListingEnrichmentCron();
 
   // ADR-075: Register EstateSales.NET sale detail enrichment cron (every 4 hours at :00 UTC)
   scheduleSaleDetailEnrichmentCron();
