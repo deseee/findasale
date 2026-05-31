@@ -55,8 +55,11 @@ export async function getPersonalizedFeed(
   // Geo bounding box filter: ~1.5 degree delta ≈ ~100 miles
   const GEO_DELTA = 1.5;
 
-  const effectiveLat = lat ?? (userId ? undefined : regionConfig.centerLat);
-  const effectiveLng = lng ?? (userId ? undefined : regionConfig.centerLng);
+  // Always fall back to region center — authenticated users without geolocation
+  // were previously getting a global unbounded query, returning scraper sales from
+  // TN/NC/TX whose pins are off-screen when the map is centered on GR.
+  const effectiveLat = lat ?? regionConfig.centerLat;
+  const effectiveLng = lng ?? regionConfig.centerLng;
 
   const whereClause: any = {
     status: 'PUBLISHED',
