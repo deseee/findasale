@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S821 — QA + Dev session. Queue cleared from 11→4 rows (7 stale items removed/resolved). 14 features/pages Chrome-verified. 4 P2 bugs found + fixed: Flip Report HTML entity decode, public profile rank mismatch (totalFinds→guildXp), TEAMS-gated pages fire API when tier insufficient, listing enrichment cron wired (4am UTC, batch 50). Blocked Queue: 4 rows. Push block ready.**
+**Latest: S822 — QA + build fix. S820 Chrome verifications applied to roadmap. Found S821 Vercel builds both failed (missing ExplorerRank type in PublicExplorerPassport hook). Fixed + redeployed green. #200 public profile rank ✅ SCOUT (ss_2483vbj9l), TEAMS-gated pages no error toast ✅ (ss_75625ykar). #476 idle timeout deferred (Patrick). Blocked Queue: 4 rows.**
 
 **Previous: S820 — Scheduled session: markSold duplicate Purchase fix + DB purge + backup restore (automated).**
 
@@ -258,19 +258,39 @@ _S819+S820 verifications applied to roadmap S822. UNVERIFIED items remain below.
 
 **Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear to resume).**
 
-**S822 status:** S820 Chrome verifications applied to roadmap. #476 Session Idle Timeout DEFERRED (JWT expiry covers security; timeout UX is annoying for home-based organizer base — Patrick decision S822). QA session in progress.
+**S822 complete:** Vercel build fixed (missing ExplorerRank type), S821 fixes now live. #200 rank ✅ Scout (ss_2483vbj9l), TEAMS-gate consignors ✅ no toast (ss_75625ykar). Apply S822 Chrome verifications to roadmap at next session start.
 
 **Patrick actions required:**
 
-1. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-2. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
-3. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
+1. **Push block for S822 docs:**
+   ```powershell
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add claude_docs/STATE.md claude_docs/strategy/roadmap.md
+   git commit -m "docs: S822 wrap — build fix verified, S820 Chrome verifications applied to roadmap"
+   .\push.ps1
+   ```
+2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
+4. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
 
 **Dispatch stubs:**
-- **QA:** Continue Pending Chrome QA items from roadmap backlog (findasale-qa).
-- **RAILWAY ENV CHECK:** Confirm Railway Variables set: `OUTREACH_SECRET`, `INTERNAL_SCRAPER_KEY`, `EBAY_VERIFICATION_TOKEN` + `EBAY_DELETION_ENDPOINT_URL`, `STRIPE_CONNECT_WEBHOOK_SECRET`.
+- **SESSION START:** Apply S822 Chrome verifications (#200 ✅, TEAMS-gate ✅) to roadmap.md Chrome columns.
+- **QA:** Flip Report HTML decode needs Artifact MI. Other backlog items with user2/user5.
+- **RAILWAY ENV CHECK:** Confirm Railway Variables: `OUTREACH_SECRET`, `INTERNAL_SCRAPER_KEY`, `EBAY_VERIFICATION_TOKEN`, `EBAY_DELETION_ENDPOINT_URL`, `STRIPE_CONNECT_WEBHOOK_SECRET`.
 
 ## Recent Sessions
+
+### S822 — Build Fix + QA: S821 Vercel Deploy Unblocked, Both S821 Fixes Verified
+
+**Session start:** S820 Chrome verifications applied to roadmap. #476 deferred (Patrick decision).
+
+**Build failure:** Both S821 Vercel deployments failed on same TypeScript error: `Property 'explorerRank' does not exist on type '{ id: string; name: string; collectorTitle: string | null; }'` in `profile/[userId].tsx:44`. Root cause: `PublicExplorerPassport.user` in `useCollectorPassport.ts` never updated with `explorerRank`/`guildXp`. Fix: added union type + guildXp. Redeployed green.
+
+**QA verified:** #200 public profile rank ✅ Leo Thomas shows Scout (ss_2483vbj9l). TEAMS-gated pages ✅ no error toast on /organizer/consignors (ss_75625ykar). Flip Report HTML decode UNVERIFIED (user2 has no ended sales — needs Artifact MI).
+
+**Files changed:** `packages/frontend/hooks/useCollectorPassport.ts` · `claude_docs/STATE.md` · `claude_docs/strategy/roadmap.md`
+
+---
 
 ### S821 — QA + Dev Session: Queue Cleared 11→4, 14 Pages Verified, 4 Bugs Fixed
 
