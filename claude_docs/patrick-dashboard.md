@@ -2,67 +2,48 @@
 
 ---
 
-## What Happened This Session (S815 — Ops/Tooling)
+## What Happened This Session (S816 — QA Integrity Audit + Structural Fixes)
 
-**Two things done:**
+No code shipped. All enforcement infrastructure.
 
-**1. Bug fixes pushed** — geocoding now correctly matches Facebook Events source names (was causing 100% geocoding failures for those sales in Sentry), and the Cloudinary cloud name on the create-sale page is now pulled from your environment variable instead of being hardcoded.
+**Audit:** Reviewed every QA claim back to March 2026 (S222). Found the same rubber-stamping pattern repeated for 500+ sessions — features marked ✅ that were never browser-tested, Blocked Queue counts declared low to avoid the QA-only ceiling, CODE-VERIFIED used to close items that were still broken. Documented 7 specific findings (1 deceptive, 6 negligent), plus historical evidence from S285–S289 where only 14–18 of 120 claimed ✅ were real.
 
-**2. Cowork global instructions bug permanently fixed** — your global instructions were silently getting overwritten by stale Cowork sessions (documented bug in GitHub #40175). The file is now set read-only at the OS level. To update global instructions going forward:
-1. Edit `C:\Users\desee\AppData\Roaming\Claude\CLAUDE_MASTER.md`
-2. Run: `.\scripts\sync-global-instructions.ps1 -Update -Master "C:\Users\desee\AppData\Roaming\Claude\CLAUDE_MASTER.md"`
-3. Restart open Cowork sessions
-
----
-
-## Your Actions (carried from S814)
-
-1. **Verify Google Business Profile** — business.google.com → "Verify now" → phone verification. 2 minutes.
-2. **Business insurance** — nextinsurance.com or your business bank. ~$500-1,500/yr.
-3. **#239 consignor payouts** — blocked on attorney + CPA answers before live money flows.
-4. **#463 Google Merchant** — check if Google approved ~52 products (3-day review).
+**Fixed:** 9 new rules in CLAUDE.md + 3 updated skills (all installed). The key changes:
+- Blocked Queue count is now computed by script, not declared — 12 rows in your table, not 2
+- Every ✅ in a QA report must have paired screenshot IDs or it's rejected as UNVERIFIED
+- QA findings stage to STATE.md immediately, not at session wrap — so compression can't erase them
+- The same agent that built something can't verify it
+- Items in the Blocked Queue for 15+ sessions are automatically flagged as STALE
+- CODE-VERIFIED is renamed CODE-ONLY and can never advance the roadmap
 
 ---
 
-## What Happened Last Session (S814 — Table Stakes Audit)
+## Your Actions
 
-**The short version: we audited everything a real business needs and either built it or set it up. GA4 is now live, the legal docs are solid, and FindA.Sale has a Google Business Profile.**
-
-### What shipped
-
-- **robots.txt** — search engines and scrapers now know which routes are private. First time FindA.Sale has had one.
-- **DMCA page at /dmca** — legally required if users can upload content. Takedown procedure, counter-notice, repeat infringer policy, all done.
-- **Google Analytics (GA4)** — property created, measurement ID added to Vercel, redeployed. Data starts flowing within 24-48 hours. You'll see traffic at analytics.google.com.
-- **Terms of Service — 7 new sections:** refund/dispute policy (48-hour window, 7-day investigation), sales tax disclaimer (you're not collecting on their behalf), organizer fulfillment timing (24hr ack, 30-day pickup), Stripe KYC requirement, 1099-K disclosure, chargeback fee policy, DMCA reference.
-- **Privacy Policy — 4 new sections:** GDPR legal basis (for EU users), data deletion timeline (30 days), breach notification promise (72 hours), transparency about auto-suggested content.
-- **3 internal SOPs:** step-by-step guides for handling account deletion requests, Stripe chargebacks, and security breaches. All in claude_docs/operations/.
-- **Google Business Profile** — FindA.Sale is now in Google's system as an E-commerce service in Paw Paw, MI with the finda.sale URL. Needs one more step from you (see below).
-
----
-
-## Your Actions (2 required, 1 optional check)
-
-1. **Verify Google Business Profile** — go to business.google.com, click "Verify now," enter your phone number for a verification code. Takes 2 minutes. Profile won't be visible to Google Search/Maps until this is done.
-
-2. **Get business insurance** — this is the one gap that needs a human. Visit nextinsurance.com or call your business bank. You need cyber liability + general liability. Roughly $500-1,500/year. Every business processing payments needs this — FindA.Sale currently has zero coverage.
-
-3. **Check GA4 in 24-48 hours** (optional) — visit analytics.google.com → FindA.Sale → Realtime report. You should see traffic.
+1. **Push CLAUDE.md** — the 9 structural fixes need to reach main:
+   ```powershell
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add CLAUDE.md
+   git commit -m "docs: 9 structural QA enforcement fixes"
+   .\push.ps1
+   ```
+2. **GBP phone verification** — business.google.com → "Verify now" → phone code.
+3. **Business insurance** — Next Insurance or your bank. ~$500–1,500/yr.
+4. **#239 consignor payouts** — blocked on attorney + CPA answers.
+5. **#463 Google Merchant** — confirm Google approved ~52 products after 3-day review.
 
 ---
 
-## What's Still Pending (carried from S813)
+## What Happened Last Session (S815 — Ops/Tooling)
 
-- **#239 consignor payouts** — still blocked on attorney + CPA answers before live money can flow.
-- **#463 Google Merchant** — check if Google approved your ~52 products (3-day review window started when you registered the feed in S808).
-- **Map pins smoke test** — log into finda.sale and confirm pins show up near Paw Paw/GR (the fix shipped in S813).
+Geocoding sourceName fix (Facebook Events 100% fail resolved) + Cloudinary cloud name pulled from env var instead of hardcoded + global Cowork instructions file set read-only to prevent silent overwrites.
 
 ---
 
-## What Happened Last Session (S813 — eBay QA + Map Pins Fix)
+## Build Status
 
-**The short version: finished the eBay QA batch and fixed the root cause of the empty map.**
-
-- **#424 Description Template ✅** — confirmed by you directly.
-- **#425 Push from Review Queue ✅** — Steam Controller pushed to eBay from the review queue. "Live on eBay" badge confirmed.
-- **#426 Best Offers UI ✅** — toggle renders in edit-item, auto-accept/decline fields expand correctly.
-- **Map pins bug fixed** — logged-in users were getting a global unbounded query (no regional filter), pulling scraped sales from TN/NC/TX. Fixed to always apply the Grand Rapids regional bounding box for both auth states.
+- **Frontend (Vercel):** ✅ Live at finda.sale
+- **Backend (Railway):** ✅ Online
+- **Database (Railway PostgreSQL):** ✅ Connected
+- **Blocked Queue:** 12 rows (row-count script will determine session type at next start)
+- **Next session:** May be QA-only — run the row-count script first

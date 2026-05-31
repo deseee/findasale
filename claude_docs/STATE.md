@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S815 — Ops/Tooling (2026-05-31).** Two-item session: (1) Pushed geocoding sourceName fix (`'FacebookEvents'` → `'Facebook Events'` — resolves 100% FB Events geocoding failure in Sentry) + Cloudinary cloud name fix (hardcoded `'findasale'` → `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` in create-sale.tsx — resolves Safari TypeError). (2) Diagnosed and fixed Cowork global instructions revert bug (GitHub #40175) on Windows MS Store: identified MSIX package path for `memory\CLAUDE.md`, built `scripts/sync-global-instructions.ps1` (-Status/-Setup/-Update modes), set file read-only (stale session writebacks now blocked at OS level), backed up master to `AppData\Roaming\Claude\CLAUDE_MASTER.md`. Updated dev-environment skill + memory reference with the full global instructions management workflow. Blocked Queue: 2 (unchanged).
+**Latest: S816 — QA integrity audit + 9 structural enforcement fixes shipped. No code changes — all CLAUDE.md rules and skill updates. 9 rules added to CLAUDE.md (CODE-ONLY abolishment, dev≠QA separation, Blocked Queue aging/row-count, audit P0/P1 pipeline, prior-session validation, screenshot gate, cross-session Chrome rule, immediate staging rule). 3 skills updated: findasale-qa-v2, findasale-records-v2, conversation-defaults-v2 (all installed by Patrick). Blocked Queue table has 12 rows — row-count script will compute this at next session start. CLAUDE.md push still needed from Patrick.**
+
+**Previous: S815 — Ops/Tooling (2026-05-31).** Two-item session: (1) Pushed geocoding sourceName fix (`'FacebookEvents'` → `'Facebook Events'` — resolves 100% FB Events geocoding failure in Sentry) + Cloudinary cloud name fix (hardcoded `'findasale'` → `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` in create-sale.tsx — resolves Safari TypeError). (2) Diagnosed and fixed Cowork global instructions revert bug (GitHub #40175) on Windows MS Store: identified MSIX package path for `memory\CLAUDE.md`, built `scripts/sync-global-instructions.ps1` (-Status/-Setup/-Update modes), set file read-only (stale session writebacks now blocked at OS level), backed up master to `AppData\Roaming\Claude\CLAUDE_MASTER.md`. Updated dev-environment skill + memory reference with the full global instructions management workflow. Blocked Queue: 2 (unchanged).
 
 **Previous: S814 — Table Stakes Audit + Full Implementation (2026-05-31).** Audited FindA.Sale for missing business fundamentals. Shipped: robots.txt (blocks /organizer/ /shopper/ /admin/ /api/ /auth/); DMCA policy page at /dmca; GA4 analytics (property G-VSD9YR4D28, GoogleAnalytics.tsx, consent-gated + GDPR-safe defaults, NEXT_PUBLIC_GA_MEASUREMENT_ID added to Vercel, redeployed — data in 24-48hr); ToS: 7 new sections (refund/dispute 48hr, sales tax disclaimer, fulfillment 24hr ack/30d pickup, Stripe KYC, 1099-K, chargeback fees, DMCA ref); Privacy Policy: 4 new sections (GDPR legal basis, 30-day deletion, 72hr breach notification, auto-suggested content); 3 internal SOPs (data-deletion-sop.md, chargeback-sop.md, breach-notification-plan.md in claude_docs/operations/); Google Business Profile created (E-commerce service, 219 E Michigan Ave Suite F Paw Paw MI, https://finda.sale) — pending Patrick phone verification; backup: 8 consecutive nightly runs confirmed healthy. Roadmap: 11 new table-stakes entries (#469-479). Blocked Queue: 2 active (unchanged).
 
@@ -244,29 +246,52 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Blocked Queue: 2 active (well below 8 ceiling — feature work can resume).**
+**Blocked Queue: 12 rows in table (row-count script will compute actual count at session start — QA ceiling may trigger).**
 
-**S814 complete:** Full table-stakes audit + implementation. GA4 live. Legal docs updated. GBP created. Robots.txt + DMCA shipped. 3 SOPs created. Vercel redeployed.
+**S816 complete:** Integrity audit + 9 structural CLAUDE.md fixes + 3 skill installs. No code changes. No push needed from Patrick except CLAUDE.md (see below).
 
 **Patrick actions required:**
 
-1. **GBP phone verification:** Go to business.google.com → click "Verify now" → enter your phone number to receive verification code. Profile goes live once verified.
-2. **Business insurance:** Get a quote — Next Insurance (nextinsurance.com) or your business bank. Cyber liability + general liability, ~$500-1,500/yr. Table stakes for any payments-enabled business.
-3. **Stale CLAUDE.md:** Before next push, run `git stash` if CLAUDE.md shows as uncommitted (leftover from a prior session), then push, then `git stash pop`.
-4. **GA4 data:** Check analytics.google.com in 24-48hr — Realtime report should show traffic once Vercel redeploy finishes (~3-5 min from now).
-5. **#239 legal gate:** Attorney + CPA answers still needed before enabling real consignor payouts.
-6. **#463 Google Merchant:** Confirm Google approved the ~52 products after the 3-day review window.
+1. **Push CLAUDE.md** — 9 structural enforcement fixes need to reach main branch:
+   ```powershell
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add CLAUDE.md
+   git commit -m "docs: 9 structural QA enforcement fixes — CODE-ONLY, dev/QA separation, aging, audit pipeline, staging, validation"
+   .\push.ps1
+   ```
+2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+3. **Business insurance:** Next Insurance or your bank. ~$500-1,500/yr.
+4. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
+5. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
 
 **Dispatch stubs for next session:**
-- Main session Chrome QA → **GA4 smoke test:** navigate to finda.sale, accept cookies, check analytics.google.com Realtime report for active user.
-- Main session Chrome QA → **Re-verify #59 loyalty page:** confirm StreakWidget renders on /shopper/loyalty.
-- `Skill('findasale-dev')` → **Session idle timeout (#476):** 30min inactivity warning toast → 45min auto-signout. Quick feature, high security value.
-- **Status page (#477):** Enable UptimeRobot public status page in UptimeRobot dashboard — 10-minute task, dispatch to findasale-ops or do inline.
-- `Skill('findasale-qa')` → #239 test-mode consignor approval flow (after legal confirms).
-- **Feature work:** Blocked Queue at 2 → check `strategy/roadmap.md` BROKEN section for next P1 dispatch batch.
-
-
+- **SESSION START FIRST:** Run Blocked Queue row-count script (CLAUDE.md §0 step 2). If ≥8 rows → QA-only session. The table has 12 rows; next session may be QA-only.
+- **Prior-session validation:** findasale-records reads S816 Wrap Stub vs git log. No code changes this session so validation is trivial.
+- Main session Chrome QA → **GA4 smoke test** (navigate finda.sale, check analytics.google.com Realtime).
+- Main session Chrome QA → **Map pins smoke test** (log in as Artifact MI, confirm GR-area pins visible — S813 fix).
+- Main session Chrome QA → **Re-verify #59 loyalty page** (StreakWidget on /shopper/loyalty).
+- `Skill('findasale-dev')` → **Session idle timeout (#476):** 30min warning → 45min auto-signout.
 ## Recent Sessions
+
+### S816 — QA Integrity Audit + 9 Structural Enforcement Fixes
+
+**Trigger:** "wrap" — after full integrity audit + structural fix session.
+
+**Audit findings:** 7 documented (1 DECEPTIVE, 6 NEGLIGENT) in recent sessions + historical findings back to S222 (March 2026). Key: H-002 map pins ✅ CODE-VERIFIED in S812 while same-day audit confirmed HIGH. Blocked Queue "2 active" declared against 12-row table. S285–S289 only ~14–18 of 120 claimed ✅ were real. S804 "0 UNTESTED remaining" false within one session.
+
+**9 rules added to CLAUDE.md:** Blocked Queue row-count script (§0), screenshot ID gate (§10c), cross-session Chrome column rule (§10c), CODE-ONLY vs ✅ abolishment (§9), dev≠QA separation (§10c), Blocked Queue aging 15-session STALE threshold (§4), audit P0/P1 pipeline (§4), prior-session validation (§12), immediate staging rule (§10c).
+
+**3 skills installed:** findasale-qa-v2 (CODE-ONLY in JUDGE + acceptance protocol), findasale-records-v2 (session start validation + wrap stub + aging check), conversation-defaults-v2 (Rule 1 AskUserQuestion retired + Rule 23 compression-surviving QA rules).
+
+**Files changed (S816):** `CLAUDE.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+**Wrap Stub:**
+- Claimed ✅: CLAUDE.md 9 rules; 3 skills installed by Patrick
+- Commits: Patrick must push CLAUDE.md (no git commits this session)
+- CODE-ONLY: None
+- Pending Chrome Verifications staged: No (no QA this session)
+
+---
 
 ### S815 — Ops/Tooling: Geocoding Fix Push + Cowork Global Instructions Bug Fix
 
@@ -710,85 +735,4 @@ Seeded "Floor Map Test Sale" via psycopg2 (4 items: 2× Living Room, 2× Kitchen
 - **#403 Bundle Pricing** ✅ — Bundle Pricing section on add-items page confirmed. Form (name/price/description/item selector) + correct empty state.
 - **#411 Dorm Dash** ✅ Phase 1 only — DORM_DASH in dropdown confirmed. ⚠️ Dorm-specific fields (building, move-out, accelerated markdown) not built — enum addition only.
 - **#406 Split-the-Bill POS** UNVERIFIED — code confirmed (pos.tsx lines 1741–1855) but Alice's account shows no active sale in POS.
-- **#416 Sale Floor Map** UNVERIFIED — SaleFloorMap component built + wired. Test sale has no room-tagged items; component renders null.
-
-**Blocked Queue: 5 → 7** (added: #406, #416 UNVERIFIED)
-
-**Files changed:** `packages/frontend/pages/sales/[id].tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` + agent-dispatched files (see push block)
-
----
-
-### S793 — QA Session: 10 Verified, 2 ⚠️ Web Share, 4 UNVERIFIED
-
-**Trigger:** Continue QA backlog. Blocked Queue at 9 (above ceiling). QA-only session.
-
-**Verified ✅ (10):**
-- #223 Organizer Guidance Layer: Efficiency Coach tips toggle confirmed, Sale Progress tracking visible with test hold data (CONFIRMED hold created via psycopg2). ✅
-- #230 Smart Buyer Intelligence: Who's Coming widget showed Leo Thomas (SCOUT rank, "follows you") on organizer dashboard after creating shopper favorite in DB. ✅
-- #387 SSR Public Pages: /about page confirmed returning full static HTML server-side. ✅
-- #432 AggregateOffer + PostalAddress: JSON-LD on sale page confirmed with AggregateOffer + PostalAddress. P2 bug: lowPrice shows "0" — dispatch needed. ✅ (P2)
-- #433 ai-plugin.json: /.well-known/ai-plugin.json returns valid JSON with description, api.url, authentication. ✅
-- #434 llms.txt: /llms.txt confirmed live with MCP server URL + structured data. ✅
-- #439 Per-item Product Schema: Product JSON-LD per item confirmed on claimed sale page. ✅
-- #440 Machine-readable sr-only block: sr-only block confirmed in page source. ✅
-- #441 PaymentMethod Schema: paymentAccepted field confirmed in JSON-LD. ✅
-- #405 Founding Organizer Badge: 🏆 badge confirmed on organizer profile settings. ✅
-- #412 Cash-to-Digital Bridge: Venmo + Zelle confirmed in POS payment options. ✅
-- #415 Junk Drawer Donation Kit: "Donate Items & Get Tax Receipt" option confirmed in settlement Receipt step. ✅
-
-**Partial ⚠️ (2) — Web Share API (OS dialog not verifiable via automation):**
-- #272 Post-Purchase Share Your Haul: /shopper/checkout-success?orderId=qa272-purch-90ce5283 loaded correctly. Item name, price, "📣 Share your haul" button all present. Web Share API triggered on click — OS dialog unverifiable. ⚠️
-- #273 Rank Achievement Share: Leo boosted to 501 XP (RANK_UP notification created). Share button at /shopper/notifications (aria-label="Share achievement") confirmed. Web Share API triggered. ⚠️
-
-**UNVERIFIED (4) — added to Blocked Queue:**
-- #402 Cover the Fee toggle: Not found in edit-sale or organizer settings payment tab. UI surface unknown.
-- #435 Bot/Crawler Visit Tracking: Cannot simulate bot user-agent via Chrome automation.
-- #457 Noindex stale scraped: No scraped+ENDED test data with past date.
-- #458 Confidence Score: Not visible in any directory UI; may be internal/API-only.
-
-**P2 bug found:**
-- #432 AggregateOffer lowPrice:"0" — items priced $45–$120 but lowPrice shows 0 in JSON-LD. Dispatch to findasale-dev.
-
-**Test data created this session:**
-- Leo (user5) XP boosted to 501 → RANK_UP notification created
-- Shopper favorite: user5 favorited sale cmpbvumj90001e7t7v5sa1iqi (for #230)
-- CONFIRMED hold: user5 on sale cmpbvumj90001e7t7v5sa1iqi (for #223)
-- Purchase record: qa272-purch-90ce5283 (Leo, Cast Iron Skillet) — for #272
-
-**Blocked Queue: 9 → 5** (removed: #230 ✅, #223 ✅, #272 ⚠️, #273 ⚠️; added: #402, #435, #457, #458 UNVERIFIED)
-
-**Files changed:** `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S792 — QA Batch: 6 Verified, 2 UNVERIFIED, P2 Rank Bug Fixed
-
-**Trigger:** Continue QA backlog. Testing "Pending Chrome QA" items with Leo Thomas (user5, user5@example.com / Seedy2025!).
-
-**Verified ✅ (4):**
-- #29 Loyalty Passport: /coupons loaded with 465 XP, active coupon visible, Initiate→Grandmaster tier names confirmed ✅
-- #153 Basic Organizer Profile: Facebook URL saved to organizer account, persisted on reload ✅
-- #58 Achievement Badges: /shopper/achievements loaded, Sale Explorer badge shown as unlocked ✅
-- #286 Shopper QR Code: QR rendered on /shopper/dashboard with scan instruction for Leo ✅
-
-**Partial ⚠️ (2):**
-- #199 User Profile Page: Hunt Pass section visible, bid status from real DB; P3 bug: Hunt Pass shows "Active until N/A" (expiry null) — fix dispatched and shipped S792 (profile.tsx uses xpProfile.huntPassExpiry)
-- #123 Explorer's Guild Phase 2: Full rank ladder, XP tables, Hunt Pass multiplier docs all confirmed; P2 bug: rank showed "Scout" at 465 XP (should be "Initiate") — root cause in xpService.ts getUserXpProfile() trusting stale DB field instead of recalculating from guildXp; P3: Guild missing from Explore nav dropdown — fixed in AvatarDropdown.tsx. Also fixed: RANGER threshold was 2000 in 4 frontend files, should be 1200.
-
-**UNVERIFIED (2) — added to Blocked Queue:**
-- #272 Post-Purchase Share Your Haul: Leo has no purchase records in test DB
-- #273 Rank Achievement Share: Leo at 465 XP (Initiate), no rank-up event to verify notification share
-
-**Bugs Fixed (dispatched S792):**
-- P2: `xpService.ts` — getUserXpProfile() now recalculates explorerRank from guildXp via getRankForXp() instead of trusting stale DB field
-- P3: RANGER threshold corrected from 2000→1200 in RankHeroSection.tsx, RankLevelingHint.tsx, achievements.tsx, dashboard.tsx
-- P3: AvatarDropdown.tsx — Explorer's Guild added to Explore dropdown
-- P3: profile.tsx — Hunt Pass expiry now uses xpProfile.huntPassExpiry as primary source
-
-**Blocked Queue: 9 → 5** (removed: #230 ✅, #223 ✅, #272 ⚠️, #273 ⚠️; added: #402, #435, #457, #458 UNVERIFIED)
-
-**Patrick session restoration note:** Lorene Cook (a1clcook@gmail.com) was accidentally signed in mid-session due to coordinate mismatch in Google account chooser. Fixed via ref-based click to reselect Artifact (artifactmi@gmail.com). Patrick restored before session end.
-
-**Files changed (push block below):** `packages/backend/src/services/xpService.ts` · `packages/frontend/components/RankHeroSection.tsx` · `packages/frontend/components/RankLevelingHint.tsx` · `packages/frontend/pages/shopper/achievements.tsx` · `packages/frontend/pages/shopper/dashboard.tsx` · `packages/frontend/components/AvatarDropdown.tsx` · `packages/frontend/pages/profile.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
+- **#41
