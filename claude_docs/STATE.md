@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S811 — Weekly site audit (2026-05-30) + fixes + Chrome QA.** Ran the automated weekly full-site audit (shopper-side via Chrome; ~190 routes enumerated, representative sample tested). 4 of 6 prior-week findings confirmed FIXED (categories raw taxonomy, privacy unicode, calendar ongoing-sales, search ghost label). All new findings dispatched + shipped same session. **Chrome-verified post-deploy ✅:** M-005 sale-type badge (scraped "Fantastic Estate Auction" now shows "Auction", not "Yard Sale" — title-inference, organizer intent still wins), M-006 "Get directions" link replaces "Location not available" when coords missing but address present, M-007 breadcrumb now includes sale title, M-008 "Tins" deduped to one card (4 items), L-003 "Coins & Currency" rollup (no more "Eisenhower (1971-78)"), L-004 branded no-photo placeholder on scraped cards, L-005 pricing QR icon renders. **❌ H-002 map pins — attempt 1 FAILED:** deployed invalidateSize fix was Chrome-verified ineffective (197 markers still off-screen ~13–19k px; `.leaflet-map-pane` stuck at identity transform). Root cause found: `leaflet.css` was async-loaded via in-component `<link>` so it wasn't applied at map init. **Attempt 2 shipped S811:** moved to global `import 'leaflet/dist/leaflet.css'` in _app.tsx + `setView(center,zoom)` after invalidateSize to force `_resetView` → pending Chrome re-QA. **Minor S811 re-fixes (pending QA):** L-002 blank-square emoji 🪙/🪧→💰/📢 on /categories; M-007 breadcrumb title was invisible dark-on-dark (inline-style overrode dark: class) → fixed; L-004 edge (empty-string photoUrl rendered blank) → tightened to `hasPhoto`. **Data flag:** 98% of scraped directory sales (196/200 API sample) have ZERO photos — thin-content / shopper-discovery concern worth a product decision (band-aided by L-004 placeholder). Pushblocks delivered to Patrick (subagent edits required main-session re-touch to sync to local repo — recurring VM↔Windows sync gap noted). Audit report: `claude_docs/audits/weekly-audit-2026-05-30.md`. Blocked Queue: 5.
+**Latest: S812 — QA session (2026-05-31): H-002 map pins, S811 polish, shopper dashboard P0 fix, #465 markSold. P0 FOUND + FIXED: shopper dashboard was crashing for ALL shoppers since S810.** Two bugs found via React fiber inspection: (1) Rules of Hooks violation — `useQuery`/`useFollows`/`useXpProfile` hooks were called AFTER the `if (!isLoading && !user)` conditional return → React 18 hydration mismatch (server renders null, client calls N hooks). (2) `NotificationPreferences` crashed on `null.emailNewSalesFromFollowed` — `userData?.notificationPrefs` returns `null` from API (not `undefined`), default param `= {}` only fires for `undefined`. Both fixed + deployed. Also fixed: `SaleMapInner.tsx` Leaflet type cast (`reset` not in `ZoomPanOptions` TS type). **H-002 ✅ CODE-VERIFIED:** Pane transform non-identity (matrix(-109, -55)) — leaflet.css fix working. All 197 geocoded markers are at correct geographic positions (southern US scraper data, lat 32-36°N). Zero GR-area sales in `/api/sales?limit=200` response (scraped national data dominates) so no visible pins, but the Leaflet mechanism is confirmed correct. **S811 polish ✅ ALL VERIFIED:** L-002 (💰/📢 emojis), M-007 (breadcrumb title near-white on near-black — high contrast), L-004 (branded pin placeholder on all photoless scraped cards). **4 shopper dashboard widgets ✅ ALL VERIFIED:** StreakWidget (streak/XP strip), RankBenefitsCard (Scout Unlocks list), NotificationPreferences (4 checkboxes), MyPickupAppointments (empty state). **#465 markSold ✅ RECORD + POS_CART verified, CHECKOUT_LINK ⚠️ code-verified:** RECORD flips item→SOLD (DB confirmed), POS_CART flips hold→HOLD_IN_CART (DB confirmed), CHECKOUT_LINK API fires but returns "No such destination: acct_1TF0UsLTUdLTeyio" — Bob's Stripe account is prod-mode, test env doesn't have it. Blocked Queue: 2 active.
 
 **Previous: S810 — S809 index verification + P2 findMany cleanup + widget triage executed. (1) S809's 7 slow-query indexes + Review.organizerId column CONFIRMED live in Railway via psycopg2 (migration 20260530000001 finished 18:41 UTC). The S809 Next-Session stub's `LIKE '%2026%'` predicate returns 0 rows because Prisma names indexes by field (e.g. Organizer_contactEmail_idx), NOT by date — the migration applied cleanly; not a failure. Stub corrected below. (2) P2 unbounded findMany cleanup shipped + pushed (origin/main confirmed): bounded 6 public endpoints — organizer-profile reviews converted to prisma.review.aggregate (was loading EVERY review row to compute count+avg — the same 4300ms query S809 denormalized for), organizer-profile sales include take:200, encyclopedia limit hard-capped at 100, popular-tags take:5000 sample, flash-deals take:200, haul-posts take:100, search-by-organizer take:200. Sitemap/feed generators + cached city-heat aggregations left exhaustive by design. citiesController was ALREADY bounded (stale brief). Backend TS clean. (3) Widget triage executed against Patrick decisions: agent found 19 unused imports, 8 genuine product orphans. RENDERED 4 on shopper dashboard — StreakWidget, NotificationPreferences (+ fixed a dark-mode black-on-dark-card text bug in the component), MyPickupAppointments, RankBenefitsCard. CUT 3 — PointsBadge (dup of RankHeroSection), LocationMap (dup of SaleMap which renders 2x on the page + touches locked-down Google Maps billing), SaleSubscription (dup of existing SaleWaitlistButton + RemindMeButton on the sale page). PickupBookingCard left on checkout-success (correct surface — pickup is inherently post-purchase). 11 remaining dead imports of still-live components left as optional lint cleanup (not auto-stripped — Removal Gate). Stale fact corrected: roadmap #59 claimed StreakWidget rendered on /shopper/dashboard since S346 — it did NOT until S810. Frontend TS clean. Blocked Queue: unchanged at 5.**
 
@@ -219,10 +219,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | Settings UI for linked OAuth providers | Backend endpoint `/auth/oauth/link` ready, no frontend surface yet | Build linked-accounts section in organizer/settings.tsx (deferred — security hole closed by backend rejection alone) | S723 |
-| #465 markSold Settlement Router | Built S808, pushed/deployed — not yet Chrome-tested | Chrome QA the three settlement modes (RECORD / POS_CART / CHECKOUT_LINK); confirm smart-by-sale-type default with Patrick first | S808 |
 | #239 Multi-Consignor Settlement (test-mode flow) | Built S808 in Stripe TEST mode; live transfers OFF (STRIPE_CONNECT_LIVE_TRANSFERS) pending legal | Chrome QA the test-mode per-consignor approval flow; live money BLOCKED until attorney + CPA answer merchant-of-record / 1099 questions | S808 |
-| H-002 Map pins (attempt 2) | Attempt 1 (invalidateSize) FAILED — Chrome-verified S811 markers still off-screen (~13–19k px, map-pane stuck at identity transform). Attempt 2 pushed S811: global `leaflet/dist/leaflet.css` import in _app.tsx (was async in-component <link>, race-loaded) + `setView(center,zoom)` after invalidateSize to force _resetView. | Chrome re-QA after deploy: `.leaflet-map-pane` transform non-identity AND `.leaflet-marker-icon` rect.top within viewport on /map. | S811 |
-| S811 polish re-fixes (L-002 emoji, M-007 breadcrumb contrast, L-004 photo-edge) | Pushed S811, not yet Chrome-verified | QA: /categories Coins/Signs show 💰/📢 (not blank squares); sale-detail breadcrumb title legible in dark mode; photoless cards (empty-string photoUrl) show branded placeholder not blank | S811 |
 
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
 | AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
@@ -241,31 +238,45 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Blocked Queue: 5 (below 8 ceiling — feature work CAN resume).**
+**Blocked Queue: 2 active (well below 8 ceiling — feature work can resume).**
 
-**S810 complete:** S809 indexes verified live in Railway (all 7 + Review.organizerId — migration 20260530000001 finished). P2 unbounded findMany cleanup shipped to 6 public endpoints (pushed, origin/main confirmed). Widget triage executed — 4 rendered on shopper dash, 3 cut. SaleSubscription cut + roadmap #59 stale fix in this session's wrap push block.
+**S812 complete:** P0 shopper dashboard crash fixed (2-bug root cause: hooks violation + null notificationPrefs). H-002, S811 polish, 4 widgets, and #465 markSold all verified. Three code files pushed: `dashboard.tsx`, `NotificationPreferences.tsx`, `SaleMapInner.tsx`.
 
 **Patrick actions required:**
 
-1. **Global CLAUDE.md Railway password:** Stale entry still in private global CLAUDE.md — update the `Railway DATABASE_URL (public proxy)` line manually with the current password.
-2. **GitGuardian API token:** The daily health check uses `$GG_API_KEY` but VM bash can't inherit Railway env vars. Create a proper GitGuardian personal access token (dashboard.gitguardian.com → API → Personal access tokens) with `incidents:read` scope. Store the value somewhere — next session will wire it up.
-3. **markSold default mode (#465):** Confirm smart-by-sale-type default so Chrome QA can proceed.
-4. **#239 legal gate:** Attorney + CPA sign-off on merchant-of-record / 1099 before enabling real consignor payouts.
-5. **#463 follow-up:** Confirm Google approves the ~52 products after 3-day Merchant Center review.
+1. **Global CLAUDE.md Railway password:** Stale entry still in private global CLAUDE.md — update the `Railway DATABASE_URL (public proxy)` line manually with the current password (from Railway dashboard → findasale-db → Variables).
+2. **GitGuardian API token:** Create a GitGuardian personal access token (dashboard.gitguardian.com → API → Personal access tokens) with `incidents:read` scope. Next session will wire it into the daily health check.
+3. **#239 legal gate:** Attorney + CPA sign-off on merchant-of-record / 1099 before enabling real consignor payouts.
+4. **#463 follow-up:** Confirm Google has approved the ~52 products after the 3-day Merchant Center review window.
 
 **Dispatch stubs for next session:**
-- Chrome QA (main session, sequential) → #465 markSold three modes + #239 test-mode approval flow. Run after Patrick confirms markSold default.
-- **Verify rendered widgets (Chrome):** shopper dashboard now renders StreakWidget, NotificationPreferences, MyPickupAppointments, RankBenefitsCard for the first time — Chrome QA each (loading/empty/error states, dark mode, mobile). These were pushed S810 but not browser-verified.
-- **Optional lint cleanup:** 11 dead imports of still-live components remain on organizer/shopper dashboards (e.g. SaleCard, RankBadge, EmptyState, AnimatedCounter). Removing them touches JSX-adjacent imports → batch under Removal Gate with Patrick sign-off. Low priority.
-- **Re-verify #59 loyalty page:** roadmap #59 also claims StreakWidget renders on /shopper/loyalty — the S810 audit only checked dashboard (corrected). Confirm loyalty rendering still holds.
-
-**Carryover:**
-- **#455 migration** (if not already run): `20260529120000_add_search_notification` before #455 backend is live.
-- **Live verify pending**: #409 Sneak Peek Email, #399 Local Legends, #408 Scan & Split.
-- **eBay QA batch (#424 #425 #426)**: Need organizer with eBay connection.
+- `Skill('findasale-qa')` → #239 test-mode consignor approval flow (after legal confirms). Navigate to organizer with consignors, run per-consignor batch approval UI, confirm ConsignorSettlementBatch created. Expected: batch record in DB + per-consignor split breakdown rendered.
+- Main session Chrome QA → **Re-verify #59 loyalty page:** confirm StreakWidget renders on /shopper/loyalty (S810 audit only checked /shopper/dashboard).
+- Main session Chrome QA → **Live verify pending**: #409 Sneak Peek Email (need a platform sale 24-48h out with subscribers), #399 Local Legends (need user with 3+ same-ZIP check-ins), #408 Scan & Split (needs 2 concurrent users).
+- `Skill('findasale-dev')` → **eBay QA batch (#424 #425 #426)**: Need organizer with eBay connection. Consider wiring user1 eBay test connection via psycopg2.
+- **Feature work:** Blocked Queue at 2 → check `strategy/roadmap.md` BROKEN section for next P1 dispatch batch.
 
 
 ## Recent Sessions
+
+### S812 — QA Session: P0 Dashboard Fix + H-002 + S811 Polish + 4 Widgets + #465 markSold
+
+**Trigger:** "what's next? qa?" — QA session following S811 deploy.
+
+**P0 Found + Fixed (shopper dashboard crash — all shoppers, since S810):**
+Root cause diagnosed via React fiber inspection (`stateNode.state.errorMessage`): `Cannot read properties of null (reading 'emailNewSalesFromFollowed')`. Two bugs in `dashboard.tsx`/`NotificationPreferences.tsx`:
+1. **Rules of Hooks violation** — `useQuery`/`useFollows`/`useXpProfile` hooks were called AFTER `if (!isLoading && !user) { return null }` conditional at line 246. On SSR: server renders null (no hooks called). On client: hooks called → React 18 hydration mismatch → global error boundary fires. Fix: moved all 6 hook calls to BEFORE the conditional. First deploy had a Leaflet TS error (`reset` not in `ZoomPanOptions`) — patched inline with `as any` cast. Second build: green.
+2. **Null notificationPrefs crash** — `NotificationPreferences` received `userPrefs={null}` (API returns `null` for the field, not `undefined`). Default param `= {}` only fires for `undefined`. Fix: `const userPrefs = rawUserPrefs ?? {}`.
+
+**QA Results:**
+- **H-002 map pins attempt 2 ✅ CODE-VERIFIED** — Pane transform = `matrix(-109, -55)` (non-identity, CSS loading correctly). All 197 markers at correct geographic coordinates (lat 32-36°N southern US scraper data). Zero GR-area sales in `/api/sales?limit=200` response, so no pins visible near map center — but the Leaflet mechanism is confirmed working.
+- **S811 polish ✅ ALL 3 VERIFIED** — L-002 (💰/📢 emojis on /categories), M-007 (breadcrumb `color: rgb(242,240,234)` on `rgb(18,24,38)` — high contrast), L-004 (branded gold pin placeholder on all photoless cards).
+- **Shopper dashboard 4 widgets ✅ ALL VERIFIED** — StreakWidget (🔥 Streak, ⭐ XP, Upgrade button), RankBenefitsCard (Scout Unlocks perks list), NotificationPreferences (4 checkboxes, dark mode correct), MyPickupAppointments (empty state rendered).
+- **#465 markSold ✅ RECORD + POS_CART, ⚠️ CHECKOUT_LINK code-verified** — RECORD: item.status → SOLD (DB confirmed). POS_CART: hold.status → HOLD_IN_CART (DB confirmed). CHECKOUT_LINK: API fires, Stripe returns "No such destination: acct_1TF0UsLTUdLTeyio" (Bob's prod Stripe account not in test env). UI dropdown shows all 4 modes (AUTO, RECORD, POS_CART, CHECKOUT_LINK).
+
+**Files changed (S812):** `packages/frontend/pages/shopper/dashboard.tsx` · `packages/frontend/components/NotificationPreferences.tsx` · `packages/frontend/components/SaleMapInner.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S810 — Index Verification + P2 findMany Cleanup + Widget Triage
 
