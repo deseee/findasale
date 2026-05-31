@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S820 — QA data cleanup + markSold duplicate Purchase bug fixed. Found 7 duplicate Purchase records for Yzerman duck in admin panel (root cause: RECORD mode didn't check `item.status !== 'SOLD'`). Fixed reservationController.ts validHolds filter. Cleaned Railway DB: 10 QA Purchases deleted, 5 QA test sales + 30 items purged, user1@test.com deleted, Yzerman duck restored to AVAILABLE. Accidentally deleted real Artifact sale "Test sale don't publish" (cmobpeoy9002cgxlxntgqb80s, 20 items) — restored from 3AM nightly backup using dpkg --extract + pg_restore (no root needed). Memory added: backup restore procedure. Skills updated: dev-environment (backup restore section), findasale-qa (test data cleanup section). Blocked Queue: 11 (unchanged).**
+**Latest: S821 — QA + Dev session. Queue cleared from 11→4 rows (7 stale items removed/resolved). 14 features/pages Chrome-verified. 4 P2 bugs found + fixed: Flip Report HTML entity decode, public profile rank mismatch (totalFinds→guildXp), TEAMS-gated pages fire API when tier insufficient, listing enrichment cron wired (4am UTC, batch 50). Blocked Queue: 4 rows. Push block ready.**
+
+**Previous: S820 — Scheduled session: markSold duplicate Purchase fix + DB purge + backup restore (automated).**
 
 **Previous: S819 — QA session. 4 features Chrome-verified. P2 bug found + fixed: reservationController.ts RECORD path now returns settlementMode in response. #239 Multi-Consignor Settlement test-mode fully verified.**
 
@@ -274,7 +276,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Next Session
 
-**Blocked Queue: 11 rows (all STALE — oldest: S651, 169 sessions). QA-ONLY mode applies. See Stale items report in S820 session start.**
+**Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear to resume).**
 
 **S819 complete:** 4 Chrome-verified features, 1 P2 bug fixed (reservationController.ts RECORD toast). Blocked Queue drops to 11 after findasale-records applies #239.
 
@@ -299,6 +301,31 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 - **RAILWAY ENV CHECK (H-002 — first session with Railway MCP connected):** Open Railway dashboard → backend service → Variables. Confirm these are set: `OUTREACH_SECRET` (outreach cron throws without it), `INTERNAL_SCRAPER_KEY` (scraper routes 401 without it), `EBAY_VERIFICATION_TOKEN` + `EBAY_DELETION_ENDPOINT_URL` (eBay compliance). Also confirm `STRIPE_CONNECT_WEBHOOK_SECRET` is the real Stripe signing secret (not the placeholder from local .env). `GOOGLE_PLACES_API_KEY` intentionally absent per May 2026 billing lockdown.
 
 ## Recent Sessions
+
+### S821 — QA + Dev Session: Queue Cleared 11→4, 14 Pages Verified, 4 Bugs Fixed
+
+**Trigger:** Patrick: "start 820" (session numbered S821 — S820 slot taken by scheduled task).
+
+**Session start actions:**
+- Applied S819 Chrome verifications to roadmap.md (#59 XP fix ✅, #465 toast fix ✅, #239 test-mode ✅)
+- findasale-qa SKILL.md credentials corrected (user5-7=shoppers, Seedy2025!, user11=unclaimed organizer)
+- Investigated 11 stale Blocked Queue items: AuctionNinja confirmed enabled, OAuth UI confirmed built (S723 wrong), S722 email token migration confirmed deployed via /api/auth/me, AI enrichment had no cron, 7 items removed → 4 remain
+
+**Dev shipped:**
+1. Listing enrichment cron — `listingEnrichmentCron.ts` + `internalListingEnrichmentController.ts` + `index.ts`. Nightly 4am UTC, batch 50.
+2. Flip Report HTML entity decode — `decodeHtml()` in `[saleId].tsx`, `cat.category` + `item.category` decoded.
+3. Public profile rank fix — `collectorPassportService.ts` includes `explorerRank`+`guildXp`; `profile/[userId].tsx` uses `profile.user.explorerRank` (was wrongly derived from `totalFinds`).
+4. TEAMS-gated pages API fix — `consignors.tsx` + `locations.tsx`: `useOrganizerTier` imported, `canAccess('TEAMS')` gates the fetch.
+
+**QA verified (staged to Pending Chrome Verifications):** #464 SEO Footer ✅, #338 Comps ✅⚠️P3, #41 Flip Report ✅⚠️P2(fixed), #71 Reputation ✅, #200 Public Profile ✅⚠️P2(fixed), Shopper Dashboard ✅, Explorer Profile ✅, Notifications ✅, Trails ✅, Leaderboard ✅, /coupons ✅, POS ✅, Linked Accounts ✅, QR Analytics ✅
+
+**UNVERIFIED:** #319/#325/#328 photo upload (Artifact MI required), #50 Loot Log (no PAID purchases)
+
+**Blocked Queue:** 11→4 rows. QA ceiling lifted.
+
+**Files changed:** `packages/backend/src/jobs/listingEnrichmentCron.ts` (new) · `internalListingEnrichmentController.ts` · `index.ts` · `packages/frontend/pages/organizer/flip-report/[saleId].tsx` · `packages/backend/src/services/collectorPassportService.ts` · `packages/frontend/pages/shopper/profile/[userId].tsx` · `packages/frontend/pages/organizer/consignors.tsx` · `packages/frontend/pages/organizer/locations.tsx` · `claude_docs/STATE.md` · `claude_docs/strategy/roadmap.md` · `claude_docs/skills-package/findasale-qa/SKILL.md`
+
+---
 
 ### S820 — QA Cleanup: markSold Duplicate Purchase Bug + DB Purge + Backup Restore
 
@@ -333,14 +360,4 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 - **#465 Mark Sold toast + z-index ✅** — Toast visible, z-index fix confirmed. Item correctly flipped SOLD in DB. ⚠️ P2 FIXED: RECORD path missing settlementMode in API response → showed "1 hold updated." instead of "1 item(s) marked as sold." Fixed reservationController.ts line 901 (0 TS errors). ss_5986gdybg.
 - **#239 Multi-Consignor Settlement test-mode ✅** — Full end-to-end: per-consignor split correct ($42.50 × 70% = $29.75), created DRAFT batch, approved → COMPLETED, correct test-mode toast, live transfers blocked. DB batch COMPLETED confirmed. ss_3389d7rid / ss_84031lshl / ss_0194mucon.
 
-**Side findings:** QA skill credentials table outdated — user11 is unclaimed organizer (not shopper), user12+ don't exist in production, password is Seedy2025! not password123.
-
-**Blocked Queue:** 12→11 pending findasale-records removing #239 at S820 start.
-
-**Files changed (S819):** `packages/backend/src/controllers/reservationController.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S818 — QA/Fix: S817 Chrome Verifications Applied + 3 P2 Bugs Fixed
-
-**Trigger:** S818 QA-ONLY (12-row Blocked Queue). Dispatch stubs from S817 Next Session executed in pa
+**Side findings:** QA skill credentials table outdated �

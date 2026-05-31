@@ -2,37 +2,72 @@
 
 ---
 
-## What Happened This Session (S820 — QA Cleanup + Bug Fix)
+## What Happened This Session (S821 — QA + Dev: Queue Cleared, 4 Bugs Fixed)
 
-**markSold duplicate Purchase bug fixed. Railway DB cleaned up. Accidentally deleted sale restored from backup.**
+**14 pages Chrome-verified. Blocked Queue cleared from 11→4 rows. 4 bugs found and fixed inline. Dev sessions now clear to resume.**
 
-- **Bug fixed:** Admin "Recent Purchases" was showing the same item purchased 7 times — root cause was markSold RECORD mode not checking if an item was already SOLD. Every re-test of the feature created another Purchase record. Fixed in `reservationController.ts` — won't happen again.
-- **DB cleanup:** Deleted all QA test purchases (10 total), 5 test sales + 30 items, user1@test.com.
-- **Backup restore:** "Test sale don't publish" (your real Artifact draft sale with 20 items) was accidentally deleted — I restored it from the 3AM nightly backup. All 20 items confirmed back. Sorry for that.
-- **Skills updated:** QA sessions now required to clean up any DB mutations they make before returning results.
+**Queue cleanup:**
+- Removed 7 stale Blocked Queue items that were either already done or not actually QA items:
+  - AuctionNinja scraper — already enabled (was never disabled)
+  - OAuth UI / Linked Accounts (S723) — already built and working in settings ✅
+  - Email token expiry migration (S722) — confirmed deployed (field visible in API)
+  - AI listing enrichment — just needed a cron wired (done this session)
+  - Facebook scraper, directoryMostRecentSource, MN/MI/TN scrapers → moved to deferred
+
+**Dev fixes shipped this session:**
+1. **Listing enrichment cron** — AI was never actually running against your 20K+ scraped listings. Now fires nightly at 4am, batches 50 at a time. Cost ~$10-15 Haiku total for the entire backlog.
+2. **Flip Report HTML entity bug** — "Books &amp; Magazines" → "Books & Magazines" in category breakdown + Return to Inventory
+3. **Public profile rank fix** — /shopper/profile showed "Initiate" for users with actual SCOUT rank. Now uses the real `guildXp` rank from the DB.
+4. **TEAMS-gated pages error toast** — Consignors and Locations pages were showing "Failed to load" error toast on top of the correct upgrade modal. API call now skipped when tier is insufficient.
+
+**14 features/pages Chrome-verified:**
+#464 SEO Footer ✅ · #338 Comps ✅ · #41 Flip Report ✅ · #71 Reputation ✅ · #200 Shopper Profile ✅ · Shopper Dashboard ✅ · Explorer Profile ✅ · Notifications ✅ · Trails ✅ · Leaderboard ✅ · /coupons ✅ · POS ✅ · Linked Accounts ✅ · QR Analytics ✅
 
 ---
 
-## Your Action (Push Block for S819+S820)
+## Your Actions
 
+**Push block — S821 code + docs:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+
+# Enrichment cron
+git add packages/backend/src/jobs/listingEnrichmentCron.ts
+git add packages/backend/src/controllers/internalListingEnrichmentController.ts
+git add packages/backend/src/index.ts
+
+# Flip Report HTML entity fix
+git add "packages/frontend/pages/organizer/flip-report/[saleId].tsx"
+
+# Public profile rank fix
+git add packages/backend/src/services/collectorPassportService.ts
+git add "packages/frontend/pages/shopper/profile/[userId].tsx"
+
+# TEAMS-gated pages fix
+git add packages/frontend/pages/organizer/consignors.tsx
+git add packages/frontend/pages/organizer/locations.tsx
+
+# Docs
 git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git add packages/backend/src/controllers/reservationController.ts
-git commit -m "fix: prevent duplicate Purchase records when markSold called on already-SOLD item; docs: S820 wrap"
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/skills-package/findasale-qa/SKILL.md
+git add claude_docs/skills-package/findasale-qa.skill
+
+git commit -m "fix: listing enrichment cron; flip report HTML entity; public profile rank from guildXp; TEAMS-gated pages skip API; docs: S821 wrap"
 .\push.ps1
 ```
 
 **Other open items:**
 - **GBP phone verification** — business.google.com → "Verify now" → enter phone code
-- **#239 consignor payouts** — test-mode ✅ verified. Still blocked on attorney + CPA for live money
+- **#239 consignors** — test-mode ✅ verified. Still blocked on attorney + CPA for live money
 - **#463 Google Merchant** — confirm Google approved ~52 products after 3-day review
+- **Photo QA (#319/#325/#328)** — need you present (Artifact MI Google login) to test bulk photo upload
 
 ---
 
-## What Happened Last Session (S819 — QA: 4 Features Verified)
+## What Happened Last Session (S820 — Scheduled: QA Cleanup + Bug Fix)
 
-4 Chrome-verified: StreakWidget XP (dashboard + coupons), Mark Sold toast + z-index, #239 Multi-Consignor Settlement test-mode (full end-to-end confirmed, Jane Thrift $29.75 payout simulated). Plus P2 bug fixed (RECORD toast showing wrong copy).
+markSold duplicate Purchase bug fixed. Railway DB cleaned (QA test data). "Test sale don't publish" accidentally deleted and restored from 3AM backup.
 
 ---
 
@@ -40,6 +75,6 @@ git commit -m "fix: prevent duplicate Purchase records when markSold called on a
 
 - **Frontend (Vercel):** ✅ Live at finda.sale
 - **Backend (Railway):** ✅ Online
-- **Database (Railway PostgreSQL):** ✅ Connected — Artifact "Test sale don't publish" restored (20 items)
-- **Blocked Queue:** 11 rows (all stale — QA-ONLY ceiling still active)
-- **Next session:** QA-ONLY — continue Pending Chrome QA items from roadmap
+- **Database (Railway PostgreSQL):** ✅ Connected
+- **Blocked Queue:** 4 rows (dev sessions clear — ceiling lifted)
+- **Next session:** Apply S821 Chrome verifications to roadmap + QA with Artifact MI for photo tests
