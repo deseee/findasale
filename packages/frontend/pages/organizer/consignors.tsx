@@ -14,6 +14,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import TierGate from '../../components/TierGate';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Link from 'next/link';
 import { Trash2, Edit2, DollarSign, Copy, Check } from 'lucide-react';
@@ -42,6 +43,7 @@ const ConsignorsPage: React.FC = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { canAccess } = useOrganizerTier();
 
   const [consignors, setConsignors] = useState<Consignor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,10 +72,10 @@ const ConsignorsPage: React.FC = () => {
 
   // Fetch consignors on mount
   useEffect(() => {
-    if (user && user.roles?.includes('ORGANIZER')) {
+    if (user && user.roles?.includes('ORGANIZER') && canAccess('TEAMS')) {
       fetchConsignors();
     }
-  }, [user]);
+  }, [user, canAccess]);
 
   const fetchConsignors = async () => {
     try {

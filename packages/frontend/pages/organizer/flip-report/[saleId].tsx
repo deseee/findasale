@@ -9,6 +9,17 @@ import Skeleton from '../../../components/Skeleton';
 import TierGate from '../../../components/TierGate';
 import ReturnToInventoryPanel from '../../../components/ReturnToInventoryPanel';
 
+/** Decode HTML entities from eBay category names (e.g. "&amp;" → "&") */
+function decodeHtml(str: string | null | undefined): string {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
 export default function FlipReportPage() {
   const router = useRouter();
   const { saleId } = router.query;
@@ -200,7 +211,7 @@ export default function FlipReportPage() {
                 <tbody className="divide-y divide-gray-200">
                   {flipReport.categoryBreakdown.map((cat) => (
                     <tr key={cat.category} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 print:hover:bg-transparent">
-                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{cat.category}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{decodeHtml(cat.category)}</td>
                       <td className="px-4 py-3 text-center text-gray-700 dark:text-gray-300">{cat.total}</td>
                       <td className="px-4 py-3 text-center text-gray-700 dark:text-gray-300">{cat.sold}</td>
                       <td className="px-4 py-3 text-center text-gray-700 dark:text-gray-300">
@@ -238,7 +249,7 @@ export default function FlipReportPage() {
                         <td className="px-4 py-3 text-2xl font-bold text-gray-400">#{idx + 1}</td>
                         <td className="px-4 py-3">
                           <p className="font-semibold text-gray-900 dark:text-gray-100">{item.title}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{item.category || 'Uncategorized'}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{decodeHtml(item.category) || 'Uncategorized'}</p>
                         </td>
                         <td className="px-4 py-3 text-right font-bold" style={{ color: '#8FB897' }}>
                           {formatCurrency(item.finalPrice)}

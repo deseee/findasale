@@ -17,6 +17,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import TierGate from '../../components/TierGate';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { Plus, Edit2, Trash2, ArrowRightLeft } from 'lucide-react';
 import Link from 'next/link';
 
@@ -59,6 +60,7 @@ const LocationsPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { canAccess } = useOrganizerTier();
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,10 +99,10 @@ const LocationsPage = () => {
       }
     };
 
-    if (!authLoading && user?.roles?.includes('ORGANIZER')) {
+    if (!authLoading && user?.roles?.includes('ORGANIZER') && canAccess('TEAMS')) {
       fetchLocations();
     }
-  }, [authLoading, user, showToast]);
+  }, [authLoading, user, showToast, canAccess]);
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
