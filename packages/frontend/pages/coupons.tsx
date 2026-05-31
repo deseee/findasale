@@ -16,6 +16,7 @@ import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/ToastContext';
 import { RarityBoostModal } from '../components/RarityBoostModal';
+import StreakWidget from '../components/StreakWidget';
 
 type Coupon = {
   id: string;
@@ -216,6 +217,11 @@ const CouponsPage = () => {
           <p className="text-warm-600 dark:text-warm-400">
             Spend XP on discounts, boosts, and perks. Both tabs are open to everyone.
           </p>
+        </div>
+
+        {/* Streak / XP Progress — visible when arriving from /shopper/loyalty */}
+        <div className="mb-6">
+          <StreakWidget />
         </div>
 
         {/* XP Balance Card */}

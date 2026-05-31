@@ -147,17 +147,22 @@ const OrganizerHoldsPage = () => {
       if (mode && mode !== 'AUTO') body.settlementMode = mode;
       return api.post('/reservations/batch', body);
     },
-    onSuccess: (res: any) => {
+    onSuccess: (res: any, variables) => {
       queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
       setSelectedIds(new Set());
       const data = res.data || {};
+      // Use variables.ids.length as the reliable count — selectedIds has been cleared by now
+      const count = data.updated ?? variables.ids.length;
       if (data.settlementMode === 'CHECKOUT_LINK' && data.paymentLinkUrl) {
         showToast('Checkout link created and sent to the shopper.', 'success');
         window.open(data.paymentLinkUrl, '_blank', 'noopener');
-      } else if (data.settlementMode === 'POS_CART') {
-        showToast(`Added to POS cart (${data.cartCount} item${data.cartCount === 1 ? '' : 's'}). Finish at checkout.`, 'success');
+      } else if (data.settlementMode === 'POS_CART' || data.cartCount != null) {
+        const cartCount = data.cartCount ?? count;
+        showToast(`Added to POS cart (${cartCount} item${cartCount === 1 ? '' : 's'}). Finish at checkout.`, 'success');
+      } else if (data.settlementMode === 'RECORD') {
+        showToast(`${count} item${count === 1 ? '' : 's'} marked as sold.`, 'success');
       } else {
-        showToast(`${data.updated ?? 0} hold(s) updated`, 'success');
+        showToast(`${count} hold${count === 1 ? '' : 's'} updated.`, 'success');
       }
     },
     onError: (err: any) => {
@@ -301,7 +306,7 @@ const OrganizerHoldsPage = () => {
 
           {/* Batch action bar */}
           {selectedIds.size > 0 && (
-            <div className="flex items-center gap-3 mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+            <div className="relative z-50 flex items-center gap-3 mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
               <span className="text-sm font-medium text-amber-800 dark:text-amber-400">{selectedIds.size} selected</span>
               <div className="flex gap-2 ml-auto">
                 <button
