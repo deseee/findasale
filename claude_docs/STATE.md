@@ -296,6 +296,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 - **SESSION START:** Run Blocked Queue row-count script — expect 11 rows. QA-ONLY ceiling still applies.
 - **QA:** Continue Pending Chrome QA items from roadmap backlog.
 - **DEV (Patrick sign-off needed):** `Skill('findasale-dev')` → Session idle timeout (#476): 30min warning → 45min auto-signout.
+- **RAILWAY ENV CHECK (H-002 — first session with Railway MCP connected):** Open Railway dashboard → backend service → Variables. Confirm these are set: `OUTREACH_SECRET` (outreach cron throws without it), `INTERNAL_SCRAPER_KEY` (scraper routes 401 without it), `EBAY_VERIFICATION_TOKEN` + `EBAY_DELETION_ENDPOINT_URL` (eBay compliance). Also confirm `STRIPE_CONNECT_WEBHOOK_SECRET` is the real Stripe signing secret (not the placeholder from local .env). `GOOGLE_PLACES_API_KEY` intentionally absent per May 2026 billing lockdown.
 
 ## Recent Sessions
 
