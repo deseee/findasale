@@ -36,6 +36,8 @@ export interface PublicExplorerPassport {
     id: string;
     name: string;
     collectorTitle: string | null;
+    explorerRank: string;
+    guildXp: number;
   };
 }
 
