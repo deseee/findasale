@@ -33,6 +33,8 @@ import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart 
 import { useCart } from '../../context/CartContext';
 import BidModal from '../../components/BidModal';
 import BidHistory from '../../components/BidHistory'; // ADR-013 Phase 2: Bid history with anonymization
+import SoldItemBanner from '../../components/SoldItemBanner';
+import SimilarItemsGrid from '../../components/SimilarItemsGrid';
 
 interface Item {
   id: string;
@@ -65,6 +67,7 @@ interface Item {
     startDate: string;
     endDate: string;
     zipCode: string;
+    city?: string | null;
     organizer?: {
       name?: string;
       businessName?: string;
@@ -361,6 +364,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
 
       newSocket.on('item-sold', (_data: unknown) => {
         refetchItem();
+        queryClient.invalidateQueries({ queryKey: ['similar-items', id as string] });
       });
 
       socketRef.current = newSocket;
@@ -635,8 +639,8 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
             <div className="flex flex-col gap-4 min-w-0">
               {/* Main Photo */}
               <div
-                onClick={() => setIsLightboxOpen(true)}
-                className="relative w-full bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden cursor-pointer group"
+                onClick={isSold ? undefined : () => setIsLightboxOpen(true)}
+                className={`relative w-full bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden transition ${isSold ? 'cursor-default' : 'cursor-pointer group'}`}
               >
                 <img
                   key={getPortrait3x4Url(item.photoUrls[selectedPhotoIndex])}
@@ -659,8 +663,8 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                     key={index}
                     src={getThumbnailUrl(url)}
                     alt={`Photo ${index + 1}`}
-                    onClick={() => setSelectedPhotoIndex(index)}
-                    className={`w-16 h-16 object-cover rounded cursor-pointer border-2 transition ${
+                    onClick={isSold ? undefined : () => setSelectedPhotoIndex(index)}
+                    className={`w-16 h-16 object-cover rounded border-2 transition ${isSold ? 'cursor-default' : 'cursor-pointer'} ${
                       selectedPhotoIndex === index ? 'border-blue-600' : 'border-gray-300 dark:border-gray-600'
                     }`}
                   />
@@ -834,6 +838,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
 
               {/* Action Buttons */}
               <div className="flex gap-3">
+                {!isSold && (
                 <button
                   onClick={handleLike}
                   disabled={updateFavoriteMutation.isPending || !user}
@@ -848,6 +853,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                 >
                   {isUserLiked ? '❤️ Saved' : user ? '🧡 Save' : '🧡 Sign in to save'}
                 </button>
+                )}
                 <ItemShareButton
                   itemId={item.id}
                   itemTitle={item.title}
@@ -893,6 +899,17 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                   checkoutUrl={item.invoiceCheckoutUrl || ''}
                   expiresAt={item.invoiceExpiresAt || ''}
                   organizerName={item.sale.organizer?.businessName ?? item.sale.organizer?.name ?? 'Organizer'}
+                />
+              )}
+
+              {/* Sold State Banner */}
+              {isSold && (
+                <SoldItemBanner
+                  saleId={item.sale.id}
+                  saleTitle={item.sale.title}
+                  saleEndDate={item.sale.endDate ?? null}
+                  soldAt={item.soldAt ?? null}
+                  saleCity={item.sale.city ?? null}
                 />
               )}
 
@@ -1082,6 +1099,15 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
             itemStatus={item.status}
             userId={user?.id}
           />
+
+          {/* Similar Items — shown when item is sold */}
+          {isSold && (
+            <SimilarItemsGrid
+              currentItemId={item.id}
+              currentSaleId={item.sale.id}
+              category={item.category ?? null}
+            />
+          )}
         </div>
       </div>
 
