@@ -167,6 +167,11 @@ export async function getPersonalizedFeed(
         score += 500;
       }
 
+      // +25 if sale has at least one photo (float photo sales above blank placeholders)
+      if (sale.photoUrls && sale.photoUrls.length > 0) {
+        score += 25;
+      }
+
         return {
           ...sale,
           score,
@@ -244,6 +249,11 @@ export async function getPersonalizedFeed(
     // +500 if active SALE_BUMP boost
     if (sale.boost?.status === 'ACTIVE' && sale.boost?.boostType === 'SALE_BUMP') {
       score += 500;
+    }
+
+    // +25 if sale has at least one photo (float photo sales above blank placeholders)
+    if (sale.photoUrls && sale.photoUrls.length > 0) {
+      score += 25;
     }
 
     return { ...sale, score };
