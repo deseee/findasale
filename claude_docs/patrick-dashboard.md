@@ -2,24 +2,24 @@
 
 ---
 
-## What Happened This Session (S819 — QA: 4 Features Verified, 1 Bug Fixed)
+## What Happened This Session (S820 — QA Cleanup + Bug Fix)
 
-**4 features Chrome-verified end-to-end. 1 additional P2 bug found and fixed.**
+**markSold duplicate Purchase bug fixed. Railway DB cleaned up. Accidentally deleted sale restored from backup.**
 
-- **StreakWidget XP** (dashboard + coupons) ✅ — Both pages show your correct 268 XP. Fix confirmed working.
-- **Mark Sold toast** ✅ — Toast appears, action bar visible. Plus: found and fixed the toast showing "1 hold updated." instead of "1 item(s) marked as sold." (backend wasn't returning the settlement mode type in the response).
-- **#239 Multi-Consignor Settlement** ✅ — Full flow tested: created settlement batch for Jane Thrift ($42.50 × 70% = $29.75), approved in test mode, got "Transfers simulated — no money moved" confirmation. COMPLETED status persists on reload. This item can come off the Blocked Queue.
+- **Bug fixed:** Admin "Recent Purchases" was showing the same item purchased 7 times — root cause was markSold RECORD mode not checking if an item was already SOLD. Every re-test of the feature created another Purchase record. Fixed in `reservationController.ts` — won't happen again.
+- **DB cleanup:** Deleted all QA test purchases (10 total), 5 test sales + 30 items, user1@test.com.
+- **Backup restore:** "Test sale don't publish" (your real Artifact draft sale with 20 items) was accidentally deleted — I restored it from the 3AM nightly backup. All 20 items confirmed back. Sorry for that.
+- **Skills updated:** QA sessions now required to clean up any DB mutations they make before returning results.
 
 ---
 
-## Your Action (Push Block for S819)
+## Your Action (Push Block for S819+S820)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add CLAUDE.md
 git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
 git add packages/backend/src/controllers/reservationController.ts
-git commit -m "fix: RECORD settlement mode returns settlementMode in response (correct toast copy); docs: S819 QA wrap"
+git commit -m "fix: prevent duplicate Purchase records when markSold called on already-SOLD item; docs: S820 wrap"
 .\push.ps1
 ```
 
@@ -30,9 +30,9 @@ git commit -m "fix: RECORD settlement mode returns settlementMode in response (c
 
 ---
 
-## What Happened Last Session (S817 — QA Session)
+## What Happened Last Session (S819 — QA: 4 Features Verified)
 
-7 features tested. 6 ✅ verified (map pins, GA4, #467, #466, #465 RECORD/POS_CART), 1 ⚠️ partial (#59 StreakWidget — XP:0 bug), 2 P2 bugs found. Both bugs fixed this session (S818).
+4 Chrome-verified: StreakWidget XP (dashboard + coupons), Mark Sold toast + z-index, #239 Multi-Consignor Settlement test-mode (full end-to-end confirmed, Jane Thrift $29.75 payout simulated). Plus P2 bug fixed (RECORD toast showing wrong copy).
 
 ---
 
@@ -40,6 +40,6 @@ git commit -m "fix: RECORD settlement mode returns settlementMode in response (c
 
 - **Frontend (Vercel):** ✅ Live at finda.sale
 - **Backend (Railway):** ✅ Online
-- **Database (Railway PostgreSQL):** ✅ Connected
-- **Blocked Queue:** 12 rows (QA-ONLY ceiling still active)
-- **Next session:** QA-ONLY — verify the 3 S818 bug fixes in Chrome + QA #239 consignor flow
+- **Database (Railway PostgreSQL):** ✅ Connected — Artifact "Test sale don't publish" restored (20 items)
+- **Blocked Queue:** 11 rows (all stale — QA-ONLY ceiling still active)
+- **Next session:** QA-ONLY — continue Pending Chrome QA items from roadmap

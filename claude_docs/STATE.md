@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S820 — QA-ONLY session (11-row Blocked Queue after #239 removed). Session start: findasale-records applied S819 Pending Chrome Verifications to roadmap.md (#59 ✅ XP fix, #465 ✅ toast fix, #239 ✅ test-mode) and removed #239 from Blocked Queue. findasale-qa SKILL.md credentials corrected (user5-7=shoppers, Seedy2025!, user11=unclaimed organizer). ⚠️ ALL 11 remaining Blocked Queue items are STALE (oldest: AI listing enrichment S651 = 169 sessions). QA session in progress.**
+**Latest: S820 — QA data cleanup + markSold duplicate Purchase bug fixed. Found 7 duplicate Purchase records for Yzerman duck in admin panel (root cause: RECORD mode didn't check `item.status !== 'SOLD'`). Fixed reservationController.ts validHolds filter. Cleaned Railway DB: 10 QA Purchases deleted, 5 QA test sales + 30 items purged, user1@test.com deleted, Yzerman duck restored to AVAILABLE. Accidentally deleted real Artifact sale "Test sale don't publish" (cmobpeoy9002cgxlxntgqb80s, 20 items) — restored from 3AM nightly backup using dpkg --extract + pg_restore (no root needed). Memory added: backup restore procedure. Skills updated: dev-environment (backup restore section), findasale-qa (test data cleanup section). Blocked Queue: 11 (unchanged).**
 
 **Previous: S819 — QA session. 4 features Chrome-verified. P2 bug found + fixed: reservationController.ts RECORD path now returns settlementMode in response. #239 Multi-Consignor Settlement test-mode fully verified.**
 
@@ -263,25 +263,47 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Patrick actions required:**
 
-1. **Push block for S819:**
+1. **Push block for S819+S820:**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add CLAUDE.md
    git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
    git add packages/backend/src/controllers/reservationController.ts
-   git commit -m "fix: RECORD settlement mode returns settlementMode in response (correct toast copy); docs: S819 QA wrap"
+   git commit -m "fix: prevent duplicate Purchase records when markSold called on already-SOLD item; docs: S820 wrap"
    .\push.ps1
    ```
 2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts (test-mode now verified ✅).
+3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
 4. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
 
 **Dispatch stubs for next session:**
-- **SESSION START FIRST (findasale-records):** Apply S819 Pending Chrome Verifications to roadmap.md. Remove #239 from Blocked Queue. Update QA skill credentials table (user11=unclaimed organizer, password=Seedy2025!, production accounts=user1-7+artifactmi).
-- **SESSION START:** Run Blocked Queue row-count script — expect 11 rows after #239 removed. QA-ONLY ceiling still applies (≥8).
-- **QA:** Additional Pending Chrome QA items from roadmap backlog (now that 3 S818 fixes are confirmed).
+- **SESSION START:** Run Blocked Queue row-count script — expect 11 rows. QA-ONLY ceiling still applies.
+- **QA:** Continue Pending Chrome QA items from roadmap backlog.
 - **DEV (Patrick sign-off needed):** `Skill('findasale-dev')` → Session idle timeout (#476): 30min warning → 45min auto-signout.
+
 ## Recent Sessions
+
+### S820 — QA Cleanup: markSold Duplicate Purchase Bug + DB Purge + Backup Restore
+
+**Trigger:** Patrick noticed duplicate "Leo Thomas" Purchase entries in admin Recent Purchases panel.
+
+**Root cause found + fixed:** `reservationController.ts` validHolds filter (`line 755`) didn't check `h.item.status !== 'SOLD'`. Holds stay `CONFIRMED` after markSold, so calling markSold again on the same hold created a new Purchase. Fix: added `&& h.item.status !== 'SOLD'` to validHolds filter.
+
+**DB cleanup:**
+- 7 Yzerman duck Purchase records deleted (QA testing markSold 7 times)
+- 3 Leo Thomas (user5@example.com) Purchase records deleted
+- 5 QA test sales deleted: Barn Door QA Test Sale, QA Test Ended Sale — Donation Kit, Floor Map Test Sale — DELETE ME, "test sale", + 1 more. 30 items + all child records purged.
+- user1@test.com deleted
+
+**Accidental deletion + restore:** "Test sale don't publish" (Artifact's real draft sale, cmobpeoy9002cgxlxntgqb80s, 20 items) was deleted — was not a test sale. Restored from 3AM nightly backup: `dpkg --extract postgresql-client-17 deb → pg_restore -f /tmp/output.sql → psycopg2 COPY FROM STDIN`. Sale + all 20 items confirmed restored. Memory saved: backup restore procedure. Lesson: title "don't publish" means "keep as draft," not "throwaway."
+
+**Skills updated:** dev-environment (backup restore section added), findasale-qa (test data cleanup section — track + revert all DB mutations per QA session).
+
+**Blocked Queue:** 11 (unchanged).
+
+**Files changed (S820):** `packages/backend/src/controllers/reservationController.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
+
 
 ### S819 — QA Session: 4 Features Chrome-Verified, 1 P2 Bug Fixed
 
