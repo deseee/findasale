@@ -1127,7 +1127,8 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
         const fd = new FormData();
         fd.append('file', file);
         fd.append('upload_preset', 'findasale_unsigned');
-        const res = await fetch('https://api.cloudinary.com/v1_1/findasale/image/upload', {
+        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'db8yhzjdq';
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
           method: 'POST', body: fd,
         });
         if (!res.ok) throw new Error('Upload failed');
