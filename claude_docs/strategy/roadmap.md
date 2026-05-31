@@ -41,7 +41,7 @@
 - [x] Open business bank account ✅
 - [x] Set up support@finda.sale email forwarding ✅ (2026-03-06)
 - [ ] Order business cards (~$25) — files in `claude_docs/brand/`
-- [ ] Create Google Business Profile for FindA.Sale
+- [x] Create Google Business Profile for FindA.Sale ✅ (S814 — profile created, category: E-commerce service, address: 219 E Michigan Ave Suite F Paw Paw MI, website: finda.sale. ⚠️ Patrick action: verify via phone at business.google.com — required for profile to go live)
 - [x] Open Stripe business account ✅ (S679)
 - [x] Google Search Console verification ✅ (S679 — TXT record verified)
 - [ ] ~~Set up Google Voice for support line~~ — cancelled S679
@@ -633,6 +633,24 @@ Infrastructure and internal systems. All code-verified. No browser QA needed.
 | 429 | eBay Push from Review Queue Skips Store Description Template | ORG | PRO | ✅ Chrome QA S775. FIXED S736. review.tsx handleApproveItem and handleApproveAll now include description: editState.description in update payloads. |
 | 430 | Register Form Silent Error — Existing Email Shows No Feedback | PLATFORM | ALL | FIXED S736. ✅ Chrome QA S777 — red toast + inline "Sign in instead?" banner confirmed live. |
 | 220 | Cloudinary URL Utility | PLATFORM | ALL | Consolidated Cloudinary URL generation into single shared utility. S317. |
+
+## Table Stakes — Business Operations (S814)
+
+Missing fundamentals identified and addressed in S814 audit. All shipped unless marked PENDING.
+
+| # | Feature | Role | Tier | Notes |
+|---|---------|------|------|-------|
+| 469 | robots.txt (General — Block Private Routes) | PLATFORM | ALL | SHIPPED S814. packages/frontend/public/robots.txt — Disallow: /organizer/ /shopper/ /admin/ /api/ /auth/, Crawl-delay: 2, Sitemap reference. Extends #385 (AI crawler allowlist) with comprehensive route blocking. |
+| 470 | DMCA Policy Page | PLATFORM | ALL | SHIPPED S814. /dmca — designated agent (support@finda.sale), takedown requirements, counter-notice procedure, repeat infringer policy. Linked from ToS. |
+| 471 | GA4 Analytics Integration | PLATFORM | ALL | SHIPPED S814. GoogleAnalytics.tsx component — env-var-gated (NEXT_PUBLIC_GA_MEASUREMENT_ID), consent-gated (reads cookieConsent localStorage key), GDPR-compliant default (analytics_storage: denied). ⚠️ Patrick action: create GA4 property at analytics.google.com, add Measurement ID to Vercel env vars. |
+| 472 | Legal Document Updates (ToS + Privacy Policy) | PLATFORM | ALL | SHIPPED S814. ToS: added refund/dispute policy (48hr window), sales tax disclaimer, organizer fulfillment (24hr ack, 30-day pickup), Stripe KYC language, 1099-K disclosure, chargeback fee policy, DMCA reference. Privacy Policy: added GDPR legal basis, data deletion timeline (30-day), breach notification (72hr), auto-suggested content transparency. |
+| 473 | Data Deletion SOP | PLATFORM | ALL | SHIPPED S814. claude_docs/operations/data-deletion-sop.md — 9-step identity-verify → pseudonymize process, 30-day deadline, MailerLite removal, 7-year financial data retention, Railway DB commands included. Fulfills Privacy Policy 30-day deletion promise. |
+| 474 | Chargeback SOP | PLATFORM | ALL | SHIPPED S814. claude_docs/operations/chargeback-sop.md — 6-step dispute workflow, organizer evidence request email template, Stripe submission process, 0.5% rate monitoring. |
+| 475 | Breach Notification Plan | PLATFORM | ALL | SHIPPED S814. claude_docs/operations/breach-notification-plan.md — P0-P3 severity tiers, 72hr GDPR notification requirement, user email template, Michigan AG trigger (1000+ users), forensic preservation steps, recovery checklist. |
+| 476 | Session Idle Timeout | PLATFORM | ALL | PENDING. JWT expiry is set but frontend has no idle warning/auto-signout. Organizers leaving dashboard open on public computers = security risk. Implement: 30min inactivity warning toast → 45min auto-signout. Dispatch: findasale-dev. |
+| 477 | Public Status Page | PLATFORM | ALL | PENDING. Users have no way to check if finda.sale is down. Free options: Betterstack (instatus.com), UptimeRobot public page. UptimeRobot already set up — enable public status page at their dashboard. Patrick action: ~10 minutes. |
+| 478 | Business Insurance | PLATFORM | ALL | PENDING — Patrick action. No general liability or cyber liability insurance in place. Every real business with payment processing needs this. Estimated $500-1,500/yr. Contact existing business bank or a broker (Next Insurance, Hiscox). |
+| 479 | Backup Restore Validation | PLATFORM | ALL | PARTIALLY VERIFIED S814. 8 consecutive nightly backups confirmed running (03:00 AM, May 24-31). DB dump 26.6MB, git bundle 30.6MB. pg_restore --list and git bundle verify could not run (VM disk). Patrick action: run both commands from PowerShell to close validation: pg_restore --list [extracted dump path] && git bundle verify [extracted bundle path]. |
 
 ## Blocked
 

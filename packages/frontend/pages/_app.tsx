@@ -48,6 +48,7 @@ import LowBandwidthBanner from '../components/LowBandwidthBanner'; // Feature #2
 import { useLowBandwidthInitializer } from '../hooks/useLowBandwidthInitializer'; // Feature #22: Low-Bandwidth Mode
 import { useOfflineSync } from '../hooks/useOfflineSync'; // Feature #69: Local-First Offline Mode
 import CookieConsentBanner from '../components/CookieConsentBanner';
+import GoogleAnalytics from '../components/GoogleAnalytics';
 
 // #63 Dark Mode — Apply theme class on mount to prevent FOUC
 function ThemeInitializer() {
@@ -397,6 +398,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <RankUpManager />
               {/* Cookie Consent Banner */}
               <CookieConsentBanner />
+              {/* GA4 — consent-gated, env-var-controlled */}
+              <GoogleAnalytics />
               {/* Vercel Analytics + Speed Insights */}
               <Analytics />
               <SpeedInsights />
