@@ -122,8 +122,19 @@ equivalents. Custom skills have project context; generics don't.
 ## 0. Session Start (MANDATORY — first action every session, no exceptions)
 
 1. Read `claude_docs/STATE.md` in full.
-2. Read `claude_docs/strategy/roadmap.md` — identify all items marked BROKEN, PENDING, or Pending Chrome QA.
-3. Present Patrick: "Outstanding: [top 3 by priority]. My recommendation: [P1 item]."
+2. **Blocked Queue row count (HARD — run before declaring session type):**
+   ```bash
+   python3 -c "
+   import re
+   content = open('claude_docs/STATE.md').read()
+   section = content.split('## Blocked Queue')[1].split('\n## ')[0] if '## Blocked Queue' in content else ''
+   rows = [l for l in section.split('\n') if l.startswith('| ') and '---' not in l and 'Feature' not in l and l.strip() not in ('|', '')]
+   print(len(rows))
+   "
+   ```
+   If count ≥ 8: this session is **QA-ONLY**. No new feature dev. No exceptions. The declared count in STATE.md Next Session is irrelevant — only the computed count matters. A 12-row table declared as "2 active" = **12 items**.
+3. Read `claude_docs/strategy/roadmap.md` — identify all items marked BROKEN, PENDING, or Pending Chrome QA.
+4. Present Patrick: "Outstanding: [top 3 by priority]. My recommendation: [P1 item]."
 
 **Never ask "what would you like to work on today?" — the roadmap answers that.**
 
@@ -558,6 +569,26 @@ every ✅ mark for the required evidence sentence:
 If ANY ✅ lacks this specific evidence → reject that finding. Re-dispatch with:
 "Feature [X] missing verification evidence. Re-test in Chrome and provide exact
 interaction details." Do NOT accept vague reports like "works fine" or "page loads."
+
+**Screenshot ID count gate (HARD — fires on every QA report):** Count the ✅ marks in the
+report. Count the screenshot ID strings (any token matching `screenshot [id]` or `ss_`). If
+✅ count > (screenshot ID strings ÷ 2), the excess ✅ marks are UNVERIFIED — reject them.
+"The evidence is in the agent's context" is not accepted — it must be in the returned report.
+A report with 10 ✅ marks and 4 screenshot IDs has at most 2 verified features. The rest
+are UNVERIFIED regardless of how plausible the descriptions sound.
+
+**Cross-session Chrome column update (HARD — survives compression):** The roadmap.md Chrome
+column MUST NOT be updated in the same session that ran QA. Workflow:
+1. QA findings with ✅ status go into STATE.md under `## Pending Chrome Verifications`
+   (format: `| # | Feature | Evidence sentence with screenshot IDs | Session |`)
+2. At the START of the next session, findasale-records reads this table and applies ✅
+   marks to roadmap.md — but only after confirming the evidence sentence contains a URL,
+   a user, an element, an outcome, and at least one screenshot ID.
+3. ❌ FAIL and UNVERIFIED findings may be noted in the roadmap same-session (they don't
+   grant false credit).
+This rule exists because: S812 CODE-VERIFIED H-002 in the same session the weekly audit
+confirmed it HIGH severity. S804 marked "0 UNTESTED remaining" — false within one session.
+Same-session updates allow compression-era rationalizations to reach the roadmap unchecked.
 
 **UNVERIFIED acceptance (REQUIRED):** Accept UNVERIFIED results as valid honest output.
 Do NOT re-dispatch UNVERIFIED items in the same session unless Chrome becomes available.
