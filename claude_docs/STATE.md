@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S819 — QA session. 4 features Chrome-verified (see Pending Chrome Verifications). P2 bug found + fixed: reservationController.ts RECORD path now returns settlementMode in response so frontend shows correct "N item(s) marked as sold." toast. #239 Multi-Consignor Settlement test-mode flow fully verified end-to-end. Credentials/accounts finding: QA skill table outdated (user11=unclaimed organizer not shopper; production has user1-7 + artifactmi; password=Seedy2025! not password123). Blocked Queue: 11 rows (#239 verified, pending findasale-records application at S820 start).**
+**Latest: S820 — QA-ONLY session (11-row Blocked Queue after #239 removed). Session start: findasale-records applied S819 Pending Chrome Verifications to roadmap.md (#59 ✅ XP fix, #465 ✅ toast fix, #239 ✅ test-mode) and removed #239 from Blocked Queue. findasale-qa SKILL.md credentials corrected (user5-7=shoppers, Seedy2025!, user11=unclaimed organizer). ⚠️ ALL 11 remaining Blocked Queue items are STALE (oldest: AI listing enrichment S651 = 169 sessions). QA session in progress.**
+
+**Previous: S819 — QA session. 4 features Chrome-verified. P2 bug found + fixed: reservationController.ts RECORD path now returns settlementMode in response. #239 Multi-Consignor Settlement test-mode fully verified.**
 
 **Previous: S818 — QA/Fix: S817 Chrome Verifications Applied + 3 P2 Bugs Fixed.**
 
@@ -230,21 +232,14 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| Settings UI for linked OAuth providers | Backend endpoint `/auth/oauth/link` ready, no frontend surface yet | Build linked-accounts section in organizer/settings.tsx (deferred — security hole closed by backend rejection alone) | S723 |
-| #239 Multi-Consignor Settlement (test-mode flow) | Built S808 in Stripe TEST mode; live transfers OFF (STRIPE_CONNECT_LIVE_TRANSFERS) pending legal | Chrome QA the test-mode per-consignor approval flow; live money BLOCKED until attorney + CPA answer merchant-of-record / 1099 questions | S808 |
 
 | P0-3: Email verification token expiry | Migration created S726 (20260515180000) — schema.prisma updated, authController.ts updated. Patrick deploying next week. | Patrick: deploy migration when ready (same powershell block as before) | S722 |
-| AuctionNinja + NAA scrapers | enabled:false in sourceRegistry | Decide: set enabled:true to activate | S712 |
 | RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
 
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 
 | #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Consignor emails use Gmail API (not Resend — that was a red herring). Same service as all working transactional emails. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
-| Facebook Marketplace scraper | FB GraphQL doc_id may break with platform changes | Monitor for breakage; fragile by design | S712 |
-| directoryMostRecentSource NULL | 84% of organizers have NULL (Phase 2 scrapers write sourcesJson only) | Backfill fix deferred — Phase 2 scrapers need to write the field | S712 |
-| MN/MI/TN licensing scrapers | Bot-blocked (Radware/DIFS 403) — graceful no-ops, no failure emails | Needs headless browser + residential proxy (#SCRAPER-HEADLESS-PROXY in Deferred) | S713 |
-| AI listing enrichment | Fire-and-forget | Check Railway logs for `[listingEnrichmentService]` or query `scrapedMetadata.aiEnriched` | S651 |
 
 ---
 
@@ -256,12 +251,13 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | S818-fix | StreakWidget XP on /shopper/dashboard | Navigated to https://finda.sale/shopper/dashboard as Artifact MI. StreakWidget renders mid-page showing ⭐ XP 268 — ss_920700tvd. Reloaded — persists 268 — ss_7787gm81e. DB guildXp=268, streakPoints=0. ⚠️ P3: widget is ~1800px down page, not visible above fold. | S819 |
 | #465 | Mark Sold toast + z-index on /organizer/holds | Navigated to https://finda.sale/organizer/holds as Artifact MI. Selected Vintage Paris Leather Paddle hold. Clicked Mark Sold. Toast "1 hold updated." visible top-right — ss_5986gdybg. DB confirmed item.status=SOLD. Z-index fix confirmed (action bar visible above accordion). ⚠️ P2 FIXED: RECORD path missing settlementMode in response → wrong toast copy. Fix shipped: reservationController.ts line 901. | S819 |
 | #239 | Multi-Consignor Settlement test-mode flow | Navigated to https://finda.sale/organizer/consignor-settlement/cmpt2oq6q00138cehpgqx3huk as Artifact MI. Per-consignor split: Jane Thrift $42.50 × 70% = $29.75 net (math correct). Clicked Create Settlement Batch → toast "Settlement batch created (draft)" — ss_3389d7rid. Clicked Approve & Pay Consignors → toast "Settlement approved in test mode. Transfers simulated — no money moved (live transfers OFF)." — ss_84031lshl. Reloaded → COMPLETED + ✅ Settled persists — ss_0194mucon. DB batch cmpuayq90000fxbkn6whteqtd COMPLETED confirmed. Removes #239 from Blocked Queue. | S819 |
+| #464 | SEO Footer + Internal Linking (3 scenarios) | (1) Navigated to https://finda.sale as Artifact MI. Scrolled to footer. "Discover" column present with 7 links: /map /trending /search /categories /cities /encyclopedia /guides — hrefs verified via DOM (ss_1853r66mg). (2) Clicked Explore dropdown — Categories, Encyclopedia, Guides all present (ss_8451czzzm). (3) Navigated to https://finda.sale/sales/cmoqnytob00pvgzwwv5njtvs0. Scrolled to bottom. "MORE IN WAYLAND, MI" section renders with /city/wayland-mi + /city/wayland-mi/estate-sales + 3 other sale-type links (ss_3460u57db). | S820 |
 
 ---
 
 ## Next Session
 
-**Blocked Queue: 11 rows (#239 verified S819 — findasale-records must remove it from queue and apply Pending Chrome Verifications to roadmap.md at session start).**
+**Blocked Queue: 11 rows (all STALE — oldest: S651, 169 sessions). QA-ONLY mode applies. See Stale items report in S820 session start.**
 
 **S819 complete:** 4 Chrome-verified features, 1 P2 bug fixed (reservationController.ts RECORD toast). Blocked Queue drops to 11 after findasale-records applies #239.
 
@@ -318,48 +314,4 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Blocked Queue: 12 (unchanged — no Blocked Queue items resolved this session).**
 
-**Files changed (S818):** `packages/backend/src/routes/streaks.ts` · `packages/frontend/components/StreakWidget.tsx` · `packages/frontend/pages/organizer/holds.tsx` · `packages/frontend/pages/coupons.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S817 — QA Session: 7 Features Tested, 2 P2 Bugs Found
-
-**Trigger:** S817 QA-ONLY session (12-row Blocked Queue). First session using new S816 QA workflow (evidence gates, screenshot IDs, immediate staging).
-
-**Results:** 6 ✅ (map pins, GA4, #467, #466, #465 RECORD, #465 POS_CART), 1 ⚠️ partial (#59 StreakWidget renders but XP:0 vs 268 actual guildXp), 2 P2 bugs identified (#465 action bar z-index + no toast, /shopper/loyalty redirects to /coupons with no StreakWidget). Pending Chrome Verifications staged for S818 application.
-
-**Files changed (S817):** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S816 — QA Integrity Audit + 9 Structural Enforcement Fixes
-
-**Trigger:** "wrap" — after full integrity audit + structural fix session.
-
-**Audit findings:** 7 documented (1 DECEPTIVE, 6 NEGLIGENT) in recent sessions + historical findings back to S222 (March 2026). Key: H-002 map pins ✅ CODE-VERIFIED in S812 while same-day audit confirmed HIGH. Blocked Queue "2 active" declared against 12-row table. S285–S289 only ~14–18 of 120 claimed ✅ were real. S804 "0 UNTESTED remaining" false within one session.
-
-**9 rules added to CLAUDE.md:** Blocked Queue row-count script (§0), screenshot ID gate (§10c), cross-session Chrome column rule (§10c), CODE-ONLY vs ✅ abolishment (§9), dev≠QA separation (§10c), Blocked Queue aging 15-session STALE threshold (§4), audit P0/P1 pipeline (§4), prior-session validation (§12), immediate staging rule (§10c).
-
-**3 skills installed:** findasale-qa-v2 (CODE-ONLY in JUDGE + acceptance protocol), findasale-records-v2 (session start validation + wrap stub + aging check), conversation-defaults-v2 (Rule 1 AskUserQuestion retired + Rule 23 compression-surviving QA rules).
-
-**Files changed (S816):** `CLAUDE.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
-**Wrap Stub:**
-- Claimed ✅: CLAUDE.md 9 rules; 3 skills installed by Patrick
-- Commits: Patrick must push CLAUDE.md (no git commits this session)
-- CODE-ONLY: None
-- Pending Chrome Verifications staged: No (no QA this session)
-
----
-
-### S815 — Ops/Tooling: Geocoding Fix Push + Cowork Global Instructions Bug Fix
-
-**Trigger:** Code push + GitHub #40175 investigation.
-
-**Pushed:** `internalGeocodingController.ts` (sourceName `'FacebookEvents'` → `'Facebook Events'`) + `create-sale.tsx` (hardcoded Cloudinary cloud `'findasale'` → `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`). Resolves Sentry geocodingAudit 100% FB Events failure + Safari TypeError: Load failed.
-
-**Cowork global instructions fix:** Diagnosed GitHub issue #40175 (stale session writeback silently overwrites `memory\CLAUDE.md` whenever any open chat generates a response). Windows MS Store path is under MSIX sandbox (`%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\...`), not `%APPDATA%\Claude`. Built `scripts/sync-global-instructions.ps1` with `-Status` / `-Setup` / `-Update` modes. Applied read-only flag — OS now silently blocks all stale writebacks. Master backup: `C:\Users\desee\AppData\Roaming\Claude\CLAUDE_MASTER.md`. Updated dev-environment skill + memory reference with full workflow.
-
-**To update global instructions going forward:** Edit `CLAUDE_MASTER.md`, then `.\scripts\sync-global-instructions.ps1 -Update -Master "C:\Users\desee\AppData\Roaming\Claude\CLAUDE_MASTER.md"`, restart open Cowork sessions.
-
-**Files changed (S815):** `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/frontend/pages/organizer/create-sale.tsx` · `scripts/sync-global-instructions.ps1` (new) · dev-environment skill · memory/reference_claude_config_location.md · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+**F
