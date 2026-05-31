@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S814 — Table Stakes Audit + Full Implementation (2026-05-31).** Audited FindA.Sale for missing business fundamentals. Shipped: robots.txt (blocks /organizer/ /shopper/ /admin/ /api/ /auth/); DMCA policy page at /dmca; GA4 analytics (property G-VSD9YR4D28, GoogleAnalytics.tsx, consent-gated + GDPR-safe defaults, NEXT_PUBLIC_GA_MEASUREMENT_ID added to Vercel, redeployed — data in 24-48hr); ToS: 7 new sections (refund/dispute 48hr, sales tax disclaimer, fulfillment 24hr ack/30d pickup, Stripe KYC, 1099-K, chargeback fees, DMCA ref); Privacy Policy: 4 new sections (GDPR legal basis, 30-day deletion, 72hr breach notification, auto-suggested content); 3 internal SOPs (data-deletion-sop.md, chargeback-sop.md, breach-notification-plan.md in claude_docs/operations/); Google Business Profile created (E-commerce service, 219 E Michigan Ave Suite F Paw Paw MI, https://finda.sale) — pending Patrick phone verification; backup: 8 consecutive nightly runs confirmed healthy. Roadmap: 11 new table-stakes entries (#469-479). Blocked Queue: 2 active (unchanged).
+**Latest: S815 — Ops/Tooling (2026-05-31).** Two-item session: (1) Pushed geocoding sourceName fix (`'FacebookEvents'` → `'Facebook Events'` — resolves 100% FB Events geocoding failure in Sentry) + Cloudinary cloud name fix (hardcoded `'findasale'` → `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` in create-sale.tsx — resolves Safari TypeError). (2) Diagnosed and fixed Cowork global instructions revert bug (GitHub #40175) on Windows MS Store: identified MSIX package path for `memory\CLAUDE.md`, built `scripts/sync-global-instructions.ps1` (-Status/-Setup/-Update modes), set file read-only (stale session writebacks now blocked at OS level), backed up master to `AppData\Roaming\Claude\CLAUDE_MASTER.md`. Updated dev-environment skill + memory reference with the full global instructions management workflow. Blocked Queue: 2 (unchanged).
+
+**Previous: S814 — Table Stakes Audit + Full Implementation (2026-05-31).** Audited FindA.Sale for missing business fundamentals. Shipped: robots.txt (blocks /organizer/ /shopper/ /admin/ /api/ /auth/); DMCA policy page at /dmca; GA4 analytics (property G-VSD9YR4D28, GoogleAnalytics.tsx, consent-gated + GDPR-safe defaults, NEXT_PUBLIC_GA_MEASUREMENT_ID added to Vercel, redeployed — data in 24-48hr); ToS: 7 new sections (refund/dispute 48hr, sales tax disclaimer, fulfillment 24hr ack/30d pickup, Stripe KYC, 1099-K, chargeback fees, DMCA ref); Privacy Policy: 4 new sections (GDPR legal basis, 30-day deletion, 72hr breach notification, auto-suggested content); 3 internal SOPs (data-deletion-sop.md, chargeback-sop.md, breach-notification-plan.md in claude_docs/operations/); Google Business Profile created (E-commerce service, 219 E Michigan Ave Suite F Paw Paw MI, https://finda.sale) — pending Patrick phone verification; backup: 8 consecutive nightly runs confirmed healthy. Roadmap: 11 new table-stakes entries (#469-479). Blocked Queue: 2 active (unchanged).
 
 **Previous: S813 — eBay QA batch (#424/#425/#426) + map pins root cause found and fixed. #424 ✅ Patrick-verified. #425 ✅ Chrome-verified: logged in as Artifact MI, checked "Also push to eBay" on Steam Controller (16oz, 12×8×4"), clicked Approve in review queue → "Item published!" toast → edit-item confirmed "Live on eBay" badge + "View on eBay" + "Re-push to eBay" buttons. ebayListingId assigned — push fires correctly from review queue. #426 ✅ Chrome-verified: "Best Offers" section renders in edit-item for eBay-connected account; "Accept Best Offers on eBay" checkbox toggles, auto-accept % + auto-decline % inputs expand on check. Map pins root cause: authenticated users were bypassing the regional bounding box in discoveryService.ts (line 58-59 had `userId ? undefined : regionConfig.centerLat` — logged-in users got a global unbounded query, top-20 were scraper sales from TN/NC/TX with coordinates 1000+ miles south of GR, appearing off-screen). Fix: always apply regionConfig center as fallback for both auth states. 2-line change in discoveryService.ts — pushed green. Blocked Queue: 2 active.**
 
@@ -265,6 +267,20 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 
 ## Recent Sessions
+
+### S815 — Ops/Tooling: Geocoding Fix Push + Cowork Global Instructions Bug Fix
+
+**Trigger:** Code push + GitHub #40175 investigation.
+
+**Pushed:** `internalGeocodingController.ts` (sourceName `'FacebookEvents'` → `'Facebook Events'`) + `create-sale.tsx` (hardcoded Cloudinary cloud `'findasale'` → `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`). Resolves Sentry geocodingAudit 100% FB Events failure + Safari TypeError: Load failed.
+
+**Cowork global instructions fix:** Diagnosed GitHub issue #40175 (stale session writeback silently overwrites `memory\CLAUDE.md` whenever any open chat generates a response). Windows MS Store path is under MSIX sandbox (`%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\...`), not `%APPDATA%\Claude`. Built `scripts/sync-global-instructions.ps1` with `-Status` / `-Setup` / `-Update` modes. Applied read-only flag — OS now silently blocks all stale writebacks. Master backup: `C:\Users\desee\AppData\Roaming\Claude\CLAUDE_MASTER.md`. Updated dev-environment skill + memory reference with full workflow.
+
+**To update global instructions going forward:** Edit `CLAUDE_MASTER.md`, then `.\scripts\sync-global-instructions.ps1 -Update -Master "C:\Users\desee\AppData\Roaming\Claude\CLAUDE_MASTER.md"`, restart open Cowork sessions.
+
+**Files changed (S815):** `packages/backend/src/controllers/internalGeocodingController.ts` · `packages/frontend/pages/organizer/create-sale.tsx` · `scripts/sync-global-instructions.ps1` (new) · dev-environment skill · memory/reference_claude_config_location.md · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S813 — eBay QA Batch (#424/#425/#426) + Map Pins Root Cause Fixed
 

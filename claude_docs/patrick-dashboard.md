@@ -2,7 +2,29 @@
 
 ---
 
-## What Happened This Session (S814 — Table Stakes Audit)
+## What Happened This Session (S815 — Ops/Tooling)
+
+**Two things done:**
+
+**1. Bug fixes pushed** — geocoding now correctly matches Facebook Events source names (was causing 100% geocoding failures for those sales in Sentry), and the Cloudinary cloud name on the create-sale page is now pulled from your environment variable instead of being hardcoded.
+
+**2. Cowork global instructions bug permanently fixed** — your global instructions were silently getting overwritten by stale Cowork sessions (documented bug in GitHub #40175). The file is now set read-only at the OS level. To update global instructions going forward:
+1. Edit `C:\Users\desee\AppData\Roaming\Claude\CLAUDE_MASTER.md`
+2. Run: `.\scripts\sync-global-instructions.ps1 -Update -Master "C:\Users\desee\AppData\Roaming\Claude\CLAUDE_MASTER.md"`
+3. Restart open Cowork sessions
+
+---
+
+## Your Actions (carried from S814)
+
+1. **Verify Google Business Profile** — business.google.com → "Verify now" → phone verification. 2 minutes.
+2. **Business insurance** — nextinsurance.com or your business bank. ~$500-1,500/yr.
+3. **#239 consignor payouts** — blocked on attorney + CPA answers before live money flows.
+4. **#463 Google Merchant** — check if Google approved ~52 products (3-day review).
+
+---
+
+## What Happened Last Session (S814 — Table Stakes Audit)
 
 **The short version: we audited everything a real business needs and either built it or set it up. GA4 is now live, the legal docs are solid, and FindA.Sale has a Google Business Profile.**
 
