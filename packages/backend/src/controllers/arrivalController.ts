@@ -191,6 +191,7 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
         },
       },
       select: { userId: true },
+      take: 2000,
     });
 
     const recentUserIds = new Set(recentNotifications.map(n => n.userId));
@@ -200,24 +201,30 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
       .map(s => s.userId)
       .filter((userId): userId is string => userId !== null && !recentUserIds.has(userId as string)));
 
-    // Create notification logs for eligible users
-    const notifications = await Promise.all(
-      usersToNotify.map(userId =>
-        prisma.pushNotificationLog.create({
-          data: {
-            userId,
-            type: 'APPROACH_NOTES',
-            payload: {
-              saleId: sale.id,
-              saleTitle: sale.title,
-              entranceNote: sale.entranceNote ?? undefined,
-              address: `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}`,
-              startDate: sale.startDate,
+    // Create notification logs for eligible users — chunked to avoid hammering DB
+    const CHUNK_SIZE = 50;
+    const notifications: Awaited<ReturnType<typeof prisma.pushNotificationLog.create>>[] = [];
+    for (let i = 0; i < usersToNotify.length; i += CHUNK_SIZE) {
+      const chunk = usersToNotify.slice(i, i + CHUNK_SIZE);
+      const chunkResults = await Promise.all(
+        chunk.map(userId =>
+          prisma.pushNotificationLog.create({
+            data: {
+              userId,
+              type: 'APPROACH_NOTES',
+              payload: {
+                saleId: sale.id,
+                saleTitle: sale.title,
+                entranceNote: sale.entranceNote ?? undefined,
+                address: `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}`,
+                startDate: sale.startDate,
+              },
             },
-          },
-        })
-      )
-    );
+          })
+        )
+      );
+      notifications.push(...chunkResults);
+    }
 
     res.json({
       message: 'Approach notes notifications sent',
