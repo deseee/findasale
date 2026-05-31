@@ -246,59 +246,29 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Pending Chrome Verifications
 
+_S819+S820 verifications applied to roadmap S822. UNVERIFIED items remain below._
+
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| S818-fix | StreakWidget XP on /coupons | Navigated to https://finda.sale/coupons as Artifact MI. StreakWidget renders showing ⭐ XP 268 above XP Balance Card (guildXp=268, streakPoints=0 in DB — fix confirmed) — ss_2316glwxc. Reloaded — persists 268 — ss_08734fp1w. | S819 |
-| S818-fix | StreakWidget XP on /shopper/dashboard | Navigated to https://finda.sale/shopper/dashboard as Artifact MI. StreakWidget renders mid-page showing ⭐ XP 268 — ss_920700tvd. Reloaded — persists 268 — ss_7787gm81e. DB guildXp=268, streakPoints=0. ⚠️ P3: widget is ~1800px down page, not visible above fold. | S819 |
-| #465 | Mark Sold toast + z-index on /organizer/holds | Navigated to https://finda.sale/organizer/holds as Artifact MI. Selected Vintage Paris Leather Paddle hold. Clicked Mark Sold. Toast "1 hold updated." visible top-right — ss_5986gdybg. DB confirmed item.status=SOLD. Z-index fix confirmed (action bar visible above accordion). ⚠️ P2 FIXED: RECORD path missing settlementMode in response → wrong toast copy. Fix shipped: reservationController.ts line 901. | S819 |
-| #239 | Multi-Consignor Settlement test-mode flow | Navigated to https://finda.sale/organizer/consignor-settlement/cmpt2oq6q00138cehpgqx3huk as Artifact MI. Per-consignor split: Jane Thrift $42.50 × 70% = $29.75 net (math correct). Clicked Create Settlement Batch → toast "Settlement batch created (draft)" — ss_3389d7rid. Clicked Approve & Pay Consignors → toast "Settlement approved in test mode. Transfers simulated — no money moved (live transfers OFF)." — ss_84031lshl. Reloaded → COMPLETED + ✅ Settled persists — ss_0194mucon. DB batch cmpuayq90000fxbkn6whteqtd COMPLETED confirmed. Removes #239 from Blocked Queue. | S819 |
-| #464 | SEO Footer + Internal Linking (3 scenarios) | (1) Navigated to https://finda.sale as Artifact MI. Scrolled to footer. "Discover" column present with 7 links: /map /trending /search /categories /cities /encyclopedia /guides — hrefs verified via DOM (ss_1853r66mg). (2) Clicked Explore dropdown — Categories, Encyclopedia, Guides all present (ss_8451czzzm). (3) Navigated to https://finda.sale/sales/cmoqnytob00pvgzwwv5njtvs0. Scrolled to bottom. "MORE IN WAYLAND, MI" section renders with /city/wayland-mi + /city/wayland-mi/estate-sales + 3 other sale-type links (ss_3460u57db). | S820 |
-| #338 | Surface Sold-Price Comps in edit-item | Navigated to https://finda.sale/organizer/edit-item/cmo3eu2720075jqsued3xp8vn as Artifact MI. EbayCompTiles visible above price field — 3 tiles ($10.95/Good, $79.99/Very Good, $100.00/Good). Clicked "Suggest Price" → Smart Price Suggestion card appeared: "$8–$14 (suggested: $10)" with eBay narrative (ss_300045cfs). Comps surfaced and actionable. ⚠️P3: no "Based on N sources" attribution text — range shown but source count not stated. | S820 |
-| #41 | Flip Report | Navigated to https://finda.sale/organizer/flip-report as Artifact MI. Selected "Artifact Downtown Paw Paw" (ENDED). Report rendered: 4 KPI cards (0.0% sell-through, $0.00 revenue, 0/2 sold, 2 unsold), Category Breakdown, Pricing Insights ($26.75 avg ask, $0.00 avg sale), Recommendations, Return to Inventory (2 items with checkboxes). Division-by-zero handled correctly (ss_9737tiosm). ⚠️ P2 BUG: "Books &amp; Magazines:Magazines" — HTML entity not decoded in category names, appears in Category Breakdown table AND Return to Inventory item subtitles. | S820 |
-| #71 | Reputation Score | Navigated to https://finda.sale/shopper/reputation as user5 (Leo Thomas). "Your Reputation" page loaded — "New Shopper" status, 4 KPI cards (0 purchases, $0.00 spent, 0% completion, 0 wishlist saves), welcome message, "How to Build Your Reputation" tips section. All 6 QA gate questions YES. (ss_4606qdxvz) | S820 |
-| #50 | Loot Log | UNVERIFIED — user5 has 0 PAID purchases. Loot Log route is /shopper/loot-log/[purchaseId] (dynamic, no index page). Need user with a completed PAID purchase to verify. /shopper/history confirms 0 items purchased. | S820 |
-| #200 | Shopper Public Profiles | Navigated to https://finda.sale/shopper/profile/cmomwf7rr000k11qw65082ykg as user5 (Leo Thomas). Profile renders: name, "Joined May 2026", rank badge, bio ("QA verification - vintage furniture hunter"), "0 finds", Collection Interests (mid-century modern, Furniture, Jewelry), Follow button (disabled/"Coming soon"). (ss_44178p7ih). ⚠️ P2 BUG: Profile shows "Initiate" rank but /api/auth/me reports explorerRank="SCOUT" (guildXp=517). Public profile reading wrong rank. | S820 |
-| S722 | Email verification token expiry migration | /api/auth/me response includes "emailVerificationTokenExpiry":null — field exists in Railway DB. Migration 20260515180000 confirmed applied. Remove from Blocked Queue. | S820 |
-| Shopper Dashboard (full scroll) | Navigated to https://finda.sale/shopper/dashboard as user5. Full page verified: welcome banner, Scout rank card (517/1200 XP, 43%), QR code, nav tabs, StreakWidget (Streak:0 XP:517), Share & Earn, Wishlists (2 wishlists), RankBenefitsCard (6 Scout perks), Hunt Pass Active card, stat row (0 purchases, 0 wishlist, 0 streak points), NotificationPreferences (4 checkboxes). All widgets render — no crashes. (ss_1563sz3w5) | S820 |
-| Explorer Profile | Navigated to https://finda.sale/shopper/explorer-profile as user5. Renders: "0 finds", bio textarea, Specialties chip (mid-century modern), Item Categories grid (9 categories with checkboxes), Keywords section. (ss_2268r7tr0) | S820 |
-| #319/#325/#328 | Burst Clustering / Best-Photo-First / Photo Role Awareness | UNVERIFIED — user2 (Bob Smith) has no sales to attach items to. Artifact MI requires Patrick present (Google OAuth). Photo upload tests require: organizer with sale + bulk upload_image. Re-queue when Patrick is available to use Artifact MI account, or after user2 test sale is created with seed data. | S820 |
-| POS (user2) | Navigated to https://finda.sale/organizer/pos as user2. Renders: "POS In-person payments", Reader not connected badge, "No active sales. Publish a sale first." (correct empty state), POS Value Unlock Tiers (0/3). (ss_605332pou) | S820 |
-| Linked Accounts (S723 — already built) | Navigated to https://finda.sale/organizer/settings Profile tab as user2. "Linked Accounts" section visible with Google G badge, "Not connected" status, "Link Google Account" button. Frontend surface IS built — S723 Blocked Queue entry was stale/wrong. (ss_1583kg3zq) | S820 |
-| QR Scan Analytics (user2) | Navigated to https://finda.sale/organizer/qr-codes as user2. Renders: 3 KPI cards (0 scans, 0 active, 0 with labels), Scanner Funnel empty state. (ss_8681nis2l) | S820 |
-| Consignors tier gate | Navigated to https://finda.sale/organizer/consignors as user2 (PRO). Tier gate renders correctly (TEAMS badge, upgrade CTA, plan label). ⚠️ P2 BUG: "Failed to load consignors" error toast fires even though gate is active — API call not blocked by tier check. (ss_2756nafbu) | S820 |
-| Multi-Location Inventory tier gate | Navigated to https://finda.sale/organizer/locations as user2 (PRO). Tier gate renders correctly (TEAMS badge, upgrade CTA). ⚠️ P2 BUG: "TEAMS subscription required" error toast fires redundantly — same pattern as consignors. Systematic across TEAMS-gated pages. (ss_6724fs6nz) | S820 |
-| Notifications (user5) | Navigated to https://finda.sale/shopper/notifications as user5. Real notifications: "Item sold — Vintage Paris Leather Paddle...marked as sold by organizer" (1h ago — S819 Mark Sold cross-role confirmed ✅). Multiple hold-sold notifications, unread blue dots, dismiss buttons, tabs (All/Organizer Alerts/Discoveries), Mark all read. (ss_82727x51e) | S820 |
-| Trails | Navigated to https://finda.sale/shopper/trails as user5. "No Treasure Trails Yet" empty state, Create Trail CTAs, "0 trails total". (ss_70675776c) | S820 |
-| Leaderboard | Navigated to https://finda.sale/shopper/leaderboard as user5. 3 tabs (Top Shoppers/Top Organizers/Scout Leaderboard). Real data: Maya #1 RANGER 2021XP, Leo #2 SCOUT 517XP (🏆 current user indicator, 3 badges). No PII exposed (userName/XP/rank only). (ss_4393lgldj) | S820 |
-| /coupons XP Store | Navigated to https://finda.sale/coupons as user5. StreakWidget: XP:517 ✅ (S819 fix confirmed 3rd time). "517 XP available — SCOUT · Hunt Pass Active". Shopper/Organizer tabs, 3 coupon tiers (Standard/Deluxe/Premium). (ss_0516l23cw) | S820 |
-
+| #319/#325/#328 | Burst Clustering / Best-Photo-First / Photo Role Awareness | UNVERIFIED — requires Artifact MI (Google OAuth, Patrick present) + bulk photo upload_image session. Re-queue when Patrick available. | S820 |
+| #50 | Loot Log | UNVERIFIED — user5 has 0 PAID purchases. /shopper/loot-log/[purchaseId] is dynamic, no index page. Need user with completed PAID purchase. | S820 |
 ---
 
 ## Next Session
 
 **Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear to resume).**
 
-**S819 complete:** 4 Chrome-verified features, 1 P2 bug fixed (reservationController.ts RECORD toast). Blocked Queue drops to 11 after findasale-records applies #239.
+**S822 status:** S820 Chrome verifications applied to roadmap. #476 Session Idle Timeout DEFERRED (JWT expiry covers security; timeout UX is annoying for home-based organizer base — Patrick decision S822). QA session in progress.
 
 **Patrick actions required:**
 
-1. **Push block for S819+S820:**
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
-   git add packages/backend/src/controllers/reservationController.ts
-   git commit -m "fix: prevent duplicate Purchase records when markSold called on already-SOLD item; docs: S820 wrap"
-   .\push.ps1
-   ```
-2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
-4. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
+1. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+2. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
+3. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
 
-**Dispatch stubs for next session:**
-- **SESSION START:** Run Blocked Queue row-count script — expect 11 rows. QA-ONLY ceiling still applies.
-- **QA:** Continue Pending Chrome QA items from roadmap backlog.
-- **DEV (Patrick sign-off needed):** `Skill('findasale-dev')` → Session idle timeout (#476): 30min warning → 45min auto-signout.
-- **RAILWAY ENV CHECK (H-002 — first session with Railway MCP connected):** Open Railway dashboard → backend service → Variables. Confirm these are set: `OUTREACH_SECRET` (outreach cron throws without it), `INTERNAL_SCRAPER_KEY` (scraper routes 401 without it), `EBAY_VERIFICATION_TOKEN` + `EBAY_DELETION_ENDPOINT_URL` (eBay compliance). Also confirm `STRIPE_CONNECT_WEBHOOK_SECRET` is the real Stripe signing secret (not the placeholder from local .env). `GOOGLE_PLACES_API_KEY` intentionally absent per May 2026 billing lockdown.
+**Dispatch stubs:**
+- **QA:** Continue Pending Chrome QA items from roadmap backlog (findasale-qa).
+- **RAILWAY ENV CHECK:** Confirm Railway Variables set: `OUTREACH_SECRET`, `INTERNAL_SCRAPER_KEY`, `EBAY_VERIFICATION_TOKEN` + `EBAY_DELETION_ENDPOINT_URL`, `STRIPE_CONNECT_WEBHOOK_SECRET`.
 
 ## Recent Sessions
 
