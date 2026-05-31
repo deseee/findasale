@@ -239,6 +239,10 @@ Do not ask "shall I continue?" mid-batch.
 
 **QA ceiling rule:** If the Blocked/Unverified Queue in STATE.md has ≥8 items, the next session MUST be a dedicated QA session. No new feature dev without Patrick explicit sign-off. Check the queue count at every session start. This rule has been recommended 3 consecutive months (March, April, May 2026) — it is now mandatory. No exceptions.
 
+**Blocked Queue aging (HARD):** Items in the Blocked Queue with a "Session Added" value more than 15 sessions prior to the current session are STALE. Stale items: (1) must be listed first in the queue, (2) count at full weight toward the ≥8 QA ceiling — they cannot be excluded to avoid triggering QA mode, (3) are reported to Patrick at session start with their original add date. A Blocked Queue item does not become less blocked by sitting there for 100 sessions. No new feature dev without Patrick explicit sign-off. Check the queue count at every session start. This rule has been recommended 3 consecutive months (March, April, May 2026) — it is now mandatory. No exceptions.
+
+**Audit findings pipeline (HARD):** Any P0 or P1 finding from a weekly-audit or friction-audit file MUST be added to the Blocked Queue in the same session that reads the audit. No discretion. No "carry-forward." No "worth noting." A P0/P1 finding without a corresponding Blocked Queue entry is a documentation failure. The documented failure case: friction-audit-2026-05-28 reported 4 BROKEN S786 items across 9 sessions and never once triggered a Blocked Queue entry — those items disappeared from tracking without being fixed.
+
 **Roadmap update gate (two triggers only):**
 1. **Session ships a new feature** → add or update the roadmap entry at wrap. Include `claude_docs/strategy/roadmap.md` in the push block.
 2. **Chrome QA confirms a feature** → update the roadmap Chrome QA column immediately (not deferred to wrap). Include roadmap.md in that push block.
@@ -513,6 +517,14 @@ A feature is ✅ only when a real user can complete the intended task end-to-end
 - "I couldn't attach the file" — wrong tool; use upload_image
 UNVERIFIED is only valid after a genuine upload_image attempt that failed. Skipping the attempt and marking UNVERIFIED is rubber-stamping.
 
+**CODE-ONLY vs ✅ (HARD — survives compression):**
+"CODE-VERIFIED" is abolished as a ✅ equivalent and replaced with "CODE-ONLY" project-wide.
+- **Meaning:** Code path confirmed (function exists, TypeScript compiles, API returns data). Browser interaction NOT performed. Feature NOT user-verified.
+- **CODE-ONLY never:** advances the Chrome column in roadmap.md, removes an item from the Blocked Queue, or counts as a verified feature in any QA report relayed to STATE.md.
+- **Legitimate use:** "`sendConsignorPayout()` called after payout creation — CODE-ONLY" (a code fact)
+- **Illegitimate use:** "H-002 ✅ CODE-VERIFIED — Leaflet mechanism confirmed correct" (S812 — deceptive reclassification of a HIGH confirmed broken feature)
+Every occurrence of "CODE-VERIFIED" in any agent output should be read as "CODE-ONLY, not user-verified."
+
 **Code confirmation ≠ browser verification (HARD RULE — survives compression):**
 Reading a file on GitHub or in the filesystem and confirming a fix is present is NOT a ✅. "Fix confirmed deployed to Railway" without Chrome interaction is UNVERIFIED. For any fix that involves user-visible behavior (AI confidence label, photo display, form save, toast, redirect), the only valid ✅ requires: navigated to the page in Chrome, performed the interaction, saw the expected outcome, reloaded, confirmed persistence — with screenshot IDs. Code-on-GitHub ≠ works-in-browser.
 
@@ -555,6 +567,8 @@ were never actually verified (documented S285–S296). The smoke test catches fa
 **Context checkpoints (no-pause rule):** Agent handoff "Context Checkpoint: yes/no" is internal bookkeeping. Never pause work to discuss a checkpoint.
 
 **QA Management (§10c) — Structural Anti-Fabrication Rules:**
+
+**Dev-QA separation (HARD — survives compression):** The agent dispatch that implemented a feature is NEVER the dispatch that verifies it. findasale-dev returns code + TypeScript checks. A separate `Skill('findasale-qa')` dispatch verifies the user experience in Chrome. findasale-dev's "0 TS errors" and "no crashes" are code facts — acceptable self-reports. findasale-dev's claims that a feature "renders correctly," "works end-to-end," or "looks right" require an independent Chrome dispatch before any ✅ is recorded. No exceptions for user-facing features.
 
 **Micro-dispatch rule (HARD):** Never dispatch "QA these N features" as a single task.
 Dispatch ONE feature or ONE flow per QA subagent call. Example: "QA the favorites
@@ -633,6 +647,17 @@ list. After dev returns, provide the push block, then immediately write QA dispa
 
 Before ending any session:
 
+**Prior-session validation (fires at SESSION START, before any new work):**
+At the start of every session, findasale-records (or the main session if records isn't dispatched) runs:
+```bash
+git log --oneline -10
+```
+Then reads the most recent "## Recent Sessions" entry in STATE.md and checks:
+1. For each feature claimed as ✅ done: does a plausible git commit exist within ±3 commits of the session wrap?
+2. For each claim marked CODE-ONLY: does it appear as ✅ in roadmap Chrome column? If yes → flag as MISREPRESENTED, remove the Chrome ✅.
+3. Process "## Pending Chrome Verifications" table: apply ✅ to roadmap for entries with full evidence (URL + user + element + outcome + screenshot ID). Reject entries without all five.
+This takes ~60 seconds and catches the H-002 class of deception (CODE-VERIFIED in STATE.md while audit confirmed HIGH severity same day).
+
 **File placement pre-check (fires before doc update):**
 If any new file was created in `claude_docs/` this session: verify each file's path against `claude_docs/operations/file-creation-schema.md`. Files in the wrong location must be noted in the push block comment. Files that belong in a subdirectory must NOT be left in `claude_docs/` root. This check prevents the accumulating root-violation debt documented in monthly retrospectives.
 
@@ -660,42 +685,4 @@ STATE.md session summaries MUST NEVER contain passwords, connection strings, tok
 **Critical rule:** Never update STATE.md without also updating patrick-dashboard.md. This ensures Patrick always has a current snapshot of project state.
 
 **Wrap doc files — always in the push block (HARD RULE):**
-`claude_docs/STATE.md` and `claude_docs/patrick-dashboard.md` are edited by the main session at every wrap using the Edit tool (not MCP). They will always appear as uncommitted local changes. They MUST be included in every wrap push block — no exceptions. `push.ps1` will abort if they are omitted. Template:
-```powershell
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add [all other changed files...]
-git commit -m "..."
-.\push.ps1
-```
-
-**Subagent files:**
-- Maintain running changed-files list from all subagent dispatches
-- Cross-reference against `git status` at wrap
-- Include all tracked and untracked files in the final push block
-
----
-
-## Reference Docs (load on demand, not at init)
-
-| Need | File |
-|------|------|
-| Recurring bug patterns | `self-healing/self_healing_skills.md` |
-| Session safeguards | `operations/session-safeguards.md` |
-| Patrick's shorthand | `operations/patrick-language-map.md` |
-| Model routing | `operations/model-routing.md` |
-| QA accountability | `operations/orchestrator-qa-accountability.md` |
-| Wrap protocol | `operations/WRAP_PROTOCOL_QUICK_REFERENCE.md` |
-| Decisions log | `decisions-log.md` — scan index line at top for session IDs; read only the section(s) you need |
-| Tech stack | `STACK.md §Frontend` (UI libs) · `§Backend` (runtime/auth/payments) · `§Database` · `§Infrastructure` (deploy targets) · `§Fee Structure` (commission rates) · `§Deploy Risk Matrix` (change risk levels) |
-| Security | `SECURITY.md §6 Secrets Handling` (DB/API keys, never-commit rules) · `§8 Deployment Safety Checklist` · `§4 Safe Execution Mode` (subagent constraints) · `§7 Incident Response` |
-| Recovery | `RECOVERY.md §Decision Trees` (triage flowchart) · `§10 Backend Crash Loop` · `§11 Migration Drift` · `§1 Context Overflow` |
-| Sprint status / in-flight work | `STATE.md §Current Status` |
-| QA backlog / unverified features | `STATE.md §Blocked Queue` |
-| Recent session summaries | `STATE.md §Recent Sessions` |
-| Next session priorities / Patrick actions | `STATE.md §Next Session` |
-| File creation paths | `operations/file-creation-schema.md` |
-
----
-
-Status: Project Authority Layer (v5.0, Session 226 — merged CORE.md, added pain point fixes)
+`claude_docs/STATE.md` and `claude_docs/patrick-dashboard.md` are edited by t
