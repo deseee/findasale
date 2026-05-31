@@ -95,10 +95,14 @@ Read `claude_docs/SECURITY.md` if testing auth, payments, or data deletion.
 Open Chrome MCP via `tabs_context_mcp(createIfEmpty: true)` and navigate to
 https://finda.sale. Test as multiple roles with provided credentials:
 - Unauthenticated visitor (no login)
-- Shopper: user11@example.com / password123
-- Organizer (SIMPLE): user2@example.com / password123
-- Organizer (TEAMS): user3@example.com / password123
-- Admin: user1@example.com / password123
+- Shopper: user5@example.com / Seedy2025! (or user6, user7)
+- Organizer (SIMPLE): user2@example.com / Seedy2025!
+- Organizer (TEAMS): user3@example.com / Seedy2025!
+- Admin: user1@example.com / Seedy2025!
+- Organizer (production/real): artifactmi@gmail.com (Patrick must be present — real account)
+
+⚠️ CREDENTIALS CORRECTED S820: Password is Seedy2025! (not password123 — changed S576).
+Production accounts: user1–7 + artifactmi. user11 = unclaimed organizer (NOT a shopper) — do NOT use for shopper tests. user12+ do NOT exist in production.
 
 ---
 
@@ -296,7 +300,7 @@ Save findings to a markdown file: `/sessions/[session-id]/qa-findings-[feature-n
 | P | Location/Flow | Issue | Expected | Actual | Evidence |
 |----|---|---|---|---|---|
 | 0 | Create Sale → Add Items | Button disabled indefinitely | Button enables after upload | Still disabled after image uploaded | Navigated to /organizer/sales/new as user2. Clicked "Add Item". Upload completed. Button remained grayed out. Refreshed — same. |
-| 0 | Shopper favorite | Like button doesn't save | Heart filled on like, filled after refresh | Heart unfilled after refresh | Navigated to /sales/abc as user11. Clicked heart on item 1. Heart filled. Refreshed page — heart empty. |
+| 0 | Shopper favorite | Like button doesn't save | Heart filled on like, filled after refresh | Heart unfilled after refresh | Navigated to /sales/abc as user5. Clicked heart on item 1. Heart filled. Refreshed page — heart empty. |
 
 ## Severity Summary
 - P0: X (blockers must fix before ship)
@@ -318,8 +322,8 @@ Save findings to a markdown file: `/sessions/[session-id]/qa-findings-[feature-n
 ## Multi-Endpoint Testing (if applicable)
 | Flow | From | To | Status | Evidence |
 |------|------|----|----|--------|
-| Like item | Shopper | Liked items | ✅ | Navigated to /shopper/favorites as user11. Item present after liking on sale page. |
-| Message | Organizer | Shopper inbox | ❌ | Sent message as user2. Logged in as user11. Inbox empty. |
+| Like item | Shopper | Liked items | ✅ | Navigated to /shopper/favorites as user5. Item present after liking on sale page. |
+| Message | Organizer | Shopper inbox | ❌ | Sent message as user2. Logged in as user5. Inbox empty. |
 
 ## Conditions to Ship
 - [ ] Fix [specific issue]
@@ -333,11 +337,16 @@ Save findings to a markdown file: `/sessions/[session-id]/qa-findings-[feature-n
 
 ## Test Data Reference
 
-Known test accounts (always use password123):
-- Shopper: user11@example.com
+Known test accounts (password: Seedy2025! — changed S576, verified S819):
+- Shoppers: user5@example.com, user6@example.com, user7@example.com
 - Organizer (SIMPLE): user2@example.com
-- Organizer (TEAMS): user3@example.com
+- Organizer (TEAMS): user3@example.com (Patrick manually set to TEAMS in Railway)
 - Admin: user1@example.com
+- Organizer (real/production): artifactmi@gmail.com (Patrick must be present)
+
+⚠️ user11 = unclaimed organizer (NOT a shopper) — do NOT use for shopper feature QA.
+⚠️ user12+ do NOT exist in production.
+⚠️ Old password "password123" DOES NOT WORK — use Seedy2025!
 
 When testing as unauthenticated, use **private/incognito mode** in Chrome to
 avoid logged-in session leaking.
@@ -356,9 +365,9 @@ avoid logged-in session leaking.
   empty results, slow network (use throttling), offline, deleted items, etc.
 - **Don't mark a feature ✅ based on API/curl alone.** See PRE-VERIFICATION GATE above.
 - **Don't substitute curl/API testing for browser testing.** If Chrome MCP is unavailable: status = `UNVERIFIED — Chrome MCP required`. Never assume the feature works.
-- **Don't test shopper features as user1 (admin/organizer).** Shopper features MUST be tested as user11@example.com. Wrong account = invalid test.
+- **Don't test shopper features as user1 (admin/organizer).** Shopper features MUST be tested as user5/user6/user7@example.com. user11 is an unclaimed organizer — using it for shopper tests is an invalid test.
 - **Don't leave "needs live check" items.** If you cannot complete a check, the status is BLOCKED. Return it to main session as BLOCKED with explanation — do not mark ✅.
-- **Don't assume a feature works because the test account has no data.** user11 may have zero entries for loot log / loyalty / trails — that means you need to seed data or mark UNVERIFIED, not assume it works.
+- **Don't assume a feature works because the test account has no data.** user5/user6/user7 may have zero entries for loot log / loyalty / trails — that means you need to seed data or mark UNVERIFIED, not assume it works.
 - **Don't fabricate evidence.** If you didn't click it, don't describe clicking it. S285–S296 documented repeated fabrication. One honest UNVERIFIED is worth more than ten fake ✅ marks.
 
 ---
@@ -429,7 +438,7 @@ But **always do the clickthrough first** — that's your primary job.
 ## Dispatch Sizing Rule (Main Session Must Follow)
 
 **One feature per dispatch.** Do not send "QA these 10 features." Send:
-- "QA the favorites feature for shopper (user11). Return evidence per PRE-VERIFICATION GATE."
+- "QA the favorites feature for shopper (user5). Return evidence per PRE-VERIFICATION GATE."
 - "QA the messaging flow — organizer sends to shopper, verify both sides."
 - "QA the sale creation flow for SIMPLE tier organizer."
 
