@@ -83,12 +83,19 @@ const MapPage = () => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
   const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || '';
 
+  // Default to GR center when user location is unavailable
+  const DEFAULT_LAT = parseFloat(process.env.NEXT_PUBLIC_DEFAULT_LAT || '42.9619');
+  const DEFAULT_LNG = parseFloat(process.env.NEXT_PUBLIC_DEFAULT_LNG || '-85.6789');
+
   const { data: sales, isLoading, isError, refetch } = useQuery({
-    queryKey: ['sales', { limit: 200 }],
+    queryKey: ['sales', { limit: 200, lat: userLocation?.lat, lng: userLocation?.lng }],
     queryFn: async () => {
       try {
-        // Backend filters by status: 'PUBLISHED' by default
-        const response = await api.get('/sales?limit=200');
+        const lat = userLocation?.lat ?? DEFAULT_LAT;
+        const lng = userLocation?.lng ?? DEFAULT_LNG;
+        // Apply 100-mile bounding box so map pins appear near the user/default region
+        // (without this, /api/sales returns global scraper data off-screen)
+        const response = await api.get(`/sales?limit=200&lat=${lat}&lng=${lng}&radius=100`);
         const salesData = response.data.sales ?? response.data;
         return Array.isArray(salesData) ? salesData : [];
       } catch (err: any) {
