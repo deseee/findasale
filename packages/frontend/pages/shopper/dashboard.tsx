@@ -243,11 +243,8 @@ const ShopperDashboard = () => {
     setWelcomeDismissed(true);
   };
 
-  if (!isLoading && !user) {
-    router.push('/login?redirect=/shopper/dashboard');
-    return null;
-  }
-
+  // All hooks MUST be called before any conditional return (Rules of Hooks).
+  // Queries are guarded by `enabled: !!user?.id` so they do nothing when user is null.
   const { data: purchases, isError: purchasesError } = useQuery({
     queryKey: ['shopper-purchases'],
     queryFn: async () => {
@@ -280,8 +277,6 @@ const ShopperDashboard = () => {
     enabled: !!user?.id,
   });
 
-
-
   // Fetch shopper holds for Pickups tab
   const { data: holds = [], isLoading: holdsLoading, isError: holdsError } = useQuery({
     queryKey: ['shopper-holds'],
@@ -292,8 +287,14 @@ const ShopperDashboard = () => {
     enabled: !!user?.id,
   });
 
-    // Fetch XP profile for rank progress
+  // Fetch XP profile for rank progress
   const { data: xpProfile, isLoading: xpLoading, isError: xpError } = useXpProfile(!!user?.id);
+
+  // Redirect unauthenticated users — must come AFTER all hook calls
+  if (!isLoading && !user) {
+    router.push('/login?redirect=/shopper/dashboard');
+    return null;
+  }
 
   // Check if any critical fetch has failed
   const hasError = purchasesError || userDataError || followsError || invoicesError || holdsError || xpError;
