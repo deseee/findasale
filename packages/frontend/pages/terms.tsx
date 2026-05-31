@@ -100,14 +100,14 @@ const TermsPage = () => {
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">4a. Sales Tax Obligations</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               <strong>Organizer Responsibility:</strong> FindA.Sale does not calculate, collect, or remit sales tax on
-              behalf of organizers. Organizers are solely responsible for determining whether their sales are subject to
-              sales tax under Michigan state law and applicable local ordinances, and for registering with the appropriate
-              tax authorities and remitting tax as required.
+              behalf of organizers. Organizers are solely responsible for registering for and remitting any applicable
+              sales tax under federal, state, and local law, including Michigan state law and applicable local ordinances.
+              FindA.Sale recommends consulting a tax professional regarding your specific obligations.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               <strong>Buyer Responsibility:</strong> Buyers should be aware that they may owe sales tax or use tax on
               items purchased, depending on their location and the applicable jurisdiction. Buyers are responsible for
-              understanding their own tax obligations.
+              understanding their own tax obligations under their state law.
             </p>
           </section>
 
@@ -248,6 +248,62 @@ const TermsPage = () => {
               These Terms are governed by the laws of the State of Michigan, without regard to conflict-of-law
               principles. Any dispute shall be resolved in the state or federal courts located in Kent County, Michigan,
               and you consent to personal jurisdiction in those courts.
+            </p>
+          </section>
+
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">14a. Refund &amp; Dispute Policy</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              Disputed purchases must be reported to{' '}
+              <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>{' '}
+              within 48 hours of the transaction. FindA.Sale will investigate with the organizer within 7 business
+              days. If fraud or material misrepresentation is confirmed, FindA.Sale will facilitate a refund where
+              possible. Buyers who file chargebacks with their card issuer before contacting FindA.Sale support may
+              have their accounts suspended.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">14b. Chargebacks</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              If a buyer disputes a charge with their card issuer, the organizer&apos;s Stripe Connect account will
+              bear any resulting chargeback fees (typically $15 USD per dispute). FindA.Sale does not absorb
+              chargeback costs. Organizers who maintain chargeback rates exceeding 0.5% may have their accounts
+              reviewed or suspended.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">14c. Stripe Identity Verification</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              Before receiving payouts, organizers must complete Stripe&apos;s identity verification process as part
+              of Stripe Connect onboarding. FindA.Sale does not control Stripe&apos;s KYC decisions. Payouts are
+              subject to{' '}
+              <a href="https://stripe.com/legal/connect-account" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">
+                Stripe&apos;s terms of service
+              </a>{' '}
+              and may be withheld by Stripe for any reason consistent with their policies.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">14d. Tax Reporting (1099-K)</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              Organizers who receive payments through FindA.Sale may receive IRS Form 1099-K from Stripe if their
+              transactions meet applicable reporting thresholds. Organizers are solely responsible for all federal,
+              state, and local income tax reporting and payment obligations. FindA.Sale does not provide tax advice.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">14e. Copyright / DMCA</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              FindA.Sale respects intellectual property rights. If you believe content on FindA.Sale infringes your
+              copyright, please review our{' '}
+              <a href="/dmca" className="text-amber-600 hover:underline">DMCA Policy</a>{' '}
+              for instructions on submitting a takedown request. Users who repeatedly infringe copyrights will have
+              their accounts terminated.
             </p>
           </section>
 

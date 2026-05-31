@@ -209,6 +209,68 @@ const PrivacyPage = () => {
             </p>
           </section>
 
+
+          {/* 10a */}
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">10a. GDPR Legal Basis (EU/EEA Users)</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              If you are located in the European Union or European Economic Area, FindA.Sale processes your personal
+              data on the following legal bases:
+            </p>
+            <ul className="list-disc list-inside text-warm-700 dark:text-warm-300 space-y-2 mb-3">
+              <li><strong>Performance of a contract</strong> — to provide marketplace services and process transactions</li>
+              <li><strong>Compliance with legal obligations</strong> — financial record-keeping and tax reporting</li>
+              <li><strong>Legitimate interests</strong> — fraud prevention, platform security, and aggregate analytics</li>
+            </ul>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+              You have the right to lodge a complaint with your national data protection authority. For requests
+              regarding your rights under GDPR (access, rectification, erasure, portability, objection), contact us
+              at{' '}
+              <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>.
+            </p>
+          </section>
+
+          {/* 10b */}
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">10b. Account Deletion</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              To request account deletion, email{' '}
+              <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>{' '}
+              with the subject line <strong>&ldquo;Account Deletion Request.&rdquo;</strong> FindA.Sale will process
+              your request within 30 days.
+            </p>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              Transaction records required by applicable law (including IRS financial record-keeping requirements)
+              will be retained in pseudonymized form for up to 7 years. All other personal data — including your
+              name, email address, and phone number — will be permanently deleted.
+            </p>
+          </section>
+
+          {/* 10c */}
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">10c. Security Breach Notification</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+              In the event of a confirmed security breach affecting your personal information, FindA.Sale will notify
+              affected users within 72 hours of confirmation via email and post a notice at{' '}
+              <a href="/security-notice" className="text-amber-600 hover:underline">finda.sale/security-notice</a>.
+            </p>
+          </section>
+
+          {/* 10d */}
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">10d. Auto-Suggested Content</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              FindA.Sale uses automated tools to suggest item tags, condition grades, and descriptions to help
+              organizers list items faster. These suggestions are presented to organizers for review before being
+              published — suggested content is never published automatically without organizer approval.
+            </p>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+              Auto-generated suggestions may be inaccurate or incomplete. Organizers are responsible for verifying
+              all item details before publishing, and buyers should always verify item details manually before
+              purchasing.
+            </p>
+          </section>
+
           <div className="border-t border-warm-200 dark:border-gray-700 pt-6 text-sm text-warm-500 dark:text-warm-400">
             <p>
               See also our{' '}
