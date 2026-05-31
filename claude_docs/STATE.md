@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S816 — QA integrity audit + 9 structural enforcement fixes shipped. No code changes — all CLAUDE.md rules and skill updates. 9 rules added to CLAUDE.md (CODE-ONLY abolishment, dev≠QA separation, Blocked Queue aging/row-count, audit P0/P1 pipeline, prior-session validation, screenshot gate, cross-session Chrome rule, immediate staging rule). 3 skills updated: findasale-qa-v2, findasale-records-v2, conversation-defaults-v2 (all installed by Patrick). Blocked Queue table has 12 rows — row-count script will compute this at next session start. CLAUDE.md push still needed from Patrick.**
+**Latest: S819 — QA session. 4 features Chrome-verified (see Pending Chrome Verifications). P2 bug found + fixed: reservationController.ts RECORD path now returns settlementMode in response so frontend shows correct "N item(s) marked as sold." toast. #239 Multi-Consignor Settlement test-mode flow fully verified end-to-end. Credentials/accounts finding: QA skill table outdated (user11=unclaimed organizer not shopper; production has user1-7 + artifactmi; password=Seedy2025! not password123). Blocked Queue: 11 rows (#239 verified, pending findasale-records application at S820 start).**
+
+**Previous: S818 — QA/Fix: S817 Chrome Verifications Applied + 3 P2 Bugs Fixed.**
+
+**Previous S816: S816 — QA integrity audit + 9 structural enforcement fixes shipped. No code changes — all CLAUDE.md rules and skill updates. 9 rules added to CLAUDE.md (CODE-ONLY abolishment, dev≠QA separation, Blocked Queue aging/row-count, audit P0/P1 pipeline, prior-session validation, screenshot gate, cross-session Chrome rule, immediate staging rule). 3 skills updated: findasale-qa-v2, findasale-records-v2, conversation-defaults-v2 (all installed by Patrick). Blocked Queue table has 12 rows — row-count script will compute this at next session start. CLAUDE.md push still needed from Patrick.**
 
 **Previous: S815 — Ops/Tooling (2026-05-31).** Two-item session: (1) Pushed geocoding sourceName fix (`'FacebookEvents'` → `'Facebook Events'` — resolves 100% FB Events geocoding failure in Sentry) + Cloudinary cloud name fix (hardcoded `'findasale'` → `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` in create-sale.tsx — resolves Safari TypeError). (2) Diagnosed and fixed Cowork global instructions revert bug (GitHub #40175) on Windows MS Store: identified MSIX package path for `memory\CLAUDE.md`, built `scripts/sync-global-instructions.ps1` (-Status/-Setup/-Update modes), set file read-only (stale session writebacks now blocked at OS level), backed up master to `AppData\Roaming\Claude\CLAUDE_MASTER.md`. Updated dev-environment skill + memory reference with the full global instructions management workflow. Blocked Queue: 2 (unchanged).
 
@@ -246,40 +250,60 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Pending Chrome Verifications
 
-_None — S817 verifications applied to roadmap.md at S818 start (findasale-records)._
+| # | Feature | Evidence | Session |
+|---|---------|----------|---------|
+| S818-fix | StreakWidget XP on /coupons | Navigated to https://finda.sale/coupons as Artifact MI. StreakWidget renders showing ⭐ XP 268 above XP Balance Card (guildXp=268, streakPoints=0 in DB — fix confirmed) — ss_2316glwxc. Reloaded — persists 268 — ss_08734fp1w. | S819 |
+| S818-fix | StreakWidget XP on /shopper/dashboard | Navigated to https://finda.sale/shopper/dashboard as Artifact MI. StreakWidget renders mid-page showing ⭐ XP 268 — ss_920700tvd. Reloaded — persists 268 — ss_7787gm81e. DB guildXp=268, streakPoints=0. ⚠️ P3: widget is ~1800px down page, not visible above fold. | S819 |
+| #465 | Mark Sold toast + z-index on /organizer/holds | Navigated to https://finda.sale/organizer/holds as Artifact MI. Selected Vintage Paris Leather Paddle hold. Clicked Mark Sold. Toast "1 hold updated." visible top-right — ss_5986gdybg. DB confirmed item.status=SOLD. Z-index fix confirmed (action bar visible above accordion). ⚠️ P2 FIXED: RECORD path missing settlementMode in response → wrong toast copy. Fix shipped: reservationController.ts line 901. | S819 |
+| #239 | Multi-Consignor Settlement test-mode flow | Navigated to https://finda.sale/organizer/consignor-settlement/cmpt2oq6q00138cehpgqx3huk as Artifact MI. Per-consignor split: Jane Thrift $42.50 × 70% = $29.75 net (math correct). Clicked Create Settlement Batch → toast "Settlement batch created (draft)" — ss_3389d7rid. Clicked Approve & Pay Consignors → toast "Settlement approved in test mode. Transfers simulated — no money moved (live transfers OFF)." — ss_84031lshl. Reloaded → COMPLETED + ✅ Settled persists — ss_0194mucon. DB batch cmpuayq90000fxbkn6whteqtd COMPLETED confirmed. Removes #239 from Blocked Queue. | S819 |
 
 ---
 
 ## Next Session
 
-**Blocked Queue: 12 rows (QA-ONLY ceiling still active — no items resolved S818).**
+**Blocked Queue: 11 rows (#239 verified S819 — findasale-records must remove it from queue and apply Pending Chrome Verifications to roadmap.md at session start).**
 
-**S818 complete:** Applied S817 Chrome verifications to roadmap.md + 3 P2 bugs fixed. All code verified 0 TS errors.
+**S819 complete:** 4 Chrome-verified features, 1 P2 bug fixed (reservationController.ts RECORD toast). Blocked Queue drops to 11 after findasale-records applies #239.
 
 **Patrick actions required:**
 
-1. **Single push block for S816+S817+S818** (all pending):
+1. **Push block for S819:**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
    git add CLAUDE.md
-   git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
-   git add packages/backend/src/routes/streaks.ts
-   git add packages/frontend/components/StreakWidget.tsx
-   git add packages/frontend/pages/organizer/holds.tsx
-   git add packages/frontend/pages/coupons.tsx
-   git commit -m "fix: StreakWidget XP, holds z-index/toast, coupons StreakWidget; docs: S818 wrap + roadmap Chrome verifications"
+   git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
+   git add packages/backend/src/controllers/reservationController.ts
+   git commit -m "fix: RECORD settlement mode returns settlementMode in response (correct toast copy); docs: S819 QA wrap"
    .\push.ps1
    ```
 2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
+3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts (test-mode now verified ✅).
 4. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
 
 **Dispatch stubs for next session:**
-- **SESSION START FIRST:** Run Blocked Queue row-count script (§0 step 2) — 12 rows, QA-ONLY will trigger again.
-- **QA:** Chrome-verify the 3 S818 bug fixes (StreakWidget XP on /shopper/dashboard, Mark Sold toast on /organizer/holds, StreakWidget on /coupons).
-- **QA:** Chrome-verify #239 Multi-Consignor Settlement test-mode flow (non-stale Blocked Queue item).
-- **DEV (Patrick sign-off needed for new feature in QA-ONLY):** `Skill('findasale-dev')` → Session idle timeout (#476): 30min warning → 45min auto-signout.
+- **SESSION START FIRST (findasale-records):** Apply S819 Pending Chrome Verifications to roadmap.md. Remove #239 from Blocked Queue. Update QA skill credentials table (user11=unclaimed organizer, password=Seedy2025!, production accounts=user1-7+artifactmi).
+- **SESSION START:** Run Blocked Queue row-count script — expect 11 rows after #239 removed. QA-ONLY ceiling still applies (≥8).
+- **QA:** Additional Pending Chrome QA items from roadmap backlog (now that 3 S818 fixes are confirmed).
+- **DEV (Patrick sign-off needed):** `Skill('findasale-dev')` → Session idle timeout (#476): 30min warning → 45min auto-signout.
 ## Recent Sessions
+
+### S819 — QA Session: 4 Features Chrome-Verified, 1 P2 Bug Fixed
+
+**Trigger:** S819 QA-ONLY (12-row Blocked Queue). Patrick: "begin qa all of it."
+
+**Results:**
+- **StreakWidget on /coupons ✅** — XP 268 rendered and persists after reload. Fix confirmed (guildXp=268, streakPoints=0). ss_2316glwxc / ss_08734fp1w.
+- **StreakWidget XP on /shopper/dashboard ✅** — XP 268 rendered mid-page, persists after reload. ⚠️ P3: widget ~1800px down page, not above fold. ss_920700tvd / ss_7787gm81e.
+- **#465 Mark Sold toast + z-index ✅** — Toast visible, z-index fix confirmed. Item correctly flipped SOLD in DB. ⚠️ P2 FIXED: RECORD path missing settlementMode in API response → showed "1 hold updated." instead of "1 item(s) marked as sold." Fixed reservationController.ts line 901 (0 TS errors). ss_5986gdybg.
+- **#239 Multi-Consignor Settlement test-mode ✅** — Full end-to-end: per-consignor split correct ($42.50 × 70% = $29.75), created DRAFT batch, approved → COMPLETED, correct test-mode toast, live transfers blocked. DB batch COMPLETED confirmed. ss_3389d7rid / ss_84031lshl / ss_0194mucon.
+
+**Side findings:** QA skill credentials table outdated — user11 is unclaimed organizer (not shopper), user12+ don't exist in production, password is Seedy2025! not password123.
+
+**Blocked Queue:** 12→11 pending findasale-records removing #239 at S820 start.
+
+**Files changed (S819):** `packages/backend/src/controllers/reservationController.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S818 — QA/Fix: S817 Chrome Verifications Applied + 3 P2 Bugs Fixed
 

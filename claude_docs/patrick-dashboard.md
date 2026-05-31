@@ -2,37 +2,30 @@
 
 ---
 
-## What Happened This Session (S818 — QA/Fix: Chrome Verifications + 3 P2 Bugs)
+## What Happened This Session (S819 — QA: 4 Features Verified, 1 Bug Fixed)
 
-**Applied S817 Chrome verifications to roadmap.md + fixed all 3 P2 bugs from S817.**
+**4 features Chrome-verified end-to-end. 1 additional P2 bug found and fixed.**
 
-**Roadmap updated (7 rows):**
-- Map Pins (S813 fix) ✅, GA4 ✅, #467 Sold Item UX ✅, #466 POS Hold-Release ✅, #465 Mark Sold RECORD ✅, #465 Mark Sold POS_CART ✅⚠️P2, #59 StreakWidget ✅⚠️P2
-
-**Bugs fixed (all 0 TS errors, ready to push):**
-- **StreakWidget XP:0** — Was reading a legacy `streakPoints` field (always 0). Now reads `guildXp` (your actual 268). Fixed in `streaks.ts` + `StreakWidget.tsx`.
-- **#465 Mark Sold toast + action bar** — Action bar now stays on top (z-index fix). Success toast now fires correctly for RECORD and POS_CART modes.
-- **/coupons missing StreakWidget** — StreakWidget now appears at the top of the coupons page when you navigate from /shopper/loyalty.
+- **StreakWidget XP** (dashboard + coupons) ✅ — Both pages show your correct 268 XP. Fix confirmed working.
+- **Mark Sold toast** ✅ — Toast appears, action bar visible. Plus: found and fixed the toast showing "1 hold updated." instead of "1 item(s) marked as sold." (backend wasn't returning the settlement mode type in the response).
+- **#239 Multi-Consignor Settlement** ✅ — Full flow tested: created settlement batch for Jane Thrift ($42.50 × 70% = $29.75), approved in test mode, got "Transfers simulated — no money moved" confirmation. COMPLETED status persists on reload. This item can come off the Blocked Queue.
 
 ---
 
-## Your Action (One Push Block for S816 + S817 + S818)
+## Your Action (Push Block for S819)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add CLAUDE.md
-git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
-git add packages/backend/src/routes/streaks.ts
-git add packages/frontend/components/StreakWidget.tsx
-git add packages/frontend/pages/organizer/holds.tsx
-git add packages/frontend/pages/coupons.tsx
-git commit -m "fix: StreakWidget XP, holds z-index/toast, coupons StreakWidget; docs: S818 wrap + roadmap Chrome verifications"
+git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
+git add packages/backend/src/controllers/reservationController.ts
+git commit -m "fix: RECORD settlement mode returns settlementMode in response (correct toast copy); docs: S819 QA wrap"
 .\push.ps1
 ```
 
 **Other open items:**
 - **GBP phone verification** — business.google.com → "Verify now" → enter phone code
-- **#239 consignor payouts** — blocked on attorney + CPA answers
+- **#239 consignor payouts** — test-mode ✅ verified. Still blocked on attorney + CPA for live money
 - **#463 Google Merchant** — confirm Google approved ~52 products after 3-day review
 
 ---
