@@ -591,6 +591,13 @@ report. Count the screenshot ID strings (any token matching `screenshot [id]` or
 A report with 10 ✅ marks and 4 screenshot IDs has at most 2 verified features. The rest
 are UNVERIFIED regardless of how plausible the descriptions sound.
 
+**Immediate staging rule (HARD):** QA findings must be staged to STATE.md
+`## Pending Chrome Verifications` in the same turn the QA agent returns — before
+starting any next task, before session wrap, before any other dispatch. If staging
+is deferred to wrap and compression hits first, the finding is lost and becomes
+UNVERIFIED. The staging table is compression-proof (it's a file on disk). In-context
+memory is not. Stage immediately; compression can then hit any time safely.
+
 **Cross-session Chrome column update (HARD — survives compression):** The roadmap.md Chrome
 column MUST NOT be updated in the same session that ran QA. Workflow:
 1. QA findings with ✅ status go into STATE.md under `## Pending Chrome Verifications`
