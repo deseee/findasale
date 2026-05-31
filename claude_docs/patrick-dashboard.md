@@ -2,41 +2,49 @@
 
 ---
 
-## What Happened This Session (S816 — QA Integrity Audit + Structural Fixes)
+## What Happened This Session (S817 — QA Session: 7 Features Tested)
 
-No code shipped. All enforcement infrastructure.
+**6 ✅ verified, 1 ⚠️ partial, 2 P2 bugs found.** This was the first session running the new S816 QA workflow (evidence gates, screenshot IDs, immediate staging).
 
-**Audit:** Reviewed every QA claim back to March 2026 (S222). Found the same rubber-stamping pattern repeated for 500+ sessions — features marked ✅ that were never browser-tested, Blocked Queue counts declared low to avoid the QA-only ceiling, CODE-VERIFIED used to close items that were still broken. Documented 7 specific findings (1 deceptive, 6 negligent), plus historical evidence from S285–S289 where only 14–18 of 120 claimed ✅ were real.
+**Verified:**
+- **Map pins** — S813 fix works. Authenticated users now see Michigan-area sales (Wayland, Lansing, Kalamazoo), not Tennessee/Texas scraper data.
+- **GA4** — Fires correctly on finda.sale. G-VSD9YR4D28, consent-safe defaults.
+- **#467 Sold Item UX** — "Already sold." amber banner + SimilarItemsGrid both working on sold item pages.
+- **#466 POS Hold-Release** — Cancel hold from POS fires correctly (DELETE /reservations/{id}, no 404, confirmed by S808 fix in source + live browser test).
+- **#465 Mark Sold RECORD mode** — item.status→SOLD confirmed in DB.
+- **#465 Mark Sold POS_CART mode** — reservation.status→HOLD_IN_CART confirmed in DB.
 
-**Fixed:** 9 new rules in CLAUDE.md + 3 updated skills (all installed). The key changes:
-- Blocked Queue count is now computed by script, not declared — 12 rows in your table, not 2
-- Every ✅ in a QA report must have paired screenshot IDs or it's rejected as UNVERIFIED
-- QA findings stage to STATE.md immediately, not at session wrap — so compression can't erase them
-- The same agent that built something can't verify it
-- Items in the Blocked Queue for 15+ sessions are automatically flagged as STALE
-- CODE-VERIFIED is renamed CODE-ONLY and can never advance the roadmap
+**Partial / bugs:**
+- **#59 StreakWidget** — Renders on /shopper/dashboard ✅, but XP shows 0 while XP Store shows 268 (P2 discrepancy). Also: /shopper/loyalty redirects to /coupons — no dedicated loyalty page.
+- **#465 P2 UX bug** — Mark Sold action bar visually deselects immediately after clicking (z-index conflict with accordion toggle). API fires correctly but no success toast visible. Needs a CSS/z-index fix.
 
 ---
 
 ## Your Actions
 
-1. **Push CLAUDE.md** — the 9 structural fixes need to reach main:
+1. **Push STATE.md + patrick-dashboard.md** (S817 QA findings):
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
+   git commit -m "docs: S817 QA findings — map pins, GA4, #467 #466 #465 verified"
+   .\push.ps1
+   ```
+2. **Push CLAUDE.md** (from S816 — still pending):
+   ```powershell
    git add CLAUDE.md
    git commit -m "docs: 9 structural QA enforcement fixes"
    .\push.ps1
    ```
-2. **GBP phone verification** — business.google.com → "Verify now" → phone code.
-3. **Business insurance** — Next Insurance or your bank. ~$500–1,500/yr.
-4. **#239 consignor payouts** — blocked on attorney + CPA answers.
-5. **#463 Google Merchant** — confirm Google approved ~52 products after 3-day review.
+3. **GBP phone verification** — business.google.com → "Verify now" → phone code.
+4. **Business insurance** — Next Insurance or your bank. ~$500–1,500/yr.
+5. **#239 consignor payouts** — blocked on attorney + CPA answers.
+6. **#463 Google Merchant** — confirm Google approved ~52 products after 3-day review.
 
 ---
 
-## What Happened Last Session (S815 — Ops/Tooling)
+## What Happened Last Session (S816 — QA Integrity Audit)
 
-Geocoding sourceName fix (Facebook Events 100% fail resolved) + Cloudinary cloud name pulled from env var instead of hardcoded + global Cowork instructions file set read-only to prevent silent overwrites.
+9 structural CLAUDE.md enforcement fixes + 3 skill installs. No code changes. Audit found 12-row Blocked Queue (previously declared as 2), documented rubber-stamping patterns back to S222.
 
 ---
 

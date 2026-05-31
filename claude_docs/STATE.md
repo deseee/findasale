@@ -244,33 +244,55 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ---
 
+## Pending Chrome Verifications
+
+Staged S817 — apply to roadmap.md at START of next session (findasale-records).
+
+| # | Feature | Evidence | Session |
+|---|---------|----------|---------|
+| Map Pins (S813 fix) | Navigated https://finda.sale as Artifact MI (logged in). Fetched /api/sales — all 10 sampled results Michigan cities (Wayland, Lansing, Kalamazoo, lat 42-43°N, not 32-36°N scraper data). 20 active map markers visible in GR/SW-MI area — ss_6981mw6dx. | S817 |
+| GA4 (S814) | Navigated https://finda.sale as Artifact MI. window.dataLayer confirmed: gtag js init, consent default (analytics_storage:denied), config G-VSD9YR4D28 page_path:/, consent update (analytics_storage:granted). Tag firing correctly — ss_6981mw6dx. | S817 |
+| #59 StreakWidget | Navigated /shopper/dashboard as Artifact MI. StreakWidget renders: 🔥 Streak:6, ⭐ XP:0, Upgrade button — ss_7828jgral. ⚠️ XP shows 0 but XP Store shows 268 guildXp (P2 metric mismatch). /shopper/loyalty → redirects to /coupons (no dedicated page). | S817 |
+| #467 Sold Item UX | Navigated /items/cmo3eu2720075jqsued3xp8vn as Artifact MI. SOLD stamp on photo — ss_83666qqfy. Amber banner "Already sold." + "See what's left at Artifact Downtown Paw Paw →" CTA. SimilarItemsGrid: 3 real magazine items with photos/prices — ss_28729zeub. | S817 |
+| #466 POS Hold-Release | Navigated /organizer/pos as Artifact MI. Invoice panel → Leo Thomas hold (Steam Controller $42.50) — ss_9439ujvbx. Load Hold → loaded. Cancel Hold → confirmation dialog — ss_95612zgzq. Confirm → "Hold cancelled" toast, hold removed, "No active holds" empty state — ss_37228u0ka. No 404. | S817 |
+| #465 Mark Sold RECORD | Navigated /organizer/holds as Artifact MI. Selected Yzerman duck hold (Leo Thomas). Set "Record cash sale" → Mark Sold → POST /api/reservations/batch 200 — ss_3184fbljj. DB confirmed item.status=SOLD. | S817 |
+| #465 Mark Sold POS_CART | Same session, same hold. Set "Add to POS cart" → Mark Sold → POST /api/reservations/batch 200. DB confirmed reservation.status=HOLD_IN_CART. ⚠️ P2: action bar visually deselects after click (z-index conflict with accordion toggle), no success toast visible. | S817 |
+
+---
+
 ## Next Session
 
 **Blocked Queue: 12 rows in table (row-count script will compute actual count at session start — QA ceiling may trigger).**
 
-**S816 complete:** Integrity audit + 9 structural CLAUDE.md fixes + 3 skill installs. No code changes. No push needed from Patrick except CLAUDE.md (see below).
+**S817 complete:** QA session. 7 features tested. 6 ✅ (map pins, GA4, #467, #466, #465 RECORD, #465 POS_CART), 1 ⚠️ PARTIAL (#59 StreakWidget — XP:0 vs 268 guildXp discrepancy + /shopper/loyalty redirect). 2 P2 bugs found. Pending Chrome Verifications staged above.
+
+**S816 complete:** Integrity audit + 9 structural CLAUDE.md fixes + 3 skill installs. No code changes.
 
 **Patrick actions required:**
 
-1. **Push CLAUDE.md** — 9 structural enforcement fixes need to reach main branch:
+1. **Push CLAUDE.md** (from S816) — 9 structural enforcement fixes:
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
    git add CLAUDE.md
    git commit -m "docs: 9 structural QA enforcement fixes — CODE-ONLY, dev/QA separation, aging, audit pipeline, staging, validation"
    .\push.ps1
    ```
-2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-3. **Business insurance:** Next Insurance or your bank. ~$500-1,500/yr.
+2. **Push STATE.md** (from S817 QA):
+   ```powershell
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
+   git commit -m "docs: S817 QA findings staged — map pins, GA4, #467, #466, #465"
+   .\push.ps1
+   ```
+3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 4. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
 5. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
 
 **Dispatch stubs for next session:**
-- **SESSION START FIRST:** Run Blocked Queue row-count script (CLAUDE.md §0 step 2). If ≥8 rows → QA-only session. The table has 12 rows; next session may be QA-only.
-- **Prior-session validation:** findasale-records reads S816 Wrap Stub vs git log. No code changes this session so validation is trivial.
-- Main session Chrome QA → **GA4 smoke test** (navigate finda.sale, check analytics.google.com Realtime).
-- Main session Chrome QA → **Map pins smoke test** (log in as Artifact MI, confirm GR-area pins visible — S813 fix).
-- Main session Chrome QA → **Re-verify #59 loyalty page** (StreakWidget on /shopper/loyalty).
-- `Skill('findasale-dev')` → **Session idle timeout (#476):** 30min warning → 45min auto-signout.
+- **SESSION START FIRST:** Run Blocked Queue row-count script (§0 step 2) — table has 12 rows, QA-only session will trigger again.
+- **findasale-records:** Apply Pending Chrome Verifications table to roadmap.md (map pins, GA4, #467, #466, #465, #59).
+- **P2 bugs to fix (dispatch to findasale-dev):** (1) #59 StreakWidget XP shows 0 vs 268 actual guildXp; (2) #465 Mark Sold action bar z-index conflict with accordion toggle (no success toast visible); (3) /shopper/loyalty → /coupons redirect with no StreakWidget on that page.
+- **`Skill('findasale-dev')`** → **Session idle timeout (#476):** 30min warning → 45min auto-signout.
 ## Recent Sessions
 
 ### S816 — QA Integrity Audit + 9 Structural Enforcement Fixes
