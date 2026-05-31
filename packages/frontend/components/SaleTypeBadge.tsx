@@ -4,8 +4,7 @@
  * Reusable pill/badge for each sale type. Differentiation via icon + label
  * (not color). Charity/Benefit gets a secondary heart indicator.
  *
- * NOTE: saleSubtype is not in schema — display only until schema migration lands.
- * NOTE: isOnlineOnly is not in schema — accept from parent props for display purposes.
+ * saleSubtype and isOnlineOnly are both in schema.prisma (Sale model).
  */
 import React from 'react';
 
@@ -107,7 +106,6 @@ const PRIMARY_TYPES: Record<string, TypeConfig> = {
   RETAIL: { label: 'Antique Shop', icon: 'bag', colorClass: 'text-amber-700 dark:text-amber-400' },
 };
 
-// TODO: saleSubtype not in schema — display only until schema migration lands
 const SUBTYPE_OVERRIDES: Record<string, Pick<TypeConfig, 'label' | 'icon'>> = {
   moving: { label: 'Moving Sale', icon: 'truck' },
   storage_auction: { label: 'Storage Auction', icon: 'storage' },
@@ -119,9 +117,7 @@ const SUBTYPE_OVERRIDES: Record<string, Pick<TypeConfig, 'label' | 'icon'>> = {
 
 export interface SaleTypeBadgeProps {
   saleType: string; // ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL
-  // TODO: saleSubtype not in schema — display only until schema migration lands
   saleSubtype?: string; // 'moving' | 'storage_auction' | 'pop_up' | 'benefit'
-  // TODO: isOnlineOnly not in schema — accept from parent props for display purposes
   isOnlineOnly?: boolean;
   size?: 'sm' | 'md' | 'lg';
   theme?: 'dark' | 'light';
