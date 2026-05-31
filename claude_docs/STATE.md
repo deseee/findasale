@@ -252,6 +252,8 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #465 | Mark Sold toast + z-index on /organizer/holds | Navigated to https://finda.sale/organizer/holds as Artifact MI. Selected Vintage Paris Leather Paddle hold. Clicked Mark Sold. Toast "1 hold updated." visible top-right — ss_5986gdybg. DB confirmed item.status=SOLD. Z-index fix confirmed (action bar visible above accordion). ⚠️ P2 FIXED: RECORD path missing settlementMode in response → wrong toast copy. Fix shipped: reservationController.ts line 901. | S819 |
 | #239 | Multi-Consignor Settlement test-mode flow | Navigated to https://finda.sale/organizer/consignor-settlement/cmpt2oq6q00138cehpgqx3huk as Artifact MI. Per-consignor split: Jane Thrift $42.50 × 70% = $29.75 net (math correct). Clicked Create Settlement Batch → toast "Settlement batch created (draft)" — ss_3389d7rid. Clicked Approve & Pay Consignors → toast "Settlement approved in test mode. Transfers simulated — no money moved (live transfers OFF)." — ss_84031lshl. Reloaded → COMPLETED + ✅ Settled persists — ss_0194mucon. DB batch cmpuayq90000fxbkn6whteqtd COMPLETED confirmed. Removes #239 from Blocked Queue. | S819 |
 | #464 | SEO Footer + Internal Linking (3 scenarios) | (1) Navigated to https://finda.sale as Artifact MI. Scrolled to footer. "Discover" column present with 7 links: /map /trending /search /categories /cities /encyclopedia /guides — hrefs verified via DOM (ss_1853r66mg). (2) Clicked Explore dropdown — Categories, Encyclopedia, Guides all present (ss_8451czzzm). (3) Navigated to https://finda.sale/sales/cmoqnytob00pvgzwwv5njtvs0. Scrolled to bottom. "MORE IN WAYLAND, MI" section renders with /city/wayland-mi + /city/wayland-mi/estate-sales + 3 other sale-type links (ss_3460u57db). | S820 |
+| #338 | Surface Sold-Price Comps in edit-item | Navigated to https://finda.sale/organizer/edit-item/cmo3eu2720075jqsued3xp8vn as Artifact MI. EbayCompTiles visible above price field — 3 tiles ($10.95/Good, $79.99/Very Good, $100.00/Good). Clicked "Suggest Price" → Smart Price Suggestion card appeared: "$8–$14 (suggested: $10)" with eBay narrative (ss_300045cfs). Comps surfaced and actionable. ⚠️P3: no "Based on N sources" attribution text — range shown but source count not stated. | S820 |
+| #41 | Flip Report | Navigated to https://finda.sale/organizer/flip-report as Artifact MI. Selected "Artifact Downtown Paw Paw" (ENDED). Report rendered: 4 KPI cards (0.0% sell-through, $0.00 revenue, 0/2 sold, 2 unsold), Category Breakdown, Pricing Insights ($26.75 avg ask, $0.00 avg sale), Recommendations, Return to Inventory (2 items with checkboxes). Division-by-zero handled correctly (ss_9737tiosm). ⚠️ P2 BUG: "Books &amp; Magazines:Magazines" — HTML entity not decoded in category names, appears in Category Breakdown table AND Return to Inventory item subtitles. | S820 |
 
 ---
 
@@ -325,15 +327,4 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ### S818 — QA/Fix: S817 Chrome Verifications Applied + 3 P2 Bugs Fixed
 
-**Trigger:** S818 QA-ONLY (12-row Blocked Queue). Dispatch stubs from S817 Next Session executed in parallel.
-
-**findasale-records:** Applied S817 Pending Chrome Verifications to roadmap.md — 7 rows updated: Map Pins (S813 fix) ✅, GA4 ✅, #59 StreakWidget ✅⚠️P2, #467 Sold Item UX ✅, #466 POS Hold-Release ✅, #465 Mark Sold RECORD ✅, #465 Mark Sold POS_CART ✅⚠️P2.
-
-**3 P2 bugs fixed (parallel dev agents, 0 TS errors each):**
-- **StreakWidget XP:0 root cause:** Widget read `profile.streakPoints` (legacy counter, always 0 for most users) instead of `profile.guildXp` (268 for Artifact MI). Fix: `streaks.ts` — added `guildXp` to Prisma select + response JSON. `StreakWidget.tsx` — added `guildXp: number` to interface, changed display from `profile.streakPoints` → `profile.guildXp`.
-- **#465 action bar z-index + missing toast root causes:** (1) Action bar div had no stacking context — buyer accordion cards created new stacking contexts above it. Fix: added `relative z-50` to action bar container. (2) `onSuccess` handler used stale `selectedIds.size` after `setSelectedIds(new Set())` ran. Fix: added `variables` param (`onSuccess(data, variables)`), derived `count` from `variables.ids.length`. Added explicit RECORD branch toast ("N item(s) marked as sold."), hardened POS_CART detection.
-- **/coupons StreakWidget:** `/shopper/loyalty` intentionally redirects to `/coupons` (correct, left untouched). `/coupons` had no StreakWidget. Fix: added import + `<StreakWidget />` render above XP Balance Card in `coupons.tsx`.
-
-**Blocked Queue: 12 (unchanged — no Blocked Queue items resolved this session).**
-
-**F
+**Trigger:** S818 QA-ONLY (12-row Blocked Queue). Dispatch stubs from S817 Next Session executed in pa
