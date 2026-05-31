@@ -752,7 +752,8 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       });
 
       // Verify each hold belongs to this organizer (re-check inside transaction)
-      const validHolds = holds.filter((h) => h.item.sale?.organizerId === organizer.id);
+      // Also exclude already-SOLD items to prevent duplicate Purchase records on re-submit
+      const validHolds = holds.filter((h) => h.item.sale?.organizerId === organizer.id && h.item.status !== 'SOLD');
       if (validHolds.length === 0) {
         throw new Error('No valid holds found');
       }
@@ -897,7 +898,8 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
     }
 
     const { holds: _holds, ...responseResult } = result as any;
-    res.json(responseResult);
+    // Include settlementMode for RECORD so the frontend can show the correct toast copy
+    res.json(action === 'markSold' ? { ...responseResult, settlementMode: 'RECORD' } : responseResult);
   } catch (error) {
     console.error('[reservations] batchUpdateHolds error:', error);
     res.status(500).json({ message: 'Server error' });
