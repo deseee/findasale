@@ -5,6 +5,7 @@
  */
 
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { enrichScrapedListing } from '../services/listingEnrichmentService';
 
@@ -15,11 +16,18 @@ async function _runEnrichmentBatch(batchSize: number): Promise<void> {
   let enriched = 0;
   let skipped = 0;
 
-  // Find unenriched scraped sales: has scrapedMetadata, description > 50 chars, not yet enriched
+  // Fetch only unenriched sales: scrapedMetadata exists but aiEnriched key is absent.
+  // SQL-level filter avoids the previous 3× over-fetch + JS JSON blob scanning.
   const sales = await prisma.sale.findMany({
     where: {
-      scrapedMetadata: { not: null },
+      scrapedMetadata: { not: Prisma.DbNull },
       description: { not: null },
+      NOT: {
+        scrapedMetadata: {
+          path: ['aiEnriched'],
+          not: Prisma.DbNull,
+        },
+      },
     },
     select: {
       id: true,
@@ -27,17 +35,11 @@ async function _runEnrichmentBatch(batchSize: number): Promise<void> {
       description: true,
       scrapedMetadata: true,
     },
-    take: batchSize * 3, // over-fetch since we filter in JS for JSON field checks
+    take: batchSize,
   });
 
-  // Filter: description > 50 chars AND scrapedMetadata.aiEnriched is null/undefined
-  const unenriched = sales.filter((sale) => {
-    const desc = sale.description ?? '';
-    if (desc.length <= 50) return false;
-    const meta = sale.scrapedMetadata as Record<string, unknown> | null;
-    if (!meta) return false;
-    return !meta.aiEnriched;
-  }).slice(0, batchSize);
+  // Secondary filter: skip descriptions too short to enrich (service rejects them anyway)
+  const unenriched = sales.filter((sale) => (sale.description ?? '').length > 50);
 
   console.log(`[ListingEnrichmentBatch] Processing ${unenriched.length} unenriched sales (batchSize=${batchSize})`);
 
