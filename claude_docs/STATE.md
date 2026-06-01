@@ -251,7 +251,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 
 | #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Consignor emails use Gmail API (not Resend — that was a red herring). Same service as all working transactional emails. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
-| #462/#463/#464 UTM Params | ❌ BROKEN S831 — S827 fix (`skipTrailingSlashRedirect: true` in next.config.js) did NOT solve the issue. `redirectCount: 3` hops strip query params before `router.isReady` fires, so `router.query` is empty and sessionStorage never written. Fix must read from `window.location.search` (or `URLSearchParams`) directly on initial mount, NOT from `router.query`. | `findasale-dev` dispatch: in UTMCapture component (_app.tsx), replace `router.query` destructure with direct `new URLSearchParams(window.location.search)` read on first render — fire before any client-side redirect. Also add vercel.json `"trailingSlash": false` if not already set. | S831 |
+| #462/#463/#464 UTM Params | ❌ BROKEN S831, FIX APPLIED S831 (CODE-ONLY) — UTMCapture now reads `window.location.search` on mount (empty deps `[]`) instead of `router.query` after `router.isReady`. Root cause: redirectCount=3 chain strips params before router hydration. 0 TS errors. Needs Chrome re-QA after deploy. | Navigate to finda.sale/search?utm_source=email after deploy, confirm sessionStorage.fsa_utm is written. | S831 |
 
 ---
 
@@ -265,7 +265,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Blocked Queue: 5 rows (below ≥8 ceiling — dev sessions clear).**
 
-**S831 mid-session:** Records applied #319/#325/#328 Chrome ✅ to roadmap. UTM QA: #462/#463/#464 ❌ BROKEN — `redirectCount: 3` strips params before `router.query` populated. Added to Blocked Queue.
+**S831 mid-session:** Records applied #319/#325/#328 Chrome ✅ to roadmap. UTM QA #462/#463/#464: ❌ BROKEN — `redirectCount: 3` strips params before `router.query` populated. Fix applied (UTMCapture now uses `window.location.search` on mount). CODE-ONLY pending deploy + Chrome re-QA.
 
 **Patrick actions required:**
 
