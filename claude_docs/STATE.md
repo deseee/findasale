@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S838 — QA batch: #165 PASS WITH NOTES (P3 only: stub button + roles/role inconsistency in admin guard — functionally correct), #61 ✅ (NudgeBar confirmed, STREAK_CONTINUATION, variable-ratio, P3: TIER_PROGRESS type declared but never generated), #36 CODE-ONLY ✅ (weeklyEmailJob.ts cron Sunday 6pm confirmed in index.ts), #72 ✅ FULL PASS (user2 ORGANIZER+SHOPPER: nav 22 items zero duplicates, organizer dashboard, shopper dashboard, wishlist all load, mobile Shop tab confirmed). Blocked Queue: 5 rows from 5 (removed #72, added #308+#25 as Patrick-gated). #308 Item Hide and #25 eBay Sync B/C both need Patrick present — no test account has published items with embeddings; eBay needs real connection. Records to apply S838 Chrome verifications (#61, #72) to roadmap at next session start.**
+**Latest: S838 — QA batch: #165 PASS WITH NOTES (P3: stub Clear button, roles/role inconsistency), #61 ✅ (NudgeBar confirmed, STREAK_CONTINUATION, variable-ratio, P3: TIER_PROGRESS never generated), #36 CODE-ONLY ✅ (weeklyEmailJob.ts cron Sunday 6pm confirmed), #72 ✅ FULL PASS (user2 ORGANIZER+SHOPPER: 22-item nav zero dups, all dashboards load), #308 PASS WITH NOTES (Artifact MI: hide fires isActive:false, absent from all 4 public sale pages, item restored; P3: no Hidden indicator in organizer list), #25 ✅ Patrick-confirmed (eBay Sync Phase B/C import flow + Pull to Sale working). Blocked Queue: 4 rows (removed #308, #25, #72).**
 
 **Previous: S837 — QA+DEV: #166 ✅, #74 ✅, #150 ✅ + nav audit → 11 fixes + 6 pages surfaced. QA verified 3 P0 items. Nav code audit (AvatarDropdown + BottomTabNav): double hr, Explorer's Guild dup in Connect, Add Items wrong href, dual-role settings buried, mobile no shopper path, 6 complete features with no nav entry (#398 referrals, #334 markdown-cycles, #396 starter-kit, #438 ai-score, #55 challenges, #182 surprise-me). All shipped: AvatarDropdown (11 changes), BottomTabNav (Shop tab for dual-role), color-rules→discount-rules redirect, notifications consolidated (sale_alert filter + redirect), wishlist "New Collection" stub wired to /wishlists. Unsurfaced pages: 9 were just redirects (no action needed), 6 surfaced in nav, 3 resolved (discount-rules canonical, notifications consolidated, wishlists hub-and-spoke Option A). 0 TS errors. user2 now USER+ORGANIZER+SHOPPER for dual-role testing. SVPKNKV3 invite code unused in DB — Patrick delete via /admin/invites. Blocked Queue: 5 rows.**
 
@@ -259,8 +259,6 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 | #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Gmail API is the correct service. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
-| #308 Item Hide | BLOCKED S838 — No test account has a published sale with items. Artifact MI "Artifact Downtown Paw Paw" has 101 items but Patrick must be present. | Patrick present + use Artifact MI organizer account: hide an item via bulk Hide, verify absent from sale detail, search, trending. | S838 |
-| #25 eBay Sync Phase B/C | BLOCKED S838 — Needs real eBay connection (artifactmi). Patrick must be present. Phase A (Contigo push) Patrick-verified. Phase B/C (import flow, Pull to Sale) not yet browser-verified. | Patrick present + use Artifact MI eBay-connected account to verify import flow and Pull to Sale. | S838 |
 
 
 ---
@@ -273,12 +271,14 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | 165 | A/B Testing Infrastructure | Navigated to /admin/ab-tests as user1. Page loaded with "A/B Tests" heading, "Hero CTA v1" card, results table, empty state "No test data available yet." Admin guard: user5 → redirect to homepage. ss_6638o313h ss_5055y2b3t ss_3149h3aam. PASS WITH NOTES (P3 only). | S838 |
 | 61 | Near-Miss Nudges | Navigated to finda.sale as user5. /api/nudges returned 200. NudgeBar rendered with STREAK_CONTINUATION "One more day to hit a 7-day streak!", 85.7% progress bar. Clicked dismiss — bar removed immediately. Variable-ratio: 65% dispatch days confirmed. P3: TIER_PROGRESS type declared but never generated. | S838 |
 | 72 | Dual-Role Account Schema | Navigated to finda.sale/organizer/dashboard as user2 (ORGANIZER+SHOPPER). AvatarDropdown: 22 items, zero duplicates confirmed. /organizer/dashboard ✅, /shopper/dashboard ✅, /shopper/wishlist ✅ (1 real item visible). Mobile Shop tab confirmed. No broken flows. ss_03429gv9v ss_6093biwjy ss_4141w0o2s ss_2568irdlf | S838 |
+| 308 | Item Hide | Navigated to /organizer/add-items/cmpt2oq6q00138cehpgqx3huk as Artifact MI. Selected Philips DVP 3040. Clicked bulk Hide → POST /api/items/bulk 200, isActive:false confirmed via API. Navigated to /sales/cmpt2oq6q00138cehpgqx3huk — DVD Player absent from all 4 pages. Bulk Show → 200, isActive:true restored. PASS WITH NOTES. P3: no "Hidden" visual indicator in organizer item list. Note: test item was PENDING_REVIEW; public exclusion partially attributable to draft filter — backend PUBLIC_ITEM_FILTER logic confirmed correct (requires both isActive:true AND draftStatus:PUBLISHED). | S838 |
+| 25 | Organizer Persistent Inventory / eBay Sync Phase B/C | Patrick confirmed Phase B/C (import flow, Pull to Sale) working S838. Artifact MI account, real eBay connection. | S838 |
 
 ## Next Session
 
-**Blocked Queue: 6 rows (below ≥8 ceiling — dev sessions clear).**
+**Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear).**
 
-**S838 complete.** #165 PASS WITH NOTES, #61 ✅, #36 CODE-ONLY ✅, #72 ✅ — all staged to Pending Chrome Verifications. #308 and #25 added to Blocked Queue (Patrick-gated). Records to apply S838 Chrome verifications (#61, #72) to roadmap at next session start.
+**S838 complete.** #165 PASS WITH NOTES, #61 ✅, #36 CODE-ONLY ✅, #72 ✅, #308 PASS WITH NOTES, #25 Patrick-confirmed ✅ — all staged to Pending Chrome Verifications. Records to apply S838 Chrome verifications to roadmap at next session start.
 
 **Patrick actions required:**
 
