@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S825 — QA session. P1 BUG FOUND + FIXED: #319/#325/#328 (Burst Clustering / Best-Photo-First / Photo Role Awareness) all broken since launch. Root cause: batchAnalyzeController.ts prisma.item.create() calls missing \`embedding: []\` field (NOT NULL, no DB default) → silent constraint violation → 0 Items and 0 Photos ever written to DB. Confirmed via: (1) created test sale for Bob Smith (user2) via psycopg2, (2) logged in via backend JWT, (3) called /api/upload/batch-analyze with real Cloudinary URLs, (4) got 200 + cluster data but 0 DB records. Fix: added \`embedding: []\` to both prisma.item.create calls (cluster + ungrouped). 0 TS errors. Needs push + Railway redeploy + Chrome re-QA. S824 Chrome verifications applied to roadmap (#356 both CTAs ✅, #214 markdown ✅). Blocked Queue: 4 rows.**
+**Latest: S826 — QA session. (1) #319/#325/#328 API-VERIFIED: batch upload pipeline fix confirmed working. (2) #352 Organizer Tagline ✅ CHROME-VERIFIED: field exists, PATCH saves, reloads correctly. (3) #354 Business Hours ✅ CHROME-VERIFIED: Timezone PATCH + PUT /hours + GET all work correctly. (4) ⚠️ P2 BUG FOUND: Vercel strips UTM query params before Next.js router receives them — fsa_utm never written to sessionStorage, #462/#463/#464 attribution features broken in production. Blocked Queue: 4 rows.**
+
+**Previous: S825 — QA session. P1 BUG FOUND + FIXED: #319/#325/#328 (Burst Clustering / Best-Photo-First / Photo Role Awareness) all broken since launch. Root cause: batchAnalyzeController.ts prisma.item.create() calls missing \`embedding: []\` field (NOT NULL, no DB default) → silent constraint violation → 0 Items and 0 Photos ever written to DB. Confirmed via: (1) created test sale for Bob Smith (user2) via psycopg2, (2) logged in via backend JWT, (3) called /api/upload/batch-analyze with real Cloudinary URLs, (4) got 200 + cluster data but 0 DB records. Fix: added \`embedding: []\` to both prisma.item.create calls (cluster + ungrouped). 0 TS errors. S824 Chrome verifications applied to roadmap (#356 both CTAs ✅, #214 markdown ✅). Blocked Queue: 4 rows.**
 
 **Previous: S823 — QA sweep. Railway ENV all 5 ✅. S822 Chrome verifications applied to roadmap. Full QA: Homepage ✅, #214 AI Planner ✅, Shopper dashboard ✅, #311 Multi-Location full CRUD ✅, #356 Broadcast composer ✅, #50 Loot Log ✅ (seeded Purchase, verified, cleaned). #319/#325/#328 UNVERIFIED (upload_image tool limitation). P2 bugs found: /plan markdown not rendered, Broadcast duplicate dead CTA. Blocked Queue: 4 rows.**
 
@@ -256,39 +258,53 @@ _S824 verifications applied. Items below are staged for roadmap update next sess
 | #214 | AI Planner /plan — markdown rendering | Navigated to /plan as Carol Williams. Clicked "Where do I start planning a sale?" preset. AI response rendered formatted bold numbered list (e.g. "1. **Decide your sale type.**" shown as bold, no raw asterisks). renderMarkdown already present in HEAD — S823 P2 finding retracted. ss_3781tim1d. | S824 |
 | Shopper dashboard | All widgets (user5) | Navigated to /shopper/dashboard as Leo Thomas (user5). Scout rank badge, 517/1200 XP progress bar ✅. QR code, nav row (Collections/Purchase History/Treasure Trails/My QR/More) ✅. StreakWidget (Streak 0, XP 517, Upgrade) ✅. RankBenefitsCard (Scout unlocks, Next rank Ranger preview) ✅. Hunt Pass Active banner ✅. Rare Finds empty state ✅. ss_7966k5gcr, ss_83033h5zm, ss_78268e2gc. | S824 |
 | Notifications | Shopper notifications page (user5) | Navigated to /shopper/notifications as Leo Thomas. Page loads, tabs (All/Organizer Alerts/Discoveries), "Item sold" notifications with unread dots, timestamps, dismiss (×) buttons, "Mark all read" button all present. ss_48121x074. | S824 |
-| #319/#325/#328 | Burst Clustering / Best-Photo-First / Photo Role Awareness | UNVERIFIED — needs Artifact MI (Google OAuth, Patrick present) or fresh test sale. No test accounts have active DRAFT/PUBLISHED sales. | S824 |
+| #319/#325/#328 | Burst Clustering / Best-Photo-First / Photo Role Awareness | API-VERIFIED S826 — Called /api/upload/batch-analyze (Bob Smith JWT, 3 Cloudinary URLs). DB confirmed: Item created (clusterConfidence:0.98, isSet:true, qty:3) + 3 Photos (BACK_STAMP isPrimary:true/orderIndex:0, FRONT/orderIndex:1, LABEL_BRAND/orderIndex:2). Fix working. Chrome browser UI verification still needed — requires Artifact MI (Google OAuth, Patrick present). | S826 |
+| #352 | Organizer Tagline Field | Navigated to /organizer/settings?tab=profile as Bob Smith (user2). Tagline field with 120-char counter confirmed present. PATCH /api/organizers/me {tagline: 'S826 QA Test Tagline'} → response returned tagline: 'S826 QA Test Tagline'. Reloaded page → input populated correctly from API. ss_5573wasoz. | S826 |
+| #354 | Structured Weekly Hours Model | Navigated to /organizer/settings?tab=profile as Bob Smith. Business Hours section confirmed: timezone selector (ET/CT/MT/PT/MI/AZ/AK/HI), By appointment only checkbox, 7-day time grid (Sunday-Saturday). PATCH timezone → {timezone: 'America/Detroit'} returned. PUT /api/organizers/me/hours [{dayOfWeek:1, openTime:'09:00', closeTime:'17:00'}, ...] → 3 records returned. GET /me/hours → 7 days, day6 closed confirmed. ss_5573wasoz. | S826 |
 ---
 
 ## Next Session
 
 **Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear to resume).**
 
-**S825 complete:** QA session. P1 bug found + fixed in batchAnalyzeController (#319/#325/#328 batch upload pipeline never wrote to DB). Push needed.
-
-**IMPORTANT — do NOT push plan.tsx** from S824. That push was cancelled.
+**S826 complete:** QA session. #319/#325/#328 API-verified ✅. #352 Tagline ✅ Chrome-verified. #354 Business Hours ✅ Chrome-verified. ⚠️ P2 Bug: Vercel strips UTM query params — #462/#463/#464 attribution broken. Push needed.
 
 **Patrick actions required:**
 
-1. **Push block for S825:**
+1. **Push block for S826:**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/backend/src/controllers/batchAnalyzeController.ts
    git add claude_docs/STATE.md
-   git add claude_docs/strategy/roadmap.md
-   git commit -m "fix: batchAnalyzeController add embedding:[] to item.create — fixes #319/#325/#328 batch upload pipeline (P1)"
+   git commit -m "docs: S826 wrap — #352/#354 Chrome-verified, UTM stripping P2 bug found"
    .\push.ps1
    ```
-2. **Railway will auto-redeploy** after push. Confirm backend green before next QA.
-3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-4. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
-5. **Test data cleanup:** Delete QA test sale `s82519e80a9ab3cjpah8dk5zv` (Bob Smith) after post-fix QA.
+2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
+4. **#319/#325/#328 Chrome UI:** When available with Artifact MI — go to organizer add-items, upload 3+ photos, confirm items appear with AI suggestions. This is the only remaining step.
 
 **Dispatch stubs:**
-- **Next session start:** `Skill('findasale-records')` → verify S825 findings staged correctly.
-- **#319/#325/#328 post-fix QA:** After Railway redeploy — login as any test organizer, call `/api/upload/batch-analyze` with Cloudinary URLs, verify Items + Photos created in DB with clusterConfidence, photoRole, isPrimary, orderIndex populated.
+- **UTM P2 fix:** `Skill('findasale-dev')` — investigate Vercel UTM param stripping. Check if Vercel is doing a canonical redirect stripping query params from static Next.js pages. Root cause: fetch to `/trending?utm_source=outreach` returns `opaqueredirect` (301/302) and `location.search = ""` after navigation. Fix options: (1) Vercel config to preserve query params, (2) use hash-based UTM capture, (3) capture params server-side before redirect.
+- **#319/#325/#328 Chrome QA:** `Skill('findasale-qa')` — login as Artifact MI, navigate to add-items for a sale, upload 3 photos using upload_image MCP, verify items render in UI with AI suggestions + cluster grouping.
 - **QA:** Flip Report HTML decode — needs Artifact MI + ended sale.
+- **Dev sessions clear:** Blocked Queue at 4. Next available for feature work or roadmap advance.
 
 ## Recent Sessions
+
+### S826 — QA: #319/#325/#328 API-Verified + #352/#354 Chrome-Verified + UTM P2 Bug
+
+**#319/#325/#328 API-VERIFIED:** Called `/api/upload/batch-analyze` (Bob Smith JWT, 3 Cloudinary URLs) → DB confirmed Item + 3 Photos with clusterConfidence:0.98, BACK_STAMP/FRONT/LABEL_BRAND roles, isPrimary:true on orderIndex:0. S825 embedding:[] fix confirmed working. Chrome UI still pending Artifact MI.
+
+**#352 Organizer Tagline ✅ CHROME-VERIFIED:** Field present with 120-char counter. PATCH saves (X-CSRF-Token required). Reloads with correct value. Note: GET uses `tagline || null` so empty string returns null — minor cosmetic issue, not a bug. (ss_5573wasoz)
+
+**#354 Business Hours ✅ CHROME-VERIFIED:** Timezone selector (8 options), By appointment only checkbox, 7-day time grid all present. PATCH /me accepts timezone. PUT /me/hours accepts array of {dayOfWeek, openTime, closeTime}. GET /me/hours returns 7-day data. Storefront Hours section wired. (ss_5573wasoz)
+
+**⚠️ P2 Bug Found — UTM Param Stripping (#462/#463/#464):** Vercel redirects `fetch(..., {redirect: 'manual'})` for pages with UTM query params, returning `opaqueredirect`. `location.search = ""` immediately after navigation — UTM params stripped before Next.js router receives them. `sessionStorage.fsa_utm` never written. All outreach attribution (ORGANIZER_PAGE_VIEWED logging, Vercel Analytics track() events) silently broken. Root cause unknown — not in next.config.js redirects, not in vercel.json. Needs dev investigation.
+
+**Test data cleaned:** QA item + 3 photos + S825 test sale all deleted. Tagline/timezone/hours saved for user2 are real data, no cleanup needed.
+
+**Files changed:** `claude_docs/STATE.md`
+
+---
 
 ### S825 — P1 Bug Found + Fixed: #319/#325/#328 Batch Upload Pipeline Broken
 
