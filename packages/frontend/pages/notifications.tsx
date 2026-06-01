@@ -83,9 +83,10 @@ const NotificationsPage = () => {
       setIsLoading(true);
       setIsError(false);
       try {
-        const res = await api.get('/notifications/inbox', {
-          params: { channel: selectedChannel },
-        });
+        const params: Record<string, string> = { channel: selectedChannel };
+        // Match shopper/notifications behavior: OPERATIONAL tab filters to sale alerts only
+        if (selectedChannel === 'OPERATIONAL') params.type = 'sale_alert';
+        const res = await api.get('/notifications/inbox', { params });
         setNotifications(res.data.notifications);
         setUnreadCount(res.data.unreadCount);
         setChannelUnreadCounts((prev) => ({

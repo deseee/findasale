@@ -665,6 +665,16 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     : 'Upgrade to PRO'}</span>
               </Link>
 
+              <Link
+                href="/organizer/referrals"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+                title="Refer other organizers — earn XP and 30-day tier discount"
+              >
+                <Gift size={16} className="text-amber-500" />
+                <span>Refer Organizers</span>
+              </Link>
+
               {/* Pro Tools Section — Collapsible */}
               <button
                 onClick={() => setProToolsOpen(!proToolsOpen)}
@@ -715,6 +725,15 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                   >
                     <TrendingUp size={16} className="text-purple-400" />
                     <span>Flip Report</span>
+                  </Link>
+                  <Link
+                    href="/organizer/markdown-cycles"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Auto-reduce prices after set days — PRO"
+                  >
+                    <TrendingUp size={16} className="text-purple-400" />
+                    <span>Markdown Cycles</span>
                   </Link>
                   <Link
                     href="/organizer/appraisals"
@@ -838,7 +857,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                         <span>Market Hubs</span>
                       </Link>
                       <Link
-                        href="/organizer/color-rules"
+                        href="/organizer/discount-rules"
                         className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                         onClick={() => setIsOpen(false)}
                         title="Color-tagged discount rules — TEAMS"
@@ -925,6 +944,15 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                   >
                     <Heart size={16} className="text-indigo-500" />
                     <span>Wishlist</span>
+                  </Link>
+                  <Link
+                    href="/wishlists"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Create and manage named wishlists by occasion — share publicly"
+                  >
+                    <Bookmark size={16} className="text-indigo-500" />
+                    <span>My Collections</span>
                   </Link>
                   <Link
                     href="/shopper/wishlist?tab=sellers"
@@ -1040,6 +1068,24 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                   >
                     <Zap size={16} className="text-indigo-500" />
                     <span>Early Access Cache</span>
+                  </Link>
+                  <Link
+                    href="/challenges"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Seasonal discovery challenges with XP rewards"
+                  >
+                    <Target size={16} className="text-indigo-500" />
+                    <span>Challenges</span>
+                  </Link>
+                  <Link
+                    href="/surprise-me"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Random item discovery — serendipity search"
+                  >
+                    <Sparkles size={16} className="text-indigo-500" />
+                    <span>Surprise Me</span>
                   </Link>
                   <Link
                     href="/shopper/hall-of-fame"
@@ -1215,6 +1261,24 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
           >
             <Tag size={16} className="text-warm-500" />
             <span>Pricing</span>
+          </Link>
+          <Link
+            href="/organizer/starter-kit"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            onClick={() => setIsOpen(false)}
+            title="Printable sale day guide — checklists, pricing tips, day-of runbook"
+          >
+            <BookOpen size={16} className="text-warm-500" />
+            <span>Sale Starter Kit</span>
+          </Link>
+          <Link
+            href="/ai-score"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            onClick={() => setIsOpen(false)}
+            title="Check your sale's search visibility score"
+          >
+            <Search size={16} className="text-warm-500" />
+            <span>Search Visibility</span>
           </Link>
           {!isOrganizer && (
             <button
