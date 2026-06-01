@@ -151,6 +151,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             isSet: cluster.photoIndices.length > 1,
             clusterConfidence: cluster.confidence,
             isAiTagged: true,
+            embedding: [],
           },
         });
         itemIds.push(item.id);
@@ -176,6 +177,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             quantity: 1,
             isSet: false,
             isAiTagged: true,
+            embedding: [],
           },
         });
         itemIds.push(item.id);

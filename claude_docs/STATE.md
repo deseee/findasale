@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S824 — QA session. #356 Broadcast ✅ REVERIFIED (both CTAs work — ss_10748req1/ss_4277txmmx). #214 /plan markdown ✅ already deployed in HEAD (renderMarkdown was pre-existing; S823 P2 finding retracted). Shopper dashboard ✅ all widgets (Scout rank, StreakWidget, RankBenefitsCard, Hunt Pass Active, Rare Finds). Notifications ✅. plan.tsx truncation by fix agent caught and reversed (restored to HEAD 321 lines). plan.tsx push block from S824 CANCELLED — do NOT push. #319/#325/#328 still UNVERIFIED (needs Artifact MI or test sale). Blocked Queue: 4 rows.**
+**Latest: S825 — QA session. P1 BUG FOUND + FIXED: #319/#325/#328 (Burst Clustering / Best-Photo-First / Photo Role Awareness) all broken since launch. Root cause: batchAnalyzeController.ts prisma.item.create() calls missing \`embedding: []\` field (NOT NULL, no DB default) → silent constraint violation → 0 Items and 0 Photos ever written to DB. Confirmed via: (1) created test sale for Bob Smith (user2) via psycopg2, (2) logged in via backend JWT, (3) called /api/upload/batch-analyze with real Cloudinary URLs, (4) got 200 + cluster data but 0 DB records. Fix: added \`embedding: []\` to both prisma.item.create calls (cluster + ungrouped). 0 TS errors. Needs push + Railway redeploy + Chrome re-QA. S824 Chrome verifications applied to roadmap (#356 both CTAs ✅, #214 markdown ✅). Blocked Queue: 4 rows.**
 
 **Previous: S823 — QA sweep. Railway ENV all 5 ✅. S822 Chrome verifications applied to roadmap. Full QA: Homepage ✅, #214 AI Planner ✅, Shopper dashboard ✅, #311 Multi-Location full CRUD ✅, #356 Broadcast composer ✅, #50 Loot Log ✅ (seeded Purchase, verified, cleaned). #319/#325/#328 UNVERIFIED (upload_image tool limitation). P2 bugs found: /plan markdown not rendered, Broadcast duplicate dead CTA. Blocked Queue: 4 rows.**
 
@@ -263,29 +263,48 @@ _S824 verifications applied. Items below are staged for roadmap update next sess
 
 **Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear to resume).**
 
-**S824 complete:** QA session. #356 ✅ reverified. #214 /plan markdown ✅ already deployed. Shopper dashboard + notifications ✅. plan.tsx truncation caught and reversed. Blocked Queue: 4 rows unchanged.
+**S825 complete:** QA session. P1 bug found + fixed in batchAnalyzeController (#319/#325/#328 batch upload pipeline never wrote to DB). Push needed.
 
-**IMPORTANT — do NOT push plan.tsx:** S824 fix agent truncated plan.tsx (287 lines vs HEAD 321 lines). File restored to HEAD in workspace. The push block given earlier this session for plan.tsx is CANCELLED.
+**IMPORTANT — do NOT push plan.tsx** from S824. That push was cancelled.
 
 **Patrick actions required:**
 
-1. **Push block for S824 docs only:**
+1. **Push block for S825:**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add packages/backend/src/controllers/batchAnalyzeController.ts
    git add claude_docs/STATE.md
-   git commit -m "docs: S824 wrap — QA session, #356/#214/shopper dashboard verified, plan.tsx truncation caught"
+   git add claude_docs/strategy/roadmap.md
+   git commit -m "fix: batchAnalyzeController add embedding:[] to item.create — fixes #319/#325/#328 batch upload pipeline (P1)"
    .\push.ps1
    ```
-2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
-4. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
+2. **Railway will auto-redeploy** after push. Confirm backend green before next QA.
+3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+4. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
+5. **Test data cleanup:** Delete QA test sale `s82519e80a9ab3cjpah8dk5zv` (Bob Smith) after post-fix QA.
 
 **Dispatch stubs:**
-- **Next session start:** `Skill('findasale-records')` → Apply S824 Pending Chrome Verifications (#356, #214, shopper dashboard, notifications) to roadmap.md Chrome column.
-- **#319/#325/#328:** Re-attempt with Artifact MI (Patrick present, Google OAuth). Artifact MI ENDED sale `cmom7h73l000hz36wzbruoa64` confirmed exists.
-- **QA:** Flip Report HTML decode — needs Artifact MI + ended sale (same session as photo upload).
+- **Next session start:** `Skill('findasale-records')` → verify S825 findings staged correctly.
+- **#319/#325/#328 post-fix QA:** After Railway redeploy — login as any test organizer, call `/api/upload/batch-analyze` with Cloudinary URLs, verify Items + Photos created in DB with clusterConfidence, photoRole, isPrimary, orderIndex populated.
+- **QA:** Flip Report HTML decode — needs Artifact MI + ended sale.
 
 ## Recent Sessions
+
+### S825 — P1 Bug Found + Fixed: #319/#325/#328 Batch Upload Pipeline Broken
+
+**Root cause confirmed:** `batchAnalyzeController.ts` called `prisma.item.create()` without `embedding: []`. The `embedding` column is `NOT NULL` with no DB default → silent constraint violation → try/catch swallows error → 0 Items and 0 Photos ever created in production. The S807 "CONFIRMED WORKING" finding was based on code reading only, not an actual browser test.
+
+**Evidence:** Created test DRAFT sale for Bob Smith (user2) via psycopg2. Logged in via backend JWT (`/api/auth/login`). Called `/api/upload/batch-analyze` with 5 real Cloudinary URLs (CSRF token from cookie). Got HTTP 200 + AI cluster data. Queried DB: 0 Items, 0 Photos created in last 10 minutes. Confirmed `embedding NOT NULL, no default` on Item table.
+
+**Fix applied:** Added `embedding: []` to both `prisma.item.create` calls in `batchAnalyzeController.ts` (cluster path line ~148, ungrouped path line ~173). 0 TS errors.
+
+**S824 Chrome verifications applied to roadmap:** #356 both CTAs ✅, #214 markdown ✅.
+
+**Test data:** QA test sale `s82519e80a9ab3cjpah8dk5zv` (Bob Smith / user2) — needs cleanup after post-fix QA.
+
+**Files changed:** `packages/backend/src/controllers/batchAnalyzeController.ts` · `claude_docs/STATE.md` · `claude_docs/strategy/roadmap.md`
+
+---
 
 ### S824 — QA Session: #356/#214 Reverified, Shopper Dashboard ✅, plan.tsx Truncation Caught
 
@@ -338,66 +357,4 @@ _S824 verifications applied. Items below are staged for roadmap update next sess
 
 **QA verified:** #200 public profile rank ✅ Leo Thomas shows Scout (ss_2483vbj9l). TEAMS-gated pages ✅ no error toast on /organizer/consignors (ss_75625ykar). Flip Report HTML decode UNVERIFIED (user2 has no ended sales — needs Artifact MI).
 
-**Files changed:** `packages/frontend/hooks/useCollectorPassport.ts` · `claude_docs/STATE.md` · `claude_docs/strategy/roadmap.md`
-
----
-
-### S821 — QA + Dev Session: Queue Cleared 11→4, 14 Pages Verified, 4 Bugs Fixed
-
-**Trigger:** Patrick: "start 820" (session numbered S821 — S820 slot taken by scheduled task).
-
-**Session start actions:**
-- Applied S819 Chrome verifications to roadmap.md (#59 XP fix ✅, #465 toast fix ✅, #239 test-mode ✅)
-- findasale-qa SKILL.md credentials corrected (user5-7=shoppers, Seedy2025!, user11=unclaimed organizer)
-- Investigated 11 stale Blocked Queue items: AuctionNinja confirmed enabled, OAuth UI confirmed built (S723 wrong), S722 email token migration confirmed deployed via /api/auth/me, AI enrichment had no cron, 7 items removed → 4 remain
-
-**Dev shipped:**
-1. Listing enrichment cron — `listingEnrichmentCron.ts` + `internalListingEnrichmentController.ts` + `index.ts`. Nightly 4am UTC, batch 50.
-2. Flip Report HTML entity decode — `decodeHtml()` in `[saleId].tsx`, `cat.category` + `item.category` decoded.
-3. Public profile rank fix — `collectorPassportService.ts` includes `explorerRank`+`guildXp`; `profile/[userId].tsx` uses `profile.user.explorerRank` (was wrongly derived from `totalFinds`).
-4. TEAMS-gated pages API fix — `consignors.tsx` + `locations.tsx`: `useOrganizerTier` imported, `canAccess('TEAMS')` gates the fetch.
-
-**QA verified (staged to Pending Chrome Verifications):** #464 SEO Footer ✅, #338 Comps ✅⚠️P3, #41 Flip Report ✅⚠️P2(fixed), #71 Reputation ✅, #200 Public Profile ✅⚠️P2(fixed), Shopper Dashboard ✅, Explorer Profile ✅, Notifications ✅, Trails ✅, Leaderboard ✅, /coupons ✅, POS ✅, Linked Accounts ✅, QR Analytics ✅
-
-**UNVERIFIED:** #319/#325/#328 photo upload (Artifact MI required), #50 Loot Log (no PAID purchases)
-
-**Blocked Queue:** 11→4 rows. QA ceiling lifted.
-
-**Files changed:** `packages/backend/src/jobs/listingEnrichmentCron.ts` (new) · `internalListingEnrichmentController.ts` · `index.ts` · `packages/frontend/pages/organizer/flip-report/[saleId].tsx` · `packages/backend/src/services/collectorPassportService.ts` · `packages/frontend/pages/shopper/profile/[userId].tsx` · `packages/frontend/pages/organizer/consignors.tsx` · `packages/frontend/pages/organizer/locations.tsx` · `claude_docs/STATE.md` · `claude_docs/strategy/roadmap.md` · `claude_docs/skills-package/findasale-qa/SKILL.md`
-
----
-
-### S820 — QA Cleanup: markSold Duplicate Purchase Bug + DB Purge + Backup Restore
-
-**Trigger:** Patrick noticed duplicate "Leo Thomas" Purchase entries in admin Recent Purchases panel.
-
-**Root cause found + fixed:** `reservationController.ts` validHolds filter (`line 755`) didn't check `h.item.status !== 'SOLD'`. Holds stay `CONFIRMED` after markSold, so calling markSold again on the same hold created a new Purchase. Fix: added `&& h.item.status !== 'SOLD'` to validHolds filter.
-
-**DB cleanup:**
-- 7 Yzerman duck Purchase records deleted (QA testing markSold 7 times)
-- 3 Leo Thomas (user5@example.com) Purchase records deleted
-- 5 QA test sales deleted: Barn Door QA Test Sale, QA Test Ended Sale — Donation Kit, Floor Map Test Sale — DELETE ME, "test sale", + 1 more. 30 items + all child records purged.
-- user1@test.com deleted
-
-**Accidental deletion + restore:** "Test sale don't publish" (Artifact's real draft sale, cmobpeoy9002cgxlxntgqb80s, 20 items) was deleted — was not a test sale. Restored from 3AM nightly backup: `dpkg --extract postgresql-client-17 deb → pg_restore -f /tmp/output.sql → psycopg2 COPY FROM STDIN`. Sale + all 20 items confirmed restored. Memory saved: backup restore procedure. Lesson: title "don't publish" means "keep as draft," not "throwaway."
-
-**Skills updated:** dev-environment (backup restore section added), findasale-qa (test data cleanup section — track + revert all DB mutations per QA session).
-
-**Blocked Queue:** 11 (unchanged).
-
-**Files changed (S820):** `packages/backend/src/controllers/reservationController.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-
-### S819 — QA Session: 4 Features Chrome-Verified, 1 P2 Bug Fixed
-
-**Trigger:** S819 QA-ONLY (12-row Blocked Queue). Patrick: "begin qa all of it."
-
-**Results:**
-- **StreakWidget on /coupons ✅** — XP 268 rendered and persists after reload. Fix confirmed (guildXp=268, streakPoints=0). ss_2316glwxc / ss_08734fp1w.
-- **StreakWidget XP on /shopper/dashboard ✅** — XP 268 rendered mid-page, persists after reload. ⚠️ P3: widget ~1800px down page, not above fold. ss_920700tvd / ss_7787gm81e.
-- **#465 Mark Sold toast + z-index ✅** — Toast visible, z-index fix confirmed. Item correctly flipped SOLD in DB. ⚠️ P2 FIXED: RECORD path missing settlementMode in API response → showed "1 hold updated." instead of "1 item(s) marked as sold." Fixed reservationController.ts line 901 (0 TS errors). ss_5986gdybg.
-- **#239 Multi-Consignor Settlement test-mode ✅** — Full end-to-end: per-consignor split correct ($42.50 × 70% = $29.75), created DRAFT batch, approved → COMPLETED, correct test-mode toast, live transfers blocked. DB batch COMPLETED confirmed. ss_3389d7rid / ss_84031lshl / ss_0194mucon.
-
-**Side findings:** QA skill credentials table outdated �
+**Files changed:** `p
