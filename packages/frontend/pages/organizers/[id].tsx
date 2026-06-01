@@ -469,7 +469,7 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                     Claim This Profile — It&apos;s Free
                   </button>
                   <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-                    Takes 2 minutes &middot; <strong className="text-gray-400 dark:text-gray-300">47 shoppers</strong> viewed your sales this month
+                    Free forever &middot; No credit card needed
                   </p>
                 </div>
               )}
@@ -671,7 +671,7 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
         <div className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-gray-200 dark:border-zinc-700 px-4 py-3 flex items-center gap-3 z-50 shadow-lg">
           <div className="flex-1 text-sm text-gray-700 dark:text-gray-300 leading-tight min-w-0">
             <strong className="text-warm-900 dark:text-white block truncate">{organizer.businessName}</strong>
-            <span className="text-gray-500 dark:text-gray-400">47 shoppers found you this month</span>
+            <span className="text-gray-500 dark:text-gray-400">Claim your free storefront</span>
           </div>
           <Link
             href={`/register?claim=${organizer.id}`}
