@@ -6,6 +6,15 @@ const withPWA = require('next-pwa')({
   register: false,
   skipWaiting: true,
   disable: process.env.NODE_ENV === 'development',
+  // Disable dynamic start-url re-fetching on every navigation.
+  // When true (the default), next-pwa injects a cacheOnFrontEndNav helper into
+  // main.js that calls fetch('/') on every history.pushState/replaceState.
+  // On iOS Safari with a flaky or offline connection that fetch() rejects and
+  // — because the returned promise is fire-and-forget — becomes an unhandled
+  // rejection captured by Sentry (issue 7342457975, "TypeError: Load failed").
+  // Setting this false removes the dynamic fetch entirely; the start URL is
+  // still pre-cached at SW install time via cacheStartUrl: true (default).
+  dynamicStartUrl: false,
   // Cache-first for static assets; network-first for API and navigation
   runtimeCaching: [
     // Google Fonts — cache first

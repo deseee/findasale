@@ -45,13 +45,21 @@ async function auditGeocodingFailureRate(): Promise<void> {
     }
 
     // Alert on sources with >10% failure rate
+    // Sources where geocoding failure is structurally expected (no street address in data)
+    // are suppressed from Sentry alerts — they still log to console for visibility.
+    const GEOCODING_SUPPRESSED_SOURCES = new Set([
+      'Facebook Events',  // event listings have no geocodable street address
+      'FacebookEvents',   // legacy source name (pre-S815 records)
+      'GarageSaleFinder', // 80%+ failure expected — Nominatim cannot parse their address format
+    ]);
+
     const failureThreshold = 0.1;
     const failingSources: Array<{ source: string; rate: number; total: number; nullCount: number }> = [];
 
     for (const [source, stats] of sourceStats.entries()) {
       if (stats.total > 10) {
         const failureRate = stats.nullCount / stats.total;
-        if (failureRate > failureThreshold) {
+        if (failureRate > failureThreshold && !GEOCODING_SUPPRESSED_SOURCES.has(source)) {
           failingSources.push({
             source,
             rate: failureRate,
