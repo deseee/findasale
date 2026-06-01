@@ -285,20 +285,47 @@ function RateLimitListener() {
  * (Fixes #462/#463/#464 — outreach attribution silently broken on Vercel.)
  */
 function UTMCapture() {
-  // Capture from window.location.search immediately on mount — before any
-  // client-side redirect (redirectCount=3 observed in prod) strips the params
-  // from router.query. This runs synchronously on the very first render while
-  // the original URL is still in the address bar.
+  // #462/#463/#464 — Two-source UTM capture:
+  //
+  // Source 1 (primary): window.location.search — works when React boots before any redirect.
+  // Source 2 (fallback): fsa_utm_pending cookie — set by middleware.ts at the Edge BEFORE
+  //   any Vercel/Next.js redirect fires. Survives the redirect chain that strips query params
+  //   from window.location.search.
+  //
+  // Reading both ensures attribution is captured regardless of which redirect scenario fires.
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const params = new URLSearchParams(window.location.search);
-    const utm_source = params.get('utm_source') ?? undefined;
-    const utm_medium = params.get('utm_medium') ?? undefined;
-    const utm_campaign = params.get('utm_campaign') ?? undefined;
-    const utm_content = params.get('utm_content') ?? undefined;
-    const ref = params.get('ref') ?? undefined;
-    const saleId = params.get('saleId') ?? undefined;
+    // --- Source 1: URL params (fast path) ---
+    const urlParams = new URLSearchParams(window.location.search);
+    let utm_source = urlParams.get('utm_source') ?? undefined;
+    let utm_medium = urlParams.get('utm_medium') ?? undefined;
+    let utm_campaign = urlParams.get('utm_campaign') ?? undefined;
+    let utm_content = urlParams.get('utm_content') ?? undefined;
+    let ref = urlParams.get('ref') ?? undefined;
+    const saleId = urlParams.get('saleId') ?? undefined;
+
+    // --- Source 2: Cookie fallback (survives redirect stripping) ---
+    if (!utm_source && !utm_medium && !utm_campaign && !utm_content) {
+      try {
+        const cookieMatch = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('fsa_utm_pending='));
+        if (cookieMatch) {
+          const raw = decodeURIComponent(cookieMatch.split('=').slice(1).join('='));
+          const parsed = JSON.parse(raw);
+          utm_source = parsed.utm_source;
+          utm_medium = parsed.utm_medium;
+          utm_campaign = parsed.utm_campaign;
+          utm_content = parsed.utm_content;
+          ref = parsed.ref;
+          // Immediately expire the cookie — read once, don't persist
+          document.cookie = 'fsa_utm_pending=; path=/; max-age=0; SameSite=Lax';
+        }
+      } catch {
+        // Non-fatal — cookie may be malformed
+      }
+    }
 
     if (!utm_source && !utm_medium && !utm_campaign && !utm_content) return;
 
@@ -322,7 +349,7 @@ function UTMCapture() {
     if (utm_campaign) pixelParams.append('utm_campaign', utm_campaign);
     if (utm_content) pixelParams.append('utm_content', utm_content);
     fetch(`/api/link-clicks/record?${pixelParams}`, { method: 'GET' }).catch(() => {});
-  }, []); // Empty deps — run once on mount, before any redirect clears the URL
+  }, []); // Empty deps — run once on mount
 
   return null;
 }
@@ -414,7 +441,4 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
         </AuthProvider>
       </ToastProvider>
     </SessionProvider>
-  );
-}
-
-export default MyApp;
+  
