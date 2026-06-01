@@ -155,34 +155,6 @@ const AdminDisputesPage = () => {
     setEditResolution(dispute.resolution || '');
   };
 
-  if (!isLoading && !isLoadingDisputes && disputes.length === 0) {
-    return (
-      <>
-        <Head>
-          <title>Disputes | Admin Panel | FindA.Sale</title>
-        </Head>
-        <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
-          <div className="max-w-6xl mx-auto px-4">
-            <div className="mb-6 flex items-center justify-between">
-              <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">Disputes</h1>
-              <Link
-                href="/admin"
-                className="text-amber-600 hover:text-amber-700 font-medium"
-              >
-                Back to Admin
-              </Link>
-            </div>
-
-            <EmptyState
-              heading="No Disputes"
-              subtext="No disputes have been reported yet."
-            />
-          </div>
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       <Head>
@@ -244,6 +216,11 @@ const AdminDisputesPage = () => {
               </div>
               <p className="mt-4 text-warm-600 dark:text-warm-400">Loading disputes...</p>
             </div>
+          ) : disputes.length === 0 ? (
+            <EmptyState
+              heading={filterStatus ? `No ${getStatusLabel(filterStatus)} Disputes` : 'No Disputes'}
+              subtext={filterStatus ? `There are no disputes with status "${getStatusLabel(filterStatus)}". Try another filter.` : 'No disputes have been reported yet.'}
+            />
           ) : (
             <>
               <div className="space-y-4">
