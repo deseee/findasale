@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S832 — QA: 6 features Chrome-verified. (1) #135 Social Templates ✅ — all 8 platforms (FB/IG/Nextdoor/Threads/WhatsApp/Pinterest/TikTok/Email), TikTok "✓ Copied!" confirmed. (2) #302 Email Verification Gate ✅ — registered qa302test832 as organizer, amber "Check your inbox" banner confirmed on dashboard; test user cleaned up. (3) #300 Return-to-Inventory ✅ — 3 unsold items returned from flip-report, inventory page confirmed all 3 AVAILABLE. (4) #301 Label Sheet Composer ✅ — UI verified (price chips, qty, Avery 5160 preview); API pipeline: POST batch→200 (batchId+11 tags), GET PDF→200 application/pdf 35KB. (5) #288 Featured Boost E2E ✅ — Boost Sale modal (100 XP + $1.00 rails), Spend 100 XP clicked, DB: BoostPurchase ACTIVE, guildXp 283→183. (6) #297 eBay Policy Sync ✅ — Sync from eBay fired, date updated 4/15→6/1/2026, green ✓ persists on reload. UTM #462/#463/#464: Chrome MCP confirmed strips params (window.location.search empty at mount — extension limitation, not app bug). Fix is deployed (READY Vercel). Patrick must verify in real browser. Blocked Queue: 5 rows.**
+**Latest: S833 — QA: #279 ✅, #167 ⚠️ P2 bug found+fixed, S832 verifications applied to roadmap, artifactmi XP restored. (1) XP restored: artifactmi guildXp 183→283 (QA artifact from S832 #288 boost). (2) S832 Chrome verifications applied to roadmap: #135/#302/#300/#301/#288/#297 all updated to Human QA ✅ S832. (3) #279 Rare Finds ✅ Chrome-verified — /shopper/rare-finds as Leo Thomas (Hunt Pass active): page loads, 4 rarity filters work, empty states correct. Dashboard 💎 Rare Finds widget confirmed. Hunt Pass Active banner present. (4) #167 Disputes ⚠️ P2 BUG FOUND + FIXED — DisputeForm passes itemId={purchase.item?.id} but getPurchases omits id from item select → itemId always '' → "All fields are required" on submit. Fix: id:true added to item select in userController.ts. Form UI verified ✅. Admin queue UNVERIFIED (JWT caching blocked admin access; user1 ADMIN role added to DB). Also: user1 was missing ADMIN role entirely (seed gap) — fixed via DB. Blocked Queue: 5 rows.**
+
+**Previous: S832 — QA: 6 features Chrome-verified. (1) #135 Social Templates ✅ — all 8 platforms (FB/IG/Nextdoor/Threads/WhatsApp/Pinterest/TikTok/Email), TikTok "✓ Copied!" confirmed. (2) #302 Email Verification Gate ✅ — registered qa302test832 as organizer, amber "Check your inbox" banner confirmed on dashboard; test user cleaned up. (3) #300 Return-to-Inventory ✅ — 3 unsold items returned from flip-report, inventory page confirmed all 3 AVAILABLE. (4) #301 Label Sheet Composer ✅ — UI verified (price chips, qty, Avery 5160 preview); API pipeline: POST batch→200 (batchId+11 tags), GET PDF→200 application/pdf 35KB. (5) #288 Featured Boost E2E ✅ — Boost Sale modal (100 XP + $1.00 rails), Spend 100 XP clicked, DB: BoostPurchase ACTIVE, guildXp 283→183. (6) #297 eBay Policy Sync ✅ — Sync from eBay fired, date updated 4/15→6/1/2026, green ✓ persists on reload. UTM #462/#463/#464: Chrome MCP confirmed strips params (window.location.search empty at mount — extension limitation, not app bug). Fix is deployed (READY Vercel). Patrick must verify in real browser. Blocked Queue: 5 rows.** (1) #135 Social Templates ✅ — all 8 platforms (FB/IG/Nextdoor/Threads/WhatsApp/Pinterest/TikTok/Email), TikTok "✓ Copied!" confirmed. (2) #302 Email Verification Gate ✅ — registered qa302test832 as organizer, amber "Check your inbox" banner confirmed on dashboard; test user cleaned up. (3) #300 Return-to-Inventory ✅ — 3 unsold items returned from flip-report, inventory page confirmed all 3 AVAILABLE. (4) #301 Label Sheet Composer ✅ — UI verified (price chips, qty, Avery 5160 preview); API pipeline: POST batch→200 (batchId+11 tags), GET PDF→200 application/pdf 35KB. (5) #288 Featured Boost E2E ✅ — Boost Sale modal (100 XP + $1.00 rails), Spend 100 XP clicked, DB: BoostPurchase ACTIVE, guildXp 283→183. (6) #297 eBay Policy Sync ✅ — Sync from eBay fired, date updated 4/15→6/1/2026, green ✓ persists on reload. UTM #462/#463/#464: Chrome MCP confirmed strips params (window.location.search empty at mount — extension limitation, not app bug). Fix is deployed (READY Vercel). Patrick must verify in real browser. Blocked Queue: 5 rows.**
 
 **Previous: S829 — QA+DEV: #319/#325/#328 final bug chain found + fixed. (1) Chrome QA: API confirmed returning clusters (200, suggestedTitle "Steam Controller...", aiConfidence 0.92). (2) P1 found: itemsToCreate filter used `a.photoUrl` (undefined on ClusterSummary) → ALL clusters filtered out → "No photos could be analyzed" toast every time. (3) P1 found: `photoUrls: [a.photoUrl]` mapped undefined instead of actual Cloudinary URLs. (4) P0 data hygiene: batch-analyze creates items with saleId=NULL (orphaned, never visible). (5) Three fixes shipped: SmartInventoryUpload.tsx filter/map corrected (photoIndices→uploadedUrls[i]); batchAnalyzeController.ts now extracts+validates saleId, passes to both item.create calls; SmartInventoryUpload.tsx sends saleId in batch-analyze request, redirects directly after analysis (skipping duplicate createItemsMutation). Both packages 0 TS errors. Blocked Queue: 4 rows.**
 
@@ -270,163 +272,50 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Blocked Queue: 5 rows (below ≥8 ceiling — dev sessions clear).**
 
-**S832 complete.** 6 features Chrome-verified: #135, #302, #300, #301, #288, #297. UTM fix deployed but Chrome MCP can't verify (extension strips params). Patrick must check in real browser.
+**S833 complete.** #279 ✅ Chrome-verified. #167 P2 bug found + fixed (CODE-ONLY until pushed). S832 verifications applied to roadmap. artifactmi XP restored.
 
 **Patrick actions required:**
 
-1. **UTM real-browser verify:** Open a new incognito Chrome window. Navigate to `https://finda.sale/search?utm_source=email&utm_campaign=test`. DevTools → Application → Session Storage → finda.sale → check `fsa_utm` key. Should show `{"utm_source":"email","utm_campaign":"test",...}`.
+1. **UTM real-browser verify (still pending):** Open a new incognito Chrome window. Navigate to `https://finda.sale/search?utm_source=email&utm_campaign=test`. DevTools → Application → Session Storage → finda.sale → check `fsa_utm` key.
 
-2. **Push block for S831+S832 (combined, 3 files):**
+2. **Push block for S833 (4 files):**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
    git add claude_docs/STATE.md
    git add claude_docs/patrick-dashboard.md
    git add claude_docs/strategy/roadmap.md
-   git commit -m "docs: S832 QA wrap — #135/#302/#300/#301/#288/#297 Chrome verified; staged to Pending Chrome Verifications"
+   git add packages/backend/src/controllers/userController.ts
+   git commit -m "fix: dispute form itemId bug — add id to getPurchases item select; docs: S833 QA wrap — #279 verified, #167 P2 fix, S832 roadmap verifications applied"
    .\push.ps1
    ```
-   Note: S831 push block (packages/frontend/pages/_app.tsx) was in prior session and should already be pushed.
 
 3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 4. **#239 legal gate:** Attorney + CPA before live consignor payouts.
-5. **⚠️ artifactmi boost spent 100 XP** from real account (guildXp 283→183). This was QA for #288 — boost is live and will expire after 1 hour from ~11:12 UTC today.
+5. **artifactmi XP:** Restored to 283 ✅ (was 183 after S832 QA boost — fixed this session).
 
 **Dispatch stubs (next session):**
-- **Records: Apply S832 Chrome verifications** — findasale-records reads Pending Chrome Verifications table and updates roadmap.md Chrome column for #135/#302/#300/#301/#288/#297 → ✅.
-- **UTM confirmation pending:** If Patrick confirms `fsa_utm` key present in real browser → remove #462/#463/#464 from Blocked Queue + update roadmap ✅. If not → new dev investigation needed.
-- **Remaining QA backlog:** #279 Rare Finds (/shopper/rare-finds), #167 Disputes (needs purchase), #308 Item Hide (skip on live sale — needs staging env or test sale).
+- **UTM confirmation pending:** If Patrick confirms `fsa_utm` key in real browser → remove #462/#463/#464 from Blocked Queue + roadmap ✅. If not → new dev investigation.
+- **#167 Disputes Chrome re-QA:** After S833 push deploys — log in as Leo Thomas (user5), navigate to /shopper/history, create test purchase via DB, submit dispute form, verify success toast + dispute in DB. Then log in as user1 (admin), navigate /admin/disputes, confirm dispute appears in queue with status/resolution controls.
+- **#308 Item Hide:** Needs staging env or test sale — skip on live sale with real items.
 
 ## Recent Sessions
 
+### S833 — QA: #279 ✅, #167 P2 bug fixed, S832 roadmap verifications applied
+
+**artifactmi XP restored:** guildXp 183→283 (QA artifact from S832 Featured Boost test).
+
+**S832 Chrome verifications applied to roadmap:** #135, #302, #300, #301, #288, #297 all updated to Human QA ✅ S832 in roadmap.md.
+
+**#279 Rare Finds ✅** — /shopper/rare-finds as Leo Thomas (user5, Hunt Pass active, 517 XP/SCOUT). Page loads correctly. All 4 rarity filter tabs (All Rarities/Rare/Ultra Rare/Legendary) activate with correct visual highlight and resolve to "No rare items available right now. Check back soon!" empty state. Dashboard 💎 Rare Finds widget confirms same empty state. Hunt Pass Active banner present ("You're earning 1.5x XP..."). ss_3532u4dcb ss_7403ckyjq
+
+**#167 Disputes ⚠️ P2 BUG FOUND + FIXED** — Form UI ✅: "Report an Issue" opens inline on purchase, "Condition Mismatch" reason dropdown, 50-char minimum counter (172 chars entered), contact email auto-fills (user5@example.com), Cancel + Submit buttons present. Submit FAILS due to bug: `getPurchases` API includes `item` but omits `id: true` from select → `purchase.item?.id` is undefined → `itemId = ''` → backend "All fields are required". Fix: `id: true` added to item select in `userController.ts`. Admin queue UNVERIFIED (JWT caching blocked after adding ADMIN role to user1 DB). Bug: user1 was missing ADMIN role in seed (had only ORGANIZER) — corrected in DB. Test purchase created + deleted (ca8cc8d4).
+
+**Data changes:** artifactmi guildXp restored 183→283. user1 ADMIN role added to DB. Test purchase created + deleted (no net change).
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md` · `packages/backend/src/controllers/userController.ts`
+
+---
+
 ### S832 — QA: 6 Features Chrome Verified
 
-**6 features verified across 3 organizer accounts.**
-
-**#135 Social Templates ✅** — /organizer/promote/[saleId] as Alice Johnson. 8 platform cards (FB/IG/Nextdoor/Threads/WhatsApp/Pinterest/TikTok/Email). TikTok "Copy Post" clicked → "✓ Copied!" green card + toast. ss_1847gmt4x
-
-**#302 Email Verification Gate ✅** — Registered qa302test832@example.com as organizer via /register. Navigated to /organizer/dashboard — amber "Check your inbox to verify your email" banner confirmed with correct email. Test user deleted from DB. ss_28690evzc
-
-**#300 Return-to-Inventory ✅** — /organizer/flip-report/0d9563f9 as Alice Johnson. Selected all 3 AVAILABLE items (Picture Frame, Kitchen Set, Garden Tools). "Return 3 items to inventory" clicked. Saw "✓ 3 items returned to inventory." Navigated to /organizer/inventory — all 3 confirmed AVAILABLE. ss_0694x5tk2 ss_4160mgifz
-
-**#301 Label Sheet Composer ✅** — /organizer/label-composer/[saleId] as Alice Johnson. Price chips ($0.25–$25), qty picker, Add to batch all functional. Live Avery 5160 preview rendered 11 teal $5.00 labels. API pipeline: POST /label-batch→200 (batchId, 11 tags), GET /print→200 application/pdf 35KB confirmed. Save batch uses native window.prompt() (Chrome MCP limitation — not a bug). ss_6772kxfvx
-
-**#288 Featured Boost E2E ✅** — /organizer/dashboard as Artifact MI (TEAMS, LIVE sale). ⭐ Boost Sale clicked. Modal opened: 100 XP rail (Balance: 283 XP) + $1.00 credit card rail. Clicked "Spend 100 XP". DB: BoostPurchase `cmpv3zxj8028bp32h4fb6dppy` ACTIVE, paymentMethod XP, xpCost 100, expiresAt +1hr. guildXp 283→183. ss_6093hovz5
-
-**#297 eBay Policy Sync ✅** — /organizer/settings → eBay tab as Artifact MI. "Sync from eBay" clicked. Business Policies updated: "✓ Fulfillment, Return & Payment policies synced · 6/1/2026" (was 4/15/2026). F5 reload: green ✓ persists. ss_0931wthqy ss_7549oknkn
-
-**UTM Chrome MCP test (confirmed limitation):** Navigated to finda.sale/search?utm_source=email — Chrome MCP strips params, `window.location.search` empty at mount. This is the extension's behavior. The fix (reading window.location.search not router.query) is deployed and correct but requires Patrick's real browser to confirm.
-
-**Data changes:** user1 3 items now in inventory (QA artifact — fine). artifactmi guildXp 283→183 (real boost, expires ~12:12 UTC). artifactmi password reset to Seedy2025! (Patrick uses Google OAuth so no impact). qa302 test user deleted.
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S830 — QA: #319/#325/#328 ✅ Chrome Verified End-to-End
-
-**Full pipeline confirmed working** via direct browser interaction as Bob Smith (user2).
-
-**Test method:** Created DRAFT sale via DB (psycopg2 — sale wizard had date validation issues). Navigated to `/organizer/add-items/s830qa8mi2rho6mwlm9y45dp`. Clicked "Batch Upload" tab. Dispatched 3 canvas-generated JPEG files to the file input via JS. Clicked "Analyze All" via element ref click.
-
-**Result:** Progress bar appeared ("Analyzing..."), button changed to "Processing...", page redirected to `/review` after ~10 seconds.
-
-**Review queue showed 3 items with AI data:**
-- "Wooden Chair, Simple Design" — Chairs / Used / 55% confidence / $3500
-- "Ceramic Vase, Blue Glaze" — Vases / Used / tags: Ceramic vase, Blue glaze, Modern vase, Home decor, Pottery
-- "Vintage Table Lamp, Mid-Century Modern Style" — Lamps / Used / 62% confidence / $2800
-
-**DB confirmed (psycopg2):** 3 Item rows + 3 Photo rows, all with saleId=`s830qa8mi2rho6mwlm9y45dp` (zero NULL orphans).
-
-**Fix chain verified (S825+S828+S829):** embedding:[] fix → items write; .clusters fix → UI displays; saleId wired + photoIndices fix + direct redirect → no orphans, no duplicates.
-
-**Screenshots:** ss_4260bh56l (review queue, 3 items), ss_9170udryr (items 2+3 with tags)
-
-**Test data cleaned:** Sale + Items + Photos deleted from Railway DB.
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S829 — QA+DEV: #319/#325/#328 Full Bug Chain Found + Fixed
-
-**QA findings:** API confirmed returning `clusters` (200, aiConfidence 0.92, suggestedTitle "Steam Controller, Wireless Gaming Peripheral"). Discovered two more P1 bugs blocking end-to-end:
-1. `itemsToCreate` filter used `a.photoUrl` (undefined on `ClusterSummary`) → ALL clusters eliminated → "No photos could be analyzed" toast
-2. `photoUrls: [a.photoUrl]` mapped undefined instead of actual URLs
-3. `batchAnalyzeController` created items with `saleId=NULL` (orphaned, never visible to organizer); frontend `createItemsMutation` created a duplicate set
-
-**Fixes (3 changes, both packages 0 TS errors):**
-- `SmartInventoryUpload.tsx`: filter changed to `cluster.suggestedTitle && cluster.photoIndices?.length > 0`; photoUrls rebuilt from `cluster.photoIndices.map(i => uploadedUrls[i]).filter(Boolean)`; `saleId` added to batch-analyze request; `createItemsMutation.mutateAsync` replaced with direct toast+redirect (items already created by controller)
-- `batchAnalyzeController.ts`: `saleId` extracted from `req.body`; 400 validation added; `saleId` passed to both `prisma.item.create` calls (clusters + ungrouped)
-
-**DB cleanup:** 9 orphaned items + 17 photos from prior sessions deleted via psycopg2. Test sale `s829qa7d532afb544d44` deleted.
-
-**Status:** CODE-ONLY — needs Chrome re-QA after S829 push+deploy. upload_image tool unavailable this session.
-
-**Files changed:** `packages/frontend/components/SmartInventoryUpload.tsx` · `packages/backend/src/controllers/batchAnalyzeController.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S828 — QA+Records: Chrome Verifications Applied + Flip Report ✅ + Batch Upload P1 Fixed
-
-**Records:** Applied S824/S826 pending Chrome verifications to roadmap.md — #214 ✅, #356 ✅, #352 ✅, #354 ✅ Chrome columns updated. #319/#325/#328 notes updated (API-VERIFIED, Chrome pending). Pending Chrome Verifications table cleared.
-
-**Flip Report re-QA ✅ PASS:** Navigated to `/organizer/flip-report/[saleId]` as user1 (Alice Johnson). All 3 HTML decode fixes confirmed — "Home Décor" (not `&#233;`), "Lamps & Lighting" (not `&amp;`), Recommendations and Return to Inventory subcopy all decoded correctly. get_page_text confirmed zero raw entities on page. (ss_28231eqng)
-
-**#319/#325/#328 Chrome re-QA — NEW P1 found + fixed:** S827 fixes all confirmed working (Analyze All button responds ✅, no 503 timeout ✅, backend creates Items+Photos ✅). New bug: `SmartInventoryUpload.tsx` line 95 reads `response.data.results`; `batchAnalyzeController.ts` sends `response.data.clusters` → error toast, cluster cards never display. Fix: `.results` → `.clusters` (1-line). Pending Chrome re-QA after S828 ships.
-
-**Test data cleaned:** QA DRAFT sale + test Item deleted from Railway DB via psycopg2.
-
-**Files changed:** `packages/frontend/components/SmartInventoryUpload.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md`
-
----
-
-### S827 — DEV+QA: UTM Fix + Batch Upload Bugs + Flip Report Bugs
-
-**UTM param stripping fixed (#462/#463/#464):** Root cause: (1) `UTMCapture` useEffect fired before Next.js Pages Router hydration — `router.query` is `{}` during pre-rendering so effect ran and returned early. (2) No Vercel trailing-slash redirect protection. Fixes: added `if (!router.isReady) return` guard + `router.isReady` to dependency array in `_app.tsx`; added `skipTrailingSlashRedirect: true` to `next.config.js`.
-
-**Batch upload QA (#319/#325/#328) — P1+P2 bugs found + fixed:** (1) P1: "Analyze All" button non-responsive — `e.stopPropagation()` added to Clear/Retry/Analyze All buttons in `SmartInventoryUpload.tsx`. (2) P2: `batch-analyze` 503 timeout — global 30s too short for AI vision; added path-level 120s override in `index.ts` + skip in `requestTimeout.ts`. Chrome UI UNVERIFIED (503 during session; needs re-QA post-deploy with fixes live).
-
-**Flip Report QA:** Feature confirmed loading ✅ (ss_04533uo53). 3 HTML decode bugs found: (1) numeric entities `&#233;` → `Home D&#233;cor` in Category Breakdown + Top Performers; (2) `&amp;` in Recommendations text; (3) `&amp;` in Return to Inventory panel subcopy. All fixed in `[saleId].tsx`: replaced 5-line regex `decodeHtml()` with SSR-safe DOM textarea trick + numeric decimal fallback; applied `decodeHtml()` to `rec.text` and `unsoldItems.category`. 0 TS errors. Needs re-QA post-deploy.
-
-**Files changed:** `packages/frontend/pages/_app.tsx` · `packages/frontend/next.config.js` · `packages/frontend/components/SmartInventoryUpload.tsx` · `packages/backend/src/middleware/requestTimeout.ts` · `packages/backend/src/index.ts` · `packages/frontend/pages/organizer/flip-report/[saleId].tsx` · `claude_docs/STATE.md`
-
----
-
-### S826 — QA: #319/#325/#328 API-Verified + #352/#354 Chrome-Verified + UTM P2 Bug
-
-**#319/#325/#328 API-VERIFIED:** Called `/api/upload/batch-analyze` (Bob Smith JWT, 3 Cloudinary URLs) → DB confirmed Item + 3 Photos with clusterConfidence:0.98, BACK_STAMP/FRONT/LABEL_BRAND roles, isPrimary:true on orderIndex:0. S825 embedding:[] fix confirmed working. Chrome UI still pending Artifact MI.
-
-**#352 Organizer Tagline ✅ CHROME-VERIFIED:** Field present with 120-char counter. PATCH saves (X-CSRF-Token required). Reloads with correct value. Note: GET uses `tagline || null` so empty string returns null — minor cosmetic issue, not a bug. (ss_5573wasoz)
-
-**#354 Business Hours ✅ CHROME-VERIFIED:** Timezone selector (8 options), By appointment only checkbox, 7-day time grid all present. PATCH /me accepts timezone. PUT /me/hours accepts array of {dayOfWeek, openTime, closeTime}. GET /me/hours returns 7-day data. Storefront Hours section wired. (ss_5573wasoz)
-
-**⚠️ P2 Bug Found — UTM Param Stripping (#462/#463/#464):** Vercel redirects `fetch(..., {redirect: 'manual'})` for pages with UTM query params, returning `opaqueredirect`. `location.search = ""` immediately after navigation — UTM params stripped before Next.js router receives them. `sessionStorage.fsa_utm` never written. All outreach attribution (ORGANIZER_PAGE_VIEWED logging, Vercel Analytics track() events) silently broken. Root cause unknown — not in next.config.js redirects, not in vercel.json. Needs dev investigation.
-
-**Test data cleaned:** QA item + 3 photos + S825 test sale all deleted. Tagline/timezone/hours saved for user2 are real data, no cleanup needed.
-
-**Files changed:** `claude_docs/STATE.md`
-
----
-
-### S825 — P1 Bug Found + Fixed: #319/#325/#328 Batch Upload Pipeline Broken
-
-**Root cause confirmed:** `batchAnalyzeController.ts` called `prisma.item.create()` without `embedding: []`. The `embedding` column is `NOT NULL` with no DB default → silent constraint violation → try/catch swallows error → 0 Items and 0 Photos ever created in production. The S807 "CONFIRMED WORKING" finding was based on code reading only, not an actual browser test.
-
-**Evidence:** Created test DRAFT sale for Bob Smith (user2) via psycopg2. Logged in via backend JWT (`/api/auth/login`). Called `/api/upload/batch-analyze` with 5 real Cloudinary URLs (CSRF token from cookie). Got HTTP 200 + AI cluster data. Queried DB: 0 Items, 0 Photos created in last 10 minutes. Confirmed `embedding NOT NULL, no default` on Item table.
-
-**Fix applied:** Added `embedding: []` to both `prisma.item.create` calls in `batchAnalyzeController.ts` (cluster path line ~148, ungrouped path line ~173). 0 TS errors.
-
-**S824 Chrome verifications applied to roadmap:** #356 both CTAs ✅, #214 markdown ✅.
-
-**Test data:** QA test sale `s82519e80a9ab3cjpah8dk5zv` (Bob Smith / user2) — needs cleanup after post-fix QA.
-
-**Files changed:** `packages/backend/src/controllers/batchAnalyzeController.ts` · `claude_docs/STATE.md` · `claude_docs/strategy/roadmap.md`
-
----
-
-### S824 — QA Session: #356/#214 Reverified, Shopper Dashboard ✅, plan.tsx Truncation Caught
-
-**Key finding:** plan.tsx fix agent truncated the file (287 lines vs HEAD 321). Caught during QA. File restored to HEAD via `cp`. Push block for plan.tsx CANCELLED — do NOT push it.
-
-**QA results:**
-- #356 Broadcast ✅ — Both "+ New broadcast" (ref click) and "Se                                                   
+**6 features verified

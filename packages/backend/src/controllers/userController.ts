@@ -39,6 +39,7 @@ export const getPurchases = async (req: AuthRequest, res: Response) => {
       include: {
         item: {
           select: {
+            id: true,
             title: true,
             photoUrls: true,
           },

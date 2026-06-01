@@ -2,49 +2,56 @@
 
 ---
 
-## What Happened This Week
+## What Happened This Session (S833)
 
-S832 was a full QA sweep. 6 features verified end-to-end in Chrome:
+Quick QA session. Three things done:
 
-**Social Templates (#135):** The Promote page (where organizers share sales on social media) has all 8 platforms working — Facebook, Instagram, Nextdoor, Threads, WhatsApp, Pinterest, TikTok, Email. Clicking any of them copies a ready-to-post message to the clipboard and shows a green "Copied!" confirmation.
+**artifactmi XP restored:** The S832 #288 Featured Boost QA spent 100 real XP from your account (283→183). Fixed — restored to 283.
 
-**Email Verification Gate (#302):** New organizer accounts correctly see an amber "Check your inbox" banner on their dashboard until they verify. Confirmed by registering a fresh test account.
+**S832 verifications applied to roadmap:** The 6 features verified last session (#135 Social Templates, #302 Email Gate, #300 Return-to-Inventory, #301 Label Composer, #288 Featured Boost, #297 eBay Policy Sync) are now marked ✅ Human QA in roadmap.md.
 
-**Return-to-Inventory (#300):** From the Flip Report, organizers can select unsold items and return them to persistent inventory. Tested full flow — 3 items returned, all confirmed in inventory page as AVAILABLE.
+**#279 Rare Finds ✅ verified:** Tested as Leo Thomas (test shopper with Hunt Pass active). The /shopper/rare-finds page loads correctly, all 4 rarity filter tabs work, and the Rare Finds widget shows on the shopper dashboard alongside the Hunt Pass Active banner.
 
-**Label Sheet Composer (#301):** The price-tag label builder works end-to-end. Price chips, quantity picker, live Avery 5160 sheet preview, and the backend PDF generation all confirmed (35KB PDF returned on export).
+**#167 Disputes — P2 bug found and fixed:** The dispute submission form opens correctly (shows the item, validates 50-char minimum, auto-fills your email), but submitting always fails with "All fields are required." Root cause: the API that loads your purchase history was returning item data without the item's ID — so the form was sending an empty itemId to the backend. One-line fix applied to userController.ts. Needs to be pushed and verified after deploy.
 
-**Featured Boost E2E (#288):** The ⭐ Boost Sale flow works completely. Clicked on your Artifact Downtown Paw Paw sale, selected the 100 XP rail, confirmed the boost is ACTIVE in the database. Note: this spent 100 XP from your real artifactmi account (283 → 183 XP).
-
-**eBay Policy Sync (#297):** The "Sync from eBay" button on your eBay settings page works — it refreshed your policy sync date to today (6/1/2026) and the green checkmark persists after page reload.
-
-The UTM attribution fix is deployed to Vercel (confirmed READY). The Chrome extension can't test it because it strips URL query params during navigation. This is a Cowork extension limitation, not an app bug. The fix is correct — you just need to confirm it in your regular Chrome browser.
+Also found: user1 (the admin test account) was missing the ADMIN role entirely — it only had ORGANIZER. Fixed in the database.
 
 ---
 
 ## Action Items for Patrick
 
-- [ ] **Verify UTM tracking (60 seconds):** Open a new incognito window in regular Chrome. Go to `https://finda.sale/search?utm_source=email&utm_campaign=test`. Open DevTools (F12) → Application tab → Session Storage → finda.sale. Check for key `fsa_utm` — should contain `{"utm_source":"email","utm_campaign":"test",...}`. Report back what you see.
-- [ ] **Push block for S832:**
-  ```powershell
-  cd C:\Users\desee\ClaudeProjects\FindaSale
-  git add claude_docs/STATE.md
-  git add claude_docs/patrick-dashboard.md
-  git commit -m "docs: S832 QA wrap — #135/#302/#300/#301/#288/#297 Chrome verified"
-  .\push.ps1
-  ```
-  Note: The S831 push block (4 files including _app.tsx UTM fix) should already be pushed from last session. If not, push those first.
-- [ ] **GBP phone verification:** business.google.com → "Verify now" → phone code
-- [ ] **#239 legal gate:** Attorney + CPA sign-off before live consignor payouts
+- [ ] **Verify UTM tracking (60 seconds):** Open a new incognito window in regular Chrome. Go to `https://finda.sale/search?utm_source=email&utm_campaign=test`. Open DevTools (F12) → Application → Session Storage → finda.sale. Look for key `fsa_utm` with `{"utm_source":"email",...}`.
+- [ ] **GBP phone verification:** business.google.com → "Verify now" → enter phone code.
+- [ ] **#239 legal gate:** Attorney + CPA sign-off before live consignor payouts go live.
+- [ ] **Push block for S833:**
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git add packages/backend/src/controllers/userController.ts
+git commit -m "fix: dispute form itemId bug — add id to getPurchases item select; docs: S833 QA wrap — #279 verified, #167 P2 fix, S832 roadmap verifications applied"
+.\push.ps1
+```
 
 ---
 
-## Blocked Queue (5 items — dev sessions clear)
+## Platform Health
 
-| Feature | What's Blocking It |
-|---------|-------------------|
-| RSVP XP Monthly Cap | Need 5 RSVPs in one month to test the cap |
-| Shopify Cross-Listing | Need a test Shopify store connected |
-| eBay Post-Sale Panel | Need a completed sale with eBay items |
-| Consignor Payout Email | Need to run a payout to a real email address |
-| UTM Attribution | Needs your real-browser verify (see above) |
+- **Blocked Queue:** 5 items (well below the 8-item QA ceiling — dev is unblocked)
+- **Backend:** Railway — healthy
+- **Frontend:** Vercel — healthy, UTM fix deployed
+- **QA backlog remaining:** #167 Disputes (re-verify after this push deploys), #308 Item Hide (needs test environment)
+
+---
+
+## Recent Sessions
+
+| Session | Type | Outcome |
+|---------|------|---------|
+| S833 | QA | #279 ✅, #167 P2 bug fixed, S832 roadmap applied, XP restored |
+| S832 | QA | 6 features Chrome-verified (#135/#302/#300/#301/#288/#297) |
+| S831 | QA+Dev | UTM fix shipped, batch upload re-QA, flip report bugs fixed |
+| S830 | QA | #319/#325/#328 batch upload ✅ Chrome-verified end-to-end |
+| S829 | QA+Dev | Batch upload P1 bug chain found + fixed (3 bugs) |
