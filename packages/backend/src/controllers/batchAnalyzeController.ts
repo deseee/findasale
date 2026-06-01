@@ -74,7 +74,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const { imageUrls } = req.body;
+    const { imageUrls, saleId } = req.body;
 
     if (!Array.isArray(imageUrls) || imageUrls.length === 0) {
       res.status(400).json({ message: 'imageUrls must be a non-empty array' });
@@ -83,6 +83,11 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
 
     if (imageUrls.length > 20) {
       res.status(400).json({ message: 'Maximum 20 images allowed per batch' });
+      return;
+    }
+
+    if (!saleId || typeof saleId !== 'string') {
+      res.status(400).json({ message: 'saleId is required' });
       return;
     }
 
@@ -151,6 +156,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             isSet: cluster.photoIndices.length > 1,
             clusterConfidence: cluster.confidence,
             isAiTagged: true,
+            saleId,
             embedding: [],
           },
         });
@@ -177,6 +183,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             quantity: 1,
             isSet: false,
             isAiTagged: true,
+            saleId,
             embedding: [],
           },
         });

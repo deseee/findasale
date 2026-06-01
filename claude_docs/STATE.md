@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S828 — QA+records. (1) Records: Applied S824/S826 Chrome verifications to roadmap — #214 ✅, #356 ✅, #352 ✅, #354 ✅; #319/#325/#328 notes updated (API-VERIFIED, Chrome pending). (2) Flip Report re-QA: ✅ PASS — all 3 HTML entity decode bugs confirmed fixed (&#233; + &amp; both decoded correctly in Category Breakdown, Recommendations, Return to Inventory). (3) #319/#325/#328 Chrome re-QA: NEW P1 found + fixed — SmartInventoryUpload.tsx read response.data.results but backend sends response.data.clusters → error toast, items never displayed in UI. All S827 fixes confirmed working (button responds, no timeout). Fix: .results → .clusters (1-line). Needs Chrome re-QA after this ships. Blocked Queue: 4 rows.**
+**Latest: S829 — QA+DEV: #319/#325/#328 final bug chain found + fixed. (1) Chrome QA: API confirmed returning clusters (200, suggestedTitle "Steam Controller...", aiConfidence 0.92). (2) P1 found: itemsToCreate filter used `a.photoUrl` (undefined on ClusterSummary) → ALL clusters filtered out → "No photos could be analyzed" toast every time. (3) P1 found: `photoUrls: [a.photoUrl]` mapped undefined instead of actual Cloudinary URLs. (4) P0 data hygiene: batch-analyze creates items with saleId=NULL (orphaned, never visible). (5) Three fixes shipped: SmartInventoryUpload.tsx filter/map corrected (photoIndices→uploadedUrls[i]); batchAnalyzeController.ts now extracts+validates saleId, passes to both item.create calls; SmartInventoryUpload.tsx sends saleId in batch-analyze request, redirects directly after analysis (skipping duplicate createItemsMutation). Both packages 0 TS errors. Status: CODE-ONLY — needs Chrome re-QA after deploy. Blocked Queue: 4 rows.**
+
+**Previous: S828 — QA+records. (1) Records: Applied S824/S826 Chrome verifications to roadmap — #214 ✅, #356 ✅, #352 ✅, #354 ✅; #319/#325/#328 notes updated (API-VERIFIED, Chrome pending). (2) Flip Report re-QA: ✅ PASS — all 3 HTML entity decode bugs confirmed fixed. (3) #319/#325/#328 Chrome re-QA: NEW P1 found + fixed — SmartInventoryUpload.tsx read response.data.results but backend sends response.data.clusters → error toast, items never displayed in UI. Fix: .results → .clusters (1-line). Needs Chrome re-QA after this ships. Blocked Queue: 4 rows.**
 
 **Previous: S827 — DEV+QA. (1) UTM fix shipped (#462/#463/#464): root cause = router.isReady guard missing + Vercel trailing-slash redirect stripping params. Fixed: _app.tsx guard + next.config.js skipTrailingSlashRedirect. (2) Batch upload QA (#319/#325/#328): P1 bug found (Analyze All button non-responsive) + P2 bug (30s timeout too short for AI) — both fixed (SmartInventoryUpload.tsx + requestTimeout.ts + index.ts). Chrome UI UNVERIFIED (needs re-QA post-deploy). (3) Flip Report QA: loads ✅, 3 HTML decode bugs found + fixed ([saleId].tsx). Blocked Queue: 4 rows.**
 
@@ -260,29 +262,49 @@ _All S828 verifications applied._
 
 ## Next Session
 
-**Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear to resume).**
+**Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear).**
 
-**S827 complete:** UTM fix shipped. Batch upload P1+P2 bugs fixed. Flip Report 3x HTML decode bugs fixed. Push block below.
+**S829 complete:** #319/#325/#328 final bug chain fixed. Push block below.
 
 **Patrick actions required:**
 
-1. **Push block for S828 (3 files):**
+1. **Push block for S829 (4 files):**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
    git add packages/frontend/components/SmartInventoryUpload.tsx
-   git add claude_docs/strategy/roadmap.md
+   git add packages/backend/src/controllers/batchAnalyzeController.ts
    git add claude_docs/STATE.md
-   git commit -m "fix: SmartInventoryUpload response.data.results→.clusters (P1 batch upload UI); S828 wrap — Chrome verifications applied to roadmap"
+   git add claude_docs/patrick-dashboard.md
+   git commit -m "fix: batch upload full pipeline — saleId wired through controller, ClusterSummary shape mismatch fixed, duplicate createItemsMutation removed; S829 wrap"
    .\push.ps1
    ```
 2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
 
 **Dispatch stubs (next session):**
-- **#319/#325/#328 Chrome re-QA post-deploy:** `Skill('findasale-qa')` — after S828 ships, navigate to add-items as Bob Smith (user2), upload 3 photos via upload_image, click Analyze All, verify cluster cards appear with AI suggestions (title/category/price). All backend fixes confirmed — this should be the final re-QA.
+- **#319/#325/#328 Final Chrome QA:** After S829 ships and deploys — navigate to add-items as Bob Smith (user2), drop 3 real photos via file picker, click Analyze All. Expected: no error toast, items appear in review queue with AI titles/prices. If ✅ this closes the feature permanently.
 - **Dev sessions clear:** Blocked Queue at 4. Available for roadmap feature work.
 
 ## Recent Sessions
+
+### S829 — QA+DEV: #319/#325/#328 Full Bug Chain Found + Fixed
+
+**QA findings:** API confirmed returning `clusters` (200, aiConfidence 0.92, suggestedTitle "Steam Controller, Wireless Gaming Peripheral"). Discovered two more P1 bugs blocking end-to-end:
+1. `itemsToCreate` filter used `a.photoUrl` (undefined on `ClusterSummary`) → ALL clusters eliminated → "No photos could be analyzed" toast
+2. `photoUrls: [a.photoUrl]` mapped undefined instead of actual URLs
+3. `batchAnalyzeController` created items with `saleId=NULL` (orphaned, never visible to organizer); frontend `createItemsMutation` created a duplicate set
+
+**Fixes (3 changes, both packages 0 TS errors):**
+- `SmartInventoryUpload.tsx`: filter changed to `cluster.suggestedTitle && cluster.photoIndices?.length > 0`; photoUrls rebuilt from `cluster.photoIndices.map(i => uploadedUrls[i]).filter(Boolean)`; `saleId` added to batch-analyze request; `createItemsMutation.mutateAsync` replaced with direct toast+redirect (items already created by controller)
+- `batchAnalyzeController.ts`: `saleId` extracted from `req.body`; 400 validation added; `saleId` passed to both `prisma.item.create` calls (clusters + ungrouped)
+
+**DB cleanup:** 9 orphaned items + 17 photos from prior sessions deleted via psycopg2. Test sale `s829qa7d532afb544d44` deleted.
+
+**Status:** CODE-ONLY — needs Chrome re-QA after S829 push+deploy. upload_image tool unavailable this session.
+
+**Files changed:** `packages/frontend/components/SmartInventoryUpload.tsx` · `packages/backend/src/controllers/batchAnalyzeController.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S828 — QA+Records: Chrome Verifications Applied + Flip Report ✅ + Batch Upload P1 Fixed
 
