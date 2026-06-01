@@ -278,55 +278,51 @@ function RateLimitListener() {
  * #18: Capture and record UTM parameters on page load
  * Fires a silent pixel call to record social link clicks
  *
- * router.isReady guard: In Next.js Pages Router, router.query is an empty object
- * during SSR/pre-rendering and only populated after client-side hydration. Without
- * the isReady guard the effect fires on mount with an empty query, sees no UTM params,
- * and returns early. Gating on router.isReady is the documented Next.js pattern and
- * guarantees the effect only runs once the full query string (including UTM params)
- * is available. (Fixes #462/#463/#464 — outreach attribution silently broken on Vercel.)
+ * Uses window.location.search (not router.query) because Vercel's edge routing
+ * produces a redirectCount=3 chain that strips query params before router.isReady
+ * fires. Reading window.location.search on initial mount captures the original URL
+ * before any client-side redirect normalises it away.
+ * (Fixes #462/#463/#464 — outreach attribution silently broken on Vercel.)
  */
 function UTMCapture() {
-  const router = useRouter();
-
+  // Capture from window.location.search immediately on mount — before any
+  // client-side redirect (redirectCount=3 observed in prod) strips the params
+  // from router.query. This runs synchronously on the very first render while
+  // the original URL is still in the address bar.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // Wait for router hydration — router.query is {} until isReady=true on static/ISR pages
-    if (!router.isReady) return;
 
-    const { utm_source, utm_medium, utm_campaign, utm_content, saleId } = router.query;
+    const params = new URLSearchParams(window.location.search);
+    const utm_source = params.get('utm_source') ?? undefined;
+    const utm_medium = params.get('utm_medium') ?? undefined;
+    const utm_campaign = params.get('utm_campaign') ?? undefined;
+    const utm_content = params.get('utm_content') ?? undefined;
+    const ref = params.get('ref') ?? undefined;
+    const saleId = params.get('saleId') ?? undefined;
 
-    // Only fire if we have UTM params
-    if (!utm_source && !utm_medium && !utm_campaign && !utm_content) {
-      return;
-    }
+    if (!utm_source && !utm_medium && !utm_campaign && !utm_content) return;
 
-    // Always persist UTM params to sessionStorage so any page can read them
     try {
       sessionStorage.setItem('fsa_utm', JSON.stringify({
         utm_source,
         utm_medium,
         utm_campaign,
         utm_content,
-        ref: router.query.ref,
+        ref,
         captured_at: new Date().toISOString(),
       }));
     } catch {}
 
-    // Only fire the link-clicks pixel when saleId is also present (existing behaviour)
-    if (!saleId || typeof saleId !== 'string') {
-      return;
-    }
-
-    // Fire-and-forget pixel call (no await, silent failure)
-    const params = new URLSearchParams();
-    params.append('saleId', saleId);
-    if (typeof utm_source === 'string') params.append('utm_source', utm_source);
-    if (typeof utm_medium === 'string') params.append('utm_medium', utm_medium);
-    if (typeof utm_campaign === 'string') params.append('utm_campaign', utm_campaign);
-    if (typeof utm_content === 'string') params.append('utm_content', utm_content);
-
-    fetch(`/api/link-clicks/record?${params}`, { method: 'GET' }).catch(() => {}); // Silent fail
-  }, [router.query, router.isReady]);
+    // Fire pixel only when saleId present (existing behaviour)
+    if (!saleId) return;
+    const pixelParams = new URLSearchParams();
+    pixelParams.append('saleId', saleId);
+    if (utm_source) pixelParams.append('utm_source', utm_source);
+    if (utm_medium) pixelParams.append('utm_medium', utm_medium);
+    if (utm_campaign) pixelParams.append('utm_campaign', utm_campaign);
+    if (utm_content) pixelParams.append('utm_content', utm_content);
+    fetch(`/api/link-clicks/record?${pixelParams}`, { method: 'GET' }).catch(() => {});
+  }, []); // Empty deps — run once on mount, before any redirect clears the URL
 
   return null;
 }
