@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S837 — QA+DEV: #166 ✅, #74 ✅, #150 ✅ + nav audit → 11 fixes + 6 pages surfaced. QA verified 3 P0 items. Nav code audit (AvatarDropdown + BottomTabNav): double hr, Explorer's Guild dup in Connect, Add Items wrong href, dual-role settings buried, mobile no shopper path, 6 complete features with no nav entry (#398 referrals, #334 markdown-cycles, #396 starter-kit, #438 ai-score, #55 challenges, #182 surprise-me). All shipped: AvatarDropdown (11 changes), BottomTabNav (Shop tab for dual-role), color-rules→discount-rules redirect, notifications consolidated (sale_alert filter + redirect), wishlist "New Collection" stub wired to /wishlists. Unsurfaced pages: 9 were just redirects (no action needed), 6 surfaced in nav, 3 resolved (discount-rules canonical, notifications consolidated, wishlists hub-and-spoke Option A). 0 TS errors. user2 now USER+ORGANIZER+SHOPPER for dual-role testing. SVPKNKV3 invite code unused in DB — Patrick delete via /admin/invites. Blocked Queue: 5 rows.**
+**Latest: S838 — QA batch: #165 PASS WITH NOTES (P3 only: stub button + roles/role inconsistency in admin guard — functionally correct), #61 ✅ (NudgeBar confirmed, STREAK_CONTINUATION, variable-ratio, P3: TIER_PROGRESS type declared but never generated), #36 CODE-ONLY ✅ (weeklyEmailJob.ts cron Sunday 6pm confirmed in index.ts), #72 ✅ FULL PASS (user2 ORGANIZER+SHOPPER: nav 22 items zero duplicates, organizer dashboard, shopper dashboard, wishlist all load, mobile Shop tab confirmed). Blocked Queue: 5 rows from 5 (removed #72, added #308+#25 as Patrick-gated). #308 Item Hide and #25 eBay Sync B/C both need Patrick present — no test account has published items with embeddings; eBay needs real connection. Records to apply S838 Chrome verifications (#61, #72) to roadmap at next session start.**
+
+**Previous: S837 — QA+DEV: #166 ✅, #74 ✅, #150 ✅ + nav audit → 11 fixes + 6 pages surfaced. QA verified 3 P0 items. Nav code audit (AvatarDropdown + BottomTabNav): double hr, Explorer's Guild dup in Connect, Add Items wrong href, dual-role settings buried, mobile no shopper path, 6 complete features with no nav entry (#398 referrals, #334 markdown-cycles, #396 starter-kit, #438 ai-score, #55 challenges, #182 surprise-me). All shipped: AvatarDropdown (11 changes), BottomTabNav (Shop tab for dual-role), color-rules→discount-rules redirect, notifications consolidated (sale_alert filter + redirect), wishlist "New Collection" stub wired to /wishlists. Unsurfaced pages: 9 were just redirects (no action needed), 6 surfaced in nav, 3 resolved (discount-rules canonical, notifications consolidated, wishlists hub-and-spoke Option A). 0 TS errors. user2 now USER+ORGANIZER+SHOPPER for dual-role testing. SVPKNKV3 invite code unused in DB — Patrick delete via /admin/invites. Blocked Queue: 5 rows.**
 
 **Previous: S836 — DEV+QA: #462/#463/#464 UTM attribution ✅ FULLY VERIFIED. Root cause confirmed: Chrome incognito strips utm_* params at browser level before request is sent. Fix: email links use fsa_* param names (Chrome-safe). UTMCapture reads fsa_* as primary source, maps to utm_* for sessionStorage. Confirmed via console: sessionStorage.getItem('fsa_utm') = {"utm_source":"outreach","utm_medium":"email","utm_campaign":"touch1","utm_content":"hot",...}. Blocked Queue: 4 rows.**
 
@@ -255,12 +257,10 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have Going/RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
 | #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
-
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
-
-| #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Consignor emails use Gmail API (not Resend — that was a red herring). Same service as all working transactional emails. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
-
-| #72 Dual-Role Account Schema | UNVERIFIED S837 — No seed user has both ORGANIZER+SHOPPER roles simultaneously. VM disk full prevented psycopg2 DB access. Single-role organizer nav confirmed clean (no duplicates). | Create a user with both ORGANIZER and SHOPPER DB roles, then verify nav deduplication and endpoint access for both roles. | S837 |
+| #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Gmail API is the correct service. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
+| #308 Item Hide | BLOCKED S838 — No test account has a published sale with items. Artifact MI "Artifact Downtown Paw Paw" has 101 items but Patrick must be present. | Patrick present + use Artifact MI organizer account: hide an item via bulk Hide, verify absent from sale detail, search, trending. | S838 |
+| #25 eBay Sync Phase B/C | BLOCKED S838 — Needs real eBay connection (artifactmi). Patrick must be present. Phase A (Contigo push) Patrick-verified. Phase B/C (import flow, Pull to Sale) not yet browser-verified. | Patrick present + use Artifact MI eBay-connected account to verify import flow and Pull to Sale. | S838 |
 
 
 ---
@@ -269,42 +269,45 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| 166 | Invites (Admin Beta Codes + Workspace) | Navigated to /admin/invites as user1. Clicked "Generate Invite Code" → code SVPKNKV3 appeared in list (unused). Navigated to /register?invite=SVPKNKV3 → green banner "Invite code SVPKNKV3 applied", role pre-set to "Sale Organizer". Navigated to /organizer/members → typed qa-member-invite@example.com → clicked "Send Invite" → green toast "Invitatio..." + POST /api/workspace/invite → 201. Screenshots: ss_1510bwi14, ss_7342ujb0m, ss_4900ul8jh | S837 |
-| 74 | Role-Aware Registration Consent | Navigated to /register as user1. Clicked role dropdown → selected "Sale Organizer" → Business Information section appeared (Business Name/Phone/Address fields). Shopper role: 1 consent checkbox visible. Organizer role: 1 consent checkbox + Business Info section visible. ToS link present both roles. Role-aware behavior confirmed via form_input + screenshot. Screenshots: ss_5756ltixe, ss_4111g721a | S837 |
-| 150 | Push Notification Subscriptions | Navigated to /organizer/settings → Notifications tab as user1. Saw "Push Notifications" section: "Push notifications are enabled" + Disable button. JS confirmed: navigator.serviceWorker scope=https://finda.sale/ state=activated. pushManager.getSubscription() → FCM endpoint + p256dh+auth keys active. Screenshot: ss_42439jwp1 | S837 |
+| — | — | S837 verifications (#166, #74, #150) applied to roadmap.md at S838 start. | S838 |
+| 165 | A/B Testing Infrastructure | Navigated to /admin/ab-tests as user1. Page loaded with "A/B Tests" heading, "Hero CTA v1" card, results table, empty state "No test data available yet." Admin guard: user5 → redirect to homepage. ss_6638o313h ss_5055y2b3t ss_3149h3aam. PASS WITH NOTES (P3 only). | S838 |
+| 61 | Near-Miss Nudges | Navigated to finda.sale as user5. /api/nudges returned 200. NudgeBar rendered with STREAK_CONTINUATION "One more day to hit a 7-day streak!", 85.7% progress bar. Clicked dismiss — bar removed immediately. Variable-ratio: 65% dispatch days confirmed. P3: TIER_PROGRESS type declared but never generated. | S838 |
+| 72 | Dual-Role Account Schema | Navigated to finda.sale/organizer/dashboard as user2 (ORGANIZER+SHOPPER). AvatarDropdown: 22 items, zero duplicates confirmed. /organizer/dashboard ✅, /shopper/dashboard ✅, /shopper/wishlist ✅ (1 real item visible). Mobile Shop tab confirmed. No broken flows. ss_03429gv9v ss_6093biwjy ss_4141w0o2s ss_2568irdlf | S838 |
 
 ## Next Session
 
-**Blocked Queue: 5 rows (below ≥8 ceiling — dev sessions clear).**
+**Blocked Queue: 6 rows (below ≥8 ceiling — dev sessions clear).**
 
-**S837 complete.** #166 ✅, #74 ✅, #150 ✅ staged to Pending Chrome Verifications. #72 UNVERIFIED → added to Blocked Queue. Records to apply S837 verifications to roadmap at next session start.
+**S838 complete.** #165 PASS WITH NOTES, #61 ✅, #36 CODE-ONLY ✅, #72 ✅ — all staged to Pending Chrome Verifications. #308 and #25 added to Blocked Queue (Patrick-gated). Records to apply S838 Chrome verifications (#61, #72) to roadmap at next session start.
 
 **Patrick actions required:**
 
-1. **Push block for S837 (2 files — docs only):**
+1. **Push block for S838 (3 files):**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
    git add claude_docs/STATE.md
    git add claude_docs/patrick-dashboard.md
-   git commit -m "docs: S837 QA wrap — #166/#74/#150 verified, #72 UNVERIFIED, staged to Pending Chrome Verifications"
+   git add claude_docs/strategy/roadmap.md
+   git commit -m "docs: S838 QA wrap — #165/#61/#36/#72 verified, #308/#25 blocked (Patrick-gated), S837 verifications applied to roadmap"
    .\push.ps1
    ```
 
-2. **Delete test invite SVPKNKV3:** Navigate to finda.sale/admin/invites → Delete the SVPKNKV3 row (Chrome froze during QA cleanup — code is unused and harmless but should be removed).
-3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-4. **#239 legal gate:** Attorney + CPA before live consignor payouts.
+2. **Delete test invite SVPKNKV3:** Navigate to finda.sale/admin/invites → Delete the SVPKNKV3 row (carried from S837).
+3. **#308 + #25 when you have 30 min:** Open finda.sale, log in as artifactmi. (a) Go to Artifact Downtown Paw Paw → add-items → select any item → bulk Hide → check it's gone from sale page as shopper. (b) eBay Settings → verify Pull to Sale / import flow for Phase B/C.
+4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+5. **#239 legal gate:** Attorney + CPA before live consignor payouts.
 
-**Dispatch stubs (next session — QA + Records):**
+**Dispatch stubs (next session — Records first, then QA or DEV):**
 
-1. **Records at session start:** Apply S837 Pending Chrome Verifications to roadmap.md — #166, #74, #150 all have full evidence (URL + user + element + outcome + screenshot IDs).
+1. **Records at session start:** Apply S838 Pending Chrome Verifications to roadmap.md — #61, #72 have full evidence. #165 PASS WITH NOTES (update Chrome column with P3 notes). #36 CODE-ONLY (update Chrome column as CODE-ONLY ✅).
 
-2. **QA continues (P0 age-floor targets remaining):**
-   - **#165 A/B Testing Infrastructure** — ORG/SIMPLE. Dispatch: verify A/B variant assignment visible in organizer flow.
-   - **#36 Weekly Treasure Digest** — SHO/FREE. CODE-ONLY acceptable (cron, can't force Sunday 6pm).
-   - **#61 Near-Miss Nudges** — SHO/FREE. Dispatch: verify nudge API endpoint, check if any UI surfaces it.
-   - **#72 Dual-Role Account Schema** — needs dual-role user (ORGANIZER+SHOPPER). Create via psycopg2 on a session where VM disk has space, then Chrome verify.
-   - **#308 Item Hide** — needs a test sale with items (not live organizer data).
-   - **#25 eBay Sync Phase B/C** — browser verification pending.
+2. **QA continues (Patrick-gated items — only if Patrick present):**
+   - **#308 Item Hide** — Patrick + Artifact MI. Hide an item via bulk Hide → verify absent from sale detail, search, trending.
+   - **#25 eBay Sync Phase B/C** — Patrick + real eBay connection. Verify import flow, Pull to Sale.
+
+3. **P3 dev fix (low priority, batch with next dev session):**
+   - `admin/ab-tests.tsx`: stub "Clear Test Data" button → disable it or wire to real endpoint. `roles` vs `role` inconsistency (line 28 vs 52/76).
+   - `nudgeService.ts`: TIER_PROGRESS type declared but `generateNudges()` has no case for it — add or remove the declared type.
 
 ## Recent Sessions
 
