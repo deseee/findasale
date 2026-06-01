@@ -209,20 +209,23 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       }
 
       // Step 3: Auto-save all successfully analyzed items
-      const failedCount = aiResults.filter((a: AIAnalysis) => a.error).length;
+      // ClusterSummary shape: { photoIndices, suggestedTitle, suggestedDescription,
+      //   suggestedCategory, suggestedCondition, suggestedPrice, suggestedTags, aiConfidence }
+      // photoUrls are reconstructed from photoIndices → uploadedUrls[i]
+      const failedCount = 0; // ClusterSummary has no error field; failures are skipped server-side
       const itemsToCreate = aiResults
-        .filter((a: AIAnalysis) => !a.error && a.photoUrl && a.photoUrl !== '(unknown)')
-        .map((a: AIAnalysis) => ({
+        .filter((cluster: any) => cluster.suggestedTitle && Array.isArray(cluster.photoIndices) && cluster.photoIndices.length > 0)
+        .map((cluster: any) => ({
           saleId,
-          title: a.suggestedTitle,
-          description: a.suggestedDescription,
-          price: a.suggestedPrice,
-          category: a.suggestedCategory,
-          condition: a.suggestedCondition,
-          photoUrls: [a.photoUrl],
-          tags: a.suggestedTags || [],
+          title: cluster.suggestedTitle || 'Item',
+          description: cluster.suggestedDescription,
+          price: cluster.suggestedPrice,
+          category: cluster.suggestedCategory,
+          condition: cluster.suggestedCondition,
+          photoUrls: cluster.photoIndices.map((i: number) => uploadedUrls[i]).filter(Boolean),
+          tags: cluster.suggestedTags || [],
           isAiTagged: true,
-          aiConfidence: a.confidence || 0.5,
+          aiConfidence: cluster.aiConfidence || 0.5,
         }));
 
       setUploadProgress(100);
