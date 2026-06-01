@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S827 — DEV+QA. (1) UTM fix shipped (#462/#463/#464): root cause = router.isReady guard missing + Vercel trailing-slash redirect stripping params. Fixed: _app.tsx guard + next.config.js skipTrailingSlashRedirect. (2) Batch upload QA (#319/#325/#328): P1 bug found (Analyze All button non-responsive) + P2 bug (30s timeout too short for AI) — both fixed (SmartInventoryUpload.tsx + requestTimeout.ts + index.ts). Chrome UI UNVERIFIED (needs re-QA post-deploy). (3) Flip Report QA: loads ✅, 3 HTML decode bugs found + fixed ([saleId].tsx). Blocked Queue: 4 rows.**
+**Latest: S828 — QA+records. (1) Records: Applied S824/S826 Chrome verifications to roadmap — #214 ✅, #356 ✅, #352 ✅, #354 ✅; #319/#325/#328 notes updated (API-VERIFIED, Chrome pending). (2) Flip Report re-QA: ✅ PASS — all 3 HTML entity decode bugs confirmed fixed (&#233; + &amp; both decoded correctly in Category Breakdown, Recommendations, Return to Inventory). (3) #319/#325/#328 Chrome re-QA: NEW P1 found + fixed — SmartInventoryUpload.tsx read response.data.results but backend sends response.data.clusters → error toast, items never displayed in UI. All S827 fixes confirmed working (button responds, no timeout). Fix: .results → .clusters (1-line). Needs Chrome re-QA after this ships. Blocked Queue: 4 rows.**
+
+**Previous: S827 — DEV+QA. (1) UTM fix shipped (#462/#463/#464): root cause = router.isReady guard missing + Vercel trailing-slash redirect stripping params. Fixed: _app.tsx guard + next.config.js skipTrailingSlashRedirect. (2) Batch upload QA (#319/#325/#328): P1 bug found (Analyze All button non-responsive) + P2 bug (30s timeout too short for AI) — both fixed (SmartInventoryUpload.tsx + requestTimeout.ts + index.ts). Chrome UI UNVERIFIED (needs re-QA post-deploy). (3) Flip Report QA: loads ✅, 3 HTML decode bugs found + fixed ([saleId].tsx). Blocked Queue: 4 rows.**
 
 **Previous: S825 — QA session. P1 BUG FOUND + FIXED: #319/#325/#328 (Burst Clustering / Best-Photo-First / Photo Role Awareness) all broken since launch. Root cause: batchAnalyzeController.ts prisma.item.create() calls missing \`embedding: []\` field (NOT NULL, no DB default) → silent constraint violation → 0 Items and 0 Photos ever written to DB. Confirmed via: (1) created test sale for Bob Smith (user2) via psycopg2, (2) logged in via backend JWT, (3) called /api/upload/batch-analyze with real Cloudinary URLs, (4) got 200 + cluster data but 0 DB records. Fix: added \`embedding: []\` to both prisma.item.create calls (cluster + ungrouped). 0 TS errors. S824 Chrome verifications applied to roadmap (#356 both CTAs ✅, #214 markdown ✅). Blocked Queue: 4 rows.**
 
@@ -250,17 +252,10 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Pending Chrome Verifications
 
-_S824 verifications applied. Items below are staged for roadmap update next session._
+_All S828 verifications applied._
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| #356 | Organizer Broadcast — both CTAs | Navigated to /organizer/settings as Carol Williams (user3, TEAMS). Clicked "+ New broadcast" via ref_169 → BroadcastComposer opened (BROADCASTS/NEW, Templates, Review & send, Subject/Message fields, Live Preview). Closed. Clicked "Send your first broadcast →" via ref_354 → same composer opened. Both CTAs confirmed functional. ss_10748req1, ss_4277txmmx. | S824 |
-| #214 | AI Planner /plan — markdown rendering | Navigated to /plan as Carol Williams. Clicked "Where do I start planning a sale?" preset. AI response rendered formatted bold numbered list (e.g. "1. **Decide your sale type.**" shown as bold, no raw asterisks). renderMarkdown already present in HEAD — S823 P2 finding retracted. ss_3781tim1d. | S824 |
-| Shopper dashboard | All widgets (user5) | Navigated to /shopper/dashboard as Leo Thomas (user5). Scout rank badge, 517/1200 XP progress bar ✅. QR code, nav row (Collections/Purchase History/Treasure Trails/My QR/More) ✅. StreakWidget (Streak 0, XP 517, Upgrade) ✅. RankBenefitsCard (Scout unlocks, Next rank Ranger preview) ✅. Hunt Pass Active banner ✅. Rare Finds empty state ✅. ss_7966k5gcr, ss_83033h5zm, ss_78268e2gc. | S824 |
-| Notifications | Shopper notifications page (user5) | Navigated to /shopper/notifications as Leo Thomas. Page loads, tabs (All/Organizer Alerts/Discoveries), "Item sold" notifications with unread dots, timestamps, dismiss (×) buttons, "Mark all read" button all present. ss_48121x074. | S824 |
-| #319/#325/#328 | Burst Clustering / Best-Photo-First / Photo Role Awareness | API-VERIFIED S826 — Called /api/upload/batch-analyze (Bob Smith JWT, 3 Cloudinary URLs). DB confirmed: Item created (clusterConfidence:0.98, isSet:true, qty:3) + 3 Photos (BACK_STAMP isPrimary:true/orderIndex:0, FRONT/orderIndex:1, LABEL_BRAND/orderIndex:2). Fix working. Chrome browser UI verification still needed — requires Artifact MI (Google OAuth, Patrick present). | S826 |
-| #352 | Organizer Tagline Field | Navigated to /organizer/settings?tab=profile as Bob Smith (user2). Tagline field with 120-char counter confirmed present. PATCH /api/organizers/me {tagline: 'S826 QA Test Tagline'} → response returned tagline: 'S826 QA Test Tagline'. Reloaded page → input populated correctly from API. ss_5573wasoz. | S826 |
-| #354 | Structured Weekly Hours Model | Navigated to /organizer/settings?tab=profile as Bob Smith. Business Hours section confirmed: timezone selector (ET/CT/MT/PT/MI/AZ/AK/HI), By appointment only checkbox, 7-day time grid (Sunday-Saturday). PATCH timezone → {timezone: 'America/Detroit'} returned. PUT /api/organizers/me/hours [{dayOfWeek:1, openTime:'09:00', closeTime:'17:00'}, ...] → 3 records returned. GET /me/hours → 7 days, day6 closed confirmed. ss_5573wasoz. | S826 |
 ---
 
 ## Next Session
@@ -271,28 +266,37 @@ _S824 verifications applied. Items below are staged for roadmap update next sess
 
 **Patrick actions required:**
 
-1. **Push block for S827 (all 7 files):**
+1. **Push block for S828 (3 files):**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/frontend/pages/_app.tsx
-   git add packages/frontend/next.config.js
    git add packages/frontend/components/SmartInventoryUpload.tsx
-   git add packages/backend/src/middleware/requestTimeout.ts
-   git add packages/backend/src/index.ts
-   git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
+   git add claude_docs/strategy/roadmap.md
    git add claude_docs/STATE.md
-   git commit -m "fix: UTM router.isReady guard + skipTrailingSlashRedirect; batch upload Analyze All stopPropagation + 120s timeout; flip report full HTML entity decode"
+   git commit -m "fix: SmartInventoryUpload response.data.results→.clusters (P1 batch upload UI); S828 wrap — Chrome verifications applied to roadmap"
    .\push.ps1
    ```
 2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
 
 **Dispatch stubs (next session):**
-- **#319/#325/#328 Chrome re-QA post-deploy:** `Skill('findasale-qa')` — after S827 ships, navigate to add-items as Bob Smith (user2), upload 3 photos, verify items appear with AI cluster suggestions. P1 button + P2 timeout both fixed — should now complete end-to-end.
-- **Flip Report re-QA post-deploy:** `Skill('findasale-qa')` — navigate to Flip Report for ended sale, verify `Home Décor`, `Lamps & Lighting` etc. display without raw entities in Category Breakdown, Recommendations, and Return to Inventory panel.
-- **Dev sessions clear:** Blocked Queue at 4. Next available for roadmap feature work.
+- **#319/#325/#328 Chrome re-QA post-deploy:** `Skill('findasale-qa')` — after S828 ships, navigate to add-items as Bob Smith (user2), upload 3 photos via upload_image, click Analyze All, verify cluster cards appear with AI suggestions (title/category/price). All backend fixes confirmed — this should be the final re-QA.
+- **Dev sessions clear:** Blocked Queue at 4. Available for roadmap feature work.
 
 ## Recent Sessions
+
+### S828 — QA+Records: Chrome Verifications Applied + Flip Report ✅ + Batch Upload P1 Fixed
+
+**Records:** Applied S824/S826 pending Chrome verifications to roadmap.md — #214 ✅, #356 ✅, #352 ✅, #354 ✅ Chrome columns updated. #319/#325/#328 notes updated (API-VERIFIED, Chrome pending). Pending Chrome Verifications table cleared.
+
+**Flip Report re-QA ✅ PASS:** Navigated to `/organizer/flip-report/[saleId]` as user1 (Alice Johnson). All 3 HTML decode fixes confirmed — "Home Décor" (not `&#233;`), "Lamps & Lighting" (not `&amp;`), Recommendations and Return to Inventory subcopy all decoded correctly. get_page_text confirmed zero raw entities on page. (ss_28231eqng)
+
+**#319/#325/#328 Chrome re-QA — NEW P1 found + fixed:** S827 fixes all confirmed working (Analyze All button responds ✅, no 503 timeout ✅, backend creates Items+Photos ✅). New bug: `SmartInventoryUpload.tsx` line 95 reads `response.data.results`; `batchAnalyzeController.ts` sends `response.data.clusters` → error toast, cluster cards never display. Fix: `.results` → `.clusters` (1-line). Pending Chrome re-QA after S828 ships.
+
+**Test data cleaned:** QA DRAFT sale + test Item deleted from Railway DB via psycopg2.
+
+**Files changed:** `packages/frontend/components/SmartInventoryUpload.tsx` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md`
+
+---
 
 ### S827 — DEV+QA: UTM Fix + Batch Upload Bugs + Flip Report Bugs
 
@@ -343,4 +347,4 @@ _S824 verifications applied. Items below are staged for roadmap update next sess
 **Key finding:** plan.tsx fix agent truncated the file (287 lines vs HEAD 321). Caught during QA. File restored to HEAD via `cp`. Push block for plan.tsx CANCELLED — do NOT push it.
 
 **QA results:**
-- #356 Broadcast ✅ — Both "+ New broadcast" (ref click) and "Se
+- #356 Broadcast ✅ — Both "+ New broadcast" (ref click) and "Se                                                   
