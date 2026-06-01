@@ -1,18 +1,17 @@
 /**
  * #462/#463/#464 — UTM Parameter Preservation
  *
- * Root cause: Vercel's infrastructure-level trailing-slash redirect fires BEFORE
- * Next.js routing, stripping query params (including UTM) from the URL. By the
- * time React hydrates, window.location.search is empty.
+ * Root cause (confirmed S836): Chrome strips `utm_*` params in incognito mode before
+ * the request reaches the server. Server-side middleware never sees them.
  *
- * Fix: Middleware runs at the Edge BEFORE any redirect. When UTM params are present
- * in the incoming request URL, we write them to a short-lived cookie on the response.
- * The redirect follows, the browser carries the cookie to the destination, and
- * UTMCapture in _app.tsx reads the cookie as a fallback when window.location.search
- * is empty.
+ * Fix: Email/outreach links now use `fsa_*` param names (fsa_src, fsa_med, fsa_cmp,
+ * fsa_cnt) which Chrome does not recognise as tracking params and does not strip.
  *
- * Cookie: fsa_utm_pending — JSON, path=/, maxAge=300s (5 min), httpOnly=false (must
- * be readable by client JS), sameSite=lax, secure in production.
+ * This middleware captures BOTH fsa_* (new) and utm_* (legacy / non-incognito) and
+ * writes them to a short-lived cookie so UTMCapture in _app.tsx can read them after
+ * any redirect that might still move the URL.
+ *
+ * Cookie: fsa_utm_pending — JSON, path=/, maxAge=300s, httpOnly=false, sameSite=lax.
  */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
@@ -20,31 +19,39 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   const { searchParams } = request.nextUrl;
 
+  // fsa_* params: used in outreach emails (Chrome-safe names)
+  const fsa_src = searchParams.get('fsa_src');
+  const fsa_med = searchParams.get('fsa_med');
+  const fsa_cmp = searchParams.get('fsa_cmp');
+  const fsa_cnt = searchParams.get('fsa_cnt');
+
+  // utm_* params: fallback for non-incognito clicks (social shares, direct links)
   const utm_source = searchParams.get('utm_source');
   const utm_medium = searchParams.get('utm_medium');
   const utm_campaign = searchParams.get('utm_campaign');
   const utm_content = searchParams.get('utm_content');
+
   const ref = searchParams.get('ref');
 
-  // Only act when at least one UTM param is present — skip all other requests
-  if (!utm_source && !utm_medium && !utm_campaign && !utm_content) {
+  // Act only when at least one attribution param is present
+  const hasFsa = fsa_src || fsa_med || fsa_cmp || fsa_cnt;
+  const hasUtm = utm_source || utm_medium || utm_campaign || utm_content;
+  if (!hasFsa && !hasUtm) {
     return NextResponse.next();
   }
 
   const response = NextResponse.next();
 
+  // Normalise to utm_* names in the cookie regardless of input format
   const utmData = JSON.stringify({
-    ...(utm_source ? { utm_source } : {}),
-    ...(utm_medium ? { utm_medium } : {}),
-    ...(utm_campaign ? { utm_campaign } : {}),
-    ...(utm_content ? { utm_content } : {}),
+    ...(fsa_src || utm_source ? { utm_source: fsa_src ?? utm_source } : {}),
+    ...(fsa_med || utm_medium ? { utm_medium: fsa_med ?? utm_medium } : {}),
+    ...(fsa_cmp || utm_campaign ? { utm_campaign: fsa_cmp ?? utm_campaign } : {}),
+    ...(fsa_cnt || utm_content ? { utm_content: fsa_cnt ?? utm_content } : {}),
     ...(ref ? { ref } : {}),
     captured_at: new Date().toISOString(),
   });
 
-  // Set cookie on the response — survives any redirect chain that follows.
-  // httpOnly: false is required so client-side UTMCapture can read it via document.cookie.
-  // maxAge: 300 (5 min) — long enough to survive redirects, short enough to self-clean.
   response.cookies.set('fsa_utm_pending', utmData, {
     path: '/',
     maxAge: 300,
@@ -57,8 +64,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Match all navigation routes. Exclude static assets, Next.js internals,
-  // and service worker files to avoid unnecessary middleware overhead.
   matcher: [
     '/((?!_next/static|_next/image|_next/data|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
   ],

@@ -285,27 +285,42 @@ function RateLimitListener() {
  * (Fixes #462/#463/#464 — outreach attribution silently broken on Vercel.)
  */
 function UTMCapture() {
-  // #462/#463/#464 — Two-source UTM capture:
+  // #462/#463/#464 — Three-source UTM capture:
   //
-  // Source 1 (primary): window.location.search — works when React boots before any redirect.
-  // Source 2 (fallback): fsa_utm_pending cookie — set by middleware.ts at the Edge BEFORE
-  //   any Vercel/Next.js redirect fires. Survives the redirect chain that strips query params
-  //   from window.location.search.
+  // Root cause confirmed S836: Chrome incognito strips utm_* params at browser level
+  // before the request is sent. Server-side fixes cannot intercept them.
   //
-  // Reading both ensures attribution is captured regardless of which redirect scenario fires.
+  // Fix: Outreach email links now use fsa_* param names (fsa_src, fsa_med, fsa_cmp,
+  // fsa_cnt) which Chrome does not recognise as tracking params and does not strip.
+  //
+  // Source 1 (primary): fsa_* params in window.location.search (Chrome-safe, email links)
+  // Source 2 (legacy): utm_* params in window.location.search (social shares, direct links)
+  // Source 3 (fallback): fsa_utm_pending cookie set by middleware.ts (survives redirects)
+  //
+  // All sources normalise to utm_* names before storing in sessionStorage.
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // --- Source 1: URL params (fast path) ---
     const urlParams = new URLSearchParams(window.location.search);
-    let utm_source = urlParams.get('utm_source') ?? undefined;
-    let utm_medium = urlParams.get('utm_medium') ?? undefined;
-    let utm_campaign = urlParams.get('utm_campaign') ?? undefined;
-    let utm_content = urlParams.get('utm_content') ?? undefined;
-    let ref = urlParams.get('ref') ?? undefined;
     const saleId = urlParams.get('saleId') ?? undefined;
 
-    // --- Source 2: Cookie fallback (survives redirect stripping) ---
+    // --- Source 1: fsa_* params (Chrome-safe — email outreach links) ---
+    let utm_source: string | undefined = urlParams.get('fsa_src') ?? undefined;
+    let utm_medium: string | undefined = urlParams.get('fsa_med') ?? undefined;
+    let utm_campaign: string | undefined = urlParams.get('fsa_cmp') ?? undefined;
+    let utm_content: string | undefined = urlParams.get('fsa_cnt') ?? undefined;
+    let ref: string | undefined = urlParams.get('ref') ?? undefined;
+
+    // --- Source 2: utm_* params (social shares / non-incognito direct links) ---
+    if (!utm_source && !utm_medium && !utm_campaign && !utm_content) {
+      utm_source = urlParams.get('utm_source') ?? undefined;
+      utm_medium = urlParams.get('utm_medium') ?? undefined;
+      utm_campaign = urlParams.get('utm_campaign') ?? undefined;
+      utm_content = urlParams.get('utm_content') ?? undefined;
+      if (!ref) ref = urlParams.get('ref') ?? undefined;
+    }
+
+    // --- Source 3: Cookie fallback (middleware.ts sets this before any redirect fires) ---
     if (!utm_source && !utm_medium && !utm_campaign && !utm_content) {
       try {
         const cookieMatch = document.cookie
@@ -319,11 +334,10 @@ function UTMCapture() {
           utm_campaign = parsed.utm_campaign;
           utm_content = parsed.utm_content;
           ref = parsed.ref;
-          // Immediately expire the cookie — read once, don't persist
           document.cookie = 'fsa_utm_pending=; path=/; max-age=0; SameSite=Lax';
         }
       } catch {
-        // Non-fatal — cookie may be malformed
+        // Non-fatal
       }
     }
 
@@ -349,7 +363,7 @@ function UTMCapture() {
     if (utm_campaign) pixelParams.append('utm_campaign', utm_campaign);
     if (utm_content) pixelParams.append('utm_content', utm_content);
     fetch(`/api/link-clicks/record?${pixelParams}`, { method: 'GET' }).catch(() => {});
-  }, []); // Empty deps — run once on mount
+  }, []);
 
   return null;
 }
