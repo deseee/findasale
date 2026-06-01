@@ -1,53 +1,62 @@
-# Patrick's Dashboard — Week of June 1, 2026
+# Patrick's Dashboard — Week of June 2, 2026
 
 ---
 
-## What Happened This Session (S830 — Batch Upload DONE ✅)
+## What Happened This Week
 
-**#319/#325/#328 (Burst Clustering, Best-Photo-First, Photo Role Awareness) is fully verified and closed.**
+The week was dominated by a hunt-and-fix sprint on the batch photo upload feature — the one where you drop photos, it analyzes them with AI, and creates items automatically. It had been silently broken since launch (items were never actually saved to the database). The agents ran it down across 5 sessions, found 4 separate bugs stacked on top of each other, and on Friday confirmed it working end-to-end in a real browser: 3 photos dropped → AI titles, categories, prices generated → 3 items created correctly in the database. That feature is closed.
 
-The S825+S828+S829 fix chain was tested end-to-end in Chrome as Bob Smith (user2):
-- Went to Add Items → Batch Upload → selected 3 photos → clicked Analyze All
-- Progress bar appeared, analysis ran, page redirected to the Smart Review queue
-- Review queue showed 3 items with AI-generated titles, categories, tags, and prices:
-  - "Wooden Chair, Simple Design" — Chairs, Used, 55% confidence, $3,500
-  - "Ceramic Vase, Blue Glaze" — Vases, Used, with 5 auto-tags
-  - "Vintage Table Lamp, Mid-Century Modern Style" — Lamps, Used, 62% confidence, $2,800
-- DB confirmed: 3 Items + 3 Photos created with the correct saleId — zero orphaned records
-
-**The feature is working. Batch photo upload → AI analysis → Review queue is the core value driver, and it's live.**
+The week also produced a second fix for UTM attribution (the tracking that tells us where organizer signups came from), plus 8 features verified in Chrome across robots.txt, DMCA page, eBay settings, homepage filter pills, and the Flip Report.
 
 ---
 
-## Your Actions
+## Audit Results (Weekly — May 30)
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S830 wrap — #319/#325/#328 Chrome verified ✅, feature closed"
-.\push.ps1
-```
+The weekly audit found no critical issues and confirmed 4 previously broken things are now fixed (categories page, privacy page, calendar, search).
 
-### Other pending:
-- **GBP phone verification:** business.google.com → "Verify now" → phone code
-- **#239 legal gate:** Attorney + CPA before live consignor payouts
+The one problem that needs real attention: **the map is broken for shoppers.** The pins exist in the code — 197 of them — but they render about 13,000 pixels off-screen, so the map just looks empty. This has persisted for two weeks. It needs a dev fix this week.
+
+Four medium issues were also flagged, all related to scraped directory listings showing wrong sale type badges, a confusing "Location not available" message, and a breadcrumb with a trailing slash. A single dev pass on scraped-sale normalization would clean all four.
 
 ---
 
-## Blocked Queue (4 items — below 8-item QA ceiling)
+## Pending Decisions
 
-| Feature | Status |
-|---------|--------|
-| RSVP XP Monthly Cap | Needs 5 RSVPs in one month |
-| #332 Shopify Cross-Listing | Needs Shopify OAuth test store |
-| #293 eBay Post-Sale Panel | Needs ended sale with eBay connection |
-| #335 Consignor Payout Email | Needs payout against real email address |
+No pending decisions from the DECISIONS registry. All standing decisions (all sale types, dark mode, mobile-first, etc.) are locked and holding.
 
 ---
 
-## Next Session Priority
+## Beta Tester Impact
 
-1. Push S829 → wait for deploy → final Chrome QA of batch upload (drop real photos, verify items appear in review queue)
-2. Once batch upload is ✅, dev sessions open — pick up roadmap feature work
+**Better this week:** The batch upload + AI photo analysis feature actually works now — this is a core value-driver for organizers. The homepage "This Weekend" filter pill works. The DMCA page and robots.txt are live. The Flip Report displays cleanly.
 
+**Still rough:** The map page shows an empty map to shoppers even though there are hundreds of sales loaded. Organizers using UTM-tracked links (from our outreach emails) may still not have attribution tracked — needs your real-browser confirmation.
+
+---
+
+## This Week's Priority
+
+1. **Map fix.** Dispatch to the dev agent — it's a 2-line Leaflet fix that would unlock the map for every shopper who visits /map.
+2. **Scraped listing cleanup.** One backend pass cleans up wrong sale type badges, the "Location not available" confusion, and duplicate category tiles.
+3. **UTM verification.** You need to open one URL in Chrome and check one value in DevTools. Takes 60 seconds. Until you do, we don't know if outreach attribution is working.
+
+---
+
+## Action Items for Patrick
+
+- [ ] **Verify UTM tracking:** Open a normal Chrome tab (not Cowork), go to `https://finda.sale/search?utm_source=email&utm_campaign=test`, then open DevTools → Application → Session Storage → check for `fsa_utm`. Tell the agent what you see.
+- [ ] **Run the S831 push block** (from last session — 4 files including the UTM fix and verified roadmap entries)
+- [ ] **GBP phone verification:** Go to business.google.com → "Verify now" → enter the phone code to claim the FindA.Sale Google Business Profile
+- [ ] **#239 legal gate:** Consignor payouts to real bank accounts are built and waiting — get your attorney + CPA sign-off before flipping the live switch
+
+---
+
+## Blocked Queue (5 items — dev sessions are clear to proceed)
+
+| Feature | What's Blocking It |
+|---------|-------------------|
+| RSVP XP Monthly Cap | Need 5 RSVPs in one month to test the cap |
+| Shopify Cross-Listing | Need a test Shopify store connected |
+| eBay Post-Sale Panel | Need a completed sale with eBay items |
+| Consignor Payout Email | Need to run a payout to a real email address |
+| UTM Attribution | Needs your real-browser verify (see above) |

@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S830 — QA: #319/#325/#328 ✅ CHROME VERIFIED end-to-end. Navigated to add-items as Bob Smith (user2), selected 3 real canvas-generated images, clicked Analyze All — pipeline fired (Analyzing... progress bar), redirected to /review queue showing "Review 3 items before they go live": Item 1 "Wooden Chair, Simple Design" (Chairs, Used, 55% conf, $3500), Item 2 "Ceramic Vase, Blue Glaze" (Vases, Art, Used), Item 3 "Vintage Table Lamp, Mid-Century Modern Style" (Lamps, Furniture, Used, 62% conf, $2800). DB confirmed: 3 Item rows + 3 Photo rows with correct saleId (zero orphans). Full S825+S828+S829 fix chain verified. Test data cleaned from DB. Blocked Queue: 4 rows (unchanged — no new bugs).**
+**Latest: S831 — QA+DEV+Records: Multi-feature batch. (1) Records: #319/#325/#328 Chr ✅ applied to roadmap.md. (2) UTM QA: #462/#463/#464 ❌ BROKEN — redirectCount=3 strips params before React mount; `skipTrailingSlashRedirect` fix didn't work. Root cause: Chrome MCP navigate strips params (3 prefetch requests), confirmed HTTP 200 with params but `window.location.search` empty at mount. Fix applied: UTMCapture reads `window.location.search` on initial mount (empty deps []). Chrome MCP can't verify this fix (extension artifact) — Patrick must confirm via real browser. (3) Homepage filter pills #176 ✅ — "This Weekend" filters 20→9 sales. (4) robots.txt ✅, DMCA page ✅. (5) #297 eBay Policy Sync ✅ — amber warning state correct, Sync button present (⚠️ P3: "Token issue: 401" visible — could confuse real organizers). (6) #298 eBay Advanced Setup ✅ — all 8 sections: Default Policies, Push Defaults, Shipping by Weight, Special Rules, Category Overrides, Description Template, Pickup Location, Custom Label. (7) #334 Markdown Cycles ✅ — Create Markdown Cycle modal opens with all fields. (8) #41 Flip Report ✅ — KPIs correct, HTML entities decoded. Blocked Queue: 5 rows.**
 
 **Previous: S829 — QA+DEV: #319/#325/#328 final bug chain found + fixed. (1) Chrome QA: API confirmed returning clusters (200, suggestedTitle "Steam Controller...", aiConfidence 0.92). (2) P1 found: itemsToCreate filter used `a.photoUrl` (undefined on ClusterSummary) → ALL clusters filtered out → "No photos could be analyzed" toast every time. (3) P1 found: `photoUrls: [a.photoUrl]` mapped undefined instead of actual Cloudinary URLs. (4) P0 data hygiene: batch-analyze creates items with saleId=NULL (orphaned, never visible). (5) Three fixes shipped: SmartInventoryUpload.tsx filter/map corrected (photoIndices→uploadedUrls[i]); batchAnalyzeController.ts now extracts+validates saleId, passes to both item.create calls; SmartInventoryUpload.tsx sends saleId in batch-analyze request, redirects directly after analysis (skipping duplicate createItemsMutation). Both packages 0 TS errors. Blocked Queue: 4 rows.**
 
@@ -265,20 +265,24 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 **Blocked Queue: 5 rows (below ≥8 ceiling — dev sessions clear).**
 
-**S831 mid-session:** Records applied #319/#325/#328 Chrome ✅ to roadmap. UTM QA #462/#463/#464: ❌ BROKEN — `redirectCount: 3` strips params before `router.query` populated. Fix applied (UTMCapture now uses `window.location.search` on mount). CODE-ONLY pending deploy + Chrome re-QA.
+**S831 complete.** Records applied, UTM fix deployed (Vercel green). 6 features Chrome-verified. Needs Patrick UTM real-browser check.
 
 **Patrick actions required:**
 
-1. **Push block for S830 (2 files):**
+1. **UTM real-browser verify:** Open `https://finda.sale/search?utm_source=email&utm_campaign=test` in normal Chrome. DevTools → Application → Session Storage → check `fsa_utm` key. Report result.
+
+2. **Push block for S831 (4 files):**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add packages/frontend/pages/_app.tsx
    git add claude_docs/STATE.md
    git add claude_docs/patrick-dashboard.md
-   git commit -m "docs: S830 wrap — #319/#325/#328 Chrome verified, Pending Chrome Verifications table updated"
+   git add claude_docs/strategy/roadmap.md
+   git commit -m "fix: UTMCapture reads window.location.search on mount — bypasses redirect chain (#462/#463/#464); records: #319/#325/#328 Chrome verified; S831 wrap"
    .\push.ps1
    ```
-2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
+3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+4. **#239 legal gate:** Attorney + CPA before live consignor payouts.
 
 **Dispatch stubs (next session):**
 - **Records: Apply S830 Chrome verifications** — findasale-records reads Pending Chrome Verifications table and updates roadmap.md Chrome column for #319/#325/#328 → ✅.
