@@ -32,20 +32,29 @@ const RegisterPage = () => {
   const [shopperEmailConsent, setShopperEmailConsent] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [claimOrganizerId, setClaimOrganizerId] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
 
-  // Pre-fill referral codes from URL params
+  // Pre-fill referral codes and claim params from URL
   // ?ref= for shopper-to-shopper referral rewards (existing system)
   // ?aff= for organizer-to-organizer affiliate program (new system)
+  // ?claim= for organizer profile claim flow — Feature #443
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('ref');
     const aff = params.get('aff');
     const invite = params.get('invite');
+    const claim = params.get('claim');
     if (ref) setFormData(prev => ({ ...prev, referralCode: ref }));
     if (aff) setFormData(prev => ({ ...prev, affiliateReferralCode: aff }));
     // Invite codes are for organizer beta access — pre-select ORGANIZER role
     if (invite) setFormData(prev => ({ ...prev, inviteCode: invite.toUpperCase(), role: 'ORGANIZER' }));
+    // Claim flow: arriving from organizer profile "Claim This Profile" button
+    if (claim) {
+      sessionStorage.setItem('claimOrganizerId', claim);
+      setClaimOrganizerId(claim);
+      setFormData(prev => ({ ...prev, role: 'ORGANIZER' }));
+    }
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -187,6 +196,16 @@ const RegisterPage = () => {
           router.push('/organizer/dashboard?welcomed=workspace');
         }
       } else if (response.data.user.roles?.includes('ORGANIZER')) {
+        // Feature #443: claim flow — fire claim endpoint if arrived from organizer profile page
+        const storedClaimId = sessionStorage.getItem('claimOrganizerId');
+        if (storedClaimId) {
+          sessionStorage.removeItem('claimOrganizerId');
+          try {
+            await api.post(`/organizers/${storedClaimId}/claim-oauth`);
+          } catch (_) { /* non-fatal — user is logged in, claim failed silently */ }
+          router.push('/organizer/dashboard?claimed=true');
+          return;
+        }
         router.push('/organizer/dashboard');
       } else {
         router.push('/');
@@ -214,10 +233,20 @@ const RegisterPage = () => {
       <div className="max-w-md w-full mx-auto space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-warm-900 dark:text-warm-100">
-            Create your account
+            {claimOrganizerId ? 'Claim your storefront' : 'Create your account'}
           </h2>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {claimOrganizerId && (
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 text-center">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                You're claiming your FindA.Sale storefront.
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-300 mt-1">
+                Create a free account — once registered, your profile is immediately linked and you're in control.
+              </p>
+            </div>
+          )}
           {formData.affiliateReferralCode && (
             <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
               <div className="flex items-start gap-3">
@@ -414,7 +443,7 @@ const RegisterPage = () => {
             </div>
           )}
 
-          {!formData.inviteCode && (
+          {!formData.inviteCode && !claimOrganizerId && (
             <div>
               <label htmlFor="inviteCode" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
                 Beta Invite Code <span className="text-warm-400 font-normal">(if you have one)</span>
@@ -571,6 +600,9 @@ const RegisterPage = () => {
               if (formData.inviteCode) {
                 sessionStorage.setItem('pendingInviteCode', formData.inviteCode);
               }
+              // Feature #443: preserve claim param through OAuth redirect
+              const claimParam = new URLSearchParams(window.location.search).get('claim');
+              if (claimParam) sessionStorage.setItem('claimOrganizerId', claimParam);
               signIn('google', { callbackUrl: '/auth/oauth-callback' });
             }}
             className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-sm font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
@@ -590,6 +622,9 @@ const RegisterPage = () => {
               if (formData.inviteCode) {
                 sessionStorage.setItem('pendingInviteCode', formData.inviteCode);
               }
+              // Feature #443: preserve claim param through OAuth redirect
+              const claimParam = new URLSearchParams(window.location.search).get('claim');
+              if (claimParam) sessionStorage.setItem('claimOrganizerId', claimParam);
               signIn('facebook', { callbackUrl: '/auth/oauth-callback' });
             }}
             className="w-full inline-flex justify-center items-center gap-2 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-sm font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
