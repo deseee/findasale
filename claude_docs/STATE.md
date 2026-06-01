@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S836 — DEV: UTM fix attempt 3 (middleware cookie + vercel.json trailingSlash:false). All 3 fixes failed — strip confirmed happening before request reaches server. Root cause: browser-level stripping suspected (Chrome incognito strips utm_* params). Diagnostic needed: test non-utm param name to confirm. Blocked Queue: 5 rows.**
+**Latest: S836 — DEV+QA: #462/#463/#464 UTM attribution ✅ FULLY VERIFIED. Root cause confirmed: Chrome incognito strips utm_* params at browser level before request is sent. Fix: email links use fsa_* param names (Chrome-safe). UTMCapture reads fsa_* as primary source, maps to utm_* for sessionStorage. Confirmed via console: sessionStorage.getItem('fsa_utm') = {"utm_source":"outreach","utm_medium":"email","utm_campaign":"touch1","utm_content":"hot",...}. Blocked Queue: 4 rows.**
 
 **Previous: S835 — QA+Fix: #167 admin queue properly re-verified with real DB data (Patrick caught rubber-stamping of empty state). 2 test disputes injected via psycopg2 → /admin/disputes confirmed: dispute cards show buyer/seller/reason, expand reveals description + 4 status buttons, "Mark Under review" clicked → green toast + badge updated live without reload, F5 reload → status persisted. Admin guard verified (user5 → redirected to homepage). P2 found + fixed: filter tabs disappeared when filtered status returned empty results (EmptyState rendered before tabs, trapping admin). Fix: disputes.tsx restructured so tabs always render; inline empty state now context-aware ("No Open Disputes — try another filter"). UTM #462/#463/#464 ❌ confirmed broken in Patrick's real browser — session storage empty after navigating to finda.sale/search?utm_source=email in incognito; URL showed stripped params before page loaded. Needs new dev investigation. Blocked Queue: 5 rows.**
 
@@ -257,7 +257,7 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 
 | #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Consignor emails use Gmail API (not Resend — that was a red herring). Same service as all working transactional emails. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
-| #462/#463/#464 UTM Params | ✅ ROOT CAUSE CONFIRMED + FIXED S836 — Chrome incognito strips utm_* params at browser level (confirmed by fsa_src=email surviving, utm_source=email stripped). Fix: email outreach links now use fsa_* param names (fsa_src/fsa_med/fsa_cmp/fsa_cnt). UTMCapture reads fsa_* as primary, utm_* as fallback, cookie as tertiary. middleware.ts updated to normalise both. Needs Chrome QA: navigate to finda.sale/organizers/[any-id]?fsa_src=outreach&fsa_med=email&fsa_cmp=touch1&fsa_cnt=hot in incognito, check sessionStorage fsa_utm. | Chrome QA after deploy: fsa_* params survive incognito, fsa_utm written to sessionStorage | S836 |
+
 
 ---
 
@@ -290,10 +290,20 @@ _S835: S832 entries cleared — applied to roadmap in S833. No new pending verif
 2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 3. **#239 legal gate:** Attorney + CPA before live consignor payouts.
 
-**Dispatch stubs (next session):**
-- **UTM #462/#463/#464 — new dev investigation:** `window.location.search` fix (S831 CODE-ONLY) confirmed not working. Patrick verified in real browser — session storage empty, URL shows params stripped before mount. Dispatch `Skill('findasale-dev')` to investigate the Vercel redirect chain (middleware approach or cookie-before-redirect pattern). Root cause: server-side redirect strips params before React boots.
-- **#308 Item Hide:** Needs staging env or test sale — skip on live sale with real items.
-- **Next QA batch:** Pull Pending Chrome QA items from roadmap with ⚠️ partial or UNVERIFIED status from S804 era. Many features unverified for 30+ sessions.
+**Dispatch stubs (next session — QA batch):**
+
+QA session. Blocked Queue at 4 (below ≥8 ceiling). S804-era UNVERIFIED items are 32 sessions old — all P0 by age floor. Run sequential Chrome micro-dispatches (one feature per QA call, Chrome agents must be sequential).
+
+Priority QA targets (all UNVERIFIED S804, 32 sessions = P0):
+1. **#166 Invites** — ORG/SIMPLE. Dispatch: `Skill('findasale-qa')` → navigate /organizer/settings, find invite flow, send invite to test email, verify invite-to-sale and beta code acceptance.
+2. **#74 Role-Aware Registration Consent** — BOTH/FREE. Dispatch: navigate /register as new user, verify consent checkboxes present, copy attorney-reviewed.
+3. **#72 Dual-Role Account Schema** — BOTH/SIMPLE. Dispatch: log in as a dual-role account (organizer+shopper), verify nav has no duplicates, test organizer and shopper endpoints work.
+4. **#165 A/B Testing Infrastructure** — ORG/SIMPLE. Dispatch: verify A/B variant assignment visible somewhere in organizer flow.
+5. **#150 Push Notification Subscriptions** — BOTH/SIMPLE. Dispatch: verify VAPID subscription prompt fires, service worker registered.
+6. **#36 Weekly Treasure Digest** — SHO/FREE. CODE-ONLY acceptable (cron job, can't force Sunday 6pm).
+7. **#61 Near-Miss Nudges** — SHO/FREE. Dispatch: verify nudge API endpoint responds, check if any UI surfaces it.
+
+Also pending: #308 Item Hide (needs test sale, not live items), #25 eBay Sync Phase B/C browser verification.
 
 ## Recent Sessions
 
@@ -306,6 +316,27 @@ _S835: S832 entries cleared — applied to roadmap in S833. No new pending verif
 **UTM #462/#463/#464 ❌ confirmed broken in real browser:** Patrick navigated to finda.sale/search?utm_source=email in real Chrome incognito. Session storage empty. URL shows params already stripped. S831 CODE-ONLY fix (window.location.search on mount) did not work — server-side redirect strips params before React boots.
 
 **Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md` · `packages/frontend/pages/admin/disputes.tsx` · `packages/backend/src/controllers/userController.ts` (S833 fix included in push)
+
+---
+
+### S836 — DEV+QA: #462/#463/#464 UTM attribution ✅ verified, Vercel build failure fixed
+
+**Root cause confirmed:** Chrome incognito strips `utm_*` params at the browser level before the HTTP request is sent. No server-side fix (middleware, skipTrailingSlashRedirect, window.location.search) could intercept them — they never arrive.
+
+**Fix shipped:**
+- `outreachEmailsCron.ts`: email links now use `fsa_*` param names (`fsa_src`, `fsa_med`, `fsa_cmp`, `fsa_cnt`) — Chrome-safe, not on strip list
+- `middleware.ts`: updated to capture both `fsa_*` (primary) and `utm_*` (legacy/non-incognito) and normalise to utm_* in `fsa_utm_pending` cookie
+- `_app.tsx` UTMCapture: reads `fsa_*` as primary source, `utm_*` as fallback, cookie as tertiary — all normalised to `utm_*` in sessionStorage
+- `_app.tsx`: also fixed missing `  );
+}
+
+export default MyApp;
+` closing (caused S835 push Vercel build failure)
+- `vercel.json`: added `"trailingSlash": false, "cleanUrls": false` (belt-and-suspenders against infrastructure redirect)
+
+**Verified:** Incognito Chrome → `finda.sale/search?fsa_src=outreach&fsa_med=email&fsa_cmp=touch1&fsa_cnt=hot` → `sessionStorage.getItem('fsa_utm')` = `{"utm_source":"outreach","utm_medium":"email","utm_campaign":"touch1","utm_content":"hot","captured_at":"2026-06-01T14:48:54.209Z"}` ✅
+
+**Files changed:** `packages/frontend/middleware.ts` · `packages/frontend/pages/_app.tsx` · `packages/frontend/vercel.json` · `packages/backend/src/jobs/outreachEmailsCron.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
 
 ---
 

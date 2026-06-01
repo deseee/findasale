@@ -1,59 +1,59 @@
-# Patrick's Dashboard — Week of June 2, 2026
+# Patrick's Dashboard — S836 Wrap
 
 ---
 
-## What Happened This Session (S835)
+## What Happened This Session (S836)
 
-**#167 Disputes admin queue — properly verified with real data.** You caught a rubber-stamp: the previous check showed "No Disputes" empty state and called it verified. That's not a verification. This session injected 2 real test disputes into the DB via psycopg2, then verified the admin queue end-to-end:
-- Dispute cards show buyer name, seller name, reason, and date ✅
-- Expanding a card shows the full description + 4 status buttons ✅
-- Clicking "Mark Under Review" fires a green toast and updates the badge live without page reload ✅
-- Hard refresh (F5) — status change persisted ✅
-- Admin guard confirmed: user5 (shopper) navigated to /admin/disputes → redirected to homepage ✅
-- Test data cleaned up after verification
+**#462/#463/#464 UTM attribution ✅ FIXED and VERIFIED after 3 sessions of investigation.**
 
-**P2 bug found and fixed:** When filtering disputes by status (e.g. "Open") and there are no results, the filter tabs disappeared — leaving the admin stuck on a blank page with no way to switch to another filter without navigating away. Fixed: the tabs now always render, and the empty state message is now context-aware ("No Open Disputes — try another filter.").
+Root cause: Chrome strips `utm_*` query params in incognito mode at the browser level — before any request is sent to the server. Every server-side fix was attacking the wrong layer.
 
-**UTM tracking ❌ still broken — confirmed in your real browser.** You navigated to `finda.sale/search?utm_source=email` in incognito and the session storage was empty. The URL showed just `/search` — params stripped before the page loaded. The code fix from a previous session didn't work. The redirect is happening at the server level before React even starts. Needs a new developer investigation.
+The real fix: outreach email links now use custom `fsa_*` param names (`fsa_src`, `fsa_med`, `fsa_cmp`, `fsa_cnt`). Chrome doesn't recognize these as tracking params and leaves them alone. UTMCapture maps them back to standard `utm_*` names internally. Verified with console: `sessionStorage.getItem('fsa_utm')` returned `{"utm_source":"outreach","utm_medium":"email","utm_campaign":"touch1","utm_content":"hot"}`.
+
+Also fixed: the Vercel build failure from the S835 push (missing closing bracket in `_app.tsx`).
 
 ---
 
-## Action Items for Patrick
+## Current State
 
-- [ ] **Push block (covers S833 + S834 + S835):**
+**Blocked Queue: 4 items** (below ≥8 QA ceiling — dev sessions available)
 
+| Item | Status |
+|------|--------|
+| RSVP XP Monthly Cap | Waiting for organic usage (5 RSVPs/month needed) |
+| #332 Shopify Cross-Listing | Needs Shopify OAuth test store |
+| #293 eBay Post-Sale Panel | Needs completed sale with eBay connection |
+| #335 Consignor Payout Email | CODE-ONLY — needs real email address to verify delivery |
+
+---
+
+## Your Actions Required
+
+1. **Push block (S836 docs):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git add packages/backend/src/controllers/userController.ts
-git add packages/frontend/pages/admin/disputes.tsx
-git commit -m "fix: disputes filter tabs always render on empty state (P2); fix: dispute form itemId bug; docs: S833-S835 QA wrap"
+git commit -m "docs: S836 wrap — #462/#463/#464 ✅ UTM verified, next QA batch queued"
 .\push.ps1
 ```
 
-- [ ] **GBP phone verification:** business.google.com → "Verify now" → enter phone code.
-- [ ] **#239 legal gate:** Attorney + CPA sign-off before live consignor payouts.
+2. **GBP phone verification:** business.google.com → "Verify now" → phone code (still pending).
+3. **#239 legal gate:** Attorney + CPA before live consignor payouts.
 
 ---
 
-## Platform Health
+## Next Session — QA Batch
 
-- **Blocked Queue:** 5 items (below 8-item ceiling — dev is unblocked)
-- **Backend:** Railway — healthy
-- **Frontend:** Vercel — healthy
-- **UTM tracking:** ❌ broken — server strips params before React loads (needs dev fix)
-- **#167 Disputes:** ✅ fully verified (shopper + admin queue)
+S804-era UNVERIFIED items are now 32 sessions old (all P0 by age floor). QA session targeting:
 
----
+- **#166 Invites** — organizer invite flow end-to-end
+- **#74 Role-Aware Registration Consent** — consent checkboxes at /register
+- **#72 Dual-Role Account Schema** — nav deduplication for organizer+shopper accounts
+- **#165 A/B Testing Infrastructure** — variant assignment visible in organizer flow
+- **#150 Push Notification Subscriptions** — VAPID prompt + service worker
+- **#36 Weekly Treasure Digest** — CODE-ONLY acceptable (cron, can't force timing)
+- **#61 Near-Miss Nudges** — API + any UI surface
 
-## Recent Sessions
-
-| Session | Type | Outcome |
-|---------|------|---------|
-| S835 | QA+Fix | #167 admin queue ✅ (real data), P2 filter bug fixed, UTM ❌ confirmed broken |
-| S834 | QA | #167 shopper E2E ✅, #200 ✅, #160 ✅ |
-| S833 | QA | #279 ✅, #167 P2 bug fixed, S832 roadmap applied |
-| S832 | QA | 6 features Chrome-verified (#135/#302/#300/#301/#288/#297) |
-| S831 | QA+Dev | UTM fix shipped (CODE-ONLY), batch upload re-QA |
+Chrome agents run SEQUENTIALLY — one feature per dispatch.

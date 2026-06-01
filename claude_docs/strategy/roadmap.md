@@ -1,6 +1,6 @@
 # ROADMAP – FindA.Sale v2
 
-**Last Updated:** 2026-06-01 (Weekly audit — #464 ROADMAP DRIFT fixed: status updated from SHIPPED S807 to ❌ BROKEN S831 per STATE.md Blocked Queue. S831 records — #319/#325/#328 ✅ Chrome verified S830. Navigated to add-items as Bob Smith (user2), selected 3 photos, clicked Analyze All, progress bar fired, redirected to /review with 3 items + AI titles/prices/tags. DB: 3 Items + 3 Photos, correct saleId, zero orphans. ss_4260bh56l ss_9170udryr. All 3 Chr columns updated.)
+**Last Updated:** 2026-06-01 (Weekly audit — #464 ROADMAP DRIFT fixed: status updated from SHIPPED S807 to ✅ FIXED S836 — fsa_* param names bypass Chrome incognito utm_* stripping; sessionStorage verified. S831 records — #319/#325/#328 ✅ Chrome verified S830. Navigated to add-items as Bob Smith (user2), selected 3 photos, clicked Analyze All, progress bar fired, redirected to /review with 3 items + AI titles/prices/tags. DB: 3 Items + 3 Photos, correct saleId, zero orphans. ss_4260bh56l ss_9170udryr. All 3 Chr columns updated.)
 
 **Status:** Production MVP live at finda.sale. Beta: GO. Full build history: `claude_docs/strategy/COMPLETED_PHASES.md`.
 
