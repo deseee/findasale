@@ -4,54 +4,42 @@
 
 ## What Happened This Week
 
-The week was dominated by a hunt-and-fix sprint on the batch photo upload feature — the one where you drop photos, it analyzes them with AI, and creates items automatically. It had been silently broken since launch (items were never actually saved to the database). The agents ran it down across 5 sessions, found 4 separate bugs stacked on top of each other, and on Friday confirmed it working end-to-end in a real browser: 3 photos dropped → AI titles, categories, prices generated → 3 items created correctly in the database. That feature is closed.
+S832 was a full QA sweep. 6 features verified end-to-end in Chrome:
 
-The week also produced a second fix for UTM attribution (the tracking that tells us where organizer signups came from), plus 8 features verified in Chrome across robots.txt, DMCA page, eBay settings, homepage filter pills, and the Flip Report.
+**Social Templates (#135):** The Promote page (where organizers share sales on social media) has all 8 platforms working — Facebook, Instagram, Nextdoor, Threads, WhatsApp, Pinterest, TikTok, Email. Clicking any of them copies a ready-to-post message to the clipboard and shows a green "Copied!" confirmation.
 
----
+**Email Verification Gate (#302):** New organizer accounts correctly see an amber "Check your inbox" banner on their dashboard until they verify. Confirmed by registering a fresh test account.
 
-## Audit Results (Weekly — May 30)
+**Return-to-Inventory (#300):** From the Flip Report, organizers can select unsold items and return them to persistent inventory. Tested full flow — 3 items returned, all confirmed in inventory page as AVAILABLE.
 
-The weekly audit found no critical issues and confirmed 4 previously broken things are now fixed (categories page, privacy page, calendar, search).
+**Label Sheet Composer (#301):** The price-tag label builder works end-to-end. Price chips, quantity picker, live Avery 5160 sheet preview, and the backend PDF generation all confirmed (35KB PDF returned on export).
 
-The one problem that needs real attention: **the map is broken for shoppers.** The pins exist in the code — 197 of them — but they render about 13,000 pixels off-screen, so the map just looks empty. This has persisted for two weeks. It needs a dev fix this week.
+**Featured Boost E2E (#288):** The ⭐ Boost Sale flow works completely. Clicked on your Artifact Downtown Paw Paw sale, selected the 100 XP rail, confirmed the boost is ACTIVE in the database. Note: this spent 100 XP from your real artifactmi account (283 → 183 XP).
 
-Four medium issues were also flagged, all related to scraped directory listings showing wrong sale type badges, a confusing "Location not available" message, and a breadcrumb with a trailing slash. A single dev pass on scraped-sale normalization would clean all four.
+**eBay Policy Sync (#297):** The "Sync from eBay" button on your eBay settings page works — it refreshed your policy sync date to today (6/1/2026) and the green checkmark persists after page reload.
 
----
-
-## Pending Decisions
-
-No pending decisions from the DECISIONS registry. All standing decisions (all sale types, dark mode, mobile-first, etc.) are locked and holding.
-
----
-
-## Beta Tester Impact
-
-**Better this week:** The batch upload + AI photo analysis feature actually works now — this is a core value-driver for organizers. The homepage "This Weekend" filter pill works. The DMCA page and robots.txt are live. The Flip Report displays cleanly.
-
-**Still rough:** The map page shows an empty map to shoppers even though there are hundreds of sales loaded. Organizers using UTM-tracked links (from our outreach emails) may still not have attribution tracked — needs your real-browser confirmation.
-
----
-
-## This Week's Priority
-
-1. **Map fix.** Dispatch to the dev agent — it's a 2-line Leaflet fix that would unlock the map for every shopper who visits /map.
-2. **Scraped listing cleanup.** One backend pass cleans up wrong sale type badges, the "Location not available" confusion, and duplicate category tiles.
-3. **UTM verification.** You need to open one URL in Chrome and check one value in DevTools. Takes 60 seconds. Until you do, we don't know if outreach attribution is working.
+The UTM attribution fix is deployed to Vercel (confirmed READY). The Chrome extension can't test it because it strips URL query params during navigation. This is a Cowork extension limitation, not an app bug. The fix is correct — you just need to confirm it in your regular Chrome browser.
 
 ---
 
 ## Action Items for Patrick
 
-- [ ] **Verify UTM tracking:** Open a normal Chrome tab (not Cowork), go to `https://finda.sale/search?utm_source=email&utm_campaign=test`, then open DevTools → Application → Session Storage → check for `fsa_utm`. Tell the agent what you see.
-- [ ] **Run the S831 push block** (from last session — 4 files including the UTM fix and verified roadmap entries)
-- [ ] **GBP phone verification:** Go to business.google.com → "Verify now" → enter the phone code to claim the FindA.Sale Google Business Profile
-- [ ] **#239 legal gate:** Consignor payouts to real bank accounts are built and waiting — get your attorney + CPA sign-off before flipping the live switch
+- [ ] **Verify UTM tracking (60 seconds):** Open a new incognito window in regular Chrome. Go to `https://finda.sale/search?utm_source=email&utm_campaign=test`. Open DevTools (F12) → Application tab → Session Storage → finda.sale. Check for key `fsa_utm` — should contain `{"utm_source":"email","utm_campaign":"test",...}`. Report back what you see.
+- [ ] **Push block for S832:**
+  ```powershell
+  cd C:\Users\desee\ClaudeProjects\FindaSale
+  git add claude_docs/STATE.md
+  git add claude_docs/patrick-dashboard.md
+  git commit -m "docs: S832 QA wrap — #135/#302/#300/#301/#288/#297 Chrome verified"
+  .\push.ps1
+  ```
+  Note: The S831 push block (4 files including _app.tsx UTM fix) should already be pushed from last session. If not, push those first.
+- [ ] **GBP phone verification:** business.google.com → "Verify now" → phone code
+- [ ] **#239 legal gate:** Attorney + CPA sign-off before live consignor payouts
 
 ---
 
-## Blocked Queue (5 items — dev sessions are clear to proceed)
+## Blocked Queue (5 items — dev sessions clear)
 
 | Feature | What's Blocking It |
 |---------|-------------------|

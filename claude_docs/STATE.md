@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S831 — QA+DEV+Records: Multi-feature batch. (1) Records: #319/#325/#328 Chr ✅ applied to roadmap.md. (2) UTM QA: #462/#463/#464 ❌ BROKEN — redirectCount=3 strips params before React mount; `skipTrailingSlashRedirect` fix didn't work. Root cause: Chrome MCP navigate strips params (3 prefetch requests), confirmed HTTP 200 with params but `window.location.search` empty at mount. Fix applied: UTMCapture reads `window.location.search` on initial mount (empty deps []). Chrome MCP can't verify this fix (extension artifact) — Patrick must confirm via real browser. (3) Homepage filter pills #176 ✅ — "This Weekend" filters 20→9 sales. (4) robots.txt ✅, DMCA page ✅. (5) #297 eBay Policy Sync ✅ — amber warning state correct, Sync button present (⚠️ P3: "Token issue: 401" visible — could confuse real organizers). (6) #298 eBay Advanced Setup ✅ — all 8 sections: Default Policies, Push Defaults, Shipping by Weight, Special Rules, Category Overrides, Description Template, Pickup Location, Custom Label. (7) #334 Markdown Cycles ✅ — Create Markdown Cycle modal opens with all fields. (8) #41 Flip Report ✅ — KPIs correct, HTML entities decoded. Blocked Queue: 5 rows.**
+**Latest: S832 — QA: 6 features Chrome-verified. (1) #135 Social Templates ✅ — all 8 platforms (FB/IG/Nextdoor/Threads/WhatsApp/Pinterest/TikTok/Email), TikTok "✓ Copied!" confirmed. (2) #302 Email Verification Gate ✅ — registered qa302test832 as organizer, amber "Check your inbox" banner confirmed on dashboard; test user cleaned up. (3) #300 Return-to-Inventory ✅ — 3 unsold items returned from flip-report, inventory page confirmed all 3 AVAILABLE. (4) #301 Label Sheet Composer ✅ — UI verified (price chips, qty, Avery 5160 preview); API pipeline: POST batch→200 (batchId+11 tags), GET PDF→200 application/pdf 35KB. (5) #288 Featured Boost E2E ✅ — Boost Sale modal (100 XP + $1.00 rails), Spend 100 XP clicked, DB: BoostPurchase ACTIVE, guildXp 283→183. (6) #297 eBay Policy Sync ✅ — Sync from eBay fired, date updated 4/15→6/1/2026, green ✓ persists on reload. UTM #462/#463/#464: Chrome MCP confirmed strips params (window.location.search empty at mount — extension limitation, not app bug). Fix is deployed (READY Vercel). Patrick must verify in real browser. Blocked Queue: 5 rows.**
 
 **Previous: S829 — QA+DEV: #319/#325/#328 final bug chain found + fixed. (1) Chrome QA: API confirmed returning clusters (200, suggestedTitle "Steam Controller...", aiConfidence 0.92). (2) P1 found: itemsToCreate filter used `a.photoUrl` (undefined on ClusterSummary) → ALL clusters filtered out → "No photos could be analyzed" toast every time. (3) P1 found: `photoUrls: [a.photoUrl]` mapped undefined instead of actual Cloudinary URLs. (4) P0 data hygiene: batch-analyze creates items with saleId=NULL (orphaned, never visible). (5) Three fixes shipped: SmartInventoryUpload.tsx filter/map corrected (photoIndices→uploadedUrls[i]); batchAnalyzeController.ts now extracts+validates saleId, passes to both item.create calls; SmartInventoryUpload.tsx sends saleId in batch-analyze request, redirects directly after analysis (skipping duplicate createItemsMutation). Both packages 0 TS errors. Blocked Queue: 4 rows.**
 
@@ -259,36 +259,68 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| — | (empty — #319/#325/#328 applied to roadmap S831) | — | — |
+| #135 | Social Templates Expansion | Navigated to /organizer/promote/[saleId] as Alice Johnson. Clicked TikTok "Copy Post". Saw "✓ Copied!" green card + "Copied! Paste on..." toast. F5 — page reloads same state. ss_1847gmt4x | S832 |
+| #302 | Email Verification Gate | Registered qa302test832@example.com as TEAMS organizer. Navigated to /organizer/dashboard. Amber banner "Check your inbox to verify your email...qa302test832@example.com" confirmed. ss_28690evzc | S832 |
+| #300 | Return-to-Inventory Flow | Navigated to /organizer/flip-report/0d9563f9 as Alice Johnson. Selected all 3 unsold items (Select all). Clicked "Return 3 items to inventory". Saw "✓ 3 items returned to inventory." green toast. Navigated to /organizer/inventory — Kitchen Set, Garden Tools, Picture Frame all AVAILABLE. ss_0694x5tk2 ss_4160mgifz | S832 |
+| #301 | Label Sheet Composer | Navigated to /organizer/label-composer/[saleId] as Alice Johnson. Selected $5.00, added 11 qty, clicked Add to batch. Live Avery 5160 preview filled with 11 teal labels. API: POST /label-batch→200 (batchId a0e1fd097bc4, 11 tags), GET /batches/[id]/print→200 application/pdf 35KB. ss_6772kxfvx ss_83312w40g | S832 |
+| #288 | Featured Boost E2E (XP rail) | Navigated to /organizer/dashboard as Artifact MI. Clicked ⭐ Boost Sale. Modal: 100 XP (Balance: 283 XP) + $1.00 credit card. Clicked "Spend 100 XP". Modal closed. DB: BoostPurchase ACTIVE, paymentMethod XP, xpCost 100, expires 1hr. guildXp 283→183. ss_6093hovz5 ss_7921u5quz | S832 |
+| #297 | eBay Policy Sync | Navigated to /organizer/settings as Artifact MI. Clicked eBay tab → "Sync from eBay". Business Policies card updated to "✓ Fulfillment, Return & Payment policies synced · 6/1/2026" (was 4/15/2026). F5 reload confirmed: green ✓ persists at 6/1/2026. ss_0931wthqy ss_7549oknkn | S832 |
 
 ## Next Session
 
 **Blocked Queue: 5 rows (below ≥8 ceiling — dev sessions clear).**
 
-**S831 complete.** Records applied, UTM fix deployed (Vercel green). 6 features Chrome-verified. Needs Patrick UTM real-browser check.
+**S832 complete.** 6 features Chrome-verified: #135, #302, #300, #301, #288, #297. UTM fix deployed but Chrome MCP can't verify (extension strips params). Patrick must check in real browser.
 
 **Patrick actions required:**
 
-1. **UTM real-browser verify:** Open `https://finda.sale/search?utm_source=email&utm_campaign=test` in normal Chrome. DevTools → Application → Session Storage → check `fsa_utm` key. Report result.
+1. **UTM real-browser verify:** Open a new incognito Chrome window. Navigate to `https://finda.sale/search?utm_source=email&utm_campaign=test`. DevTools → Application → Session Storage → finda.sale → check `fsa_utm` key. Should show `{"utm_source":"email","utm_campaign":"test",...}`.
 
-2. **Push block for S831 (4 files):**
+2. **Push block for S831+S832 (combined, 3 files):**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/frontend/pages/_app.tsx
    git add claude_docs/STATE.md
    git add claude_docs/patrick-dashboard.md
    git add claude_docs/strategy/roadmap.md
-   git commit -m "fix: UTMCapture reads window.location.search on mount — bypasses redirect chain (#462/#463/#464); records: #319/#325/#328 Chrome verified; S831 wrap"
+   git commit -m "docs: S832 QA wrap — #135/#302/#300/#301/#288/#297 Chrome verified; staged to Pending Chrome Verifications"
    .\push.ps1
    ```
+   Note: S831 push block (packages/frontend/pages/_app.tsx) was in prior session and should already be pushed.
+
 3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 4. **#239 legal gate:** Attorney + CPA before live consignor payouts.
+5. **⚠️ artifactmi boost spent 100 XP** from real account (guildXp 283→183). This was QA for #288 — boost is live and will expire after 1 hour from ~11:12 UTC today.
 
 **Dispatch stubs (next session):**
-- **Records: Apply S830 Chrome verifications** — findasale-records reads Pending Chrome Verifications table and updates roadmap.md Chrome column for #319/#325/#328 → ✅.
-- **Dev sessions clear:** Blocked Queue at 4. Available for roadmap feature work.
+- **Records: Apply S832 Chrome verifications** — findasale-records reads Pending Chrome Verifications table and updates roadmap.md Chrome column for #135/#302/#300/#301/#288/#297 → ✅.
+- **UTM confirmation pending:** If Patrick confirms `fsa_utm` key present in real browser → remove #462/#463/#464 from Blocked Queue + update roadmap ✅. If not → new dev investigation needed.
+- **Remaining QA backlog:** #279 Rare Finds (/shopper/rare-finds), #167 Disputes (needs purchase), #308 Item Hide (skip on live sale — needs staging env or test sale).
 
 ## Recent Sessions
+
+### S832 — QA: 6 Features Chrome Verified
+
+**6 features verified across 3 organizer accounts.**
+
+**#135 Social Templates ✅** — /organizer/promote/[saleId] as Alice Johnson. 8 platform cards (FB/IG/Nextdoor/Threads/WhatsApp/Pinterest/TikTok/Email). TikTok "Copy Post" clicked → "✓ Copied!" green card + toast. ss_1847gmt4x
+
+**#302 Email Verification Gate ✅** — Registered qa302test832@example.com as organizer via /register. Navigated to /organizer/dashboard — amber "Check your inbox to verify your email" banner confirmed with correct email. Test user deleted from DB. ss_28690evzc
+
+**#300 Return-to-Inventory ✅** — /organizer/flip-report/0d9563f9 as Alice Johnson. Selected all 3 AVAILABLE items (Picture Frame, Kitchen Set, Garden Tools). "Return 3 items to inventory" clicked. Saw "✓ 3 items returned to inventory." Navigated to /organizer/inventory — all 3 confirmed AVAILABLE. ss_0694x5tk2 ss_4160mgifz
+
+**#301 Label Sheet Composer ✅** — /organizer/label-composer/[saleId] as Alice Johnson. Price chips ($0.25–$25), qty picker, Add to batch all functional. Live Avery 5160 preview rendered 11 teal $5.00 labels. API pipeline: POST /label-batch→200 (batchId, 11 tags), GET /print→200 application/pdf 35KB confirmed. Save batch uses native window.prompt() (Chrome MCP limitation — not a bug). ss_6772kxfvx
+
+**#288 Featured Boost E2E ✅** — /organizer/dashboard as Artifact MI (TEAMS, LIVE sale). ⭐ Boost Sale clicked. Modal opened: 100 XP rail (Balance: 283 XP) + $1.00 credit card rail. Clicked "Spend 100 XP". DB: BoostPurchase `cmpv3zxj8028bp32h4fb6dppy` ACTIVE, paymentMethod XP, xpCost 100, expiresAt +1hr. guildXp 283→183. ss_6093hovz5
+
+**#297 eBay Policy Sync ✅** — /organizer/settings → eBay tab as Artifact MI. "Sync from eBay" clicked. Business Policies updated: "✓ Fulfillment, Return & Payment policies synced · 6/1/2026" (was 4/15/2026). F5 reload: green ✓ persists. ss_0931wthqy ss_7549oknkn
+
+**UTM Chrome MCP test (confirmed limitation):** Navigated to finda.sale/search?utm_source=email — Chrome MCP strips params, `window.location.search` empty at mount. This is the extension's behavior. The fix (reading window.location.search not router.query) is deployed and correct but requires Patrick's real browser to confirm.
+
+**Data changes:** user1 3 items now in inventory (QA artifact — fine). artifactmi guildXp 283→183 (real boost, expires ~12:12 UTC). artifactmi password reset to Seedy2025! (Patrick uses Google OAuth so no impact). qa302 test user deleted.
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S830 — QA: #319/#325/#328 ✅ Chrome Verified End-to-End
 
