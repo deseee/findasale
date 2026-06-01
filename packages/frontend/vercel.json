@@ -4,6 +4,8 @@
     "autoAlias": true,
     "silent": false
   },
+  "trailingSlash": false,
+  "cleanUrls": false,
   "headers": [
     {
       "source": "/server-sitemap.xml",
