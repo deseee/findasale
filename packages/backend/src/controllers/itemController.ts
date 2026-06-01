@@ -31,6 +31,7 @@ import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase
 import { fetchEbayPriceComps } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid
 import { composeDescription, stripShippingPhrases, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
+import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
 
 // Feature #408: Scan & Split — in-memory tracker for simultaneous QR scans on the same item.
 // Maps itemId → array of { userId, scannedAt } entries. TTL: 60 seconds.
@@ -1273,6 +1274,13 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     res.json(updatedItem);
+
+    // Bug #461: FB nudge on single-item status → SOLD transition
+    if (status === 'SOLD' && item.status !== 'SOLD' && item.fbExportedAt) {
+      notifyFacebookExportedItemSold(id).catch(err =>
+        console.warn(`[FB Nudge] single-item failed for item ${id}:`, err.message)
+      );
+    }
 
     // P2-3: Invalidate command center cache after item update
     invalidateCommandCenterCache(req.user.organizer!.id).catch((err) =>

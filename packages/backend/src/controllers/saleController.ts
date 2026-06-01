@@ -13,6 +13,7 @@ import { markSalePublished } from '../services/mailerliteService';
 import { pingIndexNowForSale } from '../services/indexNowService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
+import { canRemoveWatermark } from '../utils/watermarkPolicy'; // #27b: iCal watermark footer
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
 import { notifyNearbyFavorites } from '../services/rippleService'; // Phase 5: #51 Sale Ripples
 import { getIO } from '../lib/socket'; // V1: Socket.io instance
@@ -1087,7 +1088,7 @@ export const generateIcal = async (req: Request, res: Response) => {
 
     const sale = await prisma.sale.findUnique({
       where: { id },
-      include: { organizer: { select: { businessName: true } } },
+      include: { organizer: { select: { businessName: true, subscriptionTier: true, removeWatermarkEnabled: true } } },
     });
 
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
@@ -1103,7 +1104,8 @@ export const generateIcal = async (req: Request, res: Response) => {
       (s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
 
     const location = `${sale.address}\\, ${sale.city}\\, ${sale.state} ${sale.zip}`;
-    const description = esc(sale.description || '') + (sale.description ? '\\n\\n' : '') + `View items online: ${saleUrl}`;
+    const baseDescription = esc(sale.description || '') + (sale.description ? '\\n\\n' : '') + `View items online: ${saleUrl}`;
+    const description = baseDescription + (!canRemoveWatermark(sale.organizer) ? '\\n\\nShared via FindA.Sale — finda.sale' : '');
 
     const ical = [
       'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FindA.Sale//FindA.Sale//EN',
