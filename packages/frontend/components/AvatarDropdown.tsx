@@ -455,7 +455,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     <span>Plan a Sale</span>
                   </Link>
                   <Link
-                    href="/organizer/sales"
+                    href="/organizer/add-items"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                     title="Add items to any sale or your inventory"
@@ -870,9 +870,6 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
               )}
 
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
-
-
-              <hr className="my-2 border-warm-200 dark:border-gray-700" />
             </>
           )}
 
@@ -960,14 +957,6 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                   >
                     <Package size={16} className="text-indigo-500" />
                     <span>My History</span>
-                  </Link>
-                  <Link
-                    href="/shopper/settings"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Settings size={16} className="text-indigo-500" />
-                    <span>Settings</span>
                   </Link>
                 </>
               )}
@@ -1097,12 +1086,13 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     <span>Bounty Board</span>
                   </Link>
                   <Link
-                    href="/shopper/guild-primer"
+                    href="/shopper/ranks"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
+                    title="Explorer rank benefits, thresholds, and your progress"
                   >
-                    <Star size={16} className="text-indigo-500" />
-                    <span>Explorer's Guild</span>
+                    <Trophy size={16} className="text-indigo-500" />
+                    <span>Rank Guide</span>
                   </Link>
                   <Link
                     href="/coupons"
@@ -1243,14 +1233,35 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
             <UserCircle size={16} className={isOrganizer ? "text-amber-600" : "text-indigo-500"} />
             <span>{isOrganizer ? "My Profile" : "Explorer Profile"}</span>
           </Link>
-          <Link
-            href={isOrganizer ? "/organizer/settings" : "/shopper/settings"}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-            onClick={() => setIsOpen(false)}
-          >
-            <Settings size={16} className={isOrganizer ? "text-amber-600" : "text-indigo-500"} />
-            <span>Settings</span>
-          </Link>
+          {isOrganizer && isUser ? (
+            <>
+              <Link
+                href="/organizer/settings"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <Settings size={16} className="text-amber-600" />
+                <span>Organizer Settings</span>
+              </Link>
+              <Link
+                href="/shopper/settings"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <Settings size={16} className="text-indigo-500" />
+                <span>Shopper Settings</span>
+              </Link>
+            </>
+          ) : (
+            <Link
+              href={isOrganizer ? "/organizer/settings" : "/shopper/settings"}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              <Settings size={16} className={isOrganizer ? "text-amber-600" : "text-indigo-500"} />
+              <span>Settings</span>
+            </Link>
+          )}
 
           {!isStandalone && (
             <div>

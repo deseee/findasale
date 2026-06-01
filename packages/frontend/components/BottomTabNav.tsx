@@ -59,6 +59,8 @@ const BottomTabNav = () => {
   const router = useRouter();
   const { user } = useAuth();
   const isOrganizer = user?.roles?.includes('ORGANIZER');
+  const isUser = user?.roles?.includes('USER');
+  const isDualRole = !!(isOrganizer && isUser);
   const { data: unreadData } = useUnreadMessages(!!user);
   const [exploreSheetOpen, setExploreSheetOpen] = useState(false);
 
@@ -91,12 +93,20 @@ const BottomTabNav = () => {
       icon: MapIcon,
       matchPaths: ['/map'],
     },
-    {
-      href: '/trending',
-      label: 'Trending',
-      icon: TrendingIcon,
-      matchPaths: ['/trending'],
-    },
+    // Dual-role users get a Shop tab (shopper dashboard) instead of Trending
+    isDualRole
+      ? {
+          href: '/shopper/dashboard',
+          label: 'Shop',
+          icon: HeartIcon,
+          matchPaths: ['/shopper/dashboard', '/shopper/wishlist', '/shopper/history'],
+        }
+      : {
+          href: '/trending',
+          label: 'Trending',
+          icon: TrendingIcon,
+          matchPaths: ['/trending'],
+        },
     {
       href: '#',
       label: 'Explore',
