@@ -5,6 +5,28 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 
+function renderMarkdown(text: string): string {
+  return text
+    // Headers
+    .replace(/^### (.+)$/gm, '<h3 class="text-sm font-bold mt-3 mb-1">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 class="text-sm font-bold mt-3 mb-1">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h2 class="text-sm font-bold mt-3 mb-1">$1</h2>')
+    // Bold
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // Italic
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Unordered list items
+    .replace(/^[-*] (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+    // Numbered list items
+    .replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>')
+    // Wrap consecutive <li> tags in a <ul>/<ol> (simple approach: just use a wrapper div)
+    .replace(/(<li[^>]*>.*<\/li>\n?)+/g, (m) => `<ul class="my-1 space-y-0.5">${m}</ul>`)
+    // Paragraph breaks (double newline → <p> spacing)
+    .replace(/\n\n/g, '</p><p class="mt-2">')
+    // Single newlines
+    .replace(/\n/g, '<br />');
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -213,7 +235,14 @@ const PlanPage = () => {
                           <span className="text-xs text-warm-500 dark:text-warm-400 font-medium">Assistant</span>
                         </div>
                       )}
-                      <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                      {msg.role === 'assistant' ? (
+                        <div
+                          className="text-sm leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
+                        />
+                      ) : (
+                        <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                      )}
                     </div>
                   </div>
                 ))}
