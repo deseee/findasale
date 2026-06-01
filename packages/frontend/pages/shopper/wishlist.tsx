@@ -207,14 +207,12 @@ const WishlistPage = () => {
               <div className="inline-flex items-center px-3 py-2 rounded-full bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-sm font-medium text-warm-900 dark:text-warm-100">
                 ✓ All Saves
               </div>
-              <button
-                onClick={() => {
-                  showToast('Named collections coming soon! For now, all your saved items appear here.', 'info');
-                }}
+              <Link
+                href="/wishlists"
                 className="inline-flex items-center px-3 py-2 rounded-full bg-warm-100 dark:bg-gray-800 border border-warm-200 dark:border-gray-700 text-sm font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-200 dark:hover:bg-gray-700 transition-colors"
               >
                 + New Collection
-              </button>
+              </Link>
             </div>
           )}
 
