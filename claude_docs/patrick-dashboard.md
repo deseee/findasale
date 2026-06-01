@@ -1,22 +1,22 @@
-# Patrick's Dashboard — S838 Wrap
+# Patrick's Dashboard — S839 Wrap
 
 ---
 
-## What Happened This Session (S838)
+## What Happened This Session (S839)
 
-QA session — cleared 6 items total. Blocked Queue down to 4.
+QA-only session — no new dev. Applied S838 roadmap verifications, then ran QA on S837 nav links and several pending features.
 
-**#165 A/B Testing Infrastructure ✅ PASS WITH NOTES** — Admin page works, guard works. Two P3s: "Clear Test Data" button is a stub (toast only, no API), and a `roles` vs `role` inconsistency in the guard code. Nothing breaking.
+**S837 nav links ✅ ALL VERIFIED** — The 6 features surfaced to nav in S837 all load correctly: Referrals, Auto Markdown, Starter Kit, AI Score, Challenges, Surprise Me. The color-rules→discount-rules redirect works. Notifications consolidated page renders with All/Operational/Discovery tabs.
 
-**#61 Near-Miss Nudges ✅ VERIFIED** — NudgeBar confirmed live on finda.sale. STREAK_CONTINUATION renders with progress bar, dismiss works. P3: TIER_PROGRESS nudge type is declared but never generated.
+**⚠️ P2 Bug found: /wishlists** — Navigating directly to `/wishlists` redirects to login even when logged in. Root cause: the auth guard fires before the "who am I" API call completes. The nav link click (client-side) should work fine, but direct URL access is broken. Low urgency, easy fix.
 
-**#36 Weekly Treasure Digest ✅ CODE-ONLY** — Cron confirmed (every Sunday 6pm). Can't force the trigger — CODE-ONLY is the accepted status.
+**#321 Encyclopedia Auto-Gen ✅** — Admin encyclopedia page shows 77 entries (57 auto-generated awaiting review, 20 published). Entry list visible with Promote buttons.
 
-**#72 Dual-Role Account Schema ✅ FULL PASS** — user2 (Bob Smith) is ORGANIZER+SHOPPER. Nav has 22 items, zero duplicates. Both dashboards and wishlist load correctly.
+**#303 Photo Station ⚠️ PASS WITH NOTES** — Page loads correctly. Now shows a "Location Required" gate before awarding XP — this is correct behavior after geofencing was added. Can't fully verify the XP award without real GPS at a sale location.
 
-**#308 Item Hide ✅ PASS WITH NOTES** — Hid the Philips DVD Player on Artifact Downtown Paw Paw. Item disappeared from all 4 pages of the public sale. Restored (unhidden) after test. P3: no visual "Hidden" indicator in the organizer item list — organizers can't tell which items are hidden without toggling.
+**#317 Geofence QR fallback ✅ CODE-VERIFIED** — If you deny location permission when scanning a QR clue, the scan proceeds anyway. Both frontend and backend confirmed to handle "no location" gracefully.
 
-**#25 eBay Sync Phase B/C ✅** — You confirmed import flow and Pull to Sale working.
+**#340 Camera Auto-Reopen ✅ CODE-VERIFIED** — After approving an item in the review queue, the app redirects back to the camera in rapidfire mode. Code confirmed in place on both sides.
 
 ---
 
@@ -35,18 +35,31 @@ QA session — cleared 6 items total. Blocked Queue down to 4.
 
 ## Your Actions Required
 
-1. **Push block (S838 final — 3 files):**
+1. **Push block (S839 — 3 files):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git commit -m "docs: S838 QA wrap — #165/#61/#36/#72/#308/#25 verified, Blocked Queue 4 rows, S837 verifications applied to roadmap"
+git commit -m "docs: S839 QA wrap — S838 verifications applied, S837 nav verified, #321/#303 QA, P2 /wishlists auth guard bug documented"
 .\push.ps1
 ```
 
-2. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → delete the row (carried from S837).
+2. **Delete test invite SVPKNKV3** — Navigate to finda.sale/admin/invites and delete this row (carried from S837).
 
-3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+3. **P2 bug fix (low urgency)** — `/wishlists` page redirects to login on direct URL access. Tell me when you want me to patch it.
 
-4. **#239 legal gate:** Attorney + CPA sign-off before enabling live consignor payouts.
+---
+
+## QA Scoreboard
+
+| Feature | Result |
+|---------|--------|
+| S837 nav links (6 total) | ✅ All pass |
+| color-rules redirect | ✅ Pass |
+| Notifications page | ✅ Pass |
+| /wishlists | ⚠️ P2 bug |
+| #321 Encyclopedia | ✅ Pass |
+| #303 Photo Station | ⚠️ Pass with notes (location gate) |
+| #317 Geofence fallback | ✅ CODE-VERIFIED |
+| #340 Camera auto-reopen | ✅ CODE-VERIFIED |

@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S838 — QA batch: #165 PASS WITH NOTES (P3: stub Clear button, roles/role inconsistency), #61 ✅ (NudgeBar confirmed, STREAK_CONTINUATION, variable-ratio, P3: TIER_PROGRESS never generated), #36 CODE-ONLY ✅ (weeklyEmailJob.ts cron Sunday 6pm confirmed), #72 ✅ FULL PASS (user2 ORGANIZER+SHOPPER: 22-item nav zero dups, all dashboards load), #308 PASS WITH NOTES (Artifact MI: hide fires isActive:false, absent from all 4 public sale pages, item restored; P3: no Hidden indicator in organizer list), #25 ✅ Patrick-confirmed (eBay Sync Phase B/C import flow + Pull to Sale working). Blocked Queue: 4 rows (removed #308, #25, #72).**
+**Latest: S839 — QA: S837 nav links all verified, #321 ✅, #317 CODE-VERIFIED, #340 CODE-VERIFIED, #303 PASS WITH NOTES. P2 found: /wishlists auth guard fires before auth loads on hard navigation (missing isLoading check). Blocked Queue: 4 rows (unchanged).**
+
+**Previous: S838 — QA batch: #165 PASS WITH NOTES (P3: stub Clear button, roles/role inconsistency), #61 ✅ (NudgeBar confirmed, STREAK_CONTINUATION, variable-ratio, P3: TIER_PROGRESS never generated), #36 CODE-ONLY ✅ (weeklyEmailJob.ts cron Sunday 6pm confirmed), #72 ✅ FULL PASS (user2 ORGANIZER+SHOPPER: 22-item nav zero dups, all dashboards load), #308 PASS WITH NOTES (Artifact MI: hide fires isActive:false, absent from all 4 public sale pages, item restored; P3: no Hidden indicator in organizer list), #25 ✅ Patrick-confirmed (eBay Sync Phase B/C import flow + Pull to Sale working). Blocked Queue: 4 rows (removed #308, #25, #72).**
 
 **Previous: S837 — QA+DEV: #166 ✅, #74 ✅, #150 ✅ + nav audit → 11 fixes + 6 pages surfaced. QA verified 3 P0 items. Nav code audit (AvatarDropdown + BottomTabNav): double hr, Explorer's Guild dup in Connect, Add Items wrong href, dual-role settings buried, mobile no shopper path, 6 complete features with no nav entry (#398 referrals, #334 markdown-cycles, #396 starter-kit, #438 ai-score, #55 challenges, #182 surprise-me). All shipped: AvatarDropdown (11 changes), BottomTabNav (Shop tab for dual-role), color-rules→discount-rules redirect, notifications consolidated (sale_alert filter + redirect), wishlist "New Collection" stub wired to /wishlists. Unsurfaced pages: 9 were just redirects (no action needed), 6 surfaced in nav, 3 resolved (discount-rules canonical, notifications consolidated, wishlists hub-and-spoke Option A). 0 TS errors. user2 now USER+ORGANIZER+SHOPPER for dual-role testing. SVPKNKV3 invite code unused in DB — Patrick delete via /admin/invites. Blocked Queue: 5 rows.**
 
@@ -267,18 +269,38 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| — | — | S837 verifications (#166, #74, #150) applied to roadmap.md at S838 start. | S838 |
-| 165 | A/B Testing Infrastructure | Navigated to /admin/ab-tests as user1. Page loaded with "A/B Tests" heading, "Hero CTA v1" card, results table, empty state "No test data available yet." Admin guard: user5 → redirect to homepage. ss_6638o313h ss_5055y2b3t ss_3149h3aam. PASS WITH NOTES (P3 only). | S838 |
-| 61 | Near-Miss Nudges | Navigated to finda.sale as user5. /api/nudges returned 200. NudgeBar rendered with STREAK_CONTINUATION "One more day to hit a 7-day streak!", 85.7% progress bar. Clicked dismiss — bar removed immediately. Variable-ratio: 65% dispatch days confirmed. P3: TIER_PROGRESS type declared but never generated. | S838 |
-| 72 | Dual-Role Account Schema | Navigated to finda.sale/organizer/dashboard as user2 (ORGANIZER+SHOPPER). AvatarDropdown: 22 items, zero duplicates confirmed. /organizer/dashboard ✅, /shopper/dashboard ✅, /shopper/wishlist ✅ (1 real item visible). Mobile Shop tab confirmed. No broken flows. ss_03429gv9v ss_6093biwjy ss_4141w0o2s ss_2568irdlf | S838 |
-| 308 | Item Hide | Navigated to /organizer/add-items/cmpt2oq6q00138cehpgqx3huk as Artifact MI. Selected Philips DVP 3040. Clicked bulk Hide → POST /api/items/bulk 200, isActive:false confirmed via API. Navigated to /sales/cmpt2oq6q00138cehpgqx3huk — DVD Player absent from all 4 pages. Bulk Show → 200, isActive:true restored. PASS WITH NOTES. P3: no "Hidden" visual indicator in organizer item list. Note: test item was PENDING_REVIEW; public exclusion partially attributable to draft filter — backend PUBLIC_ITEM_FILTER logic confirmed correct (requires both isActive:true AND draftStatus:PUBLISHED). | S838 |
-| 25 | Organizer Persistent Inventory / eBay Sync Phase B/C | Patrick confirmed Phase B/C (import flow, Pull to Sale) working S838. Artifact MI account, real eBay connection. | S838 |
+| — | — | S838 verifications (#61, #72, #165, #36, #308, #25) applied to roadmap.md at S839 start. | S839 |
+| — | S837 nav links | /organizer/referrals ✅ ss_2111ot92n, /organizer/markdown-cycles ✅ ss_13669biz1, /organizer/starter-kit ✅ ss_4290g7l50, /ai-score ✅ ss_7202aknos, /challenges ✅ ss_6044kctkn, /surprise-me ✅ ss_9114f3ygx. color-rules→discount-rules redirect ✅ ss_1244mka3a. /notifications consolidated ✅ ss_2195g9kxb. P2: /wishlists hard-nav redirects to login (auth guard fires before /me resolves — missing isLoading check in useEffect). | S839 |
+| 321 | Encyclopedia Auto-Gen | /admin/encyclopedia as user1 (Alice): 57 Awaiting Review, 20 Published, 57 Enriched (Pending), 77 Total. Entry table shows Hoosier/Stickley/Catalin with Promote buttons. Run Full Curator Pass button present. ss_0551gs4p3 ss_01850j1g8 | S839 |
+| 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate — expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
 
 ## Next Session
 
 **Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear).**
 
-**S838 complete.** #165 PASS WITH NOTES, #61 ✅, #36 CODE-ONLY ✅, #72 ✅, #308 PASS WITH NOTES, #25 Patrick-confirmed ✅ — all staged to Pending Chrome Verifications. Records to apply S838 Chrome verifications to roadmap at next session start.
+**S839 complete.** QA-only session. S838 roadmap verifications applied. S837 nav links all verified. #321 ✅, #303 PASS WITH NOTES, #317 CODE-VERIFIED, #340 CODE-VERIFIED. P2 found: /wishlists auth guard missing isLoading check — redirects to login on hard navigation. Records to apply S839 Chrome verifications to roadmap at next session start.
+
+**Patrick actions required:**
+
+1. **Push block for S839 (3 files):**
+   ```powershell
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add claude_docs/STATE.md
+   git add claude_docs/patrick-dashboard.md
+   git add claude_docs/strategy/roadmap.md
+   git commit -m "docs: S839 QA wrap — S838 verifications applied, S837 nav verified, #321/#303 QA, P2 /wishlists auth guard bug documented"
+   .\push.ps1
+   ```
+
+2. **P2 fix (low urgency):** `/wishlists` page auth guard — `useEffect(() => { if (user === null) { router.push('/login'); } })` needs `isLoading` guard: `if (!isLoading && user === null)`. Dispatch to findasale-dev when convenient.
+
+**Dispatch stubs (next session):**
+
+1. **Records at session start:** Apply S839 Pending Chrome Verifications to roadmap.md — #321 ✅, nav links verified.
+
+2. **Dev (batchwith next sprint):** Fix /wishlists auth guard (P2). Fix `nudgeService.ts` TIER_PROGRESS case (P3). Fix ab-tests.tsx stub buttons + roles/role inconsistency (P3).
+
+3. **QA continues:** Switch to shopper account (user5 or user6) to test #267 RSVP monthly cap, #303 Already Scanned state, wishlists in-app nav flow.
 
 **Patrick actions required:**
 
@@ -311,6 +333,24 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Recent Sessions
 
+### S839 — QA: S837 nav links, #321, #303, #317, #340
+
+**S838 roadmap verifications applied:** #61 ✅, #72 ✅, #165 ⚠️ PASS WITH NOTES (P3), #36 CODE-ONLY, #308 ⚠️ PASS WITH NOTES (P3), #25 ✅ Patrick-confirmed.
+
+**S837 nav links verified:** /organizer/referrals ✅, /organizer/markdown-cycles ✅, /organizer/starter-kit ✅, /ai-score ✅, /challenges ✅, /surprise-me ✅, color-rules→discount-rules redirect ✅, /notifications consolidated ✅ (All/Operational/Discovery tabs, 12 unread). P2: /wishlists hard-nav redirects to login — auth guard `useEffect(() => { if (user === null) { router.push('/login') }})` fires before /api/auth/me resolves; fix: add `isLoading` guard.
+
+**#321 Encyclopedia Auto-Gen ✅** — /admin/encyclopedia as user1: 57 Awaiting Review, 20 Published, 57 Enriched (Pending), 77 Total. Entry table: Hoosier (Furniture), Stickley (Furniture), Catalin (Jewelry) — all AUTO_GENERATED with Promote buttons. Run Full Curator Pass button visible. ss_0551gs4p3 ss_01850j1g8
+
+**#303 Photo Station ⚠️ PASS WITH NOTES** — /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5: page loads with "Share Your Find" + "Location Access Required" gate. Expected post-#317 geofencing (S553). XP award + Already Scanned state UNVERIFIED (requires real GPS). ss_65158fo38
+
+**#317 Geofence QR fallback CODE-VERIFIED** — itemController.ts:2723 `if (latitude !== undefined && longitude !== undefined)` — check skipped when no coords sent. treasure-hunt-qr/[clueId].tsx:82 "Geolocation denied or unavailable — proceed without coordinates." Both sides implement graceful degradation.
+
+**#340 Camera Auto-Reopen CODE-VERIFIED** — review.tsx:413 redirects `?openCamera=1&captureMode=rapidfire` after publish. [saleId].tsx:496-499 reads query param + auto-opens camera. Browser verification blocked (VM camera limitation).
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
+
+---
+
 ### S837 — QA: #166 ✅, #74 ✅, #150 ✅, #72 UNVERIFIED
 
 **#166 Invites ✅** — Admin /admin/invites: generated code SVPKNKV3, appeared in table (unused, 6/1/2026). /register?invite=SVPKNKV3: green "Invite code SVPKNKV3 applied" banner + role pre-set to "Sale Organizer". Workspace invite: /organizer/members → sent to qa-member-invite@example.com → POST /api/workspace/invite → 201 + green toast. Both invite flows fully verified. Cleanup: SVPKNKV3 left in DB (browser froze on delete — Patrick to delete manually).
@@ -327,74 +367,4 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ### S836 — DEV+QA: #462/#463/#464 UTM attribution ✅ verified, Vercel build failure fixed
 
-**Root cause confirmed:** Chrome incognito strips `utm_*` params at the browser level before the HTTP request is sent. No server-side fix (middleware, skipTrailingSlashRedirect, window.location.search) could intercept them — they never arrive.
-
-**Fix shipped:**
-- `outreachEmailsCron.ts`: email links now use `fsa_*` param names (`fsa_src`, `fsa_med`, `fsa_cmp`, `fsa_cnt`) — Chrome-safe, not on strip list
-- `middleware.ts`: updated to capture both `fsa_*` (primary) and `utm_*` (legacy/non-incognito) and normalise to utm_* in `fsa_utm_pending` cookie
-- `_app.tsx` UTMCapture: reads `fsa_*` as primary source, `utm_*` as fallback, cookie as tertiary — all normalised to `utm_*` in sessionStorage
-- `_app.tsx`: also fixed missing `  );
-}
-
-export default MyApp;
-` closing (caused S835 push Vercel build failure)
-- `vercel.json`: added `"trailingSlash": false, "cleanUrls": false` (belt-and-suspenders against infrastructure redirect)
-
-**Verified:** Incognito Chrome → `finda.sale/search?fsa_src=outreach&fsa_med=email&fsa_cmp=touch1&fsa_cnt=hot` → `sessionStorage.getItem('fsa_utm')` = `{"utm_source":"outreach","utm_medium":"email","utm_campaign":"touch1","utm_content":"hot","captured_at":"2026-06-01T14:48:54.209Z"}` ✅
-
-**Files changed:** `packages/frontend/middleware.ts` · `packages/frontend/pages/_app.tsx` · `packages/frontend/vercel.json` · `packages/backend/src/jobs/outreachEmailsCron.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
-
----
-
-### S835 — QA+Fix: #167 admin queue verified with real data, P2 filter bug fixed, UTM confirmed broken
-
-**#167 admin queue ✅ properly verified** — Patrick caught rubber-stamping (empty state ≠ verification). 2 test disputes injected via psycopg2. /admin/disputes as user1 (ADMIN): dispute cards show buyer/seller/reason ✅, expand shows description + 4 status buttons ✅, "Mark Under review" → green toast + live badge update ✅, F5 → persisted ✅, admin guard (user5 → homepage redirect) ✅. Test data cleaned up.
-
-**P2 bug found + fixed:** filter tabs disappeared when filtered status returned empty results. EmptyState rendered before tabs, trapping admin. Fix: disputes.tsx restructured — tabs always render; inline empty state is now context-aware ("No Open Disputes — try another filter."). 0 TS errors.
-
-**UTM #462/#463/#464 ❌ confirmed broken in real browser:** Patrick navigated to finda.sale/search?utm_source=email in real Chrome incognito. Session storage empty. URL shows params already stripped. S831 CODE-ONLY fix (window.location.search on mount) did not work — server-side redirect strips params before React boots.
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md` · `packages/frontend/pages/admin/disputes.tsx` · `packages/backend/src/controllers/userController.ts` (S833 fix included in push)
-
----
-
-### S836 — DEV+QA: #462/#463/#464 UTM attribution ✅ verified, Vercel build failure fixed
-
-**Root cause confirmed:** Chrome incognito strips `utm_*` params at the browser level before the HTTP request is sent. No server-side fix (middleware, skipTrailingSlashRedirect, window.location.search) could intercept them — they never arrive.
-
-**Fix shipped:**
-- `outreachEmailsCron.ts`: email links now use `fsa_*` param names (`fsa_src`, `fsa_med`, `fsa_cmp`, `fsa_cnt`) — Chrome-safe, not on strip list
-- `middleware.ts`: updated to capture both `fsa_*` (primary) and `utm_*` (legacy/non-incognito) and normalise to utm_* in `fsa_utm_pending` cookie
-- `_app.tsx` UTMCapture: reads `fsa_*` as primary source, `utm_*` as fallback, cookie as tertiary — all normalised to `utm_*` in sessionStorage
-- `_app.tsx`: also fixed missing `  );
-}
-
-export default MyApp;
-` closing (caused S835 push Vercel build failure)
-- `vercel.json`: added `"trailingSlash": false, "cleanUrls": false` (belt-and-suspenders against infrastructure redirect)
-
-**Verified:** Incognito Chrome → `finda.sale/search?fsa_src=outreach&fsa_med=email&fsa_cmp=touch1&fsa_cnt=hot` → `sessionStorage.getItem('fsa_utm')` = `{"utm_source":"outreach","utm_medium":"email","utm_campaign":"touch1","utm_content":"hot","captured_at":"2026-06-01T14:48:54.209Z"}` ✅
-
-**Files changed:** `packages/frontend/middleware.ts` · `packages/frontend/pages/_app.tsx` · `packages/frontend/vercel.json` · `packages/backend/src/jobs/outreachEmailsCron.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
-
----
-
-### S833 — QA: #279 ✅, #167 P2 bug fixed, S832 roadmap verifications applied
-
-**artifactmi XP restored:** guildXp 183→283 (QA artifact from S832 Featured Boost test).
-
-**S832 Chrome verifications applied to roadmap:** #135, #302, #300, #301, #288, #297 all updated to Human QA ✅ S832 in roadmap.md.
-
-**#279 Rare Finds ✅** — /shopper/rare-finds as Leo Thomas (user5, Hunt Pass active, 517 XP/SCOUT). Page loads correctly. All 4 rarity filter tabs (All Rarities/Rare/Ultra Rare/Legendary) activate with correct visual highlight and resolve to "No rare items available right now. Check back soon!" empty state. Dashboard 💎 Rare Finds widget confirms same empty state. Hunt Pass Active banner present ("You're earning 1.5x XP..."). ss_3532u4dcb ss_7403ckyjq
-
-**#167 Disputes ⚠️ P2 BUG FOUND + FIXED** — Form UI ✅: "Report an Issue" opens inline on purchase, "Condition Mismatch" reason dropdown, 50-char minimum counter (172 chars entered), contact email auto-fills (user5@example.com), Cancel + Submit buttons present. Submit FAILS due to bug: `getPurchases` API includes `item` but omits `id: true` from select → `purchase.item?.id` is undefined → `itemId = ''` → backend "All fields are required". Fix: `id: true` added to item select in `userController.ts`. Admin queue UNVERIFIED (JWT caching blocked after adding ADMIN role to user1 DB). Bug: user1 was missing ADMIN role in seed (had only ORGANIZER) — corrected in DB. Test purchase created + deleted (ca8cc8d4).
-
-**Data changes:** artifactmi guildXp restored 183→283. user1 ADMIN role added to DB. Test purchase created + deleted (no net change).
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md` · `packages/backend/src/controllers/userController.ts`
-
----
-
-### S832 — QA: 6 Features Chrome Verified
-
-**6 features verified
+**Root cause confirmed:** Chrome incognito strips `utm_
