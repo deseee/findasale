@@ -438,6 +438,15 @@ When agents return, do all four before dispatching again:
 **Step 5 — Context budget:**
 Each batch burns ~400–500k agent tokens. Main session grows ~15–20k per batch processed. At 80% context (~170k tokens), wrap instead of dispatching another batch. A fresh session with updated STATE.md produces better dispatches than a compressed one.
 
+**AUDIT DISPATCH GATE (fires when orchestrator dispatches any audit, scan, or review task):**
+Every audit dispatch prompt MUST include this block verbatim before the task description:
+
+> **AUDIT HONESTY GATE:** Every finding requires a tool citation. Run bash/Read/Grep first, report second. Prohibited: "likely," "appears to be," "may be stale," "requires Patrick to open," "binary-encoded" without a tool call. Age floor: 5–9 sessions unresolved = P1 minimum; 10+ = P0. Every P0/P1 → add to STATE.md Blocked Queue this session. Self-audit: count findings vs. tool citations before submitting — excess findings are UNVERIFIED.
+
+This applies to findasale-records, health-scout, findasale-hacker, findasale-legal, and any other agent doing audit/review/scan work. Without this block in the dispatch prompt, the agent has no gate and will guess.
+
+---
+
 **QA DISPATCH GATE (fires when orchestrator dispatches QA work):**
 Before dispatching any QA or audit task:
 1. Identify which roles are affected (SHOPPER, ORGANIZER, ADMIN)
@@ -546,6 +555,54 @@ The VM cannot run `git push` (no HTTPS auth), but the MCP bypasses this for smal
 **Railway stuck / not rebuilding:** Push a trivial change to `packages/backend/Dockerfile.production` — update the cache-bust comment with today's date. This always unblocks Railway.
 
 **Deployments:** Frontend on Vercel, backend on Railway. Both auto-deploy on push to `main`. No manual redeploy buttons — to force a redeploy, make a trivial commit and push.
+
+---
+
+## 10a. Audit Honesty Gate (HARD RULE — survives compression)
+
+An audit finding is only valid when the auditing agent obtained evidence directly from a tool call. Speculation, inference from memory, and "likely" judgments are not findings. This gate applies to ALL audit types: friction audits, weekly audits, health-scout runs, doc audits, and any scheduled audit task.
+
+**Before recording ANY finding (P0–P3), answer all 3 checks. Every answer must be YES or the finding is UNVERIFIED:**
+
+1. **Tool evidence obtained?** Did the auditor run a bash command, `Read` a file, or `Grep` for the specific claim before writing the finding? If no → UNVERIFIED.
+2. **Citation present?** Does the finding include the exact file:line, bash command + output, or grep result that confirms the claim? If no → UNVERIFIED.
+3. **Tools exhausted before declaring inaccessible?** Before writing "cannot read," "binary-encoded," "requires Patrick to open," or "full item names not available" — did the auditor try ALL of: `Read` the file → `bash grep 'pattern' file` → `bash head -100 file` → `bash cat file | head -200`? All must be attempted. "Can't read" is only valid after exhausting all four.
+
+**Prohibited phrases (finding is UNVERIFIED if any appear without an accompanying tool citation):**
+- "requires Patrick to open the file directly"
+- "full item names require"
+- "worth asking" / "worth confirming"
+- "binary-encoded" / "appears to be unreadable" / "long-line Unicode"
+- "may be stale" / "might have been dispatched" / "possibly fixed"
+- "appears to be" / "likely" / "probably" / "seems like"
+- "cannot confirm without" — if you can confirm with a tool, confirm it
+
+**Age-based severity floor (no discretion — overrides auditor judgment):**
+- Unresolved for 1–4 sessions → auditor's judgment
+- Unresolved for 5–9 sessions → minimum **P1** regardless of prior classification
+- Unresolved for 10+ sessions → minimum **P0** regardless of prior classification
+
+"9 sessions without action, rated P2" is a rule violation. Age alone escalates severity.
+
+**Mandatory Blocked Queue trigger (no discretion — extends §4 Audit Findings Pipeline):**
+- Every P0 finding → MUST appear in STATE.md Blocked Queue **in the same session**. No exceptions.
+- Every P1 finding → MUST appear in STATE.md Blocked Queue **in the same session**. No exceptions.
+- "Cannot auto-dispatch" is NOT a reason to skip the queue entry. The queue exists for exactly these items.
+- Finding in the report but absent from the Blocked Queue = documentation failure.
+
+**These are NOT audit findings:**
+- "The roadmap shows X items BROKEN" without reading the roadmap → NOT a finding
+- "TypeScript appears clean" without running `npx tsc --noEmit` → NOT a finding
+- "Carried forward from prior session" without re-verifying current state → NOT a finding
+- "File is binary/unreadable" without attempting bash commands → NOT a finding
+
+**These ARE audit findings:**
+- `` `grep -r 'BROKEN' roadmap.md` returned 4 matches — lines 47, 89, 134, 201: [item names listed] `` → P1 finding with evidence
+- `` `Read STATE.md` lines 30–55. Blocked Queue table has 9 rows. `` → P1 finding with evidence
+- `` `npx tsc --noEmit --skipLibCheck` → 0 errors `` → clean check with evidence
+
+**Self-audit gate (fire before submitting every report):**
+Count the findings in the report. Count the distinct tool citations (bash commands, Read calls, Grep outputs) cited inline. If findings > tool citations, the excess findings are UNVERIFIED — reclassify or remove them before submitting. A report with 6 findings and 2 tool citations has at most 2 verified findings.
 
 ---
 
