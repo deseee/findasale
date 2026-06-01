@@ -91,6 +91,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     mutationFn: async (imageUrls: string[]) => {
       const response = await api.post('/upload/batch-analyze', {
         imageUrls,
+        saleId,
       });
       return response.data.clusters;
     },
@@ -212,7 +213,6 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       // ClusterSummary shape: { photoIndices, suggestedTitle, suggestedDescription,
       //   suggestedCategory, suggestedCondition, suggestedPrice, suggestedTags, aiConfidence }
       // photoUrls are reconstructed from photoIndices → uploadedUrls[i]
-      const failedCount = 0; // ClusterSummary has no error field; failures are skipped server-side
       const itemsToCreate = aiResults
         .filter((cluster: any) => cluster.suggestedTitle && Array.isArray(cluster.photoIndices) && cluster.photoIndices.length > 0)
         .map((cluster: any) => ({
@@ -236,11 +236,13 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
         return;
       }
 
-      if (failedCount > 0) {
-        showToast(`${failedCount} photo${failedCount !== 1 ? 's' : ''} failed to analyze and will be skipped`, 'info');
-      }
-
-      await createItemsMutation.mutateAsync(itemsToCreate);
+      // Items already created + AI-enriched by batch-analyze — redirect to review
+      showToast(`✓ ${itemsToCreate.length} item${itemsToCreate.length !== 1 ? 's' : ''} added!`, 'success');
+      queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+      setPhotoFiles([]);
+      setAnalyses([]);
+      onComplete?.();
+      router.push(`/organizer/add-items/${saleId}/review`);
     } catch {
       // mutateAsync re-throws after onError fires — reset progress so UI doesn't stay stuck
       showToast('Some photos failed to upload. Please try again.', 'error');
