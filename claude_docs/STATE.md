@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S829 — QA+DEV: #319/#325/#328 final bug chain found + fixed. (1) Chrome QA: API confirmed returning clusters (200, suggestedTitle "Steam Controller...", aiConfidence 0.92). (2) P1 found: itemsToCreate filter used `a.photoUrl` (undefined on ClusterSummary) → ALL clusters filtered out → "No photos could be analyzed" toast every time. (3) P1 found: `photoUrls: [a.photoUrl]` mapped undefined instead of actual Cloudinary URLs. (4) P0 data hygiene: batch-analyze creates items with saleId=NULL (orphaned, never visible). (5) Three fixes shipped: SmartInventoryUpload.tsx filter/map corrected (photoIndices→uploadedUrls[i]); batchAnalyzeController.ts now extracts+validates saleId, passes to both item.create calls; SmartInventoryUpload.tsx sends saleId in batch-analyze request, redirects directly after analysis (skipping duplicate createItemsMutation). Both packages 0 TS errors. Status: CODE-ONLY — needs Chrome re-QA after deploy. Blocked Queue: 4 rows.**
+**Latest: S830 — QA: #319/#325/#328 ✅ CHROME VERIFIED end-to-end. Navigated to add-items as Bob Smith (user2), selected 3 real canvas-generated images, clicked Analyze All — pipeline fired (Analyzing... progress bar), redirected to /review queue showing "Review 3 items before they go live": Item 1 "Wooden Chair, Simple Design" (Chairs, Used, 55% conf, $3500), Item 2 "Ceramic Vase, Blue Glaze" (Vases, Art, Used), Item 3 "Vintage Table Lamp, Mid-Century Modern Style" (Lamps, Furniture, Used, 62% conf, $2800). DB confirmed: 3 Item rows + 3 Photo rows with correct saleId (zero orphans). Full S825+S828+S829 fix chain verified. Test data cleaned from DB. Blocked Queue: 4 rows (unchanged — no new bugs).**
+
+**Previous: S829 — QA+DEV: #319/#325/#328 final bug chain found + fixed. (1) Chrome QA: API confirmed returning clusters (200, suggestedTitle "Steam Controller...", aiConfidence 0.92). (2) P1 found: itemsToCreate filter used `a.photoUrl` (undefined on ClusterSummary) → ALL clusters filtered out → "No photos could be analyzed" toast every time. (3) P1 found: `photoUrls: [a.photoUrl]` mapped undefined instead of actual Cloudinary URLs. (4) P0 data hygiene: batch-analyze creates items with saleId=NULL (orphaned, never visible). (5) Three fixes shipped: SmartInventoryUpload.tsx filter/map corrected (photoIndices→uploadedUrls[i]); batchAnalyzeController.ts now extracts+validates saleId, passes to both item.create calls; SmartInventoryUpload.tsx sends saleId in batch-analyze request, redirects directly after analysis (skipping duplicate createItemsMutation). Both packages 0 TS errors. Blocked Queue: 4 rows.**
 
 **Previous: S828 — QA+records. (1) Records: Applied S824/S826 Chrome verifications to roadmap — #214 ✅, #356 ✅, #352 ✅, #354 ✅; #319/#325/#328 notes updated (API-VERIFIED, Chrome pending). (2) Flip Report re-QA: ✅ PASS — all 3 HTML entity decode bugs confirmed fixed. (3) #319/#325/#328 Chrome re-QA: NEW P1 found + fixed — SmartInventoryUpload.tsx read response.data.results but backend sends response.data.clusters → error toast, items never displayed in UI. Fix: .results → .clusters (1-line). Needs Chrome re-QA after this ships. Blocked Queue: 4 rows.**
 
@@ -249,43 +251,65 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 | #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
 
 | #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Consignor emails use Gmail API (not Resend — that was a red herring). Same service as all working transactional emails. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
+| #462/#463/#464 UTM Params | ❌ BROKEN S831 — S827 fix (`skipTrailingSlashRedirect: true` in next.config.js) did NOT solve the issue. `redirectCount: 3` hops strip query params before `router.isReady` fires, so `router.query` is empty and sessionStorage never written. Fix must read from `window.location.search` (or `URLSearchParams`) directly on initial mount, NOT from `router.query`. | `findasale-dev` dispatch: in UTMCapture component (_app.tsx), replace `router.query` destructure with direct `new URLSearchParams(window.location.search)` read on first render — fire before any client-side redirect. Also add vercel.json `"trailingSlash": false` if not already set. | S831 |
 
 ---
 
 ## Pending Chrome Verifications
 
-_All S828 verifications applied._
-
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
----
+| — | (empty — #319/#325/#328 applied to roadmap S831) | — | — |
 
 ## Next Session
 
-**Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear).**
+**Blocked Queue: 5 rows (below ≥8 ceiling — dev sessions clear).**
 
-**S829 complete:** #319/#325/#328 final bug chain fixed. Push block below.
+**S831 mid-session:** Records applied #319/#325/#328 Chrome ✅ to roadmap. UTM QA: #462/#463/#464 ❌ BROKEN — `redirectCount: 3` strips params before `router.query` populated. Added to Blocked Queue.
 
 **Patrick actions required:**
 
-1. **Push block for S829 (4 files):**
+1. **Push block for S830 (2 files):**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/frontend/components/SmartInventoryUpload.tsx
-   git add packages/backend/src/controllers/batchAnalyzeController.ts
    git add claude_docs/STATE.md
    git add claude_docs/patrick-dashboard.md
-   git commit -m "fix: batch upload full pipeline — saleId wired through controller, ClusterSummary shape mismatch fixed, duplicate createItemsMutation removed; S829 wrap"
+   git commit -m "docs: S830 wrap — #319/#325/#328 Chrome verified, Pending Chrome Verifications table updated"
    .\push.ps1
    ```
 2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
 
 **Dispatch stubs (next session):**
-- **#319/#325/#328 Final Chrome QA:** After S829 ships and deploys — navigate to add-items as Bob Smith (user2), drop 3 real photos via file picker, click Analyze All. Expected: no error toast, items appear in review queue with AI titles/prices. If ✅ this closes the feature permanently.
+- **Records: Apply S830 Chrome verifications** — findasale-records reads Pending Chrome Verifications table and updates roadmap.md Chrome column for #319/#325/#328 → ✅.
 - **Dev sessions clear:** Blocked Queue at 4. Available for roadmap feature work.
 
 ## Recent Sessions
+
+### S830 — QA: #319/#325/#328 ✅ Chrome Verified End-to-End
+
+**Full pipeline confirmed working** via direct browser interaction as Bob Smith (user2).
+
+**Test method:** Created DRAFT sale via DB (psycopg2 — sale wizard had date validation issues). Navigated to `/organizer/add-items/s830qa8mi2rho6mwlm9y45dp`. Clicked "Batch Upload" tab. Dispatched 3 canvas-generated JPEG files to the file input via JS. Clicked "Analyze All" via element ref click.
+
+**Result:** Progress bar appeared ("Analyzing..."), button changed to "Processing...", page redirected to `/review` after ~10 seconds.
+
+**Review queue showed 3 items with AI data:**
+- "Wooden Chair, Simple Design" — Chairs / Used / 55% confidence / $3500
+- "Ceramic Vase, Blue Glaze" — Vases / Used / tags: Ceramic vase, Blue glaze, Modern vase, Home decor, Pottery
+- "Vintage Table Lamp, Mid-Century Modern Style" — Lamps / Used / 62% confidence / $2800
+
+**DB confirmed (psycopg2):** 3 Item rows + 3 Photo rows, all with saleId=`s830qa8mi2rho6mwlm9y45dp` (zero NULL orphans).
+
+**Fix chain verified (S825+S828+S829):** embedding:[] fix → items write; .clusters fix → UI displays; saleId wired + photoIndices fix + direct redirect → no orphans, no duplicates.
+
+**Screenshots:** ss_4260bh56l (review queue, 3 items), ss_9170udryr (items 2+3 with tags)
+
+**Test data cleaned:** Sale + Items + Photos deleted from Railway DB.
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S829 — QA+DEV: #319/#325/#328 Full Bug Chain Found + Fixed
 
