@@ -444,7 +444,8 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
 
           <div className="mt-8 flex gap-3 justify-center">
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 setPhotoFiles([]);
                 setUploadProgress(0);
               }}
@@ -455,14 +456,14 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
             </button>
             {uploadPhotosMutation.isError || batchAnalyzeMutation.isError ? (
               <button
-                onClick={handleAnalyzePhotos}
+                onClick={(e) => { e.stopPropagation(); handleAnalyzePhotos(); }}
                 className="px-8 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg"
               >
                 Retry Upload
               </button>
             ) : null}
             <button
-              onClick={handleAnalyzePhotos}
+              onClick={(e) => { e.stopPropagation(); handleAnalyzePhotos(); }}
               disabled={
                 photoFiles.length === 0 ||
                 uploadPhotosMutation.isPending ||

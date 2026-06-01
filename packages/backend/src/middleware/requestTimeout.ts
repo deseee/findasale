@@ -12,8 +12,14 @@ import { Request, Response, NextFunction } from 'express';
  */
 export const requestTimeout = (timeoutMs: number = 30000) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Skip timeout guard for health check endpoints and internal pipeline routes
-    if (req.path === '/' || req.path === '/api/health' || req.path.startsWith('/api/internal/')) {
+    // Skip timeout guard for health check endpoints, internal pipeline routes,
+    // and AI-heavy endpoints that use their own route-level timeout.
+    if (
+      req.path === '/' ||
+      req.path === '/api/health' ||
+      req.path.startsWith('/api/internal/') ||
+      req.path === '/api/upload/batch-analyze'
+    ) {
       return next();
     }
 

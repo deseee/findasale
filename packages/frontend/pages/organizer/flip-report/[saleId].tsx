@@ -9,15 +9,24 @@ import Skeleton from '../../../components/Skeleton';
 import TierGate from '../../../components/TierGate';
 import ReturnToInventoryPanel from '../../../components/ReturnToInventoryPanel';
 
-/** Decode HTML entities from eBay category names (e.g. "&amp;" → "&") */
+/** Decode HTML entities from eBay category names and AI-generated strings.
+ * Uses the browser textarea trick (handles all entities incl. numeric &#233;).
+ * SSR fallback handles common named + decimal numeric refs. */
 function decodeHtml(str: string | null | undefined): string {
   if (!str) return '';
-  return str
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+  if (typeof document === 'undefined') {
+    // SSR fallback: named entities + decimal numeric character references
+    return str
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
+  }
+  const el = document.createElement('textarea');
+  el.innerHTML = str;
+  return el.value;
 }
 
 export default function FlipReportPage() {
@@ -322,7 +331,7 @@ export default function FlipReportPage() {
                     >
                       {icon}
                     </span>
-                    <p className="text-gray-700 dark:text-gray-300">{rec.text}</p>
+                    <p className="text-gray-700 dark:text-gray-300">{decodeHtml(rec.text)}</p>
                   </li>
                 );
               })}
@@ -339,7 +348,7 @@ export default function FlipReportPage() {
                   id: item.id,
                   title: item.title,
                   price: item.askingPrice,
-                  category: item.category,
+                  category: decodeHtml(item.category),
                 }))}
               />
             </div>
