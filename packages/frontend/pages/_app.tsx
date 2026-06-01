@@ -441,4 +441,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
         </AuthProvider>
       </ToastProvider>
     </SessionProvider>
-  
+  );
+}
+
+export default MyApp;
