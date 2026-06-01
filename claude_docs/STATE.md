@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S822 — QA + build fix. S820 Chrome verifications applied to roadmap. Found S821 Vercel builds both failed (missing ExplorerRank type in PublicExplorerPassport hook). Fixed + redeployed green. #200 public profile rank ✅ SCOUT (ss_2483vbj9l), TEAMS-gated pages no error toast ✅ (ss_75625ykar). #476 idle timeout deferred (Patrick). Blocked Queue: 4 rows.**
+**Latest: S823 — QA sweep. Railway ENV all 5 ✅. S822 Chrome verifications applied to roadmap. Full QA: Homepage ✅, #214 AI Planner ✅, Shopper dashboard ✅, #311 Multi-Location full CRUD ✅, #356 Broadcast composer ✅, #50 Loot Log ✅ (seeded Purchase, verified, cleaned). #319/#325/#328 UNVERIFIED (upload_image tool limitation). P2 bugs found: /plan markdown not rendered, Broadcast duplicate dead CTA. Blocked Queue: 4 rows.**
 
 **Previous: S820 — Scheduled session: markSold duplicate Purchase fix + DB purge + backup restore (automated).**
 
@@ -246,27 +246,26 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Pending Chrome Verifications
 
-_S819+S820 verifications applied to roadmap S822. UNVERIFIED items remain below._
+_S822+S823 verifications applied. UNVERIFIED items remain below._
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| #319/#325/#328 | Burst Clustering / Best-Photo-First / Photo Role Awareness | UNVERIFIED — requires Artifact MI (Google OAuth, Patrick present) + bulk photo upload_image session. Re-queue when Patrick available. | S820 |
-| #50 | Loot Log | UNVERIFIED — user5 has 0 PAID purchases. /shopper/loot-log/[purchaseId] is dynamic, no index page. Need user with completed PAID purchase. | S820 |
+| #319/#325/#328 | Burst Clustering / Best-Photo-First / Photo Role Awareness | UNVERIFIED — upload_image tool failed to access screenshot history in S823 (genuine attempts made). Batch Upload UI renders correctly ✅; file input found ✅; photo upload itself blocked by tool limitation. Re-queue with upload_image fix. | S823 |
 ---
 
 ## Next Session
 
 **Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear to resume).**
 
-**S822 complete:** Vercel build fixed (missing ExplorerRank type), S821 fixes now live. #200 rank ✅ Scout (ss_2483vbj9l), TEAMS-gate consignors ✅ no toast (ss_75625ykar). Apply S822 Chrome verifications to roadmap at next session start.
+**S823 complete:** QA sweep done. All 5 Railway ENV vars confirmed. #50 Loot Log ✅ (seeded + verified + cleaned). #311 Multi-Location full CRUD ✅. #356 Broadcast ✅. 2 P2 bugs found. #319/#325/#328 still UNVERIFIED (upload_image tool limitation). Blocked Queue: 4 rows.
 
 **Patrick actions required:**
 
-1. **Push block for S822 docs:**
+1. **Push block for S823 docs:**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
    git add claude_docs/STATE.md claude_docs/strategy/roadmap.md
-   git commit -m "docs: S822 wrap — build fix verified, S820 Chrome verifications applied to roadmap"
+   git commit -m "docs: S823 wrap — QA sweep, #311/#356/#50 verified, 2 P2 bugs logged"
    .\push.ps1
    ```
 2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
@@ -274,11 +273,37 @@ _S819+S820 verifications applied to roadmap S822. UNVERIFIED items remain below.
 4. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
 
 **Dispatch stubs:**
-- **SESSION START:** Apply S822 Chrome verifications (#200 ✅, TEAMS-gate ✅) to roadmap.md Chrome columns.
-- **QA:** Flip Report HTML decode needs Artifact MI. Other backlog items with user2/user5.
-- **RAILWAY ENV CHECK:** Confirm Railway Variables: `OUTREACH_SECRET`, `INTERNAL_SCRAPER_KEY`, `EBAY_VERIFICATION_TOKEN`, `EBAY_DELETION_ENDPOINT_URL`, `STRIPE_CONNECT_WEBHOOK_SECRET`.
+- **P2 fix dispatch:** `Skill('findasale-dev')` → Fix /plan markdown rendering (response not parsed via ReactMarkdown or similar). Fix Broadcast duplicate dead CTA ("Send your first broadcast →" in empty state calls nothing — wire to same openComposer or remove).
+- **#319/#325/#328:** Re-attempt when upload_image tool access issue is resolved. Batch Upload UI confirmed renders; photo upload flow itself unverified.
+- **QA:** Flip Report HTML decode still needs Artifact MI + ended sale.
 
 ## Recent Sessions
+
+### S823 — QA Sweep: #311 #356 #50 Verified, 2 P2 Bugs Found, ENV Check Clean
+
+**Session start:** S822 Chrome verifications (#200 rank fix, #309 TEAMS-gate) applied to roadmap.
+
+**Railway ENV:** All 5 vars confirmed set (OUTREACH_SECRET, INTERNAL_SCRAPER_KEY, EBAY_VERIFICATION_TOKEN, EBAY_DELETION_ENDPOINT_URL, STRIPE_CONNECT_WEBHOOK_SECRET). Listing enrichment cron confirmed registered in index.ts (0 4 * * *).
+
+**QA verified:**
+- Homepage ✅ — GR map pins, 20 sales, Treasure Hunt card (ss_6915tbooo)
+- #214 AI Sale Planner Chat ✅ — responds correctly; ⚠️P2 raw markdown rendered instead of formatted
+- Shopper dashboard ✅ — Scout rank, XP 517, all widgets load
+- #311 Multi-Location full CRUD ✅ — create/list/delete all work with toasts (ss_1481hhswc, ss_4783cmh97)
+- #356 Organizer Broadcast ✅ — "+ New broadcast" opens full composer UI (ss_5408xfx9o)
+- #50 Loot Log ✅ — seeded Purchase for user5, navigated to /shopper/loot-log/[id], item+price+condition rendered (ss_20725x3d4). Cleanup: Purchase deleted.
+
+**P2 bugs found:**
+- /plan chat renders raw markdown (**bold** visible as literal asterisks)
+- Broadcast section has dead "Send your first broadcast →" CTA (bottom of empty state) — does nothing; real button is "+ New broadcast" at top
+
+**UNVERIFIED:** #319/#325/#328 — upload_image tool failed to access screenshot history (genuine attempts x3). Batch Upload UI renders correctly, file input found — photo upload itself blocked by tool limitation.
+
+**Test data cleanup:** QA test sale (qa823testsale319photo0001, user3) deleted. Purchase (qa50test823lootlog01234567, user5) deleted. No test data remains.
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/strategy/roadmap.md`
+
+---
 
 ### S822 — Build Fix + QA: S821 Vercel Deploy Unblocked, Both S821 Fixes Verified
 
