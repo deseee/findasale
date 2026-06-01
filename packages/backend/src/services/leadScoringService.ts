@@ -383,8 +383,10 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
       return { id: org.id, score, tier, shouldSuppress };
     });
 
-    // Write in parallel — each update is small
-    await Promise.all(
+    // Write as a single transaction — collapses N round-trips into one DB call per batch.
+    // Promise.all of individual .update() calls was the N+1 pattern causing the 1500ms
+    // Sentry slow-query (Sentry ID 7516775231, 64x since May 31).
+    await prisma.$transaction(
       updates.map(({ id, score, tier, shouldSuppress }) =>
         prisma.organizer.update({
           where: { id },
