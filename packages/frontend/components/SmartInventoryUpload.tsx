@@ -92,7 +92,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       const response = await api.post('/upload/batch-analyze', {
         imageUrls,
       });
-      return response.data.results;
+      return response.data.clusters;
     },
     onError: (error: any) => {
       const isTransient = error.code === 'ECONNREFUSED' || error.message?.includes('timeout') || error.response?.status === 503;
