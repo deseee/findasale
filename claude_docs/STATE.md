@@ -8,13 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S842 — DEV+Records: #461 fix written (FB nudge wired to itemController.ts updateItem, 0 TS errors). #27b fix written (iCal watermark footer via canRemoveWatermark() in generateIcal(), 0 TS errors). Roadmap: #193 wishlists ✅ applied (S841 evidence). Records scan: 4 P0 aging violations flagged, 14-item testable QA backlog identified. Blocked Queue: 6 rows. Awaiting push + Chrome QA.**
+**Latest: S843 — QA: #27b iCal watermark ✅ Chrome-verified (ss_4410s6brw). #461 UNVERIFIED — downloadFile localStorage JWT bug blocks fbExportedAt stamp. New P2 bug found: promote page exports (FB, EstateSales.NET, Craigslist) broken for all users. Blocked Queue: 6 rows.**
+
+**Previous: S842 — DEV+Records: #461 fix written (FB nudge wired to itemController.ts updateItem, 0 TS errors). #27b fix written (iCal watermark footer via canRemoveWatermark() in generateIcal(), 0 TS errors). Roadmap: #193 wishlists ✅ applied (S841 evidence). Records scan: 4 P0 aging violations flagged. Blocked Queue: 6 rows.**
 
 **Previous: S841 — QA: #321 wishlists hard-nav ✅ Chrome-verified (ss_1258kvk8e ss_839591msq). #461 ⚠️ P2 BUG — FB nudge not wired to single-item PUT (only bulk PATCH). #27b ⚠️ P2 BUG — iCal watermark footer missing from generateIcal(). Blocked Queue: 6 rows (2 new P2 bugs added).**
 
-**Previous: S840 — Records cleanup + QA: STATE.md trimmed (369→136 lines), #321 ✅ applied to roadmap, #464 UTM drift fixed, #340 CODE-VERIFIED noted. Wishlists flow QA: /shopper/wishlist in-app nav ✅, Sellers tab ✅, /wishlists P2 bug confirmed ❌ + FIXED (wishlists.tsx: authLoading guard added, 0 TS errors). Fix deployed. Blocked Queue: 4 rows.**
-
-**Previous: S839 — QA: S837 nav links all verified, #321 ✅ Encyclopedia Auto-Gen, #317 CODE-VERIFIED, #340 CODE-VERIFIED, #303 PASS WITH NOTES. P2 found: /wishlists auth guard missing isLoading check. Blocked Queue: 4 rows.**
+**Previous: S840 — Records cleanup + QA: STATE.md trimmed (369→136 lines), #321 ✅ applied to roadmap, #464 UTM drift fixed. Wishlists flow QA: /wishlists auth guard fixed. Blocked Queue: 4 rows.**
 
 ---
 
@@ -35,16 +35,16 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING (S842): #267, #293 at 57 sessions; #332, #335 at 51 sessions — mandatory P0 per CLAUDE.md §10a. All structurally blocked by external dependencies._
+_⚠️ P0 AGING (S843): #267, #293 at 58 sessions; #332, #335 at 52 sessions — mandatory P0 per CLAUDE.md §10a. All structurally blocked by external dependencies._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| RSVP XP Monthly Cap (#267 part 2) | **P0 (57 sessions)** — Only 3 platform sales have RSVP; need 5 RSVPs in one month to hit 10 XP cap | Create platform sales with RSVP enabled or wait for organic usage | S785 |
-| #293 eBay Listing Data Parity | **P0 (57 sessions)** — PostSaleEbayPanel requires eBay connection + completed ENDED sale with items | Manually end a test sale in DB (UPDATE Sale SET status='ENDED'), connect eBay to user1, test 17-field panel | S785 |
-| #332 Shopify Cross-Listing | **P0 (51 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (51 sessions)** — CODE-VERIFIED S791: sendConsignorPayout() called. Email delivery unverified | Run payout against real email address, check inbox | S791 |
-| #461 FB Nudge — single-item path | Fix written S842: nudge added to `itemController.ts` updateItem — fires on SOLD transition when fbExportedAt set. 0 TS errors. | Push then Chrome-verify: mark item SOLD via edit-item, confirm nudge fires | S841 |
-| #27b iCal watermark footer | Fix written S842: `canRemoveWatermark()` check + footer added to `generateIcal()` (saleController.ts). 0 TS errors. | Push then Chrome-verify: download .ics from sale, confirm footer appears | S841 |
+| RSVP XP Monthly Cap (#267 part 2) | **P0 (58 sessions)** — Only 3 platform sales have RSVP; need 5 RSVPs in one month to hit 10 XP cap | Create platform sales with RSVP enabled or wait for organic usage | S785 |
+| #293 eBay Listing Data Parity | **P0 (58 sessions)** — PostSaleEbayPanel requires eBay connection + completed ENDED sale with items | Manually end a test sale in DB (UPDATE Sale SET status='ENDED'), connect eBay to user1, test 17-field panel | S785 |
+| #332 Shopify Cross-Listing | **P0 (52 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
+| #335 Consignor Payout Email | **P0 (52 sessions)** — CODE-VERIFIED S791: sendConsignorPayout() called. Email delivery unverified | Run payout against real email address, check inbox | S791 |
+| #461 FB Nudge — single-item path | **UNVERIFIED S843** — Fix code correct (CODE-ONLY). Blocked: `downloadFile` uses `localStorage.getItem('token')` (null since cookie migration) → export endpoint 401 → fbExportedAt never stamped in test env | Fix downloadFile localStorage→cookie auth bug first, then re-test #461 end-to-end | S841 |
+| downloadFile promote-page exports broken | **P2 S843** — `downloadFile` in promote/[saleId].tsx uses stale `localStorage.getItem('token')`. Returns null for ALL users since cookie auth migration. FB Marketplace, EstateSales.NET, Craigslist exports broken in production | `findasale-dev`: update `downloadFile` to use cookie auth (api Axios instance or credentials:'include' + CSRF header) | S843 |
 
 ---
 
@@ -53,6 +53,7 @@ _⚠️ P0 AGING (S842): #267, #293 at 57 sessions; #332, #335 at 51 sessions �
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
+| 27b | iCal watermark footer | Fetched /api/sales/0d9563f9-4fcd-4630-8beb-189ea58c8118/calendar.ics from Chrome (sale page as Alice Johnson / Kelly's Estate Sales, SIMPLE tier). DESCRIPTION confirmed ends with `\n\nShared via FindA.Sale — finda.sale`. canRemoveWatermark()=false for SIMPLE tier → footer appended ✓. ss_4410s6brw ss_0944l9m2y | S843 |
 
 ---
 
@@ -60,41 +61,43 @@ _⚠️ P0 AGING (S842): #267, #293 at 57 sessions; #332, #335 at 51 sessions �
 
 **Blocked Queue: 6 rows (below ≥8 ceiling — dev sessions clear). 4 are P0 aging (structurally blocked by external deps).**
 
-**S842 complete.** DEV: #461 + #27b fixes written, 0 TS errors. Records: wishlists ✅ applied to roadmap. Push required before QA.
+**S843 complete.** QA: #27b ✅ Chrome-verified. #461 UNVERIFIED (downloadFile localStorage bug). New P2 bug: all promote-page exports broken.
 
 **Patrick actions required:**
 
-1. **Push block for S842 (5 files):**
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/backend/src/controllers/itemController.ts
-   git add packages/backend/src/controllers/saleController.ts
-   git add claude_docs/strategy/roadmap.md
-   git add claude_docs/STATE.md
-   git add claude_docs/patrick-dashboard.md
-   git commit -m "fix: #461 FB nudge wired to single-item updateItem; #27b iCal watermark footer added to generateIcal()"
-   .\push.ps1
-   ```
+1. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
 
-2. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
-3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+3. **#239 legal gate:** Attorney + CPA before live consignor payouts.
 
-4. **#239 legal gate:** Attorney + CPA before live consignor payouts.
+**Dispatch stubs (next session):**
 
-**Dispatch stubs (next session — after push + Railway deploy):**
+1. **DEV: Fix downloadFile (P2):** `Skill('findasale-dev')` → `packages/frontend/pages/organizer/promote/[saleId].tsx`. Root cause: `downloadFile` uses `localStorage.getItem('token')` which is null since cookie migration. Fix: replace `const token = localStorage.getItem('token')` with cookie-based auth (add `credentials: 'include'` to fetch + include `x-csrf-token` header from cookie). Expected output: exports work for authenticated users + push block.
 
-1. **QA #461 post-push:** Navigate as Artifact MI (user1), edit an item with fbExportedAt set, change status → SOLD. Check organizer notification inbox for FB nudge. (Or: mark SOLD via edit-item page for any previously FB-exported item.)
+2. **QA #461 post-fix:** After downloadFile is fixed and deployed, navigate to Alice's promote page, click "Download Spreadsheet" (FB), verify 200 response. Then go to edit-item for any item in that sale, change status → SOLD. Confirm FB nudge notification fires in Alice's notification inbox.
 
-2. **QA #27b post-push:** Fetch /api/sales/[saleId]/calendar.ics or click the iCal download link on a sale page. Confirm ".ics description contains `Shared via FindA.Sale — finda.sale`" for an organizer without TEAMS+watermark-removal enabled.
+3. **Records: Apply #27b ✅ to roadmap.** `Skill('findasale-records')` → update roadmap.md Chrome column for #27b (evidence: ss_4410s6brw, S843).
 
-3. **QA backlog (14 items — Records S842):** Top priority: #32 Shopper Wishlist Alerts, #68 Command Center, #73 Two-Channel Notifications, #91 Auto-Markdown, #125 Inventory CSV Export.
+4. **QA backlog:** #32 Shopper Wishlist Alerts, #68 Command Center, #91 Auto-Markdown, #125 Inventory CSV Export.
 
-4. **P0 aging quick-win:** #335 Consignor Payout Email — run a test payout against deseee@yahoo.com, check inbox. #293 — UPDATE Sale status='ENDED' via psycopg2, then QA eBay panel.
+5. **P0 aging quick-win:** #335 Consignor Payout Email — run a test payout against deseee@yahoo.com, check inbox. #293 — UPDATE Sale status='ENDED' via psycopg2, then QA eBay panel.
 
 ---
 
 ## Recent Sessions
+
+### S843 — QA: #27b ✅ iCal watermark verified, #461 UNVERIFIED, P2 downloadFile bug found
+
+**#27b ✅ Chrome-verified:** Fetched /api/sales/0d9563f9-4fcd-4630-8beb-189ea58c8118/calendar.ics in Chrome as Alice Johnson (Kelly's Estate Sales, SIMPLE tier). DESCRIPTION field confirmed: ends with `\n\nShared via FindA.Sale — finda.sale`. canRemoveWatermark()=false for SIMPLE → footer appended. ss_4410s6brw ss_0944l9m2y. Added to Pending Chrome Verifications for records to apply next session.
+
+**#461 UNVERIFIED:** Fix code is correct (CODE-ONLY). Blocker: `downloadFile` in promote/[saleId].tsx uses `localStorage.getItem('token')` — returns null since cookie auth migration (P0 security fix). Export endpoint returns 401, fbExportedAt never stamped. QA can't complete until downloadFile is fixed.
+
+**P2 bug found:** All promote-page exports (FB Marketplace XLSX/JSON, EstateSales.NET CSV, Craigslist TXT) broken for ALL production users. `downloadFile` sends `Authorization: Bearer null`. Added to Blocked Queue. Root cause: stale localStorage JWT pattern, fix is trivial (credentials:'include' + CSRF header).
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S842 — DEV: #461 FB nudge fix + #27b iCal watermark fix + Records roadmap scan
 

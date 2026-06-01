@@ -1,31 +1,26 @@
-# Patrick's Dashboard — S842 Wrap
+# Patrick's Dashboard — S843 Wrap
 
 ---
 
-## What Happened This Session (S842)
+## What Happened This Session (S843)
 
-Dev + records session. Both P2 bugs from last session are now fixed in code.
+QA session. One feature verified, one blocked by a newly-discovered production bug.
 
-**#461 FB Nudge — FIXED** — The Facebook sold nudge now fires when you mark a single item sold through the edit-item page, not just from the bulk status-change tool. The fix adds the nudge call to the individual item update function in the backend with the same guard logic as the bulk handler: only fires if the item was previously exported to Facebook (`fbExportedAt` is set) and the status is transitioning to SOLD. 0 TypeScript errors. Ready to push.
+**#27b iCal Watermark — ✅ VERIFIED** — Confirmed live in Chrome. The `.ics` download now correctly appends "Shared via FindA.Sale — finda.sale" to the event description for SIMPLE-tier organizers. Watermark removal only suppresses it for TEAMS+ organizers who have that toggle enabled.
 
-**#27b iCal Watermark — FIXED** — The `.ics` calendar file download now appends "Shared via FindA.Sale — finda.sale" to the event description, using the same watermark policy already used by the Print Kit and Marketing Kit controllers. The footer is suppressed only if the organizer has the watermark-removal toggle enabled (TEAMS tier feature). 0 TypeScript errors. Ready to push.
-
-**Records scan:** Wishlists Chrome verification from last session applied to the roadmap. Records also identified 14 features that are code-complete and testable right now without any external dependencies — next QA session has a clear queue.
+**#461 FB Nudge — UNVERIFIED (blocked by production bug)** — The fix code is correct, but a pre-existing bug prevents testing: all exports on the Promote page (Facebook Marketplace, EstateSales.NET, Craigslist) are silently broken in production. The `downloadFile` function sends an empty Bearer token because it reads from `localStorage`, which has been null since the auth cookie migration. This means no real user can download FB Marketplace exports right now, so `fbExportedAt` is never set, so the nudge never fires. A quick fix is needed for `downloadFile` first, then #461 can be re-verified.
 
 ---
 
-## ⚠️ P0 Aging Alert
+## ⚠️ New P2 Bug — Promote Page Exports Broken for All Users
 
-Four items in the Blocked Queue have been sitting there 50+ sessions without resolution. Per project rules these are mandatory P0. All are blocked by external infrastructure, not code bugs:
+**All exports on the Promote page return 401.** This affects:
+- Facebook Marketplace spreadsheet download
+- Facebook Marketplace JSON download
+- EstateSales.NET CSV download
+- Craigslist plain text download
 
-| Item | Sessions Old | What's Actually Blocking It |
-|------|-------------|---------------------------|
-| RSVP XP Monthly Cap | 57 sessions | Needs 5 RSVPs in one month — only 3 platform sales have RSVP enabled |
-| eBay Post-Sale Panel | 57 sessions | Needs a completed + ended eBay sale to test the panel |
-| Shopify Cross-Listing | 51 sessions | Needs a Shopify test store (free via Shopify Partners) |
-| Consignor Payout Email | 51 sessions | Just needs someone to run a test payout to a real inbox |
-
-The consignor payout one (#335) is the easiest to close — it just needs a real payout triggered and an inbox checked.
+Root cause: `downloadFile()` uses the old `localStorage.getItem('token')` pattern, which has been null for all users since the cookie auth security update. Fix is straightforward (2–3 lines) — will be dispatched as first item next session.
 
 ---
 
@@ -39,37 +34,35 @@ The consignor payout one (#335) is the easiest to close — it just needs a real
 | #332 Shopify Cross-Listing | P0 — needs Shopify Partners dev store |
 | #293 eBay Post-Sale Panel | P0 — needs ended sale in DB |
 | #335 Consignor Payout Email | P0 — run a test payout to verify email fires |
-| #461 FB Nudge single-item path | Fix written S842 — push then QA |
-| #27b iCal watermark footer | Fix written S842 — push then QA |
+| #461 FB Nudge single-item path | UNVERIFIED — fix downloadFile first, then re-QA |
+| Promote exports broken (P2) | `downloadFile` localStorage JWT — all exports 401 |
 
 ---
 
 ## Your Actions Required
 
-1. **Push block (S842 — 5 files, backend + docs):**
+1. **Delete test invite SVPKNKV3** — finda.sale/admin/invites → Delete SVPKNKV3 row.
+
+2. **GBP phone verification** — business.google.com → "Verify now" → phone code.
+
+3. **#239 legal gate** — Attorney + CPA before live consignor payouts.
+
+**Push block (S843 — 2 files, docs only):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/itemController.ts
-git add packages/backend/src/controllers/saleController.ts
-git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: #461 FB nudge wired to single-item updateItem; #27b iCal watermark footer added to generateIcal()"
+git commit -m "docs: S843 QA wrap — #27b verified, #461 unverified, P2 downloadFile bug"
 .\push.ps1
 ```
-
-2. **Delete test invite SVPKNKV3** — finda.sale/admin/invites → Delete SVPKNKV3 row.
-
-3. **GBP phone verification** — business.google.com → "Verify now" → phone code.
-
-4. **#239 legal gate** — Attorney + CPA before live consignor payouts.
 
 ---
 
 ## Next Session
 
-After push + Railway deploys (~2–3 min):
+Priority order:
 
-- QA #461: edit an item that was previously exported to Facebook, change its status to Sold, check organizer notifications for the nudge
-- QA #27b: download the `.ics` file from any sale page, confirm "Shared via FindA.Sale — finda.sale" appears at the end of the description
-- QA backlog: 14 testable features identified — top picks are #32 (wishlist alerts), #68 (command center), #73 (two-channel notifications)
+1. Fix `downloadFile` on the promote page (P2, trivial fix, blocks #461 QA)
+2. Re-QA #461 after the fix ships
+3. Apply #27b ✅ to roadmap (records)
+4. QA backlog: #32 (wishlist alerts), #68 (command center), #91 (auto-markdown)
