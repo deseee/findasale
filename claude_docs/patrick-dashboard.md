@@ -1,10 +1,10 @@
-# Patrick's Dashboard — S839 Wrap
+# Patrick's Dashboard — S840 Wrap
 
 ---
 
-## What Happened This Session (S839)
+## What Happened This Session (S840)
 
-QA-only session — no new dev. Applied S838 roadmap verifications, then ran QA on S837 nav links and several pending features.
+Two things: (1) Records cleanup — STATE.md was 369 lines, trimmed to 136. Roadmap drift fixed (#464 UTM still showed BROKEN, now FIXED S836; #321 ✅ Claude QA applied). (2) Wishlists QA + bug fix — confirmed and patched the P2 bug where navigating directly to /wishlists boots you to the login screen even when you're already signed in.
 
 **S837 nav links ✅ ALL VERIFIED** — The 6 features surfaced to nav in S837 all load correctly: Referrals, Auto Markdown, Starter Kit, AI Score, Challenges, Surprise Me. The color-rules→discount-rules redirect works. Notifications consolidated page renders with All/Operational/Discovery tabs.
 
@@ -35,19 +35,20 @@ QA-only session — no new dev. Applied S838 roadmap verifications, then ran QA 
 
 ## Your Actions Required
 
-1. **Push block (S839 — 3 files):**
+1. **Push block (S839+S840 — 4 files, includes code fix):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git commit -m "docs: S839 QA wrap — S838 verifications applied, S837 nav verified, #321/#303 QA, P2 /wishlists auth guard bug documented"
+git add packages/frontend/pages/wishlists.tsx
+git commit -m "fix: wishlists auth guard — add isLoading check to prevent premature /login redirect; docs: S840 wrap"
 .\push.ps1
 ```
 
-2. **Delete test invite SVPKNKV3** — Navigate to finda.sale/admin/invites and delete this row (carried from S837).
+2. **After push — verify the fix:** Go to finda.sale/wishlists while logged in (direct URL or F5). It should now show your wishlist hub instead of redirecting to login.
 
-3. **P2 bug fix (low urgency)** — `/wishlists` page redirects to login on direct URL access. Tell me when you want me to patch it.
+3. **Delete test invite SVPKNKV3** — finda.sale/admin/invites → Delete SVPKNKV3 row (carried from S837).
 
 ---
 

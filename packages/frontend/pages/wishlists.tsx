@@ -49,7 +49,7 @@ const occasionLabels: Record<string, string> = {
 
 const WishlistsPage = () => {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
@@ -59,12 +59,12 @@ const WishlistsPage = () => {
   const [newOccasion, setNewOccasion] = useState('');
   const [newIsPublic, setNewIsPublic] = useState(false);
 
-  // Redirect if not logged in
+  // Redirect if not logged in — wait for auth to resolve before redirecting
   useEffect(() => {
-    if (user === null) {
+    if (!authLoading && user === null) {
       router.push('/login');
     }
-  }, [user, router]);
+  }, [authLoading, user, router]);
 
   // Fetch wishlists
   const { data: wishlists = [], isLoading, refetch } = useQuery({
