@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S836 — DEV+QA: #462/#463/#464 UTM attribution ✅ FULLY VERIFIED. Root cause confirmed: Chrome incognito strips utm_* params at browser level before request is sent. Fix: email links use fsa_* param names (Chrome-safe). UTMCapture reads fsa_* as primary source, maps to utm_* for sessionStorage. Confirmed via console: sessionStorage.getItem('fsa_utm') = {"utm_source":"outreach","utm_medium":"email","utm_campaign":"touch1","utm_content":"hot",...}. Blocked Queue: 4 rows.**
+**Latest: S837 — QA: #166 ✅, #74 ✅, #150 ✅, #72 UNVERIFIED. All P0 priority targets from S836 Next Session dispatched. #166 Invites: admin code generation → register?invite pre-fill → workspace invite 201. #74 Role-Aware Consent: role dropdown toggles Business Info + correct consent checkbox. #150 Push Notifications: SW activated (scope finda.sale), VAPID FCM subscription confirmed. #72 Dual-Role: UNVERIFIED — no seed user has ORGANIZER+SHOPPER simultaneously; added to Blocked Queue. Cleanup: SVPKNKV3 invite code left unused in DB (Chrome froze on delete — Patrick to delete via /admin/invites). Blocked Queue: 5 rows.**
+
+**Previous: S836 — DEV+QA: #462/#463/#464 UTM attribution ✅ FULLY VERIFIED. Root cause confirmed: Chrome incognito strips utm_* params at browser level before request is sent. Fix: email links use fsa_* param names (Chrome-safe). UTMCapture reads fsa_* as primary source, maps to utm_* for sessionStorage. Confirmed via console: sessionStorage.getItem('fsa_utm') = {"utm_source":"outreach","utm_medium":"email","utm_campaign":"touch1","utm_content":"hot",...}. Blocked Queue: 4 rows.**
 
 **Previous: S835 — QA+Fix: #167 admin queue properly re-verified with real DB data (Patrick caught rubber-stamping of empty state). 2 test disputes injected via psycopg2 → /admin/disputes confirmed: dispute cards show buyer/seller/reason, expand reveals description + 4 status buttons, "Mark Under review" clicked → green toast + badge updated live without reload, F5 reload → status persisted. Admin guard verified (user5 → redirected to homepage). P2 found + fixed: filter tabs disappeared when filtered status returned empty results (EmptyState rendered before tabs, trapping admin). Fix: disputes.tsx restructured so tabs always render; inline empty state now context-aware ("No Open Disputes — try another filter"). UTM #462/#463/#464 ❌ confirmed broken in Patrick's real browser — session storage empty after navigating to finda.sale/search?utm_source=email in incognito; URL showed stripped params before page loaded. Needs new dev investigation. Blocked Queue: 5 rows.**
 
@@ -258,6 +260,8 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout creation. Consignor emails use Gmail API (not Resend — that was a red herring). Same service as all working transactional emails. Fictional test address can't be inbox-verified. | Run payout against a real email address to fully verify delivery. | S791 |
 
+| #72 Dual-Role Account Schema | UNVERIFIED S837 — No seed user has both ORGANIZER+SHOPPER roles simultaneously. VM disk full prevented psycopg2 DB access. Single-role organizer nav confirmed clean (no duplicates). | Create a user with both ORGANIZER and SHOPPER DB roles, then verify nav deduplication and endpoint access for both roles. | S837 |
+
 
 ---
 
@@ -265,47 +269,79 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-_S835: S832 entries cleared — applied to roadmap in S833. No new pending verifications this session (#167 admin queue re-verification is additive to existing ✅ S834 roadmap entry)._
+| 166 | Invites (Admin Beta Codes + Workspace) | Navigated to /admin/invites as user1. Clicked "Generate Invite Code" → code SVPKNKV3 appeared in list (unused). Navigated to /register?invite=SVPKNKV3 → green banner "Invite code SVPKNKV3 applied", role pre-set to "Sale Organizer". Navigated to /organizer/members → typed qa-member-invite@example.com → clicked "Send Invite" → green toast "Invitatio..." + POST /api/workspace/invite → 201. Screenshots: ss_1510bwi14, ss_7342ujb0m, ss_4900ul8jh | S837 |
+| 74 | Role-Aware Registration Consent | Navigated to /register as user1. Clicked role dropdown → selected "Sale Organizer" → Business Information section appeared (Business Name/Phone/Address fields). Shopper role: 1 consent checkbox visible. Organizer role: 1 consent checkbox + Business Info section visible. ToS link present both roles. Role-aware behavior confirmed via form_input + screenshot. Screenshots: ss_5756ltixe, ss_4111g721a | S837 |
+| 150 | Push Notification Subscriptions | Navigated to /organizer/settings → Notifications tab as user1. Saw "Push Notifications" section: "Push notifications are enabled" + Disable button. JS confirmed: navigator.serviceWorker scope=https://finda.sale/ state=activated. pushManager.getSubscription() → FCM endpoint + p256dh+auth keys active. Screenshot: ss_42439jwp1 | S837 |
 
 ## Next Session
 
 **Blocked Queue: 5 rows (below ≥8 ceiling — dev sessions clear).**
 
-**S835 complete.** #167 admin queue ✅ properly verified with real data. P2 filter bug fixed. UTM ❌ confirmed broken in real browser.
+**S837 complete.** #166 ✅, #74 ✅, #150 ✅ staged to Pending Chrome Verifications. #72 UNVERIFIED → added to Blocked Queue. Records to apply S837 verifications to roadmap at next session start.
 
 **Patrick actions required:**
 
-1. **Push block for S833+S834+S835 (5 files):**
+1. **Push block for S837 (2 files — docs only):**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
    git add claude_docs/STATE.md
    git add claude_docs/patrick-dashboard.md
-   git add claude_docs/strategy/roadmap.md
-   git add packages/backend/src/controllers/userController.ts
-   git add packages/frontend/pages/admin/disputes.tsx
-   git commit -m "fix: disputes filter tabs always render on empty state (P2); fix: dispute form itemId bug; docs: S833-S835 QA wrap"
+   git commit -m "docs: S837 QA wrap — #166/#74/#150 verified, #72 UNVERIFIED, staged to Pending Chrome Verifications"
    .\push.ps1
    ```
 
-2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-3. **#239 legal gate:** Attorney + CPA before live consignor payouts.
+2. **Delete test invite SVPKNKV3:** Navigate to finda.sale/admin/invites → Delete the SVPKNKV3 row (Chrome froze during QA cleanup — code is unused and harmless but should be removed).
+3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+4. **#239 legal gate:** Attorney + CPA before live consignor payouts.
 
-**Dispatch stubs (next session — QA batch):**
+**Dispatch stubs (next session — QA + Records):**
 
-QA session. Blocked Queue at 4 (below ≥8 ceiling). S804-era UNVERIFIED items are 32 sessions old — all P0 by age floor. Run sequential Chrome micro-dispatches (one feature per QA call, Chrome agents must be sequential).
+1. **Records at session start:** Apply S837 Pending Chrome Verifications to roadmap.md — #166, #74, #150 all have full evidence (URL + user + element + outcome + screenshot IDs).
 
-Priority QA targets (all UNVERIFIED S804, 32 sessions = P0):
-1. **#166 Invites** — ORG/SIMPLE. Dispatch: `Skill('findasale-qa')` → navigate /organizer/settings, find invite flow, send invite to test email, verify invite-to-sale and beta code acceptance.
-2. **#74 Role-Aware Registration Consent** — BOTH/FREE. Dispatch: navigate /register as new user, verify consent checkboxes present, copy attorney-reviewed.
-3. **#72 Dual-Role Account Schema** — BOTH/SIMPLE. Dispatch: log in as a dual-role account (organizer+shopper), verify nav has no duplicates, test organizer and shopper endpoints work.
-4. **#165 A/B Testing Infrastructure** — ORG/SIMPLE. Dispatch: verify A/B variant assignment visible somewhere in organizer flow.
-5. **#150 Push Notification Subscriptions** — BOTH/SIMPLE. Dispatch: verify VAPID subscription prompt fires, service worker registered.
-6. **#36 Weekly Treasure Digest** — SHO/FREE. CODE-ONLY acceptable (cron job, can't force Sunday 6pm).
-7. **#61 Near-Miss Nudges** — SHO/FREE. Dispatch: verify nudge API endpoint responds, check if any UI surfaces it.
-
-Also pending: #308 Item Hide (needs test sale, not live items), #25 eBay Sync Phase B/C browser verification.
+2. **QA continues (P0 age-floor targets remaining):**
+   - **#165 A/B Testing Infrastructure** — ORG/SIMPLE. Dispatch: verify A/B variant assignment visible in organizer flow.
+   - **#36 Weekly Treasure Digest** — SHO/FREE. CODE-ONLY acceptable (cron, can't force Sunday 6pm).
+   - **#61 Near-Miss Nudges** — SHO/FREE. Dispatch: verify nudge API endpoint, check if any UI surfaces it.
+   - **#72 Dual-Role Account Schema** — needs dual-role user (ORGANIZER+SHOPPER). Create via psycopg2 on a session where VM disk has space, then Chrome verify.
+   - **#308 Item Hide** — needs a test sale with items (not live organizer data).
+   - **#25 eBay Sync Phase B/C** — browser verification pending.
 
 ## Recent Sessions
+
+### S837 — QA: #166 ✅, #74 ✅, #150 ✅, #72 UNVERIFIED
+
+**#166 Invites ✅** — Admin /admin/invites: generated code SVPKNKV3, appeared in table (unused, 6/1/2026). /register?invite=SVPKNKV3: green "Invite code SVPKNKV3 applied" banner + role pre-set to "Sale Organizer". Workspace invite: /organizer/members → sent to qa-member-invite@example.com → POST /api/workspace/invite → 201 + green toast. Both invite flows fully verified. Cleanup: SVPKNKV3 left in DB (browser froze on delete — Patrick to delete manually).
+
+**#74 Role-Aware Registration Consent ✅** — /register default role = Shopper (1 consent checkbox + ToS). Switch to Sale Organizer: Business Information section (Name/Phone/Address) appears, 1 consent checkbox + ToS. Role-aware form behavior confirmed. Code verified: `organizerEmailConsent` vs `shopperEmailConsent` mapped per role; third branch (both checkboxes) is dead code since UI only offers 2 roles.
+
+**#150 Push Notification Subscriptions ✅** — /organizer/settings → Notifications tab: "Push notifications are enabled" + Disable button. JS: `navigator.serviceWorker` scope=https://finda.sale/ state=activated. `pushManager.getSubscription()` → FCM endpoint + p256dh+auth keys confirmed active.
+
+**#72 Dual-Role Account Schema UNVERIFIED** — No seed user has both ORGANIZER+SHOPPER roles simultaneously. VM disk full prevented psycopg2 access. Single-role organizer nav (ORGANIZER+ADMIN) confirmed no duplicate links. Added to Blocked Queue.
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
+
+### S836 — DEV+QA: #462/#463/#464 UTM attribution ✅ verified, Vercel build failure fixed
+
+**Root cause confirmed:** Chrome incognito strips `utm_*` params at the browser level before the HTTP request is sent. No server-side fix (middleware, skipTrailingSlashRedirect, window.location.search) could intercept them — they never arrive.
+
+**Fix shipped:**
+- `outreachEmailsCron.ts`: email links now use `fsa_*` param names (`fsa_src`, `fsa_med`, `fsa_cmp`, `fsa_cnt`) — Chrome-safe, not on strip list
+- `middleware.ts`: updated to capture both `fsa_*` (primary) and `utm_*` (legacy/non-incognito) and normalise to utm_* in `fsa_utm_pending` cookie
+- `_app.tsx` UTMCapture: reads `fsa_*` as primary source, `utm_*` as fallback, cookie as tertiary — all normalised to `utm_*` in sessionStorage
+- `_app.tsx`: also fixed missing `  );
+}
+
+export default MyApp;
+` closing (caused S835 push Vercel build failure)
+- `vercel.json`: added `"trailingSlash": false, "cleanUrls": false` (belt-and-suspenders against infrastructure redirect)
+
+**Verified:** Incognito Chrome → `finda.sale/search?fsa_src=outreach&fsa_med=email&fsa_cmp=touch1&fsa_cnt=hot` → `sessionStorage.getItem('fsa_utm')` = `{"utm_source":"outreach","utm_medium":"email","utm_campaign":"touch1","utm_content":"hot","captured_at":"2026-06-01T14:48:54.209Z"}` ✅
+
+**Files changed:** `packages/frontend/middleware.ts` · `packages/frontend/pages/_app.tsx` · `packages/frontend/vercel.json` · `packages/backend/src/jobs/outreachEmailsCron.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
+
+---
 
 ### S835 — QA+Fix: #167 admin queue verified with real data, P2 filter bug fixed, UTM confirmed broken
 
