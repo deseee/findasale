@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S823 — QA sweep. Railway ENV all 5 ✅. S822 Chrome verifications applied to roadmap. Full QA: Homepage ✅, #214 AI Planner ✅, Shopper dashboard ✅, #311 Multi-Location full CRUD ✅, #356 Broadcast composer ✅, #50 Loot Log ✅ (seeded Purchase, verified, cleaned). #319/#325/#328 UNVERIFIED (upload_image tool limitation). P2 bugs found: /plan markdown not rendered, Broadcast duplicate dead CTA. Blocked Queue: 4 rows.**
+**Latest: S824 — QA session. #356 Broadcast ✅ REVERIFIED (both CTAs work — ss_10748req1/ss_4277txmmx). #214 /plan markdown ✅ already deployed in HEAD (renderMarkdown was pre-existing; S823 P2 finding retracted). Shopper dashboard ✅ all widgets (Scout rank, StreakWidget, RankBenefitsCard, Hunt Pass Active, Rare Finds). Notifications ✅. plan.tsx truncation by fix agent caught and reversed (restored to HEAD 321 lines). plan.tsx push block from S824 CANCELLED — do NOT push. #319/#325/#328 still UNVERIFIED (needs Artifact MI or test sale). Blocked Queue: 4 rows.**
+
+**Previous: S823 — QA sweep. Railway ENV all 5 ✅. S822 Chrome verifications applied to roadmap. Full QA: Homepage ✅, #214 AI Planner ✅, Shopper dashboard ✅, #311 Multi-Location full CRUD ✅, #356 Broadcast composer ✅, #50 Loot Log ✅ (seeded Purchase, verified, cleaned). #319/#325/#328 UNVERIFIED (upload_image tool limitation). P2 bugs found: /plan markdown not rendered, Broadcast duplicate dead CTA. Blocked Queue: 4 rows.**
 
 **Previous: S820 — Scheduled session: markSold duplicate Purchase fix + DB purge + backup restore (automated).**
 
@@ -246,26 +248,32 @@ _S772 reconciliation: graduated/closed rows (✅ VERIFIED/CLOSED/DONE) removed �
 
 ## Pending Chrome Verifications
 
-_S822+S823 verifications applied. UNVERIFIED items remain below._
+_S824 verifications applied. Items below are staged for roadmap update next session._
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| #319/#325/#328 | Burst Clustering / Best-Photo-First / Photo Role Awareness | UNVERIFIED — upload_image tool failed to access screenshot history in S823 (genuine attempts made). Batch Upload UI renders correctly ✅; file input found ✅; photo upload itself blocked by tool limitation. Re-queue with upload_image fix. | S823 |
+| #356 | Organizer Broadcast — both CTAs | Navigated to /organizer/settings as Carol Williams (user3, TEAMS). Clicked "+ New broadcast" via ref_169 → BroadcastComposer opened (BROADCASTS/NEW, Templates, Review & send, Subject/Message fields, Live Preview). Closed. Clicked "Send your first broadcast →" via ref_354 → same composer opened. Both CTAs confirmed functional. ss_10748req1, ss_4277txmmx. | S824 |
+| #214 | AI Planner /plan — markdown rendering | Navigated to /plan as Carol Williams. Clicked "Where do I start planning a sale?" preset. AI response rendered formatted bold numbered list (e.g. "1. **Decide your sale type.**" shown as bold, no raw asterisks). renderMarkdown already present in HEAD — S823 P2 finding retracted. ss_3781tim1d. | S824 |
+| Shopper dashboard | All widgets (user5) | Navigated to /shopper/dashboard as Leo Thomas (user5). Scout rank badge, 517/1200 XP progress bar ✅. QR code, nav row (Collections/Purchase History/Treasure Trails/My QR/More) ✅. StreakWidget (Streak 0, XP 517, Upgrade) ✅. RankBenefitsCard (Scout unlocks, Next rank Ranger preview) ✅. Hunt Pass Active banner ✅. Rare Finds empty state ✅. ss_7966k5gcr, ss_83033h5zm, ss_78268e2gc. | S824 |
+| Notifications | Shopper notifications page (user5) | Navigated to /shopper/notifications as Leo Thomas. Page loads, tabs (All/Organizer Alerts/Discoveries), "Item sold" notifications with unread dots, timestamps, dismiss (×) buttons, "Mark all read" button all present. ss_48121x074. | S824 |
+| #319/#325/#328 | Burst Clustering / Best-Photo-First / Photo Role Awareness | UNVERIFIED — needs Artifact MI (Google OAuth, Patrick present) or fresh test sale. No test accounts have active DRAFT/PUBLISHED sales. | S824 |
 ---
 
 ## Next Session
 
 **Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear to resume).**
 
-**S823 complete:** QA sweep done. All 5 Railway ENV vars confirmed. #50 Loot Log ✅ (seeded + verified + cleaned). #311 Multi-Location full CRUD ✅. #356 Broadcast ✅. 2 P2 bugs found. #319/#325/#328 still UNVERIFIED (upload_image tool limitation). Blocked Queue: 4 rows.
+**S824 complete:** QA session. #356 ✅ reverified. #214 /plan markdown ✅ already deployed. Shopper dashboard + notifications ✅. plan.tsx truncation caught and reversed. Blocked Queue: 4 rows unchanged.
+
+**IMPORTANT — do NOT push plan.tsx:** S824 fix agent truncated plan.tsx (287 lines vs HEAD 321 lines). File restored to HEAD in workspace. The push block given earlier this session for plan.tsx is CANCELLED.
 
 **Patrick actions required:**
 
-1. **Push block for S823 docs:**
+1. **Push block for S824 docs only:**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add claude_docs/STATE.md claude_docs/strategy/roadmap.md
-   git commit -m "docs: S823 wrap — QA sweep, #311/#356/#50 verified, 2 P2 bugs logged"
+   git add claude_docs/STATE.md
+   git commit -m "docs: S824 wrap — QA session, #356/#214/shopper dashboard verified, plan.tsx truncation caught"
    .\push.ps1
    ```
 2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
@@ -273,11 +281,28 @@ _S822+S823 verifications applied. UNVERIFIED items remain below._
 4. **#463 Google Merchant:** Confirm Google approved ~52 products after 3-day review.
 
 **Dispatch stubs:**
-- **P2 fix dispatch:** `Skill('findasale-dev')` → Fix /plan markdown rendering (response not parsed via ReactMarkdown or similar). Fix Broadcast duplicate dead CTA ("Send your first broadcast →" in empty state calls nothing — wire to same openComposer or remove).
-- **#319/#325/#328:** Re-attempt when upload_image tool access issue is resolved. Batch Upload UI confirmed renders; photo upload flow itself unverified.
-- **QA:** Flip Report HTML decode still needs Artifact MI + ended sale.
+- **Next session start:** `Skill('findasale-records')` → Apply S824 Pending Chrome Verifications (#356, #214, shopper dashboard, notifications) to roadmap.md Chrome column.
+- **#319/#325/#328:** Re-attempt with Artifact MI (Patrick present, Google OAuth). Artifact MI ENDED sale `cmom7h73l000hz36wzbruoa64` confirmed exists.
+- **QA:** Flip Report HTML decode — needs Artifact MI + ended sale (same session as photo upload).
 
 ## Recent Sessions
+
+### S824 — QA Session: #356/#214 Reverified, Shopper Dashboard ✅, plan.tsx Truncation Caught
+
+**Key finding:** plan.tsx fix agent truncated the file (287 lines vs HEAD 321). Caught during QA. File restored to HEAD via `cp`. Push block for plan.tsx CANCELLED — do NOT push it.
+
+**QA results:**
+- #356 Broadcast ✅ — Both "+ New broadcast" (ref click) and "Send your first broadcast →" (empty state) open BroadcastComposer. S823 "dead CTA" finding was a pixel-coordinate miss, not a real bug. (ss_10748req1, ss_4277txmmx)
+- #214 /plan AI Planner ✅ — renderMarkdown already in HEAD; AI responses render formatted bold numbered lists. S823 P2 finding retracted. (ss_3781tim1d)
+- Shopper dashboard ✅ — Leo Thomas (user5, SCOUT, 517 XP): Scout badge, progress bar, QR code, nav row, StreakWidget, RankBenefitsCard, Hunt Pass Active banner, Rare Finds empty state. (ss_7966k5gcr, ss_78268e2gc)
+- Notifications ✅ — Tabs, unread dots, timestamps, dismiss buttons, Mark all read. (ss_48121x074)
+- #319/#325/#328 UNVERIFIED — no test accounts have active sales; needs Artifact MI (Patrick present) or test sale creation.
+
+**Other findings:** user3@example.com = Carol Williams (TEAMS tier). No test accounts (user1-4) have DRAFT/PUBLISHED sales in Railway DB.
+
+**Files changed:** `claude_docs/STATE.md`
+
+---
 
 ### S823 — QA Sweep: #311 #356 #50 Verified, 2 P2 Bugs Found, ENV Check Clean
 
