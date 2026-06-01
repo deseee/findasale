@@ -1,205 +1,168 @@
 /**
- * Illinois Department of Financial and Professional Regulation — Auctioneer License Scraper
- * Scrapes licensed auctioneers from IDFPR license verification system
- * Source: https://www.idfpr.com/LicenseLookup/LicenseLookup.asp
- * Public directory with auctioneer records
+ * Illinois IDFPR — Auctioneer License Scraper
  * ADR-073: Directory Scraper Phase 1 — State licensing data
+ *
+ * DATA SOURCE: Illinois Socrata Open Data API
+ * Endpoint: https://data.illinois.gov/resource/pzzh-kp68.json
+ * Dataset:  Illinois IDFPR Professional Licensing (1.2M+ records, updated daily)
+ * Filter:   license_type='AUCTIONEER' AND license_status='ACTIVE'
+ * Records:  ~1,260 active licensed auctioneers
+ *
+ * NOTE: As of Jan 1 2026 Illinois requires estate sale companies to hold
+ * auctioneer licenses (Illinois Auction License Act) — this dataset is growing.
+ *
+ * Previous approach (www.idfpr.com VIEWSTATE form) broke when IDFPR migrated
+ * domains (SSL alert 80). Socrata is the authoritative public API — no browser,
+ * no VIEWSTATE, simple JSON GET with SoQL pagination.
  */
 
-import { RateLimiter, defaultRateLimiter } from '../rateLimiter';
+import axios from 'axios';
+import { defaultRateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
-import { getRandomUserAgent } from '../userAgents';
 
-const IDFPR_BASE_URL = 'https://www.idfpr.com';
-const LICENSE_LOOKUP_URL = 'https://www.idfpr.com/LicenseLookup/LicenseLookup.asp';
+const SOCRATA_BASE_URL = 'https://data.illinois.gov/resource/pzzh-kp68.json';
+const PAGE_SIZE = 1000;
+// Socrata anonymous quota is generous; 300ms between pages is polite
+const PAGE_DELAY_MS = 300;
 
-/**
- * Parse an address string like "Chicago, IL 60601" into city and zip components
- */
-function parseAddress(address: string): { city: string; zip: string } {
-  const parts = address.split(',').map((s) => s.trim());
-  if (parts.length < 2) {
-    return { city: address, zip: '' };
-  }
-  const cityPart = parts[0];
-  const stateZip = parts[1];
-  // Format: "IL 60601"
-  const zipMatch = stateZip.match(/\d{5}/);
-  const zip = zipMatch ? zipMatch[0] : '';
-  return { city: cityPart, zip };
+interface SocrataAuctioneerRecord {
+  license_type: string;
+  license_number: string;
+  license_status: string;
+  business_name: string;
+  businessdba: string;
+  first_name: string;
+  last_name: string;
+  city: string;
+  state: string;
+  zip: string;
+  county: string;
 }
 
 /**
- * Scrape Illinois auctioneer licenses from IDFPR verification system.
- * Public directory — no authentication required.
- * Ingests records into Organizer table with IllinoisLicensing source attribution.
+ * Resolve the best display name for an auctioneer record.
+ * Business entity names take priority; fall back to individual name.
  */
+function resolveOrganizerName(record: SocrataAuctioneerRecord): string {
+  const dba = record.businessdba?.trim();
+  if (dba) return dba;
+  const bizName = record.business_name?.trim();
+  if (bizName) return bizName;
+  const individual = `${record.first_name ?? ''} ${record.last_name ?? ''}`.trim();
+  return individual || 'Unknown';
+}
+
 export async function runIllinoisLicensingScraper(): Promise<void> {
   const rateLimiter = defaultRateLimiter;
-  const domain = new URL(LICENSE_LOOKUP_URL).hostname;
   let totalRecords = 0;
   let createdOrganizers = 0;
+  let offset = 0;
 
   try {
-    console.log('[IllinoisLicensing] Starting auctioneer license scraper');
+    console.log('[IllinoisLicensing] Starting auctioneer license scraper via Socrata API');
 
-    // First, fetch the initial search form to get any hidden fields (VIEWSTATE, etc.)
-    await rateLimiter.waitBeforeRequest(domain);
+    // Paginate until Socrata returns an empty page
+    while (true) {
+      await rateLimiter.waitBeforeRequest('data.illinois.gov');
 
-    const formPageResponse = await fetch(LICENSE_LOOKUP_URL, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
+      const response = await axios.get<SocrataAuctioneerRecord[]>(SOCRATA_BASE_URL, {
+        params: {
+          $where: "license_type='AUCTIONEER' AND license_status='ACTIVE'",
+          $limit: PAGE_SIZE,
+          $offset: offset,
+          $order: 'license_number ASC',
+        },
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'FindA.Sale Directory Scraper (+https://finda.sale)',
+        },
+        timeout: 30000,
+      });
 
-    if (!formPageResponse.ok) {
-      throw new Error(`Failed to fetch search form: ${formPageResponse.status}`);
-    }
+      const records = response.data;
 
-    const formHtml = await formPageResponse.text();
-
-    // Extract ASP.NET ViewState and EventValidation from hidden fields if present
-    const viewStateMatch = formHtml.match(/name="__VIEWSTATE"\s+value="([^"]+)"/);
-    const eventValidationMatch = formHtml.match(/name="__EVENTVALIDATION"\s+value="([^"]+)"/);
-
-    const viewState = viewStateMatch ? viewStateMatch[1] : '';
-    const eventValidation = eventValidationMatch ? eventValidationMatch[1] : '';
-
-    console.log('[IllinoisLicensing] Extracted form state if present');
-
-    // Build form data for search: License Type = Auctioneer
-    const formData = new URLSearchParams();
-    if (viewState) {
-      formData.append('__VIEWSTATE', viewState);
-    }
-    if (eventValidation) {
-      formData.append('__EVENTVALIDATION', eventValidation);
-    }
-    // IDFPR form field names — adjust if actual form differs
-    formData.append('ddlLicenseType', 'Auctioneer');
-    formData.append('ddlLicenseStatus', 'Active');
-    formData.append('btnSearch', 'Search');
-
-    // Submit search
-    await rateLimiter.waitBeforeRequest(domain);
-
-    const searchResponse = await fetch(LICENSE_LOOKUP_URL, {
-      method: 'POST',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
-        Referer: LICENSE_LOOKUP_URL,
-      },
-      body: formData.toString(),
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!searchResponse.ok) {
-      throw new Error(`Search failed: ${searchResponse.status}`);
-    }
-
-    const html = await searchResponse.text();
-
-    // Parse HTML table rows
-    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
-    const rows = html.match(rowRegex) || [];
-
-    console.log(`[IllinoisLicensing] Found ${rows.length} table rows on page 1`);
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-
-      // Extract cells from row
-      const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/g;
-      const cells = row.match(cellRegex) || [];
-
-      if (cells.length < 5) {
-        // Skip header or malformed rows
-        continue;
+      if (!records || records.length === 0) {
+        console.log(`[IllinoisLicensing] No more records at offset ${offset} — done`);
+        break;
       }
 
-      // Extract text from cells, removing HTML tags
-      const extractText = (html: string): string => {
-        return html
-          .replace(/<[^>]*>/g, '')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
-          .trim();
-      };
+      console.log(`[IllinoisLicensing] Page offset=${offset}: ${records.length} records`);
 
-      const name = extractText(cells[0]);
-      const licenseNum = extractText(cells[1]);
-      const licenseType = extractText(cells[2]);
-      const status = extractText(cells[3]);
-      const addressFull = extractText(cells[4]);
+      for (const record of records) {
+        totalRecords++;
 
-      if (!name || !licenseNum) {
-        continue; // Skip rows without name or license
-      }
+        const name = resolveOrganizerName(record);
+        const city = (record.city ?? '').trim() || 'Illinois';
+        const licenseNum = (record.license_number ?? '').trim();
 
-      totalRecords++;
+        if (!name || !licenseNum) continue;
 
-      // Parse address
-      const { city, zip } = parseAddress(addressFull);
-
-      // Only ingest active licenses
-      if (status !== 'Active' && !status.includes('Active')) {
-        console.log(
-          `[IllinoisLicensing] Skipping ${name} (license ${licenseNum}): status=${status}`
+        const organizerId = await getOrCreateScrapedOrganizer(
+          name,
+          'IllinoisLicensing',
+          city,
+          'IL',
+          undefined, // esnOrgId
+          undefined, // googlePlaceId
+          undefined, // foursquareVenueId
+          undefined, // hereBusinessId
+          'AUCTION_HOUSE',
+          undefined  // contactEmail
         );
-        continue;
-      }
 
-      console.log(`[IllinoisLicensing] Processing: ${name} (License ${licenseNum}) in ${city}, IL`);
+        if (organizerId) {
+          await prisma.organizer.update({
+            where: { id: organizerId },
+            data: {
+              licenseNumber: licenseNum,
+              licenseState: 'IL',
+              isStateLicensed: true,
+            },
+          });
+          createdOrganizers++;
+        }
 
-      // Call getOrCreateScrapedOrganizer with AUCTION_HOUSE category
-      const organizerId = await getOrCreateScrapedOrganizer(
-        name,
-        'IllinoisLicensing',
-        city || 'Illinois',
-        'IL',
-        undefined, // esnOrgId
-        undefined, // googlePlaceId
-        undefined, // foursquareVenueId
-        undefined, // hereBusinessId
-        'AUCTION_HOUSE', // businessCategory
-        undefined // contactEmail
-      );
-
-      // If organizer was created or found, update with Illinois-specific fields
-      if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: {
-            licenseNumber: licenseNum,
-            licenseState: 'IL',
-            isStateLicensed: true,
-          },
-        });
-
-        createdOrganizers++;
-
-        if (totalRecords % 50 === 0) {
+        if (totalRecords % 100 === 0) {
           console.log(
-            `[IllinoisLicensing] Progress: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
+            `[IllinoisLicensing] Progress: ${totalRecords} processed, ${createdOrganizers} upserted`
           );
         }
       }
+
+      // Socrata returned a full page — advance offset and continue
+      if (records.length < PAGE_SIZE) {
+        // Partial page = last page
+        break;
+      }
+
+      offset += PAGE_SIZE;
+
+      // Brief pause between pages to stay within Socrata's anonymous quota
+      await new Promise((r) => setTimeout(r, PAGE_DELAY_MS));
     }
 
     console.log(
-      `[IllinoisLicensing] Scraper completed: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
+      `[IllinoisLicensing] Completed: ${totalRecords} records processed, ${createdOrganizers} organizers upserted`
     );
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as Error & { response?: { status: number } };
+
+    // Infrastructure failures — log as warning, don't throw to Sentry
+    const status = err.response?.status;
+    if (status === 403 || status === 429) {
+      console.warn(
+        `[IllinoisLicensing] Socrata returned ${status} — rate limited or blocked. Returning 0 results.`
+      );
+      return;
+    }
+
+    const code = (err as NodeJS.ErrnoException).code ?? '';
+    if (code === 'ENOTFOUND' || code === 'ECONNREFUSED' || err.name === 'ConnectTimeoutError') {
+      console.warn('[IllinoisLicensing] Network error reaching Socrata:', err.message);
+      return;
+    }
+
     console.error('[IllinoisLicensing] Scraper error:', error);
     throw error;
   }
