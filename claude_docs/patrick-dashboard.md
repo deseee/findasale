@@ -1,16 +1,31 @@
-# Patrick's Dashboard — S841 Wrap
+# Patrick's Dashboard — S842 Wrap
 
 ---
 
-## What Happened This Session (S841)
+## What Happened This Session (S842)
 
-QA session. Three items checked.
+Dev + records session. Both P2 bugs from last session are now fixed in code.
 
-**#321 wishlists hard-nav ✅ CONFIRMED** — The S840 fix deployed successfully. Navigated directly to finda.sale/wishlists while logged in as Leo Thomas — hub loaded with both collections, no redirect to login. That bug is done.
+**#461 FB Nudge — FIXED** — The Facebook sold nudge now fires when you mark a single item sold through the edit-item page, not just from the bulk status-change tool. The fix adds the nudge call to the individual item update function in the backend with the same guard logic as the bulk handler: only fires if the item was previously exported to Facebook (`fbExportedAt` is set) and the status is transitioning to SOLD. 0 TypeScript errors. Ready to push.
 
-**#461 Facebook Export Sold Nudge ⚠️ P2 bug found** — The "Download Spreadsheet" button exists on the promote page and looks correct. But the notification that's supposed to fire when you mark a previously-exported item as sold (the "Mark this sold on Facebook Marketplace too" nudge) is only wired to the bulk status-change tool in the add-items list — NOT to the regular edit-item page. If you go to edit an item and change its status to Sold, you'll never get the notification. I confirmed this by marking an item sold and checking Alice's inbox — nothing arrived. Root cause in code: `items.ts:431` has the nudge call, `itemController.ts` does not.
+**#27b iCal Watermark — FIXED** — The `.ics` calendar file download now appends "Shared via FindA.Sale — finda.sale" to the event description, using the same watermark policy already used by the Print Kit and Marketing Kit controllers. The footer is suppressed only if the organizer has the watermark-removal toggle enabled (TEAMS tier feature). 0 TypeScript errors. Ready to push.
 
-**#27b iCal Watermark ⚠️ P2 bug found** — The Print Kit PDF watermark is correctly implemented (code confirmed). But the iCal `.ics` file has no watermark footer at all. I fetched the live `.ics` file from the server — the description ends at "View items online: [url]" with nothing after it. The S599 changelog claims this was added, but it's not in the code. The iCal generator (`saleController.ts generateIcal`) has zero watermark logic.
+**Records scan:** Wishlists Chrome verification from last session applied to the roadmap. Records also identified 14 features that are code-complete and testable right now without any external dependencies — next QA session has a clear queue.
+
+---
+
+## ⚠️ P0 Aging Alert
+
+Four items in the Blocked Queue have been sitting there 50+ sessions without resolution. Per project rules these are mandatory P0. All are blocked by external infrastructure, not code bugs:
+
+| Item | Sessions Old | What's Actually Blocking It |
+|------|-------------|---------------------------|
+| RSVP XP Monthly Cap | 57 sessions | Needs 5 RSVPs in one month — only 3 platform sales have RSVP enabled |
+| eBay Post-Sale Panel | 57 sessions | Needs a completed + ended eBay sale to test the panel |
+| Shopify Cross-Listing | 51 sessions | Needs a Shopify test store (free via Shopify Partners) |
+| Consignor Payout Email | 51 sessions | Just needs someone to run a test payout to a real inbox |
+
+The consignor payout one (#335) is the easiest to close — it just needs a real payout triggered and an inbox checked.
 
 ---
 
@@ -20,23 +35,26 @@ QA session. Three items checked.
 
 | Item | Status |
 |------|--------|
-| RSVP XP Monthly Cap | Waiting for organic usage (5 RSVPs/month needed) |
-| #332 Shopify Cross-Listing | Needs Shopify OAuth test store |
-| #293 eBay Post-Sale Panel | Needs completed eBay sale with items |
-| #335 Consignor Payout Email | CODE-ONLY — needs real email to verify delivery |
-| #461 FB Nudge single-item path | P2 bug — nudge not wired to edit-item PUT endpoint |
-| #27b iCal watermark footer | P2 bug — footer missing from generateIcal() |
+| RSVP XP Monthly Cap | P0 — infrastructure gap (needs 5 RSVPs) |
+| #332 Shopify Cross-Listing | P0 — needs Shopify Partners dev store |
+| #293 eBay Post-Sale Panel | P0 — needs ended sale in DB |
+| #335 Consignor Payout Email | P0 — run a test payout to verify email fires |
+| #461 FB Nudge single-item path | Fix written S842 — push then QA |
+| #27b iCal watermark footer | Fix written S842 — push then QA |
 
 ---
 
 ## Your Actions Required
 
-1. **Push block (S841 — docs only, 2 files):**
+1. **Push block (S842 — 5 files, backend + docs):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/saleController.ts
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S841 wrap — #321 wishlists ✅ verified, #461 P2 nudge path bug, #27b P2 iCal watermark missing"
+git commit -m "fix: #461 FB nudge wired to single-item updateItem; #27b iCal watermark footer added to generateIcal()"
 .\push.ps1
 ```
 
@@ -48,11 +66,10 @@ git commit -m "docs: S841 wrap — #321 wishlists ✅ verified, #461 P2 nudge pa
 
 ---
 
-## QA Scoreboard
+## Next Session
 
-| Feature | Result |
-|---------|--------|
-| #321 /wishlists hard-nav fix | ✅ Confirmed deployed |
-| #461 FB export sold nudge | ⚠️ P2 bug (edit-item path missing nudge) |
-| #27b iCal watermark footer | ⚠️ P2 bug (footer not implemented) |
-| #27b Print Kit PDF watermark | ✅ CODE-CONFIRMED |
+After push + Railway deploys (~2–3 min):
+
+- QA #461: edit an item that was previously exported to Facebook, change its status to Sold, check organizer notifications for the nudge
+- QA #27b: download the `.ics` file from any sale page, confirm "Shared via FindA.Sale — finda.sale" appears at the end of the description
+- QA backlog: 14 testable features identified — top picks are #32 (wishlist alerts), #68 (command center), #73 (two-channel notifications)

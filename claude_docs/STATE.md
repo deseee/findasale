@@ -8,13 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S841 — QA: #321 wishlists hard-nav ✅ Chrome-verified (ss_1258kvk8e ss_839591msq). #461 ⚠️ P2 BUG — FB nudge not wired to single-item PUT (only bulk PATCH); export button UI confirmed. #27b ⚠️ P2 BUG — iCal watermark footer missing from generateIcal(); Chrome-fetch confirmed no footer text. Print Kit PDF watermark CODE-CONFIRMED. Blocked Queue: 6 rows (2 new P2 bugs added).**
+**Latest: S842 — DEV+Records: #461 fix written (FB nudge wired to itemController.ts updateItem, 0 TS errors). #27b fix written (iCal watermark footer via canRemoveWatermark() in generateIcal(), 0 TS errors). Roadmap: #193 wishlists ✅ applied (S841 evidence). Records scan: 4 P0 aging violations flagged, 14-item testable QA backlog identified. Blocked Queue: 6 rows. Awaiting push + Chrome QA.**
+
+**Previous: S841 — QA: #321 wishlists hard-nav ✅ Chrome-verified (ss_1258kvk8e ss_839591msq). #461 ⚠️ P2 BUG — FB nudge not wired to single-item PUT (only bulk PATCH). #27b ⚠️ P2 BUG — iCal watermark footer missing from generateIcal(). Blocked Queue: 6 rows (2 new P2 bugs added).**
 
 **Previous: S840 — Records cleanup + QA: STATE.md trimmed (369→136 lines), #321 ✅ applied to roadmap, #464 UTM drift fixed, #340 CODE-VERIFIED noted. Wishlists flow QA: /shopper/wishlist in-app nav ✅, Sellers tab ✅, /wishlists P2 bug confirmed ❌ + FIXED (wishlists.tsx: authLoading guard added, 0 TS errors). Fix deployed. Blocked Queue: 4 rows.**
 
 **Previous: S839 — QA: S837 nav links all verified, #321 ✅ Encyclopedia Auto-Gen, #317 CODE-VERIFIED, #340 CODE-VERIFIED, #303 PASS WITH NOTES. P2 found: /wishlists auth guard missing isLoading check. Blocked Queue: 4 rows.**
-
-**Previous: S838 — QA batch: #165 ⚠️, #61 ✅, #36 CODE-ONLY, #72 ✅, #308 ⚠️, #25 ✅. Blocked Queue: 4 rows.**
 
 ---
 
@@ -35,15 +35,16 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
+_⚠️ P0 AGING (S842): #267, #293 at 57 sessions; #332, #335 at 51 sessions — mandatory P0 per CLAUDE.md §10a. All structurally blocked by external dependencies._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| RSVP XP Monthly Cap (#267 part 2) | Only 3 platform sales have RSVP button; need 5 RSVPs in one month to hit 10 XP cap | Create more platform sales with RSVP enabled, or wait for organic usage | S785 |
-| #332 Shopify Cross-Listing | UNVERIFIED S791 — Requires Shopify OAuth connection; no test store available | Connect a Shopify store to an organizer account, then verify cross-listing flow | S791 |
-| #293 eBay Listing Data Parity | PostSaleEbayPanel requires eBay connection + completed sale with items | Connect eBay to user1, complete a sale, then test 17-field Edit eBay section | S785 |
-| #335 Consignor Payout Email | ✅ CODE-VERIFIED S791 — sendConsignorPayout() called after payout. Gmail API correct service. | Run payout against real email to fully verify delivery. | S791 |
-| #461 FB Nudge — single-item path | P2 BUG S841: `notifyFacebookExportedItemSold()` only called in bulk PATCH status handler (items.ts:431), NOT in `updateItem` (itemController.ts). Organizers marking sold via edit-item get no nudge. | Fix: add nudge call to itemController.ts `updateItem` when status transitions to SOLD. | S841 |
-| #27b iCal watermark footer | P2 BUG S841: `generateIcal()` (saleController.ts:1084) has zero watermark implementation. Live .ics fetch confirmed: description ends at "View items online: [url]" — no footer. | Fix: add `removeWatermarkEnabled` check + "Shared via FindA.Sale" footer to generateIcal(). | S841 |
+| RSVP XP Monthly Cap (#267 part 2) | **P0 (57 sessions)** — Only 3 platform sales have RSVP; need 5 RSVPs in one month to hit 10 XP cap | Create platform sales with RSVP enabled or wait for organic usage | S785 |
+| #293 eBay Listing Data Parity | **P0 (57 sessions)** — PostSaleEbayPanel requires eBay connection + completed ENDED sale with items | Manually end a test sale in DB (UPDATE Sale SET status='ENDED'), connect eBay to user1, test 17-field panel | S785 |
+| #332 Shopify Cross-Listing | **P0 (51 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
+| #335 Consignor Payout Email | **P0 (51 sessions)** — CODE-VERIFIED S791: sendConsignorPayout() called. Email delivery unverified | Run payout against real email address, check inbox | S791 |
+| #461 FB Nudge — single-item path | Fix written S842: nudge added to `itemController.ts` updateItem — fires on SOLD transition when fbExportedAt set. 0 TS errors. | Push then Chrome-verify: mark item SOLD via edit-item, confirm nudge fires | S841 |
+| #27b iCal watermark footer | Fix written S842: `canRemoveWatermark()` check + footer added to `generateIcal()` (saleController.ts). 0 TS errors. | Push then Chrome-verify: download .ics from sale, confirm footer appears | S841 |
 
 ---
 
@@ -52,24 +53,26 @@ _S772 reconciliation: graduated/closed rows removed — reconciled into strategy
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
-| wishlists fix | /wishlists hard-nav auth guard | Navigated directly to finda.sale/wishlists as Leo Thomas (user5). Hub loaded with Vintage Jewelry + Mid-Century Modern Hunt collections. No redirect to /login. ss_1258kvk8e ss_839591msq | S841 |
 
 ---
 
 ## Next Session
 
-**Blocked Queue: 6 rows (below ≥8 ceiling — dev sessions clear).**
+**Blocked Queue: 6 rows (below ≥8 ceiling — dev sessions clear). 4 are P0 aging (structurally blocked by external deps).**
 
-**S841 complete.** QA session: #321 ✅ wishlists fix confirmed deployed, 2 P2 bugs found (#461 nudge path gap, #27b iCal watermark missing).
+**S842 complete.** DEV: #461 + #27b fixes written, 0 TS errors. Records: wishlists ✅ applied to roadmap. Push required before QA.
 
 **Patrick actions required:**
 
-1. **Push block for S841 (2 files — docs only):**
+1. **Push block for S842 (5 files):**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add packages/backend/src/controllers/itemController.ts
+   git add packages/backend/src/controllers/saleController.ts
+   git add claude_docs/strategy/roadmap.md
    git add claude_docs/STATE.md
    git add claude_docs/patrick-dashboard.md
-   git commit -m "docs: S841 wrap — #321 ✅ wishlists fix verified, #461 P2 nudge path bug, #27b P2 iCal watermark missing"
+   git commit -m "fix: #461 FB nudge wired to single-item updateItem; #27b iCal watermark footer added to generateIcal()"
    .\push.ps1
    ```
 
@@ -79,27 +82,39 @@ _S772 reconciliation: graduated/closed rows removed — reconciled into strategy
 
 4. **#239 legal gate:** Attorney + CPA before live consignor payouts.
 
-**Dispatch stubs (next session):**
+**Dispatch stubs (next session — after push + Railway deploy):**
 
-1. **Apply Pending Chrome Verifications to roadmap** — `Skill('findasale-records')`: apply wishlists hard-nav ✅ (ss_1258kvk8e ss_839591msq) to roadmap Chrome column.
+1. **QA #461 post-push:** Navigate as Artifact MI (user1), edit an item with fbExportedAt set, change status → SOLD. Check organizer notification inbox for FB nudge. (Or: mark SOLD via edit-item page for any previously FB-exported item.)
 
-2. **Fix P2 bugs (dispatch to findasale-dev in parallel):**
-   - `#461 nudge fix`: In `itemController.ts` `updateItem` function, add `notifyFacebookExportedItemSold(item.id).catch(...)` call when status transitions to `SOLD`. Pattern: items.ts:424-431.
-   - `#27b iCal fix`: In `saleController.ts` `generateIcal()`, add `removeWatermarkEnabled` check on the organizer (need to include in the prisma query) and append `\n\nShared via FindA.Sale — finda.sale` to description when watermark is enabled.
+2. **QA #27b post-push:** Fetch /api/sales/[saleId]/calendar.ics or click the iCal download link on a sale page. Confirm ".ics description contains `Shared via FindA.Sale — finda.sale`" for an organizer without TEAMS+watermark-removal enabled.
 
-3. **QA continues:** #267 RSVP monthly cap (user5/user6, needs 5 RSVPs), #303 Already Scanned (real GPS — VM blocked), #332 Shopify (needs test store).
+3. **QA backlog (14 items — Records S842):** Top priority: #32 Shopper Wishlist Alerts, #68 Command Center, #73 Two-Channel Notifications, #91 Auto-Markdown, #125 Inventory CSV Export.
+
+4. **P0 aging quick-win:** #335 Consignor Payout Email — run a test payout against deseee@yahoo.com, check inbox. #293 — UPDATE Sale status='ENDED' via psycopg2, then QA eBay panel.
 
 ---
 
 ## Recent Sessions
 
+### S842 — DEV: #461 FB nudge fix + #27b iCal watermark fix + Records roadmap scan
+
+**#461 Fix written:** `itemController.ts` line 34 — import `notifyFacebookExportedItemSold`. Lines 1278-1283 — nudge fires on `status === 'SOLD' && item.status !== 'SOLD' && item.fbExportedAt`. Fire-and-forget `.catch()`. Matches bulk handler pattern (items.ts:431). 0 TS errors. Awaiting push + Chrome QA.
+
+**#27b Fix written:** `saleController.ts` line 16 — import `canRemoveWatermark`. Line 1091 — organizer select extended with `removeWatermarkEnabled`. Lines 1107-1108 — footer `\n\nShared via FindA.Sale — finda.sale` appended unless `canRemoveWatermark()` returns true. Matches marketingKitController/printKitController pattern. 0 TS errors. Awaiting push + Chrome QA.
+
+**Records S842:** Roadmap #193 wishlists Chr ✅ applied (ss_1258kvk8e ss_839591msq, S841 evidence). P0 aging violations: #267/#293 (S785, 57 sessions), #332/#335 (S791, 51 sessions). 14-item testable QA backlog identified (top 5: #32, #68, #73, #91, #125).
+
+**Files changed:** `packages/backend/src/controllers/itemController.ts` · `packages/backend/src/controllers/saleController.ts` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
+
 ### S841 — QA: #321 wishlists ✅, #461 P2 bug, #27b P2 bug
 
 **#321 wishlists fix Chrome-verified:** Navigated directly to finda.sale/wishlists as Leo Thomas (user5). Hub loaded with 2 collections (Vintage Jewelry, Mid-Century Modern Hunt). No redirect to /login. Fix confirmed deployed. ss_1258kvk8e ss_839591msq
 
-**#461 ⚠️ PASS WITH NOTES (P2 bug):** FB Marketplace "Download Spreadsheet" button present and renders on promote page (ss_6661l9vm1). P2 BUG: `notifyFacebookExportedItemSold()` only wired to bulk PATCH `status` operation (items.ts:431) — NOT wired to single-item `updateItem` (itemController.ts). Marked Antique Chair AVAILABLE→SOLD via edit-item, zero notifications fired in Alice's inbox. Chrome-verified. UNVERIFIED: whether nudge fires via bulk path; UNVERIFIED: fbExportedAt stamped (VM disk full).
+**#461 ⚠️ P2 bug confirmed:** `notifyFacebookExportedItemSold()` only wired to bulk PATCH (items.ts:431) — NOT to single-item `updateItem` (itemController.ts). Marked Antique Chair AVAILABLE→SOLD via edit-item, zero notifications fired in Alice's inbox.
 
-**#27b ⚠️ PASS WITH NOTES (P2 bug):** Print Kit PDF watermark CODE-CONFIRMED (printKitController.ts:326 — `!canRemoveWatermark()` → "Find more sales at FindA.Sale" footer). P2 BUG: `generateIcal()` (saleController.ts:1084) has no watermark implementation. Live `.ics` fetch confirmed description ends at `View items online: [url]` — no footer text, no `removeWatermarkEnabled` check. iCal watermark was claimed implemented in S599 but missing from code.
+**#27b ⚠️ P2 bug confirmed:** `generateIcal()` has no watermark logic. Live `.ics` fetch confirmed description ends at `View items online: [url]` — no footer. Print Kit PDF watermark CODE-CONFIRMED (printKitController.ts:326).
 
 **Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
 
@@ -107,13 +122,9 @@ _S772 reconciliation: graduated/closed rows removed — reconciled into strategy
 
 ### S840 — Records + QA: STATE.md cleanup, wishlists P2 fix
 
-**Records:** STATE.md trimmed 369→136 lines. Stale S838 Next Session block removed. Roadmap: #321 Claude QA ✅ applied (ss_0551gs4p3 ss_01850j1g8), #464 UTM drift fixed (BROKEN→FIXED S836), #340 CODE-VERIFIED S839 noted. Pool Audit Findings condensed.
+**Records:** STATE.md trimmed 369→136 lines. Roadmap: #321 Claude QA ✅ applied, #464 UTM drift fixed (BROKEN→FIXED S836), #340 CODE-VERIFIED noted.
 
-**Wishlists QA:** Navigated to /shopper/wishlist as user5 (Leo Thomas) via MY COLLECTION → Wishlist nav click. Items tab ✅, Sellers tab ✅ (correct empty state), 2 collections (Vintage Jewelry/Mid-Century Modern Hunt) present. "+ New Collection" routes to /wishlists hub ✅ via client-side nav. Direct URL /shopper/wishlist ✅ no auth bug. /wishlists hard nav (F5 reload while logged in) → redirected to /login ❌ P2 confirmed. ss_5165fdf0j ss_30826q1k8 ss_2960t250m ss_2592nh65t
-
-**P2 FIXED:** wishlists.tsx line 52: `const { user, isLoading: authLoading } = useAuth()`. Line 63–67: `if (!authLoading && user === null)` + `authLoading` in deps array. 0 TS errors. PENDING DEPLOY (Patrick push required).
-
-**Secondary P3:** /login redirect from /wishlists doesn't include `?redirect=/wishlists` — user loses their place. Low priority, not blocking.
+**Wishlists QA:** /shopper/wishlist in-app nav ✅, Sellers tab ✅. /wishlists hard nav → redirected to /login ❌ P2 confirmed. Fix: wishlists.tsx authLoading guard added, 0 TS errors. DEPLOYED. ss_5165fdf0j ss_30826q1k8 ss_2960t250m ss_2592nh65t
 
 **Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md` · `packages/frontend/pages/wishlists.tsx`
 
@@ -121,15 +132,9 @@ _S772 reconciliation: graduated/closed rows removed — reconciled into strategy
 
 ### S839 — QA: S837 nav links, #321, #303, #317, #340
 
-**S838 roadmap verifications applied:** #61 ✅, #72 ✅, #165 ⚠️ PASS WITH NOTES (P3), #36 CODE-ONLY, #308 ⚠️ PASS WITH NOTES (P3), #25 ✅ Patrick-confirmed.
+**S837 nav links verified:** /organizer/referrals ✅, /organizer/markdown-cycles ✅, /organizer/starter-kit ✅, /ai-score ✅, /challenges ✅, /surprise-me ✅, /notifications consolidated ✅.
 
-**S837 nav links verified:** /organizer/referrals ✅, /organizer/markdown-cycles ✅, /organizer/starter-kit ✅, /ai-score ✅, /challenges ✅, /surprise-me ✅, color-rules→discount-rules redirect ✅, /notifications consolidated ✅ (All/Operational/Discovery tabs). P2: /wishlists hard-nav redirects to login — auth guard missing isLoading check.
-
-**#321 Encyclopedia Auto-Gen ✅** — /admin/encyclopedia as user1: 57 Awaiting Review, 20 Published, 77 Total. Hoosier/Stickley/Catalin — AUTO_GENERATED with Promote buttons. Run Full Curator Pass button visible. ss_0551gs4p3 ss_01850j1g8
-
-**#303 Photo Station ⚠️ PASS WITH NOTES** — page loads, "Location Access Required" gate expected. XP/Already Scanned UNVERIFIED (requires real GPS). ss_65158fo38
-
-**#317 CODE-VERIFIED** — itemController.ts:2723 coords check + graceful degradation. **#340 CODE-VERIFIED** — review.tsx:413 + [saleId].tsx:496-499 query param auto-open flow.
+**#321 ✅** — /admin/encyclopedia: 57 Awaiting Review, 20 Published, 77 Total. ss_0551gs4p3 ss_01850j1g8. **#303 ⚠️** — page loads, GPS-gated. **#317/#340 CODE-VERIFIED.**
 
 **Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
 
@@ -137,24 +142,10 @@ _S772 reconciliation: graduated/closed rows removed — reconciled into strategy
 
 ### S838 — QA: #165, #61, #36, #72, #308, #25
 
-**#165 ⚠️ PASS WITH NOTES** — P3: stub Clear button, roles/role inconsistency. **#61 ✅** — NudgeBar confirmed, STREAK_CONTINUATION, variable-ratio. P3: TIER_PROGRESS never generated. **#36 CODE-ONLY ✅** — weeklyEmailJob.ts cron Sunday 6pm confirmed. **#72 ✅** — user2 ORGANIZER+SHOPPER: 22-item nav zero dups, all dashboards load. **#308 ⚠️** — hide fires isActive:false, absent from public pages; P3: no Hidden indicator in organizer list. **#25 ✅ Patrick-confirmed** — eBay Sync Phase B/C + Pull to Sale working.
+**#165 ⚠️** P3: stub Clear button. **#61 ✅** NudgeBar, STREAK_CONTINUATION. **#36 CODE-ONLY** weeklyEmailJob cron confirmed. **#72 ✅** dual-role nav zero dups. **#308 ⚠️** hide fires isActive:false, no Hidden indicator. **#25 ✅ Patrick-confirmed** eBay Sync Phase B/C + Pull to Sale.
 
 **Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
 
 ---
 
-### S837 — QA: #166 ✅, #74 ✅, #150 ✅ + nav audit → 11 fixes
-
-**#166 Invites ✅** — Admin invites: generated SVPKNKV3 (Patrick to delete). /register?invite flow ✅. Workspace invite: 201 + toast. **#74 ✅** — Role-aware registration: Shopper vs Organizer forms confirmed. **#150 ✅** — FCM push subscription active (p256dh+auth keys confirmed). Nav audit: 11 AvatarDropdown + BottomTabNav fixes, 6 unlinked features surfaced and nav-wired (#398/#334/#396/#438/#55/#182).
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S836 — DEV+QA: UTM #462/#463/#464 ✅
-
-**Root cause:** Chrome incognito strips utm_* params at browser level. Fix: email links use fsa_* param names. UTMCapture reads fsa_* as primary, maps to utm_* for sessionStorage. Verified via console: sessionStorage fsa_utm confirmed with source/medium/campaign/content. Vercel build failure fixed (dashboard.tsx TS1005 — JSX siblings without Fragment). Blocked Queue: 4 rows.
-
----
-
-_Older sessions archived. S835 and earlier: see git log._
+_Older sessions archived. S837 and earlier: see git log._
