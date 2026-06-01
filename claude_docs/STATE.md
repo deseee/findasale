@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S826 — QA session. (1) #319/#325/#328 API-VERIFIED: batch upload pipeline fix confirmed working. (2) #352 Organizer Tagline ✅ CHROME-VERIFIED: field exists, PATCH saves, reloads correctly. (3) #354 Business Hours ✅ CHROME-VERIFIED: Timezone PATCH + PUT /hours + GET all work correctly. (4) ⚠️ P2 BUG FOUND: Vercel strips UTM query params before Next.js router receives them — fsa_utm never written to sessionStorage, #462/#463/#464 attribution features broken in production. Blocked Queue: 4 rows.**
+**Latest: S827 — DEV+QA. (1) UTM fix shipped (#462/#463/#464): root cause = router.isReady guard missing + Vercel trailing-slash redirect stripping params. Fixed: _app.tsx guard + next.config.js skipTrailingSlashRedirect. (2) Batch upload QA (#319/#325/#328): P1 bug found (Analyze All button non-responsive) + P2 bug (30s timeout too short for AI) — both fixed (SmartInventoryUpload.tsx + requestTimeout.ts + index.ts). Chrome UI UNVERIFIED (needs re-QA post-deploy). (3) Flip Report QA: loads ✅, 3 HTML decode bugs found + fixed ([saleId].tsx). Blocked Queue: 4 rows.**
 
 **Previous: S825 — QA session. P1 BUG FOUND + FIXED: #319/#325/#328 (Burst Clustering / Best-Photo-First / Photo Role Awareness) all broken since launch. Root cause: batchAnalyzeController.ts prisma.item.create() calls missing \`embedding: []\` field (NOT NULL, no DB default) → silent constraint violation → 0 Items and 0 Photos ever written to DB. Confirmed via: (1) created test sale for Bob Smith (user2) via psycopg2, (2) logged in via backend JWT, (3) called /api/upload/batch-analyze with real Cloudinary URLs, (4) got 200 + cluster data but 0 DB records. Fix: added \`embedding: []\` to both prisma.item.create calls (cluster + ungrouped). 0 TS errors. S824 Chrome verifications applied to roadmap (#356 both CTAs ✅, #214 markdown ✅). Blocked Queue: 4 rows.**
 
@@ -267,28 +267,44 @@ _S824 verifications applied. Items below are staged for roadmap update next sess
 
 **Blocked Queue: 4 rows (below ≥8 ceiling — dev sessions clear to resume).**
 
-**S826 complete:** QA session. #319/#325/#328 API-verified ✅. #352 Tagline ✅ Chrome-verified. #354 Business Hours ✅ Chrome-verified. ⚠️ P2 Bug: Vercel strips UTM query params — #462/#463/#464 attribution broken. Push needed.
+**S827 complete:** UTM fix shipped. Batch upload P1+P2 bugs fixed. Flip Report 3x HTML decode bugs fixed. Push block below.
 
 **Patrick actions required:**
 
-1. **Push block for S826:**
+1. **Push block for S827 (all 7 files):**
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add packages/frontend/pages/_app.tsx
+   git add packages/frontend/next.config.js
+   git add packages/frontend/components/SmartInventoryUpload.tsx
+   git add packages/backend/src/middleware/requestTimeout.ts
+   git add packages/backend/src/index.ts
+   git add packages/frontend/pages/organizer/flip-report/[saleId].tsx
    git add claude_docs/STATE.md
-   git commit -m "docs: S826 wrap — #352/#354 Chrome-verified, UTM stripping P2 bug found"
+   git commit -m "fix: UTM router.isReady guard + skipTrailingSlashRedirect; batch upload Analyze All stopPropagation + 120s timeout; flip report full HTML entity decode"
    .\push.ps1
    ```
 2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 3. **#239 legal gate:** Attorney + CPA still needed before live consignor payouts.
-4. **#319/#325/#328 Chrome UI:** When available with Artifact MI — go to organizer add-items, upload 3+ photos, confirm items appear with AI suggestions. This is the only remaining step.
 
-**Dispatch stubs:**
-- **UTM P2 fix:** `Skill('findasale-dev')` — investigate Vercel UTM param stripping. Check if Vercel is doing a canonical redirect stripping query params from static Next.js pages. Root cause: fetch to `/trending?utm_source=outreach` returns `opaqueredirect` (301/302) and `location.search = ""` after navigation. Fix options: (1) Vercel config to preserve query params, (2) use hash-based UTM capture, (3) capture params server-side before redirect.
-- **#319/#325/#328 Chrome QA:** `Skill('findasale-qa')` — login as Artifact MI, navigate to add-items for a sale, upload 3 photos using upload_image MCP, verify items render in UI with AI suggestions + cluster grouping.
-- **QA:** Flip Report HTML decode — needs Artifact MI + ended sale.
-- **Dev sessions clear:** Blocked Queue at 4. Next available for feature work or roadmap advance.
+**Dispatch stubs (next session):**
+- **#319/#325/#328 Chrome re-QA post-deploy:** `Skill('findasale-qa')` — after S827 ships, navigate to add-items as Bob Smith (user2), upload 3 photos, verify items appear with AI cluster suggestions. P1 button + P2 timeout both fixed — should now complete end-to-end.
+- **Flip Report re-QA post-deploy:** `Skill('findasale-qa')` — navigate to Flip Report for ended sale, verify `Home Décor`, `Lamps & Lighting` etc. display without raw entities in Category Breakdown, Recommendations, and Return to Inventory panel.
+- **Dev sessions clear:** Blocked Queue at 4. Next available for roadmap feature work.
 
 ## Recent Sessions
+
+### S827 — DEV+QA: UTM Fix + Batch Upload Bugs + Flip Report Bugs
+
+**UTM param stripping fixed (#462/#463/#464):** Root cause: (1) `UTMCapture` useEffect fired before Next.js Pages Router hydration — `router.query` is `{}` during pre-rendering so effect ran and returned early. (2) No Vercel trailing-slash redirect protection. Fixes: added `if (!router.isReady) return` guard + `router.isReady` to dependency array in `_app.tsx`; added `skipTrailingSlashRedirect: true` to `next.config.js`.
+
+**Batch upload QA (#319/#325/#328) — P1+P2 bugs found + fixed:** (1) P1: "Analyze All" button non-responsive — `e.stopPropagation()` added to Clear/Retry/Analyze All buttons in `SmartInventoryUpload.tsx`. (2) P2: `batch-analyze` 503 timeout — global 30s too short for AI vision; added path-level 120s override in `index.ts` + skip in `requestTimeout.ts`. Chrome UI UNVERIFIED (503 during session; needs re-QA post-deploy with fixes live).
+
+**Flip Report QA:** Feature confirmed loading ✅ (ss_04533uo53). 3 HTML decode bugs found: (1) numeric entities `&#233;` → `Home D&#233;cor` in Category Breakdown + Top Performers; (2) `&amp;` in Recommendations text; (3) `&amp;` in Return to Inventory panel subcopy. All fixed in `[saleId].tsx`: replaced 5-line regex `decodeHtml()` with SSR-safe DOM textarea trick + numeric decimal fallback; applied `decodeHtml()` to `rec.text` and `unsoldItems.category`. 0 TS errors. Needs re-QA post-deploy.
+
+**Files changed:** `packages/frontend/pages/_app.tsx` · `packages/frontend/next.config.js` · `packages/frontend/components/SmartInventoryUpload.tsx` · `packages/backend/src/middleware/requestTimeout.ts` · `packages/backend/src/index.ts` · `packages/frontend/pages/organizer/flip-report/[saleId].tsx` · `claude_docs/STATE.md`
+
+---
 
 ### S826 — QA: #319/#325/#328 API-Verified + #352/#354 Chrome-Verified + UTM P2 Bug
 
@@ -327,50 +343,4 @@ _S824 verifications applied. Items below are staged for roadmap update next sess
 **Key finding:** plan.tsx fix agent truncated the file (287 lines vs HEAD 321). Caught during QA. File restored to HEAD via `cp`. Push block for plan.tsx CANCELLED — do NOT push it.
 
 **QA results:**
-- #356 Broadcast ✅ — Both "+ New broadcast" (ref click) and "Send your first broadcast →" (empty state) open BroadcastComposer. S823 "dead CTA" finding was a pixel-coordinate miss, not a real bug. (ss_10748req1, ss_4277txmmx)
-- #214 /plan AI Planner ✅ — renderMarkdown already in HEAD; AI responses render formatted bold numbered lists. S823 P2 finding retracted. (ss_3781tim1d)
-- Shopper dashboard ✅ — Leo Thomas (user5, SCOUT, 517 XP): Scout badge, progress bar, QR code, nav row, StreakWidget, RankBenefitsCard, Hunt Pass Active banner, Rare Finds empty state. (ss_7966k5gcr, ss_78268e2gc)
-- Notifications ✅ — Tabs, unread dots, timestamps, dismiss buttons, Mark all read. (ss_48121x074)
-- #319/#325/#328 UNVERIFIED — no test accounts have active sales; needs Artifact MI (Patrick present) or test sale creation.
-
-**Other findings:** user3@example.com = Carol Williams (TEAMS tier). No test accounts (user1-4) have DRAFT/PUBLISHED sales in Railway DB.
-
-**Files changed:** `claude_docs/STATE.md`
-
----
-
-### S823 — QA Sweep: #311 #356 #50 Verified, 2 P2 Bugs Found, ENV Check Clean
-
-**Session start:** S822 Chrome verifications (#200 rank fix, #309 TEAMS-gate) applied to roadmap.
-
-**Railway ENV:** All 5 vars confirmed set (OUTREACH_SECRET, INTERNAL_SCRAPER_KEY, EBAY_VERIFICATION_TOKEN, EBAY_DELETION_ENDPOINT_URL, STRIPE_CONNECT_WEBHOOK_SECRET). Listing enrichment cron confirmed registered in index.ts (0 4 * * *).
-
-**QA verified:**
-- Homepage ✅ — GR map pins, 20 sales, Treasure Hunt card (ss_6915tbooo)
-- #214 AI Sale Planner Chat ✅ — responds correctly; ⚠️P2 raw markdown rendered instead of formatted
-- Shopper dashboard ✅ — Scout rank, XP 517, all widgets load
-- #311 Multi-Location full CRUD ✅ — create/list/delete all work with toasts (ss_1481hhswc, ss_4783cmh97)
-- #356 Organizer Broadcast ✅ — "+ New broadcast" opens full composer UI (ss_5408xfx9o)
-- #50 Loot Log ✅ — seeded Purchase for user5, navigated to /shopper/loot-log/[id], item+price+condition rendered (ss_20725x3d4). Cleanup: Purchase deleted.
-
-**P2 bugs found:**
-- /plan chat renders raw markdown (**bold** visible as literal asterisks)
-- Broadcast section has dead "Send your first broadcast →" CTA (bottom of empty state) — does nothing; real button is "+ New broadcast" at top
-
-**UNVERIFIED:** #319/#325/#328 — upload_image tool failed to access screenshot history (genuine attempts x3). Batch Upload UI renders correctly, file input found — photo upload itself blocked by tool limitation.
-
-**Test data cleanup:** QA test sale (qa823testsale319photo0001, user3) deleted. Purchase (qa50test823lootlog01234567, user5) deleted. No test data remains.
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/strategy/roadmap.md`
-
----
-
-### S822 — Build Fix + QA: S821 Vercel Deploy Unblocked, Both S821 Fixes Verified
-
-**Session start:** S820 Chrome verifications applied to roadmap. #476 deferred (Patrick decision).
-
-**Build failure:** Both S821 Vercel deployments failed on same TypeScript error: `Property 'explorerRank' does not exist on type '{ id: string; name: string; collectorTitle: string | null; }'` in `profile/[userId].tsx:44`. Root cause: `PublicExplorerPassport.user` in `useCollectorPassport.ts` never updated with `explorerRank`/`guildXp`. Fix: added union type + guildXp. Redeployed green.
-
-**QA verified:** #200 public profile rank ✅ Leo Thomas shows Scout (ss_2483vbj9l). TEAMS-gated pages ✅ no error toast on /organizer/consignors (ss_75625ykar). Flip Report HTML decode UNVERIFIED (user2 has no ended sales — needs Artifact MI).
-
-**Files changed:** `p
+- #356 Broadcast ✅ — Both "+ New broadcast" (ref click) and "Se

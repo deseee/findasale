@@ -511,6 +511,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/affiliate', affiliateRoutes);
 app.use('/api/lines', lineRoutes);
 app.use('/api/geocode', geocodeRoutes);
+app.post('/api/upload/batch-analyze', requestTimeout(120000)); // AI batch analysis needs up to 2 min
 app.use('/api/upload', uploadRoutes);
 app.use('/api/organizers', organizerRoutes);
 app.use('/api/contact', contactLimiter, contactRoutes); // M3: dedicated contact spam limiter

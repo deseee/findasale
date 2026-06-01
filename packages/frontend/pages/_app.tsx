@@ -277,12 +277,21 @@ function RateLimitListener() {
 /**
  * #18: Capture and record UTM parameters on page load
  * Fires a silent pixel call to record social link clicks
+ *
+ * router.isReady guard: In Next.js Pages Router, router.query is an empty object
+ * during SSR/pre-rendering and only populated after client-side hydration. Without
+ * the isReady guard the effect fires on mount with an empty query, sees no UTM params,
+ * and returns early. Gating on router.isReady is the documented Next.js pattern and
+ * guarantees the effect only runs once the full query string (including UTM params)
+ * is available. (Fixes #462/#463/#464 — outreach attribution silently broken on Vercel.)
  */
 function UTMCapture() {
   const router = useRouter();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    // Wait for router hydration — router.query is {} until isReady=true on static/ISR pages
+    if (!router.isReady) return;
 
     const { utm_source, utm_medium, utm_campaign, utm_content, saleId } = router.query;
 
@@ -317,7 +326,7 @@ function UTMCapture() {
     if (typeof utm_content === 'string') params.append('utm_content', utm_content);
 
     fetch(`/api/link-clicks/record?${params}`, { method: 'GET' }).catch(() => {}); // Silent fail
-  }, [router.query]);
+  }, [router.query, router.isReady]);
 
   return null;
 }

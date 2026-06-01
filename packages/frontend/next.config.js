@@ -131,6 +131,13 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
 
+  // Prevent Vercel's edge layer from issuing a trailing-slash redirect that
+  // would strip query params (including UTM params) before Next.js sees them.
+  // Without this, a request to /trending?utm_source=outreach can be redirected
+  // to /trending/ by Vercel's platform-level cleanUrls/trailingSlash logic,
+  // arriving at Next.js with an empty query string. (#462/#463/#464)
+  skipTrailingSlashRedirect: true,
+
   // Ensure guide data is included in Vercel serverless bundle for server-sitemap.xml
   outputFileTracingIncludes: {
     '/pages/server-sitemap.xml': ['./data/seo-pages/slugs.json'],
