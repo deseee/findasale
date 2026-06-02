@@ -32,8 +32,12 @@ function parseAddress(address: string): { city: string; zip: string } {
 function isInfrastructureError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message ?? '';
-  const code = (err as NodeJS.ErrnoException).code ?? '';
+  // Node's native fetch wraps network errors as TypeError: fetch failed
+  // with the actual ENOTFOUND/ECONNREFUSED on err.cause, not err directly.
+  const code = (err as NodeJS.ErrnoException).code ??
+    ((err as { cause?: NodeJS.ErrnoException }).cause?.code) ?? '';
   return (
+    msg === 'fetch failed' ||
     code === 'ENOTFOUND' ||
     code === 'ECONNREFUSED' ||
     err.name === 'ConnectTimeoutError' ||
