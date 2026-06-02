@@ -702,7 +702,7 @@ function Step1({ c, form, setForm }: Step1Props) {
             type="text"
             value={form.title}
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            placeholder={selectedTile ? `e.g., ${titleSuggestions[selectedTile.key][0]}` : 'e.g., Smith Family Estate Sale'}
+            placeholder={selectedTile ? `e.g., ${titleSuggestions[selectedTile.key][0]}` : 'e.g., Your Sale Name'}
             required
             style={{
               padding: '11px 14px', borderRadius: 8,

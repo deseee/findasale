@@ -69,7 +69,7 @@ export default function EfficiencyCoachingWidget() {
           <div className="text-right">
             <div className="flex items-center justify-end gap-1 mb-1">
               <p className="text-xs text-gray-500 dark:text-gray-400">Sell-Through</p>
-              <Tooltip content="Percentage of your listed items that have sold. Industry average is 60–80% for estate sales." position="top" />
+              <Tooltip content="Percentage of your listed items that have sold. Industry average is 60–80% for most resale events." position="top" />
             </div>
             <p className="text-lg font-semibold text-gray-900 dark:text-white">
               {Math.round(data.sellThroughRate * 100)}%

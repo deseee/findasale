@@ -37,7 +37,7 @@ const AuctionCountdown = ({ endTime, onExpired }: Props) => {
 
   if (expired) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs font-semibold text-warm-500 bg-warm-100 px-2 py-0.5 rounded-full">
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-warm-500 dark:text-warm-300 bg-warm-100 dark:bg-warm-800/40 px-2 py-0.5 rounded-full">
         Auction ended
       </span>
     );
