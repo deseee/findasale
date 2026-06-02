@@ -65,9 +65,13 @@ export async function runMonthlyTrendReport(): Promise<void> {
 
   console.log(`[monthlyTrendReport] Running for period: ${periodLabel}`);
 
-  // Find all organizers with at least one PUBLISHED or ENDED sale in the past 30 days
+  // Find real (claimed) organizers with at least one PUBLISHED or ENDED sale in the past 30 days.
+  // isUnmanagedListing: false excludes scraped/unclaimed organizers — without this filter the job
+  // attempts to email ~44k scraped orgs, burns through Gmail's 2,000/day cap, and blocks all
+  // transactional email (payouts, notifications) for the rest of the day.
   const activeOrganizers = await prisma.organizer.findMany({
     where: {
+      isUnmanagedListing: false,
       sales: {
         some: {
           status: { in: ['PUBLISHED', 'ENDED'] },
