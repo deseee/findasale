@@ -46,7 +46,7 @@ Read before any marketing work:
 ## Brand Voice
 
 **Tone**: Warm, practical, local. Not corporate, not hustle-culture, not flashy.
-Think: a knowledgeable neighbor who happens to run estate sales.
+Think: a knowledgeable neighbor who happens to run local sales — estate sales, garage sales, auctions, or anything in between.
 
 **For organizers**: Emphasize time savings, simplicity, and fair fees.
 Don't talk about "disruption" or "revolutionizing" — talk about what

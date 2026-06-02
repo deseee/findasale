@@ -74,6 +74,24 @@ git commit -m "fix: #293 PostSaleEbayPanel API paths missing /ebay/ prefix (S845
 
 ---
 
+## Brand Drift Alert — 2026-06-02 (Automated Scan)
+
+**Score: 8/10 decisions compliant** (up from 7/10 last week — 7 fixes confirmed).
+
+**3 P2 items needing `findasale-dev` dispatch:**
+- `create-sale.tsx:705` — Default title placeholder says "Smith Family Estate Sale" before any sale type is selected. Frames estate sales as the default for all new organizers. → Change to neutral placeholder like "e.g., Your Sale Name"
+- `organizers/[id].tsx:218` — OG meta description says "Estate sales, auctions, and more" — drops garage/yard/flea. High visibility on social shares.
+- `findasale-marketing/SKILL.md:49` — CARRYOVER (week 2). "Run estate sales" brand archetype still present. Requires skill reinstall after edit.
+
+**2 P3 items (low priority):**
+- `EfficiencyCoachingWidget.tsx:72` — Tooltip benchmarks "60–80% for estate sales" shown to all organizer types
+- `settings.tsx:1441` — Organizer tagline placeholder example is estate-sale-specific
+- `AuctionCountdown.tsx:40` — Badge missing dark: variants
+
+Full report: `claude_docs/audits/brand-drift-2026-06-02.md`
+
+---
+
 ## Next Session Options
 
 1. **After push:** QA #293 — finda.sale/organizer/sales/0d9563f9-... (already ENDED, 2 AVAILABLE items). Verify panel loads with items + 17-field edit works.

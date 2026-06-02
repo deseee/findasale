@@ -2,11 +2,19 @@ import { google } from 'googleapis';
 
 /**
  * Transactional email service — uses Gmail API (same auth as outreach).
- * SES SMTP is pending approval; Gmail API is the active transport.
- *
- * FROM address: uses SES_FROM_EMAIL env var (defaults to notifications@send.finda.sale).
- * Gmail send-as alias must be configured for whatever FROM address is used.
+ * FROM address: uses SES_FROM_EMAIL env var (defaults to find@outreach.finda.sale).
+ * Must match the same DKIM/SPF domain as outreach emails (outreach.finda.sale).
  */
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(p|div|h[1-6]|li|tr)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/\n{3,}/g, '\n\n').replace(/[ \t]+/g, ' ')
+    .trim();
+}
 
 function createGmailClient() {
   if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !process.env.GMAIL_REFRESH_TOKEN) {
@@ -55,13 +63,22 @@ function buildRawMessage(options: {
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
 
+  const plainText = htmlToPlainText(options.html);
+  const plainBase64 = Buffer.from(plainText, 'utf-8').toString('base64');
   const htmlBase64 = Buffer.from(options.html, 'utf-8').toString('base64');
   const body = [
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    plainBase64,
+    ``,
     `--${boundary}`,
     `Content-Type: text/html; charset="UTF-8"`,
     `Content-Transfer-Encoding: base64`,
     ``,
     htmlBase64,
+    ``,
     `--${boundary}--`,
   ];
 
