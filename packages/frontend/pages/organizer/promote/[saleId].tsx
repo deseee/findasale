@@ -321,7 +321,9 @@ export default function PromotePage(): JSX.Element {
     }
   };
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  // S831 fix: Use same-origin /api proxy so finda.sale cookies are sent.
+  // Direct NEXT_PUBLIC_API_URL (Railway) is cross-domain → SameSite=Lax blocks the accessToken cookie.
+  const apiBase = '/api';
 
   // Template strings from SharePromoteModal
   const getSaleTypeLabel = (saleType?: string): string => {
