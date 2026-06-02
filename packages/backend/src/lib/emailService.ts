@@ -41,9 +41,12 @@ function encodeSubject(subject: string): string {
   return `=?UTF-8?B?${encoded}?=`;
 }
 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
+
 /**
  * Build an RFC 2822 raw email and Base64url-encode it for the Gmail API.
  * Sends multipart/alternative with text/plain + text/html — required for Yahoo delivery.
+ * List-Unsubscribe headers are required by Yahoo/Gmail bulk sender policy (Feb 2024).
  */
 function buildRawMessage(options: {
   from: string;
@@ -51,9 +54,11 @@ function buildRawMessage(options: {
   subject: string;
   html: string;
   replyTo?: string;
+  listUnsubscribe?: string;
 }): string {
   const toAddresses = Array.isArray(options.to) ? options.to.join(', ') : options.to;
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const unsubUrl = options.listUnsubscribe || `${FRONTEND_URL}/settings/notifications`;
 
   const headers = [
     `From: ${options.from}`,
@@ -61,6 +66,8 @@ function buildRawMessage(options: {
     `Subject: ${encodeSubject(options.subject)}`,
     `MIME-Version: 1.0`,
     ...(options.replyTo ? [`Reply-To: ${options.replyTo}`] : []),
+    `List-Unsubscribe: <${unsubUrl}>`,
+    `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
 
@@ -95,6 +102,7 @@ export const emailService = {
       subject: string;
       html: string;
       replyTo?: string;
+      listUnsubscribe?: string;
     }) => {
       const gmail = createGmailClient();
       const raw = buildRawMessage(options);
