@@ -43,6 +43,7 @@ function encodeSubject(subject: string): string {
 
 /**
  * Build an RFC 2822 raw email and Base64url-encode it for the Gmail API.
+ * Sends multipart/alternative with text/plain + text/html — required for Yahoo delivery.
  */
 function buildRawMessage(options: {
   from: string;
