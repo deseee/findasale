@@ -8,7 +8,7 @@ import { google } from 'googleapis';
 
 function htmlToPlainText(html: string): string {
   return html
-    .replace(/<br\s*\/?>/ gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/?(p|div|h[1-6]|li|tr)[^>]*>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
@@ -43,6 +43,7 @@ function encodeSubject(subject: string): string {
 
 /**
  * Build an RFC 2822 raw email and Base64url-encode it for the Gmail API.
+ * Sends multipart/alternative with text/plain + text/html — required for Yahoo delivery.
  */
 function buildRawMessage(options: {
   from: string;
