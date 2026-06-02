@@ -373,12 +373,36 @@ export const sendOutreachEmails = async (): Promise<void> => {
 
     console.log(`[OutreachCron] Fetched ${recordsToSend.length} candidates across all tiers (quota: ${quotaPerWindow})`)
 
+    // Deduplicate by emailAddress across all tier buckets — keep the most-progressed record
+    // (highest touch number sent) so we never send two emails to the same address in one window.
+    // In test mode the effective address is OUTREACH_TEST_EMAIL for all records, so dedup by
+    // the real emailAddress (not the redirected address) to avoid sending only one email total.
+    const seenEmails = new Set<string>();
+    const dedupedRecords = recordsToSend
+      .sort((a, b) => {
+        // Higher touch count = more progressed; sort descending so first-seen wins
+        const touchCount = (r: any) =>
+          (r.touch1SentAt ? 1 : 0) + (r.touch2SentAt ? 1 : 0) +
+          (r.touch3SentAt ? 1 : 0) + (r.touch4SentAt ? 1 : 0);
+        return touchCount(b) - touchCount(a);
+      })
+      .filter(record => {
+        const email = record.emailAddress.toLowerCase();
+        if (seenEmails.has(email)) return false;
+        seenEmails.add(email);
+        return true;
+      });
+
+    if (dedupedRecords.length < recordsToSend.length) {
+      console.log(`[OutreachCron] Deduped ${recordsToSend.length - dedupedRecords.length} duplicate email address(es) from candidate pool`);
+    }
+
     const gmail = createGmailClient();
     const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
     let sent = 0;
     let failed = 0;
 
-    for (const record of recordsToSend) {
+    for (const record of dedupedRecords) {
       // Stop once we've hit the per-window quota (candidates pool is larger than quota)
       if (sent >= quotaPerWindow) break;
 

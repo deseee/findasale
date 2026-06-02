@@ -127,6 +127,16 @@ export async function runAutoSeedOutreach(): Promise<void> {
       trackingToken: string;
     }> = [];
 
+    // Track email addresses already queued this run to prevent two organizers
+    // sharing the same contactEmail from both entering the outreach queue.
+    // We also need to check the DB for emails already present in existing rows
+    // (different organizers may share sam@gmail.com across 48 rows, etc.).
+    const existingClaimEmails = await prisma.directoryClaimEmail.findMany({
+      select: { emailAddress: true },
+    });
+    const existingEmailAddresses = new Set(existingClaimEmails.map(c => c.emailAddress.toLowerCase()));
+    const seenEmailAddresses = new Set<string>();
+
     for (const org of organizers) {
       if (toInsert.length >= MAX_PER_RUN) break;
 
@@ -142,6 +152,19 @@ export async function runAutoSeedOutreach(): Promise<void> {
       }
       if (isPlaceholderEmail(email)) continue;
       if (suppressedEmails.has(email.toLowerCase())) continue;
+
+      // Dedup by email address: skip if another organizer already has a DirectoryClaimEmail
+      // row with this address, or if we already queued this email address this run.
+      const emailLower = email.toLowerCase();
+      if (existingEmailAddresses.has(emailLower)) {
+        console.log(`[AutoSeedCron] Skipped organizer ${org.id} — emailAddress already in outreach queue: ${emailLower}`);
+        continue;
+      }
+      if (seenEmailAddresses.has(emailLower)) {
+        console.log(`[AutoSeedCron] Skipped organizer ${org.id} — duplicate emailAddress in this run: ${emailLower}`);
+        continue;
+      }
+      seenEmailAddresses.add(emailLower);
 
       toInsert.push({
         organizerId: org.id,
