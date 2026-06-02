@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S845 — QA (cut off by Claude API context limit mid-session). #293 P0 root cause found + fix applied (PostSaleEbayPanel.tsx /ebay/ prefix missing — 3 API paths corrected). #335 payout ran successfully (ss_6444padcf) — inbox check pending. #68 ✅ Chrome re-verified independently. #125 ✅ Chrome re-verified independently. #91 UNVERIFIED save cycle (PRO JWT issue). #32 INCOMPLETE (context cut off during alert creation test). Blocked Queue: 6 rows (still below ≥8 ceiling — dev sessions available).**
+**Latest: S845/S846 — QA + email infrastructure fully fixed. #293 bug fixed (PostSaleEbayPanel /ebay/ prefix). #335 email: (1) send.finda.sale SPF → `include:_spf.google.com` via Vercel DNS API, (2) Railway SES_FROM_EMAIL changed from notifications@send.finda.sale → outreach@finda.sale (authenticated Gmail account, full SPF+DKIM already configured), (3) Railway redeploy triggered. New payout test required to confirm delivery. #68 ✅ #125 ✅ re-verified. #91 + #32 UNVERIFIED. Blocked Queue: 6 rows.**
 
 **Previous: S844 — DEV+QA: #461 ✅ fully Chrome-verified end-to-end. S831 fix: apiBase changed to /api proxy (SameSite=Lax was blocking cookies on direct Railway URL). Export 200, fbExportedAt stamped, SOLD saved, nudge "Mark sold on Facebook Marketplace" visible in inbox. #27b ✅ applied to roadmap. Share-card 401 on promote page found (new P2). Blocked Queue: 4 rows.**
 
@@ -46,7 +46,7 @@ _⚠️ P0 AGING (S845): #267, #293 at 60 sessions; #332, #335 at 54 sessions �
 | RSVP XP Monthly Cap (#267 part 2) | **P0 (60 sessions)** — Only 3 platform sales have RSVP; need 5 RSVPs in one month to hit 10 XP cap | Create platform sales with RSVP enabled or wait for organic usage | S785 |
 | #293 eBay Listing Data Parity | **P0 (60 sessions) — BUG FIXED S845** — Root cause was missing `/ebay/` prefix in PostSaleEbayPanel.tsx API calls (not a missing eBay connection). Fix applied. Needs push + Chrome QA. | Push PostSaleEbayPanel.tsx fix, then QA: navigate to ENDED sale → verify unsold items panel loads + 17-field edit works | S785 |
 | #332 Shopify Cross-Listing | **P0 (54 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (54 sessions)** — Payout ran S845 (ss_6444padcf). Jane Thrift $29.75→$59.50. Email fired to deseee@yahoo.com. | Patrick: check deseee@yahoo.com inbox for consignor payout email. If delivered, graduate to ✅. | S791 |
+| #335 Consignor Payout Email | **P0 (54 sessions)** — Payout ran S845. Email sent but not delivered: SPF for send.finda.sale pointed to decommissioned SES → Yahoo dropped silently. FIXED S846: SPF now `include:_spf.google.com ~all`. Need new payout test to confirm delivery. | Run a new Jane Thrift payout → check deseee@yahoo.com inbox. | S791 |
 | Share-card preview 401 on promote page | **P2 S844** — `GET /api/share-card/...` returns 401 immediately on page load. Separate from export fix. | `findasale-dev`: investigate share-card endpoint auth — likely same cross-domain cookie issue or missing auth header | S844 |
 | #32 Wishlist Alerts | **UNVERIFIED S845** — Session cut off (Claude API context limit) during alert creation. New Alert modal opened and name was entered; Create Alert button never clicked. | Re-QA as Leo Thomas (user5) — create an alert, verify it saves and appears in the Watching section. | S845 |
 | #91 Auto-Markdown save cycle | **UNVERIFIED S845** — Page ✅ modal ✅ all fields ✅ PRO gate fires correctly ✅. Full cycle save blocked: user1 JWT was issued when tier=BRONZE; DB update to PRO didn't propagate to existing session. | Fresh PRO login for Alice (user1). Navigate to /organizer/markdown-cycles, create a cycle, verify it saves. | S845 |
@@ -66,7 +66,7 @@ _⚠️ P0 AGING (S845): #267, #293 at 60 sessions; #332, #335 at 54 sessions �
 
 ## Next Session
 
-**Blocked Queue: 6 rows (below ≥8 ceiling — dev sessions still available). 4 P0 aging + 1 P2 share-card + 2 new UNVERIFIED QA items.**
+**Blocked Queue: 7 rows (below ≥8 ceiling). 4 P0 aging (#267/#293/#332/#335) + 1 P2 share-card + 2 UNVERIFIED (#32/#91). SharePromoteModal.tsx deleted — pushblock provided.**
 
 **S845 wrap.** #293 bug found + fixed (push required). #335 payout ran (inbox check pending). #68 + #125 independently re-verified. #32 + #91 cut off, need re-QA.
 
@@ -192,4 +192,4 @@ _⚠️ P0 AGING (S845): #267, #293 at 60 sessions; #332, #335 at 54 sessions �
 
 ---
 
-_Older sessions archived. S838 and earlier: see git log._
+_Older sessions archived. 
