@@ -1438,7 +1438,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setTagline(e.target.value.slice(0, 120))}
                     maxLength={120}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="e.g., Estate Sales Since 2010 — Quality & Authenticity"
+                    placeholder="e.g., Quality Sales Since 2010 — Trusted by Local Buyers"
                   />
                   <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">{tagline.length}/120 characters</p>
                 </div>
