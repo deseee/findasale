@@ -529,6 +529,20 @@ export const sendOutreachEmails = async (): Promise<void> => {
         // SECURITY FIX P3: Only log the error message, not the full error object which may contain transport config with credentials
         const errorMsg = err.message || 'Unknown error';
         console.error(`[OutreachCron] Failed to send to ${record.organizerId} — ${errorMsg}`);
+        // Log BOUNCED event to audit log for deliverability tracking
+        // Uses BOUNCED enum value (no FAILED value in OutreachAuditEvent); metadata distinguishes send errors from SMTP bounces
+        try {
+          await prisma.outreachAuditLog.create({
+            data: {
+              organizerId: record.organizerId,
+              event: 'BOUNCED',
+              touchNumber: touchNum ?? 0,
+              metadata: { failureType: 'SEND_ERROR', errorMessage: err.message || 'Unknown error' },
+            },
+          });
+        } catch (auditErr: any) {
+          console.error('[OutreachAudit] Failed to log BOUNCED event:', auditErr.message);
+        }
       }
     }
 
@@ -619,19 +633,12 @@ export function initOutreachEmailsCron(): void {
     return;
   }
 
-  // Every 4 hours — spreads daily quota across 6 windows
-  cron.schedule('0 */4 * * *', cronGuard({ jobName: 'outreach-emails' }, async () => {    await sendOutreachEmails();
-  }), { timezone: 'UTC' });
-  console.log('[OutreachCron] Registered — runs every 4 hours UTC');
+  // sendOutreachEmails scheduling removed — GitHub Actions is the durable trigger (S725 Step 3)
+  console.log('[OutreachCron] sendOutreachEmails scheduling removed — GitHub Actions is the durable trigger (S725 Step 3)');
 
   // Weekly Sunday 04:00 UTC — sync lead tiers to MailerLite groups (offset from scoring at 02:00 to avoid race)
   cron.schedule('0 4 * * 0', cronGuard({ jobName: 'sync-lead-tier-groups' }, async () => {
     await syncLeadTierGroups();
   }), { timezone: 'UTC' });
   console.log('[OutreachCron] syncLeadTierGroups registered — runs Sundays 04:00 UTC');
-
-  // Startup catch-up: 30s after boot, check if a send window was missed and fire immediately
-  setTimeout(() => {
-    startupCatchUp();
-  }, 30_000);
 }
