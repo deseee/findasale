@@ -239,9 +239,10 @@ export default function PromotePage(): JSX.Element {
   const downloadFile = async (endpoint: string, filename: string) => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const csrfToken = document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] ?? '';
       const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${token || ''}` },
+        credentials: 'include',
+        headers: { 'x-csrf-token': csrfToken },
       });
 
       if (response.status === 429) {
@@ -283,9 +284,10 @@ export default function PromotePage(): JSX.Element {
   const copyToClipboard = async (endpoint: string, successMessage: string) => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const csrfToken = document.cookie.split('; ').find(r => r.startsWith('csrf-token='))?.split('=')[1] ?? '';
       const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${token || ''}` },
+        credentials: 'include',
+        headers: { 'x-csrf-token': csrfToken },
       });
 
       if (response.status === 429) {
