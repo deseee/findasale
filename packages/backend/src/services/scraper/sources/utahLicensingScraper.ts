@@ -15,6 +15,30 @@ const UTAH_DPL_BASE_URL = 'https://secure.utah.gov';
 const SEARCH_URL = 'https://secure.utah.gov/llv/search/index.html';
 
 /**
+ * Returns true for network/infra failures: DNS dead, SSL rejected, connect timeout.
+ * Logged as warnings — not thrown to Sentry — because these are site migration issues.
+ * Note: Node's native fetch wraps errors as TypeError: fetch failed with the actual
+ * ENOTFOUND/ECONNREFUSED code on err.cause, not directly on err.
+ */
+function isInfrastructureError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message ?? '';
+  const code = (err as NodeJS.ErrnoException).code ??
+    ((err as { cause?: NodeJS.ErrnoException }).cause?.code) ?? '';
+  return (
+    msg === 'fetch failed' ||
+    code === 'ENOTFOUND' ||
+    code === 'ECONNREFUSED' ||
+    err.name === 'ConnectTimeoutError' ||
+    msg.includes('Connect Timeout') ||
+    msg.includes('SSL') ||
+    msg.includes('ssl3_read_bytes') ||
+    msg.includes('tlsv1 alert') ||
+    msg.includes('ENOTFOUND')
+  );
+}
+
+/**
  * Parse an address string into city and state components
  */
 function parseAddress(address: string): { city: string } {
@@ -57,8 +81,16 @@ export async function runUtahLicensingScraper(): Promise<void> {
 
     const formHtml = await formPageResponse.text();
 
-    // Extract form state if present
+    // SPA detection: if the page migrated to a React/JS app it won't have VIEWSTATE.
+    // Return 0 gracefully rather than throwing to Sentry.
     const viewStateMatch = formHtml.match(/name="__VIEWSTATE"\s+value="([^"]+)"/);
+    if (!viewStateMatch) {
+      console.warn(
+        '[UtahLicensing] No VIEWSTATE found — site may have migrated to a JavaScript SPA. ' +
+        'Returning 0 results. TODO: Rewrite with Playwright or REST API.'
+      );
+      return;
+    }
     const eventValidationMatch = formHtml.match(/name="__EVENTVALIDATION"\s+value="([^"]+)"/);
 
     const viewState = viewStateMatch ? viewStateMatch[1] : '';
@@ -179,6 +211,10 @@ export async function runUtahLicensingScraper(): Promise<void> {
       `[UtahLicensing] Scraper completed: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
     );
   } catch (error) {
+    if (isInfrastructureError(error)) {
+      console.warn('[UtahLicensing] Infrastructure failure (site moved/unreachable):', (error as Error).message);
+      return;
+    }
     console.error('[UtahLicensing] Scraper error:', error);
     throw error;
   }
