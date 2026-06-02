@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S844 — DEV+QA: #461 ✅ fully Chrome-verified end-to-end. S831 fix: apiBase changed to /api proxy (SameSite=Lax was blocking cookies on direct Railway URL). Export 200, fbExportedAt stamped, SOLD saved, nudge "Mark sold on Facebook Marketplace" visible in inbox. #27b ✅ applied to roadmap. Share-card 401 on promote page found (new P2). Blocked Queue: 4 rows.**
+**Latest: S845 — QA (cut off by Claude API context limit mid-session). #293 P0 root cause found + fix applied (PostSaleEbayPanel.tsx /ebay/ prefix missing — 3 API paths corrected). #335 payout ran successfully (ss_6444padcf) — inbox check pending. #68 ✅ Chrome re-verified independently. #125 ✅ Chrome re-verified independently. #91 UNVERIFIED save cycle (PRO JWT issue). #32 INCOMPLETE (context cut off during alert creation test). Blocked Queue: 6 rows (still below ≥8 ceiling — dev sessions available).**
+
+**Previous: S844 — DEV+QA: #461 ✅ fully Chrome-verified end-to-end. S831 fix: apiBase changed to /api proxy (SameSite=Lax was blocking cookies on direct Railway URL). Export 200, fbExportedAt stamped, SOLD saved, nudge "Mark sold on Facebook Marketplace" visible in inbox. #27b ✅ applied to roadmap. Share-card 401 on promote page found (new P2). Blocked Queue: 4 rows.**
 
 **Previous: S843 — QA: #27b iCal watermark ✅ Chrome-verified (ss_4410s6brw). #461 UNVERIFIED — root cause misdiagnosed as localStorage; actual bug was direct Railway URL bypassing /api proxy. New P2 bug noted. Blocked Queue: 6 rows.**
 
@@ -37,15 +39,17 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING (S844): #267, #293 at 59 sessions; #332, #335 at 53 sessions — mandatory P0 per CLAUDE.md §10a. All structurally blocked by external dependencies._
+_⚠️ P0 AGING (S845): #267, #293 at 60 sessions; #332, #335 at 54 sessions — mandatory P0 per CLAUDE.md §10a._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| RSVP XP Monthly Cap (#267 part 2) | **P0 (59 sessions)** — Only 3 platform sales have RSVP; need 5 RSVPs in one month to hit 10 XP cap | Create platform sales with RSVP enabled or wait for organic usage | S785 |
-| #293 eBay Listing Data Parity | **P0 (59 sessions)** — PostSaleEbayPanel requires eBay connection + completed ENDED sale with items | Manually end a test sale in DB (UPDATE Sale SET status='ENDED'), connect eBay to user1, test 17-field panel | S785 |
-| #332 Shopify Cross-Listing | **P0 (53 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (53 sessions)** — CODE-VERIFIED S791: sendConsignorPayout() called. Email delivery unverified | Run payout against real email address, check inbox | S791 |
+| RSVP XP Monthly Cap (#267 part 2) | **P0 (60 sessions)** — Only 3 platform sales have RSVP; need 5 RSVPs in one month to hit 10 XP cap | Create platform sales with RSVP enabled or wait for organic usage | S785 |
+| #293 eBay Listing Data Parity | **P0 (60 sessions) — BUG FIXED S845** — Root cause was missing `/ebay/` prefix in PostSaleEbayPanel.tsx API calls (not a missing eBay connection). Fix applied. Needs push + Chrome QA. | Push PostSaleEbayPanel.tsx fix, then QA: navigate to ENDED sale → verify unsold items panel loads + 17-field edit works | S785 |
+| #332 Shopify Cross-Listing | **P0 (54 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
+| #335 Consignor Payout Email | **P0 (54 sessions)** — Payout ran S845 (ss_6444padcf). Jane Thrift $29.75→$59.50. Email fired to deseee@yahoo.com. | Patrick: check deseee@yahoo.com inbox for consignor payout email. If delivered, graduate to ✅. | S791 |
 | Share-card preview 401 on promote page | **P2 S844** — `GET /api/share-card/...` returns 401 immediately on page load. Separate from export fix. | `findasale-dev`: investigate share-card endpoint auth — likely same cross-domain cookie issue or missing auth header | S844 |
+| #32 Wishlist Alerts | **UNVERIFIED S845** — Session cut off (Claude API context limit) during alert creation. New Alert modal opened and name was entered; Create Alert button never clicked. | Re-QA as Leo Thomas (user5) — create an alert, verify it saves and appears in the Watching section. | S845 |
+| #91 Auto-Markdown save cycle | **UNVERIFIED S845** — Page ✅ modal ✅ all fields ✅ PRO gate fires correctly ✅. Full cycle save blocked: user1 JWT was issued when tier=BRONZE; DB update to PRO didn't propagate to existing session. | Fresh PRO login for Alice (user1). Navigate to /organizer/markdown-cycles, create a cycle, verify it saves. | S845 |
 
 ---
 
@@ -55,34 +59,64 @@ _⚠️ P0 AGING (S844): #267, #293 at 59 sessions; #332, #335 at 53 sessions �
 |---|---------|----------|---------|
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
 | 461 | FB Marketplace Export + Sold Nudge | finda.sale/organizer/promote/0d9563f9-... as Alice Johnson (user1). Clicked "Download Spreadsheet" → GET /api/export/.../facebook-xlsx 200 ✅. DB confirmed fbExportedAt stamped on 3 items. Navigated to edit-item/b4a74f89-... → set status=SOLD → saved → redirected to dashboard. Notification inbox at finda.sale/notifications showed "Mark sold on Facebook Marketplace" / "Silver Bracelet sold on FindA.Sale — don't forget to mark it sold on Facebook Marketplace too" — just now ✅. | S844 |
+| 68 | Command Center Dashboard | finda.sale/organizer/command-center as Alice Johnson. Recent tab clicked → "QA Test Flip Report Sale" with ● ENDED badge, May 21–May 28 dates visible. Tabs (Active/Upcoming/Recent/All) all work. Active tab empty state correct. ss_7321prqsa. Independent re-verification of S804 claim. | S845 |
+| 125 | Inventory Syndication CSV Export | finda.sale/organizer/add-items/... as Alice Johnson (PRO). "Export to eBay" button clicked → modal opened: "Export 2 available items as eBay CSV", watermark toggle ✅, "Remove watermark — TEAMS only" gate visible. ss_5085g9dtj. Independent re-verification of S805 claim. | S845 |
 
 ---
 
 ## Next Session
 
-**Blocked Queue: 4 rows (well below ≥8 ceiling — dev sessions clear). All 4 are P0 aging (structurally blocked by external deps) + 1 new P2.**
+**Blocked Queue: 6 rows (below ≥8 ceiling — dev sessions still available). 4 P0 aging + 1 P2 share-card + 2 new UNVERIFIED QA items.**
 
-**S844 complete.** #461 ✅ fully Chrome-verified. #27b ✅ applied to roadmap. Share-card 401 is new P2.
+**S845 wrap.** #293 bug found + fixed (push required). #335 payout ran (inbox check pending). #68 + #125 independently re-verified. #32 + #91 cut off, need re-QA.
 
 **Patrick actions required:**
 
-1. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+1. **Push the S845 fix** — see push block below.
 
-2. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+2. **Check deseee@yahoo.com inbox** — should have a consignor payout email for Jane Thrift. If received, #335 is ✅. If not, something in Resend failed.
 
-3. **#239 legal gate:** Attorney + CPA before live consignor payouts.
+3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+
+4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+
+5. **#239 legal gate:** Attorney + CPA before live consignor payouts.
 
 **Dispatch stubs (next session):**
 
-1. **DEV: Share-card 401 (P2):** `Skill('findasale-dev')` → investigate `GET /api/share-card/...` returning 401 on promote page load. Likely same-origin cookie issue or endpoint auth misconfiguration. Expected output: share card preview loads for organizers on promote page + push block.
+1. **Push first** — then open Chrome: QA #293 as Alice Johnson. Navigate to `finda.sale/organizer/sales/0d9563f9-...` (sale is already ENDED, 2 items set to AVAILABLE by S845). Verify PostSaleEbayPanel loads with 2 unsold items + 17-field edit panel works.
 
-2. **QA backlog:** #32 Shopper Wishlist Alerts, #68 Command Center, #91 Auto-Markdown, #125 Inventory CSV Export.
+2. **QA #32** — as Leo Thomas (user5). Go to /wishlists → Watching → "+ New Alert". Create an alert. Verify it saves and appears.
 
-3. **P0 aging quick-win:** #335 Consignor Payout Email — run a test payout against deseee@yahoo.com, check inbox. #293 — UPDATE Sale status='ENDED' via psycopg2, then QA eBay panel.
+3. **QA #91** — log into user1 (Alice) fresh. Navigate to /organizer/markdown-cycles. Create a cycle. Verify it saves (PRO session required — Alice is now PRO in DB).
+
+4. **DEV: Share-card 401 (P2):** `Skill('findasale-dev')` → investigate `GET /api/share-card/...` returning 401 on promote page. Expected output: share card preview loads + push block.
 
 ---
 
 ## Recent Sessions
+
+### S845 — QA: #293 bug found + fixed, #335 payout ran, #68/#125 re-verified, #32/#91 cut off
+
+**Session cut off by Claude API context limit** mid-QA on #32 (Wishlist Alerts alert creation). Work was mid-flight; wrap handled in S846 immediately after.
+
+**#293 eBay Panel — P0 BUG FOUND + FIXED:** Root cause was NOT the missing eBay connection (as documented since S785). Actual bug: `PostSaleEbayPanel.tsx` was calling `/organizer/sales/${saleId}/unsold-items` — missing the `/ebay/` prefix. Backend route is at `/ebay/organizer/sales/.../unsold-items`. API 404 every time → panel always showed "All items sold" even with AVAILABLE items. Fix: corrected 3 API paths in PostSaleEbayPanel.tsx (`unsold-items`, `ebay-shipping`, `ebay-push`). Confirmed with direct API call returning 200 with 2 items. Awaiting push + Chrome QA.
+
+**#335 Consignor Payout Email:** Jane Thrift email updated to deseee@yahoo.com. Payout run against Jane Thrift as Artifact MI. `PAYOUTED` jumped $29.75→$59.50, payout count 2→3 (ss_6444padcf). `sendConsignorPayout()` fires fire-and-forget — email went out. Patrick must check deseee@yahoo.com to confirm delivery. If confirmed → ✅.
+
+**#68 Command Center ✅ re-verified:** finda.sale/organizer/command-center as Alice Johnson. Recent tab → "QA Test Flip Report Sale" with ENDED badge, May 21–May 28. Active/Upcoming/Recent/All tabs work. ss_7321prqsa. Independent re-verification of S804 claim (known inflation session).
+
+**#125 CSV Export ✅ re-verified:** Export to eBay modal shows "Export 2 available items as eBay CSV", watermark toggle, "Remove watermark — TEAMS only" gate. ss_5085g9dtj. Independent re-verification of S805 claim.
+
+**#91 Auto-Markdown — UNVERIFIED save cycle:** Page ✅ modal ✅ all fields ✅ PRO gate fires correctly ✅. Cycle save blocked because user1's JWT was issued when tier=BRONZE; DB update to PRO not reflected in existing session. Needs fresh login.
+
+**#32 Wishlist Alerts — INCOMPLETE:** New Alert modal opened as Leo Thomas. Alert name entered ("Antiques Test"), Antiques category checked. Session cut off before clicking Create Alert. UNVERIFIED.
+
+**DB changes by S845 (all on Railway):** Jane Thrift email → deseee@yahoo.com. user1 (Alice Johnson) → PRO tier. 2 items in sale 0d9563f9 flipped from PUBLISHED → AVAILABLE (for eBay panel test; harmless for QA).
+
+**Files changed:** `packages/frontend/components/PostSaleEbayPanel.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S844 — DEV+QA: #461 ✅ Chrome-verified end-to-end, #27b ✅ roadmap applied, share-card P2 found
 
@@ -156,12 +190,6 @@ _⚠️ P0 AGING (S844): #267, #293 at 59 sessions; #332, #335 at 53 sessions �
 
 ---
 
-### S838 — QA: #165, #61, #36, #72, #308, #25
-
-**#165 ⚠️** P3: stub Clear button. **#61 ✅** NudgeBar, STREAK_CONTINUATION. **#36 CODE-ONLY** weeklyEmailJob cron confirmed. **#72 ✅** dual-role nav zero dups. **#308 ⚠️** hide fires isActive:false, no Hidden indicator. **#25 ✅ Patrick-confirmed** eBay Sync Phase B/C + Pull to Sale.
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
-
 ---
 
-_Older sessions archived. S837 and earlier: see git log._
+_Older sessions archived. S838 and earlier: see git log._

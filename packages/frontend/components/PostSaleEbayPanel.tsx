@@ -436,7 +436,7 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
   const { data: unsoldData, isLoading, isError } = useQuery({
     queryKey: ['unsold-items', saleId],
     queryFn: async () => {
-      const response = await api.get(`/organizer/sales/${saleId}/unsold-items`);
+      const response = await api.get(`/ebay/organizer/sales/${saleId}/unsold-items`);
       return response.data as { items: UnsoldItem[] };
     },
   });
@@ -444,7 +444,7 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
   // Mutation for setting shipping override
   const setOverrideMutation = useMutation({
     mutationFn: async ({ itemId, override }: { itemId: string; override: ShippingOverride }) => {
-      return api.patch(`/organizer/items/${itemId}/ebay-shipping`, { override });
+      return api.patch(`/ebay/organizer/items/${itemId}/ebay-shipping`, { override });
     },
     onSuccess: (response, variables) => {
       setItemOverrides((prev) => ({
@@ -479,7 +479,7 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
   // Mutation for pushing items to eBay — S725 LIVE only (DRAFT mode killed)
   const pushToEbayMutation = useMutation({
     mutationFn: async ({ itemIds }: { itemIds: string[] }) => {
-      return api.post(`/organizer/sales/${saleId}/ebay-push`, {
+      return api.post(`/ebay/organizer/sales/${saleId}/ebay-push`, {
         itemIds,
         localPickupIds: itemIds.filter(
           (id) => itemOverrides[id] === 'LOCAL_PICKUP_ONLY' || getEffectiveShipping(id) === 'LOCAL_PICKUP_ONLY'
