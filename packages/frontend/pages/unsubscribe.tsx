@@ -16,10 +16,14 @@ const UnsubscribePage = () => {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
+    if (!router.isReady) return;
     if (token) {
       unsubscribe();
+    } else {
+      setStatus('error');
+      setMessage('Invalid unsubscribe link. Please use the link from your email or contact support@finda.sale.');
     }
-  }, [token]);
+  }, [token, router.isReady]);
 
   const unsubscribe = async () => {
     try {

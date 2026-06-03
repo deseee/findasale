@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S851 — QA PASS: #334 ✅ #280 ✅ Chrome-verified. #206 confirmed intentional redirect to /faq. 4 new bugs logged (P2: inventory edit-item null saleId, Full-Edit button misfire, unsubscribe infinite spinner; P3: \u2014 literal in Photos). Records: S850 Chr ✅ marks applied to roadmap (#91/#32/#267/SC/#293). #316 stale status fixed (code+migration live S735). Blocked Queue: 6 rows.** All 4 S849 fixes Chrome-verified. #91: POST /api/markdown-cycles 201, cycle renders. #32: Watching section renders with Antiques Test alert. Share-card: 200 image/png confirmed via credentials:include fetch. #267 RSVP cap: RSVP #5 → +2 XP (total=10), RSVP #6 → 0 XP (capped) — DB-confirmed. #293 ss_ IDs obtained: ss_85819up9q ss_832940555. Roadmap: #68 Chr ✅ S845 + #125 Chr ✅ S845 applied. Blocked Queue: 2 rows (down from 6).**
+**Latest: S852 — DEV+QA: 3 P2 bugs fixed (edit-item inventory null-saleId, Full-Edit misfire, /unsubscribe no-token spinner). P3 fixed (em dash literal in ItemPhotoManager). #320 DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden), Chrome UNVERIFIED. #317 frontend graceful fallback code-confirmed, Chrome UNVERIFIED (test clue API returns not-found). Blocked Queue: 6 rows.**
 
 **Previous: S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX. Full audit of every email-sending service in the backend. 10 files fixed. Global daily quota counter built. Two previously unknown P0 blast-to-all jobs found and fixed (notificationController.sendWeeklyDigest fires every Friday to 5,000 users with no opt-out + no unsubscribe link; organizerAnalyticsService sends weekly to all organizers with no suppression). Inbox incident confirmed stopped — no runaway sends in Railway logs. Blocked Queue: 7 rows. Push block ready.**
 
@@ -76,12 +76,12 @@ _⚠️ P0 AGING: #332 at 57 sessions; #335 at 57 sessions — mandatory P0 per 
 
 ## Next Session
 
-**S851 done. Records tasks complete (S850 Chr ✅ applied to roadmap, #316 status fixed). QA: #334 ✅ #280 ✅ #206 confirmed intentional redirect. 4 new bugs in Blocked Queue.**
+**S852 done. 3 P2 bugs fixed + P3 fixed. #317/#320 UNVERIFIED (see Blocked Queue). Blocked Queue: 6 rows.**
 
-1. **#335 payout confirm** — Patrick check deseee@yahoo.com. If Jane Thrift payout email received → ✅, remove from Blocked Queue.
-2. **Fix P2 bugs (dispatch findasale-dev):** (a) edit-item null saleId crash for inventory items, (b) Full Edit button misfire in inline editor, (c) /unsubscribe no-token infinite spinner.
-3. **P3 fix (inline ok):** \u2014 renders literally in edit-item Photos empty state.
-4. **Continue QA backlog** — Remaining testable: #317 Geofence QR Scans, #320 Async eBay Comp Fetch, shopper features as Leo Thomas (user5@example.com).
+1. **#335 payout confirm** — Patrick check deseee@yahoo.com (not yet midnight PST). If Jane Thrift payout email received → ✅, remove from Blocked Queue.
+2. **Push S852 code fixes** — 4 files changed this session (see push block below).
+3. **QA after push** — Browser-verify Bug 1 fix: navigate to /organizer/inventory as Alice, click edit on a returned-to-inventory item → should load edit-item page (not "Item not found").
+4. **#317/#320** — Remain UNVERIFIED. #320 needs item with null price + publish + wait; #317 needs real treasure hunt clue setup. Defer unless Patrick wants to prioritize.
 5. **#332 Shopify** — Still blocked on Shopify dev store. No action unless Patrick creates one.
 
 **Blocked Queue: 6 rows. Below ≥8 ceiling — DEV mode permitted.**
@@ -91,16 +91,35 @@ _⚠️ P0 AGING: #332 at 57 sessions; #335 at 57 sessions — mandatory P0 per 
 1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
 2. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
 3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-4. **Push S851 wrap docs:**
+4. **Push S852 code fixes:**
 ```
+git add packages/backend/src/controllers/itemController.ts
+git add packages/frontend/pages/organizer/add-items/[saleId].tsx
+git add packages/frontend/pages/unsubscribe.tsx
+git add packages/frontend/components/ItemPhotoManager.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "docs: S851 wrap — #334/#280 Chrome-verified, 4 P2/P3 bugs logged, #316 fixed"
+git commit -m "fix: S852 — 3 P2 bugs (inventory edit-item, Full-Edit misfire, unsubscribe spinner) + P3 em dash"
 .\push.ps1
 ```
 
 ## Recent Sessions
+
+### S852 — DEV: 3 P2 bugs fixed + P3 + QA #317/#320 UNVERIFIED
+
+**Fixes shipped:**
+- Bug 1 (P2): `getItemById` now does organizer ownership fallback via `item.organizerId` for inventory items (saleId=null). Previously returned 404 for all returned-to-inventory items.
+- Bug 2 (P2): Full Edit ↗ button in add-items inline editor converted from `<Link>` to `<button router.push() + stopPropagation>` — fixes misfire opening next item's editor.
+- Bug 3 (P2): `/unsubscribe` no-token spinner fixed — `router.isReady` guard + else branch shows "Invalid unsubscribe link" error state.
+- Bug 4 (P3): `ItemPhotoManager.tsx` em dash literal (`\u2014`) → actual em dash (`—`) in Photos empty state.
+
+**QA attempts:** #320 Async eBay Comp: DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden per D-005). Chrome UNVERIFIED — CSRF blocks raw fetch, React controlled-input blocks null-price save via DOM. `aiSuggestedPrice` not in `getItemById` select. #317 Geofence QR: Frontend graceful fallback code-confirmed (`catch` → proceed without coords). Chrome UNVERIFIED — test clues in DB return "not found" from API (no linked items/hunt configured).
+
+**TypeScript:** 0 errors frontend, 0 errors backend.
+
+**Files changed:** `packages/backend/src/controllers/itemController.ts` · `packages/frontend/pages/organizer/add-items/[saleId].tsx` · `packages/frontend/pages/unsubscribe.tsx` · `packages/frontend/components/ItemPhotoManager.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S851 — QA PASS + Records housekeeping
 

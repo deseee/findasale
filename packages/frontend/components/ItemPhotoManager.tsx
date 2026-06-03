@@ -155,7 +155,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
           onClick={() => fileInputRef.current?.click()}
           onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
         >
-          <p className="text-warm-500 text-sm">No photos yet \u2014 click to upload</p>
+          <p className="text-warm-500 text-sm">No photos yet — click to upload</p>
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-3">

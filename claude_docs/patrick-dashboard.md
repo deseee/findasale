@@ -1,48 +1,54 @@
-# Patrick's Dashboard — S851 Wrap
+# Patrick's Dashboard — S852 Wrap
 
 ---
 
-## What Happened This Session (S851)
+## What Happened This Session (S852)
 
-**Records housekeeping + QA pass. Blocked Queue grows from 2 → 6 (4 new bugs found).**
-
-**Records tasks done:** Applied S850 Chrome ✅ marks to roadmap for #91, #32, #267, share-card, #293. Fixed stale #316 status (was "Pending push + migration" — actually live since S735). 7 total roadmap rows corrected.
-
-**#334 Auto Markdown Cycles ✅ Chrome-verified** — /organizer/markdown-cycles as Alice. Page loads, no 403, existing cycle card renders, Add Cycle button present. S849 tier fix confirmed working. (ss_78175awmd)
-
-**#280 Condition Rating XP ✅ Chrome-verified** — Set conditionGrade B (Good) on Old Radio via edit-item. Saved → redirected to dashboard. Reloaded → grade B persists. XP Balance went 93 → **98 XP** (+5 confirmed). (ss_5053gn0a0, ss_2855apltb)
-
-**#206 Condition Guide** — Confirmed intentional redirect to /faq. Page exists but immediately does router.replace('/faq'). Not a bug — content was integrated.
+**3 P2 bugs fixed + 1 P3 fixed. QA attempted #317 and #320 — both UNVERIFIED (reasons below).**
 
 ---
 
-## New Bugs Found (4 items added to Blocked Queue)
+## Bugs Fixed This Session
 
-| Priority | Bug | Notes |
-|---------|-----|-------|
-| P2 | edit-item "not found" for inventory items | /organizer/edit-item/[id] fails for items with saleId=null (returned to inventory). All 3 inventory items broken. |
-| P2 | "Full Edit ↗" button opens wrong item | In add-items inline editor, "Full Edit" click expands the next item's inline editor instead of navigating to edit-item page. |
-| P2 | /unsubscribe infinite spinner | Without a ?token= parameter, page shows "Processing your request..." forever. Needs an error/instructions state. |
-| P3 | — renders literally in edit-item | Photos empty state shows "No photos yet — click to upload" with the literal unicode escape instead of an em dash. |
+| Priority | Bug | Fix |
+|---------|-----|-----|
+| P2 | edit-item "not found" for inventory items | `getItemById` now checks `organizerId` ownership when `saleId=null`. Inventory items accessible again. |
+| P2 | "Full Edit ↗" opens wrong item's editor | Converted `<Link>` to `<button>` with `router.push()` + `stopPropagation`. Navigation now correct. |
+| P2 | /unsubscribe infinite spinner | Added `router.isReady` guard. No-token path now shows "Invalid unsubscribe link" error state. |
+| P3 | `—` literal in Photos empty state | Fixed `ItemPhotoManager.tsx` — now shows actual em dash `—`. |
+
+All 4 fixes: 0 TypeScript errors (frontend + backend verified).
+
+---
+
+## QA Attempted — UNVERIFIED
+
+**#320 Async eBay Comp Fetch** — DB confirms the mechanism works (6 items in the DB have `aiSuggestedPrice` from the async eBay comp fetch; all 6 have organizer prices intact — D-005 "organizer price wins" is respected). Chrome verification blocked: CSRF prevents raw API calls from browser JS, and the React price input wouldn't accept a null value via DOM manipulation. `aiSuggestedPrice` is also not exposed in the `/api/items/:id` response so it can't be checked there. UNVERIFIED — kept in Pending Chrome Verifications.
+
+**#317 Geofence QR Scans** — Code-confirmed: the `treasure-hunt-qr/[clueId].tsx` `mutationFn` has a `try/catch` around `getCurrentPosition` and explicitly continues with the POST even when location is denied ("Geolocation unavailable, proceeding without coordinates"). The graceful fallback IS implemented. Chrome UNVERIFIED — the test clues in the DB return "not found" from the API (they're bare test rows without linked items or a configured treasure hunt). UNVERIFIED — kept in Pending Chrome Verifications.
 
 ---
 
 ## Patrick Actions Required
 
-1. **Check deseee@yahoo.com** — Jane Thrift consignor payout email (#335). If received → ✅ and let Claude know.
-2. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
-3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-4. **Push S851 wrap docs** (below).
+1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅, tell Claude to remove from Blocked Queue.
+2. **Push the S852 fixes** (see push block below) — 4 code files ready.
+3. **After push: QA Bug 1 fix** — Navigate to finda.sale/organizer/inventory as Alice Johnson, click Edit on any returned-to-inventory item. Should load edit-item page normally (previously showed "Item not found").
+4. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
 ---
 
-## Push Block (S851)
+## Push Block (S852)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/itemController.ts
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add packages/frontend/pages/unsubscribe.tsx
+git add packages/frontend/components/ItemPhotoManager.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "docs: S851 wrap — #334/#280 Chrome-verified, 4 P2/P3 bugs logged, #316 status fixed"
+git commit -m "fix: S852 — 3 P2 bugs (inventory edit-item, Full-Edit misfire, unsubscribe spinner) + P3 em dash"
 .\push.ps1
 ```
