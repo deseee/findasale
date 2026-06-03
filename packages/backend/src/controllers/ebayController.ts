@@ -247,11 +247,11 @@ export async function fetchEbayPriceComps(params: {
 /**
  * Internal: Get eBay price comps for an item based on title and condition
  *
- * FIXED (Issue #337): Switched from Browse API (active listings) to Finding API's
- * findCompletedItems (completed/sold listings). This returns actual SOLD prices
- * instead of asking prices, providing more accurate price comparables.
+ * Uses the eBay Browse API to search active fixed-price listings.
+ * Returns live eBay listings with prices, images, and rover.ebay.com EPN affiliate URLs.
  *
- * Note: Finding API uses XML, so we parse manually instead of relying on JSON.
+ * Note: findCompletedItems (Finding API XML) would return actual sold prices but
+ * requires separate eBay production approval; Browse API is the modern replacement.
  */
 async function getEbayPriceComps(
   title: string,

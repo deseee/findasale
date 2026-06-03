@@ -181,10 +181,17 @@ const PrivacyPage = () => {
 
           {/* 8 */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">8. Third-Party Links</h2>
-            <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">8. Third-Party Links &amp; Affiliate Disclosure</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
               The Platform may contain links to third-party websites (e.g., Stripe's dashboard). We are not responsible
               for the privacy practices of those sites and encourage you to review their privacy policies.
+            </p>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+              FindA.Sale participates in the eBay Partner Network (EPN), an affiliate advertising program. Item detail
+              pages may display links to comparable listings on eBay. When you click these links and make a qualifying
+              purchase on eBay, FindA.Sale may earn a small commission at no additional cost to you. eBay links are
+              identified by the label "Shop Similar on eBay" and route through rover.ebay.com. We only link to eBay
+              listings we believe are relevant to the item you are viewing.
             </p>
           </section>
 
