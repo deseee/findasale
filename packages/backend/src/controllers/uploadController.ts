@@ -117,6 +117,7 @@ const uploadToCloudinary = (buffer: Buffer, folder = 'findasale'): Promise<Cloud
       {
         resource_type: 'image', // P1 SECURITY FIX: Restrict to 'image' instead of 'auto' to prevent non-image uploads
         folder,
+        exif: true, // #324 EXIF PRESERVATION: Retain EXIF metadata (DateTimeOriginal, GPS, etc.) for temporal clustering in batchAnalyzeController
         // Note: aws_rek_tagging removed — requires paid Cloudinary add-on, caused 420 on all uploads
         // Note: not using eager transforms — transformation URLs are generated on-the-fly
         // from the original URL to ensure public_id is always preserved

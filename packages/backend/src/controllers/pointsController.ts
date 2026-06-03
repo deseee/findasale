@@ -51,6 +51,11 @@ export const trackSaleVisit = async (req: AuthRequest, res: Response) => {
       description: 'Sale detail page view',
     });
 
+    // Track sale visit for referral tranche B BEFORE fraud early-return.
+    // Fraud-flagged referred users should still count their sale visits for the referrer's Tranche B XP.
+    // Fire-and-forget — don't block or fail the visit response if tranche logic errors
+    referralTrancheService.recordSaleVisit(req.user.id, saleId).catch(() => {});
+
     if (!result) {
       // User is fraud suspect or other issue — return success to avoid exposing fraud status
       return res.status(200).json({
@@ -59,10 +64,6 @@ export const trackSaleVisit = async (req: AuthRequest, res: Response) => {
         authenticated: true,
       });
     }
-
-    // Track sale visit for referral tranche B (referred user visiting 3 distinct sales → 150 XP to referrer)
-    // Fire-and-forget — don't block or fail the visit response if tranche logic errors
-    referralTrancheService.recordSaleVisit(req.user.id, saleId).catch(() => {});
 
     res.status(200).json({
       message: 'Sale visit tracked and XP awarded',

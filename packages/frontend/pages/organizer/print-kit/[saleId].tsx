@@ -132,12 +132,17 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     enabled: !!user,
   });
 
-  // Fetch organizer profile for subscriptionTier
-  const { data: organizerProfile } = useQuery<{ subscriptionTier: string }>({
+  // Fetch organizer profile for subscriptionTier and brand colors (#31)
+  const { data: organizerProfile } = useQuery<{
+    subscriptionTier: string;
+    brandPrimaryColor: string | null;
+    brandSecondaryColor: string | null;
+    brandLogoUrl: string | null;
+  }>({
     queryKey: ['print-kit-organizer-profile'],
     queryFn: async () => {
       const response = await api.get('/organizers/me');
-      return response.data as { subscriptionTier: string };
+      return response.data;
     },
     enabled: !!user,
   });
@@ -145,6 +150,10 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
   const canRemoveWatermark =
     organizerProfile?.subscriptionTier === 'TEAMS' &&
     watermarkData?.removeWatermarkEnabled === true;
+
+  // #31: Brand kit colors — applied to print templates for PRO/TEAMS organizers
+  const brandPrimary = organizerProfile?.brandPrimaryColor || '#1f2937';
+  const brandSecondary = organizerProfile?.brandSecondaryColor || '#374151';
 
   const handlePrint = () => {
     window.print();
@@ -750,9 +759,16 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
           {!isLoading && !saleError && !itemsError && sale && (
             <div className="print-container space-y-0">
               {/* Yard Sign */}
-              <div className="yard-sign bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
-                <div className="yard-sign-title">{sale.title}</div>
-
+              <div className="yard-sign bg-white dark:bg-gray-800 rounded-lg shadow-md print:shadow-none print:rounded-none overflow-hidden">
+                {/* #31: Brand color header band */}
+                <div style={{ backgroundColor: brandPrimary, padding: '0.5in 0.4in 0.3in' }}>
+                  {organizerProfile?.brandLogoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={organizerProfile.brandLogoUrl} alt="Organizer logo" style={{ height: 48, marginBottom: 8, objectFit: 'contain' }} />
+                  )}
+                  <div className="yard-sign-title" style={{ color: '#ffffff' }}>{sale.title}</div>
+                </div>
+                <div className="p-8">
                 {sale.saleType && (
                   <div className="yard-sign-type">{formatSaleType(sale.saleType)}</div>
                 )}
@@ -783,6 +799,9 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     <div className="yard-sign-logo">🏷️ FindA.Sale</div>
                   </>
                 )}
+                </div>
+                {/* #31: Brand color footer band */}
+                <div style={{ backgroundColor: brandSecondary, height: 12 }} />
               </div>
 
               {/* Item Tags Pages */}
@@ -790,12 +809,12 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 <div key={pageIndex} className="print-container bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none print:p-4">
                   <div className="item-tags-grid">
                     {pageItems.map((item) => (
-                      <div key={item.id} className="item-tag">
+                      <div key={item.id} className="item-tag" style={{ borderTopColor: brandPrimary, borderTopWidth: 3 }}>
                         {item.photoUrl && (
                           <Image key={item.photoUrl} src={item.photoUrl} alt={item.title} width={200} height={200} className="item-photo" unoptimized />
                         )}
                         <div className="item-title">{item.title}</div>
-                        <div className="item-price">${item.price != null ? item.price.toFixed(2) : 'N/A'}</div>
+                        <div className="item-price" style={{ color: brandPrimary }}>${item.price != null ? item.price.toFixed(2) : 'N/A'}</div>
                         {item.condition && (
                           <div className="item-condition">
                             <ConditionBadge condition={item.condition} />

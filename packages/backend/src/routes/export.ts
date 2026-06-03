@@ -6,8 +6,8 @@ import {
   exportFacebookJSON,
   exportFacebookXLSX,
   exportCraigslistText,
-  exportOrganizer,
 } from '../controllers/exportController';
+// Note: exportOrganizer (Feature #66) is wired at GET /api/organizers/export in routes/organizers.ts
 
 const router = Router();
 

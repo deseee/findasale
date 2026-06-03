@@ -8,41 +8,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S861 — QA: #316 Tranche B ✅ Chrome-verified end-to-end (ss_1479i18cy/ss_71277qiak/ss_1277utzwj). Green banner ✅, Tranche B fired after 3 visits (distinctSalesVisited=[3 IDs], trancheBReleasedAt set, user1 +150 XP). New P2: recordSaleVisit() after fraud early-return — fraudSuspect referred users never trigger Tranche B. #324 EXIF Clustering: P1 design bug — Cloudinary strips EXIF by default, temporal hints never fire in production. Marked UNVERIFIED pending Cloudinary EXIF fix. Blocked Queue: 8→10 rows.**
+**Latest: S862 — QA+DEV: 6 code fixes shipped. 14 features Chrome-verified. 4 new bugs found. Blocked Queue 10→12 rows.**
+- DEV fixes: Tranche B fraud gate (pointsController.ts), #324 EXIF preservation (uploadController.ts), #176 saleType in feed (discoveryService.ts + search.ts), #195 messaging 500 crash (messageController.ts + transaction), #66 ZIP export UI (settings.tsx), #31 Brand Kit → print-kit colors (print-kit/[saleId].tsx).
+- QA ✅: #327 Price Cal Logging, #73 Two-Channel Notifications, #186 QR Scan Analytics, #396 Starter Kit, #197 Bounties, #163 Earnings, #173 Message Templates, Shopper Dashboard, Hunt Pass, #71 Reputation.
+- New bugs: #194 Saved Searches view page missing (P2), #47 UGC Photo Submit not on sale detail (P2), #192 Price History data-dependent (UNVERIFIED).
 
-**Previous: S860 — QA+Records+DEV: Records: #255 Chr ✅ applied to roadmap, PCV trimmed 2→1. DEV: P2 notifications sort fixed (|| → ?? in notifications.tsx). QA: #467/#464/#237 smoke tests PASS (ss_40922gfo2/ss_5917catz6/ss_7392t9kal). #316 Referral Tranche B ❌ P1 BUG FOUND+FIXED — recordSaleVisit() never called from pointsController; fix applied (ss_8604lb5ug/ss_71195379l/ss_6851w4tv8). P2 referral banner also fixed (register.tsx). P3: "Learn about TEAMS" button clipped on dashboard upgrade card. Blocked Queue: 8 rows.**
+**Previous: S861 — QA: #316 Tranche B ✅ Chrome-verified (ss_1479i18cy/ss_71277qiak/ss_1277utzwj). New P2: recordSaleVisit() after fraud early-return. #324 EXIF P1 bug found (Cloudinary strips EXIF by default). Blocked Queue: 8→10 rows.**
 
-**Previous: S858 — QA+DEV: Flash Deal dropdown FIXED (AVAILABLE filter). Records: #159 Chr ✅ applied to roadmap + Pending Chrome Verifications trimmed. QA: #398 ✅ (organizer referral link + Copy Link + stats — ss_4915xx0kl). #259 ✅ (1.5x XP confirmed, Hunt Pass page — ss_7973nmk5n). #290 ✅ (/coupons 3-tier $ + XP display — ss_32554r03n). #158 ✅ ("Notify me of new items" + "Remind Me by Email" visible — ss_4902k1y46). 3 new P3 notes. Blocked Queue: 6 rows (Flash Deal dropdown cleared).**
+**Previous: S860 — QA+Records+DEV: #316 Tranche B P1 bug found+fixed. Notifications sort P2 fixed (|| → ??). #316 re-test ❌→✅. P2 referral banner fixed. Blocked Queue: 8 rows.**
 
-**Previous: S857 — HEALTH/OPS: Daily CI + Sentry audit. Backend Sentry cleared from 10+ unresolved → 0. All issues were historical (pre-May-30 slow queries fixed by migrations, GarageSaleFinder 0-results from old code already removed, CORS api.finda.sale fix deployed S779/S780). VACUUM ANALYZE run on Organizer + DirectoryClaimEmail + Sale tables (June 2 migration required it). GarageSaleFinder scraper confirmed working (Chicago 169 links, GR 20 links). No code changes.**
-
-**Previous: S856 — DEV: #27b FIXED — print-kit yard sign + printQRPage popups now respect canRemoveWatermark (frontend preview + backend PDF primary footer both gated). New P3: Flash Deal dropdown shows SOLD items in item selector. QA: #159 ✅ Chrome-verified — FlashDealBanner dark mode correct (orange gradient on dark bg, no white/light — P2 FIXED), countdown "Old Radio for next 1h 56m" confirmed on sale page (ss_2417corir); form dark mode confirmed ss_3858xb9jb. Blocked Queue: 7 rows.**
-
-**Previous: S855 — Records: S854 Chrome marks applied to roadmap (#289/#309/#311/#312/#316). DEV: #308 FIXED (Hidden badge in item list). #312/#289 FIXED (Generate button disabled + "X/X used" at cap). QA: #27b P2 BUG — TEAMS "Remove watermark" saves but print kit yard signs still show FindA.Sale branding (ss_28036zjv6). #159 UNVERIFIED (no published sale). New P3: yard sign hardcodes "Estate" sale type. Blocked Queue: 7 rows.**
-
-**Previous: S854 — QA: #308/#309/#311/#289/#312/#316 all Chrome-verified. #309 ✅ (P1 fixed — in-app modal). #311 ✅ (transfer modal + 409 enforcement). #289 ✅ (429 cap at 4th coupon attempt, Hunt Pass 3/month enforced). #312 ✅ (XP spend: 2000→1700 after 300 XP, UI updates). #316 ✅ (Tranche A +100 XP on 3rd login, Tranche B +150 XP on 3rd sale visit — both DB-confirmed). 2 new P3 bugs. Blocked Queue: 2 rows.**
-
-**Previous: S853 — QA: All 4 S852 bug fixes Chrome-verified. Bug 1 (edit-item null saleId) ✅ ss_8510ho8fx. Bug 2 (Full Edit misfire) ✅ ss_596216ag3. Bug 3 (/unsubscribe no-token) ✅ ss_4693l8c4l. Bug 4 (em dash) ✅ ss_0517yypd1. Blocked Queue: 2 rows (3 P2+P3 bugs cleared, #332/#335 remain).**
-
-**Previous: S852 — DEV+QA: 3 P2 bugs fixed (edit-item inventory null-saleId, Full-Edit misfire, /unsubscribe no-token spinner). P3 fixed (em dash literal in ItemPhotoManager). #320 DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden), Chrome UNVERIFIED. #317 frontend graceful fallback code-confirmed, Chrome UNVERIFIED (test clue API returns not-found). Blocked Queue: 6 rows.**
-
-**Previous: S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX. Full audit of every email-sending service in the backend. 10 files fixed. Global daily quota counter built. Two previously unknown P0 blast-to-all jobs found and fixed (notificationController.sendWeeklyDigest fires every Friday to 5,000 users with no opt-out + no unsubscribe link; organizerAnalyticsService sends weekly to all organizers with no suppression). Inbox incident confirmed stopped — no runaway sends in Railway logs. Blocked Queue: 7 rows. Push block ready.**
-
-**Previous: S847 — EMAIL INCIDENT + CLEANUP. outreach@finda.sale inbox had 21,000+ bounce emails from Gmail sending-limit errors. Root cause: monthlyTrendReportJob was emailing 44k scraped orgs (not real organizers), burning Gmail daily quota. outreachEmailsCron had duplicate emailAddress bug (sam@gmail.com ×48). BOTH FIXED and deployed today. ~15,635 "Your May 2026 Search Visibility Report" bounces manually deleted via Apps Script. "10 estate sales this weekend near you" bounce cleanup still running (~800+ deleted). Inbox not yet fully clean. Full email audit required next session. Blocked Queue: 7 rows.**
-
-**Previous: S845/S846 — QA + email infrastructure fully fixed. #293 bug fixed (PostSaleEbayPanel /ebay/ prefix). #335 email: (1) send.finda.sale SPF → `include:_spf.google.com` via Vercel DNS API, (2) Railway SES_FROM_EMAIL changed from notifications@send.finda.sale → outreach@finda.sale (authenticated Gmail account, full SPF+DKIM already configured), (3) Railway redeploy triggered. New payout test required to confirm delivery. #68 ✅ #125 ✅ re-verified. #91 + #32 UNVERIFIED. Blocked Queue: 6 rows.**
-
-**Previous: S844 — DEV+QA: #461 ✅ fully Chrome-verified end-to-end. S831 fix: apiBase changed to /api proxy (SameSite=Lax was blocking cookies on direct Railway URL). Export 200, fbExportedAt stamped, SOLD saved, nudge "Mark sold on Facebook Marketplace" visible in inbox. #27b ✅ applied to roadmap. Share-card 401 on promote page found (new P2). Blocked Queue: 4 rows.**
-
-**Previous: S843 — QA: #27b iCal watermark ✅ Chrome-verified (ss_4410s6brw). #461 UNVERIFIED — root cause misdiagnosed as localStorage; actual bug was direct Railway URL bypassing /api proxy. New P2 bug noted. Blocked Queue: 6 rows.**
-
-**Previous: S842 — DEV+Records: #461 fix written (FB nudge wired to itemController.ts updateItem, 0 TS errors). #27b fix written (iCal watermark footer via canRemoveWatermark() in generateIcal(), 0 TS errors). Roadmap: #193 wishlists ✅ applied (S841 evidence). Records scan: 4 P0 aging violations flagged. Blocked Queue: 6 rows.**
-
-**Previous: S841 — QA: #321 wishlists hard-nav ✅ Chrome-verified (ss_1258kvk8e ss_839591msq). #461 ⚠️ P2 BUG — FB nudge not wired to single-item PUT (only bulk PATCH). #27b ⚠️ P2 BUG — iCal watermark footer missing from generateIcal(). Blocked Queue: 6 rows (2 new P2 bugs added).**
-
-**Previous: S840 — Records cleanup + QA: STATE.md trimmed (369→136 lines), #321 ✅ applied to roadmap, #464 UTM drift fixed. Wishlists flow QA: /wishlists auth guard fixed. Blocked Queue: 4 rows.**
-
----
+**Previous: S858 — QA+DEV: Flash Deal dropdown FIXED. #398/#259/#290/#158 ✅. Blocked Queue: 6 rows.**
 
 ## Pool Audit Findings
 
@@ -61,20 +36,22 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING: #332 at 69 sessions; #335 at 69 sessions — mandatory P0 per CLAUDE.md §10a._
+_⚠️ P0 AGING: #332 at 70 sessions; #335 at 70 sessions — mandatory P0 per CLAUDE.md §10a._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #332 Shopify Cross-Listing | **P0 (68 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (68 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
+| #332 Shopify Cross-Listing | **P0 (70 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
+| #335 Consignor Payout Email | **P0 (70 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
-| Email Verification Migration | **P0 (133 sessions, age-escalated 2026-06-03)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S859. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
-| Production DB Re-Seed | **P0 (72 sessions, age-escalated 2026-06-03)** — Seedy2025! rejected for shopper accounts user5–user12+ since S576. Shopper Chrome QA requiring login blocked. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma db seed (back up sale cmpbvumj90001e7t7v5sa1iqi first) | S787 |
-| eBay Connection for user1 | **P0 (74 sessions, age-escalated 2026-06-03)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
-| Bing Webmaster Sitemap | **P0 (76 sessions, age-escalated 2026-06-03)** — Bing/DuckDuckGo not receiving sitemap pings. SEO gap. | Patrick: bing.com/webmasters → Add sitemap → finda.sale/server-sitemap.xml | S783 |
-| #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending but blocked: no published sale on any real test organizer account (user1 has none, Artifact MI has none, all published sales are scraper accounts). | Patrick: publish a sale on user1 account, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-| Tranche B fraud gate | **P2** — recordSaleVisit() placed AFTER fraudSuspect early-return in trackSaleVisit(). Fraud-flagged referred users never trigger Tranche B (150 XP) for referrer. Fix: move recordSaleVisit() before the `!result` return. File: packages/backend/src/controllers/pointsController.ts line ~65. | Dispatch findasale-dev: move recordSaleVisit() call before fraud early-return | S861 |
-| #324 EXIF Temporal Clustering | **P1** — Cloudinary strips EXIF by default on upload. batchAnalyzeController downloads from Cloudinary URLs → extractExifTimestamp() always returns null → temporal hints never fire. Feature is dead in production. | Dispatch findasale-dev: add `exif: true` or use `quality: 100` flag on Cloudinary upload in uploadController.ts to preserve EXIF. Then re-test #324 Chrome QA. | S861 |
+| Email Verification Migration | **P0 (134 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S862. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
+| Production DB Re-Seed | **P0 (73 sessions, age-escalated)** — Seedy2025! rejected for shopper accounts user5–user12+ since S576. Shopper Chrome QA requiring login blocked. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma db seed | S787 |
+| eBay Connection for user1 | **P0 (75 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
+| Bing Webmaster Sitemap | **P0 (77 sessions, age-escalated)** — Bing/DuckDuckGo not receiving sitemap pings. SEO gap. | Patrick: bing.com/webmasters → Add sitemap → finda.sale/server-sitemap.xml | S783 |
+| #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending but blocked: no published sale on any real test organizer account. | Patrick: publish a sale on user1 account, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
+| #324 EXIF Temporal Clustering | **P1** — Fix shipped S862 (exif: true in uploadController.ts). Needs Chrome re-QA after push+deploy to confirm temporal hints fire on real uploads. | Push S862 batch → verify new upload preserves EXIF → re-QA #324 | S861 |
+| #194 Saved Searches view page | **P2** — POST /api/saved-searches works + toast fires, but /shopper/saved-searches → 404. Page was never built. DB table + API exist. | Dispatch findasale-dev: build /shopper/saved-searches page + Save Search button on search results. | S862 |
+| #47 UGC Photo Submit not on sale detail | **P2** — UGCPhotoSubmitButton exists and works, but is only wired into shopper/history.tsx. Not present on sales/[id].tsx. Shopper has no way to submit photos on the sale page. | Dispatch findasale-dev: add UGCPhotoSubmitButton to sales/[id].tsx alongside the existing UGCPhotoGallery. | S862 |
+| #192 Price History data-dependent | **P3** — ItemPriceHistoryChart is correctly wired in edit-item/[id].tsx but returns null when no ItemPriceHistory records exist. Railway DB has no price change history for test items. | No code fix needed. To verify: run price update on a real item, then check chart renders. | S862 |
 
 ---
 
@@ -82,35 +59,71 @@ _⚠️ P0 AGING: #332 at 69 sessions; #335 at 69 sessions — mandatory P0 per 
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| 316 | Referral Tranche B ✅ | Navigated to /register?ref=REF-7CD8DCC0 as new user. Green "Referral link applied" banner visible (ss_1479i18cy). Registered qa-tranche-b-s861@test.com, logged in (ss_71277qiak). Visited 3 distinct sales (/cmopyeoqi.../cmoqnzsh.../cmoqnzrqz...). DB post-visit: distinctSalesVisited=[3 IDs], trancheBReleasedAt=2026-06-03T14:37:15, user1 +150 XP confirmed (ss_1277utzwj). Test data cleaned. | S861 |
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
+| 327 | Price Calibration Logging ✅ | Navigated to edit-item as Alice (user1). Seeded aiSuggestedPrice=65 on Old Radio. Changed price 75→80, clicked Save. DB: PriceOverrideLog count 7→8, new row organizerId=Alice, aiSuggestedPrice=65, organizerPrice=80, delta=15, category=Electronics. Logging pipeline confirmed working. | S862 |
+| 73 | Two-Channel Notification System ✅ | Navigated to /notifications as Alice. "Operational" and "Discovery" tab buttons both visible alongside "All". 3 real notifications present. | S862 |
+| 186 | QR Scan Analytics ✅ | Navigated to /organizer/qr-codes as Alice. KPI tiles (Total/Active/Sales-with-scans), Scanner Funnel, Sales Breakdown table all present and rendering. | S862 |
+| 396 | DIY Sale Starter Kit ✅ | Navigated to /organizer/starter-kit as Alice. All 4 sections visible (Pre-Sale/Pricing Tips/Day-Of/Post-Sale). /downloads/sale-starter-kit.pdf returns 200/application-pdf. Print button present. | S862 |
+| 197 | Bounties organizer view ✅ | Navigated to /organizer/bounties as Alice. 3 tabs visible (Browse/Sale Requests/Your Submissions). "Your Submissions" tab loads correctly with empty state. | S862 |
+| 163 | Organizer Earnings ✅ | Navigated to /organizer/earnings as Alice. Real data: $325 gross, -$26 platform fees (8%), $299 net. Year selector + PDF button present. Fee breakdown is per-sale (not per-item — note: roadmap says "item-level" but implementation is sale-level; matches current product behavior). | S862 |
+| 173 | Message Templates ✅ | Navigated to /organizer/message-templates as Bob (user2). 6 default templates, Edit+Delete per template, + New Template button. Full CRUD visible. | S862 |
+| 71 | Shopper Reputation ✅ | Navigated to /shopper/reputation as Bob (user2). KPI cards (0 purchases, $0 spent, 0% completion, 1 wishlist save), "New Shopper" status, Coming Soon section. | S862 |
+| SHO-DASH | Shopper Dashboard + Hunt Pass ✅ | Navigated to /shopper/dashboard as Bob: 157 XP, Initiate rank, all widgets visible. /shopper/hunt-pass: $4.99/mo upsell, 6 perks listed. | S862 |
 
 ---
 
 ## Next Session
 
-**S861 done. Blocked Queue: 10 rows — QA MODE next session (≥8 items).**
+**S862 done. Blocked Queue: 12 rows — QA MODE next session (≥8 items).**
 
 Priority:
-1. **Records: Apply #316 ✅ to roadmap** (PCV → roadmap Chrome column). Cross-session rule.
-2. **DEV: Fix Tranche B fraud gate** — move `recordSaleVisit()` before `!result` early-return in `pointsController.ts`. 1-line fix, dispatch findasale-dev.
-3. **DEV: Fix #324 EXIF Cloudinary** — add EXIF preservation flag to Cloudinary upload in `uploadController.ts`. Then re-QA #324.
-4. **P3: "Learn about TEAMS" button clipped** on dashboard upgrade card — dispatch findasale-dev if time.
-5. **#317/#320** — Still UNVERIFIED. Defer (needs GPS/Stripe).
-6. **#335 payout** — Patrick check deseee@yahoo.com.
-7. **5 P0 Patrick-action items** in Blocked Queue.
+1. **Records: Apply S862 PCV ✅ marks to roadmap** (#327/#73/#186/#396/#197/#163/#173/#71/SHO-DASH). Cross-session rule.
+2. **Push S862 code batch** (11 files — see push block). Then verify #176 filter + #195 messaging in Chrome.
+3. **DEV: #194 Saved Searches view page** — build /shopper/saved-searches page + Save Search button.
+4. **DEV: #47 UGC Photo Submit** — wire UGCPhotoSubmitButton onto sales/[id].tsx.
+5. **#324 EXIF** — Chrome re-QA after deploy (upload a photo, verify EXIF preserved in temporal clustering).
+6. **5 P0 Patrick-action items** unchanged.
 
-**Blocked Queue: 10 rows. QA MODE — no new feature dev without Patrick sign-off.**
+**Blocked Queue: 12 rows. QA MODE — no new feature dev without Patrick sign-off.**
 
 **Patrick actions required:**
 
-1. **Push S860 code+docs** (see push block below).
+1. **Push S862 code+docs** (see push block below — 11 files).
 2. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
 3. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail?
-4. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+4. **Admin invites:** SVPKNKV3 not found in /admin/invites — already deleted or was test-only; no action needed.
 5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+6. **Barn Door QA Test Sale (cmpbvumj90001e7t7v5sa1iqi)** → returns 404 in prod. STATE.md references should be ignored for future QA — use any other published sale.
 
 ## Recent Sessions
+
+### S862 — QA+DEV: 6 fixes shipped, 14 features verified, 4 new bugs found
+
+**DEV (6 fixes, all 0 TS errors):**
+- `pointsController.ts`: moved `recordSaleVisit()` before `!result` fraud early-return (Tranche B fraud gate fix)
+- `uploadController.ts`: added `exif: true` to Cloudinary upload_stream options (#324 EXIF preservation)
+- `discoveryService.ts` + `search.ts`: added `saleType: true` to Prisma selects (#176 — browse filter returning 0 results)
+- `messageController.ts`: wrapped Conversation+Message in `prisma.$transaction`, moved unmanaged-listing guard before DB writes (#195 — messaging 500 crash)
+- `settings.tsx`: added "Download Sale & Item Data (ZIP)" button calling `GET /api/organizers/export` (#66 frontend UI)
+- `print-kit/[saleId].tsx`: brand colors from brandPrimaryColor/brandSecondaryColor now applied to yard sign header/footer + item tag price/borders (#31)
+
+**QA ✅ (all Chrome-verified S862):** #327 Price Calibration Logging, #73 Two-Channel Notifications, #186 QR Scan Analytics, #396 DIY Starter Kit, #197 Bounties organizer, #163 Organizer Earnings (sale-level fees), #173 Message Templates, Shopper Dashboard, Hunt Pass upsell page, #71 Shopper Reputation.
+
+**QA bugs found:**
+- **#176 Browse filter** ❌ P1 FIXED — saleType absent from feed API, every filter returned 0 results
+- **#195 Messaging** ❌ P1 FIXED — POST /api/messages crashed, Conversation created but Message insert failed
+- **#27 CSV Exports** ⚠️ PARTIAL — rate-limited (1/month), endpoints confirmed live, no standalone /organizer/exports page (exports live inside Promote page per-sale)
+- **#194 Saved Searches view** ❌ P2 NEW — no /shopper/saved-searches page, POST works + toast fires but no view
+- **#47 UGC Photo Submit** ❌ P2 NEW — UGCPhotoSubmitButton only in history.tsx, not wired to sale detail page
+- **#192 Price History** UNVERIFIED P3 — chart wired correctly but returns null with no history data; data-dependent not a code bug
+- **#401 Sale of the Day** — no card visible on homepage (may require qualifying sale to exist)
+- **Admin invites** — SVPKNKV3 not present in /admin/invites (already gone)
+
+**Blocked Queue: 10 → 12 rows** (removed Tranche B gate, updated #324, added #194/#47/#192).
+
+**Files changed:** pointsController.ts · uploadController.ts · discoveryService.ts · search.ts · export.ts · messageController.ts · settings.tsx · print-kit/[saleId].tsx · roadmap.md · STATE.md · patrick-dashboard.md
+
+---
 
 ### S861 — QA: #316 Tranche B ✅ Chrome-verified; #324 EXIF P1 bug found; 2 new bugs
 
@@ -198,97 +211,3 @@ Priority:
 
 ---
 
-### S857 — HEALTH/OPS: Sentry audit + DB maintenance
-
-**Automated daily health + Patrick-requested dispatch and investigation.**
-
-- **Sentry backend cleared 10 → 0 unresolved:** Resolved 25 historical slow-query issues (pre-May-30, covered by migrations 20260530000001 + 20260602000000). Resolved 22 GarageSaleFinder 0-results issues (old `captureMessage` code already removed from source — current code has "Do NOT Sentry-capture here" comment). Resolved CORS `api.finda.sale` issue (fix in code since S779/S780, last fired May 24).
-- **VACUUM ANALYZE:** Run on Organizer, DirectoryClaimEmail, Sale tables (June 2 migration comment required manual run — can't run inside transaction).
-- **GarageSaleFinder scraper confirmed working:** Live-tested Chicago (169 links), Grand Rapids (20 links). Sparse metros (Yakima, Pocatello) have genuinely 0 active listings — expected behavior.
-- **api.finda.sale = Railway backend:** Confirmed via `server: railway-edge` headers. CORS fix (`allowedOrigins.push('https://api.finda.sale')`) already in index.ts with full explanation comment.
-- **MulterError on /rapidfire:** Already suppressed in instrument.ts `beforeSend` filter. 3 historical Sentry captures from before the filter was added.
-- **No code changes this session.**
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S856 — DEV #27b FIXED + QA #159 ✅
-
-**DEV — #27b watermark print kit (0 TS errors):**
-- `packages/frontend/pages/organizer/print-kit/[saleId].tsx`: Added `/organizers/settings/watermark` + `/organizers/me` queries. Derived `canRemoveWatermark = subscriptionTier === 'TEAMS' && removeWatermarkEnabled`. Yard sign footer (`yard-sign-footer` + `yard-sign-logo`) gated. `printQRPage()` now accepts `hideWatermark` param — all 4 callers pass `canRemoveWatermark`. Three `qr-full-page-sublabel` elements (check-in, treasure hunt, photo station) gated.
-- `packages/backend/src/controllers/printKitController.ts`: `getYardSignKit` primary footer `'Scan to browse & buy online  •  finda.sale'` wrapped in `if (!canRemoveWatermark(sale.organizer))`. Secondary watermark footer was already gated.
-
-**QA — #159 Flash Deals:**
-- ✅ Flash Deal form dark mode: opened as Alice Johnson on PUBLISHED sale. Form renders full dark navy bg (no white/light) — P2 FIXED. ss_3858xb9jb.
-- ✅ Flash Deal banner on sale page: `⚡ Flash Deal — 25% off! Old Radio for next 1h 56m` confirmed. Banner orange gradient on dark page, countdown live. ss_2417corir.
-- ⚠️ P3 NEW: Flash Deal item dropdown includes SOLD items. Created deal on SOLD Vintage Lamp — banner won't appear since item is not in public inventory. Filter should be `AVAILABLE` only.
-
-**Blocked Queue:** 7 rows (replaced #27b with new P3 Flash Deal dropdown bug).
-
-**Files changed:** `packages/frontend/pages/organizer/print-kit/[saleId].tsx` · `packages/backend/src/controllers/printKitController.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S855 — Records + DEV P3 fixes + QA: #27b watermark P2 found
-
-**Records:** Applied S854 Chrome ✅ marks to roadmap.md for #289 (monthly cap note), #309 (window.confirm P1 fix), #311 (transfer+409 S854 evidence), #312 (Chr ⬜→✅ S854, XP spend path), #316 (Chr ⬜→✅ S854, Tranche A/B DB-confirmed).
-
-**DEV — P3 bugs fixed (0 TS errors):**
-- #308: Hidden badge (grey pill) now renders on organizer item list row when `item.isActive === false`. Add-items page, next to existing Live/Draft status chip.
-- #312/#289: `couponController.getUserCoupons` now returns `monthlyUsageByTier` (current-month groupBy). `coupons.tsx` disables Generate button when `usedThisMonth >= monthlyLimit`, shows "Cap reached (X/X)" button label and "X/X used this month" helper text.
-
-**QA findings:**
-- #27b Watermark removal: ⚠️ **P2 BUG** — Navigated to /organizer/settings as Alice Johnson (TEAMS). Enabled "Remove FindA.Sale watermark from exports" → green toast confirmed (ss_28036zjv6). Navigated to /organizer/print-kit → yard sign still shows "finda.sale" / "FindA.Sale" branding. Setting not wired to print template renderer.
-- #159 Flash Deals dark mode: UNVERIFIED — Alice has no PUBLISHED sale; Flash Deal button never appeared.
-- P3 brand voice: yard sign template hardcodes "Estate" as sale type label (codebase-wide ban on estate-sale-only language applies).
-
-**Blocked Queue: 7 rows (added #27b watermark removal bug).**
-
-**Files changed:** `claude_docs/strategy/roadmap.md` · `packages/frontend/pages/organizer/add-items/[saleId].tsx` · `packages/backend/src/controllers/couponController.ts` · `packages/frontend/pages/coupons.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S854 — QA: #289 #309 #311 #312 #316 Chrome-verified
-
-**6 roadmap items QA'd. All doable-without-Stripe items completed.**
-
-- **#308** ⚠️ P3 OPEN — `isActive=False` confirmed in DB after hide, but organizer item list shows zero visual indicator. P3 bug, dispatch findasale-dev next session.
-- **#309** ✅ — Consignor delete uses proper in-app modal (P1 `window.confirm()` bug confirmed FIXED). ss_1713d6g2g.
-- **#311** ✅ — Multi-location: transfer modal opens with items + destination, Delete hidden when items > 0, backend 409 enforced via JS fetch.
-- **#289** ✅ — Shopper coupon monthly cap: Hunt Pass limit 3/month enforced correctly. 429 on 4th attempt with message "Monthly limit reached for this tier (3/month)."
-- **#312** ✅ — XP spend path works end-to-end: Generate buttons clickable, XP deducted, page reload shows updated balance 2000→1700. ⚠️ P3: Generate button stays enabled/active after monthly cap hit — no disabled UI state.
-- **#316** ✅ — Referral Tranche A (+100 XP, 3 distinct login days) and Tranche B (+150 XP, 3 distinct sale visits) both DB-confirmed. Tranches C/D blocked (require Stripe purchase / trail completion).
-
-**New finding:** New users registered while another user is logged in from same browser session are auto-flagged `fraudSuspect=True` by the fraud detection system. This blocked XP award for the QA test user. Likely intentional fraud detection; cleared manually for testing. Not a bug unless it affects real onboarding flows.
-
-**Test data cleaned up:** qa-tranche-s854 user deleted, user5 XP restored to 2000, June test coupons removed.
-
-**Blocked Queue: 2 rows (unchanged). DEV mode permitted.**
-
----
-
-### S853 — QA: All 4 S852 bug fixes Chrome-verified
-
-**All 4 S852 fixes browser-verified against live Vercel deployment (dpl_CbDjpZs1, READY, S852 commit e56d4f3).**
-
-- Bug 1 (P2) ✅: /organizer/inventory → clicked Kitchen Set (null saleId) → Edit Item page loaded, Title "Kitchen Set" visible. ss_8510ho8fx.
-- Bug 2 (P2) ✅: add-items inline editor → "Full Edit ↗" for Antique Chair → navigated to /organizer/edit-item/1278fdf6-... showing "Antique Chair". ss_596216ag3.
-- Bug 3 (P2) ✅: /unsubscribe (no token) → "Email Preferences — Error: Invalid unsubscribe link. Please use the link from your email or contact support@finda.sale." No spinner. ss_4693l8c4l.
-- Bug 4 (P3) ✅: edit-item Photos section shows "No photos yet — click to upload" with proper em dash (not \u2014). Confirmed via find tool + ss_0517yypd1.
-
-**Blocked Queue: 6 → 2 rows.** 4 P2/P3 items cleared. #332 and #335 remain (both P0 aging).
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S852 — DEV: 3 P2 bugs fixed + P3 + QA #317/#320 UNVERIFIED
-
-**Fixes shipped:**
-- Bug 1 (P2): `getItemById` now does organizer ownership fallback via `item.organizerId` for inventory items (saleId=null). Previously returned 404 for all returned-to-inventory items.
-- Bug 2 (P2): Full Edit ↗ button in add-items inline editor converted from `<Link>` to `<button router.push() + stopPropagation>` — fixes misfire opening next item's editor.
-- Bug 3 (P2): `/unsubscribe` no-token spinner fixed — `router.isReady` guard + else branch shows "Invalid unsubscribe link" error state.
-- Bug 4 (P3): `ItemPhotoManager.tsx` em dash literal (`\u2014`) → actual em dash (`—`) in Photos empty state.
-
-**QA attempts:** #320 Async eBay Comp: DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden per D-005). Chrome UNVERIFIED — CSRF blocks raw fetch, React controlled-input                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 

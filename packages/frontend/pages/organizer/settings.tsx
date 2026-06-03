@@ -2004,29 +2004,56 @@ const OrganizerSettingsPage = () => {
                   <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
                     Download a copy of your account data (GDPR Article 20). Limited to once per 24 hours.
                   </p>
-                  <button
-                    onClick={async () => {
-                      try {
-                        const response = await api.get('/users/me/export', {
-                          responseType: 'blob',
-                        });
-                        const url = window.URL.createObjectURL(new Blob([response.data]));
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.setAttribute('download', `findasale-data-export-${new Date().toISOString().split('T')[0]}.json`);
-                        document.body.appendChild(link);
-                        link.click();
-                        link.parentNode?.removeChild(link);
-                        showToast('Data export downloaded successfully', 'success');
-                      } catch (error: any) {
-                        const msg = error.response?.data?.error || 'Failed to download data export';
-                        showToast(msg, 'error');
-                      }
-                    }}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-sm transition"
-                  >
-                    Download My Data
-                  </button>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const response = await api.get('/users/me/export', {
+                            responseType: 'blob',
+                          });
+                          const url = window.URL.createObjectURL(new Blob([response.data]));
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.setAttribute('download', `findasale-data-export-${new Date().toISOString().split('T')[0]}.json`);
+                          document.body.appendChild(link);
+                          link.click();
+                          link.parentNode?.removeChild(link);
+                          showToast('Data export downloaded successfully', 'success');
+                        } catch (error: any) {
+                          const msg = error.response?.data?.error || 'Failed to download data export';
+                          showToast(msg, 'error');
+                        }
+                      }}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-sm transition"
+                    >
+                      Download My Data
+                    </button>
+                    {/* Feature #66: Open Data ZIP — sales, items, purchases as CSVs */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          const response = await api.get('/organizers/export', {
+                            responseType: 'blob',
+                          });
+                          const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/zip' }));
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.setAttribute('download', `findasale-export-${new Date().toISOString().split('T')[0]}.zip`);
+                          document.body.appendChild(link);
+                          link.click();
+                          link.parentNode?.removeChild(link);
+                          window.URL.revokeObjectURL(url);
+                          showToast('Organizer data export downloaded', 'success');
+                        } catch (error: any) {
+                          const msg = error.response?.data?.message || 'Failed to download organizer export';
+                          showToast(msg, 'error');
+                        }
+                      }}
+                      className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-lg font-medium text-sm transition"
+                    >
+                      Download Sale & Item Data (ZIP)
+                    </button>
+                  </div>
                 </div>
 
                 {/* Danger Zone */}
