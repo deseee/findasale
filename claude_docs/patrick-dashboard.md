@@ -1,10 +1,25 @@
-# Patrick's Dashboard — S845 Wrap
+# Patrick's Dashboard — S847 Wrap
 
 ---
 
-## What Happened This Session (S845)
+## What Happened This Session (S847)
 
-QA session — cut off by Claude API context limit mid-test on #32. Here's what got done:
+**Email incident.** outreach@finda.sale had 21,000+ bounce emails from Gmail sending-limit errors. We cleaned them out and the cron fixes that caused it were pushed. But this session is not a win — it's cleanup from a serious operational failure that should never have happened.
+
+**What caused it:**
+- `monthlyTrendReportJob` was emailing 44,000 scraped organizers, not real users. It burned Gmail's daily send quota every time it ran.
+- `outreachEmailsCron` had duplicate email addresses in the database (same address 48x), creating a spam-like pattern.
+
+**What was fixed (code pushed, NOT yet verified in production):**
+- Monthly trend report now filters to real organizers only
+- Both outreach crons have Set-based dedup to prevent duplicate sends
+- emailService now includes List-Unsubscribe headers (Yahoo compliance)
+
+**Inbox cleanup done:**
+- ~15,635 "Your May 2026 Search Visibility Report" bounce emails → Trash ✅
+- "10 estate sales this weekend near you" cleanup still running at session end
+
+**Honest assessment:** The code fixes look right but haven't been verified in production. The inbox could refill tomorrow if there are edge cases the dedup missed. Next session is a mandatory full email audit before any other work.
 
 **#293 eBay Panel — ROOT CAUSE FOUND + FIXED.** The blocker was never about needing an eBay connection or an ended sale. The real bug: `PostSaleEbayPanel.tsx` was calling the wrong API paths (missing `/ebay/` prefix). Every call returned 404, so the panel always showed "All items sold." Fix applied — 3 paths corrected in PostSaleEbayPanel.tsx. Needs your push, then a quick QA (the sale is already ENDED and has 2 AVAILABLE items ready to test).
 
@@ -22,15 +37,13 @@ QA session — cut off by Claude API context limit mid-test on #32. Here's what 
 
 ## Patrick Actions Required
 
-1. **Push the fix** — push block below. One file changed.
+1. **Check outreach@finda.sale tomorrow morning.** If new bounce emails appeared overnight, the cron fixes need more work. Note the count and subject line and bring it to next session.
 
-2. **Check deseee@yahoo.com** — look for the Jane Thrift consignor payout email. If it's there, #335 is done (54 sessions). If not, Resend has a delivery issue to investigate.
+2. **Check deseee@yahoo.com** — look for the Jane Thrift consignor payout email. If it's there, #335 is done (54 sessions).
 
 3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
 
 4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-
-5. **#239 legal gate:** Attorney + CPA before live consignor payouts.
 
 ---
 

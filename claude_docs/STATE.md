@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S845/S846 — QA + email infrastructure fully fixed. #293 bug fixed (PostSaleEbayPanel /ebay/ prefix). #335 email: (1) send.finda.sale SPF → `include:_spf.google.com` via Vercel DNS API, (2) Railway SES_FROM_EMAIL changed from notifications@send.finda.sale → outreach@finda.sale (authenticated Gmail account, full SPF+DKIM already configured), (3) Railway redeploy triggered. New payout test required to confirm delivery. #68 ✅ #125 ✅ re-verified. #91 + #32 UNVERIFIED. Blocked Queue: 6 rows.**
+**Latest: S847 — EMAIL INCIDENT + CLEANUP. outreach@finda.sale inbox had 21,000+ bounce emails from Gmail sending-limit errors. Root cause: monthlyTrendReportJob was emailing 44k scraped orgs (not real organizers), burning Gmail daily quota. outreachEmailsCron had duplicate emailAddress bug (sam@gmail.com ×48). BOTH FIXED and deployed today. ~15,635 "Your May 2026 Search Visibility Report" bounces manually deleted via Apps Script. "10 estate sales this weekend near you" bounce cleanup still running (~800+ deleted). Inbox not yet fully clean. Full email audit required next session. Blocked Queue: 7 rows.**
+
+**Previous: S845/S846 — QA + email infrastructure fully fixed. #293 bug fixed (PostSaleEbayPanel /ebay/ prefix). #335 email: (1) send.finda.sale SPF → `include:_spf.google.com` via Vercel DNS API, (2) Railway SES_FROM_EMAIL changed from notifications@send.finda.sale → outreach@finda.sale (authenticated Gmail account, full SPF+DKIM already configured), (3) Railway redeploy triggered. New payout test required to confirm delivery. #68 ✅ #125 ✅ re-verified. #91 + #32 UNVERIFIED. Blocked Queue: 6 rows.**
 
 **Previous: S844 — DEV+QA: #461 ✅ fully Chrome-verified end-to-end. S831 fix: apiBase changed to /api proxy (SameSite=Lax was blocking cookies on direct Railway URL). Export 200, fbExportedAt stamped, SOLD saved, nudge "Mark sold on Facebook Marketplace" visible in inbox. #27b ✅ applied to roadmap. Share-card 401 on promote page found (new P2). Blocked Queue: 4 rows.**
 
@@ -66,35 +68,68 @@ _⚠️ P0 AGING (S845): #267, #293 at 60 sessions; #332, #335 at 54 sessions �
 
 ## Next Session
 
-**Blocked Queue: 7 rows (below ≥8 ceiling). 4 P0 aging (#267/#293/#332/#335) + 1 P2 share-card + 2 UNVERIFIED (#32/#91). SharePromoteModal.tsx deleted — pushblock provided.**
+**⚠️ MANDATORY FIRST SESSION: EMAIL SYSTEM AUDIT — no new feature dev until complete.**
 
-**S845 wrap.** #293 bug found + fixed (push required). #335 payout ran (inbox check pending). #68 + #125 independently re-verified. #32 + #91 cut off, need re-QA.
+**Context:** outreach@finda.sale accumulated 20,000+ bounce emails because two crons were misbehaving. Fixes were pushed today (S847) but NOT verified as working. The inbox may refill tomorrow if the fixes are incomplete.
+
+**Audit scope — every email-sending cron in the backend. For each one, answer:**
+1. What does it send, to whom, how often?
+2. Is there a daily/hourly send rate limiter?
+3. Is there a dedup guard that persists across runs (not just in-memory)?
+4. Could it send to unsubscribed or scraped contacts?
+5. Does it respect Gmail Workspace limits (2,000/day)?
+
+**Files to audit (start here, may not be exhaustive):**
+- `packages/backend/src/jobs/autoSeedOutreachCron.ts` — dedup fix applied, verify it's correct
+- `packages/backend/src/jobs/outreachEmailsCron.ts` — dedup fix applied, verify cross-run persistence
+- `packages/backend/src/jobs/monthlyTrendReportJob.ts` — filter to real organizers fix applied, verify
+- `packages/backend/src/jobs/` — list ALL files, audit any that send email
+- `packages/backend/src/index.ts` — check all cron schedules registered
+
+**For each cron, use Railway logs (via CLI or MCP) to check actual send volume from the last 7 days.**
+
+**Dispatch stub:**
+`Skill('findasale-dev')` → read all job files in packages/backend/src/jobs/, identify every email send, map sending rate + dedup logic + recipient filter for each. Return a table: Cron | Sends To | Frequency | Rate Limit | Dedup Scope | Risk Level. Flag any P0 risk immediately.
+
+**Then:** `Skill('findasale-ops')` → pull Railway logs for the backend service, last 24 hours. Count email send log lines by cron. Report actual send volume vs. Gmail 2,000/day limit.
+
+**After audit:** Update STATE.md with findings + any fixes needed. Only then return to the Blocked Queue.
+
+---
+
+**Blocked Queue: 7 rows (below ≥8 ceiling). 4 P0 aging (#267/#293/#332/#335) + 1 P2 share-card + 2 UNVERIFIED (#32/#91).**
 
 **Patrick actions required:**
 
-1. **Push the S845 fix** — see push block below.
+1. **Check outreach@finda.sale inbox tomorrow morning** — if new bounce emails appeared overnight, the cron fixes didn't fully work. Report count to next session.
 
-2. **Check deseee@yahoo.com inbox** — should have a consignor payout email for Jane Thrift. If received, #335 is ✅. If not, something in Resend failed.
+2. **Check deseee@yahoo.com inbox** — should have a consignor payout email for Jane Thrift (#335). If received → ✅.
 
 3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
 
 4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
-5. **#239 legal gate:** Attorney + CPA before live consignor payouts.
-
-**Dispatch stubs (next session):**
-
-1. **Push first** — then open Chrome: QA #293 as Alice Johnson. Navigate to `finda.sale/organizer/sales/0d9563f9-...` (sale is already ENDED, 2 items set to AVAILABLE by S845). Verify PostSaleEbayPanel loads with 2 unsold items + 17-field edit panel works.
-
-2. **QA #32** — as Leo Thomas (user5). Go to /wishlists → Watching → "+ New Alert". Create an alert. Verify it saves and appears.
-
-3. **QA #91** — log into user1 (Alice) fresh. Navigate to /organizer/markdown-cycles. Create a cycle. Verify it saves (PRO session required — Alice is now PRO in DB).
-
-4. **DEV: Share-card 401 (P2):** `Skill('findasale-dev')` → investigate `GET /api/share-card/...` returning 401 on promote page. Expected output: share card preview loads + push block.
-
 ---
 
 ## Recent Sessions
+
+### S847 — EMAIL INCIDENT: inbox cleanup + cron fixes deployed
+
+**Root cause confirmed:** `monthlyTrendReportJob.ts` was emailing 44,000+ scraped organizers (not real users), burning Gmail Workspace daily quota. `outreachEmailsCron.ts` had a duplicate emailAddress bug (same address repeated 48x in DirectoryClaimEmail table). Both caused mailer-daemon@googlemail.com to flood outreach@finda.sale with "You have reached a limit for sending mail" bounces.
+
+**Fixes pushed today:**
+- `c5ba28e` — monthlyTrendReportJob filter to real organizers only + emailService List-Unsubscribe headers (Yahoo compliance)
+- `1203d7b` — autoSeedOutreachCron + outreachEmailsCron Set-based dedup
+
+**Inbox cleanup (Apps Script, outreach@finda.sale):**
+- "Your May 2026 Search Visibility Report" — ~15,635 emails moved to Trash ✅ Done:1235 confirmed
+- "10 estate sales this weekend near you" — cleanup in progress at session end (~800+ deleted, auto-runner active)
+
+**Honest status of fixes:** CODE-ONLY. Dedup logic has not been verified in production. Cross-run persistence of the Set-based dedup is unconfirmed. Inbox may refill if fixes are incomplete. Full audit is mandatory next session.
+
+**Files changed this session:** none (fixes were pushed by Patrick from prior session dispatches)
+
+---
 
 ### S845 — QA: #293 bug found + fixed, #335 payout ran, #68/#125 re-verified, #32/#91 cut off
 
