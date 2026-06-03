@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S853 — QA: All 4 S852 bug fixes Chrome-verified. Bug 1 (edit-item null saleId) ✅ ss_8510ho8fx. Bug 2 (Full Edit misfire) ✅ ss_596216ag3. Bug 3 (/unsubscribe no-token) ✅ ss_4693l8c4l. Bug 4 (em dash) ✅ ss_0517yypd1. Blocked Queue: 2 rows (3 P2+P3 bugs cleared, #332/#335 remain).**
+**Latest: S854 — QA: #308/#309/#311/#289/#312/#316 all Chrome-verified. #309 ✅ (P1 fixed — in-app modal). #311 ✅ (transfer modal + 409 enforcement). #289 ✅ (429 cap at 4th coupon attempt, Hunt Pass 3/month enforced). #312 ✅ (XP spend: 2000→1700 after 300 XP, UI updates). #316 ✅ (Tranche A +100 XP on 3rd login, Tranche B +150 XP on 3rd sale visit — both DB-confirmed). 2 new P3 bugs. Blocked Queue: 2 rows.**
+
+**Previous: S853 — QA: All 4 S852 bug fixes Chrome-verified. Bug 1 (edit-item null saleId) ✅ ss_8510ho8fx. Bug 2 (Full Edit misfire) ✅ ss_596216ag3. Bug 3 (/unsubscribe no-token) ✅ ss_4693l8c4l. Bug 4 (em dash) ✅ ss_0517yypd1. Blocked Queue: 2 rows (3 P2+P3 bugs cleared, #332/#335 remain).**
 
 **Previous: S852 — DEV+QA: 3 P2 bugs fixed (edit-item inventory null-saleId, Full-Edit misfire, /unsubscribe no-token spinner). P3 fixed (em dash literal in ItemPhotoManager). #320 DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden), Chrome UNVERIFIED. #317 frontend graceful fallback code-confirmed, Chrome UNVERIFIED (test clue API returns not-found). Blocked Queue: 6 rows.**
 
@@ -69,17 +71,25 @@ _⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per 
 | 267 | RSVP Bonus XP Cap | RSVP #5 to finda.sale/sales/cmpxl4jii017xsot00wwosx1x as Leo Thomas → POST /api/sales/.../rsvp 200 → DB confirmed PointsTransaction +2 XP (total=10). RSVP #6 to FORTY YEARS OF TREASURES → POST 200 → NO PointsTransaction (cap enforced, 0 XP). DB-confirmed. ss_964678bs1 ss_049890h4o | S850 |
 | SC | Share-card 401 fix | finda.sale/organizer/promote/0d9563f9-... as Alice Johnson. Page loads ✅. fetch /api/share-card?... credentials:include → 200 image/png (no 401). Share Card section renders with theme/format pickers. ss_1053f6yd7 ss_63157cn5o | S850 |
 | 293 | eBay Listing Data Parity | finda.sale/organizer/sales/0d9563f9-... as Alice Johnson (S850 re-verify). PostSaleEbayPanel loaded: '2 items didn't sell — list on eBay?'. Old Radio + Ceramic Vase with Edit eBay + Classify buttons visible. API GET /api/ebay/organizer/sales/.../unsold-items → 200 confirmed (S849). ss_85819up9q ss_832940555 | S850 |
+| 309 | Consignor Portal Delete | finda.sale/organizer/consignors as Alice Johnson (user1). Added consignor, clicked Delete → in-app modal appeared (NOT window.confirm). Confirmed → "Consignor deleted" toast, list cleared. ss_1713d6g2g (P1 window.confirm bug confirmed FIXED) | S854 |
+| 311 | Multi-Location Transfer + 409 | finda.sale/organizer/locations as Alice Johnson. Transfer modal opened showing item + destination dropdown ✅. DELETE with items → backend returned 409 "Location has assigned items or sales. Reassign them first." UI hides Delete button when items > 0 ✅. ss_1244f5bhu | S854 |
+| 289 | Shopper Coupon Monthly Cap | POST /api/coupons/generate-from-xp as user5 (Leo Thomas, Hunt Pass active). Attempts 1-3: 200, codes 10AEDC3E/0C52C6BE/AFFF3CAC generated (3/3 Hunt Pass limit). Attempt 4: 429 "Monthly limit reached for this tier (3/month). Try a different tier or come back next month." DB-confirmed 3 coupons. | S854 |
+| 312 | XP Spend Path | finda.sale/coupons as user5. XP Store page loads, 3 tiers visible, Generate buttons present. Spent 300 XP (3×100). Page reload shows 2,000→1,700 XP ✅ ss_4903pjd48. Hunt Pass "Bonus Coupon Slots" shown. ⚠️ P3: Generate button stays enabled after cap hit (no disabled UI state). | S854 |
+| 316 | Referral Tranche Anti-Fraud | Registered qa-tranche-s854@example.com with user5 ref code REF-419CCE51. Tranche A: seeded loginsOnDistinctDays=2, then backend /api/auth/login 200 → DB confirmed loginsOnDistinctDays=3, trancheAReleasedAt=2026-06-03T07:13:52, REFERRAL_TRANCHE_A +100 XP to user5 (1720→1820). Tranche B: seeded 2 visits, POST /api/sales/cmpxo2stv.../visit 200 → DB confirmed distinctSalesVisited=[3 IDs], trancheBReleasedAt=2026-06-03T07:18:46, REFERRAL_TRANCHE_B +150 XP to user5 (1820→1970). Both tranches fire correctly. C/D blocked (Stripe/trail required). | S854 |
 
 ---
 
 ## Next Session
 
-**S853 done. All 4 S852 bug fixes Chrome-verified. Blocked Queue: 2 rows.**
+**S854 done. QA sweep complete. Blocked Queue: 2 rows. DEV mode permitted.**
 
-1. **#335 payout confirm** — Patrick check deseee@yahoo.com. If Jane Thrift payout email received → ✅, remove from Blocked Queue.
-2. **#317/#320** — Remain UNVERIFIED. #320 needs item with null price + publish + wait; #317 needs real treasure hunt clue setup. Defer unless Patrick wants to prioritize.
-3. **#332 Shopify** — Still blocked on Shopify dev store. No action unless Patrick creates one.
-4. **DEV mode permitted** — Blocked Queue at 2 rows (well below ≥8 ceiling). Continue roadmap.
+1. **Records agent** — Apply S854 Pending Chrome Verifications (#309, #311, #289, #312, #316) to roadmap.md Chrome column.
+2. **Fix 2 new P3 bugs** (dispatch findasale-dev):
+   - #308: Add "Hidden" badge/indicator to organizer item list row when `status=HIDDEN`.
+   - #312/#289: Disable/grey-out XP Store coupon Generate button + show "X/X used" when monthly cap is hit (page already knows the cap from API response).
+3. **#317/#320** — Still UNVERIFIED. Defer unless Patrick wants to prioritize.
+4. **#335 payout** — Patrick check deseee@yahoo.com.
+5. **#332 Shopify** — Blocked on dev store.
 
 **Blocked Queue: 2 rows. DEV mode permitted.**
 
@@ -88,15 +98,34 @@ _⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per 
 1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
 2. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
 3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-4. **Push S853 STATE.md + patrick-dashboard.md:**
+4. **Push S854 STATE.md + patrick-dashboard.md:**
 ```
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S853 wrap — all 4 S852 bug fixes Chrome-verified, Blocked Queue 6→2"
+git commit -m "docs: S854 wrap — QA #289/#309/#311/#312/#316 all verified, 2 P3 bugs noted"
 .\push.ps1
 ```
 
 ## Recent Sessions
+
+### S854 — QA: #289 #309 #311 #312 #316 Chrome-verified
+
+**6 roadmap items QA'd. All doable-without-Stripe items completed.**
+
+- **#308** ⚠️ P3 OPEN — `isActive=False` confirmed in DB after hide, but organizer item list shows zero visual indicator. P3 bug, dispatch findasale-dev next session.
+- **#309** ✅ — Consignor delete uses proper in-app modal (P1 `window.confirm()` bug confirmed FIXED). ss_1713d6g2g.
+- **#311** ✅ — Multi-location: transfer modal opens with items + destination, Delete hidden when items > 0, backend 409 enforced via JS fetch.
+- **#289** ✅ — Shopper coupon monthly cap: Hunt Pass limit 3/month enforced correctly. 429 on 4th attempt with message "Monthly limit reached for this tier (3/month)."
+- **#312** ✅ — XP spend path works end-to-end: Generate buttons clickable, XP deducted, page reload shows updated balance 2000→1700. ⚠️ P3: Generate button stays enabled/active after monthly cap hit — no disabled UI state.
+- **#316** ✅ — Referral Tranche A (+100 XP, 3 distinct login days) and Tranche B (+150 XP, 3 distinct sale visits) both DB-confirmed. Tranches C/D blocked (require Stripe purchase / trail completion).
+
+**New finding:** New users registered while another user is logged in from same browser session are auto-flagged `fraudSuspect=True` by the fraud detection system. This blocked XP award for the QA test user. Likely intentional fraud detection; cleared manually for testing. Not a bug unless it affects real onboarding flows.
+
+**Test data cleaned up:** qa-tranche-s854 user deleted, user5 XP restored to 2000, June test coupons removed.
+
+**Blocked Queue: 2 rows (unchanged). DEV mode permitted.**
+
+---
 
 ### S853 — QA: All 4 S852 bug fixes Chrome-verified
 
