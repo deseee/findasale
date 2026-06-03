@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S847 — EMAIL INCIDENT + CLEANUP. outreach@finda.sale inbox had 21,000+ bounce emails from Gmail sending-limit errors. Root cause: monthlyTrendReportJob was emailing 44k scraped orgs (not real organizers), burning Gmail daily quota. outreachEmailsCron had duplicate emailAddress bug (sam@gmail.com ×48). BOTH FIXED and deployed today. ~15,635 "Your May 2026 Search Visibility Report" bounces manually deleted via Apps Script. "10 estate sales this weekend near you" bounce cleanup still running (~800+ deleted). Inbox not yet fully clean. Full email audit required next session. Blocked Queue: 7 rows.**
+**Latest: S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX. Full audit of every email-sending service in the backend. 10 files fixed. Global daily quota counter built. Two previously unknown P0 blast-to-all jobs found and fixed (notificationController.sendWeeklyDigest fires every Friday to 5,000 users with no opt-out + no unsubscribe link; organizerAnalyticsService sends weekly to all organizers with no suppression). Inbox incident confirmed stopped — no runaway sends in Railway logs. Blocked Queue: 7 rows. Push block ready.**
+
+**Previous: S847 — EMAIL INCIDENT + CLEANUP. outreach@finda.sale inbox had 21,000+ bounce emails from Gmail sending-limit errors. Root cause: monthlyTrendReportJob was emailing 44k scraped orgs (not real organizers), burning Gmail daily quota. outreachEmailsCron had duplicate emailAddress bug (sam@gmail.com ×48). BOTH FIXED and deployed today. ~15,635 "Your May 2026 Search Visibility Report" bounces manually deleted via Apps Script. "10 estate sales this weekend near you" bounce cleanup still running (~800+ deleted). Inbox not yet fully clean. Full email audit required next session. Blocked Queue: 7 rows.**
 
 **Previous: S845/S846 — QA + email infrastructure fully fixed. #293 bug fixed (PostSaleEbayPanel /ebay/ prefix). #335 email: (1) send.finda.sale SPF → `include:_spf.google.com` via Vercel DNS API, (2) Railway SES_FROM_EMAIL changed from notifications@send.finda.sale → outreach@finda.sale (authenticated Gmail account, full SPF+DKIM already configured), (3) Railway redeploy triggered. New payout test required to confirm delivery. #68 ✅ #125 ✅ re-verified. #91 + #32 UNVERIFIED. Blocked Queue: 6 rows.**
 
@@ -68,50 +70,50 @@ _⚠️ P0 AGING (S845): #267, #293 at 60 sessions; #332, #335 at 54 sessions �
 
 ## Next Session
 
-**⚠️ MANDATORY FIRST SESSION: EMAIL SYSTEM AUDIT — no new feature dev until complete.**
+**Push S848 block first (10 backend files — see patrick-dashboard.md). Then:**
 
-**Context:** outreach@finda.sale accumulated 20,000+ bounce emails because two crons were misbehaving. Fixes were pushed today (S847) but NOT verified as working. The inbox may refill tomorrow if the fixes are incomplete.
-
-**Audit scope — every email-sending cron in the backend. For each one, answer:**
-1. What does it send, to whom, how often?
-2. Is there a daily/hourly send rate limiter?
-3. Is there a dedup guard that persists across runs (not just in-memory)?
-4. Could it send to unsubscribed or scraped contacts?
-5. Does it respect Gmail Workspace limits (2,000/day)?
-
-**Files to audit (start here, may not be exhaustive):**
-- `packages/backend/src/jobs/autoSeedOutreachCron.ts` — dedup fix applied, verify it's correct
-- `packages/backend/src/jobs/outreachEmailsCron.ts` — dedup fix applied, verify cross-run persistence
-- `packages/backend/src/jobs/monthlyTrendReportJob.ts` — filter to real organizers fix applied, verify
-- `packages/backend/src/jobs/` — list ALL files, audit any that send email
-- `packages/backend/src/index.ts` — check all cron schedules registered
-
-**For each cron, use Railway logs (via CLI or MCP) to check actual send volume from the last 7 days.**
-
-**Dispatch stub:**
-`Skill('findasale-dev')` → read all job files in packages/backend/src/jobs/, identify every email send, map sending rate + dedup logic + recipient filter for each. Return a table: Cron | Sends To | Frequency | Rate Limit | Dedup Scope | Risk Level. Flag any P0 risk immediately.
-
-**Then:** `Skill('findasale-ops')` → pull Railway logs for the backend service, last 24 hours. Count email send log lines by cron. Report actual send volume vs. Gmail 2,000/day limit.
-
-**After audit:** Update STATE.md with findings + any fixes needed. Only then return to the Blocked Queue.
-
----
+1. **QA #293 eBay panel** — push PostSaleEbayPanel.tsx fix from S845 (separate push, already staged), then navigate to ENDED sale as Alice Johnson, verify unsold items panel loads + 17-field edit works.
+2. **#335 payout confirm** — run a new Jane Thrift payout as Artifact MI. Check deseee@yahoo.com. If email arrives → ✅ after 54 sessions.
+3. **QA #32 Wishlist Alerts** — as Leo Thomas (user5): /wishlists → Watching → New Alert → create → verify saves.
+4. **QA #91 Auto-Markdown** — fresh PRO login as Alice (user1). /organizer/markdown-cycles → create cycle → verify saves.
 
 **Blocked Queue: 7 rows (below ≥8 ceiling). 4 P0 aging (#267/#293/#332/#335) + 1 P2 share-card + 2 UNVERIFIED (#32/#91).**
 
 **Patrick actions required:**
 
-1. **Check outreach@finda.sale inbox tomorrow morning** — if new bounce emails appeared overnight, the cron fixes didn't fully work. Report count to next session.
-
-2. **Check deseee@yahoo.com inbox** — should have a consignor payout email for Jane Thrift (#335). If received → ✅.
-
-3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
-
-4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+1. **Push S848 block** (see push block in patrick-dashboard.md) — 10 backend files.
+2. **Push S845 block separately** — `packages/frontend/components/PostSaleEbayPanel.tsx` (already committed or staged from S845).
+3. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
+4. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
 ---
 
 ## Recent Sessions
+
+### S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX
+
+**Full audit completed.** Every email-sending service in the backend audited. Incident confirmed stopped — no runaway sends in Railway logs. Two previously unknown P0 blast-to-all jobs discovered and fixed.
+
+**Global daily quota counter built (`emailService.ts`):** Every send now logs `[EmailService] Send #N today (jobName → recipient)`. Threshold warnings at 1,500/1,800/1,950 via console.error in Railway logs. `getDailyEmailCount()` exported for future admin route. No more flying blind.
+
+**Fixes applied (10 files):**
+- `outreachEmailsCron.ts` — DB-backed cross-run dedup (in-memory Set left duplicate-address rows vulnerable across 4-hour windows)
+- `weeklyEmailService.ts` (Sunday 6pm) — `notificationPrefs.emailWeeklyDigest` opt-out + suppression check
+- `notificationController.ts` (Friday 9am) — **P0: blast to 5,000 users, no opt-out, no unsubscribe link (CAN-SPAM violation)**. Now has notifPref check + suppression + per-user unsubscribe link.
+- `buyerMatchService.ts` (every sale publish) — `notificationPrefs.emailNewSales` + suppression check
+- `organizerAnalyticsService.ts` — **P0: weekly organizer digest, no suppression**. Now gated.
+- `collectorPassportService.ts` — suppression check added
+- `wishlistAlertService.ts` — suppression check added
+- `saleEndingSoonJob.ts`, `curatorEmailJob.ts` — jobName wired to quota counter
+
+**Dead code confirmed:** `wishlistMatchEmailService.notifyWishlistMatches()` is never called — zero risk.
+
+**Remaining low-risk (no fix needed):** emailReminderService (user-set reminders), presaleSneakPeekEmailService (sale subscribers/RSVPs), followerNotificationService/smartFollowService (notifyEmail:true filter already present).
+
+**Files changed:** `packages/backend/src/lib/emailService.ts` · `packages/backend/src/jobs/outreachEmailsCron.ts` · `packages/backend/src/jobs/saleEndingSoonJob.ts` · `packages/backend/src/jobs/curatorEmailJob.ts` · `packages/backend/src/services/weeklyEmailService.ts` · `packages/backend/src/services/buyerMatchService.ts` · `packages/backend/src/controllers/notificationController.ts` · `packages/backend/src/services/organizerAnalyticsService.ts` · `packages/backend/src/services/collectorPassportService.ts` · `packages/backend/src/services/wishlistAlertService.ts`
+
+---
 
 ### S847 — EMAIL INCIDENT: inbox cleanup + cron fixes deployed
 

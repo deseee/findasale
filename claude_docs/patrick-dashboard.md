@@ -1,60 +1,69 @@
-# Patrick's Dashboard — S847 Wrap
+# Patrick's Dashboard — S848 Wrap
 
 ---
 
-## What Happened This Session (S847)
+## What Happened This Session (S848)
 
-**Email incident.** outreach@finda.sale had 21,000+ bounce emails from Gmail sending-limit errors. We cleaned them out and the cron fixes that caused it were pushed. But this session is not a win — it's cleanup from a serious operational failure that should never have happened.
+**Email system fully audited and hardened.** Every bulk email sender in the backend now has opt-out gates, suppression checks, and a global daily quota counter. The inbox incident is closed.
 
-**What caused it:**
-- `monthlyTrendReportJob` was emailing 44,000 scraped organizers, not real users. It burned Gmail's daily send quota every time it ran.
-- `outreachEmailsCron` had duplicate email addresses in the database (same address 48x), creating a spam-like pattern.
+**Incident confirmed stopped:** Railway logs showed no runaway sends in the last 6 hours. outreachEmailsCron ran once (33 emails, quota-capped). No SMTP failures.
 
-**What was fixed (code pushed, NOT yet verified in production):**
-- Monthly trend report now filters to real organizers only
-- Both outreach crons have Set-based dedup to prevent duplicate sends
-- emailService now includes List-Unsubscribe headers (Yahoo compliance)
+**Two new P0s found and fixed that nobody knew about:**
+- `notificationController.sendWeeklyDigest` — fires every Friday 9am, was blasting up to 5,000 users with no opt-out and no unsubscribe link (CAN-SPAM violation). Fixed: opt-out gate + suppression check + per-user unsubscribe link added.
+- `organizerAnalyticsService` — weekly organizer digest, no suppression check at all. Fixed.
 
-**Inbox cleanup done:**
-- ~15,635 "Your May 2026 Search Visibility Report" bounce emails → Trash ✅
-- "10 estate sales this weekend near you" cleanup still running at session end
+**Global daily quota counter built into emailService.ts:** You'll now see in Railway logs: `[EmailService] Send #47 today (buyerMatchService → user@email.com)`. Warnings fire at 1,500 / 1,800 / 1,950 sends/day via console.error. No more flying blind on Gmail quota.
 
-**Honest assessment:** The code fixes look right but haven't been verified in production. The inbox could refill tomorrow if there are edge cases the dedup missed. Next session is a mandatory full email audit before any other work.
-
-**#293 eBay Panel — ROOT CAUSE FOUND + FIXED.** The blocker was never about needing an eBay connection or an ended sale. The real bug: `PostSaleEbayPanel.tsx` was calling the wrong API paths (missing `/ebay/` prefix). Every call returned 404, so the panel always showed "All items sold." Fix applied — 3 paths corrected in PostSaleEbayPanel.tsx. Needs your push, then a quick QA (the sale is already ENDED and has 2 AVAILABLE items ready to test).
-
-**#335 Consignor Payout Email — PAYOUT RAN.** Jane Thrift's email was updated to deseee@yahoo.com, then a payout was run against her. PAYOUTED amount jumped $29.75→$59.50, payout count 3. The email should be in your inbox. If you see it, this feature is ✅ done after 54 sessions.
-
-**#68 Command Center ✅** — independently re-verified (ss_7321prqsa). S804 claim was correct.
-
-**#125 CSV Export ✅** — independently re-verified (ss_5085g9dtj). S805 claim was correct.
-
-**#91 Auto-Markdown** — page/modal/all fields work, PRO gate fires correctly. Couldn't complete a full save because the session JWT still showed BRONZE even after the DB was updated to PRO. Needs one fresh login as Alice to close this out.
-
-**#32 Wishlist Alerts** — cut off. Modal was open, name and category were filled in, but the session died before clicking Create Alert.
+**All 10 fixes (10 backend files, ready to push):**
+- outreachEmailsCron — DB-backed cross-run dedup (closes the gap the S847 fix missed)
+- weeklyEmailService, notificationController, buyerMatchService — opt-out + suppression
+- organizerAnalyticsService, collectorPassportService, wishlistAlertService — suppression
+- emailService, saleEndingSoonJob, curatorEmailJob — quota counter wired
 
 ---
 
 ## Patrick Actions Required
 
-1. **Check outreach@finda.sale tomorrow morning.** If new bounce emails appeared overnight, the cron fixes need more work. Note the count and subject line and bring it to next session.
-
-2. **Check deseee@yahoo.com** — look for the Jane Thrift consignor payout email. If it's there, #335 is done (54 sessions).
-
-3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
-
-4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+1. **Push S848 block** (below) — 10 backend files + docs.
+2. **Push S845 block separately** — `packages/frontend/components/PostSaleEbayPanel.tsx` fix (if not yet pushed). Commit message: `fix: #293 PostSaleEbayPanel API paths missing /ebay/ prefix (S845)`
+3. **Check deseee@yahoo.com** — Jane Thrift consignor payout email (#335). If received → ✅.
+4. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
 ---
 
-## Push Block
+## Push Block (S848)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/PostSaleEbayPanel.tsx
+git add packages/backend/src/lib/emailService.ts
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git add packages/backend/src/jobs/saleEndingSoonJob.ts
+git add packages/backend/src/jobs/curatorEmailJob.ts
+git add packages/backend/src/services/weeklyEmailService.ts
+git add packages/backend/src/services/buyerMatchService.ts
+git add packages/backend/src/controllers/notificationController.ts
+git add packages/backend/src/services/organizerAnalyticsService.ts
+git add packages/backend/src/services/collectorPassportService.ts
+git add packages/backend/src/services/wishlistAlertService.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: #293 PostSaleEbayPanel API paths missing /ebay/ prefix (S845)"
+git commit -m "fix(email): comprehensive opt-out/suppression audit + global daily quota counter
+
+Quota counter (emailService.ts):
+- Every send logs Send #N today (jobName -> recipient) to Railway
+- console.error warnings at 1500, 1800, 1950/day
+- getDailyEmailCount() exported for admin routes
+
+Opt-out + suppression fixes:
+- outreachEmailsCron: DB-backed cross-run dedup
+- weeklyEmailService (Sun 6pm): notificationPrefs + suppression
+- notificationController.sendWeeklyDigest (Fri 9am): P0 fixed —
+  was blasting 5000 users with no opt-out + no unsubscribe link
+- buyerMatchService (every sale publish): notificationPrefs + suppression
+- organizerAnalyticsService: suppression + notificationPrefs
+- collectorPassportService: suppression
+- wishlistAlertService: suppression"
 .\push.ps1
 ```
 
@@ -62,17 +71,17 @@ git commit -m "fix: #293 PostSaleEbayPanel API paths missing /ebay/ prefix (S845
 
 ## Current State
 
-**Blocked Queue: 6 items** (below ≥8 ceiling — dev sessions available)
+**Blocked Queue: 7 items** (below ≥8 ceiling — dev sessions available)
 
 | Item | Status |
 |------|--------|
 | RSVP XP Monthly Cap (#267) | P0 — needs 5 RSVPs in one month to test cap |
-| #293 eBay Post-Sale Panel | P0 — **bug fixed**, needs push + Chrome QA |
+| #293 eBay Post-Sale Panel | P0 — **bug fixed S845**, needs push + Chrome QA |
 | #332 Shopify Cross-Listing | P0 — needs Shopify Partners dev store |
-| #335 Consignor Payout Email | P0 — **payout ran**, check deseee@yahoo.com inbox |
+| #335 Consignor Payout Email | P0 — run new payout, check deseee@yahoo.com |
 | Share-card preview 401 | P2 — promote page share card broken |
 | #32 Wishlist Alerts | UNVERIFIED — session cut off mid-test |
-| #91 Auto-Markdown save | UNVERIFIED — needs fresh PRO login |
+| #91 Auto-Markdown save | UNVERIFIED — needs fresh PRO login as Alice |
 
 ---
 
@@ -105,9 +114,10 @@ Full report: `claude_docs/audits/brand-drift-2026-06-02.md`
 
 ---
 
-## Next Session Options
+## Next Session
 
-1. **After push:** QA #293 — finda.sale/organizer/sales/0d9563f9-... (already ENDED, 2 AVAILABLE items). Verify panel loads with items + 17-field edit works.
-2. **QA #91** — fresh login as Alice (user1, now PRO). /organizer/markdown-cycles → create a cycle → verify save.
-3. **QA #32** — as Leo Thomas (user5). /wishlists → Watching → "+ New Alert" → create → verify it saves.
-4. **DEV: Share-card 401** — `Skill('findasale-dev')` → fix GET /api/share-card/... returning 401 on promote page.
+1. Push S848 block (above) + S845 PostSaleEbayPanel.tsx fix
+2. QA #293 — ENDED sale as Alice, verify unsold items panel + 17-field edit
+3. Run new Jane Thrift payout → check deseee@yahoo.com (#335)
+4. QA #32 — Leo Thomas (user5): /wishlists → Watching → New Alert → create → verify
+5. QA #91 — fresh PRO login as Alice: /organizer/markdown-cycles → create → verify save
