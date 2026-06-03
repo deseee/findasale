@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S858 — QA+DEV: Flash Deal dropdown FIXED (AVAILABLE filter). Records: #159 Chr ✅ applied to roadmap + Pending Chrome Verifications trimmed. QA: #398 ✅ (organizer referral link + Copy Link + stats — ss_4915xx0kl). #259 ✅ (1.5x XP confirmed, Hunt Pass page — ss_7973nmk5n). #290 ✅ (/coupons 3-tier $ + XP display — ss_32554r03n). #158 ✅ ("Notify me of new items" + "Remind Me by Email" visible — ss_4902k1y46). 3 new P3 notes. Blocked Queue: 6 rows (Flash Deal dropdown cleared).**
+**Latest: S859 — QA+Records: #255 ✅ Chrome-verified (RANK_UP notification). Records: S858 Chrome marks applied to roadmap (#158/#398/#259/#290 Human QA ✅). QA: #255 ✅ — Bob Smith (user2) RSVP to sale, XP 498→500, rank INITIATE→SCOUT, "You've reached SCOUT!" visible under TODAY section (ss_7469boc64). #230 UNVERIFIED (no published sale on any real test organizer). P2 BUG: notifications page "Today" group sorts to BOTTOM — `|| 999` treats 0 as falsy; fix: `?? 999`. Blocked Queue: 8 rows.**
+
+**Previous: S858 — QA+DEV: Flash Deal dropdown FIXED (AVAILABLE filter). Records: #159 Chr ✅ applied to roadmap + Pending Chrome Verifications trimmed. QA: #398 ✅ (organizer referral link + Copy Link + stats — ss_4915xx0kl). #259 ✅ (1.5x XP confirmed, Hunt Pass page — ss_7973nmk5n). #290 ✅ (/coupons 3-tier $ + XP display — ss_32554r03n). #158 ✅ ("Notify me of new items" + "Remind Me by Email" visible — ss_4902k1y46). 3 new P3 notes. Blocked Queue: 6 rows (Flash Deal dropdown cleared).**
 
 **Previous: S857 — HEALTH/OPS: Daily CI + Sentry audit. Backend Sentry cleared from 10+ unresolved → 0. All issues were historical (pre-May-30 slow queries fixed by migrations, GarageSaleFinder 0-results from old code already removed, CORS api.finda.sale fix deployed S779/S780). VACUUM ANALYZE run on Organizer + DirectoryClaimEmail + Sale tables (June 2 migration required it). GarageSaleFinder scraper confirmed working (Chicago 169 links, GR 20 links). No code changes.**
 
@@ -57,17 +59,19 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per CLAUDE.md §10a. S853: 4 P2/P3 bugs (S851 queue) Chrome-verified and cleared._
+_⚠️ P0 AGING: #332 at 68 sessions; #335 at 68 sessions — mandatory P0 per CLAUDE.md §10a._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #332 Shopify Cross-Listing | **P0 (58 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (58 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅ after 58 sessions. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
-| Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated — need product decision on whether cash dual-rail was intentionally removed. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
-| Email Verification Migration | **P0 (132 sessions, age-escalated 2026-06-03)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S854. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
-| Production DB Re-Seed | **P0 (67 sessions, age-escalated 2026-06-03)** — Seedy2025! rejected for shopper accounts user5–user12+ since S576. Shopper Chrome QA requiring login blocked. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma db seed (back up sale cmpbvumj90001e7t7v5sa1iqi first) | S787 |
-| eBay Connection for user1 | **P0 (69 sessions, age-escalated 2026-06-03)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
-| Bing Webmaster Sitemap | **P0 (71 sessions, age-escalated 2026-06-03)** — Bing/DuckDuckGo not receiving sitemap pings. SEO gap. | Patrick: bing.com/webmasters → Add sitemap → finda.sale/server-sitemap.xml | S783 |
+| #332 Shopify Cross-Listing | **P0 (68 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
+| #335 Consignor Payout Email | **P0 (68 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
+| Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
+| Email Verification Migration | **P0 (133 sessions, age-escalated 2026-06-03)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S859. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
+| Production DB Re-Seed | **P0 (72 sessions, age-escalated 2026-06-03)** — Seedy2025! rejected for shopper accounts user5–user12+ since S576. Shopper Chrome QA requiring login blocked. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma db seed (back up sale cmpbvumj90001e7t7v5sa1iqi first) | S787 |
+| eBay Connection for user1 | **P0 (74 sessions, age-escalated 2026-06-03)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
+| Bing Webmaster Sitemap | **P0 (76 sessions, age-escalated 2026-06-03)** — Bing/DuckDuckGo not receiving sitemap pings. SEO gap. | Patrick: bing.com/webmasters → Add sitemap → finda.sale/server-sitemap.xml | S783 |
+| Notifications sort P2 bug | **P2** — /notifications "Today" group renders at BOTTOM instead of top. Root cause: `order['Today'] \|\| 999` treats 0 as falsy → Today gets rank 999. Fix: `?? 999` in notifications.tsx sort comparator (line ~322). | `Skill('findasale-dev')` → fix `|| 999` → `?? 999` in groupedNotifications sort in notifications.tsx | S859 |
+| #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending but blocked: no published sale on any real test organizer account (user1 has none, Artifact MI has none, all published sales are scraper accounts). | Patrick: publish a sale on user1 account, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 
 ---
 
@@ -75,46 +79,61 @@ _⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per 
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| 255 | Rank-Up Notifications | /notifications as Bob Smith (user2). RSVP to sale → XP 498→500, rank INITIATE→SCOUT (DB confirmed). "You've reached SCOUT!" notification visible under TODAY section, 7m ago. ss_7469boc64. ⚠️ P2: Today group renders at page BOTTOM (sort bug — || vs ??). | S859 |
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
-| 398 | Organizer Referral Loop | finda.sale/organizer/referrals as Alice Johnson. Referral link REF-7CD8DCC0 displays. Copy Link → "Copied!" toast confirmed. Stats: 1 Organizer Referred, 0 XP Earned. 3-step explainer renders. ss_4915xx0kl. ⚠️ P3: Step 3 copy omits XP component. | S858 |
-| 259 | Hunt Pass Page Accuracy (1.5x) | finda.sale/shopper/hunt-pass as Alice Johnson. "1.5x XP on Everything" confirmed (not 2x). ss_7973nmk5n. XP Earning Matrix + "6 hours early" flash deal copy not on page — removed since S530 (intentional UX simplification). | S858 |
-| 290 | Hunt Pass Dual-Rail + Coupon Tiers | finda.sale/coupons as Alice Johnson. 3 coupon tiers show $ value + XP cost. Standard: $0.75 / 100 XP, Deluxe: $2.00 / 200 XP, Premium: $5.00 / 500 XP. ss_32554r03n. ⚠️ P3: Rarity Boost 50 XP only (no cash option; spec said 15 XP / $0.15). | S858 |
-| 158 | Sale Waitlist | finda.sale/sales/cmpxl4jii017xsot00wwosx1x as Alice Johnson. "Remind Me by Email" bell + "Notify me of new items" both visible on published sale page. ss_4902k1y46. | S858 |
 
 ---
 
 ## Next Session
 
-**S858 done. Blocked Queue: 6 rows. DEV mode permitted (< 8).**
+**S859 done. Blocked Queue: 8 rows — QA MODE next session (≥8 items).**
 
-1. **Records: Apply S858 Chrome marks to roadmap** — #398, #259, #290, #158 all in Pending Chrome Verifications with full evidence. `Skill('findasale-records')` at session start.
-2. **#317/#320** — Still UNVERIFIED. Defer.
-3. **#335 payout** — Patrick check deseee@yahoo.com.
-4. **#332 Shopify** — Blocked on dev store.
-5. **5 P0 Patrick-action items** in Blocked Queue: Email Verification Migration, DB Re-Seed, eBay Connection, Bing Sitemap, Rarity Boost spec confirm.
-6. **QA targets available** (no Stripe/GPS required): #230 Smart Buyer Widget (needs active/published sale on user1), #255 Rank-Up Notifications.
+Priority:
+1. **Records: Apply S859 Chrome mark to roadmap** — #255 in Pending Chrome Verifications with full evidence. `Skill('findasale-records')` at session start.
+2. **Fix notifications sort P2 bug** — `Skill('findasale-dev')` → `notifications.tsx` line ~322: `order[a[0]] || 999` → `order[a[0]] ?? 999`. Same for b. 0-line schema change.
+3. **#317/#320** — Still UNVERIFIED. Defer.
+4. **#335 payout** — Patrick check deseee@yahoo.com.
+5. **6 P0 Patrick-action items** in Blocked Queue.
 
-**Blocked Queue: 6 rows. DEV mode permitted.**
+**Blocked Queue: 8 rows. QA MODE — no new feature dev without Patrick sign-off.**
 
 **Patrick actions required:**
 
 1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
-2. **Confirm Rarity Boost intent** — /coupons shows Rarity Boost at 50 XP, no cash option. Was the $0.15 cash dual-rail intentionally removed? Say yes or no.
+2. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail?
 3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
 4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-5. **Push S858 fixes + docs:**
+5. **Push S859 docs:**
 ```
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/organizer/print-kit/[saleId].tsx
-git add packages/backend/src/controllers/printKitController.ts
-git commit -m "fix: Flash Deal dropdown AVAILABLE filter; #27b print-kit watermark gate; docs: S858 wrap + roadmap #159 Chr"
+git commit -m "docs: S859 QA wrap — #255 Chr verified, notifications sort P2 bug flagged, roadmap #158/#398/#259/#290 Human QA applied"
 .\push.ps1
 ```
 
 ## Recent Sessions
+
+### S859 — QA+Records: #255 Chrome-verified + notifications sort P2 bug found
+
+**Records:**
+- `claude_docs/strategy/roadmap.md`: #158 Human QA ⬜→✅ S858, #398 Claude QA ⬜→✅ S858, #259 Human QA ⬜→✅ S858, #290 Human QA ⬜→✅ S858. All applied via Python.
+- `claude_docs/STATE.md`: PCV trimmed from 5→1 row (4 S858 rows graduated to roadmap).
+
+**QA #255 Rank-Up Notifications ✅:**
+- DB: Bob Smith (user2) XP set to 498, rank INITIATE.
+- Navigated to /sales/cmpaujbx701r7wh48ssciws0z as Bob. Clicked "Going (0)" RSVP button → "✓ You're going (1)" confirmed.
+- DB post-RSVP: guildXp=500, explorerRank=SCOUT. RANK_UP + RSVP_CONFIRMED notifications created.
+- /notifications page: scrolled to bottom → TODAY section visible with "You've reached SCOUT! — Congratulations! You've advanced to SCOUT rank. Keep hunting!" (7m ago). ss_7469boc64.
+- ⚠️ P2 BUG: Today group renders at BOTTOM of notification list (below This Week, Older). Root cause: `order['Today'] || 999` — `|| 999` treats 0 as falsy. Fix: `?? 999`. Dispatch findasale-dev.
+
+**QA #230 Smart Buyer Widget: UNVERIFIED** — no published sale on any real test organizer (user1 has none, Artifact MI has none, all 10 published sales are scraper accounts).
+
+**Test data cleaned:** Bob XP reset to 157/INITIATE, RSVP deleted, test notifications deleted.
+
+**Blocked Queue: 6→8 rows** (notifications sort P2 bug + #230 Human QA blocker added).
+
+---
 
 ### S858 — QA+DEV: Flash Deal dropdown fixed + 4 features Chrome-verified
 
@@ -230,4 +249,4 @@ git commit -m "fix: Flash Deal dropdown AVAILABLE filter; #27b print-kit waterma
 - Bug 3 (P2): `/unsubscribe` no-token spinner fixed — `router.isReady` guard + else branch shows "Invalid unsubscribe link" error state.
 - Bug 4 (P3): `ItemPhotoManager.tsx` em dash literal (`\u2014`) → actual em dash (`—`) in Photos empty state.
 
-**QA attempts:** #320 Async eBay Comp: DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden per D-005). Chrome UNVERIFIED — CSRF blocks raw fetch, React controlled-input 
+**QA attempts:** #320 Async eBay Comp: DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden per D-005). Chrome UNVERIFIED — CSRF blocks raw fetch, React controlled-input                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
