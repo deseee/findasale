@@ -112,7 +112,7 @@ const CouponsPage = () => {
     queryKey: ['coupons'],
     queryFn: async () => {
       const res = await api.get('/coupons');
-      return res.data as { coupons: Coupon[] };
+      return res.data as { coupons: Coupon[]; monthlyUsageByTier: Record<string, number> };
     },
     enabled: !!user,
   });
@@ -184,6 +184,7 @@ const CouponsPage = () => {
   };
 
   const coupons = couponsData?.coupons ?? [];
+  const monthlyUsageByTier = couponsData?.monthlyUsageByTier ?? {};
   const spendableXp = xpProfile?.spendableXp ?? 0;
   // Use API-sourced huntPassActive from xpProfile (freshly computed from huntPassExpiry) to prevent stale JWT data
   const huntPassActive = xpProfile?.huntPassActive ?? false;
@@ -285,7 +286,9 @@ const CouponsPage = () => {
                   {(Object.entries(SHOPPER_TIERS_BASE) as [ShopperTier, typeof SHOPPER_TIERS_BASE[ShopperTier]][]).map(
                     ([tier, tierData]) => {
                       const monthlyLimit = huntPassActive ? tierData.monthlyLimitHuntPass : tierData.monthlyLimitStandard;
-                      const canGenerate = spendableXp >= tierData.cost && !shopperGenerateMutation.isPending;
+                      const usedThisMonth = monthlyUsageByTier[tier] ?? 0;
+                      const atCap = usedThisMonth >= monthlyLimit;
+                      const canGenerate = spendableXp >= tierData.cost && !shopperGenerateMutation.isPending && !atCap;
                       return (
                         <div
                           key={tier}
@@ -319,12 +322,17 @@ const CouponsPage = () => {
                             </p>
                           </div>
 
+                          {atCap && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                              {usedThisMonth}/{monthlyLimit} used this month
+                            </p>
+                          )}
                           <button
                             onClick={() => shopperGenerateMutation.mutate(tier)}
                             disabled={!canGenerate}
                             className="mt-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
                           >
-                            {shopperGenerateMutation.isPending ? 'Generating…' : `Generate (${tierData.cost} XP)`}
+                            {shopperGenerateMutation.isPending ? 'Generating…' : atCap ? `Cap reached (${usedThisMonth}/${monthlyLimit})` : `Generate (${tierData.cost} XP)`}
                           </button>
                         </div>
                       );
