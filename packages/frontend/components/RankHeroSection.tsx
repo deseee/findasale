@@ -8,7 +8,6 @@ interface RankHeroSectionProps {
   rank: ExplorerRank;
   guildXp: number;
   xpToNext: number;
-  xpPercent: number;
   userName?: string;
   xpToNextRank?: number; // Amount of XP needed to reach next rank
 }
@@ -129,7 +128,6 @@ export const RankHeroSection: React.FC<RankHeroSectionProps> = ({
   rank,
   guildXp,
   xpToNext,
-  xpPercent,
   userName = 'Explorer',
   xpToNextRank = 0,
 }) => {

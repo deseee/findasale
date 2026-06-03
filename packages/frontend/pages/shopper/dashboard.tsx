@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import Link from 'next/link';
 import api from '../../lib/api';
@@ -126,6 +126,7 @@ const ShopperDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'overview' | 'subscribed' | 'pickups' | 'brands'>('overview');
   const [isHuntPassDismissed, setIsHuntPassDismissed] = useState(false);
   const [isReferralDismissed, setIsReferralDismissed] = useState(false);
@@ -317,56 +318,6 @@ const ShopperDashboard = () => {
     GRANDMASTER: 12000,
   };
 
-  const getRankCopy = (rank: ExplorerRank, xp: number, nextRank: ExplorerRank | null) => {
-    const threshold = RANK_THRESHOLDS[rank];
-    const xpUntilNext = Math.max(0, threshold - xp);
-
-    const configs: Record<ExplorerRank, any> = {
-      INITIATE: {
-        progressLabel: `${xp} / 500 XP`,
-        untilNextRank: `${xpUntilNext} more XP until Scout`,
-        earnTip: 'Scan an item (+10 XP each)',
-        tipDetail: 'You can scan items from any sale on your phone.',
-        ctaText: 'Browse Sales',
-        ctaHref: '/',
-      },
-      SCOUT: {
-        progressLabel: `${xp} / 1200 XP`,
-        untilNextRank: `${xpUntilNext} more XP until Ranger`,
-        earnTip: 'Make a purchase (+25 XP each)',
-        tipDetail: "You're unlocking more perks — keep going.",
-        ctaText: 'View Your Sales',
-        ctaHref: '/sales',
-      },
-      RANGER: {
-        progressLabel: `${xp} / 5000 XP`,
-        untilNextRank: `${xpUntilNext} more XP until Sage`,
-        earnTip: 'Check in to sales daily (+2 XP each, once per sale)',
-        tipDetail: "Daily visits build your streak. You're close to Sage perks.",
-        ctaText: 'See Sales Near You',
-        ctaHref: '/map',
-      },
-      SAGE: {
-        progressLabel: `${xp} / 12000 XP`,
-        untilNextRank: `${xpUntilNext} more XP until Grandmaster — the ultimate explorer rank`,
-        earnTip: 'Keep your streak going',
-        tipDetail: 'You unlock 6h Legendary-first access at Grandmaster.',
-        ctaText: 'View Exclusive Hunt Pass Benefits',
-        ctaHref: '/shopper/hunt-pass',
-      },
-      GRANDMASTER: {
-        progressLabel: `${xp} / ∞`,
-        untilNextRank: "You've reached the peak of the Explorer's Guild.",
-        earnTip: 'You earn XP infinitely',
-        tipDetail: 'You get first access to all Legendary items. Your rank badge appears on your public profile.',
-        ctaText: 'View Your Public Profile',
-        ctaHref: '/profile',
-      },
-    };
-
-    return configs[rank];
-  };
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
@@ -384,7 +335,6 @@ const ShopperDashboard = () => {
 
   // Determine shopper state: new (0 purchases) vs. returning (has purchases or saves)
   const isNewShopper = !purchases || purchases.length === 0;
-  const hasSavedItems = false; // TODO (post-launch): wire to collection API when available
 
   return (
     <>
@@ -457,22 +407,32 @@ const ShopperDashboard = () => {
 
           {/* 1. Rank/XP Hero Card */}
           <div className="mb-8">
-            {xpProfile && !xpLoading ? (
+            {xpLoading ? (
+              <Skeleton className="h-64" />
+            ) : xpProfile ? (
               <RankHeroSection
                 rank={xpProfile.explorerRank}
                 guildXp={xpProfile.guildXp}
                 xpToNext={NEXT_RANK_THRESHOLDS[xpProfile.explorerRank]}
-                xpPercent={(xpProfile.rankProgress.currentXp / NEXT_RANK_THRESHOLDS[xpProfile.explorerRank]) * 100}
                 userName={user?.firstName || user?.name || 'Explorer'}
               />
             ) : (
-              <Skeleton className="h-64" />
+              <div className="h-64 rounded-lg border border-warm-200 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-gray-800">
+                <p className="text-warm-500 dark:text-gray-400 text-sm">Couldn't load your rank — refresh to try again.</p>
+              </div>
             )}
           </div>
 
           {/* 1a. QR expanded panel (immediately below RankHeroSection, only when qrOpen === true) */}
           {shopperQRCodeDataUrl && qrOpen && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8 w-full">
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8 w-full">
+              <button
+                onClick={() => setQrOpen(false)}
+                className="absolute top-3 right-3 text-warm-400 dark:text-gray-500 hover:text-warm-600 dark:hover:text-gray-300 transition-colors"
+                aria-label="Hide QR code panel"
+              >
+                ×
+              </button>
               <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
                 Show this to the organizer at checkout to instantly load your active holds and cart items.
               </p>
@@ -568,7 +528,7 @@ const ShopperDashboard = () => {
           )}
 
           {/* Tabs */}
-          <div className="flex gap-2 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
+          <div role="tablist" className="flex gap-2 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'subscribed', label: 'Subscribed' },
@@ -577,6 +537,8 @@ const ShopperDashboard = () => {
             ].map((tab) => (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => {
                   setActiveTab(tab.id as any);
                   router.push(`#${tab.id}`);
@@ -616,12 +578,12 @@ const ShopperDashboard = () => {
                         expiresAt={invoice.expiresAt}
                         organizerName={invoice.organizerName}
                         onPaymentSuccess={() => {
-                          // Refetch invoices after payment
-                          window.location.reload();
+                          queryClient.invalidateQueries({ queryKey: ['pending-invoices'] });
+                          queryClient.invalidateQueries({ queryKey: ['shopper-holds'] });
                         }}
                         onReleaseHold={() => {
-                          // Refetch invoices after releasing hold
-                          window.location.reload();
+                          queryClient.invalidateQueries({ queryKey: ['pending-invoices'] });
+                          queryClient.invalidateQueries({ queryKey: ['shopper-holds'] });
                         }}
                       />
                     ))}
