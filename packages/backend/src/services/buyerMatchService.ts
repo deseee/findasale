@@ -5,6 +5,7 @@
 import { prisma } from '../lib/prisma';
 import { createNotification } from './notificationService';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -15,6 +16,7 @@ interface MatchedBuyer {
   name: string;
   score: number;
   matchReasons: string[];
+  notificationPrefs: Record<string, unknown> | null;
 }
 
 interface ScoredUser {
@@ -138,7 +140,7 @@ export async function getMatchedBuyersForSale(saleId: string): Promise<MatchedBu
     // Get all active shoppers (users with role USER)
     const shoppers = await prisma.user.findMany({
       where: { role: 'USER' },
-      select: { id: true, email: true, name: true, categoryInterests: true },
+      select: { id: true, email: true, name: true, categoryInterests: true, notificationPrefs: true },
     });
 
     const matched: MatchedBuyer[] = [];
@@ -184,6 +186,7 @@ export async function getMatchedBuyersForSale(saleId: string): Promise<MatchedBu
           name: shopper.name,
           score,
           matchReasons,
+          notificationPrefs: (shopper.notificationPrefs as Record<string, unknown> | null) ?? null,
         });
       }
     }
@@ -335,6 +338,21 @@ export async function notifyMatchedBuyers(saleId: string): Promise<void> {
 
     for (const buyer of matched) {
       try {
+        // Opt-out check: notificationPrefs.emailNewSales === false means explicit opt-out.
+        // null/undefined/true all mean opted-in (conservative default — same as weeklyEmailService).
+        const prefs = buyer.notificationPrefs ?? {};
+        if (prefs['emailNewSales'] === false) {
+          console.log(`[buyerMatch] Skipped ${buyer.email} — opted out of new sale notifications`);
+          continue;
+        }
+
+        // Suppression check: covers hard bounces, soft bounces, complaints, and manual opt-outs.
+        const suppressed = await suppressionService.isSuppressed(buyer.email);
+        if (suppressed) {
+          console.log(`[buyerMatch] Skipped ${buyer.email} — suppressed (bounce/complaint/opt-out)`);
+          continue;
+        }
+
         const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
         const unsubToken = await generateUnsubscribeToken(buyer.userId, 'newSales');
         const html = buildMatchNotificationHtml(buyer.name || 'Shopper', sale, topCategories, unsubToken);
