@@ -313,16 +313,18 @@ export const getYardSignKit = async (req: AuthRequest, res: Response) => {
         align: 'center',
       });
 
-    // Footer
-    doc
-      .fontSize(10)
-      .fillColor('#888888')
-      .text('Scan to browse & buy online  •  finda.sale', PAGE_MARGIN, doc.y + 10, {
-        width: PAGE_W - PAGE_MARGIN * 2,
-        align: 'center',
-      });
+    // Footer — omit finda.sale branding for TEAMS orgs with watermark removal enabled
+    if (!canRemoveWatermark(sale.organizer)) {
+      doc
+        .fontSize(10)
+        .fillColor('#888888')
+        .text('Scan to browse & buy online  •  finda.sale', PAGE_MARGIN, doc.y + 10, {
+          width: PAGE_W - PAGE_MARGIN * 2,
+          align: 'center',
+        });
+    }
 
-    // Add watermark footer if organizer cannot remove it
+    // Add secondary watermark footer if organizer cannot remove it
     if (!canRemoveWatermark(sale.organizer)) {
       doc
         .fontSize(8)

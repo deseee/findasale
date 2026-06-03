@@ -1,10 +1,10 @@
-# Patrick's Dashboard — S855 Wrap
+# Patrick's Dashboard — S856 Wrap
 
 ---
 
-## What Happened This Session (S855)
+## What Happened This Session (S856)
 
-**Records updated (S854 Chrome marks to roadmap). 2 P3 bugs fixed. QA found 1 new P2 bug (#27b watermark removal broken in print kit). Blocked Queue: 7 rows — still under ceiling.**
+**#27b watermark removal FIXED in print kit (frontend preview + backend PDF). #159 Flash Deals ✅ Chrome-verified — dark mode correct, countdown banner confirmed. New P3: Flash Deal form shows SOLD items in dropdown. Blocked Queue: 7 rows — DEV mode permitted.**
 
 ---
 
@@ -12,18 +12,23 @@
 
 | # | Feature | Result | Notes |
 |---|---------|--------|-------|
-| #308 | Hidden Item Badge | ✅ FIXED | Organizer item list now shows grey "Hidden" pill next to status when item.isActive=false |
-| #312/#289 | Coupon Generate Button Cap | ✅ FIXED | Button now disabled + shows "Cap reached (X/X)" when monthly limit hit. Helper text "X/X used this month" appears above button. |
+| #27b | Watermark Removal (Print Kit) | ✅ FIXED | Frontend yard sign preview + printQRPage popups now respect TEAMS "Remove watermark" toggle. Backend PDF primary footer ("Scan to browse & buy online • finda.sale") also gated. |
 
-## New P2 Bug Found
+## Features Verified This Session
 
-**#27b Watermark Removal (Print Kit)** — As a TEAMS user, enabling "Remove FindA.Sale watermark from exports" saves correctly (green toast) but the print kit yard sign template still renders "finda.sale" / "FindA.Sale" branding. The setting is not wired to the print kit renderer. Needs dev fix.
+| # | Feature | Result | Evidence |
+|---|---------|--------|---------|
+| #159 | Flash Deals dark mode | ✅ VERIFIED | Form: dark navy bg, no white/light (P2 fixed). Banner: "⚡ Flash Deal — 25% off! Old Radio for next 1h 56m" confirmed on sale page. ss_2417corir |
+
+## New P3 Bug Found
+
+**Flash Deal SOLD items in dropdown** — The Flash Deal item selector shows SOLD items alongside available ones. If you create a deal on a sold item it writes to the DB but the banner won't appear (sold items are filtered from the public inventory). Fix: filter the dropdown to `AVAILABLE` items only.
 
 ---
 
 ## Blocked Queue Status
 
-**7 rows (1 new P2 added):**
+**7 rows (P2 #27b cleared, replaced with new P3):**
 
 | # | Item | Priority | Action |
 |---|------|----------|--------|
@@ -33,7 +38,7 @@
 | Production DB Re-Seed | P0 aging | **Patrick: run db seed** |
 | eBay Connection (user1) | P0 aging | **Patrick: connect eBay in settings** |
 | Bing Webmaster Sitemap | P0 aging | **Patrick: add sitemap to Bing** |
-| #27b Watermark Print Kit | P2 new | Dispatch findasale-dev next session |
+| Flash Deal SOLD Dropdown | P3 new | Dispatch findasale-dev next session |
 
 **DEV mode permitted** — 7 rows, below ≥8 ceiling.
 
@@ -42,7 +47,7 @@
 ## Patrick Actions Required
 
 1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅, tell Claude.
-2. **Push S855 wrap** (see push block below).
+2. **Push S856 wrap** (see push block below).
 3. **Email Verification Migration** — Run in PowerShell:
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
@@ -55,16 +60,14 @@
 
 ---
 
-## Push Block (S855)
+## Push Block (S856)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
-git add packages/backend/src/controllers/couponController.ts
-git add packages/frontend/pages/coupons.tsx
-git commit -m "fix: #308 Hidden badge on item list, #312/#289 coupon Generate button disabled at cap; docs: S855 wrap"
+git add packages/frontend/pages/organizer/print-kit/[saleId].tsx
+git add packages/backend/src/controllers/printKitController.ts
+git commit -m "fix: #27b print-kit canRemoveWatermark gates frontend preview + backend PDF footer; docs: S856 wrap"
 .\push.ps1
 ```

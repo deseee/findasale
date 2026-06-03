@@ -122,6 +122,30 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     enabled: !!saleId && typeof saleId === 'string',
   });
 
+  // Fetch organizer watermark setting — determines whether to show finda.sale branding
+  const { data: watermarkData } = useQuery<{ removeWatermarkEnabled: boolean }>({
+    queryKey: ['print-kit-watermark'],
+    queryFn: async () => {
+      const response = await api.get('/organizers/settings/watermark');
+      return response.data as { removeWatermarkEnabled: boolean };
+    },
+    enabled: !!user,
+  });
+
+  // Fetch organizer profile for subscriptionTier
+  const { data: organizerProfile } = useQuery<{ subscriptionTier: string }>({
+    queryKey: ['print-kit-organizer-profile'],
+    queryFn: async () => {
+      const response = await api.get('/organizers/me');
+      return response.data as { subscriptionTier: string };
+    },
+    enabled: !!user,
+  });
+
+  const canRemoveWatermark =
+    organizerProfile?.subscriptionTier === 'TEAMS' &&
+    watermarkData?.removeWatermarkEnabled === true;
+
   const handlePrint = () => {
     window.print();
   };
@@ -130,7 +154,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     router.push('/organizer/dashboard');
   };
 
-  const printQRPage = (url: string, label: string, sublabel: string) => {
+  const printQRPage = (url: string, label: string, sublabel: string, hideWatermark: boolean = false) => {
     const qrSrc = getQRUrl(url, 600);
     const w = window.open('', '_blank');
     if (!w) return;
@@ -147,7 +171,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
       <img src="${qrSrc}" alt="${label}" />
       <div class="label">${label}</div>
       <div class="sublabel">${sublabel}</div>
-      <div class="footer">finda.sale</div>
+      ${hideWatermark ? '' : '<div class="footer">finda.sale</div>'}
       </body></html>`);
     w.document.close();
     w.focus();
@@ -666,7 +690,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {isPro && (
                     <div className="text-center">
                       <button
-                        onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/checkin`, '🚶 Check In & Join the Line', 'Scan with your phone to check in, browse items, and join the virtual queue for entry.')}
+                        onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/checkin`, '🚶 Check In & Join the Line', 'Scan with your phone to check in, browse items, and join the virtual queue for entry.', canRemoveWatermark)}
                         className="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                       >
                         🚶 Check-In / Queue
@@ -684,7 +708,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                             {clues.map((clue, idx) => (
                               <button
                                 key={clue.id}
-                                onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr/${clue.id}?scan=true`, `🗺️ Clue #${idx + 1}`, `Scan at this location to unlock the clue and earn XP rewards.`)}
+                                onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr/${clue.id}?scan=true`, `🗺️ Clue #${idx + 1}`, `Scan at this location to unlock the clue and earn XP rewards.`, canRemoveWatermark)}
                                 className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
                               >
                                 🗺️ Clue #{idx + 1}{clue.category ? ` — ${clue.category}` : ''}
@@ -696,7 +720,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                       ) : (
                         <div className="text-center">
                           <button
-                            onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr`, '🗺️ Treasure Hunt', 'Scan at this location to unlock the next clue and earn XP rewards.')}
+                            onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr`, '🗺️ Treasure Hunt', 'Scan at this location to unlock the next clue and earn XP rewards.', canRemoveWatermark)}
                             className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                           >
                             🗺️ Treasure Hunt
@@ -710,7 +734,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Photo Station QR (all tiers) */}
                   <div className="text-center">
                     <button
-                      onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/photo-station`, '📸 Photo Station', 'Snap a photo of your find and share it to earn XP.')}
+                      onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/photo-station`, '📸 Photo Station', 'Snap a photo of your find and share it to earn XP.', canRemoveWatermark)}
                       className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       📸 Photo Station
@@ -749,13 +773,16 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   className="yard-sign-qr"
                 />
 
-                <div className="yard-sign-footer">
-                  Browse items before you arrive
-                  <br />
-                  finda.sale
-                </div>
-
-                <div className="yard-sign-logo">🏷️ FindA.Sale</div>
+                {!canRemoveWatermark && (
+                  <>
+                    <div className="yard-sign-footer">
+                      Browse items before you arrive
+                      <br />
+                      finda.sale
+                    </div>
+                    <div className="yard-sign-logo">🏷️ FindA.Sale</div>
+                  </>
+                )}
               </div>
 
               {/* Item Tags Pages */}
@@ -817,7 +844,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                       className="qr-full-page-qr"
                     />
                     <div className="qr-full-page-label">Scan to Check In & Join the Line</div>
-                    <div className="qr-full-page-sublabel">finda.sale</div>
+                    {!canRemoveWatermark && <div className="qr-full-page-sublabel">finda.sale</div>}
                   </div>
                 </div>
               )}
@@ -832,7 +859,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                       className="qr-full-page-qr"
                     />
                     <div className="qr-full-page-label">🗺️ Clue #{idx + 1}{clue.category ? ` — ${clue.category}` : ''}</div>
-                    <div className="qr-full-page-sublabel">Scan to unlock this clue &amp; earn XP · finda.sale</div>
+                    <div className="qr-full-page-sublabel">{canRemoveWatermark ? 'Scan to unlock this clue & earn XP' : 'Scan to unlock this clue & earn XP · finda.sale'}</div>
                   </div>
                 </div>
               ))}
@@ -846,7 +873,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     className="qr-full-page-qr"
                   />
                   <div className="qr-full-page-label">Scan to snap a photo & earn XP</div>
-                  <div className="qr-full-page-sublabel">FindA.Sale</div>
+                  {!canRemoveWatermark && <div className="qr-full-page-sublabel">FindA.Sale</div>}
                 </div>
               </div>
             </div>

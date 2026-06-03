@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S855 — Records: S854 Chrome marks applied to roadmap (#289/#309/#311/#312/#316). DEV: #308 FIXED (Hidden badge in item list). #312/#289 FIXED (Generate button disabled + "X/X used" at cap). QA: #27b P2 BUG — TEAMS "Remove watermark" saves but print kit yard signs still show FindA.Sale branding (ss_28036zjv6). #159 UNVERIFIED (no published sale). New P3: yard sign hardcodes "Estate" sale type. Blocked Queue: 7 rows.**
+**Latest: S856 — DEV: #27b FIXED — print-kit yard sign + printQRPage popups now respect canRemoveWatermark (frontend preview + backend PDF primary footer both gated). New P3: Flash Deal dropdown shows SOLD items in item selector. QA: #159 ✅ Chrome-verified — FlashDealBanner dark mode correct (orange gradient on dark bg, no white/light — P2 FIXED), countdown "Old Radio for next 1h 56m" confirmed on sale page (ss_2417corir); form dark mode confirmed ss_3858xb9jb. Blocked Queue: 7 rows.**
+
+**Previous: S855 — Records: S854 Chrome marks applied to roadmap (#289/#309/#311/#312/#316). DEV: #308 FIXED (Hidden badge in item list). #312/#289 FIXED (Generate button disabled + "X/X used" at cap). QA: #27b P2 BUG — TEAMS "Remove watermark" saves but print kit yard signs still show FindA.Sale branding (ss_28036zjv6). #159 UNVERIFIED (no published sale). New P3: yard sign hardcodes "Estate" sale type. Blocked Queue: 7 rows.**
 
 **Previous: S854 — QA: #308/#309/#311/#289/#312/#316 all Chrome-verified. #309 ✅ (P1 fixed — in-app modal). #311 ✅ (transfer modal + 409 enforcement). #289 ✅ (429 cap at 4th coupon attempt, Hunt Pass 3/month enforced). #312 ✅ (XP spend: 2000→1700 after 300 XP, UI updates). #316 ✅ (Tranche A +100 XP on 3rd login, Tranche B +150 XP on 3rd sale visit — both DB-confirmed). 2 new P3 bugs. Blocked Queue: 2 rows.**
 
@@ -57,7 +59,7 @@ _⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per 
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (58 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
 | #335 Consignor Payout Email | **P0 (58 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅ after 58 sessions. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
-| #27b Watermark Removal (Print Kit) | **P2** — TEAMS "Remove watermark" setting saves (green toast confirmed ss_28036zjv6) but yard sign in print kit still shows "finda.sale" / "FindA.Sale" branding. Setting is not wired to print template renderer. | Dispatch findasale-dev: find where print-kit yard sign renders, add canRemoveWatermark() check to suppress FindA.Sale footer when removeWatermarkEnabled=true | S855 |
+| Flash Deal SOLD items in dropdown | **P3** — Flash Deal form item selector shows SOLD items (Vintage Lamp status=SOLD appeared in dropdown alongside AVAILABLE items). Organizer can create a deal on a sold item — deal creates in DB but banner can't show (item not in public inventory). | Dispatch findasale-dev: filter FlashDealForm item selector to AVAILABLE items only | S856 |
 | Email Verification Migration | **P0 (132 sessions, age-escalated 2026-06-03)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S854. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
 | Production DB Re-Seed | **P0 (67 sessions, age-escalated 2026-06-03)** — Seedy2025! rejected for shopper accounts user5–user12+ since S576. Shopper Chrome QA requiring login blocked. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma db seed (back up sale cmpbvumj90001e7t7v5sa1iqi first) | S787 |
 | eBay Connection for user1 | **P0 (69 sessions, age-escalated 2026-06-03)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
@@ -88,10 +90,10 @@ _⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per 
 
 ## Next Session
 
-**S855 done. Blocked Queue: 7 rows. DEV mode permitted (< 8).**
+**S856 done. Blocked Queue: 7 rows. DEV mode permitted (< 8).**
 
-1. **Fix #27b watermark removal in print kit** (`Skill('findasale-dev')`): Root cause — print-kit yard sign template does not call `canRemoveWatermark()`. When TEAMS organizer enables "Remove watermark," the branding still renders. Grep for where yard sign content is generated (likely in print-kit.tsx or a PDF generation service) and add the check.
-2. **#159 Flash Deals dark mode** — UNVERIFIED: Alice has no published sale. Needs a published sale to test. Seed or create a new sale as user2/user3 to get a PUBLISHED state, then test Flash Deal dark mode.
+1. **Fix Flash Deal SOLD-item dropdown** (`Skill('findasale-dev')`): FlashDealForm item selector shows SOLD items. Filter query to AVAILABLE only. File: `packages/frontend/pages/organizer/dashboard.tsx` — find where saleItems are passed to FlashDealForm and add status filter.
+2. **Apply #159 Chr ✅ to roadmap** — Records: update Chr column → ✅ S856 (ss_2417corir).
 3. **#317/#320** — Still UNVERIFIED. Defer.
 4. **#335 payout** — Patrick check deseee@yahoo.com.
 5. **#332 Shopify** — Blocked on dev store.
@@ -104,15 +106,34 @@ _⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per 
 1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
 2. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
 3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-4. **Push S854 STATE.md + patrick-dashboard.md:**
+4. **Push S856 fixes + docs:**
 ```
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S854 wrap — QA #289/#309/#311/#312/#316 all verified, 2 P3 bugs noted"
+git add packages/frontend/pages/organizer/print-kit/[saleId].tsx
+git add packages/backend/src/controllers/printKitController.ts
+git commit -m "fix: #27b print-kit canRemoveWatermark gates frontend preview + backend PDF footer; docs: S856 wrap"
 .\push.ps1
 ```
 
 ## Recent Sessions
+
+### S856 — DEV #27b FIXED + QA #159 ✅
+
+**DEV — #27b watermark print kit (0 TS errors):**
+- `packages/frontend/pages/organizer/print-kit/[saleId].tsx`: Added `/organizers/settings/watermark` + `/organizers/me` queries. Derived `canRemoveWatermark = subscriptionTier === 'TEAMS' && removeWatermarkEnabled`. Yard sign footer (`yard-sign-footer` + `yard-sign-logo`) gated. `printQRPage()` now accepts `hideWatermark` param — all 4 callers pass `canRemoveWatermark`. Three `qr-full-page-sublabel` elements (check-in, treasure hunt, photo station) gated.
+- `packages/backend/src/controllers/printKitController.ts`: `getYardSignKit` primary footer `'Scan to browse & buy online  •  finda.sale'` wrapped in `if (!canRemoveWatermark(sale.organizer))`. Secondary watermark footer was already gated.
+
+**QA — #159 Flash Deals:**
+- ✅ Flash Deal form dark mode: opened as Alice Johnson on PUBLISHED sale. Form renders full dark navy bg (no white/light) — P2 FIXED. ss_3858xb9jb.
+- ✅ Flash Deal banner on sale page: `⚡ Flash Deal — 25% off! Old Radio for next 1h 56m` confirmed. Banner orange gradient on dark page, countdown live. ss_2417corir.
+- ⚠️ P3 NEW: Flash Deal item dropdown includes SOLD items. Created deal on SOLD Vintage Lamp — banner won't appear since item is not in public inventory. Filter should be `AVAILABLE` only.
+
+**Blocked Queue:** 7 rows (replaced #27b with new P3 Flash Deal dropdown bug).
+
+**Files changed:** `packages/frontend/pages/organizer/print-kit/[saleId].tsx` · `packages/backend/src/controllers/printKitController.ts` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S855 — Records + DEV P3 fixes + QA: #27b watermark P2 found
 
