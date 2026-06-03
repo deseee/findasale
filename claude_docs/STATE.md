@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX. Full audit of every email-sending service in the backend. 10 files fixed. Global daily quota counter built. Two previously unknown P0 blast-to-all jobs found and fixed (notificationController.sendWeeklyDigest fires every Friday to 5,000 users with no opt-out + no unsubscribe link; organizerAnalyticsService sends weekly to all organizers with no suppression). Inbox incident confirmed stopped — no runaway sends in Railway logs. Blocked Queue: 7 rows. Push block ready.**
+**Latest: S849 — QA + DEV BLITZ. Dispatched 5 items in parallel. #293 eBay panel ✅ Chrome-verified (fix confirmed live, no screenshot IDs — roadmap update deferred). #91 Auto-Markdown P0 fixed: markdownCycleController was reading UserRoleSubscription (wrong table) instead of Organizer.subscriptionTier — now uses requireTier middleware at route level. #32 Wishlist Alerts P1 fixed: operator precedence bug in wishlist.tsx line 362 (|| before && caused Watching section to never render when alerts existed). Share-card 401 fix applied: edge function now accepts httpOnly cookie as auth signal. #267 RSVP XP: DB confirmed no user has ≥5 RSVPs in any single month — still externally blocked. Blocked Queue: 6 rows. Push block ready (5 files).**
+
+**Previous: S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX. Full audit of every email-sending service in the backend. 10 files fixed. Global daily quota counter built. Two previously unknown P0 blast-to-all jobs found and fixed (notificationController.sendWeeklyDigest fires every Friday to 5,000 users with no opt-out + no unsubscribe link; organizerAnalyticsService sends weekly to all organizers with no suppression). Inbox incident confirmed stopped — no runaway sends in Railway logs. Blocked Queue: 7 rows. Push block ready.**
 
 **Previous: S847 — EMAIL INCIDENT + CLEANUP. outreach@finda.sale inbox had 21,000+ bounce emails from Gmail sending-limit errors. Root cause: monthlyTrendReportJob was emailing 44k scraped orgs (not real organizers), burning Gmail daily quota. outreachEmailsCron had duplicate emailAddress bug (sam@gmail.com ×48). BOTH FIXED and deployed today. ~15,635 "Your May 2026 Search Visibility Report" bounces manually deleted via Apps Script. "10 estate sales this weekend near you" bounce cleanup still running (~800+ deleted). Inbox not yet fully clean. Full email audit required next session. Blocked Queue: 7 rows.**
 
@@ -43,17 +45,16 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING (S845): #267, #293 at 60 sessions; #332, #335 at 54 sessions — mandatory P0 per CLAUDE.md §10a._
+_⚠️ P0 AGING (S845): #267 at 62 sessions; #332, #335 at 56 sessions — mandatory P0 per CLAUDE.md §10a. #293 GRADUATED S849 (Chrome-verified)._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| RSVP XP Monthly Cap (#267 part 2) | **P0 (60 sessions)** — Only 3 platform sales have RSVP; need 5 RSVPs in one month to hit 10 XP cap | Create platform sales with RSVP enabled or wait for organic usage | S785 |
-| #293 eBay Listing Data Parity | **P0 (60 sessions) — BUG FIXED S845** — Root cause was missing `/ebay/` prefix in PostSaleEbayPanel.tsx API calls (not a missing eBay connection). Fix applied. Needs push + Chrome QA. | Push PostSaleEbayPanel.tsx fix, then QA: navigate to ENDED sale → verify unsold items panel loads + 17-field edit works | S785 |
-| #332 Shopify Cross-Listing | **P0 (54 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (54 sessions)** — Payout ran S845. Email sent but not delivered: SPF for send.finda.sale pointed to decommissioned SES → Yahoo dropped silently. FIXED S846: SPF now `include:_spf.google.com ~all`. Need new payout test to confirm delivery. | Run a new Jane Thrift payout → check deseee@yahoo.com inbox. | S791 |
-| Share-card preview 401 on promote page | **P2 S844** — `GET /api/share-card/...` returns 401 immediately on page load. Separate from export fix. | `findasale-dev`: investigate share-card endpoint auth — likely same cross-domain cookie issue or missing auth header | S844 |
-| #32 Wishlist Alerts | **UNVERIFIED S845** — Session cut off (Claude API context limit) during alert creation. New Alert modal opened and name was entered; Create Alert button never clicked. | Re-QA as Leo Thomas (user5) — create an alert, verify it saves and appears in the Watching section. | S845 |
-| #91 Auto-Markdown save cycle | **UNVERIFIED S845** — Page ✅ modal ✅ all fields ✅ PRO gate fires correctly ✅. Full cycle save blocked: user1 JWT was issued when tier=BRONZE; DB update to PRO didn't propagate to existing session. | Fresh PRO login for Alice (user1). Navigate to /organizer/markdown-cycles, create a cycle, verify it saves. | S845 |
+| RSVP XP Monthly Cap (#267 part 2) | **P0 (62 sessions)** — S849 DB confirmed: no user has ≥5 RSVPs in any single month (max: 4 RSVPs, April 2026). Code logic correct (CODE-ONLY). | Seed a test user with ≥6 RSVPs in the same calendar month via psycopg2, then verify XP caps at 10. | S785 |
+| #332 Shopify Cross-Listing | **P0 (56 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
+| #335 Consignor Payout Email | **P0 (56 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅ after 56 sessions. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
+| Share-card preview 401 on promote page | **P2 — FIX APPLIED S849** — Edge function now accepts httpOnly cookie as auth signal. ⚠️ FLAG: share cards may need to be fully public for OG scrapers. Needs push + Chrome QA + decision on public vs. auth. | Push pages/api/share-card.tsx, QA promote page load, confirm no 401. Decide: should share-card be fully public? | S844 |
+| #32 Wishlist Alerts | **P1 BUG FIXED S849** — Operator precedence bug: `watching.length > 0 \|\| true && (` → Watching section never rendered when alerts existed. Fix: added parens. Needs push + Chrome QA. | Push wishlist.tsx fix, QA as Leo Thomas: create alert, verify Watching section renders with alert visible. | S845 |
+| #91 Auto-Markdown save cycle | **P0 BUG FIXED S849** — markdownCycleController was reading UserRoleSubscription (wrong table) → 403 for all non-Stripe organizers. Fixed: requireTier middleware at route level + sales dropdown 404 fixed. Needs push + Chrome QA. | Push 3 backend/frontend files, QA as Alice (user1): /organizer/markdown-cycles, create cycle, verify saves. | S845 |
 
 ---
 
@@ -65,31 +66,52 @@ _⚠️ P0 AGING (S845): #267, #293 at 60 sessions; #332, #335 at 54 sessions �
 | 461 | FB Marketplace Export + Sold Nudge | finda.sale/organizer/promote/0d9563f9-... as Alice Johnson (user1). Clicked "Download Spreadsheet" → GET /api/export/.../facebook-xlsx 200 ✅. DB confirmed fbExportedAt stamped on 3 items. Navigated to edit-item/b4a74f89-... → set status=SOLD → saved → redirected to dashboard. Notification inbox at finda.sale/notifications showed "Mark sold on Facebook Marketplace" / "Silver Bracelet sold on FindA.Sale — don't forget to mark it sold on Facebook Marketplace too" — just now ✅. | S844 |
 | 68 | Command Center Dashboard | finda.sale/organizer/command-center as Alice Johnson. Recent tab clicked → "QA Test Flip Report Sale" with ● ENDED badge, May 21–May 28 dates visible. Tabs (Active/Upcoming/Recent/All) all work. Active tab empty state correct. ss_7321prqsa. Independent re-verification of S804 claim. | S845 |
 | 125 | Inventory Syndication CSV Export | finda.sale/organizer/add-items/... as Alice Johnson (PRO). "Export to eBay" button clicked → modal opened: "Export 2 available items as eBay CSV", watermark toggle ✅, "Remove watermark — TEAMS only" gate visible. ss_5085g9dtj. Independent re-verification of S805 claim. | S845 |
+| 293 | eBay Listing Data Parity | finda.sale/organizer/sales/0d9563f9-... as Alice Johnson. eBay post-sale panel loaded showing 2 unsold items (Old Radio, Ceramic Vase). Clicked "Edit eBay" on Old Radio — form expanded (13 fields across 3 sections). Clicked "Save eBay Details" → PUT /api/items/... 200. Correct API path GET /api/ebay/organizer/sales/.../unsold-items → 200 confirmed. ⚠️ NO screenshot IDs — agent used Chrome MCP (67 tool uses) but did not capture ss_ IDs. Records: apply roadmap Chrome ✅ only if screenshot IDs obtained on re-verify. | S849 |
 
 ---
 
 ## Next Session
 
-**Push S848 block first (10 backend files — see patrick-dashboard.md). Then:**
+**Push S849 block first (5 files — see below). Then:**
 
-1. **QA #293 eBay panel** — push PostSaleEbayPanel.tsx fix from S845 (separate push, already staged), then navigate to ENDED sale as Alice Johnson, verify unsold items panel loads + 17-field edit works.
-2. **#335 payout confirm** — run a new Jane Thrift payout as Artifact MI. Check deseee@yahoo.com. If email arrives → ✅ after 54 sessions.
-3. **QA #32 Wishlist Alerts** — as Leo Thomas (user5): /wishlists → Watching → New Alert → create → verify saves.
-4. **QA #91 Auto-Markdown** — fresh PRO login as Alice (user1). /organizer/markdown-cycles → create cycle → verify saves.
+1. **QA #91 Auto-Markdown** — as Alice (user1): /organizer/markdown-cycles → create cycle → verify saves. Also confirm sales dropdown populates.
+2. **QA #32 Wishlist Alerts** — as Leo Thomas (user5): /shopper/wishlist → Watching → New Alert → create → verify Watching section renders with alert. Screenshot required (ss_ ID needed).
+3. **QA share-card** — as Alice on /organizer/promote/[saleId]: verify page loads without 401 in console. Also decide: should share-card be fully public for OG scrapers?
+4. **#293 re-screenshot** — navigate to ENDED sale eBay panel as Alice, take screenshot (ss_ ID) so Records can apply roadmap Chrome ✅.
+5. **#335 payout confirm** — check deseee@yahoo.com. If email received → ✅ after 56 sessions.
+6. **#267 seed fix** — use psycopg2 to insert ≥6 SaleRsvp records for one user in current month, then verify XP caps at 10.
 
-**Blocked Queue: 7 rows (below ≥8 ceiling). 4 P0 aging (#267/#293/#332/#335) + 1 P2 share-card + 2 UNVERIFIED (#32/#91).**
+**Blocked Queue: 6 rows (below ≥8 ceiling). 3 P0 aging (#267/#332/#335) + 3 fix-applied-pending-QA (#32/#91/share-card).**
 
 **Patrick actions required:**
 
-1. **Push S848 block** (see push block in patrick-dashboard.md) — 10 backend files.
-2. **Push S845 block separately** — `packages/frontend/components/PostSaleEbayPanel.tsx` (already committed or staged from S845).
-3. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
-4. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
-5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+1. **Push S849 block:**
+```
+git add packages/frontend/pages/api/share-card.tsx
+git add packages/backend/src/routes/markdownCycles.ts
+git add packages/backend/src/controllers/markdownCycleController.ts
+git add packages/frontend/pages/organizer/markdown-cycles.tsx
+git add packages/frontend/pages/shopper/wishlist.tsx
+git commit -m "fix: #91 markdown cycle tier check + #32 wishlist watching section + share-card cookie auth"
+.\push.ps1
+```
+2. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
+3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
 ---
 
 ## Recent Sessions
+
+### S849 — QA + DEV BLITZ: #293 ✅, #91 P0 fixed, #32 P1 fixed, share-card fixed
+
+**5 parallel dispatches.** #293 Chrome-verified (no ss_ IDs — roadmap update deferred). #267 DB-confirmed still blocked (max 4 RSVPs in any month, cap threshold never reached). Share-card 401 fixed (cookie-first auth in edge function). #91 P0 root cause: markdownCycleController read UserRoleSubscription instead of Organizer.subscriptionTier — all non-Stripe organizers got 403. Fixed via requireTier middleware. #32 P1 root cause: operator precedence bug (`||` before `&&`) caused Watching section to never render when alerts existed. One-line fix.
+
+**New bugs found:** #32 alert DELETE returns 403 (P2 — separate from rendering fix). Share-card public/auth question needs product decision.
+
+**Files changed:** `packages/frontend/pages/api/share-card.tsx` · `packages/backend/src/routes/markdownCycles.ts` · `packages/backend/src/controllers/markdownCycleController.ts` · `packages/frontend/pages/organizer/markdown-cycles.tsx` · `packages/frontend/pages/shopper/wishlist.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX
 

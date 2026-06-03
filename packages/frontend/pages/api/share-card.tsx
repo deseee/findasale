@@ -583,21 +583,30 @@ export default async function handler(req: Request) {
   }
 
   try {
-    // Authenticate via Authorization header (same pattern as all other frontend API routes)
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
+    // Auth: accept either httpOnly cookie (primary — project-wide standard since S831)
+    // or Authorization header as fallback. The promote page fetches /api/share-card with
+    // credentials: 'include', so the accessToken cookie arrives here automatically.
+    // Direct Authorization header is no longer populated (JWT no longer in localStorage).
+    const cookieHeader = req.headers.get('cookie') || '';
+    const authHeader = req.headers.get('authorization') || '';
+
+    // Require at least one auth signal — cookie or bearer token
+    if (!cookieHeader && !authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
+    // Build forwarded auth headers for Railway backend calls
+    const forwardHeaders: Record<string, string> = {};
+    if (cookieHeader) forwardHeaders['Cookie'] = cookieHeader;
+    if (authHeader) forwardHeaders['Authorization'] = authHeader;
+
     // Fetch sale data from backend API
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
     const saleRes = await fetch(`${apiUrl}/sales/${saleId}`, {
-      headers: {
-        Authorization: authHeader,
-      },
+      headers: forwardHeaders,
     });
 
     if (!saleRes.ok) {
@@ -611,9 +620,7 @@ export default async function handler(req: Request) {
 
     // Fetch organizer subscription tier for watermark gating
     const orgRes = await fetch(`${apiUrl}/organizer/profile`, {
-      headers: {
-        Authorization: authHeader,
-      },
+      headers: forwardHeaders,
     });
     const organizer = orgRes.ok ? await orgRes.json() : null;
 

@@ -66,7 +66,7 @@ const MarkdownCyclesPage = () => {
   const { data: sales = [], isError: salesError } = useQuery({
     queryKey: ['organizer-sales-for-markdown'],
     queryFn: async () => {
-      const response = await api.get('/organizer/sales');
+      const response = await api.get('/organizers/me/sales');
       return response.data;
     },
   });
