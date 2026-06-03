@@ -45,7 +45,26 @@ export const getUserCoupons = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    res.json({ coupons });
+    // Per-tier monthly usage counts for cap display in XP Store
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const tierUsage = await prisma.coupon.groupBy({
+      by: ['xpTier'],
+      where: {
+        userId: req.user.id,
+        generatedFromXp: true,
+        xpTier: { not: null },
+        createdAt: { gte: monthStart },
+      },
+      _count: { id: true },
+    });
+    const monthlyUsageByTier: Record<string, number> = {};
+    for (const row of tierUsage) {
+      if (row.xpTier) monthlyUsageByTier[row.xpTier] = row._count.id;
+    }
+
+    res.json({ coupons, monthlyUsageByTier });
   } catch (err) {
     console.error('[coupon] getUserCoupons error:', err);
     res.status(500).json({ message: 'Failed to load coupons' });

@@ -1,59 +1,70 @@
-# Patrick's Dashboard — S854 Wrap
+# Patrick's Dashboard — S855 Wrap
 
 ---
 
-## What Happened This Session (S854)
+## What Happened This Session (S855)
 
-**QA sweep of 6 roadmap items. All doable-without-Stripe items verified. 2 new P3 bugs found. Blocked Queue unchanged at 2 rows.**
+**Records updated (S854 Chrome marks to roadmap). 2 P3 bugs fixed. QA found 1 new P2 bug (#27b watermark removal broken in print kit). Blocked Queue: 7 rows — still under ceiling.**
 
 ---
 
-## Features Verified This Session
+## Features Fixed This Session
 
 | # | Feature | Result | Notes |
 |---|---------|--------|-------|
-| #309 | Consignor Portal Delete | ✅ Fixed | In-app modal (not window.confirm). P1 confirmed fixed. |
-| #311 | Multi-Location | ✅ | Transfer modal works, delete-with-items returns 409, Delete hides when items > 0. |
-| #289 | Shopper Coupon Monthly Cap | ✅ | 429 on 4th attempt, Hunt Pass 3/month enforced correctly. |
-| #312 | XP Spend Path | ✅ | XP 2000→1700 after spending 300 XP, UI reflects spend on reload. |
-| #316 | Referral Tranche Anti-Fraud | ✅ | Tranche A (+100 XP on 3rd login) and Tranche B (+150 XP on 3rd sale) both DB-confirmed firing. |
-| #308 | Item Hide | ⚠️ P3 OPEN | Hide works (DB confirmed), but organizer list shows no "Hidden" badge/indicator. |
+| #308 | Hidden Item Badge | ✅ FIXED | Organizer item list now shows grey "Hidden" pill next to status when item.isActive=false |
+| #312/#289 | Coupon Generate Button Cap | ✅ FIXED | Button now disabled + shows "Cap reached (X/X)" when monthly limit hit. Helper text "X/X used this month" appears above button. |
 
-## New P3 Bugs Found
+## New P2 Bug Found
 
-1. **#308 indicator** — Organizer item list shows no visual badge when an item is hidden. The item IS hidden in the DB and correctly filtered from shopper view, but the organizer has no way to see which items are hidden from the list page.
-2. **#312/#289 cap UI** — XP Store Generate button stays enabled and shows "Generate (100 XP)" even after you've hit the monthly cap. Backend correctly 429s on attempt but there's no disabled/greyed-out state in the UI.
+**#27b Watermark Removal (Print Kit)** — As a TEAMS user, enabling "Remove FindA.Sale watermark from exports" saves correctly (green toast) but the print kit yard sign template still renders "finda.sale" / "FindA.Sale" branding. The setting is not wired to the print kit renderer. Needs dev fix.
 
 ---
 
 ## Blocked Queue Status
 
-**2 rows — unchanged (both P0 aging):**
+**7 rows (1 new P2 added):**
 
-| # | Item | Status |
-|---|------|--------|
-| #332 | Shopify Cross-Listing | Blocked — needs Shopify Partners dev store |
-| #335 | Consignor Payout Email | Blocked — Patrick must check deseee@yahoo.com |
+| # | Item | Priority | Action |
+|---|------|----------|--------|
+| #332 | Shopify Cross-Listing | P0 aging | Needs Shopify Partners dev store |
+| #335 | Consignor Payout Email | P0 aging | **Patrick: check deseee@yahoo.com** |
+| Email Verification Migration | P0 aging | **Patrick: run migrate deploy** |
+| Production DB Re-Seed | P0 aging | **Patrick: run db seed** |
+| eBay Connection (user1) | P0 aging | **Patrick: connect eBay in settings** |
+| Bing Webmaster Sitemap | P0 aging | **Patrick: add sitemap to Bing** |
+| #27b Watermark Print Kit | P2 new | Dispatch findasale-dev next session |
 
-**DEV mode permitted** — 2 rows, well below the ≥8 ceiling.
+**DEV mode permitted** — 7 rows, below ≥8 ceiling.
 
 ---
 
 ## Patrick Actions Required
 
 1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅, tell Claude.
-2. **Push the S854 wrap docs** (see push block below).
-3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
-4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+2. **Push S855 wrap** (see push block below).
+3. **Email Verification Migration** — Run in PowerShell:
+   ```powershell
+   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+   $env:DATABASE_URL="[Railway URL from dashboard]"
+   npx prisma migrate deploy
+   npx prisma generate
+   ```
+4. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
 ---
 
-## Push Block (S854)
+## Push Block (S855)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S854 wrap — QA #289/#309/#311/#312/#316 verified, 2 P3 bugs noted"
+git add claude_docs/strategy/roadmap.md
+git add packages/frontend/pages/organizer/add-items/[saleId].tsx
+git add packages/backend/src/controllers/couponController.ts
+git add packages/frontend/pages/coupons.tsx
+git commit -m "fix: #308 Hidden badge on item list, #312/#289 coupon Generate button disabled at cap; docs: S855 wrap"
 .\push.ps1
 ```

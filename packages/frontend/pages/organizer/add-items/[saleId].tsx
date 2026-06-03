@@ -2268,6 +2268,11 @@ const AddItemsDetailPage = () => {
                             }`}>
                               {draftStatus === 'PUBLISHED' ? 'Live' : draftStatus === 'PENDING_REVIEW' ? 'Ready' : 'Draft'}
                             </span>
+                            {item.isActive === false && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                                Hidden
+                              </span>
+                            )}
                           </div>
                           <button
                             type="button"

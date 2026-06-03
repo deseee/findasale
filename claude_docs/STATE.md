@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S854 — QA: #308/#309/#311/#289/#312/#316 all Chrome-verified. #309 ✅ (P1 fixed — in-app modal). #311 ✅ (transfer modal + 409 enforcement). #289 ✅ (429 cap at 4th coupon attempt, Hunt Pass 3/month enforced). #312 ✅ (XP spend: 2000→1700 after 300 XP, UI updates). #316 ✅ (Tranche A +100 XP on 3rd login, Tranche B +150 XP on 3rd sale visit — both DB-confirmed). 2 new P3 bugs. Blocked Queue: 2 rows.**
+**Latest: S855 — Records: S854 Chrome marks applied to roadmap (#289/#309/#311/#312/#316). DEV: #308 FIXED (Hidden badge in item list). #312/#289 FIXED (Generate button disabled + "X/X used" at cap). QA: #27b P2 BUG — TEAMS "Remove watermark" saves but print kit yard signs still show FindA.Sale branding (ss_28036zjv6). #159 UNVERIFIED (no published sale). New P3: yard sign hardcodes "Estate" sale type. Blocked Queue: 7 rows.**
+
+**Previous: S854 — QA: #308/#309/#311/#289/#312/#316 all Chrome-verified. #309 ✅ (P1 fixed — in-app modal). #311 ✅ (transfer modal + 409 enforcement). #289 ✅ (429 cap at 4th coupon attempt, Hunt Pass 3/month enforced). #312 ✅ (XP spend: 2000→1700 after 300 XP, UI updates). #316 ✅ (Tranche A +100 XP on 3rd login, Tranche B +150 XP on 3rd sale visit — both DB-confirmed). 2 new P3 bugs. Blocked Queue: 2 rows.**
 
 **Previous: S853 — QA: All 4 S852 bug fixes Chrome-verified. Bug 1 (edit-item null saleId) ✅ ss_8510ho8fx. Bug 2 (Full Edit misfire) ✅ ss_596216ag3. Bug 3 (/unsubscribe no-token) ✅ ss_4693l8c4l. Bug 4 (em dash) ✅ ss_0517yypd1. Blocked Queue: 2 rows (3 P2+P3 bugs cleared, #332/#335 remain).**
 
@@ -55,6 +57,11 @@ _⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per 
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (58 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
 | #335 Consignor Payout Email | **P0 (58 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅ after 58 sessions. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
+| #27b Watermark Removal (Print Kit) | **P2** — TEAMS "Remove watermark" setting saves (green toast confirmed ss_28036zjv6) but yard sign in print kit still shows "finda.sale" / "FindA.Sale" branding. Setting is not wired to print template renderer. | Dispatch findasale-dev: find where print-kit yard sign renders, add canRemoveWatermark() check to suppress FindA.Sale footer when removeWatermarkEnabled=true | S855 |
+| Email Verification Migration | **P0 (132 sessions, age-escalated 2026-06-03)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S854. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
+| Production DB Re-Seed | **P0 (67 sessions, age-escalated 2026-06-03)** — Seedy2025! rejected for shopper accounts user5–user12+ since S576. Shopper Chrome QA requiring login blocked. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma db seed (back up sale cmpbvumj90001e7t7v5sa1iqi first) | S787 |
+| eBay Connection for user1 | **P0 (69 sessions, age-escalated 2026-06-03)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
+| Bing Webmaster Sitemap | **P0 (71 sessions, age-escalated 2026-06-03)** — Bing/DuckDuckGo not receiving sitemap pings. SEO gap. | Patrick: bing.com/webmasters → Add sitemap → finda.sale/server-sitemap.xml | S783 |
 
 ---
 
@@ -81,17 +88,16 @@ _⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per 
 
 ## Next Session
 
-**S854 done. QA sweep complete. Blocked Queue: 2 rows. DEV mode permitted.**
+**S855 done. Blocked Queue: 7 rows. DEV mode permitted (< 8).**
 
-1. **Records agent** — Apply S854 Pending Chrome Verifications (#309, #311, #289, #312, #316) to roadmap.md Chrome column.
-2. **Fix 2 new P3 bugs** (dispatch findasale-dev):
-   - #308: Add "Hidden" badge/indicator to organizer item list row when `status=HIDDEN`.
-   - #312/#289: Disable/grey-out XP Store coupon Generate button + show "X/X used" when monthly cap is hit (page already knows the cap from API response).
-3. **#317/#320** — Still UNVERIFIED. Defer unless Patrick wants to prioritize.
+1. **Fix #27b watermark removal in print kit** (`Skill('findasale-dev')`): Root cause — print-kit yard sign template does not call `canRemoveWatermark()`. When TEAMS organizer enables "Remove watermark," the branding still renders. Grep for where yard sign content is generated (likely in print-kit.tsx or a PDF generation service) and add the check.
+2. **#159 Flash Deals dark mode** — UNVERIFIED: Alice has no published sale. Needs a published sale to test. Seed or create a new sale as user2/user3 to get a PUBLISHED state, then test Flash Deal dark mode.
+3. **#317/#320** — Still UNVERIFIED. Defer.
 4. **#335 payout** — Patrick check deseee@yahoo.com.
 5. **#332 Shopify** — Blocked on dev store.
+6. **4 P0 Patrick-action items** in Blocked Queue: Email Verification Migration, DB Re-Seed, eBay Connection, Bing Sitemap.
 
-**Blocked Queue: 2 rows. DEV mode permitted.**
+**Blocked Queue: 7 rows. DEV mode permitted.**
 
 **Patrick actions required:**
 
@@ -107,6 +113,25 @@ git commit -m "docs: S854 wrap — QA #289/#309/#311/#312/#316 all verified, 2 P
 ```
 
 ## Recent Sessions
+
+### S855 — Records + DEV P3 fixes + QA: #27b watermark P2 found
+
+**Records:** Applied S854 Chrome ✅ marks to roadmap.md for #289 (monthly cap note), #309 (window.confirm P1 fix), #311 (transfer+409 S854 evidence), #312 (Chr ⬜→✅ S854, XP spend path), #316 (Chr ⬜→✅ S854, Tranche A/B DB-confirmed).
+
+**DEV — P3 bugs fixed (0 TS errors):**
+- #308: Hidden badge (grey pill) now renders on organizer item list row when `item.isActive === false`. Add-items page, next to existing Live/Draft status chip.
+- #312/#289: `couponController.getUserCoupons` now returns `monthlyUsageByTier` (current-month groupBy). `coupons.tsx` disables Generate button when `usedThisMonth >= monthlyLimit`, shows "Cap reached (X/X)" button label and "X/X used this month" helper text.
+
+**QA findings:**
+- #27b Watermark removal: ⚠️ **P2 BUG** — Navigated to /organizer/settings as Alice Johnson (TEAMS). Enabled "Remove FindA.Sale watermark from exports" → green toast confirmed (ss_28036zjv6). Navigated to /organizer/print-kit → yard sign still shows "finda.sale" / "FindA.Sale" branding. Setting not wired to print template renderer.
+- #159 Flash Deals dark mode: UNVERIFIED — Alice has no PUBLISHED sale; Flash Deal button never appeared.
+- P3 brand voice: yard sign template hardcodes "Estate" as sale type label (codebase-wide ban on estate-sale-only language applies).
+
+**Blocked Queue: 7 rows (added #27b watermark removal bug).**
+
+**Files changed:** `claude_docs/strategy/roadmap.md` · `packages/frontend/pages/organizer/add-items/[saleId].tsx` · `packages/backend/src/controllers/couponController.ts` · `packages/frontend/pages/coupons.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S854 — QA: #289 #309 #311 #312 #316 Chrome-verified
 
@@ -201,45 +226,4 @@ git commit -m "docs: S854 wrap — QA #289/#309/#311/#312/#316 all verified, 2 P
 **Fixes applied (10 files):**
 - `outreachEmailsCron.ts` — DB-backed cross-run dedup (in-memory Set left duplicate-address rows vulnerable across 4-hour windows)
 - `weeklyEmailService.ts` (Sunday 6pm) — `notificationPrefs.emailWeeklyDigest` opt-out + suppression check
-- `notificationController.ts` (Friday 9am) — **P0: blast to 5,000 users, no opt-out, no unsubscribe link (CAN-SPAM violation)**. Now has notifPref check + suppression + per-user unsubscribe link.
-- `buyerMatchService.ts` (every sale publish) — `notificationPrefs.emailNewSales` + suppression check
-- `organizerAnalyticsService.ts` — **P0: weekly organizer digest, no suppression**. Now gated.
-- `collectorPassportService.ts` — suppression check added
-- `wishlistAlertService.ts` — suppression check added
-- `saleEndingSoonJob.ts`, `curatorEmailJob.ts` — jobName wired to quota counter
-
-**Dead code confirmed:** `wishlistMatchEmailService.notifyWishlistMatches()` is never called — zero risk.
-
-**Remaining low-risk (no fix needed):** emailReminderService (user-set reminders), presaleSneakPeekEmailService (sale subscribers/RSVPs), followerNotificationService/smartFollowService (notifyEmail:true filter already present).
-
-**Files changed:** `packages/backend/src/lib/emailService.ts` · `packages/backend/src/jobs/outreachEmailsCron.ts` · `packages/backend/src/jobs/saleEndingSoonJob.ts` · `packages/backend/src/jobs/curatorEmailJob.ts` · `packages/backend/src/services/weeklyEmailService.ts` · `packages/backend/src/services/buyerMatchService.ts` · `packages/backend/src/controllers/notificationController.ts` · `packages/backend/src/services/organizerAnalyticsService.ts` · `packages/backend/src/services/collectorPassportService.ts` · `packages/backend/src/services/wishlistAlertService.ts`
-
----
-
-### S847 — EMAIL INCIDENT: inbox cleanup + cron fixes deployed
-
-**Root cause confirmed:** `monthlyTrendReportJob.ts` was emailing 44,000+ scraped organizers (not real users), burning Gmail Workspace daily quota. `outreachEmailsCron.ts` had a duplicate emailAddress bug (same address repeated 48x in DirectoryClaimEmail table). Both caused mailer-daemon@googlemail.com to flood outreach@finda.sale with "You have reached a limit for sending mail" bounces.
-
-**Fixes pushed today:**
-- `c5ba28e` — monthlyTrendReportJob filter to real organizers only + emailService List-Unsubscribe headers (Yahoo compliance)
-- `1203d7b` — autoSeedOutreachCron + outreachEmailsCron Set-based dedup
-
-**Inbox cleanup (Apps Script, outreach@finda.sale):**
-- "Your May 2026 Search Visibility Report" — ~15,635 emails moved to Trash ✅ Done:1235 confirmed
-- "10 estate sales this weekend near you" — cleanup in progress at session end (~800+ deleted, auto-runner active)
-
-**Honest status of fixes:** CODE-ONLY. Dedup logic has not been verified in production. Cross-run persistence of the Set-based dedup is unconfirmed. Inbox may refill if fixes are incomplete. Full audit is mandatory next session.
-
-**Files changed this session:** none (fixes were pushed by Patrick from prior session dispatches)
-
----
-
-### S845 — QA: #293 bug found + fixed, #335 payout ran, #68/#125 re-verified, #32/#91 cut off
-
-**Session cut off by Claude API context limit** mid-QA on #32 (Wishlist Alerts alert creation). Work was mid-flight; wrap handled in S846 immediately after.
-
-**#293 eBay Panel — P0 BUG FOUND + FIXED:** Root cause was NOT the missing eBay connection (as documented since S785). Actual bug: `PostSaleEbayPanel.tsx` was calling `/organizer/sales/${saleId}/unsold-items` — missing the `/ebay/` prefix. Backend route is at `/ebay/organizer/sales/.../unsold-items`. API 404 every time → panel always showed "All items sold" even with AVAILABLE items. Fix: corrected 3 API paths in PostSaleEbayPanel.tsx (`unsold-items`, `ebay-shipping`, `ebay-push`). Confirmed with direct API call returning 200 with 2 items. Awaiting push + Chrome QA.
-
-**#335 Consignor Payout Email:** Jane Thrift email updated to deseee@yahoo.com. Payout run against Jane Thrift as Artifact MI. `PAYOUTED` jumped $29.75→$59.50, payout count 2→3 (ss_6444padcf). `sendConsignorPayout()` fires fire-and-forget — email went out. Patrick must check deseee@yahoo.com to confirm delivery. If confirmed → ✅.
-
-**#68 Command Center ✅ re-verified:** finda.sale/organizer/command-center as Alice Johnson. Recent tab → "QA Test Flip Report Sale"
+- `notificationController.ts` (Friday 9am) — 
