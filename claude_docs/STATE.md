@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S860 — QA+Records+DEV: Records: #255 Chr ✅ applied to roadmap, PCV trimmed 2→1. DEV: P2 notifications sort fixed (|| → ?? in notifications.tsx). QA: #467/#464/#237 smoke tests PASS (ss_40922gfo2/ss_5917catz6/ss_7392t9kal). #316 Referral Tranche B ❌ P1 BUG FOUND+FIXED — recordSaleVisit() never called from pointsController; fix applied (ss_8604lb5ug/ss_71195379l/ss_6851w4tv8). P2 referral banner also fixed (register.tsx). P3: "Learn about TEAMS" button clipped on dashboard upgrade card. Blocked Queue: 8 rows.**
+**Latest: S861 — QA: #316 Tranche B ✅ Chrome-verified end-to-end (ss_1479i18cy/ss_71277qiak/ss_1277utzwj). Green banner ✅, Tranche B fired after 3 visits (distinctSalesVisited=[3 IDs], trancheBReleasedAt set, user1 +150 XP). New P2: recordSaleVisit() after fraud early-return — fraudSuspect referred users never trigger Tranche B. #324 EXIF Clustering: P1 design bug — Cloudinary strips EXIF by default, temporal hints never fire in production. Marked UNVERIFIED pending Cloudinary EXIF fix. Blocked Queue: 8→10 rows.**
+
+**Previous: S860 — QA+Records+DEV: Records: #255 Chr ✅ applied to roadmap, PCV trimmed 2→1. DEV: P2 notifications sort fixed (|| → ?? in notifications.tsx). QA: #467/#464/#237 smoke tests PASS (ss_40922gfo2/ss_5917catz6/ss_7392t9kal). #316 Referral Tranche B ❌ P1 BUG FOUND+FIXED — recordSaleVisit() never called from pointsController; fix applied (ss_8604lb5ug/ss_71195379l/ss_6851w4tv8). P2 referral banner also fixed (register.tsx). P3: "Learn about TEAMS" button clipped on dashboard upgrade card. Blocked Queue: 8 rows.**
 
 **Previous: S858 — QA+DEV: Flash Deal dropdown FIXED (AVAILABLE filter). Records: #159 Chr ✅ applied to roadmap + Pending Chrome Verifications trimmed. QA: #398 ✅ (organizer referral link + Copy Link + stats — ss_4915xx0kl). #259 ✅ (1.5x XP confirmed, Hunt Pass page — ss_7973nmk5n). #290 ✅ (/coupons 3-tier $ + XP display — ss_32554r03n). #158 ✅ ("Notify me of new items" + "Remind Me by Email" visible — ss_4902k1y46). 3 new P3 notes. Blocked Queue: 6 rows (Flash Deal dropdown cleared).**
 
@@ -59,7 +61,7 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING: #332 at 68 sessions; #335 at 68 sessions — mandatory P0 per CLAUDE.md §10a._
+_⚠️ P0 AGING: #332 at 69 sessions; #335 at 69 sessions — mandatory P0 per CLAUDE.md §10a._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
@@ -71,6 +73,8 @@ _⚠️ P0 AGING: #332 at 68 sessions; #335 at 68 sessions — mandatory P0 per 
 | eBay Connection for user1 | **P0 (74 sessions, age-escalated 2026-06-03)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
 | Bing Webmaster Sitemap | **P0 (76 sessions, age-escalated 2026-06-03)** — Bing/DuckDuckGo not receiving sitemap pings. SEO gap. | Patrick: bing.com/webmasters → Add sitemap → finda.sale/server-sitemap.xml | S783 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending but blocked: no published sale on any real test organizer account (user1 has none, Artifact MI has none, all published sales are scraper accounts). | Patrick: publish a sale on user1 account, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
+| Tranche B fraud gate | **P2** — recordSaleVisit() placed AFTER fraudSuspect early-return in trackSaleVisit(). Fraud-flagged referred users never trigger Tranche B (150 XP) for referrer. Fix: move recordSaleVisit() before the `!result` return. File: packages/backend/src/controllers/pointsController.ts line ~65. | Dispatch findasale-dev: move recordSaleVisit() call before fraud early-return | S861 |
+| #324 EXIF Temporal Clustering | **P1** — Cloudinary strips EXIF by default on upload. batchAnalyzeController downloads from Cloudinary URLs → extractExifTimestamp() always returns null → temporal hints never fire. Feature is dead in production. | Dispatch findasale-dev: add `exif: true` or use `quality: 100` flag on Cloudinary upload in uploadController.ts to preserve EXIF. Then re-test #324 Chrome QA. | S861 |
 
 ---
 
@@ -78,24 +82,25 @@ _⚠️ P0 AGING: #332 at 68 sessions; #335 at 68 sessions — mandatory P0 per 
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| 316 | Referral Tranche B re-verify | After S860 fix: sign up via referral link, visit 3 distinct published sales as referred user, confirm ReferralTranche.distinctSalesVisited updates + referrer receives 150 XP. Also confirm green referral banner shows on /register?ref=... page. | S860 |
+| 316 | Referral Tranche B ✅ | Navigated to /register?ref=REF-7CD8DCC0 as new user. Green "Referral link applied" banner visible (ss_1479i18cy). Registered qa-tranche-b-s861@test.com, logged in (ss_71277qiak). Visited 3 distinct sales (/cmopyeoqi.../cmoqnzsh.../cmoqnzrqz...). DB post-visit: distinctSalesVisited=[3 IDs], trancheBReleasedAt=2026-06-03T14:37:15, user1 +150 XP confirmed (ss_1277utzwj). Test data cleaned. | S861 |
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
 
 ---
 
 ## Next Session
 
-**S860 done. Blocked Queue: 8 rows — QA MODE next session (≥8 items).**
+**S861 done. Blocked Queue: 10 rows — QA MODE next session (≥8 items).**
 
 Priority:
-1. **QA #316 Tranche B re-verify** — sign up via referral link, visit 3 sales, confirm `distinctSalesVisited` increments + referrer gets 150 XP. Also confirm green referral banner shows on /register?ref=... page. One Chrome dispatch.
-2. **QA #324 Temporal EXIF Clustering** (Claude QA ⬜) — upload photos with close EXIF timestamps, verify clustering behavior. One Chrome dispatch.
-3. **#317/#320** — Still UNVERIFIED. Defer (needs GPS/Stripe).
-4. **#335 payout** — Patrick check deseee@yahoo.com.
-5. **P3: "Learn about TEAMS" button clipped** on dashboard upgrade card — minor layout fix if time allows.
-6. **5 P0 Patrick-action items** in Blocked Queue (see below).
+1. **Records: Apply #316 ✅ to roadmap** (PCV → roadmap Chrome column). Cross-session rule.
+2. **DEV: Fix Tranche B fraud gate** — move `recordSaleVisit()` before `!result` early-return in `pointsController.ts`. 1-line fix, dispatch findasale-dev.
+3. **DEV: Fix #324 EXIF Cloudinary** — add EXIF preservation flag to Cloudinary upload in `uploadController.ts`. Then re-QA #324.
+4. **P3: "Learn about TEAMS" button clipped** on dashboard upgrade card — dispatch findasale-dev if time.
+5. **#317/#320** — Still UNVERIFIED. Defer (needs GPS/Stripe).
+6. **#335 payout** — Patrick check deseee@yahoo.com.
+7. **5 P0 Patrick-action items** in Blocked Queue.
 
-**Blocked Queue: 8 rows. QA MODE — no new feature dev without Patrick sign-off.**
+**Blocked Queue: 10 rows. QA MODE — no new feature dev without Patrick sign-off.**
 
 **Patrick actions required:**
 
@@ -106,6 +111,26 @@ Priority:
 5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
 ## Recent Sessions
+
+### S861 — QA: #316 Tranche B ✅ Chrome-verified; #324 EXIF P1 bug found; 2 new bugs
+
+**QA #316 Referral Tranche B — ✅ VERIFIED:**
+- Navigated to /register?ref=REF-7CD8DCC0. Green "Referral link applied" banner confirmed (ss_1479i18cy). S860 fix working.
+- Registered qa-tranche-b-s861@test.com, logged in (ss_71277qiak).
+- Root finding: fraudSuspect=True auto-set on new user (S854 pattern) — blocked awardXp(), which blocked recordSaleVisit(). Cleared flag, re-tested.
+- Visited 3 distinct sales. DB post-visit: distinctSalesVisited=[3 IDs], trancheBReleasedAt=2026-06-03T14:37:15, user1 +150 XP (ss_1277utzwj). ✅
+- **New P2 bug found:** recordSaleVisit() placed after `!result` (fraud) early-return in trackSaleVisit(). Fraud-flagged referred users never trigger Tranche B for referrer. Fix: move call before fraud gate. File: pointsController.ts.
+- Test data cleaned: test user deleted, user1 XP restored to 108.
+
+**QA #324 Temporal EXIF Clustering — UNVERIFIED (P1 design bug):**
+- Code review confirmed: `clusterPhotos()` calls `extractExifTimestamp()` on Cloudinary-downloaded images.
+- **P1 bug:** Cloudinary strips EXIF metadata by default on upload. `uploadController.ts` upload_stream has no EXIF preservation flags. batchAnalyzeController downloads from Cloudinary → EXIF always null → temporal hints never generated.
+- Feature is silently non-functional in production. Basic clustering UI works (not tested this session — no need, it's been verified in prior sessions).
+- Action: dispatch findasale-dev to add EXIF preservation to Cloudinary upload, then re-test #324.
+
+**Blocked Queue: 8 → 10 rows (2 new bugs added).**
+
+---
 
 ### S860 — QA+Records+DEV: #316 Tranche B P1 bug found+fixed, notifications P2 fixed
 
