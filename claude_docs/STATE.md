@@ -8,7 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S856 — DEV: #27b FIXED — print-kit yard sign + printQRPage popups now respect canRemoveWatermark (frontend preview + backend PDF primary footer both gated). New P3: Flash Deal dropdown shows SOLD items in item selector. QA: #159 ✅ Chrome-verified — FlashDealBanner dark mode correct (orange gradient on dark bg, no white/light — P2 FIXED), countdown "Old Radio for next 1h 56m" confirmed on sale page (ss_2417corir); form dark mode confirmed ss_3858xb9jb. Blocked Queue: 7 rows.**
+**Latest: S858 — QA+DEV: Flash Deal dropdown FIXED (AVAILABLE filter). Records: #159 Chr ✅ applied to roadmap + Pending Chrome Verifications trimmed. QA: #398 ✅ (organizer referral link + Copy Link + stats — ss_4915xx0kl). #259 ✅ (1.5x XP confirmed, Hunt Pass page — ss_7973nmk5n). #290 ✅ (/coupons 3-tier $ + XP display — ss_32554r03n). #158 ✅ ("Notify me of new items" + "Remind Me by Email" visible — ss_4902k1y46). 3 new P3 notes. Blocked Queue: 6 rows (Flash Deal dropdown cleared).**
+
+**Previous: S857 — HEALTH/OPS: Daily CI + Sentry audit. Backend Sentry cleared from 10+ unresolved → 0. All issues were historical (pre-May-30 slow queries fixed by migrations, GarageSaleFinder 0-results from old code already removed, CORS api.finda.sale fix deployed S779/S780). VACUUM ANALYZE run on Organizer + DirectoryClaimEmail + Sale tables (June 2 migration required it). GarageSaleFinder scraper confirmed working (Chicago 169 links, GR 20 links). No code changes.**
+
+**Previous: S856 — DEV: #27b FIXED — print-kit yard sign + printQRPage popups now respect canRemoveWatermark (frontend preview + backend PDF primary footer both gated). New P3: Flash Deal dropdown shows SOLD items in item selector. QA: #159 ✅ Chrome-verified — FlashDealBanner dark mode correct (orange gradient on dark bg, no white/light — P2 FIXED), countdown "Old Radio for next 1h 56m" confirmed on sale page (ss_2417corir); form dark mode confirmed ss_3858xb9jb. Blocked Queue: 7 rows.**
 
 **Previous: S855 — Records: S854 Chrome marks applied to roadmap (#289/#309/#311/#312/#316). DEV: #308 FIXED (Hidden badge in item list). #312/#289 FIXED (Generate button disabled + "X/X used" at cap). QA: #27b P2 BUG — TEAMS "Remove watermark" saves but print kit yard signs still show FindA.Sale branding (ss_28036zjv6). #159 UNVERIFIED (no published sale). New P3: yard sign hardcodes "Estate" sale type. Blocked Queue: 7 rows.**
 
@@ -59,7 +63,7 @@ _⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per 
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (58 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
 | #335 Consignor Payout Email | **P0 (58 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅ after 58 sessions. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
-| Flash Deal SOLD items in dropdown | **P3** — Flash Deal form item selector shows SOLD items (Vintage Lamp status=SOLD appeared in dropdown alongside AVAILABLE items). Organizer can create a deal on a sold item — deal creates in DB but banner can't show (item not in public inventory). | Dispatch findasale-dev: filter FlashDealForm item selector to AVAILABLE items only | S856 |
+| Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated — need product decision on whether cash dual-rail was intentionally removed. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | Email Verification Migration | **P0 (132 sessions, age-escalated 2026-06-03)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S854. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
 | Production DB Re-Seed | **P0 (67 sessions, age-escalated 2026-06-03)** — Seedy2025! rejected for shopper accounts user5–user12+ since S576. Shopper Chrome QA requiring login blocked. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma db seed (back up sale cmpbvumj90001e7t7v5sa1iqi first) | S787 |
 | eBay Connection for user1 | **P0 (69 sessions, age-escalated 2026-06-03)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
@@ -72,51 +76,81 @@ _⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
-| 461 | FB Marketplace Export + Sold Nudge | finda.sale/organizer/promote/0d9563f9-... as Alice Johnson (user1). Clicked "Download Spreadsheet" → GET /api/export/.../facebook-xlsx 200 ✅. DB confirmed fbExportedAt stamped on 3 items. Navigated to edit-item/b4a74f89-... → set status=SOLD → saved → redirected to dashboard. Notification inbox at finda.sale/notifications showed "Mark sold on Facebook Marketplace" / "Silver Bracelet sold on FindA.Sale — don't forget to mark it sold on Facebook Marketplace too" — just now ✅. | S844 |
-| 68 | Command Center Dashboard | finda.sale/organizer/command-center as Alice Johnson. Recent tab clicked → "QA Test Flip Report Sale" with ● ENDED badge, May 21–May 28 dates visible. Tabs (Active/Upcoming/Recent/All) all work. Active tab empty state correct. ss_7321prqsa. Independent re-verification of S804 claim. | S845 |
-| 125 | Inventory Syndication CSV Export | finda.sale/organizer/add-items/... as Alice Johnson (PRO). "Export to eBay" button clicked → modal opened: "Export 2 available items as eBay CSV", watermark toggle ✅, "Remove watermark — TEAMS only" gate visible. ss_5085g9dtj. Independent re-verification of S805 claim. | S845 |
-| 91 | Auto-Markdown (Smart Clearance) | finda.sale/organizer/markdown-cycles as Alice Johnson (user1). /api/markdown-cycles GET 200 (no 403 — tier fix confirmed). Clicked 'Create your first cycle', filled Days=5 %=10. POST /api/markdown-cycles → 201. '5 days: 10% off' card rendered with Active badge. ss_8165qwvge ss_1962w2cmm | S850 |
-| 32 | Shopper Wishlist Alerts + Smart Follow | finda.sale/shopper/wishlist as Leo Thomas (user5). Watching section rendered with 'Antiques Test' alert (Category: antiques, Active badge). Operator precedence fix confirmed. ss_8348w7ewi | S850 |
-| 267 | RSVP Bonus XP Cap | RSVP #5 to finda.sale/sales/cmpxl4jii017xsot00wwosx1x as Leo Thomas → POST /api/sales/.../rsvp 200 → DB confirmed PointsTransaction +2 XP (total=10). RSVP #6 to FORTY YEARS OF TREASURES → POST 200 → NO PointsTransaction (cap enforced, 0 XP). DB-confirmed. ss_964678bs1 ss_049890h4o | S850 |
-| SC | Share-card 401 fix | finda.sale/organizer/promote/0d9563f9-... as Alice Johnson. Page loads ✅. fetch /api/share-card?... credentials:include → 200 image/png (no 401). Share Card section renders with theme/format pickers. ss_1053f6yd7 ss_63157cn5o | S850 |
-| 293 | eBay Listing Data Parity | finda.sale/organizer/sales/0d9563f9-... as Alice Johnson (S850 re-verify). PostSaleEbayPanel loaded: '2 items didn't sell — list on eBay?'. Old Radio + Ceramic Vase with Edit eBay + Classify buttons visible. API GET /api/ebay/organizer/sales/.../unsold-items → 200 confirmed (S849). ss_85819up9q ss_832940555 | S850 |
-| 309 | Consignor Portal Delete | finda.sale/organizer/consignors as Alice Johnson (user1). Added consignor, clicked Delete → in-app modal appeared (NOT window.confirm). Confirmed → "Consignor deleted" toast, list cleared. ss_1713d6g2g (P1 window.confirm bug confirmed FIXED) | S854 |
-| 311 | Multi-Location Transfer + 409 | finda.sale/organizer/locations as Alice Johnson. Transfer modal opened showing item + destination dropdown ✅. DELETE with items → backend returned 409 "Location has assigned items or sales. Reassign them first." UI hides Delete button when items > 0 ✅. ss_1244f5bhu | S854 |
-| 289 | Shopper Coupon Monthly Cap | POST /api/coupons/generate-from-xp as user5 (Leo Thomas, Hunt Pass active). Attempts 1-3: 200, codes 10AEDC3E/0C52C6BE/AFFF3CAC generated (3/3 Hunt Pass limit). Attempt 4: 429 "Monthly limit reached for this tier (3/month). Try a different tier or come back next month." DB-confirmed 3 coupons. | S854 |
-| 312 | XP Spend Path | finda.sale/coupons as user5. XP Store page loads, 3 tiers visible, Generate buttons present. Spent 300 XP (3×100). Page reload shows 2,000→1,700 XP ✅ ss_4903pjd48. Hunt Pass "Bonus Coupon Slots" shown. ⚠️ P3: Generate button stays enabled after cap hit (no disabled UI state). | S854 |
-| 316 | Referral Tranche Anti-Fraud | Registered qa-tranche-s854@example.com with user5 ref code REF-419CCE51. Tranche A: seeded loginsOnDistinctDays=2, then backend /api/auth/login 200 → DB confirmed loginsOnDistinctDays=3, trancheAReleasedAt=2026-06-03T07:13:52, REFERRAL_TRANCHE_A +100 XP to user5 (1720→1820). Tranche B: seeded 2 visits, POST /api/sales/cmpxo2stv.../visit 200 → DB confirmed distinctSalesVisited=[3 IDs], trancheBReleasedAt=2026-06-03T07:18:46, REFERRAL_TRANCHE_B +150 XP to user5 (1820→1970). Both tranches fire correctly. C/D blocked (Stripe/trail required). | S854 |
+| 398 | Organizer Referral Loop | finda.sale/organizer/referrals as Alice Johnson. Referral link REF-7CD8DCC0 displays. Copy Link → "Copied!" toast confirmed. Stats: 1 Organizer Referred, 0 XP Earned. 3-step explainer renders. ss_4915xx0kl. ⚠️ P3: Step 3 copy omits XP component. | S858 |
+| 259 | Hunt Pass Page Accuracy (1.5x) | finda.sale/shopper/hunt-pass as Alice Johnson. "1.5x XP on Everything" confirmed (not 2x). ss_7973nmk5n. XP Earning Matrix + "6 hours early" flash deal copy not on page — removed since S530 (intentional UX simplification). | S858 |
+| 290 | Hunt Pass Dual-Rail + Coupon Tiers | finda.sale/coupons as Alice Johnson. 3 coupon tiers show $ value + XP cost. Standard: $0.75 / 100 XP, Deluxe: $2.00 / 200 XP, Premium: $5.00 / 500 XP. ss_32554r03n. ⚠️ P3: Rarity Boost 50 XP only (no cash option; spec said 15 XP / $0.15). | S858 |
+| 158 | Sale Waitlist | finda.sale/sales/cmpxl4jii017xsot00wwosx1x as Alice Johnson. "Remind Me by Email" bell + "Notify me of new items" both visible on published sale page. ss_4902k1y46. | S858 |
 
 ---
 
 ## Next Session
 
-**S856 done. Blocked Queue: 7 rows. DEV mode permitted (< 8).**
+**S858 done. Blocked Queue: 6 rows. DEV mode permitted (< 8).**
 
-1. **Fix Flash Deal SOLD-item dropdown** (`Skill('findasale-dev')`): FlashDealForm item selector shows SOLD items. Filter query to AVAILABLE only. File: `packages/frontend/pages/organizer/dashboard.tsx` — find where saleItems are passed to FlashDealForm and add status filter.
-2. **Apply #159 Chr ✅ to roadmap** — Records: update Chr column → ✅ S856 (ss_2417corir).
-3. **#317/#320** — Still UNVERIFIED. Defer.
-4. **#335 payout** — Patrick check deseee@yahoo.com.
-5. **#332 Shopify** — Blocked on dev store.
-6. **4 P0 Patrick-action items** in Blocked Queue: Email Verification Migration, DB Re-Seed, eBay Connection, Bing Sitemap.
+1. **Records: Apply S858 Chrome marks to roadmap** — #398, #259, #290, #158 all in Pending Chrome Verifications with full evidence. `Skill('findasale-records')` at session start.
+2. **#317/#320** — Still UNVERIFIED. Defer.
+3. **#335 payout** — Patrick check deseee@yahoo.com.
+4. **#332 Shopify** — Blocked on dev store.
+5. **5 P0 Patrick-action items** in Blocked Queue: Email Verification Migration, DB Re-Seed, eBay Connection, Bing Sitemap, Rarity Boost spec confirm.
+6. **QA targets available** (no Stripe/GPS required): #230 Smart Buyer Widget (needs active/published sale on user1), #255 Rank-Up Notifications.
 
-**Blocked Queue: 7 rows. DEV mode permitted.**
+**Blocked Queue: 6 rows. DEV mode permitted.**
 
 **Patrick actions required:**
 
 1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
-2. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
-3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-4. **Push S856 fixes + docs:**
+2. **Confirm Rarity Boost intent** — /coupons shows Rarity Boost at 50 XP, no cash option. Was the $0.15 cash dual-rail intentionally removed? Say yes or no.
+3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+5. **Push S858 fixes + docs:**
 ```
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/frontend/pages/organizer/print-kit/[saleId].tsx
 git add packages/backend/src/controllers/printKitController.ts
-git commit -m "fix: #27b print-kit canRemoveWatermark gates frontend preview + backend PDF footer; docs: S856 wrap"
+git commit -m "fix: Flash Deal dropdown AVAILABLE filter; #27b print-kit watermark gate; docs: S858 wrap + roadmap #159 Chr"
 .\push.ps1
 ```
 
 ## Recent Sessions
+
+### S858 — QA+DEV: Flash Deal dropdown fixed + 4 features Chrome-verified
+
+**DEV — Flash Deal dropdown (0 TS errors):**
+- `packages/frontend/pages/organizer/dashboard.tsx`: `useQuery` for flashDealItems now includes `status` in raw type, captures it in `queryFn` map, and filters via `select: (items) => items.filter(i => i.status === 'AVAILABLE')`. SOLD items no longer appear in Flash Deal form selector.
+
+**Records:**
+- `claude_docs/strategy/roadmap.md`: #159 Chr ⬜ → ✅ S857 (S856 evidence applied cross-session).
+- `claude_docs/STATE.md`: Pending Chrome Verifications trimmed from 14→2 (prior entries already in roadmap).
+
+**QA (4 features, all as Alice Johnson / user1@example.com):**
+- #398 ✅ Organizer Referral Loop — /organizer/referrals: link renders, Copy Link → "Copied!" confirmed, stats block (ss_4915xx0kl). ⚠️ P3: Step 3 copy omits XP.
+- #259 ✅ Hunt Pass Accuracy — /shopper/hunt-pass: "1.5x XP on Everything" confirmed (ss_7973nmk5n). XP matrix + "6 hours early" copy removed from page since S530 (intentional simplification).
+- #290 ✅ Dual-Rail Coupons — /coupons: 3-tier $ + XP display correct (ss_32554r03n). ⚠️ P3: Rarity Boost 50 XP only (spec said 15 XP / $0.15 cash — spec likely outdated).
+- #158 ✅ Sale Waitlist — /sales/cmpxl4jii017xsot00wwosx1x: "Remind Me by Email" + "Notify me of new items" visible (ss_4902k1y46).
+
+**Blocked Queue: 7→6 rows (Flash Deal SOLD dropdown cleared, Rarity Boost spec gap added P3).**
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md` · `packages/frontend/pages/organizer/dashboard.tsx`
+
+---
+
+### S857 — HEALTH/OPS: Sentry audit + DB maintenance
+
+**Automated daily health + Patrick-requested dispatch and investigation.**
+
+- **Sentry backend cleared 10 → 0 unresolved:** Resolved 25 historical slow-query issues (pre-May-30, covered by migrations 20260530000001 + 20260602000000). Resolved 22 GarageSaleFinder 0-results issues (old `captureMessage` code already removed from source — current code has "Do NOT Sentry-capture here" comment). Resolved CORS `api.finda.sale` issue (fix in code since S779/S780, last fired May 24).
+- **VACUUM ANALYZE:** Run on Organizer, DirectoryClaimEmail, Sale tables (June 2 migration comment required manual run — can't run inside transaction).
+- **GarageSaleFinder scraper confirmed working:** Live-tested Chicago (169 links), Grand Rapids (20 links). Sparse metros (Yakima, Pocatello) have genuinely 0 active listings — expected behavior.
+- **api.finda.sale = Railway backend:** Confirmed via `server: railway-edge` headers. CORS fix (`allowedOrigins.push('https://api.finda.sale')`) already in index.ts with full explanation comment.
+- **MulterError on /rapidfire:** Already suppressed in instrument.ts `beforeSend` filter. 3 historical Sentry captures from before the filter was added.
+- **No code changes this session.**
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S856 — DEV #27b FIXED + QA #159 ✅
 
@@ -196,55 +230,4 @@ git commit -m "fix: #27b print-kit canRemoveWatermark gates frontend preview + b
 - Bug 3 (P2): `/unsubscribe` no-token spinner fixed — `router.isReady` guard + else branch shows "Invalid unsubscribe link" error state.
 - Bug 4 (P3): `ItemPhotoManager.tsx` em dash literal (`\u2014`) → actual em dash (`—`) in Photos empty state.
 
-**QA attempts:** #320 Async eBay Comp: DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden per D-005). Chrome UNVERIFIED — CSRF blocks raw fetch, React controlled-input blocks null-price save via DOM. `aiSuggestedPrice` not in `getItemById` select. #317 Geofence QR: Frontend graceful fallback code-confirmed (`catch` → proceed without coords). Chrome UNVERIFIED — test clues in DB return "not found" from API (no linked items/hunt configured).
-
-**TypeScript:** 0 errors frontend, 0 errors backend.
-
-**Files changed:** `packages/backend/src/controllers/itemController.ts` · `packages/frontend/pages/organizer/add-items/[saleId].tsx` · `packages/frontend/pages/unsubscribe.tsx` · `packages/frontend/components/ItemPhotoManager.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S851 — QA PASS + Records housekeeping
-
-**Records:** Applied S850 Chrome ✅ marks to roadmap.md for #91, #32, #267, #293, and share-card 401 fix (#33). Fixed stale #316 status (both occurrences) from "Pending push + migration" → "Shipped S552/S735 — code + migration live." Fixed #206 to note intentional redirect to /faq.
-
-**QA verified:** #334 Automatic Markdown Cycles ✅ (post-S849 tier fix confirmed, no 403, cycle card renders — ss_78175awmd). #280 Condition Rating XP ✅ (conditionGrade B set on Old Radio, reloaded persists, XP 93→98 +5 confirmed via Organizer Special widget — ss_5053gn0a0, ss_2855apltb). #206 confirmed intentional redirect to /faq per condition-guide.tsx router.replace call.
-
-**4 new bugs discovered and queued:**
-- P2: edit-item shows "Item not found" for returned-to-inventory items (saleId=null) — all 3 inventory items affected
-- P2: add-items inline editor "Full Edit ↗" button opens next item's editor instead of navigating to edit-item page
-- P2: /unsubscribe without ?token= shows infinite spinner — no error state
-- P3: \u2014 unicode escape renders literally in edit-item Photos empty state
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
-
----
-
-### S850 — QA BLITZ: #91 ✅ #32 ✅ #267 ✅ share-card ✅ #293 ✅
-
-**All 4 S849 fixes Chrome-verified.** #91 Auto-Markdown: POST /api/markdown-cycles → 201, '5 days: 10% off' cycle rendered (ss_8165qwvge ss_1962w2cmm). #32 Wishlist Alerts: Watching section renders with Antiques Test alert, Active badge visible (ss_8348w7ewi). Share-card: fetch credentials:include → 200 image/png confirmed, no 401 (ss_1053f6yd7 ss_63157cn5o). #267 RSVP cap: seeded 4 RSVP txns (8 XP) via psycopg2, RSVP #5 Chrome → +2 XP (→10, cap hit), RSVP #6 Chrome → 0 XP DB-confirmed (ss_964678bs1 ss_049890h4o). #293 re-screenshot: PostSaleEbayPanel loaded with 2 items, Edit eBay buttons visible (ss_85819up9q ss_832940555). Roadmap: #68 Chr ✅ S845 + #125 Chr ✅ S845 applied. Blocked Queue: 6→2 rows.
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
-
----
-
-### S849 — QA + DEV BLITZ: #293 ✅, #91 P0 fixed, #32 P1 fixed, share-card fixed
-
-**5 parallel dispatches.** #293 Chrome-verified (no ss_ IDs — roadmap update deferred). #267 DB-confirmed still blocked (max 4 RSVPs in any month, cap threshold never reached). Share-card 401 fixed (cookie-first auth in edge function). #91 P0 root cause: markdownCycleController read UserRoleSubscription instead of Organizer.subscriptionTier — all non-Stripe organizers got 403. Fixed via requireTier middleware. #32 P1 root cause: operator precedence bug (`||` before `&&`) caused Watching section to never render when alerts existed. One-line fix.
-
-**New bugs found:** #32 alert DELETE returns 403 (P2 — separate from rendering fix). Share-card public/auth question needs product decision.
-
-**Files changed:** `packages/frontend/pages/api/share-card.tsx` · `packages/backend/src/routes/markdownCycles.ts` · `packages/backend/src/controllers/markdownCycleController.ts` · `packages/frontend/pages/organizer/markdown-cycles.tsx` · `packages/frontend/pages/shopper/wishlist.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX
-
-**Full audit completed.** Every email-sending service in the backend audited. Incident confirmed stopped — no runaway sends in Railway logs. Two previously unknown P0 blast-to-all jobs discovered and fixed.
-
-**Global daily quota counter built (`emailService.ts`):** Every send now logs `[EmailService] Send #N today (jobName → recipient)`. Threshold warnings at 1,500/1,800/1,950 via console.error in Railway logs. `getDailyEmailCount()` exported for future admin route. No more flying blind.
-
-**Fixes applied (10 files):**
-- `outreachEmailsCron.ts` — DB-backed cross-run dedup (in-memory Set left duplicate-address rows vulnerable across 4-hour windows)
-- `weeklyEmailService.ts` (Sunday 6pm) — `notificationPrefs.emailWeeklyDigest` opt-out + suppression check
-- `notificationController.ts` (Friday 9am) — 
+**QA attempts:** #320 Async eBay Comp: DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden per D-005). Chrome UNVERIFIED — CSRF blocks raw fetch, React controlled-input 

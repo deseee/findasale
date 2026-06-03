@@ -90,16 +90,18 @@ const OrganizerDashboard = () => {
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
   const [socialPostSale, setSocialPostSale] = useState<{ id: string; title: string } | null>(null);
-  const { data: flashDealItems = [] } = useQuery<Array<{ id: string; title: string; price: number }>>({
+  const { data: flashDealItems = [] } = useQuery<Array<{ id: string; title: string; price: number; status: string }>, Error, Array<{ id: string; title: string; price: number }>>({
     queryKey: ['flash-deal-items', flashDealSaleId],
     queryFn: async () => {
       const res = await api.get(`/items/drafts?saleId=${flashDealSaleId}&limit=200`);
-      return (res.data.items ?? res.data).map((item: { id: string; title: string; price?: number }) => ({
+      return (res.data.items ?? res.data).map((item: { id: string; title: string; price?: number; status?: string }) => ({
         id: item.id,
         title: item.title,
         price: item.price ?? 0,
+        status: item.status ?? '',
       }));
     },
+    select: (items) => items.filter((i) => i.status === 'AVAILABLE'),
     enabled: !!flashDealSaleId,
   });
   const [boostSaleId, setBoostSaleId] = useState<string | null>(null);

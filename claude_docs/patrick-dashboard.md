@@ -1,10 +1,13 @@
-# Patrick's Dashboard — S856 Wrap
+# Patrick's Dashboard — S858 Wrap (QA+DEV)
 
 ---
 
-## What Happened This Session (S856)
+## What Happened This Session (S858)
 
-**#27b watermark removal FIXED in print kit (frontend preview + backend PDF). #159 Flash Deals ✅ Chrome-verified — dark mode correct, countdown banner confirmed. New P3: Flash Deal form shows SOLD items in dropdown. Blocked Queue: 7 rows — DEV mode permitted.**
+**Flash Deal dropdown fixed (SOLD items no longer appear). Records applied #159 to roadmap. QA verified 4 features: organizer referral loop, Hunt Pass accuracy, coupon dual-display, sale waitlist. Blocked Queue: 6 rows — DEV mode permitted.**
+
+### Previous (S857 — automated health/ops)
+Backend Sentry cleared 10+ → 0. VACUUM ANALYZE on 3 tables. GarageSaleFinder confirmed working. No code changes.
 
 ---
 
@@ -12,23 +15,22 @@
 
 | # | Feature | Result | Notes |
 |---|---------|--------|-------|
-| #27b | Watermark Removal (Print Kit) | ✅ FIXED | Frontend yard sign preview + printQRPage popups now respect TEAMS "Remove watermark" toggle. Backend PDF primary footer ("Scan to browse & buy online • finda.sale") also gated. |
+| Flash Deal dropdown | AVAILABLE filter | ✅ FIXED | dashboard.tsx useQuery now filters SOLD items via select — only AVAILABLE items appear in Flash Deal form |
 
 ## Features Verified This Session
 
 | # | Feature | Result | Evidence |
 |---|---------|--------|---------|
-| #159 | Flash Deals dark mode | ✅ VERIFIED | Form: dark navy bg, no white/light (P2 fixed). Banner: "⚡ Flash Deal — 25% off! Old Radio for next 1h 56m" confirmed on sale page. ss_2417corir |
-
-## New P3 Bug Found
-
-**Flash Deal SOLD items in dropdown** — The Flash Deal item selector shows SOLD items alongside available ones. If you create a deal on a sold item it writes to the DB but the banner won't appear (sold items are filtered from the public inventory). Fix: filter the dropdown to `AVAILABLE` items only.
+| #398 | Organizer Referral Loop | ✅ | /organizer/referrals: link + Copy Link + stats block. ⚠️ P3: Step 3 copy omits XP. ss_4915xx0kl |
+| #259 | Hunt Pass 1.5x Accuracy | ✅ | "1.5x XP on Everything" confirmed (not 2x). ss_7973nmk5n |
+| #290 | Coupon Dual-Display | ✅ | /coupons: $0.75/100XP, $2.00/200XP, $5.00/500XP — all show $ + XP. ss_32554r03n. ⚠️ P3: Rarity Boost 50 XP only |
+| #158 | Sale Waitlist | ✅ | "Remind Me by Email" + "Notify me of new items" both visible on sale page. ss_4902k1y46 |
 
 ---
 
 ## Blocked Queue Status
 
-**7 rows (P2 #27b cleared, replaced with new P3):**
+**6 rows — DEV mode permitted:**
 
 | # | Item | Priority | Action |
 |---|------|----------|--------|
@@ -38,36 +40,30 @@
 | Production DB Re-Seed | P0 aging | **Patrick: run db seed** |
 | eBay Connection (user1) | P0 aging | **Patrick: connect eBay in settings** |
 | Bing Webmaster Sitemap | P0 aging | **Patrick: add sitemap to Bing** |
-| Flash Deal SOLD Dropdown | P3 new | Dispatch findasale-dev next session |
 
-**DEV mode permitted** — 7 rows, below ≥8 ceiling.
+Rarity Boost spec gap (P3) added — Patrick confirmation needed.
 
 ---
 
 ## Patrick Actions Required
 
 1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅, tell Claude.
-2. **Push S856 wrap** (see push block below).
-3. **Email Verification Migration** — Run in PowerShell:
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-   $env:DATABASE_URL="[Railway URL from dashboard]"
-   npx prisma migrate deploy
-   npx prisma generate
-   ```
-4. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
-5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+2. **Confirm Rarity Boost** — /coupons shows "Activate Rarity Boost (50 XP)" with no cash option. Was the $0.15 cash dual-rail intentionally removed, or is this a bug? Just say yes (removed intentionally) or no (it's a bug).
+3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
 ---
 
-## Push Block (S856)
+## Push Block (S858 — includes S856 unpushed files)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/pages/organizer/print-kit/[saleId].tsx
+git add claude_docs/strategy/roadmap.md
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add "packages/frontend/pages/organizer/print-kit/[saleId].tsx"
 git add packages/backend/src/controllers/printKitController.ts
-git commit -m "fix: #27b print-kit canRemoveWatermark gates frontend preview + backend PDF footer; docs: S856 wrap"
+git commit -m "fix: Flash Deal dropdown AVAILABLE filter; #27b print-kit watermark gate; docs: S858 wrap + roadmap #159 Chr"
 .\push.ps1
 ```
