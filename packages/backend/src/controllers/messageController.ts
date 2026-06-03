@@ -139,52 +139,79 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'organizerId and body are required' });
     }
 
-    // Shoppers send to organizers. Organizers reply via conversationId route.
-    // Find or create conversation
-    const conversation = await prisma.conversation.upsert({
-      where: {
-        shopperUserId_organizerId_saleId: {
-          shopperUserId: userId,
-          organizerId,
-          saleId: saleId ?? null,
-        },
-      },
-      update: { lastMessageAt: new Date() },
-      create: {
-        shopperUserId: userId,
-        organizerId,
-        saleId: saleId ?? null,
-        lastMessageAt: new Date(),
-      },
-    });
-
-
-    // Guard: reject messages to unmanaged listings
+    // Guard: reject messages to unmanaged listings BEFORE creating any records
     if (saleId) {
       const sale = await prisma.sale.findUnique({
         where: { id: saleId },
-        select: { id: true, isUnmanagedListing: true }
+        select: { id: true, isUnmanagedListing: true },
       });
       if (sale?.isUnmanagedListing) {
         return res.status(403).json({
           message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
-          code: 'UNMANAGED_LISTING'
+          code: 'UNMANAGED_LISTING',
         });
       }
     }
-    const message = await prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        senderId: userId,
-        body: body.trim(),
+
+    // Find existing conversation — upsert cannot be used here because Prisma 5's
+    // compound unique input requires saleId: string (non-nullable), but saleId is
+    // optional. Passing null throws PrismaClientValidationError at runtime.
+    const existing = await prisma.conversation.findFirst({
+      where: {
+        shopperUserId: userId,
+        organizerId,
+        saleId: saleId ?? null,
       },
-      include: { sender: { select: { id: true, name: true } } },
     });
+
+    // Wrap conversation upsert + message creation in a transaction so an orphaned
+    // Conversation is never left behind if message insertion fails.
+    const [conversation, message] = await prisma.$transaction(async (tx) => {
+      const conv = existing
+        ? await tx.conversation.update({
+            where: { id: existing.id },
+            data: { lastMessageAt: new Date() },
+          })
+        : await tx.conversation.create({
+            data: {
+              shopperUserId: userId,
+              organizerId,
+              saleId: saleId ?? null,
+              lastMessageAt: new Date(),
+            },
+          });
+
+      const msg = await tx.message.create({
+        data: {
+          conversationId: conv.id,
+          senderId: userId,
+          body: body.trim(),
+        },
+        include: { sender: { select: { id: true, name: true } } },
+      });
+
+      return [conv, msg] as const;
+    });
+
+    // Notify the organizer of the new message (fire-and-forget)
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { userId: true },
+    });
+    if (organizer) {
+      createNotification({
+        userId: organizer.userId,
+        type: 'message',
+        title: `New message from ${message.sender.name}`,
+        body: message.body.substring(0, 100),
+        link: `/messages/${conversation.id}`,
+      }).catch(() => {});
+    }
 
     res.status(201).json({ conversation, message });
   } catch (error) {
     console.error('[messages] sendMessage error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Failed to send message. Please try again.' });
   }
 };
 

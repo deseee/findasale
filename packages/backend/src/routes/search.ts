@@ -125,6 +125,7 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
               endDate: true,
               photoUrls: true,
               isAuctionSale: true,
+              saleType: true,
               organizer: { select: { id: true, businessName: true, reputationTier: true } },
             },
             take: limit,
@@ -226,6 +227,7 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
             endDate: true,
             photoUrls: true,
             isAuctionSale: true,
+            saleType: true,
             organizer: { select: { id: true, businessName: true, reputationTier: true } },
           },
         });

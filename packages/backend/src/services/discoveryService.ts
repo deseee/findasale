@@ -17,6 +17,7 @@ export interface SaleWithScore {
   tags: string[];
   status: string;
   isAuctionSale: boolean;
+  saleType: string;
   qrScanCount: number;
   organizerId: string;
   createdAt: Date;
@@ -93,6 +94,7 @@ export async function getPersonalizedFeed(
       tags: true,
       status: true,
       isAuctionSale: true,
+      saleType: true,
       qrScanCount: true,
       organizerId: true,
       createdAt: true,
