@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { regionConfig } from '../config/regionConfig';
 import { buildEmail } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -174,13 +175,12 @@ export const sendWeeklyEmails = async (): Promise<void> => {
       where: {
         role: 'USER', // Only regular shoppers, not organizers
         updatedAt: { gte: thirtyDaysAgo },
-        // Optional: filter by emailNotifications if field exists
-        // emailNotifications: { not: false }
       },
       select: {
         id: true,
         email: true,
         name: true,
+        notificationPrefs: true,
       },
     });
 
@@ -218,6 +218,22 @@ export const sendWeeklyEmails = async (): Promise<void> => {
     // Send personalized emails to each user
     for (const user of activeUsers) {
       try {
+        // Opt-out check: notificationPrefs.emailWeeklyDigest === false means explicit opt-out.
+        // null/undefined/true all mean opted-in (conservative default).
+        const prefs = (user.notificationPrefs as Record<string, unknown> | null) ?? {};
+        if (prefs['emailWeeklyDigest'] === false) {
+          console.log(`[WeeklyEmail] Skipped ${user.email} — opted out of weekly digest`);
+          continue;
+        }
+
+        // Suppression check: covers hard bounces, soft bounces, complaints, and manual opt-outs
+        // from the outreach pipeline (shared EmailSuppression table).
+        const isSuppressed = await suppressionService.isSuppressed(user.email);
+        if (isSuppressed) {
+          console.log(`[WeeklyEmail] Skipped ${user.email} — suppressed (bounce/complaint/opt-out)`);
+          continue;
+        }
+
         // Extract category preferences from user's history
         const userCategories = await extractCategoryPreferences(user.id);
 

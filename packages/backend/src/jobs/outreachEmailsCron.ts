@@ -427,6 +427,29 @@ export const sendOutreachEmails = async (): Promise<void> => {
         const touchNum = determineTouchToSend(record);
         if (!touchNum) continue;
 
+        // DB-backed cross-run dedup: if another row with the same emailAddress has already
+        // had this touch sent (in a previous run window), mark this row as sent too and skip.
+        // This prevents two DirectoryClaimEmail rows for the same address from each independently
+        // sending touch N in different 4-hour windows — the in-memory seenEmails Set only
+        // dedups within a single run; this check covers across runs.
+        const relevantTouchField = `touch${touchNum}SentAt` as const;
+        const alreadySentByOtherRow = await prisma.directoryClaimEmail.findFirst({
+          where: {
+            emailAddress: record.emailAddress,
+            id: { not: record.id },
+            [relevantTouchField]: { not: null },
+          },
+          select: { id: true },
+        });
+        if (alreadySentByOtherRow) {
+          console.log(`[OutreachCron] Cross-run dedup: org:${record.organizerId} touch${touchNum} already sent via row ${alreadySentByOtherRow.id} — marking and skipping`);
+          await prisma.directoryClaimEmail.update({
+            where: { id: record.id },
+            data: { [relevantTouchField]: new Date() },
+          });
+          continue;
+        }
+
         const outreachSecret = process.env.OUTREACH_SECRET;
         if (!outreachSecret) throw new Error('OUTREACH_SECRET env var is required');
 
@@ -636,7 +659,7 @@ export async function startupCatchUp(): Promise<void> {
       console.log(`[OutreachEmails] Startup catch-up: last send was ${Math.round(hoursSinceLast)}h ago, firing immediate window`);
       await sendOutreachEmails();
     } else {
-      console.log(`[OutreachEmails] Startup catch-up: last send was ${Math.round(hoursSinceLast * 10) / 10}h ago, no catch-up needed`);
+      console.log(`[OutreachEmails] Startup catch-up: last send was ${Math.round(hoursSinceLast * 10) / 10}hago, no catch-up needed`);
     }
   } catch (err: any) {
     console.error('[OutreachEmails] Startup catch-up failed:', err.message);
