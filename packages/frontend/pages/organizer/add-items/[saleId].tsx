@@ -2364,12 +2364,13 @@ const AddItemsDetailPage = () => {
                             >
                               Save
                             </button>
-                            <Link
-                              href={`/organizer/edit-item/${item.id}`}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); router.push(`/organizer/edit-item/${item.id}`); }}
                               className="px-4 py-1.5 border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 text-sm font-semibold rounded hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
                             >
                               Full Edit ↗
-                            </Link>
+                            </button>
                             <button
                               type="button"
                               onClick={() => setExpandedItemId(null)}

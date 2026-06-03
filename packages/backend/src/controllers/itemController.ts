@@ -480,6 +480,7 @@ export const getItemById = async (req: Request, res: Response) => {
       select: {
         id: true,
         saleId: true,
+        organizerId: true,
         title: true,
         sku: true,
         description: true,
@@ -599,7 +600,17 @@ export const getItemById = async (req: Request, res: Response) => {
     };
 
     // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
-    const isOwner = authReq.user?.id === item.sale?.organizer?.userId;
+    let isOwner = authReq.user?.id === item.sale?.organizer?.userId;
+
+    // For inventory items (saleId=null), check ownership via denormalized organizerId field
+    // (sale join returns null for these items, so the sale-path isOwner check fails)
+    if (!isOwner && !item.saleId && (item as any).organizerId && authReq.user) {
+      const inventoryOrganizer = await prisma.organizer.findFirst({
+        where: { id: (item as any).organizerId, userId: authReq.user.id },
+        select: { id: true }
+      });
+      if (inventoryOrganizer) isOwner = true;
+    }
 
     // For everyone else, enforce public visibility rules: must be active.
     // Allow NULL draftStatus (legacy/seeded items pre-Rapidfire) and PUBLISHED items.
