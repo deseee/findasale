@@ -12,6 +12,7 @@
 import { prisma } from '../lib/prisma';
 import { sendPushNotification } from '../utils/webpush';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 
 /**
@@ -278,11 +279,19 @@ const sendMatchNotificationEmail = async (
     <p>Happy collecting!</p>
   `;
 
+  // Suppression check
+  const suppressed = await suppressionService.isSuppressed(email);
+  if (suppressed) {
+    console.log(`[collectorPassport] Suppressed: ${email}`);
+    return;
+  }
+
   await emailService.emails.send({
     from: process.env.SES_FROM_EMAIL || 'FindA.Sale <notifications@send.finda.sale>',
     to: email,
     subject: `${matchedItems.length} item${matchedItems.length !== 1 ? 's' : ''} match your collection!`,
     html,
+    jobName: 'collectorPassportService',
   });
 };
 
