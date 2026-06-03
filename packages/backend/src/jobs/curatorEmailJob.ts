@@ -178,6 +178,7 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
           to: recipientEmail,
           subject: `This week from ${organizerName} on FindA.Sale`,
           html,
+          jobName: 'curatorEmailJob',
         });
         sentCount++;
       } catch (err) {

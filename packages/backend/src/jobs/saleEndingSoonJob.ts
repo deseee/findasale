@@ -125,6 +125,7 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
                 to: subscriber.email,
                 subject: emailTemplate.subject,
                 html: emailTemplate.html,
+                jobName: 'saleEndingSoonJob',
               });
               console.log(
                 `Sale ending soon email sent to ${subscriber.email} for sale ${sale.id}`

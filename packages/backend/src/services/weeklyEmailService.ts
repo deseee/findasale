@@ -154,6 +154,7 @@ const sendWeeklyPicksEmail = async (email: string, userId: string, name: string,
       to: email,
       subject: `${picks.length} New Sale Finds This Week (New Arrivals)`,
       html,
+      jobName: 'weeklyEmailService',
     });
     console.log(`✓ Weekly picks email sent to ${email}`);
   } catch (err) {

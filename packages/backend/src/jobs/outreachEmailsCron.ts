@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { suppressionService } from '../services/suppressionService';
 import { batchSyncLeadTiersToMailerLite } from '../services/mailerliteService';
+import { incrementDailyEmailCount } from '../lib/emailService';
 
 // Tier-specific T1 templates (strategy doc §2.1–2.3). T2–T4 are shared across tiers.
 // Token format: [Token Name] — replaced by renderTemplate() below.
@@ -536,6 +537,8 @@ export const sendOutreachEmails = async (): Promise<void> => {
           userId: 'me',
           requestBody: { raw: rawMessage },
         });
+
+        incrementDailyEmailCount('outreachEmailsCron', toEmail);
 
         // Log SENT event for CAN-SPAM audit trail
         try {

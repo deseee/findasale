@@ -15,6 +15,7 @@
 import { prisma } from '../lib/prisma';
 import { sendPushNotification } from '../utils/webpush';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 
 export interface WishlistAlertInput {
@@ -229,36 +230,43 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
 
       // Email notification
       if (alert.user.email) {
-        try {
-          await emailService.emails.send({
-            from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
-            to: alert.user.email,
-            subject: `✨ Found items matching your wishlist alert: ${alert.name}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #333;">Your wishlist alert found a match!</h2>
-                <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #8fb897;">
-                  <h3 style="margin-top: 0; color: #333;">Alert: ${alert.name}</h3>
-                  <p style="margin: 8px 0; color: #666;"><strong>${sale.title}</strong></p>
-                  <p style="margin: 8px 0; color: #666;">📍 ${sale.address}, ${sale.city}, ${sale.state}</p>
-                  <p style="margin: 8px 0; color: #666;">🕐 ${formattedDate}</p>
-                  <p style="margin: 8px 0; color: #666;">✓ ${matchingItems.length} matching item(s) found</p>
+        // Suppression check
+        const isSuppressed = await suppressionService.isSuppressed(alert.user.email);
+        if (isSuppressed) {
+          console.log(`[wishlistAlert] Suppressed: ${alert.user.email}`);
+        } else {
+          try {
+            await emailService.emails.send({
+              from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
+              to: alert.user.email,
+              subject: `✨ Found items matching your wishlist alert: ${alert.name}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #333;">Your wishlist alert found a match!</h2>
+                  <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #8fb897;">
+                    <h3 style="margin-top: 0; color: #333;">Alert: ${alert.name}</h3>
+                    <p style="margin: 8px 0; color: #666;"><strong>${sale.title}</strong></p>
+                    <p style="margin: 8px 0; color: #666;">📍 ${sale.address}, ${sale.city}, ${sale.state}</p>
+                    <p style="margin: 8px 0; color: #666;">🕐 ${formattedDate}</p>
+                    <p style="margin: 8px 0; color: #666;">✓ ${matchingItems.length} matching item(s) found</p>
+                  </div>
+                  <p>
+                    <a href="${saleUrl}"
+                       style="background: #8fb897; color: white; padding: 10px 20px;
+                              text-decoration: none; border-radius: 4px; display: inline-block;">
+                      View Sale
+                    </a>
+                  </p>
+                  <p style="font-size: 14px; color: #999; margin-top: 30px;">
+                    You're receiving this because you set up a wishlist alert for "${alert.name}" on FindA.Sale.
+                  </p>
                 </div>
-                <p>
-                  <a href="${saleUrl}"
-                     style="background: #8fb897; color: white; padding: 10px 20px;
-                            text-decoration: none; border-radius: 4px; display: inline-block;">
-                    View Sale
-                  </a>
-                </p>
-                <p style="font-size: 14px; color: #999; margin-top: 30px;">
-                  You're receiving this because you set up a wishlist alert for "${alert.name}" on FindA.Sale.
-                </p>
-              </div>
-            `,
-          });
-        } catch (err: any) {
-          console.error(`✗ Wishlist alert email failed for user ${alert.user.id}:`, err?.message);
+              `,
+              jobName: 'wishlistAlertService',
+            });
+          } catch (err: any) {
+            console.error(`✗ Wishlist alert email failed for user ${alert.user.id}:`, err?.message);
+          }
         }
       }
 

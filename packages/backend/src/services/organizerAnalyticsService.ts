@@ -3,6 +3,7 @@
 
 import { prisma } from '../lib/prisma';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -290,12 +291,33 @@ async function sendOrganizerDigestEmail(stats: OrganizerWeeklyStats): Promise<vo
     : null;
   const html = buildOrganizerDigestHtml(stats, unsubToken);
 
+  // Suppression check
+  const suppressed = await suppressionService.isSuppressed(stats.organizerEmail);
+  if (suppressed) {
+    console.log(`[OrganizerDigest] Suppressed: ${stats.organizerEmail}`);
+    return;
+  }
+
+  // Opt-out check
+  if (stats.userId) {
+    const userPrefs = await prisma.user.findUnique({
+      where: { id: stats.userId },
+      select: { notificationPrefs: true },
+    });
+    const prefs = (userPrefs?.notificationPrefs as Record<string, unknown> | null) ?? {};
+    if (prefs['emailWeeklyDigest'] === false) {
+      console.log(`[OrganizerDigest] Opted out: ${stats.organizerEmail}`);
+      return;
+    }
+  }
+
   try {
     await emailService.emails.send({
       from: FROM_EMAIL,
       to: stats.organizerEmail,
       subject: `Your Weekly Performance Summary – ${stats.totalItemsSold} items sold`,
       html,
+      jobName: 'organizerAnalyticsService',
     });
     console.log(`✓ Organizer digest email sent to ${stats.organizerEmail}`);
   } catch (err) {

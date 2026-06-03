@@ -362,6 +362,7 @@ export async function notifyMatchedBuyers(saleId: string): Promise<void> {
           to: buyer.email,
           subject: `New sale you might like: ${sale.title}`,
           html,
+          jobName: 'buyerMatchService',
         });
 
         // Create in-app notification for matched sale (fire-and-forget)

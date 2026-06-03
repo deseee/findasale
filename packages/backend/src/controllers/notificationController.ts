@@ -217,7 +217,7 @@ export const sendSMSUpdate = async (req: AuthRequest, res: Response) => {
 };
 
 // Helper: build the HTML for a weekly digest email
-const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string): string => {
+const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, unsubUrl: string): string => {
   const saleCards = sales.map((sale) => {
     const startDate = new Date(sale.startDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     const endDate = new Date(sale.endDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -263,6 +263,7 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string): s
         <a href="${frontendUrl}" style="color:#2563eb;">View all sales</a> &middot;
         <a href="${frontendUrl}/shopper/dashboard" style="color:#2563eb;">My Dashboard</a>
       </p>
+      <p style="font-size:12px;color:#9ca3af;margin-top:8px;">Don't want these? <a href="${unsubUrl}" style="color:#6b7280;">Unsubscribe</a></p>
     </div>
   </div>
 </body>
@@ -308,7 +309,7 @@ export const sendWeeklyDigest = async () => {
 
     // Get all users with email addresses
     const users = await prisma.user.findMany({
-      select: { id: true, email: true, name: true },
+      select: { id: true, email: true, name: true, notificationPrefs: true },
       where: {
         email: { not: '' },
       },
@@ -320,20 +321,41 @@ export const sendWeeklyDigest = async () => {
     let sent = 0;
     let failed = 0;
 
+    const { suppressionService } = await import('../services/suppressionService');
+    const { generateUnsubscribeToken } = await import('./unsubscribeController');
+
     for (const user of users) {
       try {
-        const html = buildDigestHtml(user.name, upcomingSales, frontendUrl);
+        // Opt-out check
+        const prefs = (user.notificationPrefs as Record<string, unknown> | null) ?? {};
+        if (prefs['emailWeeklyDigest'] === false) continue;
+
+        // Suppression check
+        const suppressed = await suppressionService.isSuppressed(user.email);
+        if (suppressed) continue;
+
+        // Per-user unsubscribe URL
+        let unsubUrl: string;
+        try {
+          const token = await generateUnsubscribeToken(user.id, 'emailWeeklyDigest');
+          unsubUrl = `${frontendUrl}/unsubscribe?token=${token}`;
+        } catch {
+          unsubUrl = `${frontendUrl}/unsubscribe?email=${encodeURIComponent(user.email)}`;
+        }
+
+        const html = buildDigestHtml(user.name, upcomingSales, frontendUrl, unsubUrl);
 
         await emailService.emails.send({
           from: fromEmail,
           to: user.email,
           subject: `🏷️ ${upcomingSales.length} estate sale${upcomingSales.length > 1 ? 's' : ''} this weekend near you`,
           html,
+          jobName: 'notificationController-weeklyDigest',
         });
 
         sent++;
 
-        // Resend free tier: 1 email/sec — add small delay to avoid rate limit
+        // Rate limit guard — small delay between sends
         await new Promise((resolve) => setTimeout(resolve, 200));
       } catch (error) {
         console.error(`Weekly digest: failed to send to ${user.email}:`, error);
