@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { awardXp } from '../services/xpService';
 import { prisma } from '../lib/prisma';
+import { referralTrancheService } from '../services/referralTrancheService';
 
 /**
  * POST /api/points/track-visit
@@ -58,6 +59,10 @@ export const trackSaleVisit = async (req: AuthRequest, res: Response) => {
         authenticated: true,
       });
     }
+
+    // Track sale visit for referral tranche B (referred user visiting 3 distinct sales → 150 XP to referrer)
+    // Fire-and-forget — don't block or fail the visit response if tranche logic errors
+    referralTrancheService.recordSaleVisit(req.user.id, saleId).catch(() => {});
 
     res.status(200).json({
       message: 'Sale visit tracked and XP awarded',

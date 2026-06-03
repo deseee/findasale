@@ -319,8 +319,8 @@ const NotificationsPage = () => {
               {Object.entries(groupedNotifications)
                 .sort((a, b) => {
                   const order = { Today: 0, Yesterday: 1, 'This Week': 2, Older: 3 };
-                  return (order[a[0] as keyof typeof order] || 999) -
-                    (order[b[0] as keyof typeof order] || 999);
+                  return (order[a[0] as keyof typeof order] ?? 999) -
+                    (order[b[0] as keyof typeof order] ?? 999);
                 })
                 .map(([group, notifs]) => (
                   <div key={group}>

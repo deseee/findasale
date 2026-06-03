@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S859 — QA+Records: #255 ✅ Chrome-verified (RANK_UP notification). Records: S858 Chrome marks applied to roadmap (#158/#398/#259/#290 Human QA ✅). QA: #255 ✅ — Bob Smith (user2) RSVP to sale, XP 498→500, rank INITIATE→SCOUT, "You've reached SCOUT!" visible under TODAY section (ss_7469boc64). #230 UNVERIFIED (no published sale on any real test organizer). P2 BUG: notifications page "Today" group sorts to BOTTOM — `|| 999` treats 0 as falsy; fix: `?? 999`. Blocked Queue: 8 rows.**
+**Latest: S860 — QA+Records+DEV: Records: #255 Chr ✅ applied to roadmap, PCV trimmed 2→1. DEV: P2 notifications sort fixed (|| → ?? in notifications.tsx). QA: #467/#464/#237 smoke tests PASS (ss_40922gfo2/ss_5917catz6/ss_7392t9kal). #316 Referral Tranche B ❌ P1 BUG FOUND+FIXED — recordSaleVisit() never called from pointsController; fix applied (ss_8604lb5ug/ss_71195379l/ss_6851w4tv8). P2 referral banner also fixed (register.tsx). P3: "Learn about TEAMS" button clipped on dashboard upgrade card. Blocked Queue: 8 rows.**
 
 **Previous: S858 — QA+DEV: Flash Deal dropdown FIXED (AVAILABLE filter). Records: #159 Chr ✅ applied to roadmap + Pending Chrome Verifications trimmed. QA: #398 ✅ (organizer referral link + Copy Link + stats — ss_4915xx0kl). #259 ✅ (1.5x XP confirmed, Hunt Pass page — ss_7973nmk5n). #290 ✅ (/coupons 3-tier $ + XP display — ss_32554r03n). #158 ✅ ("Notify me of new items" + "Remind Me by Email" visible — ss_4902k1y46). 3 new P3 notes. Blocked Queue: 6 rows (Flash Deal dropdown cleared).**
 
@@ -70,7 +70,6 @@ _⚠️ P0 AGING: #332 at 68 sessions; #335 at 68 sessions — mandatory P0 per 
 | Production DB Re-Seed | **P0 (72 sessions, age-escalated 2026-06-03)** — Seedy2025! rejected for shopper accounts user5–user12+ since S576. Shopper Chrome QA requiring login blocked. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma db seed (back up sale cmpbvumj90001e7t7v5sa1iqi first) | S787 |
 | eBay Connection for user1 | **P0 (74 sessions, age-escalated 2026-06-03)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
 | Bing Webmaster Sitemap | **P0 (76 sessions, age-escalated 2026-06-03)** — Bing/DuckDuckGo not receiving sitemap pings. SEO gap. | Patrick: bing.com/webmasters → Add sitemap → finda.sale/server-sitemap.xml | S783 |
-| Notifications sort P2 bug | **P2** — /notifications "Today" group renders at BOTTOM instead of top. Root cause: `order['Today'] \|\| 999` treats 0 as falsy → Today gets rank 999. Fix: `?? 999` in notifications.tsx sort comparator (line ~322). | `Skill('findasale-dev')` → fix `|| 999` → `?? 999` in groupedNotifications sort in notifications.tsx | S859 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending but blocked: no published sale on any real test organizer account (user1 has none, Artifact MI has none, all published sales are scraper accounts). | Patrick: publish a sale on user1 account, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 
 ---
@@ -79,40 +78,58 @@ _⚠️ P0 AGING: #332 at 68 sessions; #335 at 68 sessions — mandatory P0 per 
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| 255 | Rank-Up Notifications | /notifications as Bob Smith (user2). RSVP to sale → XP 498→500, rank INITIATE→SCOUT (DB confirmed). "You've reached SCOUT!" notification visible under TODAY section, 7m ago. ss_7469boc64. ⚠️ P2: Today group renders at page BOTTOM (sort bug — || vs ??). | S859 |
+| 316 | Referral Tranche B re-verify | After S860 fix: sign up via referral link, visit 3 distinct published sales as referred user, confirm ReferralTranche.distinctSalesVisited updates + referrer receives 150 XP. Also confirm green referral banner shows on /register?ref=... page. | S860 |
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
 
 ---
 
 ## Next Session
 
-**S859 done. Blocked Queue: 8 rows — QA MODE next session (≥8 items).**
+**S860 done. Blocked Queue: 8 rows — QA MODE next session (≥8 items).**
 
 Priority:
-1. **Records: Apply S859 Chrome mark to roadmap** — #255 in Pending Chrome Verifications with full evidence. `Skill('findasale-records')` at session start.
-2. **Fix notifications sort P2 bug** — `Skill('findasale-dev')` → `notifications.tsx` line ~322: `order[a[0]] || 999` → `order[a[0]] ?? 999`. Same for b. 0-line schema change.
-3. **#317/#320** — Still UNVERIFIED. Defer.
+1. **QA #316 Tranche B re-verify** — sign up via referral link, visit 3 sales, confirm `distinctSalesVisited` increments + referrer gets 150 XP. Also confirm green referral banner shows on /register?ref=... page. One Chrome dispatch.
+2. **QA #324 Temporal EXIF Clustering** (Claude QA ⬜) — upload photos with close EXIF timestamps, verify clustering behavior. One Chrome dispatch.
+3. **#317/#320** — Still UNVERIFIED. Defer (needs GPS/Stripe).
 4. **#335 payout** — Patrick check deseee@yahoo.com.
-5. **6 P0 Patrick-action items** in Blocked Queue.
+5. **P3: "Learn about TEAMS" button clipped** on dashboard upgrade card — minor layout fix if time allows.
+6. **5 P0 Patrick-action items** in Blocked Queue (see below).
 
 **Blocked Queue: 8 rows. QA MODE — no new feature dev without Patrick sign-off.**
 
 **Patrick actions required:**
 
-1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
-2. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail?
-3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
-4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-5. **Push S859 docs:**
-```
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "docs: S859 QA wrap — #255 Chr verified, notifications sort P2 bug flagged, roadmap #158/#398/#259/#290 Human QA applied"
-.\push.ps1
-```
+1. **Push S860 code+docs** (see push block below).
+2. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
+3. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail?
+4. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
 ## Recent Sessions
+
+### S860 — QA+Records+DEV: #316 Tranche B P1 bug found+fixed, notifications P2 fixed
+
+**Records:**
+- `claude_docs/strategy/roadmap.md`: #255 Claude QA ⬜→✅ S859 applied (cross-session from S859 PCV). #316 status updated (P1 bug found+fixed S860).
+- `claude_docs/STATE.md`: PCV trimmed (#255 graduated). #316 re-verify row added to PCV.
+
+**DEV (inline — <20 lines, 2 files):**
+- `packages/frontend/pages/notifications.tsx` lines 322–323: `|| 999` → `?? 999` — Today group (value 0) was sorting to page bottom. 0 TS errors.
+- `packages/backend/src/controllers/pointsController.ts`: added `import { referralTrancheService }` + fire-and-forget `recordSaleVisit()` call in `trackSaleVisit()`. Tranche B (150 XP / 3 sale visits) was fully implemented in the service but never wired to the controller — referred users' sale visits never counted. 0 TS errors.
+- `packages/frontend/pages/register.tsx`: added green "Referral link applied" banner for `formData.referralCode` (mirrors existing inviteCode banner). Previously `?ref=` param was silently captured with no user feedback. 0 TS errors.
+
+**QA smoke tests (DOM-verified, no new PCV entries — prior Chrome ✅ stands):**
+- #467 Sold Item UX: amber banner ✅, SOLD stamp ✅, SimilarItemsGrid ✅, lightbox suppressed ✅, save button hidden ✅, dark mode ✅. No regression vs S817.
+- #464 SEO Footer: Discover column (7 links) ✅, Explore dropdown ✅, /encyclopedia loads ✅ (ss_40922gfo2, ss_5917catz6).
+- #237 Sale-Type Dashboard: loads without errors, no horizontal scroll ✅ (ss_7392t9kal). P3 incidental: "Learn about TEAMS" button clipped at ~1200px on upgrade card.
+
+**QA #316 Referral Tranche B — ❌ FAIL → FIXED:**
+- Chrome: registered qa-tranche-b-s860@test.com via /register?ref=REF-7CD8DCC0 (ss_8604lb5ug). Visited 3 published sales (ss_71195379l, ss_6851w4tv8, ss_0089nigg0).
+- DB post-visit: `distinctSalesVisited: []` (empty), `trancheBReleasedAt: None`, user1 XP unchanged. Root cause: `referralTrancheService.recordSaleVisit()` never called from pointsController. Fix applied.
+- P2 side finding: no visual confirmation when `?ref=` param sets referralCode. Fixed (register.tsx banner).
+- Test data cleaned: qa-tranche-b-s860 deleted, user1 XP restored to 108.
+
+**Blocked Queue: 8 rows (unchanged — P0s are Patrick-action items).**
 
 ### S859 — QA+Records: #255 Chrome-verified + notifications sort P2 bug found
 
