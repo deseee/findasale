@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { requireTier } from '../middleware/requireTier';
 import {
   listMarkdownCycles,
   createMarkdownCycle,
@@ -9,8 +10,9 @@ import {
 
 const router = Router();
 
-// All routes require authentication
+// All routes require authentication + PRO tier minimum
 router.use(authenticate);
+router.use(requireTier('PRO'));
 
 // GET /api/markdown-cycles
 router.get('/', listMarkdownCycles);

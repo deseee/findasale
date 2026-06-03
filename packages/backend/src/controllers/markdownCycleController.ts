@@ -24,14 +24,8 @@ export const listMarkdownCycles = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer profile not found' });
     }
 
-    // Tier check: PRO or TEAMS
-    const userRoleSubscription = await prisma.userRoleSubscription.findUnique({
-      where: { userId_role: { userId: req.user.id, role: 'ORGANIZER' } },
-    });
-
-    if (!userRoleSubscription || !['PRO', 'TEAMS'].includes(userRoleSubscription.subscriptionTier)) {
-      return res.status(403).json({ message: 'PRO subscription required' });
-    }
+    // Tier check handled by requireTier('PRO') middleware in route registration
+    // (reads Organizer.subscriptionTier — consistent with auth/me and other controllers)
 
     // List all markdown cycles for this organizer
     const cycles = await prisma.markdownCycle.findMany({
@@ -79,14 +73,7 @@ export const createMarkdownCycle = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer profile not found' });
     }
 
-    // Tier check: PRO or TEAMS
-    const userRoleSubscription = await prisma.userRoleSubscription.findUnique({
-      where: { userId_role: { userId: req.user.id, role: 'ORGANIZER' } },
-    });
-
-    if (!userRoleSubscription || !['PRO', 'TEAMS'].includes(userRoleSubscription.subscriptionTier)) {
-      return res.status(403).json({ message: 'PRO subscription required' });
-    }
+    // Tier check handled by requireTier('PRO') middleware in route registration
 
     // If saleId is provided, verify organizer owns the sale
     if (saleId) {
