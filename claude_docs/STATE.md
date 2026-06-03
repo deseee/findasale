@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S850 — QA BLITZ: #91 ✅ #32 ✅ share-card ✅ #267 ✅ #293 re-screenshot ✅. All 4 S849 fixes Chrome-verified. #91: POST /api/markdown-cycles 201, cycle renders. #32: Watching section renders with Antiques Test alert. Share-card: 200 image/png confirmed via credentials:include fetch. #267 RSVP cap: RSVP #5 → +2 XP (total=10), RSVP #6 → 0 XP (capped) — DB-confirmed. #293 ss_ IDs obtained: ss_85819up9q ss_832940555. Roadmap: #68 Chr ✅ S845 + #125 Chr ✅ S845 applied. Blocked Queue: 2 rows (down from 6).**
+**Latest: S851 — QA PASS: #334 ✅ #280 ✅ Chrome-verified. #206 confirmed intentional redirect to /faq. 4 new bugs logged (P2: inventory edit-item null saleId, Full-Edit button misfire, unsubscribe infinite spinner; P3: \u2014 literal in Photos). Records: S850 Chr ✅ marks applied to roadmap (#91/#32/#267/SC/#293). #316 stale status fixed (code+migration live S735). Blocked Queue: 6 rows.** All 4 S849 fixes Chrome-verified. #91: POST /api/markdown-cycles 201, cycle renders. #32: Watching section renders with Antiques Test alert. Share-card: 200 image/png confirmed via credentials:include fetch. #267 RSVP cap: RSVP #5 → +2 XP (total=10), RSVP #6 → 0 XP (capped) — DB-confirmed. #293 ss_ IDs obtained: ss_85819up9q ss_832940555. Roadmap: #68 Chr ✅ S845 + #125 Chr ✅ S845 applied. Blocked Queue: 2 rows (down from 6).**
 
 **Previous: S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX. Full audit of every email-sending service in the backend. 10 files fixed. Global daily quota counter built. Two previously unknown P0 blast-to-all jobs found and fixed (notificationController.sendWeeklyDigest fires every Friday to 5,000 users with no opt-out + no unsubscribe link; organizerAnalyticsService sends weekly to all organizers with no suppression). Inbox incident confirmed stopped — no runaway sends in Railway logs. Blocked Queue: 7 rows. Push block ready.**
 
@@ -45,12 +45,16 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING: #332 at 56 sessions; #335 at 56 sessions — mandatory P0 per CLAUDE.md §10a. S850: #267 ✅ #32 ✅ #91 ✅ share-card ✅ all graduated (Chrome-verified S850)._
+_⚠️ P0 AGING: #332 at 57 sessions; #335 at 57 sessions — mandatory P0 per CLAUDE.md §10a. S851: 4 new P2/P3 bugs added from QA blitz._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (56 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
 | #335 Consignor Payout Email | **P0 (56 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅ after 56 sessions. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
+| edit-item null saleId crash | **P2** — /organizer/edit-item/[id] shows "Item not found or no permission" for returned-to-inventory items (saleId=null). Confirmed S851 for all 3 inventory items (Kitchen Set, Garden Tools, Picture Frame). | findasale-dev: edit-item route/page must support null saleId items from /organizer/inventory. | S851 |
+| Inline editor Full Edit misfire | **P2** — "Full Edit ↗" button in add-items inline editor opens NEXT item's inline editor instead of navigating to /organizer/edit-item/[id]. Click z-index/position bug. | findasale-dev: Fix button click target in add-items inline editor row. | S851 |
+| /unsubscribe no-token spinner | **P2** — /unsubscribe without ?token= query param shows infinite "Processing your request..." spinner. Should show error/instructions state. | findasale-dev: Add guard in unsubscribe.tsx — if no token, show "Invalid link" error state. | S851 |
+| \u2014 unicode literal in edit-item | **P3** — "No photos yet \u2014 click to upload" renders the escape sequence literally in edit-item Photos section. | findasale-dev: Fix unicode escape in photos empty state copy. | S851 |
 
 ---
 
@@ -72,32 +76,47 @@ _⚠️ P0 AGING: #332 at 56 sessions; #335 at 56 sessions — mandatory P0 per 
 
 ## Next Session
 
-**S850 done. Records: apply #91/#32/#267/share-card/#293 Chrome ✅ to roadmap.md from Pending Chrome Verifications table.**
+**S851 done. Records tasks complete (S850 Chr ✅ applied to roadmap, #316 status fixed). QA: #334 ✅ #280 ✅ #206 confirmed intentional redirect. 4 new bugs in Blocked Queue.**
 
-1. **Records: apply Chrome ✅ marks** — Read Pending Chrome Verifications table, verify all 5 S850 entries have full evidence (URL+user+element+outcome+ss_ ID), apply to roadmap.md Chr column: #91, #32, #267, SC (share-card row), #293.
-2. **#335 payout confirm** — Patrick must check deseee@yahoo.com. If Jane Thrift payout email received → ✅ after 56 sessions. Remove from Blocked Queue.
-3. **#332 Shopify** — Still blocked on external Shopify dev store. No action needed unless Patrick creates one.
-4. **Next dev work** — Consult roadmap.md for next BROKEN/Pending items.
+1. **#335 payout confirm** — Patrick check deseee@yahoo.com. If Jane Thrift payout email received → ✅, remove from Blocked Queue.
+2. **Fix P2 bugs (dispatch findasale-dev):** (a) edit-item null saleId crash for inventory items, (b) Full Edit button misfire in inline editor, (c) /unsubscribe no-token infinite spinner.
+3. **P3 fix (inline ok):** \u2014 renders literally in edit-item Photos empty state.
+4. **Continue QA backlog** — Remaining testable: #317 Geofence QR Scans, #320 Async eBay Comp Fetch, shopper features as Leo Thomas (user5@example.com).
+5. **#332 Shopify** — Still blocked on Shopify dev store. No action unless Patrick creates one.
 
-**Blocked Queue: 2 rows (#332/#335 only). ✅ Well below ≥8 ceiling — DEV mode permitted next session.**
+**Blocked Queue: 6 rows. Below ≥8 ceiling — DEV mode permitted.**
 
 **Patrick actions required:**
 
 1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
 2. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
 3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-4. **Push S850 wrap docs:**
+4. **Push S851 wrap docs:**
 ```
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git commit -m "docs: S850 wrap — #91/#32/#267/share-card ✅ Chrome-verified, Blocked Queue 6→2"
+git commit -m "docs: S851 wrap — #334/#280 Chrome-verified, 4 P2/P3 bugs logged, #316 fixed"
 .\push.ps1
 ```
 
----
-
 ## Recent Sessions
+
+### S851 — QA PASS + Records housekeeping
+
+**Records:** Applied S850 Chrome ✅ marks to roadmap.md for #91, #32, #267, #293, and share-card 401 fix (#33). Fixed stale #316 status (both occurrences) from "Pending push + migration" → "Shipped S552/S735 — code + migration live." Fixed #206 to note intentional redirect to /faq.
+
+**QA verified:** #334 Automatic Markdown Cycles ✅ (post-S849 tier fix confirmed, no 403, cycle card renders — ss_78175awmd). #280 Condition Rating XP ✅ (conditionGrade B set on Old Radio, reloaded persists, XP 93→98 +5 confirmed via Organizer Special widget — ss_5053gn0a0, ss_2855apltb). #206 confirmed intentional redirect to /faq per condition-guide.tsx router.replace call.
+
+**4 new bugs discovered and queued:**
+- P2: edit-item shows "Item not found" for returned-to-inventory items (saleId=null) — all 3 inventory items affected
+- P2: add-items inline editor "Full Edit ↗" button opens next item's editor instead of navigating to edit-item page
+- P2: /unsubscribe without ?token= shows infinite spinner — no error state
+- P3: \u2014 unicode escape renders literally in edit-item Photos empty state
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
+
+---
 
 ### S850 — QA BLITZ: #91 ✅ #32 ✅ #267 ✅ share-card ✅ #293 ✅
 
