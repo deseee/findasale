@@ -1668,6 +1668,30 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 )}
               </div>
 
+              {/* eBay discovery link */}
+              {sale.items.length > 0 && (() => {
+                const rawTerms = (sale.tags && sale.tags.length > 0)
+                  ? sale.tags.join(' ')
+                  : sale.title;
+                const searchQuery = rawTerms.split(/\s+/).slice(0, 3).join(' ');
+                const ebaySearchUrl =
+                  'https://rover.ebay.com/rover/1/711-53200-19255-0/1?toolid=10001&campid=5339148447&mpre=' +
+                  encodeURIComponent('https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(searchQuery));
+                return (
+                  <a
+                    href={ebaySearchUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline mb-4"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width={14} height={14} aria-hidden="true">
+                      <path fillRule="evenodd" d="M4.22 11.78a.75.75 0 0 1 0-1.06L9.44 5.5H5.75a.75.75 0 0 1 0-1.5h5.5a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0V6.56l-5.22 5.22a.75.75 0 0 1-1.06 0Z" clipRule="evenodd" />
+                    </svg>
+                    Find similar items on <span className="font-semibold">eBay</span>
+                  </a>
+                );
+              })()}
+
               {/* Tags / category chip strip */}
               {sale.tags && sale.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4 items-center">
