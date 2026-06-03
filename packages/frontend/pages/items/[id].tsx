@@ -35,6 +35,7 @@ import BidModal from '../../components/BidModal';
 import BidHistory from '../../components/BidHistory'; // ADR-013 Phase 2: Bid history with anonymization
 import SoldItemBanner from '../../components/SoldItemBanner';
 import SimilarItemsGrid from '../../components/SimilarItemsGrid';
+import EbayCompTiles from '../../components/EbayCompTiles';
 
 interface Item {
   id: string;
@@ -1108,6 +1109,9 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
               category={item.category ?? null}
             />
           )}
+
+          {/* eBay comparable listings — shown for all items via EPN affiliate links */}
+          <EbayCompTiles itemId={item.id} />
         </div>
       </div>
 
