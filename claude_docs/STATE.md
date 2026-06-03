@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S849 — QA + DEV BLITZ. Dispatched 5 items in parallel. #293 eBay panel ✅ Chrome-verified (fix confirmed live, no screenshot IDs — roadmap update deferred). #91 Auto-Markdown P0 fixed: markdownCycleController was reading UserRoleSubscription (wrong table) instead of Organizer.subscriptionTier — now uses requireTier middleware at route level. #32 Wishlist Alerts P1 fixed: operator precedence bug in wishlist.tsx line 362 (|| before && caused Watching section to never render when alerts existed). Share-card 401 fix applied: edge function now accepts httpOnly cookie as auth signal. #267 RSVP XP: DB confirmed no user has ≥5 RSVPs in any single month — still externally blocked. Blocked Queue: 6 rows. Push block ready (5 files).**
+**Latest: S850 — QA BLITZ: #91 ✅ #32 ✅ share-card ✅ #267 ✅ #293 re-screenshot ✅. All 4 S849 fixes Chrome-verified. #91: POST /api/markdown-cycles 201, cycle renders. #32: Watching section renders with Antiques Test alert. Share-card: 200 image/png confirmed via credentials:include fetch. #267 RSVP cap: RSVP #5 → +2 XP (total=10), RSVP #6 → 0 XP (capped) — DB-confirmed. #293 ss_ IDs obtained: ss_85819up9q ss_832940555. Roadmap: #68 Chr ✅ S845 + #125 Chr ✅ S845 applied. Blocked Queue: 2 rows (down from 6).**
 
 **Previous: S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX. Full audit of every email-sending service in the backend. 10 files fixed. Global daily quota counter built. Two previously unknown P0 blast-to-all jobs found and fixed (notificationController.sendWeeklyDigest fires every Friday to 5,000 users with no opt-out + no unsubscribe link; organizerAnalyticsService sends weekly to all organizers with no suppression). Inbox incident confirmed stopped — no runaway sends in Railway logs. Blocked Queue: 7 rows. Push block ready.**
 
@@ -45,16 +45,12 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING (S845): #267 at 62 sessions; #332, #335 at 56 sessions — mandatory P0 per CLAUDE.md §10a. #293 GRADUATED S849 (Chrome-verified)._
+_⚠️ P0 AGING: #332 at 56 sessions; #335 at 56 sessions — mandatory P0 per CLAUDE.md §10a. S850: #267 ✅ #32 ✅ #91 ✅ share-card ✅ all graduated (Chrome-verified S850)._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| RSVP XP Monthly Cap (#267 part 2) | **P0 (62 sessions)** — S849 DB confirmed: no user has ≥5 RSVPs in any single month (max: 4 RSVPs, April 2026). Code logic correct (CODE-ONLY). | Seed a test user with ≥6 RSVPs in the same calendar month via psycopg2, then verify XP caps at 10. | S785 |
 | #332 Shopify Cross-Listing | **P0 (56 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
 | #335 Consignor Payout Email | **P0 (56 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅ after 56 sessions. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
-| Share-card preview 401 on promote page | **P2 — FIX APPLIED S849** — Edge function now accepts httpOnly cookie as auth signal. ⚠️ FLAG: share cards may need to be fully public for OG scrapers. Needs push + Chrome QA + decision on public vs. auth. | Push pages/api/share-card.tsx, QA promote page load, confirm no 401. Decide: should share-card be fully public? | S844 |
-| #32 Wishlist Alerts | **P1 BUG FIXED S849** — Operator precedence bug: `watching.length > 0 \|\| true && (` → Watching section never rendered when alerts existed. Fix: added parens. Needs push + Chrome QA. | Push wishlist.tsx fix, QA as Leo Thomas: create alert, verify Watching section renders with alert visible. | S845 |
-| #91 Auto-Markdown save cycle | **P0 BUG FIXED S849** — markdownCycleController was reading UserRoleSubscription (wrong table) → 403 for all non-Stripe organizers. Fixed: requireTier middleware at route level + sales dropdown 404 fixed. Needs push + Chrome QA. | Push 3 backend/frontend files, QA as Alice (user1): /organizer/markdown-cycles, create cycle, verify saves. | S845 |
 
 ---
 
@@ -66,42 +62,50 @@ _⚠️ P0 AGING (S845): #267 at 62 sessions; #332, #335 at 56 sessions — mand
 | 461 | FB Marketplace Export + Sold Nudge | finda.sale/organizer/promote/0d9563f9-... as Alice Johnson (user1). Clicked "Download Spreadsheet" → GET /api/export/.../facebook-xlsx 200 ✅. DB confirmed fbExportedAt stamped on 3 items. Navigated to edit-item/b4a74f89-... → set status=SOLD → saved → redirected to dashboard. Notification inbox at finda.sale/notifications showed "Mark sold on Facebook Marketplace" / "Silver Bracelet sold on FindA.Sale — don't forget to mark it sold on Facebook Marketplace too" — just now ✅. | S844 |
 | 68 | Command Center Dashboard | finda.sale/organizer/command-center as Alice Johnson. Recent tab clicked → "QA Test Flip Report Sale" with ● ENDED badge, May 21–May 28 dates visible. Tabs (Active/Upcoming/Recent/All) all work. Active tab empty state correct. ss_7321prqsa. Independent re-verification of S804 claim. | S845 |
 | 125 | Inventory Syndication CSV Export | finda.sale/organizer/add-items/... as Alice Johnson (PRO). "Export to eBay" button clicked → modal opened: "Export 2 available items as eBay CSV", watermark toggle ✅, "Remove watermark — TEAMS only" gate visible. ss_5085g9dtj. Independent re-verification of S805 claim. | S845 |
-| 293 | eBay Listing Data Parity | finda.sale/organizer/sales/0d9563f9-... as Alice Johnson. eBay post-sale panel loaded showing 2 unsold items (Old Radio, Ceramic Vase). Clicked "Edit eBay" on Old Radio — form expanded (13 fields across 3 sections). Clicked "Save eBay Details" → PUT /api/items/... 200. Correct API path GET /api/ebay/organizer/sales/.../unsold-items → 200 confirmed. ⚠️ NO screenshot IDs — agent used Chrome MCP (67 tool uses) but did not capture ss_ IDs. Records: apply roadmap Chrome ✅ only if screenshot IDs obtained on re-verify. | S849 |
+| 91 | Auto-Markdown (Smart Clearance) | finda.sale/organizer/markdown-cycles as Alice Johnson (user1). /api/markdown-cycles GET 200 (no 403 — tier fix confirmed). Clicked 'Create your first cycle', filled Days=5 %=10. POST /api/markdown-cycles → 201. '5 days: 10% off' card rendered with Active badge. ss_8165qwvge ss_1962w2cmm | S850 |
+| 32 | Shopper Wishlist Alerts + Smart Follow | finda.sale/shopper/wishlist as Leo Thomas (user5). Watching section rendered with 'Antiques Test' alert (Category: antiques, Active badge). Operator precedence fix confirmed. ss_8348w7ewi | S850 |
+| 267 | RSVP Bonus XP Cap | RSVP #5 to finda.sale/sales/cmpxl4jii017xsot00wwosx1x as Leo Thomas → POST /api/sales/.../rsvp 200 → DB confirmed PointsTransaction +2 XP (total=10). RSVP #6 to FORTY YEARS OF TREASURES → POST 200 → NO PointsTransaction (cap enforced, 0 XP). DB-confirmed. ss_964678bs1 ss_049890h4o | S850 |
+| SC | Share-card 401 fix | finda.sale/organizer/promote/0d9563f9-... as Alice Johnson. Page loads ✅. fetch /api/share-card?... credentials:include → 200 image/png (no 401). Share Card section renders with theme/format pickers. ss_1053f6yd7 ss_63157cn5o | S850 |
+| 293 | eBay Listing Data Parity | finda.sale/organizer/sales/0d9563f9-... as Alice Johnson (S850 re-verify). PostSaleEbayPanel loaded: '2 items didn't sell — list on eBay?'. Old Radio + Ceramic Vase with Edit eBay + Classify buttons visible. API GET /api/ebay/organizer/sales/.../unsold-items → 200 confirmed (S849). ss_85819up9q ss_832940555 | S850 |
 
 ---
 
 ## Next Session
 
-**Push S849 block first (5 files — see below). Then:**
+**S850 done. Records: apply #91/#32/#267/share-card/#293 Chrome ✅ to roadmap.md from Pending Chrome Verifications table.**
 
-1. **QA #91 Auto-Markdown** — as Alice (user1): /organizer/markdown-cycles → create cycle → verify saves. Also confirm sales dropdown populates.
-2. **QA #32 Wishlist Alerts** — as Leo Thomas (user5): /shopper/wishlist → Watching → New Alert → create → verify Watching section renders with alert. Screenshot required (ss_ ID needed).
-3. **QA share-card** — as Alice on /organizer/promote/[saleId]: verify page loads without 401 in console. Also decide: should share-card be fully public for OG scrapers?
-4. **#293 re-screenshot** — navigate to ENDED sale eBay panel as Alice, take screenshot (ss_ ID) so Records can apply roadmap Chrome ✅.
-5. **#335 payout confirm** — check deseee@yahoo.com. If email received → ✅ after 56 sessions.
-6. **#267 seed fix** — use psycopg2 to insert ≥6 SaleRsvp records for one user in current month, then verify XP caps at 10.
+1. **Records: apply Chrome ✅ marks** — Read Pending Chrome Verifications table, verify all 5 S850 entries have full evidence (URL+user+element+outcome+ss_ ID), apply to roadmap.md Chr column: #91, #32, #267, SC (share-card row), #293.
+2. **#335 payout confirm** — Patrick must check deseee@yahoo.com. If Jane Thrift payout email received → ✅ after 56 sessions. Remove from Blocked Queue.
+3. **#332 Shopify** — Still blocked on external Shopify dev store. No action needed unless Patrick creates one.
+4. **Next dev work** — Consult roadmap.md for next BROKEN/Pending items.
 
-**Blocked Queue: 6 rows (below ≥8 ceiling). 3 P0 aging (#267/#332/#335) + 3 fix-applied-pending-QA (#32/#91/share-card).**
+**Blocked Queue: 2 rows (#332/#335 only). ✅ Well below ≥8 ceiling — DEV mode permitted next session.**
 
 **Patrick actions required:**
 
-1. **Push S849 block:**
+1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
+2. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+4. **Push S850 wrap docs:**
 ```
-git add packages/frontend/pages/api/share-card.tsx
-git add packages/backend/src/routes/markdownCycles.ts
-git add packages/backend/src/controllers/markdownCycleController.ts
-git add packages/frontend/pages/organizer/markdown-cycles.tsx
-git add packages/frontend/pages/shopper/wishlist.tsx
-git commit -m "fix: #91 markdown cycle tier check + #32 wishlist watching section + share-card cookie auth"
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "docs: S850 wrap — #91/#32/#267/share-card ✅ Chrome-verified, Blocked Queue 6→2"
 .\push.ps1
 ```
-2. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
-3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
-4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
 ---
 
 ## Recent Sessions
+
+### S850 — QA BLITZ: #91 ✅ #32 ✅ #267 ✅ share-card ✅ #293 ✅
+
+**All 4 S849 fixes Chrome-verified.** #91 Auto-Markdown: POST /api/markdown-cycles → 201, '5 days: 10% off' cycle rendered (ss_8165qwvge ss_1962w2cmm). #32 Wishlist Alerts: Watching section renders with Antiques Test alert, Active badge visible (ss_8348w7ewi). Share-card: fetch credentials:include → 200 image/png confirmed, no 401 (ss_1053f6yd7 ss_63157cn5o). #267 RSVP cap: seeded 4 RSVP txns (8 XP) via psycopg2, RSVP #5 Chrome → +2 XP (→10, cap hit), RSVP #6 Chrome → 0 XP DB-confirmed (ss_964678bs1 ss_049890h4o). #293 re-screenshot: PostSaleEbayPanel loaded with 2 items, Edit eBay buttons visible (ss_85819up9q ss_832940555). Roadmap: #68 Chr ✅ S845 + #125 Chr ✅ S845 applied. Blocked Queue: 6→2 rows.
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
+
+---
 
 ### S849 — QA + DEV BLITZ: #293 ✅, #91 P0 fixed, #32 P1 fixed, share-card fixed
 
@@ -165,90 +169,4 @@ git commit -m "fix: #91 markdown cycle tier check + #32 wishlist watching sectio
 
 **#68 Command Center ✅ re-verified:** finda.sale/organizer/command-center as Alice Johnson. Recent tab → "QA Test Flip Report Sale" with ENDED badge, May 21–May 28. Active/Upcoming/Recent/All tabs work. ss_7321prqsa. Independent re-verification of S804 claim (known inflation session).
 
-**#125 CSV Export ✅ re-verified:** Export to eBay modal shows "Export 2 available items as eBay CSV", watermark toggle, "Remove watermark — TEAMS only" gate. ss_5085g9dtj. Independent re-verification of S805 claim.
-
-**#91 Auto-Markdown — UNVERIFIED save cycle:** Page ✅ modal ✅ all fields ✅ PRO gate fires correctly ✅. Cycle save blocked because user1's JWT was issued when tier=BRONZE; DB update to PRO not reflected in existing session. Needs fresh login.
-
-**#32 Wishlist Alerts — INCOMPLETE:** New Alert modal opened as Leo Thomas. Alert name entered ("Antiques Test"), Antiques category checked. Session cut off before clicking Create Alert. UNVERIFIED.
-
-**DB changes by S845 (all on Railway):** Jane Thrift email → deseee@yahoo.com. user1 (Alice Johnson) → PRO tier. 2 items in sale 0d9563f9 flipped from PUBLISHED → AVAILABLE (for eBay panel test; harmless for QA).
-
-**Files changed:** `packages/frontend/components/PostSaleEbayPanel.tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S844 — DEV+QA: #461 ✅ Chrome-verified end-to-end, #27b ✅ roadmap applied, share-card P2 found
-
-**Root cause corrected:** STATE.md S843 misdiagnosed #461 blocker as `localStorage.getItem('token')`. Actual bug: `apiBase = process.env.NEXT_PUBLIC_API_URL` — direct Railway URL is cross-domain, SameSite=Lax blocks the `accessToken` cookie. Fix: `const apiBase = '/api'` (1-line change to `promote/[saleId].tsx:324`). Next.js fallback proxy already wired (`/api/:path*` → Railway).
-
-**#461 ✅ Chrome-verified:** Navigated to finda.sale/organizer/promote/0d9563f9-... as Alice Johnson (user1@example.com). Clicked "Download Spreadsheet" → `GET /api/export/.../facebook-xlsx` → **200**. DB confirmed `fbExportedAt` stamped on 3 items (psycopg2). Navigated to edit-item/b4a74f89 (Silver Bracelet), set status → SOLD, saved → redirected to dashboard. Notification inbox showed **"Mark sold on Facebook Marketplace" / "Silver Bracelet sold on FindA.Sale — don't forget to mark it sold on Facebook Marketplace too."** — unread, just now.
-
-**#27b ✅ applied:** roadmap.md Chrome column updated (evidence: ss_4410s6brw, S843). Removed from Pending Chrome Verifications.
-
-**New P2:** Share-card preview endpoint returns 401 on promote page load (fires before any user interaction). Separate from export fix. Added to Blocked Queue.
-
-**Note on QA account confusion:** user1@example.com = Alice Johnson (admin+organizer, owns the QA sale). user2@example.com = Bob Smith. Session spent significant time on auth due to wrong account. Seed account reference: user1=Alice Johnson, user2=Bob Smith. Sale `0d9563f9-...` belongs to user1.
-
-**Files changed:** `packages/frontend/pages/organizer/promote/[saleId].tsx` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
-
----
-
-### S843 — QA: #27b ✅ iCal watermark verified, #461 UNVERIFIED, P2 downloadFile bug found
-
-**#27b ✅ Chrome-verified:** Fetched /api/sales/0d9563f9-4fcd-4630-8beb-189ea58c8118/calendar.ics in Chrome as Alice Johnson (Kelly's Estate Sales, SIMPLE tier). DESCRIPTION field confirmed: ends with `\n\nShared via FindA.Sale — finda.sale`. canRemoveWatermark()=false for SIMPLE → footer appended. ss_4410s6brw ss_0944l9m2y. Added to Pending Chrome Verifications for records to apply next session.
-
-**#461 UNVERIFIED:** Fix code is correct (CODE-ONLY). Blocker: `downloadFile` in promote/[saleId].tsx uses `localStorage.getItem('token')` — returns null since cookie auth migration (P0 security fix). Export endpoint returns 401, fbExportedAt never stamped. QA can't complete until downloadFile is fixed.
-
-**P2 bug found:** All promote-page exports (FB Marketplace XLSX/JSON, EstateSales.NET CSV, Craigslist TXT) broken for ALL production users. `downloadFile` sends `Authorization: Bearer null`. Added to Blocked Queue. Root cause: stale localStorage JWT pattern, fix is trivial (credentials:'include' + CSRF header).
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S842 — DEV: #461 FB nudge fix + #27b iCal watermark fix + Records roadmap scan
-
-**#461 Fix written:** `itemController.ts` line 34 — import `notifyFacebookExportedItemSold`. Lines 1278-1283 — nudge fires on `status === 'SOLD' && item.status !== 'SOLD' && item.fbExportedAt`. Fire-and-forget `.catch()`. Matches bulk handler pattern (items.ts:431). 0 TS errors. Awaiting push + Chrome QA.
-
-**#27b Fix written:** `saleController.ts` line 16 — import `canRemoveWatermark`. Line 1091 — organizer select extended with `removeWatermarkEnabled`. Lines 1107-1108 — footer `\n\nShared via FindA.Sale — finda.sale` appended unless `canRemoveWatermark()` returns true. Matches marketingKitController/printKitController pattern. 0 TS errors. Awaiting push + Chrome QA.
-
-**Records S842:** Roadmap #193 wishlists Chr ✅ applied (ss_1258kvk8e ss_839591msq, S841 evidence). P0 aging violations: #267/#293 (S785, 57 sessions), #332/#335 (S791, 51 sessions). 14-item testable QA backlog identified (top 5: #32, #68, #73, #91, #125).
-
-**Files changed:** `packages/backend/src/controllers/itemController.ts` · `packages/backend/src/controllers/saleController.ts` · `claude_docs/strategy/roadmap.md` · `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S841 — QA: #321 wishlists ✅, #461 P2 bug, #27b P2 bug
-
-**#321 wishlists fix Chrome-verified:** Navigated directly to finda.sale/wishlists as Leo Thomas (user5). Hub loaded with 2 collections (Vintage Jewelry, Mid-Century Modern Hunt). No redirect to /login. Fix confirmed deployed. ss_1258kvk8e ss_839591msq
-
-**#461 ⚠️ P2 bug confirmed:** `notifyFacebookExportedItemSold()` only wired to bulk PATCH (items.ts:431) — NOT to single-item `updateItem` (itemController.ts). Marked Antique Chair AVAILABLE→SOLD via edit-item, zero notifications fired in Alice's inbox.
-
-**#27b ⚠️ P2 bug confirmed:** `generateIcal()` has no watermark logic. Live `.ics` fetch confirmed description ends at `View items online: [url]` — no footer. Print Kit PDF watermark CODE-CONFIRMED (printKitController.ts:326).
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
-
----
-
-### S840 — Records + QA: STATE.md cleanup, wishlists P2 fix
-
-**Records:** STATE.md trimmed 369→136 lines. Roadmap: #321 Claude QA ✅ applied, #464 UTM drift fixed (BROKEN→FIXED S836), #340 CODE-VERIFIED noted.
-
-**Wishlists QA:** /shopper/wishlist in-app nav ✅, Sellers tab ✅. /wishlists hard nav → redirected to /login ❌ P2 confirmed. Fix: wishlists.tsx authLoading guard added, 0 TS errors. DEPLOYED. ss_5165fdf0j ss_30826q1k8 ss_2960t250m ss_2592nh65t
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md` · `packages/frontend/pages/wishlists.tsx`
-
----
-
-### S839 — QA: S837 nav links, #321, #303, #317, #340
-
-**S837 nav links verified:** /organizer/referrals ✅, /organizer/markdown-cycles ✅, /organizer/starter-kit ✅, /ai-score ✅, /challenges ✅, /surprise-me ✅, /notifications consolidated ✅.
-
-**#321 ✅** — /admin/encyclopedia: 57 Awaiting Review, 20 Published, 77 Total. ss_0551gs4p3 ss_01850j1g8. **#303 ⚠️** — page loads, GPS-gated. **#317/#340 CODE-VERIFIED.**
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md`
-
----
-
----
-
-_Older sessions archived. 
+**#125 CSV Export ✅ re-verified:** Export to eBay modal shows "Export 2 available items as eBay CSV", watermark toggle, "Remove watermark — TE
