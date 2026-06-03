@@ -1,54 +1,52 @@
-# Patrick's Dashboard — S852 Wrap
+# Patrick's Dashboard — S853 Wrap
 
 ---
 
-## What Happened This Session (S852)
+## What Happened This Session (S853)
 
-**3 P2 bugs fixed + 1 P3 fixed. QA attempted #317 and #320 — both UNVERIFIED (reasons below).**
-
----
-
-## Bugs Fixed This Session
-
-| Priority | Bug | Fix |
-|---------|-----|-----|
-| P2 | edit-item "not found" for inventory items | `getItemById` now checks `organizerId` ownership when `saleId=null`. Inventory items accessible again. |
-| P2 | "Full Edit ↗" opens wrong item's editor | Converted `<Link>` to `<button>` with `router.push()` + `stopPropagation`. Navigation now correct. |
-| P2 | /unsubscribe infinite spinner | Added `router.isReady` guard. No-token path now shows "Invalid unsubscribe link" error state. |
-| P3 | `—` literal in Photos empty state | Fixed `ItemPhotoManager.tsx` — now shows actual em dash `—`. |
-
-All 4 fixes: 0 TypeScript errors (frontend + backend verified).
+**QA session. All 4 S852 bug fixes Chrome-verified against live production. Blocked Queue cleared from 6 → 2 rows.**
 
 ---
 
-## QA Attempted — UNVERIFIED
+## Bugs Verified This Session
 
-**#320 Async eBay Comp Fetch** — DB confirms the mechanism works (6 items in the DB have `aiSuggestedPrice` from the async eBay comp fetch; all 6 have organizer prices intact — D-005 "organizer price wins" is respected). Chrome verification blocked: CSRF prevents raw API calls from browser JS, and the React price input wouldn't accept a null value via DOM manipulation. `aiSuggestedPrice` is also not exposed in the `/api/items/:id` response so it can't be checked there. UNVERIFIED — kept in Pending Chrome Verifications.
+| Priority | Bug | Result | Evidence |
+|---------|-----|--------|---------|
+| P2 | edit-item "not found" for inventory items | ✅ Fixed | Clicked Kitchen Set from /organizer/inventory → Edit Item page loaded. ss_8510ho8fx |
+| P2 | "Full Edit ↗" opens wrong item's editor | ✅ Fixed | Clicked Full Edit ↗ for Antique Chair → navigated to /organizer/edit-item/1278fdf6-... showing "Antique Chair". ss_596216ag3 |
+| P2 | /unsubscribe infinite spinner | ✅ Fixed | /unsubscribe (no token) → "Invalid unsubscribe link" error state, no spinner. ss_4693l8c4l |
+| P3 | `—` literal in Photos empty state | ✅ Fixed | "No photos yet — click to upload" renders with actual em dash. ss_0517yypd1 |
 
-**#317 Geofence QR Scans** — Code-confirmed: the `treasure-hunt-qr/[clueId].tsx` `mutationFn` has a `try/catch` around `getCurrentPosition` and explicitly continues with the POST even when location is denied ("Geolocation unavailable, proceeding without coordinates"). The graceful fallback IS implemented. Chrome UNVERIFIED — the test clues in the DB return "not found" from the API (they're bare test rows without linked items or a configured treasure hunt). UNVERIFIED — kept in Pending Chrome Verifications.
+---
+
+## Blocked Queue Status
+
+**2 rows remaining (both P0 aging — action needed by Patrick):**
+
+| # | Item | Status |
+|---|------|--------|
+| #332 | Shopify Cross-Listing | Blocked — needs Shopify Partners dev store |
+| #335 | Consignor Payout Email | Blocked — Patrick must check deseee@yahoo.com for Jane Thrift email |
+
+**DEV mode permitted next session** — Blocked Queue at 2 rows, well below the ≥8 ceiling.
 
 ---
 
 ## Patrick Actions Required
 
-1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅, tell Claude to remove from Blocked Queue.
-2. **Push the S852 fixes** (see push block below) — 4 code files ready.
-3. **After push: QA Bug 1 fix** — Navigate to finda.sale/organizer/inventory as Alice Johnson, click Edit on any returned-to-inventory item. Should load edit-item page normally (previously showed "Item not found").
-4. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
-5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
+1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅, tell Claude to close it.
+2. **Push the S853 wrap docs** (see push block below).
+3. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
+4. **GBP phone verification:** business.google.com → "Verify now" → phone code.
 
 ---
 
-## Push Block (S852)
+## Push Block (S853)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/itemController.ts
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add packages/frontend/pages/unsubscribe.tsx
-git add packages/frontend/components/ItemPhotoManager.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: S852 — 3 P2 bugs (inventory edit-item, Full-Edit misfire, unsubscribe spinner) + P3 em dash"
+git commit -m "docs: S853 wrap — all 4 S852 bug fixes Chrome-verified, Blocked Queue 6->2"
 .\push.ps1
 ```

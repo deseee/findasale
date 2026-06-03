@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S852 — DEV+QA: 3 P2 bugs fixed (edit-item inventory null-saleId, Full-Edit misfire, /unsubscribe no-token spinner). P3 fixed (em dash literal in ItemPhotoManager). #320 DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden), Chrome UNVERIFIED. #317 frontend graceful fallback code-confirmed, Chrome UNVERIFIED (test clue API returns not-found). Blocked Queue: 6 rows.**
+**Latest: S853 — QA: All 4 S852 bug fixes Chrome-verified. Bug 1 (edit-item null saleId) ✅ ss_8510ho8fx. Bug 2 (Full Edit misfire) ✅ ss_596216ag3. Bug 3 (/unsubscribe no-token) ✅ ss_4693l8c4l. Bug 4 (em dash) ✅ ss_0517yypd1. Blocked Queue: 2 rows (3 P2+P3 bugs cleared, #332/#335 remain).**
+
+**Previous: S852 — DEV+QA: 3 P2 bugs fixed (edit-item inventory null-saleId, Full-Edit misfire, /unsubscribe no-token spinner). P3 fixed (em dash literal in ItemPhotoManager). #320 DB-confirmed (6 items with aiSuggestedPrice, organizer prices not overridden), Chrome UNVERIFIED. #317 frontend graceful fallback code-confirmed, Chrome UNVERIFIED (test clue API returns not-found). Blocked Queue: 6 rows.**
 
 **Previous: S848 — EMAIL SYSTEM AUDIT + COMPREHENSIVE FIX. Full audit of every email-sending service in the backend. 10 files fixed. Global daily quota counter built. Two previously unknown P0 blast-to-all jobs found and fixed (notificationController.sendWeeklyDigest fires every Friday to 5,000 users with no opt-out + no unsubscribe link; organizerAnalyticsService sends weekly to all organizers with no suppression). Inbox incident confirmed stopped — no runaway sends in Railway logs. Blocked Queue: 7 rows. Push block ready.**
 
@@ -45,16 +47,12 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING: #332 at 57 sessions; #335 at 57 sessions — mandatory P0 per CLAUDE.md §10a. S851: 4 new P2/P3 bugs added from QA blitz._
+_⚠️ P0 AGING: #332 at 58 sessions; #335 at 58 sessions — mandatory P0 per CLAUDE.md §10a. S853: 4 P2/P3 bugs (S851 queue) Chrome-verified and cleared._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #332 Shopify Cross-Listing | **P0 (56 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (56 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅ after 56 sessions. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
-| edit-item null saleId crash | **P2** — /organizer/edit-item/[id] shows "Item not found or no permission" for returned-to-inventory items (saleId=null). Confirmed S851 for all 3 inventory items (Kitchen Set, Garden Tools, Picture Frame). | findasale-dev: edit-item route/page must support null saleId items from /organizer/inventory. | S851 |
-| Inline editor Full Edit misfire | **P2** — "Full Edit ↗" button in add-items inline editor opens NEXT item's inline editor instead of navigating to /organizer/edit-item/[id]. Click z-index/position bug. | findasale-dev: Fix button click target in add-items inline editor row. | S851 |
-| /unsubscribe no-token spinner | **P2** — /unsubscribe without ?token= query param shows infinite "Processing your request..." spinner. Should show error/instructions state. | findasale-dev: Add guard in unsubscribe.tsx — if no token, show "Invalid link" error state. | S851 |
-| \u2014 unicode literal in edit-item | **P3** — "No photos yet \u2014 click to upload" renders the escape sequence literally in edit-item Photos section. | findasale-dev: Fix unicode escape in photos empty state copy. | S851 |
+| #332 Shopify Cross-Listing | **P0 (58 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
+| #335 Consignor Payout Email | **P0 (58 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅ after 58 sessions. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
 
 ---
 
@@ -76,34 +74,44 @@ _⚠️ P0 AGING: #332 at 57 sessions; #335 at 57 sessions — mandatory P0 per 
 
 ## Next Session
 
-**S852 done. 3 P2 bugs fixed + P3 fixed. #317/#320 UNVERIFIED (see Blocked Queue). Blocked Queue: 6 rows.**
+**S853 done. All 4 S852 bug fixes Chrome-verified. Blocked Queue: 2 rows.**
 
-1. **#335 payout confirm** — Patrick check deseee@yahoo.com (not yet midnight PST). If Jane Thrift payout email received → ✅, remove from Blocked Queue.
-2. **Push S852 code fixes** — 4 files changed this session (see push block below).
-3. **QA after push** — Browser-verify Bug 1 fix: navigate to /organizer/inventory as Alice, click edit on a returned-to-inventory item → should load edit-item page (not "Item not found").
-4. **#317/#320** — Remain UNVERIFIED. #320 needs item with null price + publish + wait; #317 needs real treasure hunt clue setup. Defer unless Patrick wants to prioritize.
-5. **#332 Shopify** — Still blocked on Shopify dev store. No action unless Patrick creates one.
+1. **#335 payout confirm** — Patrick check deseee@yahoo.com. If Jane Thrift payout email received → ✅, remove from Blocked Queue.
+2. **#317/#320** — Remain UNVERIFIED. #320 needs item with null price + publish + wait; #317 needs real treasure hunt clue setup. Defer unless Patrick wants to prioritize.
+3. **#332 Shopify** — Still blocked on Shopify dev store. No action unless Patrick creates one.
+4. **DEV mode permitted** — Blocked Queue at 2 rows (well below ≥8 ceiling). Continue roadmap.
 
-**Blocked Queue: 6 rows. Below ≥8 ceiling — DEV mode permitted.**
+**Blocked Queue: 2 rows. DEV mode permitted.**
 
 **Patrick actions required:**
 
 1. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
 2. **Delete test invite SVPKNKV3:** finda.sale/admin/invites → Delete SVPKNKV3.
 3. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-4. **Push S852 code fixes:**
+4. **Push S853 STATE.md + patrick-dashboard.md:**
 ```
-git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
-git add packages/frontend/pages/unsubscribe.tsx
-git add packages/frontend/components/ItemPhotoManager.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: S852 — 3 P2 bugs (inventory edit-item, Full-Edit misfire, unsubscribe spinner) + P3 em dash"
+git commit -m "docs: S853 wrap — all 4 S852 bug fixes Chrome-verified, Blocked Queue 6→2"
 .\push.ps1
 ```
 
 ## Recent Sessions
+
+### S853 — QA: All 4 S852 bug fixes Chrome-verified
+
+**All 4 S852 fixes browser-verified against live Vercel deployment (dpl_CbDjpZs1, READY, S852 commit e56d4f3).**
+
+- Bug 1 (P2) ✅: /organizer/inventory → clicked Kitchen Set (null saleId) → Edit Item page loaded, Title "Kitchen Set" visible. ss_8510ho8fx.
+- Bug 2 (P2) ✅: add-items inline editor → "Full Edit ↗" for Antique Chair → navigated to /organizer/edit-item/1278fdf6-... showing "Antique Chair". ss_596216ag3.
+- Bug 3 (P2) ✅: /unsubscribe (no token) → "Email Preferences — Error: Invalid unsubscribe link. Please use the link from your email or contact support@finda.sale." No spinner. ss_4693l8c4l.
+- Bug 4 (P3) ✅: edit-item Photos section shows "No photos yet — click to upload" with proper em dash (not \u2014). Confirmed via find tool + ss_0517yypd1.
+
+**Blocked Queue: 6 → 2 rows.** 4 P2/P3 items cleared. #332 and #335 remain (both P0 aging).
+
+**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md`
+
+---
 
 ### S852 — DEV: 3 P2 bugs fixed + P3 + QA #317/#320 UNVERIFIED
 
@@ -205,6 +213,4 @@ git commit -m "fix: S852 — 3 P2 bugs (inventory edit-item, Full-Edit misfire, 
 
 **#335 Consignor Payout Email:** Jane Thrift email updated to deseee@yahoo.com. Payout run against Jane Thrift as Artifact MI. `PAYOUTED` jumped $29.75→$59.50, payout count 2→3 (ss_6444padcf). `sendConsignorPayout()` fires fire-and-forget — email went out. Patrick must check deseee@yahoo.com to confirm delivery. If confirmed → ✅.
 
-**#68 Command Center ✅ re-verified:** finda.sale/organizer/command-center as Alice Johnson. Recent tab → "QA Test Flip Report Sale" with ENDED badge, May 21–May 28. Active/Upcoming/Recent/All tabs work. ss_7321prqsa. Independent re-verification of S804 claim (known inflation session).
-
-**#125 CSV Export ✅ re-verified:** Export to eBay modal shows "Export 2 available items as eBay CSV", watermark toggle, "Remove watermark — TE
+**#68 Command Center ✅ re-verified:** finda.sale/organizer/command-center as Alice Johnson. Recent tab → "QA Test Flip Report Sale"
