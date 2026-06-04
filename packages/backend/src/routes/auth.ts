@@ -328,7 +328,7 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// P0 Security Fix: GET /auth/me
+// P1 Security Fix: GET /auth/me — strip sensitive credential fields before sending
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
 
@@ -337,9 +337,18 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     select: { subscriptionTier: true, subscriptionStatus: true },
   }).catch(() => null);
 
+  // Strip sensitive fields that must never leave the server
+  const {
+    password,
+    resetToken,
+    resetTokenExpiry,
+    emailVerificationToken,
+    ...safeUser
+  } = req.user;
+
   res.json({
     user: {
-      ...req.user,
+      ...safeUser,
       organizerTier: organizer?.subscriptionTier ?? 'SIMPLE',
       subscriptionStatus: organizer?.subscriptionStatus ?? null,
       subscriptionLapsed: req.user.subscriptionLapsed ?? false,

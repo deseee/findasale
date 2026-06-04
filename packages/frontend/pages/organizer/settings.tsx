@@ -2002,7 +2002,7 @@ const OrganizerSettingsPage = () => {
                 <div className="border border-amber-200 dark:border-amber-700 rounded-lg p-6 bg-amber-50 dark:bg-amber-900/20">
                   <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100 mb-2">Your Data</h3>
                   <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
-                    Download a copy of your account data (GDPR Article 20). Limited to once per 24 hours.
+                    Download a copy of your account data (GDPR Article 20).
                   </p>
                   <div className="flex flex-wrap gap-3">
                     <button
@@ -2027,6 +2027,7 @@ const OrganizerSettingsPage = () => {
                       className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-sm transition"
                     >
                       Download My Data
+                      <span className="block text-xs font-normal opacity-80">Limited to once per 24 hours</span>
                     </button>
                     {/* Feature #66: Open Data ZIP — sales, items, purchases as CSVs */}
                     <button
@@ -2052,6 +2053,7 @@ const OrganizerSettingsPage = () => {
                       className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-lg font-medium text-sm transition"
                     >
                       Download Sale & Item Data (ZIP)
+                      <span className="block text-xs font-normal opacity-80">Limited to once per month</span>
                     </button>
                   </div>
                 </div>

@@ -125,13 +125,19 @@ function ServiceWorkerUpdateNotifier() {
 // Phase 31: Bridge NextAuth OAuth session → our JWT AuthContext.
 function OAuthBridge() {
   const { data: session, status } = useSession();
-  const { login, user } = useAuth();
+  const { login } = useAuth();
   const router = useRouter();
   const [exchanging, setExchanging] = useState(false);
 
   useEffect(() => {
     const oauthProfile = (session as any)?.oauthProfile;
-    if (status === 'authenticated' && oauthProfile && !user && !exchanging) {
+    // P1 Security Fix: Removed `!user` guard — previously, an existing JWT session for
+    // account A would prevent the OAuth exchange for account B from firing, leaving the
+    // user silently stuck on account A's session after completing Google OAuth as account B.
+    // The exchange must always run when there is a pending oauthProfile, regardless of
+    // whether a prior session is active. The backend sets new cookies that overwrite the
+    // existing accessToken/refreshToken, and login() replaces the React auth context.
+    if (status === 'authenticated' && oauthProfile && !exchanging) {
       setExchanging(true);
       // POST directly from browser → Next.js proxy (beforeFiles) → Railway
       // This ensures Railway's Set-Cookie headers reach the BROWSER, not Vercel
@@ -204,7 +210,7 @@ function OAuthBridge() {
           setExchanging(false);
         });
     }
-  }, [session, status, user, exchanging, login, router]);
+  }, [session, status, exchanging, login, router]);
 
   return null;
 }

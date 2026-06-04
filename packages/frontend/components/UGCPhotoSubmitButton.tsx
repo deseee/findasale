@@ -66,8 +66,7 @@ export default function UGCPhotoSubmitButton({
       {/* Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-white border-2 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-        style={{ borderColor: '#8FB897' }}
+        className="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 dark:bg-amber-900/30 border-2 border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-300 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors font-medium"
       >
         <span>📸</span>
         Tag Your Find
