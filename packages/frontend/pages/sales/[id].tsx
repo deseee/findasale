@@ -33,6 +33,7 @@ import SaleOGMeta from '../../components/SaleOGMeta'; // Feature #43: OG Image G
 import OrganizerReputation from '../../components/OrganizerReputation'; // #71: Organizer Reputation Score
 import VerifiedBadge from '../../components/VerifiedBadge'; // Feature #16
 import UGCPhotoGallery from '../../components/UGCPhotoGallery'; // Feature #47
+import UGCPhotoSubmitButton from '../../components/UGCPhotoSubmitButton'; // Feature #47
 import { RippleIndicator } from '../../components/RippleIndicator'; // Feature #51: Sale Ripples
 import { LiveFeedTicker } from '../../components/LiveFeedTicker'; // Feature #70: Live Activity Ticker
 import SaleLockCard from '../../components/SaleLockCard'; // Rank-Based Early Access
@@ -1995,12 +1996,26 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             </section>
 
             {/* ── UGC PHOTO GALLERY ── */}
-            {ugcPhotos.length > 0 && (
+            {(ugcPhotos.length > 0 || user) && (
               <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
-                <h2 style={{ fontFamily: '"Inter Tight","Inter",sans-serif', fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em', margin: '0 0 16px' }}>
-                  Community Photos <span className="text-sm font-normal text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">({ugcPhotos.length})</span>
-                </h2>
-                <UGCPhotoGallery photos={ugcPhotos} loading={ugcLoading} />
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <h2 style={{ fontFamily: '"Inter Tight","Inter",sans-serif', fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em', margin: 0 }}>
+                    Community Photos <span className="text-sm font-normal text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">({ugcPhotos.length})</span>
+                  </h2>
+                  {user && (
+                    <UGCPhotoSubmitButton
+                      saleId={sale.id}
+                      onSuccess={() => queryClient.invalidateQueries({ queryKey: ['ugcPhotos', 'sale', id] })}
+                    />
+                  )}
+                </div>
+                {ugcPhotos.length > 0 ? (
+                  <UGCPhotoGallery photos={ugcPhotos} loading={ugcLoading} />
+                ) : (
+                  <p className="text-sm text-[rgba(26,24,20,0.55)] dark:text-[rgba(242,240,234,0.55)]">
+                    No community photos yet. Found something great here? Tag your find to be the first.
+                  </p>
+                )}
               </section>
             )}
 

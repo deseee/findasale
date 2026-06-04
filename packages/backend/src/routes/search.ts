@@ -24,6 +24,7 @@ const searchQuerySchema = z.object({
   category: z.string().optional(),
   saleStatus: z.string().optional().default('all'),
   sortBy: z.string().optional().default('recent'),
+  saleType: z.string().optional(),
 });
 
 const categoriesQuerySchema = z.object({
@@ -47,7 +48,7 @@ const randomQuerySchema = z.object({
 router.get('/', searchLimiter, async (req: Request, res: Response) => {
   try {
     const validatedQuery = searchQuerySchema.parse(req.query);
-    const { q, type, page, limit, priceMin, priceMax, condition, category, saleStatus, sortBy } = validatedQuery;
+    const { q, type, page, limit, priceMin, priceMax, condition, category, saleStatus, sortBy, saleType } = validatedQuery;
     const skip = (page - 1) * limit;
 
     // Strip ", ST" state suffix so "san diego, CA" → "san diego" for city matching
@@ -114,7 +115,7 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
     const [salesResult, itemsResult, itemSearchResult, organizerSearchResult] = await Promise.all([
       type !== 'items'
         ? prisma.sale.findMany({
-            where: { ...textWhere, status: 'PUBLISHED', deletedAt: null, isInventoryContainer: false, endDate: { gte: new Date() } },
+            where: { ...textWhere, status: 'PUBLISHED', deletedAt: null, isInventoryContainer: false, endDate: { gte: new Date() }, ...(saleType ? { saleType } : {}) },
             select: {
               id: true,
               title: true,

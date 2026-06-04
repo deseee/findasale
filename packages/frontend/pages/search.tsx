@@ -28,6 +28,9 @@ import {
   filtersFromQuery,
   type ItemSearchFilters,
 } from '../hooks/useItemSearch';
+import { useAuth } from '../components/AuthContext';
+import { useToast } from '../components/ToastContext';
+import { Bookmark } from 'lucide-react';
 
 type SearchTab = 'all' | 'sales' | 'items';
 
@@ -45,6 +48,9 @@ const CATEGORIES = [
 
 const SearchPage = () => {
   const router = useRouter();
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  const [isSavingSearch, setIsSavingSearch] = useState(false);
   const [tab, setTab] = useState<SearchTab>('all');
   const [visualResults, setVisualResults] = useState<VisualSearchData | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -144,6 +150,38 @@ const SearchPage = () => {
     setVisualResults(data);
   };
 
+  // Save the current query + active filters as a Saved Search.
+  // POSTs { name, filters } to match the backend contract (savedSearchController.ts).
+  const handleSaveSearch = async () => {
+    if (!user) {
+      showToast('Sign in to save this search.', 'info');
+      router.push('/login');
+      return;
+    }
+    if (!q || q.length < 2) {
+      showToast('Enter a search first, then save it.', 'info');
+      return;
+    }
+
+    const savedFilters: Record<string, unknown> = { q };
+    if (filters.category) savedFilters.category = filters.category;
+    if (filters.condition) savedFilters.condition = filters.condition;
+    if (filters.saleStatus && filters.saleStatus !== 'all') savedFilters.saleStatus = filters.saleStatus;
+    if (filters.priceMin !== null) savedFilters.priceMin = filters.priceMin;
+    if (filters.priceMax !== null) savedFilters.priceMax = filters.priceMax;
+
+    setIsSavingSearch(true);
+    try {
+      await api.post('/saved-searches', { name: q, filters: savedFilters });
+      showToast('Search saved! View it under Saved Searches.', 'success');
+    } catch (error) {
+      console.error('Error saving search:', error);
+      showToast('Could not save your search. Please try again.', 'error');
+    } finally {
+      setIsSavingSearch(false);
+    }
+  };
+
   // Sprint 4b: FTS item search state (active when tab === 'items')
   const [itemFilters, setItemFilters] = useState<ItemSearchFilters>(() =>
     filtersFromQuery(router.isReady ? (router.query as any) : {})
@@ -212,6 +250,29 @@ const SearchPage = () => {
             router.push(`/search?q=${encodeURIComponent(suggestion)}`);
           }} />
         </form>
+
+        {/* Save Search — lets shoppers store the current query + filters for later */}
+        {q && q.length >= 2 && (
+          <div className="mb-6 flex flex-wrap items-center justify-center gap-3 max-w-2xl mx-auto">
+            <button
+              type="button"
+              onClick={handleSaveSearch}
+              disabled={isSavingSearch}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 hover:border-amber-500 dark:hover:border-amber-500 text-amber-700 dark:text-amber-300 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Bookmark className="w-4 h-4" />
+              {isSavingSearch ? 'Saving…' : 'Save Search'}
+            </button>
+            {user && (
+              <Link
+                href="/shopper/saved-searches"
+                className="text-sm text-warm-600 dark:text-warm-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+              >
+                View saved searches
+              </Link>
+            )}
+          </div>
+        )}
 
         {/* Error message — shows when main search API fails */}
         {q && q.length >= 2 && isError && (
