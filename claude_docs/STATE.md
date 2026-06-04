@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S865 — BUG/AUDIT: #335 ROOT CAUSE FOUND. Google clamped outreach@finda.sale sending since May 18 — ALL transactional email (payouts, password resets, verifications) dead 17 days. NOT Yahoo. Outreach stopped, fixes coded.**
+**Latest: S865 — BUG/AUDIT+QA: #335 RESOLVED + ✅✅ END-TO-END VERIFIED (73 sessions in queue → closed). Email outage root-caused (May 18 digest blast → Google sending suspension), suspension lifted, outreach re-enabled, payout email confirmed in Patrick's Yahoo inbox. 2 new P1s queued (OAuth session supersede + auth/me hash leak).**
 - Evidence (all tool-verified): outreach@finda.sale inbox holds 1,400+ mailer-daemon bounces "You have reached a limit for sending mail" — first bounces May 18, 100% of sends bouncing since (incl. live S865 test msg 19e91905c1d8a024, password resets, Jane Thrift payout).
 - **FULL MECHANISM (S865c, deep pass):** (1) Mon May 18, 5:00 AM ET: organizerWeeklyDigestJob blasted ~1,900+ "Performance Summary – 0 items sold" digests to SCRAPED orgs (first bounce 6:08 AM ET mid-run; bounced sample addressed "Hi Mid South Real Estate" — scraped business). That trigger was ALREADY FIXED same-day (May 18 commit "digest suppression for unmanaged orgs" + May 22 "digest system filter + throttle"). (2) THE PERSISTING PROBLEM: Google SUSPENDED the account's external sending (Gmail policy suspension) and it never auto-recovered because ~30 sends/day (outreach cron + transactional) kept re-tripping it daily for 17 days. Self-send test S865c: internal delivery WORKS (msg 19e9355cfddee108 delivered, no bounce); external sends bounce. (3) FIX: Google Admin console → Directory → Users → outreach@finda.sale → banner shows suspension reason → top-right **Reactivate** (re-enables within 15 min; 5×/calendar-year limit). Patrick-only — requires admin password. With outreach paused (S865), the 24h auto-reset may also now occur on its own.
 - S864 "SES_FROM_EMAIL regression" was a misdiagnosis — Railway value verified already find@outreach.finda.sale; Gmail refresh token valid; Gmail API accepts sends (200) then bounces them. DNS (SPF/DKIM/DMARC) all healthy.
@@ -53,7 +53,7 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING: #332 at 70 sessions; #335 at 70 sessions — mandatory P0 per CLAUDE.md §10a._
+_⚠️ P0 AGING: #332 at 70+ sessions — mandatory P0 per CLAUDE.md §10a. (#335 closed S865.)_
 _⚠️ FRICTION AUDIT 2026-06-04: 3 new P0s added — truncated working-copy files that will break both deployments if pushed._
 
 | Feature | Reason | What's Needed | Session Added |
@@ -62,7 +62,6 @@ _⚠️ FRICTION AUDIT 2026-06-04: 3 new P0s added — truncated working-copy fi
 | **TRUNCATED: routes/search.ts** | **P0** — File ends mid-comment `// #455: Anonymous search-qu`, missing notify route registration and `export default router`. Railway build will fail if pushed. | `git checkout HEAD -- packages/backend/src/routes/search.ts` before next push | Audit 2026-06-04 |
 | **TRUNCATED: messageController.ts** | **P0** — File ends mid-expression `res.status(500).json`, missing closing for catch block and function. Railway build will fail if pushed. | `git checkout HEAD -- packages/backend/src/controllers/messageController.ts` before next push | Audit 2026-06-04 |
 | #332 Shopify Cross-Listing | **P0 (70 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **RESOLVED S865d — Google sending suspension LIFTED.** Suspension (active since May 18, kept alive by daily send attempts) auto-cleared ~8h after S865 paused all bulk sending. Verified: external test 19e9361c9d4b6667 sent 16:05 UTC Jun 4, NO bounce (suspended-era bounces arrived <60s). Outreach re-enabled same session: OUTREACH_ENABLED=true (read-back verified) + GH workflow re-enabled (banner gone, Run workflow visible). Digest stays OFF (ORGANIZER_DIGEST_ENABLED unset). | ✅ END-TO-END VERIFIED S865e: Logged into finda.sale as Artifact (artifactmi@gmail.com), POST /api/consignors/cqa333testjanethrift01/payout → 201 (payout cmpzq2ylq000fg36hlx87d1m1, $29.75 Cash, 16:41 UTC). Gmail Sent: 'Payout received: $29.75' 12:41 PM no bounce. Yahoo INBOX (not spam): received from find@outreach.finda.sale. Scheduled task Jun 5 confirms overnight health. | S791 |
 | OAuth login doesn't supersede existing JWT session | **P1 NEW S865e** — With an existing JWT cookie for account A, clicking "Sign in with Google" as account B completes OAuth but /api/auth/me still returns account A. Only explicit POST /api/auth/logout then OAuth produces B's session. Reproduced twice (user1 cookie persisted through artifactmi OAuth). Confusing + potential cross-account action risk. | findasale-dev: OAuth callback must clear/replace the prior JWT + refresh cookies. | S865 |
 | /api/auth/me returns bcrypt password hash | **P1 NEW S865e (security)** — GET /api/auth/me response includes user.password (bcrypt hash) in JSON. Hash exposure to any XSS/extension. | findasale-dev: strip password (and other sensitive fields) from auth/me serializer. | S865 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
@@ -82,7 +81,6 @@ _⚠️ FRICTION AUDIT 2026-06-04: 3 new P0s added — truncated working-copy fi
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
-| 335 | Consignor Payout Email ✅ | Navigated finda.sale as Artifact (artifactmi@gmail.com). Submitted Run Payout (Cash) for Jane Thrift → POST /api/consignors/cqa333testjanethrift01/payout 201, payout cmpzq2ylq000fg36hlx87d1m1 $29.75. Outcome: Gmail Sent 12:41 PM no bounce; deseee@yahoo.com INBOX received 'Payout received: $29.75' from find@outreach.finda.sale (DOM-verified, screenshot tool unavailable this session — JSON DOM extracts logged in transcript). | S865 |
 |---|---------|----------|---------|
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
 
@@ -127,7 +125,13 @@ Priority:
 
 ## Recent Sessions
 
-### S865 — BUG/AUDIT: #335 root cause found — Google sending clamp, not Yahoo
+### S865 — BUG/AUDIT+QA: #335 root-caused, resolved, and ✅✅ END-TO-END VERIFIED
+
+**Final outcome:** #335 closed after 73 sessions. Roadmap row marked Claude QA ✅ S865 + Human QA ✅ S865 (Patrick personally confirmed payout email receipt in his Yahoo inbox).
+
+**S865d/e (after fixes):** Suspension auto-lifted ~16:00 UTC (external test 19e9361c9d4b6667, no bounce — suspended-era bounces came <60s). Outreach re-enabled: OUTREACH_ENABLED=true + GH workflow enabled (both verified). End-to-end #335 test: logged into finda.sale as Artifact via Google OAuth, POST /api/consignors/cqa333testjanethrift01/payout → 201 (payout cmpzq2ylq000fg36hlx87d1m1, $29.75 Cash) → Gmail Sent 12:41 PM no bounce → Yahoo INBOX delivery confirmed. Test payout deleted post-verification (Patrick-approved). 2 NEW P1s queued: OAuth login doesn't supersede existing JWT session (had to logout user1 cookie before artifact OAuth took); /api/auth/me returns bcrypt password hash.
+
+#### Original S865 audit chain (earlier in session)
 
 **Audit chain (all tool-verified):**
 - Railway env verified: SES_FROM_EMAIL already find@outreach.finda.sale (S864 "regression" never persisted / was misdiagnosed). Gmail refresh token VALID (live token exchange, scope gmail.send). DNS healthy (SPF/DKIM/DMARC on outreach.finda.sale all present).
