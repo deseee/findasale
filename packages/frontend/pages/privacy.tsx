@@ -190,8 +190,9 @@ const PrivacyPage = () => {
               FindA.Sale participates in the eBay Partner Network (EPN), an affiliate advertising program. Item detail
               pages may display links to comparable listings on eBay. When you click these links and make a qualifying
               purchase on eBay, FindA.Sale may earn a small commission at no additional cost to you. eBay links are
-              identified by the label "Shop Similar on eBay" and route through rover.ebay.com. We only link to eBay
-              listings we believe are relevant to the item you are viewing.
+              identified by the label "Shop Similar on eBay" and include eBay Partner Network tracking parameters
+              (such as campid and mkcid) on the ebay.com link. We only link to eBay listings we believe are relevant
+              to the item you are viewing.
             </p>
           </section>
 

@@ -1,5 +1,23 @@
 import axios from 'axios';
 
+// EPN review fix: lightweight client-side marker indicating a user has logged in
+// on this browser. Used by the 401 interceptor to distinguish "expired session"
+// (attempt refresh, redirect on failure) from "anonymous visitor on a public page"
+// (401 is normal — never redirect). Set on login/session-restore, cleared on logout.
+const SESSION_MARKER_KEY = 'fas_has_session';
+
+export const setSessionMarker = (): void => {
+  try { localStorage.setItem(SESSION_MARKER_KEY, '1'); } catch { /* SSR / storage blocked */ }
+};
+
+export const clearSessionMarker = (): void => {
+  try { localStorage.removeItem(SESSION_MARKER_KEY); } catch { /* SSR / storage blocked */ }
+};
+
+export const hasSessionMarker = (): boolean => {
+  try { return localStorage.getItem(SESSION_MARKER_KEY) === '1'; } catch { return false; }
+};
+
 const api = axios.create({
   // P0 FIX: Browser requests must go through the Next.js proxy (/api) so that
   // httpOnly cookies are set/sent on the same origin (finda.sale).
@@ -57,6 +75,15 @@ api.interceptors.response.use(
         return Promise.reject(error); // Let caller handle unauthenticated state gracefully
       }
 
+      // EPN review fix: anonymous visitors must NEVER be redirected to /login by this
+      // interceptor. Public pages (/items/[id], /sales/[id]) fire background calls
+      // (favorites status, notifications, etc.) that 401 for logged-out users — that is
+      // normal and the callers handle it. Only attempt refresh + redirect when this
+      // browser has an active session marker (set on login, cleared on logout).
+      if (typeof window !== 'undefined' && !hasSessionMarker()) {
+        return Promise.reject(error);
+      }
+
       originalRequest._retry = true;
       try {
         // Call the refresh endpoint to get a new access token
@@ -64,7 +91,10 @@ api.interceptors.response.use(
         // Retry the original request with the new cookie
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed — redirect to login (skip if already on login to prevent reload loop)
+        // Refresh failed — session is genuinely dead. Clear the marker so subsequent
+        // 401s on public pages don't re-trigger refresh/redirect, then send to login
+        // (skip if already on login to prevent reload loop).
+        clearSessionMarker();
         if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
           window.location.href = '/login';
         }

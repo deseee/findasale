@@ -1675,9 +1675,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   ? sale.tags.join(' ')
                   : sale.title;
                 const searchQuery = rawTerms.split(/\s+/).slice(0, 3).join(' ');
+                // Current EPN link format — params appended directly to the ebay.com URL
+                // (rover.ebay.com redirect links are deprecated and rejected by eBay).
                 const ebaySearchUrl =
-                  'https://rover.ebay.com/rover/1/711-53200-19255-0/1?toolid=10001&campid=5339148447&mpre=' +
-                  encodeURIComponent('https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(searchQuery));
+                  'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(searchQuery) +
+                  '&mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339148447&customid=&toolid=10001&mkevt=1';
                 return (
                   <a
                     href={ebaySearchUrl}
