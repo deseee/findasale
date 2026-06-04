@@ -33,6 +33,20 @@ DELETE FROM "AppraisalResponse" WHERE "responderId" NOT IN (SELECT "id" FROM "Us
 DELETE FROM "AppraisalDispute" WHERE "raisedByUserId" NOT IN (SELECT "id" FROM "User");
 DELETE FROM "Organizer" WHERE "userId" NOT IN (SELECT "id" FROM "User");
 
+-- Optional FK orphan cleanup (SET NULL rather than DELETE — preserve the parent record)
+UPDATE "Conversation" SET "saleId" = NULL WHERE "saleId" IS NOT NULL AND "saleId" NOT IN (SELECT "id" FROM "Sale");
+UPDATE "Item" SET "saleId" = NULL WHERE "saleId" IS NOT NULL AND "saleId" NOT IN (SELECT "id" FROM "Sale");
+UPDATE "Favorite" SET "saleId" = NULL WHERE "saleId" IS NOT NULL AND "saleId" NOT IN (SELECT "id" FROM "Sale");
+UPDATE "Favorite" SET "itemId" = NULL WHERE "itemId" IS NOT NULL AND "itemId" NOT IN (SELECT "id" FROM "Item");
+UPDATE "Purchase" SET "userId" = NULL WHERE "userId" IS NOT NULL AND "userId" NOT IN (SELECT "id" FROM "User");
+UPDATE "Purchase" SET "itemId" = NULL WHERE "itemId" IS NOT NULL AND "itemId" NOT IN (SELECT "id" FROM "Item");
+UPDATE "Purchase" SET "saleId" = NULL WHERE "saleId" IS NOT NULL AND "saleId" NOT IN (SELECT "id" FROM "Sale");
+UPDATE "Purchase" SET "affiliateLinkId" = NULL WHERE "affiliateLinkId" IS NOT NULL AND "affiliateLinkId" NOT IN (SELECT "id" FROM "AffiliateLink");
+UPDATE "SaleSubscriber" SET "userId" = NULL WHERE "userId" IS NOT NULL AND "userId" NOT IN (SELECT "id" FROM "User");
+UPDATE "Review" SET "organizerId" = NULL WHERE "organizerId" IS NOT NULL AND "organizerId" NOT IN (SELECT "id" FROM "Organizer");
+UPDATE "FraudSignal" SET "reviewedByAdminId" = NULL WHERE "reviewedByAdminId" IS NOT NULL AND "reviewedByAdminId" NOT IN (SELECT "id" FROM "User");
+UPDATE "SaleRipple" SET "userId" = NULL WHERE "userId" IS NOT NULL AND "userId" NOT IN (SELECT "id" FROM "User");
+
 -- ============================================================
 -- BLOCK 1: Organizer
 -- ============================================================
