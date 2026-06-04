@@ -8,7 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S864 — QA MODE: #195 ✅ Chrome-verified. Vercel build broken by saved-searches.tsx TS error — fixed. #324/#176 PCV marks applied. #335 email diagnosis → Claude introduced regression (see Next Session).**
+**Latest: S865 — BUG/AUDIT: #335 ROOT CAUSE FOUND. Google clamped outreach@finda.sale sending since May 18 — ALL transactional email (payouts, password resets, verifications) dead 17 days. NOT Yahoo. Outreach stopped, fixes coded.**
+- Evidence (all tool-verified): outreach@finda.sale inbox holds 1,400+ mailer-daemon bounces "You have reached a limit for sending mail" — first bounces May 18, 100% of sends bouncing since (incl. live S865 test msg 19e91905c1d8a024, password resets, Jane Thrift payout). Trigger: May 17–18 outreach duplicate blasts (same business emailed up to 4×; DB shows 5 SENT audit events on one org with attemptCount=2).
+- S864 "SES_FROM_EMAIL regression" was a misdiagnosis — Railway value verified already find@outreach.finda.sale; Gmail refresh token valid; Gmail API accepts sends (200) then bounces them. DNS (SPF/DKIM/DMARC) all healthy.
+- Mitigation applied S865: GH Actions pipeline-outreach-emails.yml DISABLED (workflow page banner confirmed) + Railway OUTREACH_ENABLED=false (redeploy 34ff3f85 @ 07:47 UTC). Cold outreach paused until clamp lifts + fixes pushed.
+- DEV fixes coded (pending push): outreachEmailsCron.ts — kill switch inside sendOutreachEmails() (was registration-only, GH path bypassed it), in-process overlap guard, atomic claim-before-send (touchNSentAt set BEFORE Gmail send via conditional updateMany — crash can no longer cause repeat blasts), touchNum TS fix.
+
+**Previous: S864 — QA MODE: #195 ✅ Chrome-verified. Vercel build broken by saved-searches.tsx TS error — fixed. #324/#176 PCV marks applied. #335 email diagnosis → S864 SES_FROM_EMAIL theory disproven S865.**
 - QA ✅: #195 messaging re-fix Chrome-verified — POST /api/messages → 201, no 500 (ss_6119ualta, ss_03909ty8h). S863 backend fix confirmed live.
 - Records: #324 Chr column updated to ✅ S863, #176 Status updated with Type filter evidence.
 - Vercel build failure found: S863 commit caused 3 consecutive ERRORED Vercel deploys. Root cause: saved-searches.tsx priceMin/priceMax typed as `number` but compared to `''` → TS error. QA agent fixed to `number | string | null`. 0 TS errors confirmed.
@@ -46,11 +52,15 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
 _⚠️ P0 AGING: #332 at 70 sessions; #335 at 70 sessions — mandatory P0 per CLAUDE.md §10a._
+_⚠️ FRICTION AUDIT 2026-06-04: 3 new P0s added — truncated working-copy files that will break both deployments if pushed._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
+| **TRUNCATED: search.tsx** | **P0** — Working copy is 514 lines vs 564 HEAD. Missing `export default SearchPage` and last 50 lines (EmptyState body, Notify Me Waitlist, closing JSX). Vercel build will fail if pushed. | `git checkout HEAD -- packages/frontend/pages/search.tsx` before next push | Audit 2026-06-04 |
+| **TRUNCATED: routes/search.ts** | **P0** — File ends mid-comment `// #455: Anonymous search-qu`, missing notify route registration and `export default router`. Railway build will fail if pushed. | `git checkout HEAD -- packages/backend/src/routes/search.ts` before next push | Audit 2026-06-04 |
+| **TRUNCATED: messageController.ts** | **P0** — File ends mid-expression `res.status(500).json`, missing closing for catch block and function. Railway build will fail if pushed. | `git checkout HEAD -- packages/backend/src/controllers/messageController.ts` before next push | Audit 2026-06-04 |
 | #332 Shopify Cross-Listing | **P0 (70 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (73 sessions)** — S864 REGRESSION: SES_FROM_EMAIL incorrectly changed to outreach@finda.sale → broke Gmail API send entirely. IMMEDIATE: revert SES_FROM_EMAIL to find@outreach.finda.sale in Railway. Then re-trigger payout and check Yahoo inbox/spam. | Patrick: (1) Revert SES_FROM_EMAIL → find@outreach.finda.sale in Railway. (2) Re-test payout email delivery. | S791 |
+| #335 Consignor Payout Email | **P0 (74 sessions) — ROOT CAUSE FOUND S865:** Google sending clamp on outreach@finda.sale since May 18 (1,400+ "reached a limit" bounces; ALL transactional email affected). Outreach triggers disabled S865; clamp should lift ~24–48h after sends stop. SES_FROM_EMAIL was never wrong (verified find@outreach.finda.sale in Railway). | (1) Push S865 outreach fixes. (2) Wait 24–48h, re-run send test (scheduled task created S865), confirm no bounce + Yahoo delivery. (3) Only then re-enable OUTREACH_ENABLED + GH workflow. | S791 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | Email Verification Migration | **P0 (134 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S862. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
 | eBay Connection for user1 | **P0 (75 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
@@ -76,28 +86,47 @@ _(S862
 
 ## Next Session
 
-**S864 done. Blocked Queue: 10 rows — QA MODE next session (≥8 items).**
+**S865 done. Blocked Queue: 10 rows — QA MODE next session (>=8 items).**
 
 Priority:
-1. **IMMEDIATE P0: Revert SES_FROM_EMAIL** in Railway → change back to `find@outreach.finda.sale`. This was incorrectly changed S864 and broke all transactional email sending.
-2. **Push saved-searches.tsx TS fix** (1 file). This unblocks the Vercel build and deploys all S863 features.
-3. **After Vercel goes green:** Chrome QA → #194 /shopper/saved-searches (save+view+delete), #47 UGC submit on sales/[id], /search Sale Type filter.
-4. **Re-test #335 payout email** after SES_FROM_EMAIL is reverted. Trigger payout for Jane Thrift and check Yahoo (inbox + spam).
-5. **P0 Patrick items:** #332 Shopify dev store, Email Verification migration, eBay OAuth user1.
+1. **#335 email clamp re-test** (scheduled task fires 2026-06-05; or manually): send test via Gmail API with prod creds -> check outreach@finda.sale inbox for bounce -> if clean, check deseee@yahoo.com delivery. Only after a clean test: consider re-enabling OUTREACH_ENABLED=true + GH workflow (requires S865 fixes pushed first).
+2. **Push S865 batch** (block below). Unblocks Vercel (S863 features) and hardens outreach before any re-enable.
+3. **After Vercel goes green:** Chrome QA -> #194 /shopper/saved-searches (save+view+delete), #47 UGC submit on sales/[id], /search Sale Type filter.
+4. **P0 Patrick items:** #332 Shopify dev store, Email Verification migration, eBay OAuth user1.
 
 **Patrick actions required (in order):**
 
-1. **IMMEDIATE: Revert SES_FROM_EMAIL** in Railway → `find@outreach.finda.sale`.
-2. **Push saved-searches.tsx fix:**
+1. **Push S865 batch:**
    ```
+   git add packages/backend/src/jobs/outreachEmailsCron.ts
    git add packages/frontend/pages/shopper/saved-searches.tsx
-   git commit -m "fix: saved-searches TS priceMin/priceMax type — unblocks Vercel build"
+   git add claude_docs/STATE.md
+   git add claude_docs/patrick-dashboard.md
+   git add claude_docs/strategy/roadmap.md
+   git commit -m "fix: outreach kill switch + atomic claim-before-send (#335 root cause) + saved-searches TS fix + S865 docs"
    .\push.ps1
    ```
-3. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
-4. **GBP phone verification** — business.google.com → "Verify now" → phone code. (carried)
+   Note: if `git status` also shows packages/backend/src/controllers/messageController.ts modified, add it too (S865 restored a truncated tail; if status is clean for it, nothing to do).
+2. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
+3. **GBP phone verification** — business.google.com -> "Verify now" -> phone code. (carried)
 
 ## Recent Sessions
+
+### S865 — BUG/AUDIT: #335 root cause found — Google sending clamp, not Yahoo
+
+**Audit chain (all tool-verified):**
+- Railway env verified: SES_FROM_EMAIL already find@outreach.finda.sale (S864 "regression" never persisted / was misdiagnosed). Gmail refresh token VALID (live token exchange, scope gmail.send). DNS healthy (SPF/DKIM/DMARC on outreach.finda.sale all present).
+- Live send test with prod creds + exact emailService.ts format: Gmail API accepted (msg 19e91905c1d8a024) -> bounced 30s later by mailer-daemon: "You have reached a limit for sending mail."
+- Chrome: deseee@yahoo.com last received find@outreach.finda.sale mail May 17. outreach@finda.sale inbox: 1,400+ limit bounces, first ones May 18, 100% of sends bouncing since — payouts, password resets, verifications, all outreach. June 3 volume only 32 sends, still all bounced -> sustained clamp, re-tripped by cron sending every 4h for 17 days.
+- May 17-18 sent folder: "We built X a storefront" blasts with duplicates (same business up to 4x; junk targets e.g. The Walt Disney Company).
+
+**Mitigation (done in-session):** GH Actions pipeline-outreach-emails.yml disabled via UI. Railway OUTREACH_ENABLED=false (redeploy 34ff3f85). Clamp expected to lift ~24-48h after sends stop; scheduled re-test task created (fires 2026-06-05).
+
+**DEV (1 agent, root causes DB-confirmed):** outreachEmailsCron.ts — (RC-1) kill switch now inside sendOutreachEmails() (was registration-only; GH job-runner path bypassed it); (RC-2) atomic claim-before-send via conditional updateMany — DB evidence showed one org with 5 SENT audit events but attemptCount=2 (sent-marking happened after send; crashes enabled repeat blasts); (RC-3) in-process overlap guard (manual route had no lock); (RC-4) 184 shared-address org records noted — existing dedup layers + atomic claim neutralize at send time. Also: messageController.ts truncated tail restored to match GitHub main.
+
+**Process notes:** Railway CLI installed in VM via npm (mnt/.claude binary not mounted this session). Email failures are invisible to the app — all catch blocks swallow; bounces only visible in the outreach@finda.sale mailbox (gmail.send scope cannot read it; used Chrome).
+
+---
 
 ### S864 — QA MODE: #195 ✅, Vercel build fixed, #335 regression introduced
 
@@ -192,70 +221,3 @@ Priority:
 **Blocked Queue: 8 → 10 rows (2 new bugs added).**
 
 ---
-
-### S860 — QA+Records+DEV: #316 Tranche B P1 bug found+fixed, notifications P2 fixed
-
-**Records:**
-- `claude_docs/strategy/roadmap.md`: #255 Claude QA ⬜→✅ S859 applied (cross-session from S859 PCV). #316 status updated (P1 bug found+fixed S860).
-- `claude_docs/STATE.md`: PCV trimmed (#255 graduated). #316 re-verify row added to PCV.
-
-**DEV (inline — <20 lines, 2 files):**
-- `packages/frontend/pages/notifications.tsx` lines 322–323: `|| 999` → `?? 999` — Today group (value 0) was sorting to page bottom. 0 TS errors.
-- `packages/backend/src/controllers/pointsController.ts`: added `import { referralTrancheService }` + fire-and-forget `recordSaleVisit()` call in `trackSaleVisit()`. Tranche B (150 XP / 3 sale visits) was fully implemented in the service but never wired to the controller — referred users' sale visits never counted. 0 TS errors.
-- `packages/frontend/pages/register.tsx`: added green "Referral link applied" banner for `formData.referralCode` (mirrors existing inviteCode banner). Previously `?ref=` param was silently captured with no user feedback. 0 TS errors.
-
-**QA smoke tests (DOM-verified, no new PCV entries — prior Chrome ✅ stands):**
-- #467 Sold Item UX: amber banner ✅, SOLD stamp ✅, SimilarItemsGrid ✅, lightbox suppressed ✅, save button hidden ✅, dark mode ✅. No regression vs S817.
-- #464 SEO Footer: Discover column (7 links) ✅, Explore dropdown ✅, /encyclopedia loads ✅ (ss_40922gfo2, ss_5917catz6).
-- #237 Sale-Type Dashboard: loads without errors, no horizontal scroll ✅ (ss_7392t9kal). P3 incidental: "Learn about TEAMS" button clipped at ~1200px on upgrade card.
-
-**QA #316 Referral Tranche B — ❌ FAIL → FIXED:**
-- Chrome: registered qa-tranche-b-s860@test.com via /register?ref=REF-7CD8DCC0 (ss_8604lb5ug). Visited 3 published sales (ss_71195379l, ss_6851w4tv8, ss_0089nigg0).
-- DB post-visit: `distinctSalesVisited: []` (empty), `trancheBReleasedAt: None`, user1 XP unchanged. Root cause: `referralTrancheService.recordSaleVisit()` never called from pointsController. Fix applied.
-- P2 side finding: no visual confirmation when `?ref=` param sets referralCode. Fixed (register.tsx banner).
-- Test data cleaned: qa-tranche-b-s860 deleted, user1 XP restored to 108.
-
-**Blocked Queue: 8 rows (unchanged — P0s are Patrick-action items).**
-
-### S859 — QA+Records: #255 Chrome-verified + notifications sort P2 bug found
-
-**Records:**
-- `claude_docs/strategy/roadmap.md`: #158 Human QA ⬜→✅ S858, #398 Claude QA ⬜→✅ S858, #259 Human QA ⬜→✅ S858, #290 Human QA ⬜→✅ S858. All applied via Python.
-- `claude_docs/STATE.md`: PCV trimmed from 5→1 row (4 S858 rows graduated to roadmap).
-
-**QA #255 Rank-Up Notifications ✅:**
-- DB: Bob Smith (user2) XP set to 498, rank INITIATE.
-- Navigated to /sales/cmpaujbx701r7wh48ssciws0z as Bob. Clicked "Going (0)" RSVP button → "✓ You're going (1)" confirmed.
-- DB post-RSVP: guildXp=500, explorerRank=SCOUT. RANK_UP + RSVP_CONFIRMED notifications created.
-- /notifications page: scrolled to bottom → TODAY section visible with "You've reached SCOUT! — Congratulations! You've advanced to SCOUT rank. Keep hunting!" (7m ago). ss_7469boc64.
-- ⚠️ P2 BUG: Today group renders at BOTTOM of notification list (below This Week, Older). Root cause: `order['Today'] || 999` — `|| 999` treats 0 as falsy. Fix: `?? 999`. Dispatch findasale-dev.
-
-**QA #230 Smart Buyer Widget: UNVERIFIED** — no published sale on any real test organizer (user1 has none, Artifact MI has none, all 10 published sales are scraper accounts).
-
-**Test data cleaned:** Bob XP reset to 157/INITIATE, RSVP deleted, test notifications deleted.
-
-**Blocked Queue: 6→8 rows** (notifications sort P2 bug + #230 Human QA blocker added).
-
----
-
-### S858 — QA+DEV: Flash Deal dropdown fixed + 4 features Chrome-verified
-
-**DEV — Flash Deal dropdown (0 TS errors):**
-- `packages/frontend/pages/organizer/dashboard.tsx`: `useQuery` for flashDealItems now includes `status` in raw type, captures it in `queryFn` map, and filters via `select: (items) => items.filter(i => i.status === 'AVAILABLE')`. SOLD items no longer appear in Flash Deal form selector.
-
-**Records:**
-- `claude_docs/strategy/roadmap.md`: #159 Chr ⬜ → ✅ S857 (S856 evidence applied cross-session).
-- `claude_docs/STATE.md`: Pending Chrome Verifications trimmed from 14→2 (prior entries already in roadmap).
-
-**QA (4 features, all as Alice Johnson / user1@example.com):**
-- #398 ✅ Organizer Referral Loop — /organizer/referrals: link renders, Copy Link → "Copied!" confirmed, stats block (ss_4915xx0kl). ⚠️ P3: Step 3 copy omits XP.
-- #259 ✅ Hunt Pass Accuracy — /shopper/hunt-pass: "1.5x XP on Everything" confirmed (ss_7973nmk5n). XP matrix + "6 hours early" copy removed from page since S530 (intentional simplification).
-- #290 ✅ Dual-Rail Coupons — /coupons: 3-tier $ + XP display correct (ss_32554r03n). ⚠️ P3: Rarity Boost 50 XP only (spec said 15 XP / $0.15 cash — spec likely outdated).
-- #158 ✅ Sale Waitlist — /sales/cmpxl4jii017xsot00wwosx1x: "Remind Me by Email" + "Notify me of new items" visible (ss_4902k1y46).
-
-**Blocked Queue: 7→6 rows (Flash Deal SOLD dropdown cleared, Rarity Boost spec gap added P3).**
-
-**Files changed:** `claude_docs/STATE.md` · `claude_docs/patrick-dashboard.md` · `claude_docs/strategy/roadmap.md` · `packages/frontend/pages/organizer/dashboard.tsx`
-
----
-

@@ -187,7 +187,34 @@ const determineTouchToSend = (record: any): number | null => {
   return null;
 };
 
+// In-process overlap guard. The internal job runner has its own runningJobs lock,
+// but the manual route (/api/internal/outreach/send) and any other direct caller
+// bypass it — two concurrent runs would both fetch the same NULL-touch candidates
+// and double-send. This flag serializes runs within one process.
+let sendRunInProgress = false;
+
 export const sendOutreachEmails = async (): Promise<void> => {
+  // HARD KILL SWITCH (incident 2026-05-18: Gmail sending clamp from duplicate blasts).
+  // The OUTREACH_ENABLED gate previously existed only at cron registration — every
+  // direct caller (internal job runner, manual route, startup catch-up) bypassed it.
+  // This check makes the env var an actual kill switch for ALL trigger paths.
+  if (process.env.OUTREACH_ENABLED !== 'true') {
+    console.log('[OutreachCron] OUTREACH_ENABLED is not true — aborting send run');
+    return;
+  }
+  if (sendRunInProgress) {
+    console.warn('[OutreachCron] A send run is already in progress — aborting overlapping run');
+    return;
+  }
+  sendRunInProgress = true;
+  try {
+    await sendOutreachEmailsInner();
+  } finally {
+    sendRunInProgress = false;
+  }
+};
+
+const sendOutreachEmailsInner = async (): Promise<void> => {
   console.log('[OutreachCron] Starting email batch send');
   if (process.env.OUTREACH_TEST_EMAIL) {
     console.log(`[OutreachCron] TEST MODE — all sends redirected to ${process.env.OUTREACH_TEST_EMAIL}`);
@@ -407,6 +434,9 @@ export const sendOutreachEmails = async (): Promise<void> => {
       // Stop once we've hit the per-window quota (candidates pool is larger than quota)
       if (sent >= quotaPerWindow) break;
 
+      // Declared outside the try so the catch block's BOUNCED audit entry can
+      // reference it (catch blocks cannot see const declarations inside the try).
+      let touchNum: number | null = null;
       try {
         const isSuppressed = await suppressionService.isSuppressed(record.emailAddress);
         if (isSuppressed) {
@@ -425,7 +455,7 @@ export const sendOutreachEmails = async (): Promise<void> => {
           continue;
         }
 
-        const touchNum = determineTouchToSend(record);
+        touchNum = determineTouchToSend(record);
         if (!touchNum) continue;
 
         // DB-backed cross-run dedup: if another row with the same emailAddress has already
@@ -533,6 +563,35 @@ export const sendOutreachEmails = async (): Promise<void> => {
           listUnsubscribe: listUnsubscribeHeader,
         });
 
+        // ATOMIC CLAIM BEFORE SEND (incident 2026-05-18: duplicate touch blasts).
+        // Previously the row was marked sent AFTER the Gmail send — a crash, restart,
+        // or failed update between send and mark left the row eligible and the next
+        // window re-sent the same touch (audit log showed 3x touch-1 SENT for rows
+        // whose touch1SentAt was never persisted). Marking first via a conditional
+        // updateMany makes the claim atomic: if another concurrent run (or a prior
+        // run) already set this touch's timestamp, count === 0 and we skip without
+        // sending. Failure mode is now "one email possibly not sent" (recoverable)
+        // instead of "same email sent repeatedly" (Gmail sending clamp).
+        const claimed = await prisma.directoryClaimEmail.updateMany({
+          where: {
+            id: record.id,
+            [`touch${touchNum}SentAt`]: null,
+          },
+          data: {
+            [`touch${touchNum}SentAt`]: new Date(),
+            trackingPixelId,
+            trackingToken,
+            status: 'SENT',
+            lastAttemptAt: new Date(),
+            attemptCount: { increment: 1 },
+            ...(touchNum === 1 && !record.sentAt ? { sentAt: new Date() } : {}),
+          },
+        });
+        if (claimed.count === 0) {
+          console.log(`[OutreachCron] Claim lost for org:${record.organizerId} touch${touchNum} — already sent by a concurrent/prior run, skipping`);
+          continue;
+        }
+
         await gmail.users.messages.send({
           userId: 'me',
           requestBody: { raw: rawMessage },
@@ -552,20 +611,6 @@ export const sendOutreachEmails = async (): Promise<void> => {
         } catch (auditErr: any) {
           console.error('[OutreachAudit] Failed to log SENT event for org:', record.organizerId, '—', auditErr.message);
         }
-
-        const updateData: any = {
-          [`touch${touchNum}SentAt`]: new Date(),
-          trackingPixelId,
-          trackingToken,
-          status: 'SENT',
-          lastAttemptAt: new Date(),
-          attemptCount: { increment: 1 },
-          ...(touchNum === 1 && !record.sentAt ? { sentAt: new Date() } : {}),
-        };
-        await prisma.directoryClaimEmail.update({
-          where: { id: record.id },
-          data: updateData,
-        });
 
         sent++;
         console.log(`[OutreachCron] Sent Touch ${touchNum} to ${record.organizerId}`);
