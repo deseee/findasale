@@ -1,7 +1,7 @@
 /**
  * AuctionNinja scraper adapter
  * Source: https://www.auctionninja.com
- * Public estate sale company listings by location + sitemap.
+ * Public estate sale company listings by location + directory.
  * Rate limit strictly — 3-4 second delays.
  * Do NOT store: images, full profile text, pricing data (legal caution).
  * Do NOT use ?keyword=, ?sort= or ?start= query params (robots.txt advisory).
@@ -15,7 +15,7 @@ import { getRandomUserAgent } from '../userAgents';
 import { ScrapeStats } from '../sourceRegistry';
 
 const AUCTION_NINJA_BASE_URL = 'https://www.auctionninja.com';
-const SITEMAP_URL = 'https://www.auctionninja.com/sitemap.html';
+const DIRECTORY_URL = 'https://www.auctionninja.com/hire-an-estate-sale-company';
 
 const EXCLUDE_FRAGMENTS = [
   'real estate', 'realty', 'realtor', 'mortgage', 'bank', 'credit union',
@@ -29,7 +29,7 @@ interface AuctionNinjaCompany {
   website?: string;
 }
 
-interface SitemapCompany {
+interface DirectoryCompany {
   name: string;
   slug: string;
   profileUrl: string;
@@ -158,25 +158,24 @@ async function fetchAuctionNinjaCompanies(
 }
 
 // ---------------------------------------------------------------------------
-// Sitemap-based auction house discovery (supplementary source)
+// Directory-based auction house discovery (supplementary source)
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch and parse the AuctionNinja sitemap HTML page.
- * The sitemap lists all auction houses as <li><a href="...">Name</a></li>
- * in a flat list structure.
+ * Fetch and parse the AuctionNinja hire-an-estate-sale-company directory page.
+ * Lists all auction houses as anchor links to auctionninja.com profiles.
  */
-async function fetchSitemapCompanies(
+async function fetchDirectoryCompanies(
   rateLimiter: RateLimiter
-): Promise<SitemapCompany[]> {
+): Promise<DirectoryCompany[]> {
   const domain = new URL(AUCTION_NINJA_BASE_URL).hostname;
-  const companies: SitemapCompany[] = [];
+  const companies: DirectoryCompany[] = [];
 
   await rateLimiter.waitBeforeRequest(domain);
 
   let html: string;
   try {
-    const response = await fetch(SITEMAP_URL, {
+    const response = await fetch(DIRECTORY_URL, {
       headers: {
         'User-Agent': getRandomUserAgent(),
         'Accept': 'text/html,application/xhtml+xml',
@@ -186,22 +185,22 @@ async function fetchSitemapCompanies(
     });
 
     if (!response.ok) {
-      console.warn(`[AuctionNinja:Sitemap] HTTP ${response.status} for ${SITEMAP_URL}`);
+      console.warn(`[AuctionNinja:Directory] HTTP ${response.status} for ${DIRECTORY_URL}`);
       return companies;
     }
 
     html = await response.text();
   } catch (err) {
-    console.warn(`[AuctionNinja:Sitemap] Fetch failed for ${SITEMAP_URL}:`, err);
+    console.warn(`[AuctionNinja:Directory] Fetch failed for ${DIRECTORY_URL}:`, err);
     return companies;
   }
 
-  console.log(`[AuctionNinja:Sitemap] Fetched sitemap HTML: ${html.length} bytes`);
+  console.log(`[AuctionNinja:Directory] Fetched directory HTML: ${html.length} bytes`);
 
   const $ = cheerio.load(html);
 
-  // Parse all <li><a> elements that link to auctionninja.com profiles
-  $('li > a').each((_i, el) => {
+  // Parse all anchor links pointing to auctionninja.com company profiles
+  $('a[href^="https://www.auctionninja.com/"]').each((_i, el) => {
     const $a = $(el);
     const href = $a.attr('href') ?? '';
     const name = $a.text().trim();
@@ -236,7 +235,7 @@ async function fetchSitemapCompanies(
     });
   });
 
-  console.log(`[AuctionNinja:Sitemap] Parsed ${companies.length} auction house profiles from sitemap`);
+  console.log(`[AuctionNinja:Directory] Parsed ${companies.length} auction house profiles from directory`);
   return companies;
 }
 
@@ -308,12 +307,12 @@ export async function scrapeAuctionNinja(
     await new Promise((resolve) => setTimeout(resolve, 3000 + Math.random() * 1000));
   }
 
-  // --- Source 2: Sitemap (supplementary — all auction houses nationally) ---
-  let sitemapCompanies: SitemapCompany[];
+  // --- Source 2: Directory (supplementary — all auction houses nationally) ---
+  let sitemapCompanies: DirectoryCompany[];
   try {
-    sitemapCompanies = await fetchSitemapCompanies(rateLimiter);
+    sitemapCompanies = await fetchDirectoryCompanies(rateLimiter);
   } catch (err) {
-    console.warn(`[AuctionNinja:Sitemap] Sitemap fetch failed (non-fatal):`, err);
+    console.warn(`[AuctionNinja:Directory] Directory fetch failed (non-fatal):`, err);
     sitemapCompanies = [];
   }
 
@@ -327,7 +326,7 @@ export async function scrapeAuctionNinja(
       // getOrCreateScrapedOrganizer handle deduplication by name + source
       const orgId = await getOrCreateScrapedOrganizer(
         company.name,
-        'AuctionNinja-Sitemap',
+        'AuctionNinja-Directory',
         'Unknown',           // city — not available from sitemap
         'US',                // state — national listing, no state info
         undefined,           // esnOrgId
@@ -348,7 +347,7 @@ export async function scrapeAuctionNinja(
         sitemapCreated++;
       }
     } catch (err) {
-      console.error(`[AuctionNinja:Sitemap] Failed to ingest "${company.name}":`, err);
+      console.error(`[AuctionNinja:Directory] Failed to ingest "${company.name}":`, err);
       sitemapFailed++;
     }
   }
@@ -367,7 +366,7 @@ export async function scrapeAuctionNinja(
   console.log('[AuctionNinja] ─────────────────────────────────────────────');
 
   if (stats.itemsFound === 0) {
-    throw new Error(`[AuctionNinja] Completed with zero results — source may be unavailable or blocking`);
+    console.warn(`[AuctionNinja] Completed with zero results — source may be blocked or changed`);
   }
 
   return stats;
