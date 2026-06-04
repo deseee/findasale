@@ -111,6 +111,22 @@ export async function runMonthlyTrendReport(): Promise<void> {
 
   console.log(`[monthlyTrendReport] Processing ${activeOrganizers.length} organizer(s)`);
 
+  // VOLUME FUSE (May 18 2026 organizer-digest incident, same-pattern hardening):
+  // the isUnmanagedListing filter above is the primary scrape guard, but a scraper
+  // bug that fails to set isUnmanagedListing=true on import would re-create the
+  // blast condition (~44k scraped orgs, 2,000/day Gmail cap). A legitimate
+  // registered-organizer list past 300 should be a deliberate decision, not an
+  // accident — abort without sending and alert via error log.
+  const MAX_TREND_REPORT_RECIPIENTS = 300;
+  if (activeOrganizers.length > MAX_TREND_REPORT_RECIPIENTS) {
+    console.error(
+      `[monthlyTrendReport] VOLUME FUSE TRIPPED: query matched ${activeOrganizers.length} organizers ` +
+      `(limit ${MAX_TREND_REPORT_RECIPIENTS}). Aborting without sending — verify the recipient ` +
+      `filter has not regressed (see May 18 2026 scraped-organizer blast incident).`
+    );
+    return;
+  }
+
   // Fetch all CrawlerVisit rows for the two periods in one query (graceful if table is empty)
   let allVisits: Array<{ crawlerName: string; saleId: string | null; createdAt: Date }> = [];
   try {

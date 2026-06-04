@@ -154,6 +154,25 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
     },
   });
 
+  // VOLUME FUSE (May 18 2026 organizer-digest incident, same-pattern hardening):
+  // recipients here are real followers (Follow.notifyEmail=true), so scraped orgs
+  // can't be swept in — but follower volume is unbounded. The Google Workspace
+  // account caps at 2,000 sends/day; no job may exceed 1,000 sends/run. Abort
+  // entirely rather than partially sending so a re-run doesn't double-send.
+  const MAX_CURATOR_SENDS = 1000;
+  const prospectiveSends = organizers.reduce(
+    (total, o) => total + (o.sales.length ? o.followers.filter(f => f.user?.email).length : 0),
+    0
+  );
+  if (prospectiveSends > MAX_CURATOR_SENDS) {
+    console.error(
+      `✗ Curator digest VOLUME FUSE TRIPPED: ${prospectiveSends} prospective sends ` +
+      `(limit ${MAX_CURATOR_SENDS}). Aborting without sending — verify recipient growth ` +
+      `is legitimate before raising the cap.`
+    );
+    return;
+  }
+
   let sentCount = 0;
 
   for (const organizer of organizers) {
@@ -190,7 +209,7 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
   console.log(`✓ Weekly curator digest: sent ${sentCount} emails across ${organizers.length} organizers`);
 };
 
-// ─── Schedule: every Monday at 8 AM ───────────────────────────────────────────────────────────────────────────────────────────────────
+// ─── Schedule: every Monday at 8 AM ───────────────────────────────────────────────────────────────────────────────────
 
 cron.schedule('0 8 * * 1', cronGuard({ jobName: 'curatorEmailJob' }, async () => {
   console.log('📧 Running weekly curator email digest…');
