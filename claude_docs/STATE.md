@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S869 — BUG: 3 P2 + 2 P1 bugs fixed and deployed green. Blocked Queue 17→9 (8 items closed). All pushes and migrations redeployed green per Patrick.**
+**Latest: S870 — QA MODE: 4/5 S869 CODE-ONLY fixes Chrome-verified ✅. OAuth supersede UNVERIFIED (needs Patrick + Gmail). AuctionNinja GH schedule disabled (Cloudflare block, pending push). ZIP rate-limit blob parse fixed (pending push). Blocked Queue: 9 rows.**
 - **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
 - **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
 - **Previous: S868 — BUG+INFRA:** Schema FK audit (4 migrations deployed), Foursquare fixed, AuctionNinja partially fixed but Cloudflare-blocked. Blocked Queue +1 (AuctionNinja).
@@ -58,9 +58,10 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | #332 Shopify Cross-Listing | **P0 (72 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
 | Email Verification Migration | **P0 (135 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but never deployed. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
 | eBay Connection for user1 | **P0 (76 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
+| OAuth session supersede | **P2 UNVERIFIED S870** — OAuthBridge !user guard fix confirmed in code (\_app.tsx). Chrome QA attempted S870 but requires completing real Google OAuth flow while logged in as a different user. | Patrick: log in as user2 (JWT active), click "Sign in with Google" as artifact account, verify /api/auth/me returns artifact not user2 | S870 |
 | "You might also like" black gap | **P2 UNVERIFIED S867** — Section shows empty on all tested sales. Cannot confirm 300px gap without a live active sale with AI-generated recommendations. | Try on a currently-active sale with items | S866 |
-| ZIP export rate-limit error swallowed | **P2** — When export is rate-limited, axios receives JSON error in blob response type → parse fails → generic fallback shown instead of "You've already exported recently." | Fix: parse JSON error body from blob response in settings.tsx export handler | S866 |
-| AuctionNinja scraper | **P2** — GitHub Actions runners get Cloudflare IP block (11KB challenge page, 0 results). Function name, URL, and selector are all correct. | Investigate NAA precedent; test User-Agent bypass; if unbypassable follow NAA pattern — disable schedule with comment | S868 |
+
+| AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 | #192 Price History data-dependent | **P3** — ItemPriceHistoryChart wired correctly but returns null with no history records. | No code fix needed. To verify: run a price update on a real item, check chart renders. | S862 |
@@ -76,11 +77,11 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | 31 | Brand Kit save | As Alice (user1/PRO) on /organizer/brand-kit: scrolled to Save Brand Kit, clicked → "Saving..." (ss_2548h9vun) → green toast "Brand Kit updated successfully" (ss_9229rauhl). DB updatedAt confirmed 16:34 UTC. TEAMS Advanced Brand Customization gated ✅. Downloadable Brand Assets section visible ✅. | S866 |
 | 194 | Saved Searches | As Bob (user2): saved "vintage" search (ss_6611nk9nv, toast ✅), viewed /shopper/saved-searches (ss_6478xn3zf, persisted ✅), clicked Run Search → results (ss_529648c4m ✅), deleted → empty state (ss_0183ddn2w ✅). Full flow verified. | S866 |
 | 47 | UGC Photo Submit button | As Bob (user2) on /sales/cmpbvumj90001e7t7v5sa1iqi: "Tag Your Find" modal opened from sale detail (ss_7093sc6dp ✅). Button in DOM, functional. | S866 |
-| — | Sale Type filter persistence | CODE-ONLY S869 — handleSearch() now builds URLSearchParams with all filter params (saleType, category, condition, saleStatus, sortBy, priceMin, priceMax). Deployed green. Test: /search → set Sale Type = Estate Sale → type "furniture" → click Search → verify saleType stays in URL and results filter correctly. | S869 |
-| — | ZIP export copy per-button | CODE-ONLY S869 — settings.tsx: shared paragraph no longer mentions rate limit; "Download My Data" button shows "Limited to once per 24 hours"; ZIP button shows "Limited to once per month". Deployed green. Test: /organizer/settings → Help tab → Your Data section. | S869 |
-| — | UGC button dark mode | CODE-ONLY S869 — UGCPhotoSubmitButton.tsx: replaced bg-white with amber-100/amber-900 amber styling. Deployed green. Test: visit any sale in dark mode → Community Photos section → verify button is amber not white. | S869 |
-| — | auth/me no password hash | CODE-ONLY S869 — auth.ts GET /me: destructures password/resetToken/resetTokenExpiry/emailVerificationToken before spreading safeUser. Deployed green. Test: Network tab → GET /api/auth/me response → confirm no `password` field. | S869 |
-| — | OAuth session supersede | CODE-ONLY S869 — _app.tsx OAuthBridge: removed `!user` guard so exchange always fires on pending oauthProfile. Deployed green. Test: log in as user1 (JWT cookie active), click Google OAuth as user2 → verify /api/auth/me returns user2. | S869 |
+| — | Sale Type filter persistence | ✅ Chrome-verified S870 — Navigated /search as user2. Set Sale Type = Estate Sale via dropdown. Typed "furniture", clicked Search. URL became ?q=furniture&saleType=ESTATE (persisted). Dropdown still shows "Estate Sale". All 10 results showed "Estate Sale" badge. ss_9039vdcse ss_8858sjoxz | S870 |
+| — | ZIP export copy per-button | ✅ Chrome-verified S870 — Navigated /organizer/settings → Help tab as user2. "Download My Data" shows "Limited to once per 24 hours" span. "Download Sale & Item Data (ZIP)" shows "Limited to once per month" span. No shared rate-limit paragraph text. ss_3469lkjs6 | S870 |
+| — | UGC button dark mode | ✅ Chrome-verified S870 — Navigated Hammond Estate Sale /sales/cmpie5dtp01nx4n1ht00o5zcn in dark mode. Community Photos section. "Tag Your Find" button computed styles: bg=rgba(120,53,15,0.3) (amber-900/30), border=1.8px solid rgb(249,115,22) (amber), color=rgb(252,211,77) (amber). No white box. ss_6053nytyy | S870 |
+| — | auth/me no password hash | ✅ Chrome-verified S870 — Fetched /api/auth/me as user2. Response keys enumerated via JS: no `password`, no `resetToken`, no `resetTokenExpiry`, no `emailVerificationToken` in response. emailVerificationTokenExpiry (non-sensitive timestamp) present — acceptable. | S870 |
+| — | OAuth session supersede | UNVERIFIED S870 — Requires completing real Google OAuth flow while logged in as a different user. Cannot test without Patrick + artifactmi@gmail.com. Added to Blocked Queue. | S870 |
 _(S862
 | 324 | EXIF Temporal Clustering (upload preservation) ✅ | As Alice (user1) on /organizer/add-items: Batch Upload 3 JPEGs with EXIF DateTimeOriginal (14:00:05/14:00:45/16:30:00), clicked Analyze All → 3 drafts created (ss_2118qp0k0, ss_4511e8aq0). Re-downloaded stored Cloudinary images: all 3 timestamps preserved exactly. Test items+photos deleted from DB. | S863 |
 | 176 | Browse Sales homepage Type filter ✅ | As Bob (user2) on finda.sale homepage: Type dropdown → Estate Sale = "17 of 20 sales", all Estate badges (ss_48642xh5d); Yard Sale = "3 of 20 sales", Yard badges (ss_73627haye). | S863 | batch of 9 graduated to roadmap S863. Note: S862 evidence had no screenshot IDs — applied on DB/page-content evidence per S862 orchestrator log.)_
@@ -96,31 +97,32 @@ _(S862
 - **[PARALLEL: no Chrome]** AuctionNinja Cloudflare investigation — read NAA/AuctionZip workflow precedents, test bypass, disable if unbypassable
 - **[PARALLEL: no Chrome]** ZIP rate-limit error swallowed (P2) — fix blob parse error in settings.tsx export handler (~10 lines)
 
-**Chrome QA dispatch stubs (sequential — one at a time):**
 
-1. `Skill('findasale-qa')` → Sale Type filter persistence. Credentials: user2 (Bob). Navigate /search, set Sale Type = Estate Sale, type "furniture", click Search. Evidence required: URL after submit contains `saleType=ESTATE`, results are estate listings only. Screenshot required.
-
-2. `Skill('findasale-qa')` → ZIP export copy. Credentials: user1 (Alice/organizer). Navigate /organizer/settings → Help tab → Your Data. Evidence: "Download My Data" button shows "once per 24 hours" span, ZIP button shows "once per month" span, no rate-limit text in the shared paragraph. Screenshot required.
-
-3. `Skill('findasale-qa')` → UGC button dark mode. Enable dark mode. Navigate any sale page. Evidence: "Tag Your Find" button in Community Photos section uses amber colors (not white box). Screenshot required.
-
-4. `Skill('findasale-qa')` → auth/me no password hash. Navigate finda.sale logged in. Open DevTools Network tab. Find GET /api/auth/me. Evidence: response JSON has no `password` field. Screenshot of network response required.
-
-5. `Skill('findasale-qa')` → OAuth session supersede. Log in as user1 (JWT active). Then Google OAuth as user2/artifact. Evidence: /api/auth/me returns user2's data, not user1's. Screenshot of auth/me response required.
-
-**AuctionNinja investigation stub (can run parallel with QA):**
-`Agent(general-purpose)` → Read `.github/workflows/scrape-naa.yml` for Cloudflare-blocked precedent. Read `.github/workflows/scrape-auctionzip.yml` for working pattern. Read `auctionNinjaScraper.ts` and `run-auctionninja.ts`. Test: does AuctionZip use a different User-Agent or proxy? If unbypassable → disable schedule with comment block (NAA pattern). Return: decision + changed file list or explanation why nothing changed.
-
-**ZIP rate-limit fix stub (can run parallel with QA):**
-`Skill('findasale-dev')` → settings.tsx ZIP export error handler. When `/api/organizers/export` returns a non-2xx with `responseType: 'blob'`, parse the JSON error body from the blob before showing the toast. Expected: "You've already exported this month" instead of generic error. Return: changed file + TS check.
 
 **Patrick actions required:**
-1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
-2. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
-3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
-4. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
+1. **Push S870 code** — see push block below (settings.tsx + scrape-auctionninja.yml)
+2. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
+3. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
+4. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
+5. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
+6. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
 
 ## Recent Sessions
+
+### S870 — QA MODE: 4/5 S869 fixes Chrome-verified. AuctionNinja disabled. ZIP rate-limit fix. Blocked Queue: 9 rows.
+
+**Chrome QA results (sequential):**
+- **Sale Type filter persistence ✅** — URL shows `?q=furniture&saleType=ESTATE` after search submit. Dropdown stays "Estate Sale". All results show Estate Sale badge. ss_9039vdcse ss_8858sjoxz
+- **ZIP export copy ✅** — "Download My Data" = "Limited to once per 24 hours". ZIP = "Limited to once per month". No shared paragraph. ss_3469lkjs6
+- **UGC button dark mode ✅** — Tag Your Find button: bg=amber-900/30, border=amber, text=amber. No white box in dark mode. ss_6053nytyy
+- **auth/me no password hash ✅** — /api/auth/me response: no password, resetToken, resetTokenExpiry, emailVerificationToken fields present.
+- **OAuth session supersede UNVERIFIED** — Requires real Google OAuth flow with Patrick's Gmail. Added to Blocked Queue.
+
+**Parallel work (AuctionNinja + ZIP fix):**
+- **AuctionNinja GH schedule disabled** — Confirmed structural Cloudflare ASN block (GitHub Actions on AWS us-east-1/us-east-2 = datacenter IPs, blocked before headers evaluated). Schedule disabled in scrape-auctionninja.yml with NAA-pattern comment. Fix path: Railway cron or residential proxy. Pending push.
+- **ZIP rate-limit blob parse fixed** — settings.tsx: both export handlers now parse JSON error from blob response before showing toast. "You've already exported today/this month" shown correctly on 429. "Download My Data" shows "Limited to once per 24 hours"; ZIP shows "Limited to once per month". Pending push.
+
+**Blocked Queue: 9 rows** (removed ZIP rate-limit ✅; added OAuth supersede UNVERIFIED)
 
 ### S869 — BUG: 5 bugs fixed (3 P2 + 2 P1), deployed green. Blocked Queue 17→9.
 

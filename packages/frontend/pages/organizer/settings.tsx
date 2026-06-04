@@ -2020,7 +2020,20 @@ const OrganizerSettingsPage = () => {
                           link.parentNode?.removeChild(link);
                           showToast('Data export downloaded successfully', 'success');
                         } catch (error: any) {
-                          const msg = error.response?.data?.error || 'Failed to download data export';
+                          let msg = 'Failed to download data export';
+                          if (error.response?.data instanceof Blob) {
+                            try {
+                              const text = await error.response.data.text();
+                              const json = JSON.parse(text);
+                              if (error.response.status === 429) {
+                                msg = json.error || json.message || 'You\'ve already exported today. Please wait 24 hours before exporting again.';
+                              } else {
+                                msg = json.error || json.message || msg;
+                              }
+                            } catch {}
+                          } else if (error.response?.data?.error) {
+                            msg = error.response.data.error;
+                          }
                           showToast(msg, 'error');
                         }
                       }}
@@ -2046,7 +2059,20 @@ const OrganizerSettingsPage = () => {
                           window.URL.revokeObjectURL(url);
                           showToast('Organizer data export downloaded', 'success');
                         } catch (error: any) {
-                          const msg = error.response?.data?.message || 'Failed to download organizer export';
+                          let msg = 'Failed to download organizer export';
+                          if (error.response?.data instanceof Blob) {
+                            try {
+                              const text = await error.response.data.text();
+                              const json = JSON.parse(text);
+                              if (error.response.status === 429) {
+                                msg = json.message || json.error || 'You\'ve already exported this month. Please wait before exporting again.';
+                              } else {
+                                msg = json.message || json.error || msg;
+                              }
+                            } catch {}
+                          } else if (error.response?.data?.message) {
+                            msg = error.response.data.message;
+                          }
                           showToast(msg, 'error');
                         }
                       }}
@@ -2135,10 +2161,4 @@ const OrganizerSettingsPage = () => {
           >
             Cancel
           </button>
-        </div>
-      </AccessibleModal>
-    </>
-  );
-};
-
-export default OrganizerSettingsPage;
+        </di
