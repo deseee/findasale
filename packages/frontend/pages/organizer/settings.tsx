@@ -2167,4 +2167,4 @@ const OrganizerSettingsPage = () => {
   );
 }
 
-export default SettingsPage;
+export default OrganizerSettingsPage;
