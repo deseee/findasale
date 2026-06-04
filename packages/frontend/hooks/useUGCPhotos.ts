@@ -96,8 +96,8 @@ export const useSubmitPhoto = () => {
       photoUrl: string;
       caption?: string;
       tags?: string[];
-      itemId?: number;
-      saleId?: number;
+      itemId?: string;
+      saleId?: string;
     }) => {
       const response = await api.post('/ugc-photos', data);
       return response.data as UGCPhoto;

@@ -3,8 +3,8 @@ import { useSubmitPhoto } from '../hooks/useUGCPhotos';
 import { useToast } from './ToastContext';
 
 interface UGCPhotoSubmitButtonProps {
-  saleId?: number;
-  itemId?: number;
+  saleId?: string;
+  itemId?: string;
   onSuccess?: () => void;
 }
 
