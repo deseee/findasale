@@ -8,17 +8,22 @@ interface EbayCompTilesProps {
 const CAMP_ID = '5339148447';
 
 /**
- * Build an eBay Partner Network rover URL for affiliate tracking.
+ * Build an eBay Partner Network affiliate link by appending EPN tracking
+ * parameters directly to the eBay listing URL (current EPN link format —
+ * rover.ebay.com redirect links are deprecated and rejected by eBay).
+ * Ref: https://partnerhelp.ebay.com/helpcenter/s/article/What-are-the-parameters-of-an-EPN-link
  */
+const EPN_PARAMS = `mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=${CAMP_ID}&customid=&toolid=10001&mkevt=1`;
+
 const buildEpnUrl = (url: string): string =>
-  `https://rover.ebay.com/rover/1/711-53200-19255-0/1?toolid=10001&campid=${CAMP_ID}&mpre=${encodeURIComponent(url)}`;
+  `${url}${url.includes('?') ? '&' : '?'}${EPN_PARAMS}`;
 
 /**
  * EbayCompTiles — Shopper-facing display of comparable eBay listings.
  *
  * Shows up to 3 eBay listings with EPN affiliate links so shoppers can
  * see what comparable items sell for on eBay. Cards are fully clickable
- * and open eBay in a new tab via rover.ebay.com affiliate links.
+ * and open eBay in a new tab via EPN-parameterized affiliate links.
  *
  * Also used on the organizer edit-item page to show market comps.
  * Renders nothing if no comps with valid listing URLs are available.

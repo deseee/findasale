@@ -248,7 +248,9 @@ export async function fetchEbayPriceComps(params: {
  * Internal: Get eBay price comps for an item based on title and condition
  *
  * Uses the eBay Browse API to search active fixed-price listings.
- * Returns live eBay listings with prices, images, and rover.ebay.com EPN affiliate URLs.
+ * Returns live eBay listings with prices, images, and raw itemWebUrl listing URLs.
+ * EPN affiliate tracking parameters are appended client-side (EbayCompTiles.tsx)
+ * using the current EPN direct-link format — rover.ebay.com is deprecated.
  *
  * Note: findCompletedItems (Finding API XML) would return actual sold prices but
  * requires separate eBay production approval; Browse API is the modern replacement.

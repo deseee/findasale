@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import api from '../lib/api';
+import api, { setSessionMarker, clearSessionMarker } from '../lib/api';
 
 interface User {
   id: string;
@@ -48,6 +48,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const hydrateFromMeResponse = (user: any) => {
+      // EPN review fix: session confirmed valid — set marker so the api.ts 401
+      // interceptor knows this browser has a real session (covers cleared storage).
+      setSessionMarker();
       setUser({
         id: user.id,
         email: user.email,
@@ -105,7 +108,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return;
             }
           } catch {
-            // Refresh failed — user is genuinely logged out. Fall through to setIsLoading(false).
+            // Refresh failed — user is genuinely logged out. Clear the session marker so
+            // the api.ts 401 interceptor treats this browser as anonymous (no redirect
+            // from public pages). Fall through to setIsLoading(false).
+            clearSessionMarker();
           }
           setIsLoading(false);
           return;
@@ -125,6 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Decode token to get user info for immediate context update
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
+      setSessionMarker(); // EPN review fix: user just logged in on this browser
       setUser({
         id: payload.id,
         email: payload.email,
@@ -161,6 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     localStorage.removeItem('fas_shopper_cart');
+    clearSessionMarker(); // EPN review fix: no session on this browser anymore
     setUser(null);
   }, []);
 
