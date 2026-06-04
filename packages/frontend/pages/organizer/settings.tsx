@@ -2161,4 +2161,10 @@ const OrganizerSettingsPage = () => {
           >
             Cancel
           </button>
-        </di
+        </div>
+      </AccessibleModal>
+    </>
+  );
+}
+
+export default SettingsPage;
