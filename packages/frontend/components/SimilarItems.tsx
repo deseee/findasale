@@ -55,7 +55,7 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category }) => {
       <SimilarItemsSkeleton />
     </section>
   );
-  if (!data || data.total === 0 || error) return null;
+  if (!data?.items?.length || error) return null;
 
   return (
     <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
