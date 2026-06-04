@@ -9,12 +9,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 ## Current Status
 
 **Latest: S865 — BUG/AUDIT+QA: #335 RESOLVED + ✅✅ END-TO-END VERIFIED (73 sessions in queue → closed). Email outage root-caused (May 18 digest blast → Google sending suspension), suspension lifted, outreach re-enabled, payout email confirmed in Patrick's Yahoo inbox. 2 new P1s queued (OAuth session supersede + auth/me hash leak).**
-- Evidence (all tool-verified): outreach@finda.sale inbox holds 1,400+ mailer-daemon bounces "You have reached a limit for sending mail" — first bounces May 18, 100% of sends bouncing since (incl. live S865 test msg 19e91905c1d8a024, password resets, Jane Thrift payout).
-- **FULL MECHANISM (S865c, deep pass):** (1) Mon May 18, 5:00 AM ET: organizerWeeklyDigestJob blasted ~1,900+ "Performance Summary – 0 items sold" digests to SCRAPED orgs (first bounce 6:08 AM ET mid-run; bounced sample addressed "Hi Mid South Real Estate" — scraped business). That trigger was ALREADY FIXED same-day (May 18 commit "digest suppression for unmanaged orgs" + May 22 "digest system filter + throttle"). (2) THE PERSISTING PROBLEM: Google SUSPENDED the account's external sending (Gmail policy suspension) and it never auto-recovered because ~30 sends/day (outreach cron + transactional) kept re-tripping it daily for 17 days. Self-send test S865c: internal delivery WORKS (msg 19e9355cfddee108 delivered, no bounce); external sends bounce. (3) FIX: Google Admin console → Directory → Users → outreach@finda.sale → banner shows suspension reason → top-right **Reactivate** (re-enables within 15 min; 5×/calendar-year limit). Patrick-only — requires admin password. With outreach paused (S865), the 24h auto-reset may also now occur on its own.
-- S864 "SES_FROM_EMAIL regression" was a misdiagnosis — Railway value verified already find@outreach.finda.sale; Gmail refresh token valid; Gmail API accepts sends (200) then bounces them. DNS (SPF/DKIM/DMARC) all healthy.
-- Mitigation applied S865: GH Actions pipeline-outreach-emails.yml DISABLED (workflow page banner confirmed) + Railway OUTREACH_ENABLED=false (redeploy 34ff3f85 @ 07:47 UTC). Cold outreach paused until clamp lifts + fixes pushed.
-- DEV fixes coded: outreachEmailsCron.ts — kill switch inside sendOutreachEmails(), overlap guard, atomic claim-before-send (pushed by Patrick, Railway green). S865b batch (pending push): organizerWeeklyDigestJob gated OFF (ORGANIZER_DIGEST_ENABLED, default off) + recipient filter fixed (isClaimed=true, isUnmanagedListing=false, user.password set, emailVerified — DB-verified: old query matched the same 2 real orgs today, but 16,788 scraped orgs were blast-eligible on any fresh import; new filter immune) + volume fuses: digest 300, monthlyTrendReport 300, curatorEmail 1,000, weeklyEmail 1,000 — no job can exceed 1,000/run now.
-- ebayController.ts found TRUNCATED in working tree (ended mid-template-literal line 4956 — prior-session Edit truncation, would have broken next Railway build). Repaired S865b: tail restored from GitHub main, local uncommitted EPN comment edit preserved. 4,963 lines, parse-clean.
+- **#335 RESOLVED S865 (carried note):** Google sending clamp lifted S865d. Payout email end-to-end verified S865e. S865b push (digest filter + volume fuses + ebayController tail) still pending from Patrick.
+- **S867 QA findings:** 3 P2 bugs confirmed (Sale Type filter reset, ZIP copy mismatch, UGC button dark mode), 1 UNVERIFIED (YMAL gap — data-dependent). See Blocked Queue for details.
 
 **Previous: S864 — QA MODE: #195 ✅ Chrome-verified. Vercel build broken by saved-searches.tsx TS error — fixed. #324/#176 PCV marks applied. #335 email diagnosis → S864 SES_FROM_EMAIL theory disproven S865.**
 - QA ✅: #195 messaging re-fix Chrome-verified — POST /api/messages → 201, no 500 (ss_6119ualta, ss_03909ty8h). S863 backend fix confirmed live.
@@ -69,11 +65,11 @@ _⚠️ FRICTION AUDIT 2026-06-04: 3 new P0s added — truncated working-copy fi
 | eBay Connection for user1 | **P0 (75 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending but blocked: no published sale on any real test organizer account. | Patrick: publish a sale on user1 account, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 
-| UGC button visually buried | **P2** — UGCPhotoSubmitButton renders `bg-white border-2 text-gray-700` below pagination section — invisible in dark mode; blends with page bg in light mode. No visual prominence. | Fix: use accent color, add section heading, surface above fold | S866 |
-| "You might also like" black gap | **P2** — ~300px unexplained black gap renders above item cards in the "You might also like" section on sale detail page. Layout shift with no content fills the gap. | Read sales/[id].tsx YouMightAlsoLike section for cause; check dark-mode container bg | S866 |
-| Sale Type filter resets on Search submit | **P2** — Selecting a Sale Type then clicking Search button drops the filter from the URL/query. Filter works correctly via onChange (auto-applies), but form submit overwrites state. | Fix search.tsx: include saleType in form submit payload | S866 |
+| UGC button visually buried | **P2 CONFIRMED S867** — "Tag Your Find" renders as white box (bg-white) in dark mode: jarring white rectangle in dark UI (ss_zoom confirmed). Not invisible but wrong—needs accent color. | Fix: replace bg-white with accent color styling | S866 |
+| "You might also like" black gap | **P2 UNVERIFIED S867** — Section shows empty on all tested sales (one had no inventory, one was archive). YMAL section exists but loads no items. Cannot confirm 300px gap without a live sale with AI recommendations loading. | Try on a currently-active sale with items | S866 |
+| Sale Type filter resets on Search submit | **P2 CONFIRMED S867** — onChange sets `?saleType=ESTATE`, Search button click resets to `?q=furniture` only. Reproduced: selected Estate Sale → typed "furniture" → clicked Search → URL dropped saleType, results showed all types (ss_1011915a0). | Fix search.tsx: include saleType in form submit payload | S866 |
 | ZIP export rate-limit error swallowed | **P2** — When export is rate-limited, axios receives JSON error in blob response type → parse fails → generic fallback shown instead of "You've already exported recently." | Fix: parse JSON error body from blob response in export handler | S866 |
-| ZIP export copy: 24h vs 1-month mismatch | **P2** — UI tooltip says "Export once per 24 hours" but backend enforces 1/month. Creates false expectation (daily retry attempts). | Align copy to match enforcement: "once per month" | S866 |
+| ZIP export copy: 24h vs 1-month mismatch | **P2 CONFIRMED S867** — Help tab "Your Data" section shows "Limited to once per 24 hours" covering both Download buttons including ZIP. Code confirmed settings.tsx line 2005. Backend enforces 1/month. (ss_33535rwau) | Align copy to match enforcement: "once per month" for ZIP button | S866 |
 | #192 Price History data-dependent | **P3** — ItemPriceHistoryChart is correctly wired in edit-item/[id].tsx but returns null when no ItemPriceHistory records exist. Railway DB has no price change history for test items. | No code fix needed. To verify: run price update on a real item, then check chart renders. | S862 |
 
 ---
@@ -95,13 +91,16 @@ _(S862
 
 ## Next Session
 
-**S865 done. Blocked Queue: 10 rows — QA MODE next session (>=8 items).**
+**S867 done. Blocked Queue: 16 rows — QA MODE next session (>=8 items). No new feature dev.**
 
 Priority:
-1. **#335 email clamp re-test** (scheduled task fires 2026-06-05; or manually): send test via Gmail API with prod creds -> check outreach@finda.sale inbox for bounce -> if clean, check deseee@yahoo.com delivery. Only after a clean test: consider re-enabling OUTREACH_ENABLED=true + GH workflow (requires S865 fixes pushed first).
-2. **Push S865 batch** (block below). Unblocks Vercel (S863 features) and hardens outreach before any re-enable.
-3. **After Vercel goes green:** Chrome QA -> #194 /shopper/saved-searches (save+view+delete), #47 UGC submit on sales/[id], /search Sale Type filter.
-4. **P0 Patrick items:** #332 Shopify dev store, Email Verification migration, eBay OAuth user1.
+1. **Push S865b batch** (still pending from S865 — digest blast fix, ebayController tail restore). Unblocks Railway hardening.
+2. **Dispatch findasale-dev (3 targeted P2 fixes, can batch):**
+   - Sale Type filter reset: include saleType in search.tsx form submit payload
+   - ZIP export copy: change "once per 24 hours" → "once per month" in settings.tsx line 2005 (for ZIP button only — "Download My Data" button rate limit unknown, verify separately)
+   - UGC button: replace `bg-white border-2 text-gray-700` with accent color styling in sales/[id].tsx UGCPhotoSubmitButton
+3. **P0 Patrick items:** #332 Shopify dev store, Email Verification migration, eBay OAuth user1.
+4. **YMAL gap bug**: needs a live active sale with AI-generated recommendations to reproduce. Try from a sale with active items and check browser for 300px gap before item cards.
 
 **Patrick actions required (in order):**
 
@@ -124,6 +123,19 @@ Priority:
 3. **GBP phone verification** — business.google.com -> "Verify now" -> phone code. (carried)
 
 ## Recent Sessions
+
+### S867 — QA MODE: 3 P2 bugs confirmed, 1 UNVERIFIED, no code shipped
+
+**QA findings (all Chrome-verified):**
+
+- **UGC "Tag Your Find" button ❌ P2 CONFIRMED** — Renders `bg-white border-2` in dark mode: jarring white rectangle in dark UI. Button IS in the correct location (Community Photos section header on sale detail page), but styling is wrong. (zoom screenshot confirmed white-on-dark; ss_8686xfj8m)
+- **Sale Type filter resets on Search submit ❌ P2 CONFIRMED** — Navigated /search. Set Sale Type = Estate Sale via dropdown (URL updated to `?q=&saleType=ESTATE`). Typed "furniture" in search box, clicked Search. URL became `?q=furniture` — saleType dropped. Dropdown reverted to "All Types". Results showed non-estate listings. (ss_1011915a0)
+- **ZIP export copy mismatch ❌ P2 CONFIRMED** — Settings → Help tab → "Your Data" section: text reads "Limited to once per 24 hours" covering both Download My Data and Download Sale & Item Data (ZIP) buttons. Code confirmed settings.tsx line 2005. Backend enforces 1/month for ZIP. (ss_33535rwau)
+- **YMAL black gap ⚠️ P2 UNVERIFIED** — "You might also like" section appeared on Alice's archive sale but rendered empty (no item cards loaded). Cannot confirm 300px gap without a live active sale with AI-generated recommendations. Data-dependent.
+
+**Notes:**
+- Sale `cmpbvumj90001e7t7v5sa1iqi` (former QA sale) now 404 — use Alice's sale `0d9563f9-4fcd-4630-8beb-189ea58c8118` for organizer QA.
+- S866 missing from Recent Sessions log — was a QA session; evidence captured in PCV table (#31, #194, #47) and Blocked Queue (P2 entries).
 
 ### S865 — BUG/AUDIT+QA: #335 root-caused, resolved, and ✅✅ END-TO-END VERIFIED
 
