@@ -9,10 +9,12 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 ## Current Status
 
 **Latest: S865 — BUG/AUDIT: #335 ROOT CAUSE FOUND. Google clamped outreach@finda.sale sending since May 18 — ALL transactional email (payouts, password resets, verifications) dead 17 days. NOT Yahoo. Outreach stopped, fixes coded.**
-- Evidence (all tool-verified): outreach@finda.sale inbox holds 1,400+ mailer-daemon bounces "You have reached a limit for sending mail" — first bounces May 18, 100% of sends bouncing since (incl. live S865 test msg 19e91905c1d8a024, password resets, Jane Thrift payout). Trigger: May 17–18 outreach duplicate blasts (same business emailed up to 4×; DB shows 5 SENT audit events on one org with attemptCount=2).
+- Evidence (all tool-verified): outreach@finda.sale inbox holds 1,400+ mailer-daemon bounces "You have reached a limit for sending mail" — first bounces May 18, 100% of sends bouncing since (incl. live S865 test msg 19e91905c1d8a024, password resets, Jane Thrift payout).
+- **TRIGGER (corrected S865b, Patrick caught the shallow attribution):** organizerWeeklyDigestJob (Mon 9AM cron) mass-sent **5,000+** "Performance Summary – 0 items sold" emails to SCRAPED directory orgs on May 18 (Gmail sent-folder counts: storefront/outreach=29, Performance Summary=5,000+ that day; May 25 + Jun 1 = 2 each — one-time blast when imported sales were <30d old). Outreach (29–39/day) was NOT the cause. Outreach dup-send bugs found earlier are real but secondary.
 - S864 "SES_FROM_EMAIL regression" was a misdiagnosis — Railway value verified already find@outreach.finda.sale; Gmail refresh token valid; Gmail API accepts sends (200) then bounces them. DNS (SPF/DKIM/DMARC) all healthy.
 - Mitigation applied S865: GH Actions pipeline-outreach-emails.yml DISABLED (workflow page banner confirmed) + Railway OUTREACH_ENABLED=false (redeploy 34ff3f85 @ 07:47 UTC). Cold outreach paused until clamp lifts + fixes pushed.
-- DEV fixes coded (pending push): outreachEmailsCron.ts — kill switch inside sendOutreachEmails() (was registration-only, GH path bypassed it), in-process overlap guard, atomic claim-before-send (touchNSentAt set BEFORE Gmail send via conditional updateMany — crash can no longer cause repeat blasts), touchNum TS fix.
+- DEV fixes coded: outreachEmailsCron.ts — kill switch inside sendOutreachEmails(), overlap guard, atomic claim-before-send (pushed by Patrick, Railway green). S865b batch (pending push): organizerWeeklyDigestJob gated OFF (ORGANIZER_DIGEST_ENABLED, default off) + recipient filter fixed (isClaimed=true, isUnmanagedListing=false, user.password set, emailVerified — DB-verified: old query matched the same 2 real orgs today, but 16,788 scraped orgs were blast-eligible on any fresh import; new filter immune) + volume fuses: digest 300, monthlyTrendReport 300, curatorEmail 1,000, weeklyEmail 1,000 — no job can exceed 1,000/run now.
+- ebayController.ts found TRUNCATED in working tree (ended mid-template-literal line 4956 — prior-session Edit truncation, would have broken next Railway build). Repaired S865b: tail restored from GitHub main, local uncommitted EPN comment edit preserved. 4,963 lines, parse-clean.
 
 **Previous: S864 — QA MODE: #195 ✅ Chrome-verified. Vercel build broken by saved-searches.tsx TS error — fixed. #324/#176 PCV marks applied. #335 email diagnosis → S864 SES_FROM_EMAIL theory disproven S865.**
 - QA ✅: #195 messaging re-fix Chrome-verified — POST /api/messages → 201, no 500 (ss_6119ualta, ss_03909ty8h). S863 backend fix confirmed live.
@@ -60,7 +62,7 @@ _⚠️ FRICTION AUDIT 2026-06-04: 3 new P0s added — truncated working-copy fi
 | **TRUNCATED: routes/search.ts** | **P0** — File ends mid-comment `// #455: Anonymous search-qu`, missing notify route registration and `export default router`. Railway build will fail if pushed. | `git checkout HEAD -- packages/backend/src/routes/search.ts` before next push | Audit 2026-06-04 |
 | **TRUNCATED: messageController.ts** | **P0** — File ends mid-expression `res.status(500).json`, missing closing for catch block and function. Railway build will fail if pushed. | `git checkout HEAD -- packages/backend/src/controllers/messageController.ts` before next push | Audit 2026-06-04 |
 | #332 Shopify Cross-Listing | **P0 (70 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (74 sessions) — ROOT CAUSE FOUND S865:** Google sending clamp on outreach@finda.sale since May 18 (1,400+ "reached a limit" bounces; ALL transactional email affected). Outreach triggers disabled S865; clamp should lift ~24–48h after sends stop. SES_FROM_EMAIL was never wrong (verified find@outreach.finda.sale in Railway). | (1) Push S865 outreach fixes. (2) Wait 24–48h, re-run send test (scheduled task created S865), confirm no bounce + Yahoo delivery. (3) Only then re-enable OUTREACH_ENABLED + GH workflow. | S791 |
+| #335 Consignor Payout Email | **P0 (74 sessions) — ROOT CAUSE (corrected S865b):** Google sending clamp since Mon May 18 = organizerWeeklyDigestJob blasted 5,000+ digest emails to scraped orgs (2.5× the 2,000/day limit). NOT outreach (29 sends that day), NOT Yahoo, NOT SES_FROM_EMAIL. Digest now gated OFF (ORGANIZER_DIGEST_ENABLED) + recipient filter fixed + volume fuses on all bulk jobs. | (1) Push S865b batch. (2) Scheduled task 2026-06-05 re-tests; on clean test it re-enables outreach (env + GH workflow). (3) Re-test payout email to Yahoo after clamp lifts. | S791 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | Email Verification Migration | **P0 (134 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S862. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
 | eBay Connection for user1 | **P0 (75 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
@@ -96,17 +98,21 @@ Priority:
 
 **Patrick actions required (in order):**
 
-1. **Push S865 batch:**
+1. **Push S865b batch (digest blast fix — the actual #335 trigger):**
    ```
-   git add packages/backend/src/jobs/outreachEmailsCron.ts
-   git add packages/frontend/pages/shopper/saved-searches.tsx
+   git add packages/backend/src/jobs/organizerWeeklyDigestJob.ts
+   git add packages/backend/src/services/organizerAnalyticsService.ts
+   git add packages/backend/src/jobs/curatorEmailJob.ts
+   git add packages/backend/src/jobs/monthlyTrendReportJob.ts
+   git add packages/backend/src/services/weeklyEmailService.ts
+   git add packages/backend/src/controllers/ebayController.ts
    git add claude_docs/STATE.md
    git add claude_docs/patrick-dashboard.md
    git add claude_docs/strategy/roadmap.md
-   git commit -m "fix: outreach kill switch + atomic claim-before-send (#335 root cause) + saved-searches TS fix + S865 docs"
+   git commit -m "fix: gate organizer digest + recipient filter + volume fuses on all bulk email jobs (May 18 blast root cause) + restore ebayController tail"
    .\push.ps1
    ```
-   Note: if `git status` also shows packages/backend/src/controllers/messageController.ts modified, add it too (S865 restored a truncated tail; if status is clean for it, nothing to do).
+   ebayController.ts: only a 3-line comment diff vs main after tail repair — safe to commit.
 2. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
 3. **GBP phone verification** — business.google.com -> "Verify now" -> phone code. (carried)
 
