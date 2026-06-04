@@ -1,69 +1,57 @@
-# Patrick's Dashboard — S868 Wrap
+# Patrick's Dashboard — S869 Wrap
 
 ---
 
-## S868 Summary — Infrastructure + Scraper Fixes
+## S869 Summary — 5 Bug Fixes, All Green
+
+All pushes and migrations confirmed redeployed green by Patrick.
 
 **What got done:**
-- ✅ **Foursquare scraper fixed** — GitHub Actions secrets were stale. Updated both `DATABASE_URL` and `DIRECT_URL`. Workflow re-triggered, confirmed SUCCESS.
-- ✅ **Schema FK audit + 4 migrations deployed to Railway prod** — Covers cascade/restrict rules for all 43 required relations, 32 new FK indexes, and nullable author/sender fields. Production DB is now protected from orphan-record errors. The Sentry crash (`Favorite.user is required, got null`) is fixed.
-- ⚠️ **AuctionNinja scraper: code fixed, still broken** — Function name, URL, and HTML selector are all corrected now. But GitHub Actions IP addresses are Cloudflare-blocked — the scraper gets an 11KB challenge page instead of the real site. Returns 0 results. Next session will investigate a bypass or disable the schedule following the existing NAA pattern.
+- ✅ **Sale Type filter persistence** — Typing a new query no longer drops the selected Sale Type. All active filters (saleType, category, condition, sortBy, priceMin, priceMax) now survive Search button clicks.
+- ✅ **ZIP export copy fixed** — "Download My Data" shows "once per 24 hours". ZIP button shows "once per month". No more conflicting rate-limit text.
+- ✅ **UGC button dark mode** — "Tag Your Find" button now uses amber styling instead of a jarring white box in dark mode.
+- ✅ **Security: auth/me no longer leaks password hash** — GET /api/auth/me no longer includes the bcrypt hash in the response. Sensitive fields stripped.
+- ✅ **OAuth session supersede** — Signing in with Google now correctly replaces an existing session. Previously, if you were logged in as user A and OAuth'd as user B, you'd still be user A.
+- ✅ **Bonus:** search.tsx tail was truncated by the Edit tool mid-session. Repaired via Python.
 
-**Still broken (carried forward):**
-- ❌ Sale Type filter resets on Search submit (P2)
-- ❌ ZIP export copy says "24 hours" instead of "1 month" (P2)
-- ❌ UGC "Tag Your Find" button is white box in dark mode (P2)
-- ⚠️ YMAL "You might also like" gap — unverified, data-dependent
+**Still needs Chrome QA (CODE-ONLY, not browser-verified yet):**
+- Sale Type filter, ZIP copy, UGC button, auth/me hash, OAuth supersede — all in Pending Chrome Verifications
+
+**Still broken:**
+- ⚠️ AuctionNinja scraper — Cloudflare IP block on GitHub Actions (S868 root cause). Under investigation next session.
+- ⚠️ YMAL gap — data-dependent, needs a live active sale with items to confirm.
+- ⚠️ ZIP rate-limit error message swallowed — generic toast instead of "once per month" message.
 
 ---
 
-## Patrick Actions — Two Push Blocks
+## No Patrick Actions Needed (All Pushes Done ✅)
 
-### Block 1 — S868 schema + scraper files (do this first)
-
-```
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260604000000_add_directoryclaimemail_indexes/migration.sql
-git add packages/database/prisma/migrations/20260604100000_favorite_user_cascade_delete/migration.sql
-git add packages/database/prisma/migrations/20260604200000_schema_fk_cascade_restrict/migration.sql
-git add packages/database/prisma/migrations/20260604300000_nullable_fields_setnull/migration.sql
-git add packages/backend/src/services/scraper/sources/auctionNinjaScraper.ts
-git add packages/backend/src/scripts/run-auctionninja.ts
-git add .github/workflows/scrape-auctionninja.yml
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "infra: full FK cascade/restrict audit (4 migrations) + Favorite cascade delete + AuctionNinja scraper URL+selector fix + run script"
-.\push.ps1
-```
-
-Note: migrations are already applied to Railway prod DB. This just syncs the files to GitHub.
-
-### Block 2 — S865b email hardening (still pending from S865)
-
-```
-git add packages/backend/src/jobs/organizerWeeklyDigestJob.ts
-git add packages/backend/src/services/organizerAnalyticsService.ts
-git add packages/backend/src/jobs/curatorEmailJob.ts
-git add packages/backend/src/jobs/monthlyTrendReportJob.ts
-git add packages/backend/src/services/weeklyEmailService.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add claude_docs/strategy/roadmap.md
-git commit -m "fix: gate organizer digest + recipient filter + volume fuses on all bulk email jobs (May 18 blast root cause) + restore ebayController tail"
-.\push.ps1
-```
+S865b ✅, S868 schema migrations ✅, S869 bug fixes ✅ — all pushed and green.
 
 ---
 
 ## Carried Actions (still need you)
 
-1. **Email Verification migration** — run `npx prisma migrate deploy` against Railway (Migration 20260515180000 is undeployed since S726).
-2. **eBay OAuth for user1** — go to /organizer/settings/ebay and connect eBay to unlock all eBay cross-listing QA.
+1. **Email Verification migration** — `npx prisma migrate deploy` against Railway (Migration 20260515180000 undeployed since S726).
+2. **eBay OAuth for user1** — /organizer/settings/ebay → connect eBay → unlocks all eBay cross-listing QA.
 3. **#332 Shopify dev store** — create free Shopify Partners dev store, connect via OAuth.
-4. **Rarity Boost intent** — confirm: XP-only at 50 XP, or restore $0.15 cash rail?
+4. **Rarity Boost intent** — XP-only at 50 XP, or restore $0.15 cash rail?
 5. **GBP phone verification** — business.google.com → "Verify now" → phone code.
 
 ---
 
-## Blocked Queue: 17 items (QA MODE next session)
+## Blocked Queue: 9 items (QA MODE — ≥8 ceiling)
 
-Queue is above the 8-item ceiling. Next session is QA-only. No new feature dev.
+| Priority | Item |
+|----------|------|
+| P0 | #332 Shopify Cross-Listing (72 sessions) |
+| P0 | Email Verification Migration (135 sessions) |
+| P0 | eBay Connection for user1 (76 sessions) |
+| P2 | YMAL black gap (data-dependent) |
+| P2 | ZIP rate-limit error swallowed |
+| P2 | AuctionNinja Cloudflare block |
+| P3 | Rarity Boost pricing spec gap |
+| P3 | #230 Smart Buyer Widget Human QA |
+| P3 | #192 Price History data-dependent |
+
+Next session: Chrome QA of S869 fixes (sequential) + AuctionNinja investigation + ZIP rate-limit fix (parallel non-Chrome agents).

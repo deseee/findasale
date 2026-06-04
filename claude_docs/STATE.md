@@ -8,10 +8,10 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S868 — BUG+INFRA: Schema FK audit complete (4 migrations deployed ✅), Foursquare scraper fixed ✅, AuctionNinja partially fixed (selector/URL updated) but GitHub Actions remains Cloudflare-blocked → STILL BROKEN. Blocked Queue +1 (AuctionNinja).**
-- **S868 highlights:** Foursquare GitHub Actions secrets were stale → updated → workflow ✅ SUCCESS. AuctionNinja function name fixed + new URL + updated selector, but scraper returns 0 results due to Cloudflare IP block on Actions runners. Full schema FK audit: 4 migrations deployed to Railway prod covering duplicate-index no-op, Favorite cascade delete, 53 FK constraint rules + 32 new indexes, nullable author/sender fields. Sentry DirectoryClaimEmail indexes confirmed already present (migration is safe no-op).
-- **#335 RESOLVED S865 (carried note):** S865b push (digest filter + volume fuses + ebayController tail) still pending from Patrick.
-- **S867 QA findings (carried):** 3 P2 bugs confirmed (Sale Type filter reset, ZIP copy mismatch, UGC button dark mode), 1 UNVERIFIED (YMAL gap — data-dependent). See Blocked Queue for details.
+**Latest: S869 — BUG: 3 P2 + 2 P1 bugs fixed and deployed green. Blocked Queue 17→9 (8 items closed). All pushes and migrations redeployed green per Patrick.**
+- **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
+- **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
+- **Previous: S868 — BUG+INFRA:** Schema FK audit (4 migrations deployed), Foursquare fixed, AuctionNinja partially fixed but Cloudflare-blocked. Blocked Queue +1 (AuctionNinja).
 
 **Previous: S864 — QA MODE: #195 ✅ Chrome-verified. Vercel build broken by saved-searches.tsx TS error — fixed. #324/#176 PCV marks applied. #335 email diagnosis → S864 SES_FROM_EMAIL theory disproven S865.**
 - QA ✅: #195 messaging re-fix Chrome-verified — POST /api/messages → 201, no 500 (ss_6119ualta, ss_03909ty8h). S863 backend fix confirmed live.
@@ -50,30 +50,20 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING: #332 at 71+ sessions — mandatory P0 per CLAUDE.md §10a. (#335 closed S865.)_
-_⚠️ FRICTION AUDIT 2026-06-04: 3 P0s added — truncated working-copy files (still unresolved — confirm git checkout before any push)._
-_⚠️ S868: AuctionNinja Cloudflare block added; full schema FK migrations deployed._
+_⚠️ P0 AGING: #332 at 72+ sessions — mandatory P0 per CLAUDE.md §10a._
+_S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed and deployed._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| **TRUNCATED: search.tsx** | **P0** — Working copy is 514 lines vs 564 HEAD. Missing `export default SearchPage` and last 50 lines (EmptyState body, Notify Me Waitlist, closing JSX). Vercel build will fail if pushed. | `git checkout HEAD -- packages/frontend/pages/search.tsx` before next push | Audit 2026-06-04 |
-| **TRUNCATED: routes/search.ts** | **P0** — File ends mid-comment `// #455: Anonymous search-qu`, missing notify route registration and `export default router`. Railway build will fail if pushed. | `git checkout HEAD -- packages/backend/src/routes/search.ts` before next push | Audit 2026-06-04 |
-| **TRUNCATED: messageController.ts** | **P0** — File ends mid-expression `res.status(500).json`, missing closing for catch block and function. Railway build will fail if pushed. | `git checkout HEAD -- packages/backend/src/controllers/messageController.ts` before next push | Audit 2026-06-04 |
-| #332 Shopify Cross-Listing | **P0 (70 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| OAuth login doesn't supersede existing JWT session | **P1 NEW S865e** — With an existing JWT cookie for account A, clicking "Sign in with Google" as account B completes OAuth but /api/auth/me still returns account A. Only explicit POST /api/auth/logout then OAuth produces B's session. Reproduced twice (user1 cookie persisted through artifactmi OAuth). Confusing + potential cross-account action risk. | findasale-dev: OAuth callback must clear/replace the prior JWT + refresh cookies. | S865 |
-| /api/auth/me returns bcrypt password hash | **P1 NEW S865e (security)** — GET /api/auth/me response includes user.password (bcrypt hash) in JSON. Hash exposure to any XSS/extension. | findasale-dev: strip password (and other sensitive fields) from auth/me serializer. | S865 |
-| Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
-| Email Verification Migration | **P0 (134 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S862. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
-| eBay Connection for user1 | **P0 (75 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
-| #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending but blocked: no published sale on any real test organizer account. | Patrick: publish a sale on user1 account, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-
-| UGC button visually buried | **P2 CONFIRMED S867** — "Tag Your Find" renders as white box (bg-white) in dark mode: jarring white rectangle in dark UI (ss_zoom confirmed). Not invisible but wrong—needs accent color. | Fix: replace bg-white with accent color styling | S866 |
-| "You might also like" black gap | **P2 UNVERIFIED S867** — Section shows empty on all tested sales (one had no inventory, one was archive). YMAL section exists but loads no items. Cannot confirm 300px gap without a live sale with AI recommendations loading. | Try on a currently-active sale with items | S866 |
-| Sale Type filter resets on Search submit | **P2 CONFIRMED S867** — onChange sets `?saleType=ESTATE`, Search button click resets to `?q=furniture` only. Reproduced: selected Estate Sale → typed "furniture" → clicked Search → URL dropped saleType, results showed all types (ss_1011915a0). | Fix search.tsx: include saleType in form submit payload | S866 |
-| ZIP export rate-limit error swallowed | **P2** — When export is rate-limited, axios receives JSON error in blob response type → parse fails → generic fallback shown instead of "You've already exported recently." | Fix: parse JSON error body from blob response in export handler | S866 |
-| ZIP export copy: 24h vs 1-month mismatch | **P2 CONFIRMED S867** — Help tab "Your Data" section shows "Limited to once per 24 hours" covering both Download buttons including ZIP. Code confirmed settings.tsx line 2005. Backend enforces 1/month. (ss_33535rwau) | Align copy to match enforcement: "once per month" for ZIP button | S866 |
-| #192 Price History data-dependent | **P3** — ItemPriceHistoryChart is correctly wired in edit-item/[id].tsx but returns null when no ItemPriceHistory records exist. Railway DB has no price change history for test items. | No code fix needed. To verify: run price update on a real item, then check chart renders. | S862 |
+| #332 Shopify Cross-Listing | **P0 (72 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
+| Email Verification Migration | **P0 (135 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but never deployed. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
+| eBay Connection for user1 | **P0 (76 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
+| "You might also like" black gap | **P2 UNVERIFIED S867** — Section shows empty on all tested sales. Cannot confirm 300px gap without a live active sale with AI-generated recommendations. | Try on a currently-active sale with items | S866 |
+| ZIP export rate-limit error swallowed | **P2** — When export is rate-limited, axios receives JSON error in blob response type → parse fails → generic fallback shown instead of "You've already exported recently." | Fix: parse JSON error body from blob response in settings.tsx export handler | S866 |
 | AuctionNinja scraper | **P2** — GitHub Actions runners get Cloudflare IP block (11KB challenge page, 0 results). Function name, URL, and selector are all correct. | Investigate NAA precedent; test User-Agent bypass; if unbypassable follow NAA pattern — disable schedule with comment | S868 |
+| Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
+| #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
+| #192 Price History data-dependent | **P3** — ItemPriceHistoryChart wired correctly but returns null with no history records. | No code fix needed. To verify: run a price update on a real item, check chart renders. | S862 |
 
 ---
 
@@ -86,6 +76,11 @@ _⚠️ S868: AuctionNinja Cloudflare block added; full schema FK migrations dep
 | 31 | Brand Kit save | As Alice (user1/PRO) on /organizer/brand-kit: scrolled to Save Brand Kit, clicked → "Saving..." (ss_2548h9vun) → green toast "Brand Kit updated successfully" (ss_9229rauhl). DB updatedAt confirmed 16:34 UTC. TEAMS Advanced Brand Customization gated ✅. Downloadable Brand Assets section visible ✅. | S866 |
 | 194 | Saved Searches | As Bob (user2): saved "vintage" search (ss_6611nk9nv, toast ✅), viewed /shopper/saved-searches (ss_6478xn3zf, persisted ✅), clicked Run Search → results (ss_529648c4m ✅), deleted → empty state (ss_0183ddn2w ✅). Full flow verified. | S866 |
 | 47 | UGC Photo Submit button | As Bob (user2) on /sales/cmpbvumj90001e7t7v5sa1iqi: "Tag Your Find" modal opened from sale detail (ss_7093sc6dp ✅). Button in DOM, functional. | S866 |
+| — | Sale Type filter persistence | CODE-ONLY S869 — handleSearch() now builds URLSearchParams with all filter params (saleType, category, condition, saleStatus, sortBy, priceMin, priceMax). Deployed green. Test: /search → set Sale Type = Estate Sale → type "furniture" → click Search → verify saleType stays in URL and results filter correctly. | S869 |
+| — | ZIP export copy per-button | CODE-ONLY S869 — settings.tsx: shared paragraph no longer mentions rate limit; "Download My Data" button shows "Limited to once per 24 hours"; ZIP button shows "Limited to once per month". Deployed green. Test: /organizer/settings → Help tab → Your Data section. | S869 |
+| — | UGC button dark mode | CODE-ONLY S869 — UGCPhotoSubmitButton.tsx: replaced bg-white with amber-100/amber-900 amber styling. Deployed green. Test: visit any sale in dark mode → Community Photos section → verify button is amber not white. | S869 |
+| — | auth/me no password hash | CODE-ONLY S869 — auth.ts GET /me: destructures password/resetToken/resetTokenExpiry/emailVerificationToken before spreading safeUser. Deployed green. Test: Network tab → GET /api/auth/me response → confirm no `password` field. | S869 |
+| — | OAuth session supersede | CODE-ONLY S869 — _app.tsx OAuthBridge: removed `!user` guard so exchange always fires on pending oauthProfile. Deployed green. Test: log in as user1 (JWT cookie active), click Google OAuth as user2 → verify /api/auth/me returns user2. | S869 |
 _(S862
 | 324 | EXIF Temporal Clustering (upload preservation) ✅ | As Alice (user1) on /organizer/add-items: Batch Upload 3 JPEGs with EXIF DateTimeOriginal (14:00:05/14:00:45/16:30:00), clicked Analyze All → 3 drafts created (ss_2118qp0k0, ss_4511e8aq0). Re-downloaded stored Cloudinary images: all 3 timestamps preserved exactly. Test items+photos deleted from DB. | S863 |
 | 176 | Browse Sales homepage Type filter ✅ | As Bob (user2) on finda.sale homepage: Type dropdown → Estate Sale = "17 of 20 sales", all Estate badges (ss_48642xh5d); Yard Sale = "3 of 20 sales", Yard badges (ss_73627haye). | S863 | batch of 9 graduated to roadmap S863. Note: S862 evidence had no screenshot IDs — applied on DB/page-content evidence per S862 orchestrator log.)_
@@ -94,57 +89,53 @@ _(S862
 
 ## Next Session
 
-**S868 done. Blocked Queue: 17 rows — QA MODE next session (>=8 items). No new feature dev without Patrick sign-off.**
+**S869 done. Blocked Queue: 9 rows — QA MODE (≥8). Chrome QA of 5 S869 fixes is the top priority. Parallel dispatch available on non-Chrome work.**
 
-Priority:
-1. **AuctionNinja scraper Cloudflare fix — INVESTIGATE BEFORE TOUCHING ANYTHING:**
-   - Read `.github/workflows/scrape-naa.yml` first — precedent for Cloudflare-blocked scraper (NAA schedule disabled with documented comment).
-   - Read `.github/workflows/scrape-auctionzip.yml` — AuctionZip runs from Actions successfully; what's different?
-   - Check whether `getRandomUserAgent()` is being passed correctly in the GitHub Actions run.
-   - If truly IP-blocked with no bypass: follow NAA pattern — disable schedule with comment. Do NOT move scraper to Railway.
-   - Files to examine in order: `scrape-naa.yml` → `scrape-auctionzip.yml` → `auctionNinjaScraper.ts` → `run-auctionninja.ts`
-2. **Push S865b batch** (still pending from S865 — digest blast fix, ebayController tail restore).
-3. **Dispatch findasale-dev (3 targeted P2 fixes, can batch):**
-   - Sale Type filter reset: include saleType in search.tsx form submit payload
-   - ZIP export copy: change "once per 24 hours" → "once per month" in settings.tsx line 2005 (ZIP button only)
-   - UGC button: replace `bg-white border-2 text-gray-700` with accent color styling in sales/[id].tsx
-4. **P0 Patrick items:** #332 Shopify dev store, Email Verification migration, eBay OAuth user1.
-5. **Confirm P0 truncated files resolved:** Run `git status` on local repo — confirm search.tsx (564 lines), routes/search.ts, messageController.ts are clean vs HEAD before any push.
+**Parallel dispatch plan for S870:**
+- **[SEQUENTIAL Chrome QA]** Verify 5 S869 CODE-ONLY fixes — one dispatch per fix, must be sequential
+- **[PARALLEL: no Chrome]** AuctionNinja Cloudflare investigation — read NAA/AuctionZip workflow precedents, test bypass, disable if unbypassable
+- **[PARALLEL: no Chrome]** ZIP rate-limit error swallowed (P2) — fix blob parse error in settings.tsx export handler (~10 lines)
 
-**Patrick actions required (in order):**
+**Chrome QA dispatch stubs (sequential — one at a time):**
 
-1. **Push S868 schema migrations batch:**
-   ```
-   git add packages/database/prisma/schema.prisma
-   git add packages/database/prisma/migrations/20260604000000_add_directoryclaimemail_indexes/migration.sql
-   git add packages/database/prisma/migrations/20260604100000_favorite_user_cascade_delete/migration.sql
-   git add packages/database/prisma/migrations/20260604200000_schema_fk_cascade_restrict/migration.sql
-   git add packages/database/prisma/migrations/20260604300000_nullable_fields_setnull/migration.sql
-   git add packages/backend/src/services/scraper/sources/auctionNinjaScraper.ts
-   git add packages/backend/src/scripts/run-auctionninja.ts
-   git add .github/workflows/scrape-auctionninja.yml
-   git add claude_docs/STATE.md
-   git add claude_docs/patrick-dashboard.md
-   git commit -m "infra: full FK cascade/restrict audit (4 migrations) + Favorite cascade delete + AuctionNinja scraper URL+selector fix + run script"
-   .\push.ps1
-   ```
-   Note: Migrations are already deployed to Railway prod DB (applied this session). This push just syncs the files to GitHub.
-2. **Push S865b batch (digest blast fix — the actual #335 trigger):**
-   ```
-   git add packages/backend/src/jobs/organizerWeeklyDigestJob.ts
-   git add packages/backend/src/services/organizerAnalyticsService.ts
-   git add packages/backend/src/jobs/curatorEmailJob.ts
-   git add packages/backend/src/jobs/monthlyTrendReportJob.ts
-   git add packages/backend/src/services/weeklyEmailService.ts
-   git add packages/backend/src/controllers/ebayController.ts
-   git add claude_docs/strategy/roadmap.md
-   git commit -m "fix: gate organizer digest + recipient filter + volume fuses on all bulk email jobs (May 18 blast root cause) + restore ebayController tail"
-   .\push.ps1
-   ```
-3. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
-4. **GBP phone verification** — business.google.com -> "Verify now" -> phone code. (carried)
+1. `Skill('findasale-qa')` → Sale Type filter persistence. Credentials: user2 (Bob). Navigate /search, set Sale Type = Estate Sale, type "furniture", click Search. Evidence required: URL after submit contains `saleType=ESTATE`, results are estate listings only. Screenshot required.
+
+2. `Skill('findasale-qa')` → ZIP export copy. Credentials: user1 (Alice/organizer). Navigate /organizer/settings → Help tab → Your Data. Evidence: "Download My Data" button shows "once per 24 hours" span, ZIP button shows "once per month" span, no rate-limit text in the shared paragraph. Screenshot required.
+
+3. `Skill('findasale-qa')` → UGC button dark mode. Enable dark mode. Navigate any sale page. Evidence: "Tag Your Find" button in Community Photos section uses amber colors (not white box). Screenshot required.
+
+4. `Skill('findasale-qa')` → auth/me no password hash. Navigate finda.sale logged in. Open DevTools Network tab. Find GET /api/auth/me. Evidence: response JSON has no `password` field. Screenshot of network response required.
+
+5. `Skill('findasale-qa')` → OAuth session supersede. Log in as user1 (JWT active). Then Google OAuth as user2/artifact. Evidence: /api/auth/me returns user2's data, not user1's. Screenshot of auth/me response required.
+
+**AuctionNinja investigation stub (can run parallel with QA):**
+`Agent(general-purpose)` → Read `.github/workflows/scrape-naa.yml` for Cloudflare-blocked precedent. Read `.github/workflows/scrape-auctionzip.yml` for working pattern. Read `auctionNinjaScraper.ts` and `run-auctionninja.ts`. Test: does AuctionZip use a different User-Agent or proxy? If unbypassable → disable schedule with comment block (NAA pattern). Return: decision + changed file list or explanation why nothing changed.
+
+**ZIP rate-limit fix stub (can run parallel with QA):**
+`Skill('findasale-dev')` → settings.tsx ZIP export error handler. When `/api/organizers/export` returns a non-2xx with `responseType: 'blob'`, parse the JSON error body from the blob before showing the toast. Expected: "You've already exported this month" instead of generic error. Return: changed file + TS check.
+
+**Patrick actions required:**
+1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
+2. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
+3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
+4. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
 
 ## Recent Sessions
+
+### S869 — BUG: 5 bugs fixed (3 P2 + 2 P1), deployed green. Blocked Queue 17→9.
+
+**Fixes deployed (all ✅ Vercel + Railway green per Patrick):**
+- **Sale Type filter reset** — handleSearch() now preserves all active filters (saleType, category, condition, saleStatus, sortBy, priceMin, priceMax) on search submit. Was: only passing `q`, dropping saleType. (search.tsx)
+- **ZIP export copy** — Shared paragraph no longer mentions rate limit; each button now has its own note: "Download My Data" = "once per 24 hours", ZIP = "once per month". (settings.tsx)
+- **UGC "Tag Your Find" dark mode** — Replaced bg-white with amber-100/amber-900 amber styling. No more white box in dark mode. (UGCPhotoSubmitButton.tsx)
+- **auth/me password hash** — GET /api/auth/me now destructures password/resetToken/resetTokenExpiry/emailVerificationToken before spreading safeUser. (auth.ts)
+- **OAuth session supersede** — OAuthBridge removed !user guard; exchange always fires on pending oauthProfile. (\_app.tsx)
+
+**Bonus:** search.tsx tail truncated by Edit tool mid-session (Edit tool truncation bug on files >250 lines). Repaired via Python — EmptyState body, Notify Me section, closing tags, export default SearchPage restored.
+
+**Session also confirmed:** S865b pushed ✅ · 3 P0 truncated files confirmed clean on GitHub HEAD ✅
+
+**Blocked Queue:** 17 → 9 (removed: 3 truncated P0s ✅, Sale Type filter ✅, ZIP copy ✅, UGC button ✅, auth/me hash ✅, OAuth supersede ✅). 5 items moved to PCV.
 
 ### S868 — BUG+INFRA: Schema FK audit (4 migrations deployed), Foursquare fixed, AuctionNinja partially fixed (Cloudflare-blocked)
 
@@ -228,26 +219,5 @@ Workflow secrets `DATABASE_URL` and `DIRECT_URL` were stale. Updated both via Gi
 
 ---
 
-### S863 — QA MODE: 2 verified, #195 re-fixed, 2 features built, payout email re-sent
-
-**QA ✅ (Chrome + DB evidence):**
-- #324 EXIF: 3 EXIF-tagged JPEGs uploaded via Batch Upload as Alice → Analyze All → re-downloaded stored Cloudinary images → DateTimeOriginal preserved exactly (ss_2118qp0k0, ss_4511e8aq0). Test data cleaned.
-- #176 homepage Type filter: Estate 17/20, Yard 3/20, badges match (ss_48642xh5d, ss_73627haye).
-
-**QA ❌ → re-fixed:**
-- #195 messaging STILL 500 in prod (ss_4465t8wly). Railway logs: PrismaClientValidationError in sendMessage. Root cause: S862 guard did `sale.findUnique({select:{isUnmanagedListing}})` but the field is on Organizer, not Sale. Fix: select `organizer:{select:{isUnmanagedListing}}`. messageController.ts, 0 TS errors. Lesson: S862 dev skipped schema preflight; TS didn't catch it (VM Prisma client types loose).
-
-**New bug found+fixed:** /search Sale Type filter silently ignored server-side — saleType absent from search route zod schema. Added schema field + where clause (search.ts).
-
-**DEV (2 parallel agents, both 0 TS errors):**
-- #194: built pages/shopper/saved-searches.tsx (list/delete/run, empty+loading+error states) + Save Search button on search.tsx with correct {name,filters} payload.
-- #47: UGCPhotoSubmitButton wired onto sales/[id].tsx alongside UGCPhotoGallery, gated to logged-in users, with empty state.
-- Inline: homepage handleSaveSearch payload fixed ({query}→{name,filters} — was 400 on every save).
-
-**#335:** Jane Thrift payout email re-sent directly via Gmail API using production creds (msg 19e9093c5a587f21). Exact replica of sendConsignorPayout template, $29.75 Cash, Artifact workspace.
-
-**Records:** 9 S862 PCV marks applied to roadmap (#327/#73/#186/#396/#197/#163/#173/#71 + note). Queue: Bing row removed (done), Re-Seed row removed (user5–12 no longer exist — Patrick), #324 graduated to PCV. Queue 12→10 rows.
-
-**Files changed:** messageController.ts · search.ts (backend routes) · index.tsx · search.tsx · saved-searches.tsx (NEW) · sales/[id].tsx · STATE.md · patrick-dashboard.md · roadmap.md
 
 ---
