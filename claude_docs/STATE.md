@@ -8,7 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S874 — QA MODE: Records pass (S873 PCVs #155/#161/#11/#156 → roadmap ✅). YMAL P2 ✅ FIXED + Chrome-verified (S873 fix incomplete → actual root cause found + fixed S874: API returns no `total` field; changed to `data?.items?.length` check; deployed + DOM-confirmed absent ss_6075980zt). Chrome QA: #168 ✅, #171 ✅ partial, #150 ✅, Leaderboard ✅, Trending ✅. Blocked Queue: 8 active rows. Bug found: #170 CSV Import 404 at /organizer/csv-import.**
+**Latest: S875 — QA MODE. Records pass (S874 PCVs: #168/#171/#150 → roadmap ✅ S874). YMAL removed from Blocked Queue (closed S874). #170 CSV Import clarified — modal on /organizer/add-items/[saleId], no standalone page (roadmap updated). Column-gap Records pass: #257→✅S785, #261→✅S791, #323→✅S791, #338 UI→✅S820. Chrome QA S875: #152 ✅, #334 ✅, #318 ✅, #338 ✅, #321 ✅ (5 features verified). Staged as PCVs. Blocked Queue: 8 active rows.**
+- **S874: Records pass applied + YMAL fix deployed.** S874 PCVs staged → roadmap applied S875.
 - **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
 - **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
 - **Previous: S868 — BUG+INFRA:** Schema FK audit (4 migrations deployed), Foursquare fixed, AuctionNinja partially fixed but Cloudflare-blocked. Blocked Queue +1 (AuctionNinja).
@@ -59,7 +60,6 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | Email Verification Migration | **P0 (135 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but never deployed. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
 | eBay Connection for user1 | **P0 (76 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
 | OAuth session supersede | **P2 UNVERIFIED S870** — OAuthBridge !user guard fix confirmed in code (\_app.tsx). Chrome QA attempted S870 but requires completing real Google OAuth flow while logged in as a different user. | Patrick: log in as user2 (JWT active), click "Sign in with Google" as artifact account, verify /api/auth/me returns artifact not user2 | S870 |
-| "You might also like" black gap | **✅ CHROME-VERIFIED S874** — Community Photos → Reviews directly, zero gap. ss_6075980zt. DOM confirmed: no YMAL H2 in DOM after page fully settled. Root cause was `data.total === 0` (API returns no `total` field) → fixed to `!data?.items?.length`. Closed. | — | S866 |
 
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
@@ -93,6 +93,11 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | 168 | Seller Performance Dashboard | /organizer/insights as Bob (user2). "Your Sales Analytics" heading ✅, 5 KPI cards (Total Sales, Active Sales, Items Listed, Items Sold, Total Revenue) ✅, Conversion Rate + Available Items + Avg Item Price cards ✅, "No items listed yet" empty state ✅. ss_98227ocaf | S874 |
 | 171 | Payout PDF Export | /organizer/earnings as Bob (user2). "Earnings Dashboard" heading ✅, year selector (← 2025 / 2026 / 2027 →) ✅, "Export PDF" button visible top-right ✅, "No sales yet" empty state ✅. Actual PDF download not triggered (requires ended sale data). ss_55517xgab | S874 |
 | 150 | Push Notification Subscriptions | /organizer/settings?tab=notifications as Bob (user2). "Notification Preferences" section ✅, email checkboxes (bids + sale start) both checked ✅, "Push Notifications" section: "Push notifications are enabled" + Disable button ✅, Smart Tagging checkbox ✅. ss_44021pdve | S874 |
+| 152 | Organizer Digest Emails | /organizer/email-digest-preview as Bob Smith (user2). "Weekly Email Digest" heading ✅, schedule "Monday morning at 9 AM" ✅, Disable button ✅, Email Preview: Hi Bob Smith + KPIs (12 Items Sold/$450.75 Revenue/3 Followers) ✅, activity section + top items ✅, "View Your Dashboard →" CTA ✅, footer manage/unsubscribe ✅, "Sent every Monday morning at 9 AM EST" info ✅. ss_83116boe8 ss_3822u3wv2 ss_2864i4lf6 | S875 |
+| 334 | Automatic Markdown Cycles | /organizer/markdown-cycles as Bob Smith (user2). "Auto Markdown" heading ✅, "Set up automatic price reductions..." subtitle ✅, empty state with icon ✅, "+ Add Cycle" button ✅, "+ Create your first cycle" CTA ✅, no 403. ss_8645vaq0f | S875 |
+| 318 | Affiliate Program | /organizer/affiliate as Bob Smith (user2). "Affiliate Program" heading ✅, "Earn commissions when organizers sign up with your link" ✅, "Your Affiliate Link" card ✅, "Generate Your Affiliate Link" CTA ✅, "← Dashboard" link ✅, no 403. ss_7743cytqb | S875 |
+| 338 | Surface Sold-Price Comps | /organizer/edit-item/cb20b99d-992f-4d56-8378-9df4a42a55ed as Alice Johnson (user1). 3 eBay comp tiles ($17.99/$120.00/$29.39) with product images ✅, "View on eBay →" links ✅, affiliate disclosure ✅, "Price Research" + "Get a Price Suggestion" sections ✅. ⚠️P3: no "Based on N sources" attribution text (matches S820 finding). ss_965075bc7 ss_17240sk5m | S875 |
+| 321 | Encyclopedia Auto-Generation | /admin/encyclopedia as Alice Johnson (user1/admin). "Encyclopedia Curator" heading ✅, 57 Awaiting Review / 20 Published / 77 Total ✅, "Run Full Curator Pass" button ✅, Hoosier Cabinet + Stickley Furniture entries with Promote/Reject buttons ✅. ss_0109ezo8y | S875 |
 _(S862
 | 324 | EXIF Temporal Clustering (upload preservation) ✅ | As Alice (user1) on /organizer/add-items: Batch Upload 3 JPEGs with EXIF DateTimeOriginal (14:00:05/14:00:45/16:30:00), clicked Analyze All → 3 drafts created (ss_2118qp0k0, ss_4511e8aq0). Re-downloaded stored Cloudinary images: all 3 timestamps preserved exactly. Test items+photos deleted from DB. | S863 |
 | 176 | Browse Sales homepage Type filter ✅ | As Bob (user2) on finda.sale homepage: Type dropdown → Estate Sale = "17 of 20 sales", all Estate badges (ss_48642xh5d); Yard Sale = "3 of 20 sales", Yard badges (ss_73627haye). | S863 | batch of 9 graduated to roadmap S863. Note: S862 evidence had no screenshot IDs — applied on DB/page-content evidence per S862 orchestrator log.)_
@@ -101,12 +106,11 @@ _(S862
 
 ## Next Session
 
-**S874 done. Blocked Queue: 8 active rows — QA MODE (≥8). YMAL P2 closed (✅ fixed + Chrome-verified). S874 PCVs (#168/#171/#150/YMAL) staged — apply to roadmap at S875 start.**
+**S875 done. Blocked Queue: 8 active rows — QA MODE (≥8). S875 PCVs (#152/#334/#318/#338/#321) staged — apply to roadmap at S876 start.**
 
-**S875 plan:**
-- **[RECORDS — session start]** Apply S874 PCVs: #168→✅ S874 Chr, #171→✅ S874 Chr partial, #150→✅ S874 Chr. YMAL: bug closed, no Chr update needed.
-- **[BUG]** #170 CSV Import — 404 at /organizer/csv-import. Find correct URL; dispatch findasale-dev if nav link needs wiring.
-- **[SEQUENTIAL Chrome QA]** Continue ⬜ features — #320 (Async eBay Comp needs item with price=null + publish), #152 (Digest — code-only), other ⬜ pages.
+**S876 plan:**
+- **[RECORDS — session start]** Apply S875 PCVs: #152→✅ S875 Chr, #334→✅ S875 Chr, #318→✅ S875 Chr, #338→✅ S875 Chr, #321→✅ S875 Chr.
+- **[SEQUENTIAL Chrome QA]** Continue ⬜ features — #320 (Async eBay Comp: create item with price=null on Alice, publish, wait 2min, verify aiSuggestedPrice), #232/#237 (need active sale — Patrick create one on user1), #316 (need qa256test806 password reset or new referred pair), remaining ⬜ roadmap items (read lines 350+).
 
 **Patrick actions required:**
 1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
@@ -114,8 +118,26 @@ _(S862
 3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
 4. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
 5. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
-
+6. Create an active sale on user1 (Alice) — needed to verify #232 SalePulseWidget + #237 Sale-Type Adaptive Dashboard
 ## Recent Sessions
+
+### S875 — QA MODE: Records pass (S874 PCVs) + #170 clarified + column-gap fixes + Chrome QA (5 features). Blocked Queue: 8 rows.
+
+**Records pass (session start):**
+- S874 PCVs applied to roadmap: #168 Chr→✅ S874, #171 Chr→✅ S874 (partial), #150 Chr→✅ S874, Human QA→✅ S837.
+- YMAL entry removed from Blocked Queue (✅ CHROME-VERIFIED S874, closed).
+- #170 CSV Import: clarified as modal on /organizer/add-items/[saleId] — no standalone page exists, /organizer/csv-import 404s by design. Roadmap Status updated, Claude QA→✅ S804.
+- Column-gap Records pass (prior-session verifications): #257→✅S785, #261→✅S791, #323→✅S791, #338 UI→✅S820.
+
+**Chrome QA (Bob Smith/user2 then Alice Johnson/user1):**
+- **#152 ✅** Organizer Digest Emails — /organizer/email-digest-preview: "Weekly Email Digest", schedule, email preview with real data, CTAs, footer. ss_83116boe8 ss_3822u3wv2 ss_2864i4lf6
+- **#334 ✅** Automatic Markdown Cycles — /organizer/markdown-cycles: page loads, Add Cycle button, empty state, no 403. ss_8645vaq0f
+- **#318 ✅** Affiliate Program — /organizer/affiliate: page loads, Generate link CTA, no 403. ss_7743cytqb
+- **#338 ✅** Surface Sold-Price Comps — edit-item: 3 EbayCompTiles with prices ($17.99/$120/$29.39), affiliate note. ⚠️P3 no "Based on N sources" text. ss_965075bc7 ss_17240sk5m
+- **#321 ✅** Encyclopedia Auto-Generation — /admin/encyclopedia: 57 Awaiting/20 Published/77 Total, Promote/Reject buttons. ss_0109ezo8y
+- **#232/#237 UNVERIFIED** — neither Bob nor Alice have active sales; SalePulseWidget/adaptive dashboard not testable.
+- **#320 UNVERIFIED** — Kitchen Set has price=20 (need price=null item for async comp test).
+- **#323 UNVERIFIED** — no PriceBenchmark data for Kitchen Set category.
 
 ### S873 — QA MODE: Records pass + YMAL fix + Chrome QA (6 features). Blocked Queue: 9 rows.
 
@@ -209,54 +231,3 @@ Workflow secrets `DATABASE_URL` and `DIRECT_URL` were stale. Updated both via Gi
 - **Sale Type filter resets on Search submit ❌ P2 CONFIRMED** — Navigated /search. Set Sale Type = Estate Sale via dropdown (URL updated to `?q=&saleType=ESTATE`). Typed "furniture" in search box, clicked Search. URL became `?q=furniture` — saleType dropped. Dropdown reverted to "All Types". Results showed non-estate listings. (ss_1011915a0)
 - **ZIP export copy mismatch ❌ P2 CONFIRMED** — Settings → Help tab → "Your Data" section: text reads "Limited to once per 24 hours" covering both Download My Data and Download Sale & Item Data (ZIP) buttons. Code confirmed settings.tsx line 2005. Backend enforces 1/month for ZIP. (ss_33535rwau)
 - **YMAL black gap ⚠️ P2 UNVERIFIED** — "You might also like" section appeared on Alice's archive sale but rendered empty (no item cards loaded). Cannot confirm 300px gap without a live active sale with AI-generated recommendations. Data-dependent.
-
-**Notes:**
-- Sale `cmpbvumj90001e7t7v5sa1iqi` (former QA sale) now 404 — use Alice's sale `0d9563f9-4fcd-4630-8beb-189ea58c8118` for organizer QA.
-- S866 missing from Recent Sessions log — was a QA session; evidence captured in PCV table (#31, #194, #47) and Blocked Queue (P2 entries).
-
-### S865 — BUG/AUDIT+QA: #335 root-caused, resolved, and ✅✅ END-TO-END VERIFIED
-
-**Final outcome:** #335 closed after 73 sessions. Roadmap row marked Claude QA ✅ S865 + Human QA ✅ S865 (Patrick personally confirmed payout email receipt in his Yahoo inbox).
-
-**S865d/e (after fixes):** Suspension auto-lifted ~16:00 UTC (external test 19e9361c9d4b6667, no bounce — suspended-era bounces came <60s). Outreach re-enabled: OUTREACH_ENABLED=true + GH workflow enabled (both verified). End-to-end #335 test: logged into finda.sale as Artifact via Google OAuth, POST /api/consignors/cqa333testjanethrift01/payout → 201 (payout cmpzq2ylq000fg36hlx87d1m1, $29.75 Cash) → Gmail Sent 12:41 PM no bounce → Yahoo INBOX delivery confirmed. Test payout deleted post-verification (Patrick-approved). 2 NEW P1s queued: OAuth login doesn't supersede existing JWT session (had to logout user1 cookie before artifact OAuth took); /api/auth/me returns bcrypt password hash.
-
-#### Original S865 audit chain (earlier in session)
-
-**Audit chain (all tool-verified):**
-- Railway env verified: SES_FROM_EMAIL already find@outreach.finda.sale (S864 "regression" never persisted / was misdiagnosed). Gmail refresh token VALID (live token exchange, scope gmail.send). DNS healthy (SPF/DKIM/DMARC on outreach.finda.sale all present).
-- Live send test with prod creds + exact emailService.ts format: Gmail API accepted (msg 19e91905c1d8a024) -> bounced 30s later by mailer-daemon: "You have reached a limit for sending mail."
-- Chrome: deseee@yahoo.com last received find@outreach.finda.sale mail May 17. outreach@finda.sale inbox: 1,400+ limit bounces, first ones May 18, 100% of sends bouncing since — payouts, password resets, verifications, all outreach. June 3 volume only 32 sends, still all bounced -> sustained clamp, re-tripped by cron sending every 4h for 17 days.
-- May 17-18 sent folder: "We built X a storefront" blasts with duplicates (same business up to 4x; junk targets e.g. The Walt Disney Company).
-
-**Mitigation (done in-session):** GH Actions pipeline-outreach-emails.yml disabled via UI. Railway OUTREACH_ENABLED=false (redeploy 34ff3f85). Clamp expected to lift ~24-48h after sends stop; scheduled re-test task created (fires 2026-06-05).
-
-**DEV (1 agent, root causes DB-confirmed):** outreachEmailsCron.ts — (RC-1) kill switch now inside sendOutreachEmails() (was registration-only; GH job-runner path bypassed it); (RC-2) atomic claim-before-send via conditional updateMany — DB evidence showed one org with 5 SENT audit events but attemptCount=2 (sent-marking happened after send; crashes enabled repeat blasts); (RC-3) in-process overlap guard (manual route had no lock); (RC-4) 184 shared-address org records noted — existing dedup layers + atomic claim neutralize at send time. Also: messageController.ts truncated tail restored to match GitHub main.
-
-**Process notes:** Railway CLI installed in VM via npm (mnt/.claude binary not mounted this session). Email failures are invisible to the app — all catch blocks swallow; bounces only visible in the outreach@finda.sale mailbox (gmail.send scope cannot read it; used Chrome).
-
----
-
-### S864 — QA MODE: #195 ✅, Vercel build fixed, #335 regression introduced
-
-**QA ✅:**
-- #195 messaging re-fix Chrome-verified: POST /api/messages → 201, no 500 (ss_6119ualta, ss_03909ty8h).
-
-**Records:**
-- #324 roadmap Chr column → ✅ S863. #176 Status updated with Type filter S863 evidence.
-- S863 PCV table entries graduated.
-
-**Vercel build failure found + fixed:**
-- 3 consecutive ERRORED Vercel deploys on S863 commit. Root cause: saved-searches.tsx priceMin/priceMax typed `number`, compared to `''` → TS compile error.
-- Fix: changed to `number | string | null`. 0 TS errors confirmed. Not yet pushed.
-
-**⚠️ #335 REGRESSION (Claude error):**
-- Incorrectly diagnosed SES_FROM_EMAIL as root cause and advised changing from `find@outreach.finda.sale` → `outreach@finda.sale`.
-- This broke Gmail API send entirely. Confirmed: no email arrives anywhere (tested artifactmi@gmail.com and Yahoo).
-- Must revert SES_FROM_EMAIL → `find@outreach.finda.sale` next session before any email testing.
-
-**Files changed:** claude_docs/strategy/roadmap.md · claude_docs/STATE.md · packages/frontend/pages/shopper/saved-searches.tsx (TS fix, not yet pushed)
-
----
-
-
----
