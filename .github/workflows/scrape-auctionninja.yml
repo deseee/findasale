@@ -36,16 +36,4 @@ jobs:
         env:
           DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
-        run: |
-          npx tsx -e '
-            import { scrapeAuctionNinja } from "./src/services/scraper/sources/auctionNinjaScraper";
-            (async () => { try {
-              await scrapeAuctionNinja();
-              console.log("AuctionNinja scraper completed successfully");
-              process.exit(0);
-            } catch (err) {
-              console.error("AuctionNinja scraper failed:", err);
-              process.exit(1);
-            }
-            })();
-          '
+        run: npx tsx src/scripts/run-auctionninja.ts

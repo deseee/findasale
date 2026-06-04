@@ -1242,7 +1242,7 @@ model ItemBundle {
 model Favorite {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   saleId    String?
   sale      Sale?    @relation(fields: [saleId], references: [id])
   itemId    String?
