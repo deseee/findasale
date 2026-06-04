@@ -8,9 +8,10 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S865 — BUG/AUDIT+QA: #335 RESOLVED + ✅✅ END-TO-END VERIFIED (73 sessions in queue → closed). Email outage root-caused (May 18 digest blast → Google sending suspension), suspension lifted, outreach re-enabled, payout email confirmed in Patrick's Yahoo inbox. 2 new P1s queued (OAuth session supersede + auth/me hash leak).**
-- **#335 RESOLVED S865 (carried note):** Google sending clamp lifted S865d. Payout email end-to-end verified S865e. S865b push (digest filter + volume fuses + ebayController tail) still pending from Patrick.
-- **S867 QA findings:** 3 P2 bugs confirmed (Sale Type filter reset, ZIP copy mismatch, UGC button dark mode), 1 UNVERIFIED (YMAL gap — data-dependent). See Blocked Queue for details.
+**Latest: S868 — BUG+INFRA: Schema FK audit complete (4 migrations deployed ✅), Foursquare scraper fixed ✅, AuctionNinja partially fixed (selector/URL updated) but GitHub Actions remains Cloudflare-blocked → STILL BROKEN. Blocked Queue +1 (AuctionNinja).**
+- **S868 highlights:** Foursquare GitHub Actions secrets were stale → updated → workflow ✅ SUCCESS. AuctionNinja function name fixed + new URL + updated selector, but scraper returns 0 results due to Cloudflare IP block on Actions runners. Full schema FK audit: 4 migrations deployed to Railway prod covering duplicate-index no-op, Favorite cascade delete, 53 FK constraint rules + 32 new indexes, nullable author/sender fields. Sentry DirectoryClaimEmail indexes confirmed already present (migration is safe no-op).
+- **#335 RESOLVED S865 (carried note):** S865b push (digest filter + volume fuses + ebayController tail) still pending from Patrick.
+- **S867 QA findings (carried):** 3 P2 bugs confirmed (Sale Type filter reset, ZIP copy mismatch, UGC button dark mode), 1 UNVERIFIED (YMAL gap — data-dependent). See Blocked Queue for details.
 
 **Previous: S864 — QA MODE: #195 ✅ Chrome-verified. Vercel build broken by saved-searches.tsx TS error — fixed. #324/#176 PCV marks applied. #335 email diagnosis → S864 SES_FROM_EMAIL theory disproven S865.**
 - QA ✅: #195 messaging re-fix Chrome-verified — POST /api/messages → 201, no 500 (ss_6119ualta, ss_03909ty8h). S863 backend fix confirmed live.
@@ -49,8 +50,9 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING: #332 at 70+ sessions — mandatory P0 per CLAUDE.md §10a. (#335 closed S865.)_
-_⚠️ FRICTION AUDIT 2026-06-04: 3 new P0s added — truncated working-copy files that will break both deployments if pushed._
+_⚠️ P0 AGING: #332 at 71+ sessions — mandatory P0 per CLAUDE.md §10a. (#335 closed S865.)_
+_⚠️ FRICTION AUDIT 2026-06-04: 3 P0s added — truncated working-copy files (still unresolved — confirm git checkout before any push)._
+_⚠️ S868: AuctionNinja Cloudflare block added; full schema FK migrations deployed._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
@@ -71,6 +73,7 @@ _⚠️ FRICTION AUDIT 2026-06-04: 3 new P0s added — truncated working-copy fi
 | ZIP export rate-limit error swallowed | **P2** — When export is rate-limited, axios receives JSON error in blob response type → parse fails → generic fallback shown instead of "You've already exported recently." | Fix: parse JSON error body from blob response in export handler | S866 |
 | ZIP export copy: 24h vs 1-month mismatch | **P2 CONFIRMED S867** — Help tab "Your Data" section shows "Limited to once per 24 hours" covering both Download buttons including ZIP. Code confirmed settings.tsx line 2005. Backend enforces 1/month. (ss_33535rwau) | Align copy to match enforcement: "once per month" for ZIP button | S866 |
 | #192 Price History data-dependent | **P3** — ItemPriceHistoryChart is correctly wired in edit-item/[id].tsx but returns null when no ItemPriceHistory records exist. Railway DB has no price change history for test items. | No code fix needed. To verify: run price update on a real item, then check chart renders. | S862 |
+| AuctionNinja scraper | **P2** — GitHub Actions runners get Cloudflare IP block (11KB challenge page, 0 results). Function name, URL, and selector are all correct. | Investigate NAA precedent; test User-Agent bypass; if unbypassable follow NAA pattern — disable schedule with comment | S868 |
 
 ---
 
@@ -91,20 +94,42 @@ _(S862
 
 ## Next Session
 
-**S867 done. Blocked Queue: 16 rows — QA MODE next session (>=8 items). No new feature dev.**
+**S868 done. Blocked Queue: 17 rows — QA MODE next session (>=8 items). No new feature dev without Patrick sign-off.**
 
 Priority:
-1. **Push S865b batch** (still pending from S865 — digest blast fix, ebayController tail restore). Unblocks Railway hardening.
-2. **Dispatch findasale-dev (3 targeted P2 fixes, can batch):**
+1. **AuctionNinja scraper Cloudflare fix — INVESTIGATE BEFORE TOUCHING ANYTHING:**
+   - Read `.github/workflows/scrape-naa.yml` first — precedent for Cloudflare-blocked scraper (NAA schedule disabled with documented comment).
+   - Read `.github/workflows/scrape-auctionzip.yml` — AuctionZip runs from Actions successfully; what's different?
+   - Check whether `getRandomUserAgent()` is being passed correctly in the GitHub Actions run.
+   - If truly IP-blocked with no bypass: follow NAA pattern — disable schedule with comment. Do NOT move scraper to Railway.
+   - Files to examine in order: `scrape-naa.yml` → `scrape-auctionzip.yml` → `auctionNinjaScraper.ts` → `run-auctionninja.ts`
+2. **Push S865b batch** (still pending from S865 — digest blast fix, ebayController tail restore).
+3. **Dispatch findasale-dev (3 targeted P2 fixes, can batch):**
    - Sale Type filter reset: include saleType in search.tsx form submit payload
-   - ZIP export copy: change "once per 24 hours" → "once per month" in settings.tsx line 2005 (for ZIP button only — "Download My Data" button rate limit unknown, verify separately)
-   - UGC button: replace `bg-white border-2 text-gray-700` with accent color styling in sales/[id].tsx UGCPhotoSubmitButton
-3. **P0 Patrick items:** #332 Shopify dev store, Email Verification migration, eBay OAuth user1.
-4. **YMAL gap bug**: needs a live active sale with AI-generated recommendations to reproduce. Try from a sale with active items and check browser for 300px gap before item cards.
+   - ZIP export copy: change "once per 24 hours" → "once per month" in settings.tsx line 2005 (ZIP button only)
+   - UGC button: replace `bg-white border-2 text-gray-700` with accent color styling in sales/[id].tsx
+4. **P0 Patrick items:** #332 Shopify dev store, Email Verification migration, eBay OAuth user1.
+5. **Confirm P0 truncated files resolved:** Run `git status` on local repo — confirm search.tsx (564 lines), routes/search.ts, messageController.ts are clean vs HEAD before any push.
 
 **Patrick actions required (in order):**
 
-1. **Push S865b batch (digest blast fix — the actual #335 trigger):**
+1. **Push S868 schema migrations batch:**
+   ```
+   git add packages/database/prisma/schema.prisma
+   git add packages/database/prisma/migrations/20260604000000_add_directoryclaimemail_indexes/migration.sql
+   git add packages/database/prisma/migrations/20260604100000_favorite_user_cascade_delete/migration.sql
+   git add packages/database/prisma/migrations/20260604200000_schema_fk_cascade_restrict/migration.sql
+   git add packages/database/prisma/migrations/20260604300000_nullable_fields_setnull/migration.sql
+   git add packages/backend/src/services/scraper/sources/auctionNinjaScraper.ts
+   git add packages/backend/src/scripts/run-auctionninja.ts
+   git add .github/workflows/scrape-auctionninja.yml
+   git add claude_docs/STATE.md
+   git add claude_docs/patrick-dashboard.md
+   git commit -m "infra: full FK cascade/restrict audit (4 migrations) + Favorite cascade delete + AuctionNinja scraper URL+selector fix + run script"
+   .\push.ps1
+   ```
+   Note: Migrations are already deployed to Railway prod DB (applied this session). This push just syncs the files to GitHub.
+2. **Push S865b batch (digest blast fix — the actual #335 trigger):**
    ```
    git add packages/backend/src/jobs/organizerWeeklyDigestJob.ts
    git add packages/backend/src/services/organizerAnalyticsService.ts
@@ -112,17 +137,39 @@ Priority:
    git add packages/backend/src/jobs/monthlyTrendReportJob.ts
    git add packages/backend/src/services/weeklyEmailService.ts
    git add packages/backend/src/controllers/ebayController.ts
-   git add claude_docs/STATE.md
-   git add claude_docs/patrick-dashboard.md
    git add claude_docs/strategy/roadmap.md
    git commit -m "fix: gate organizer digest + recipient filter + volume fuses on all bulk email jobs (May 18 blast root cause) + restore ebayController tail"
    .\push.ps1
    ```
-   ebayController.ts: only a 3-line comment diff vs main after tail repair — safe to commit.
-2. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
-3. **GBP phone verification** — business.google.com -> "Verify now" -> phone code. (carried)
+3. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
+4. **GBP phone verification** — business.google.com -> "Verify now" -> phone code. (carried)
 
 ## Recent Sessions
+
+### S868 — BUG+INFRA: Schema FK audit (4 migrations deployed), Foursquare fixed, AuctionNinja partially fixed (Cloudflare-blocked)
+
+**Health monitor findings:**
+- 2 GitHub Actions failures: AuctionNinja scraper (0 results), Foursquare scraper (secrets stale)
+- 1 Sentry slow query: DirectoryClaimEmail 1120ms (indexes already existed — no-op migration added)
+
+**Foursquare scraper — ✅ FIXED:**
+Workflow secrets `DATABASE_URL` and `DIRECT_URL` were stale. Updated both via GitHub Secrets API. Workflow re-triggered → ✅ SUCCESS.
+
+**AuctionNinja scraper — PARTIAL FIX / STILL BROKEN:**
+- Root cause 1 fixed: workflow called `runAuctionNinjaScraper` (nonexistent); actual function is `scrapeAuctionNinja`. Created `packages/backend/src/scripts/run-auctionninja.ts` run script. Updated workflow to use script.
+- Root cause 2 fixed: data moved to `/hire-an-estate-sale-company`. URL updated. Selector updated from `li > a` to `a[href^="https://www.auctionninja.com/"]`.
+- Root cause 3 UNRESOLVED: GitHub Actions runners get Cloudflare IP block (11KB challenge page vs full 325KB). Scraper returns 0 results even with correct URL + selector. Railway cron attempted (wrong) and reverted. GitHub Actions schedule re-enabled. Status: BROKEN — see Next Session investigation guide.
+
+**Schema FK audit — ✅ DEPLOYED TO RAILWAY PROD:**
+4 migrations applied in order (required 3 deploy attempts due to orphan rows in Conversation and UserAchievement):
+1. `20260604000000_add_directoryclaimemail_indexes` — IF NOT EXISTS no-op (indexes pre-existed)
+2. `20260604100000_favorite_user_cascade_delete` — `onDelete: Cascade` on Favorite.user (fixes Sentry null-user error)
+3. `20260604200000_schema_fk_cascade_restrict` — orphan cleanup + 53 FK constraints (CASCADE/RESTRICT/SetNull) + 32 new indexes
+4. `20260604300000_nullable_fields_setnull` — Review.userId, Message.senderId, EncyclopediaEntry.authorId, EncyclopediaRevision.authorId made nullable + SET NULL
+
+**Files changed:** `packages/database/prisma/schema.prisma` · 4 migration SQL files · `auctionNinjaScraper.ts` · `run-auctionninja.ts` (NEW) · `.github/workflows/scrape-auctionninja.yml` · `packages/backend/src/index.ts` (Railway cron added + reverted, net: no change)
+
+**Blocked Queue: 16 → 17 rows** (AuctionNinja Cloudflare block added).
 
 ### S867 — QA MODE: 3 P2 bugs confirmed, 1 UNVERIFIED, no code shipped
 
@@ -202,53 +249,5 @@ Priority:
 **Records:** 9 S862 PCV marks applied to roadmap (#327/#73/#186/#396/#197/#163/#173/#71 + note). Queue: Bing row removed (done), Re-Seed row removed (user5–12 no longer exist — Patrick), #324 graduated to PCV. Queue 12→10 rows.
 
 **Files changed:** messageController.ts · search.ts (backend routes) · index.tsx · search.tsx · saved-searches.tsx (NEW) · sales/[id].tsx · STATE.md · patrick-dashboard.md · roadmap.md
-
----
-
-### S862 — QA+DEV: 6 fixes shipped, 14 features verified, 4 new bugs found
-
-**DEV (6 fixes, all 0 TS errors):**
-- `pointsController.ts`: moved `recordSaleVisit()` before `!result` fraud early-return (Tranche B fraud gate fix)
-- `uploadController.ts`: added `exif: true` to Cloudinary upload_stream options (#324 EXIF preservation)
-- `discoveryService.ts` + `search.ts`: added `saleType: true` to Prisma selects (#176 — browse filter returning 0 results)
-- `messageController.ts`: wrapped Conversation+Message in `prisma.$transaction`, moved unmanaged-listing guard before DB writes (#195 — messaging 500 crash)
-- `settings.tsx`: added "Download Sale & Item Data (ZIP)" button calling `GET /api/organizers/export` (#66 frontend UI)
-- `print-kit/[saleId].tsx`: brand colors from brandPrimaryColor/brandSecondaryColor now applied to yard sign header/footer + item tag price/borders (#31)
-
-**QA ✅ (all Chrome-verified S862):** #327 Price Calibration Logging, #73 Two-Channel Notifications, #186 QR Scan Analytics, #396 DIY Starter Kit, #197 Bounties organizer, #163 Organizer Earnings (sale-level fees), #173 Message Templates, Shopper Dashboard, Hunt Pass upsell page, #71 Shopper Reputation.
-
-**QA bugs found:**
-- **#176 Browse filter** ❌ P1 FIXED — saleType absent from feed API, every filter returned 0 results
-- **#195 Messaging** ❌ P1 FIXED — POST /api/messages crashed, Conversation created but Message insert failed
-- **#27 CSV Exports** ⚠️ PARTIAL — rate-limited (1/month), endpoints confirmed live, no standalone /organizer/exports page (exports live inside Promote page per-sale)
-- **#194 Saved Searches view** ❌ P2 NEW — no /shopper/saved-searches page, POST works + toast fires but no view
-- **#47 UGC Photo Submit** ❌ P2 NEW — UGCPhotoSubmitButton only in history.tsx, not wired to sale detail page
-- **#192 Price History** UNVERIFIED P3 — chart wired correctly but returns null with no history data; data-dependent not a code bug
-- **#401 Sale of the Day** — no card visible on homepage (may require qualifying sale to exist)
-- **Admin invites** — SVPKNKV3 not present in /admin/invites (already gone)
-
-**Blocked Queue: 10 → 12 rows** (removed Tranche B gate, updated #324, added #194/#47/#192).
-
-**Files changed:** pointsController.ts · uploadController.ts · discoveryService.ts · search.ts · export.ts · messageController.ts · settings.tsx · print-kit/[saleId].tsx · roadmap.md · STATE.md · patrick-dashboard.md
-
----
-
-### S861 — QA: #316 Tranche B ✅ Chrome-verified; #324 EXIF P1 bug found; 2 new bugs
-
-**QA #316 Referral Tranche B — ✅ VERIFIED:**
-- Navigated to /register?ref=REF-7CD8DCC0. Green "Referral link applied" banner confirmed (ss_1479i18cy). S860 fix working.
-- Registered qa-tranche-b-s861@test.com, logged in (ss_71277qiak).
-- Root finding: fraudSuspect=True auto-set on new user (S854 pattern) — blocked awardXp(), which blocked recordSaleVisit(). Cleared flag, re-tested.
-- Visited 3 distinct sales. DB post-visit: distinctSalesVisited=[3 IDs], trancheBReleasedAt=2026-06-03T14:37:15, user1 +150 XP (ss_1277utzwj). ✅
-- **New P2 bug found:** recordSaleVisit() placed after `!result` (fraud) early-return in trackSaleVisit(). Fraud-flagged referred users never trigger Tranche B for referrer. Fix: move call before fraud gate. File: pointsController.ts.
-- Test data cleaned: test user deleted, user1 XP restored to 108.
-
-**QA #324 Temporal EXIF Clustering — UNVERIFIED (P1 design bug):**
-- Code review confirmed: `clusterPhotos()` calls `extractExifTimestamp()` on Cloudinary-downloaded images.
-- **P1 bug:** Cloudinary strips EXIF metadata by default on upload. `uploadController.ts` upload_stream has no EXIF preservation flags. batchAnalyzeController downloads from Cloudinary → EXIF always null → temporal hints never generated.
-- Feature is silently non-functional in production. Basic clustering UI works (not tested this session — no need, it's been verified in prior sessions).
-- Action: dispatch findasale-dev to add EXIF preservation to Cloudinary upload, then re-test #324.
-
-**Blocked Queue: 8 → 10 rows (2 new bugs added).**
 
 ---

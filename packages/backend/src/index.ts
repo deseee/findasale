@@ -245,9 +245,6 @@ import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Ph
 import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Directory scraper national cron
 import { initMetroSyncCron } from './jobs/metroSyncCron'; // ADR-074: Metro Sync — eBay sold items nightly cron
 import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase 2: Category Sync — eBay category items nightly cron
-import { scrapeAuctionNinja } from './services/scraper/sources/auctionNinjaScraper'; // ADR-073: AuctionNinja directory — Railway cron
-import { RateLimiter } from './services/scraper/rateLimiter'; // ADR-073: Scraper rate limiter
-import cron from 'node-cron'; // ADR-073: AuctionNinja Railway cron schedule
 // Pipeline crons below moved to GitHub Actions (Steps 1+2 complete — Step 3 removes in-memory scheduling).
 // Imports for autoSeedOutreachCron, outreachEmailsCron, emailDiscoveryJob,
 // websiteEnrichmentJob, organizerWebsiteAddressCron removed — no longer scheduled in-process.
@@ -810,16 +807,4 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // ADR-074 Phase 2: Initialize category sync cron (gated by CATEGORY_SYNC_ENABLED env var)
   initCategorySyncCron();
 
-  // AuctionNinja directory scraper — weekly Wednesday 6 AM UTC
-  // Runs on Railway (avoids GitHub Actions Cloudflare IP block)
-  cron.schedule('0 6 * * 3', async () => {
-    console.log('[Cron] Starting AuctionNinja directory scraper');
-    try {
-      const rateLimiter = new RateLimiter({ requestsPerSecond: 0.3, maxRetries: 3 });
-      const stats = await scrapeAuctionNinja('national-us', 'cron', rateLimiter);
-      console.log('[Cron] AuctionNinja complete:', stats);
-    } catch (err) {
-      console.error('[Cron] AuctionNinja failed:', err);
-    }
-  });
 });
