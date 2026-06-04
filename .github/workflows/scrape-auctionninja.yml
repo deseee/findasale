@@ -38,9 +38,9 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
           npx tsx -e '
-            import { runAuctionNinjaScraper } from "./src/services/scraper/sources/auctionNinjaScraper";
+            import { scrapeAuctionNinja } from "./src/services/scraper/sources/auctionNinjaScraper";
             (async () => { try {
-              await runAuctionNinjaScraper();
+              await scrapeAuctionNinja();
               console.log("AuctionNinja scraper completed successfully");
               process.exit(0);
             } catch (err) {
