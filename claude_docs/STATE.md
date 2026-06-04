@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S874 — QA MODE: Records pass (S873 PCVs #155/#161/#11/#156 applied to roadmap ✅). YMAL re-investigated: S873 fix incomplete (API returns no `total` field; `data.total===0` always false). Actual fix applied S874: SimilarItems.tsx `data?.items?.length` check (1 line). Pending push + Chrome re-verify. Blocked Queue: 9 rows.**
+**Latest: S874 — QA MODE: Records pass (S873 PCVs #155/#161/#11/#156 → roadmap ✅). YMAL P2 ✅ FIXED + Chrome-verified (S873 fix incomplete → actual root cause found + fixed S874: API returns no `total` field; changed to `data?.items?.length` check; deployed + DOM-confirmed absent ss_6075980zt). Chrome QA: #168 ✅, #171 ✅ partial, #150 ✅, Leaderboard ✅, Trending ✅. Blocked Queue: 8 active rows. Bug found: #170 CSV Import 404 at /organizer/csv-import.**
 - **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
 - **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
 - **Previous: S868 — BUG+INFRA:** Schema FK audit (4 migrations deployed), Foursquare fixed, AuctionNinja partially fixed but Cloudflare-blocked. Blocked Queue +1 (AuctionNinja).
@@ -59,7 +59,7 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | Email Verification Migration | **P0 (135 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but never deployed. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
 | eBay Connection for user1 | **P0 (76 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
 | OAuth session supersede | **P2 UNVERIFIED S870** — OAuthBridge !user guard fix confirmed in code (\_app.tsx). Chrome QA attempted S870 but requires completing real Google OAuth flow while logged in as a different user. | Patrick: log in as user2 (JWT active), click "Sign in with Google" as artifact account, verify /api/auth/me returns artifact not user2 | S870 |
-| "You might also like" black gap | **P2 FIX APPLIED S874** — S873 fix was incomplete. Chrome QA S874 confirmed: section STILL rendered (85px, heading only, no items). Actual root cause: API `items/${itemId}/similar` returns `{ items: [] }` (no `total` field). S873 check `data.total === 0` was always `undefined === 0` = false → section always rendered. Fix S874: `SimilarItems.tsx` line 58 changed to `if (!data?.items?.length \|\| error) return null;` Pending push + deploy + Chrome re-verify. | Patrick: include SimilarItems.tsx in next push block. After deploy, verify "You might also like" section is completely absent on sale details with no recommendations. | S866 |
+| "You might also like" black gap | **✅ CHROME-VERIFIED S874** — Community Photos → Reviews directly, zero gap. ss_6075980zt. DOM confirmed: no YMAL H2 in DOM after page fully settled. Root cause was `data.total === 0` (API returns no `total` field) → fixed to `!data?.items?.length`. Closed. | — | S866 |
 
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
@@ -89,6 +89,10 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | 11 | Organizer Referral (Fee Bypass) | /organizer/referrals as Bob Smith (user2). "Referrals" heading ✅, referral link (https://finda.sale/signup?ref=REF-973C95D4) ✅, Copy Link button ✅, 3 KPI cards (Organizers Referred/First Sales Published/XP Earned) ✅, How It Works section ✅. ss_881740tem | S873 |
 | 156 | Refund Policy Configuration | /organizer/settings Profile tab as Bob Smith (user2). "Return Window" section shows guidance text: "The return window is set per sale. When editing a sale, look for the 'Return Window' field in the sale details." No input field (removed per fix). ss_5542tnnsw | S873 |
 | 316 | Referral Tranche B | UNVERIFIED S873 — Fix confirmed in code (referralTrancheService.recordSaleVisit called from pointsController line 57). Test account qa256test806@example.com has 0 distinctSalesVisited. Chrome QA blocked: unknown password for test account. Need: seed a new referred user pair OR reset qa256test806 password. | S873 |
+| — | YMAL "You might also like" fix | /sales/0d9563f9-4fcd-4630-8beb-189ea58c8118 as Bob (user2). Community Photos section → Reviews section directly. DOM confirmed: `ymalFound: false` after full page settle. Empty "You might also like" section completely absent. ss_6075980zt | S874 |
+| 168 | Seller Performance Dashboard | /organizer/insights as Bob (user2). "Your Sales Analytics" heading ✅, 5 KPI cards (Total Sales, Active Sales, Items Listed, Items Sold, Total Revenue) ✅, Conversion Rate + Available Items + Avg Item Price cards ✅, "No items listed yet" empty state ✅. ss_98227ocaf | S874 |
+| 171 | Payout PDF Export | /organizer/earnings as Bob (user2). "Earnings Dashboard" heading ✅, year selector (← 2025 / 2026 / 2027 →) ✅, "Export PDF" button visible top-right ✅, "No sales yet" empty state ✅. Actual PDF download not triggered (requires ended sale data). ss_55517xgab | S874 |
+| 150 | Push Notification Subscriptions | /organizer/settings?tab=notifications as Bob (user2). "Notification Preferences" section ✅, email checkboxes (bids + sale start) both checked ✅, "Push Notifications" section: "Push notifications are enabled" + Disable button ✅, Smart Tagging checkbox ✅. ss_44021pdve | S874 |
 _(S862
 | 324 | EXIF Temporal Clustering (upload preservation) ✅ | As Alice (user1) on /organizer/add-items: Batch Upload 3 JPEGs with EXIF DateTimeOriginal (14:00:05/14:00:45/16:30:00), clicked Analyze All → 3 drafts created (ss_2118qp0k0, ss_4511e8aq0). Re-downloaded stored Cloudinary images: all 3 timestamps preserved exactly. Test items+photos deleted from DB. | S863 |
 | 176 | Browse Sales homepage Type filter ✅ | As Bob (user2) on finda.sale homepage: Type dropdown → Estate Sale = "17 of 20 sales", all Estate badges (ss_48642xh5d); Yard Sale = "3 of 20 sales", Yard badges (ss_73627haye). | S863 | batch of 9 graduated to roadmap S863. Note: S862 evidence had no screenshot IDs — applied on DB/page-content evidence per S862 orchestrator log.)_
@@ -97,20 +101,19 @@ _(S862
 
 ## Next Session
 
-**S873 done. Blocked Queue: 9 rows — QA MODE (≥8). Top priorities: (1) Apply S873 PCV entries (#155/#161/#11/#156/#316) to roadmap, (2) After Patrick pushes S873 code: Chrome re-verify YMAL fix on sale detail, (3) Continue Chrome QA on pending ⬜ features.**
+**S874 done. Blocked Queue: 8 active rows — QA MODE (≥8). YMAL P2 closed (✅ fixed + Chrome-verified). S874 PCVs (#168/#171/#150/YMAL) staged — apply to roadmap at S875 start.**
 
-**S874 plan:**
-- **[RECORDS — session start]** Apply S873 PCV to roadmap: #155→✅ S873 (partial, page load), #161→✅ S873 (partial), #11→✅ S873, #156→✅ S873. #316 stays UNVERIFIED.
-- **[CHROME QA]** Verify YMAL fix deployed: navigate to a sale detail page with no recommendations, confirm empty dark container is GONE.
-- **[SEQUENTIAL Chrome QA]** Continue ⬜ features — candidates: #320 (Async eBay Comp), #323 (PriceBenchmark fallback via API), #257 (Scout Hold Duration)
+**S875 plan:**
+- **[RECORDS — session start]** Apply S874 PCVs: #168→✅ S874 Chr, #171→✅ S874 Chr partial, #150→✅ S874 Chr. YMAL: bug closed, no Chr update needed.
+- **[BUG]** #170 CSV Import — 404 at /organizer/csv-import. Find correct URL; dispatch findasale-dev if nav link needs wiring.
+- **[SEQUENTIAL Chrome QA]** Continue ⬜ features — #320 (Async eBay Comp needs item with price=null + publish), #152 (Digest — code-only), other ⬜ pages.
 
 **Patrick actions required:**
-1. **Push S873 code** — see push block below (SimilarItems.tsx + sales/[id].tsx + roadmap.md + STATE.md)
-2. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
-3. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
-4. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
-5. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
-6. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
+1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
+2. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
+3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
+4. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
+5. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
 
 ## Recent Sessions
 

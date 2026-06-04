@@ -1,24 +1,28 @@
-# Patrick's Dashboard — S871 Wrap
+# Patrick's Dashboard — S874 Wrap
 
 ---
 
-## S871 Summary — QA Mode: Records pass + Chrome QA
+## S874 Summary — QA Mode: Records pass + YMAL fix + Chrome QA
 
-**Records pass completed:**
-- ✅ #31 Brand Kit — roadmap Chr column updated to ✅ S866 (Save Brand Kit verified, photo propagation partial)
-- ✅ #194 Saved Searches — roadmap Chr column updated to ✅ S866 (full flow: save, view, run, delete)
-- ✅ #47 UGC Photo Tags — roadmap Chr column updated to ✅ S866 (Tag Your Find modal opens on sale detail)
+**Records pass (S873 PCVs → roadmap):**
+- ✅ #155, #161, #11, #156 — Chr columns updated to ✅ S873
+
+**YMAL P2 — CLOSED:**
+- Root cause found S874: `data.total === 0` check was wrong (API returns no `total` field). Fixed to `!data?.items?.length`. Deployed, Chrome-verified — section completely absent from DOM. (ss_6075980zt)
 
 **Chrome QA results:**
-- ✅ **#195 Messaging** — Sent message in Bob→Leo thread, appeared instantly, no 500 error. Full messaging flow confirmed. (ss_6404xkj76, ss_9076mfuyt)
-- ❌ **"You might also like" gap — P2 CONFIRMED** — Section renders with an empty dark container and heading, but zero items and no empty state message. Bug: section should hide or show a "nothing here yet" message. Dev fix queued for S872. (ss_60495nt3b)
-- ✅ **ZIP export copy re-confirmed** — "Download My Data: Limited to once per 24 hours" and "Download Sale & Item Data (ZIP): Limited to once per month" both correct on Bob's account. (ss_0411xcqp8)
+- ✅ **#168 Seller Performance** — /organizer/insights loads with 5 KPI cards. (ss_98227ocaf)
+- ✅ **#171 Payout PDF** — /organizer/earnings loads, year selector + Export PDF button present. (ss_55517xgab)
+- ✅ **#150 Push Notifications** — Settings Notifications tab: push enabled, email prefs correct. (ss_44021pdve)
+- ✅ **Leaderboard** — 3 tabs, real data (Maya RANGER #1, Leo SAGE #2). (ss_70419i6xv)
+- ✅ **Trending** — "Trending This Week" with Hot Sales grid. (ss_014381051)
+- ❌ **#170 CSV Import** — 404 at /organizer/csv-import. URL wrong or feature not wired.
 
 ---
 
-## No Push Required This Session
+## Code shipped this session
 
-S870 push was confirmed on GitHub (commit 07f0893 at 20:06 UTC). No new code this session.
+`packages/frontend/components/SimilarItems.tsx` — YMAL empty-items guard fix (1 line). Deployed ✅ Vercel READY (commit d56fc29).
 
 ---
 
@@ -33,7 +37,7 @@ S870 push was confirmed on GitHub (commit 07f0893 at 20:06 UTC). No new code thi
 
 ---
 
-## Blocked Queue: 9 items (QA MODE — ≥8 ceiling)
+## Blocked Queue: 8 active items (QA MODE — ≥8 ceiling)
 
 | Priority | Item | Status |
 |----------|------|--------|
