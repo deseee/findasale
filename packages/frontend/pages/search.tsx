@@ -523,4 +523,53 @@ const SearchPage = () => {
                       <div>
                         <EmptyState
                           icon="🔍"
-             
+                          heading={`We couldn't find "${q}"`}
+                          subtext="Try browsing by category or checking back soon — new sales are being listed all the time."
+                        />
+                        <div className="flex flex-wrap justify-center gap-2 mt-6">
+                          {SUGGESTED_CATEGORIES.map((cat) => (
+                            <Link
+                              key={cat}
+                              href={`/categories/${cat.toLowerCase()}`}
+                              className="px-3 py-1 bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-700 dark:text-warm-300 rounded-full text-sm transition-colors"
+                            >
+                              {cat}
+                            </Link>
+                          ))}
+                        </div>
+                        {/* #455: Notify Me Waitlist */}
+                        <div className="mt-8 p-5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg max-w-md mx-auto">
+                          <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">🔔 Get notified when this appears</h3>
+                          <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">We&apos;ll email you when matching sales or items are listed.</p>
+                          {notifySubmitted ? (
+                            <p className="text-green-700 dark:text-green-300 font-medium">✓ We&apos;ll let you know!</p>
+                          ) : (
+                            <form onSubmit={handleNotifySubmit} className="flex gap-2">
+                              <input
+                                type="email"
+                                value={notifyEmail}
+                                onChange={e => setNotifyEmail(e.target.value)}
+                                placeholder="your@email.com"
+                                className="flex-1 px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                required
+                              />
+                              <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition">
+                                Notify Me
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default SearchPage;
