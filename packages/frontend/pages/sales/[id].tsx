@@ -2140,9 +2140,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 
             {/* ── SIMILAR ITEMS ── */}
             {sale.items.length > 0 && sale.items[0] && (
-              <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
-                <SimilarItems itemId={sale.items[0].id} category={sale.items[0].category || 'general'} />
-              </section>
+              <SimilarItems itemId={sale.items[0].id} category={sale.items[0].category || 'general'} />
             )}
 
             {/* Bug #160: Reviews — shoppers can submit a review after the sale */}

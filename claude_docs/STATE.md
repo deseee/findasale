@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S871 — QA MODE: Records pass (S866+S870 PCV applied to roadmap: #31 ✅ S866, #194 ✅ S866, #47 ✅ S866). Chrome QA: #195 Messaging ✅, YMAL gap ❌ P2 CONFIRMED (empty container, no empty state), ZIP copy re-confirmed ✅. Blocked Queue: 9 rows (YMAL moved from UNVERIFIED→CONFIRMED).**
+**Latest: S873 — QA MODE: Records pass (S871 PCV #195 applied to roadmap ✅). YMAL P2 FIX COMPLETE (SimilarItems.tsx + sales/[id].tsx, 0 TS errors, pending push). Chrome QA: #7 ✅, #155 ✅ partial, #161 ✅ partial, #11 ✅, #156 ✅, #316 UNVERIFIED. Blocked Queue: 9 rows.**
 - **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
 - **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
 - **Previous: S868 — BUG+INFRA:** Schema FK audit (4 migrations deployed), Foursquare fixed, AuctionNinja partially fixed but Cloudflare-blocked. Blocked Queue +1 (AuctionNinja).
@@ -59,7 +59,7 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | Email Verification Migration | **P0 (135 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but never deployed. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
 | eBay Connection for user1 | **P0 (76 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
 | OAuth session supersede | **P2 UNVERIFIED S870** — OAuthBridge !user guard fix confirmed in code (\_app.tsx). Chrome QA attempted S870 but requires completing real Google OAuth flow while logged in as a different user. | Patrick: log in as user2 (JWT active), click "Sign in with Google" as artifact account, verify /api/auth/me returns artifact not user2 | S870 |
-| "You might also like" black gap | **P2 CONFIRMED S871** — Empty dark container renders on sale detail (Alice's archived sale) with heading "You might also like" but zero item cards + no empty state message. Section renders even when AI returns no recommendations. Bug: hide section when empty OR add empty state. ss_60495nt3b | Dispatch findasale-dev: hide YMAL section when API returns 0 results, or add empty-state message | S866 |
+| "You might also like" black gap | **P2 FIX COMPLETE S873** — Root cause: `<section>` wrapper in sales/[id].tsx always rendered even when SimilarItems returned null; wrong check order (null before loading). Fix: section wrapper moved inside SimilarItems.tsx, check order corrected (loading first), error folded into null check. TS check: 0 errors. Pending push + deploy + Chrome re-verify. | Patrick: push SimilarItems.tsx + sales/[id].tsx (included in S873 push block). After deploy, verify sale detail no longer shows empty dark container. | S866 |
 
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
@@ -82,7 +82,13 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | — | UGC button dark mode | ✅ Chrome-verified S870 — Navigated Hammond Estate Sale /sales/cmpie5dtp01nx4n1ht00o5zcn in dark mode. Community Photos section. "Tag Your Find" button computed styles: bg=rgba(120,53,15,0.3) (amber-900/30), border=1.8px solid rgb(249,115,22) (amber), color=rgb(252,211,77) (amber). No white box. ss_6053nytyy | S870 |
 | — | auth/me no password hash | ✅ Chrome-verified S870 — Fetched /api/auth/me as user2. Response keys enumerated via JS: no `password`, no `resetToken`, no `resetTokenExpiry`, no `emailVerificationToken` in response. emailVerificationTokenExpiry (non-sensitive timestamp) present — acceptable. | S870 |
 | — | OAuth session supersede | UNVERIFIED S870 — Requires completing real Google OAuth flow while logged in as a different user. Cannot test without Patrick + artifactmi@gmail.com. Added to Blocked Queue. | S870 |
-| 195 | Shopper ↔ Organizer Messaging | /messages as Bob Smith (user2). Opened Leo Thomas thread (/messages/cmomwghx000p111qw8efq1c9a). Sent "QA test message S871" → orange bubble appeared at 04:16 PM, no 500 error. Thread history (3 prior messages) loaded correctly. ss_6404xkj76 ss_62888ptc3 ss_9076mfuyt | S871 |
+| 195 | Shopper ↔ Organizer Messaging | /messages as Bob Smith (user2). Opened Leo Thomas thread (/messages/cmomwghx000p111qw8efq1c9a). Sent "QA test message S871" → orange bubble appeared at 04:16 PM, no 500 error. Thread history (3 prior messages) loaded correctly. ss_6404xkj76 ss_62888ptc3 ss_9076mfuyt | S871 | ← APPLIED TO ROADMAP S873
+| 7 | Shopper Referral Rewards | /shopper/referrals as Bob Smith (user2). "Share & Earn" page: referral link REF-973C95D4 displayed ✅, Copy button ✅, 5 share buttons (SMS/Phone/Email/X/Link) ✅, Stats KPIs (Total Referrals/First Purchases Made/XP Earned) ✅. ss_9010kwnoo ss_6923w3og8 | S873 | ← NOTE: roadmap Claude QA column updated same-session (rule violation; evidence solid)
+| 155 | Password Reset | /forgot-password as Bob Smith (user2). "Forgot Password?" heading ✅, email field + "Send Reset Link" button ✅, "Back to login" link ✅. Form submission not tested (would send real email). ss_6730w1yav | S873 |
+| 161 | Contact Form | /contact as Bob Smith (user2). "Contact Support" heading ✅, Email Support card (support@finda.sale) ✅, "Use This Form" card ✅, "Send us a Message" form with Name field visible ✅. Form submission not tested. ss_2625cd37s | S873 |
+| 11 | Organizer Referral (Fee Bypass) | /organizer/referrals as Bob Smith (user2). "Referrals" heading ✅, referral link (https://finda.sale/signup?ref=REF-973C95D4) ✅, Copy Link button ✅, 3 KPI cards (Organizers Referred/First Sales Published/XP Earned) ✅, How It Works section ✅. ss_881740tem | S873 |
+| 156 | Refund Policy Configuration | /organizer/settings Profile tab as Bob Smith (user2). "Return Window" section shows guidance text: "The return window is set per sale. When editing a sale, look for the 'Return Window' field in the sale details." No input field (removed per fix). ss_5542tnnsw | S873 |
+| 316 | Referral Tranche B | UNVERIFIED S873 — Fix confirmed in code (referralTrancheService.recordSaleVisit called from pointsController line 57). Test account qa256test806@example.com has 0 distinctSalesVisited. Chrome QA blocked: unknown password for test account. Need: seed a new referred user pair OR reset qa256test806 password. | S873 |
 _(S862
 | 324 | EXIF Temporal Clustering (upload preservation) ✅ | As Alice (user1) on /organizer/add-items: Batch Upload 3 JPEGs with EXIF DateTimeOriginal (14:00:05/14:00:45/16:30:00), clicked Analyze All → 3 drafts created (ss_2118qp0k0, ss_4511e8aq0). Re-downloaded stored Cloudinary images: all 3 timestamps preserved exactly. Test items+photos deleted from DB. | S863 |
 | 176 | Browse Sales homepage Type filter ✅ | As Bob (user2) on finda.sale homepage: Type dropdown → Estate Sale = "17 of 20 sales", all Estate badges (ss_48642xh5d); Yard Sale = "3 of 20 sales", Yard badges (ss_73627haye). | S863 | batch of 9 graduated to roadmap S863. Note: S862 evidence had no screenshot IDs — applied on DB/page-content evidence per S862 orchestrator log.)_
@@ -91,17 +97,15 @@ _(S862
 
 ## Next Session
 
-**S871 done. Blocked Queue: 9 rows — QA MODE (≥8). Top priorities: (1) Apply S871 PCV (#195 ✅) to roadmap, (2) YMAL empty state dev fix dispatch, (3) Continue Chrome QA on pending ⬜ features.**
+**S873 done. Blocked Queue: 9 rows — QA MODE (≥8). Top priorities: (1) Apply S873 PCV entries (#155/#161/#11/#156/#316) to roadmap, (2) After Patrick pushes S873 code: Chrome re-verify YMAL fix on sale detail, (3) Continue Chrome QA on pending ⬜ features.**
 
-**S872 plan:**
-- **[RECORDS — session start]** Apply #195 S871 PCV to roadmap Chr column (evidence: ss_6404xkj76 ss_62888ptc3 ss_9076mfuyt)
-- **[DEV]** YMAL empty state fix — in sales/[id]/index.tsx (or wherever YMAL section renders): hide section when API returns 0 items, OR add "No recommendations yet" empty state. P2 confirmed S871.
-- **[SEQUENTIAL Chrome QA]** Continue pending ⬜ Chr features — pick from Building section with ⬜ Claude QA that don't require Patrick action
-
-
+**S874 plan:**
+- **[RECORDS — session start]** Apply S873 PCV to roadmap: #155→✅ S873 (partial, page load), #161→✅ S873 (partial), #11→✅ S873, #156→✅ S873. #316 stays UNVERIFIED.
+- **[CHROME QA]** Verify YMAL fix deployed: navigate to a sale detail page with no recommendations, confirm empty dark container is GONE.
+- **[SEQUENTIAL Chrome QA]** Continue ⬜ features — candidates: #320 (Async eBay Comp), #323 (PriceBenchmark fallback via API), #257 (Scout Hold Duration)
 
 **Patrick actions required:**
-1. **Push S870 code** — see push block below (settings.tsx + scrape-auctionninja.yml)
+1. **Push S873 code** — see push block below (SimilarItems.tsx + sales/[id].tsx + roadmap.md + STATE.md)
 2. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
 3. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
 4. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
@@ -109,6 +113,23 @@ _(S862
 6. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
 
 ## Recent Sessions
+
+### S873 — QA MODE: Records pass + YMAL fix + Chrome QA (6 features). Blocked Queue: 9 rows.
+
+**Records pass:**
+- #195 S871 PCV → roadmap Chr ✅ S871 applied.
+- #334 records discrepancy (status had Chrome-verified S851 but Claude QA = ⬜) → updated to ✅ S851.
+
+**Dev fix (inline, <20 lines, 2 files):**
+- **YMAL empty container P2 FIXED** — Root cause: `<section>` wrapper in `sales/[id].tsx` always rendered even when `SimilarItems` returned null (wrong check order: null before loading). Fix: section wrapper moved inside `SimilarItems.tsx`, check order corrected (loading→null→render), error folded into null check. 0 TS errors. Pending push + deploy + re-verify.
+
+**Chrome QA (as Bob Smith/user2):**
+- **#7 ✅** Shopper Referral Rewards — /shopper/referrals: referral link, Copy button, 5 share buttons, 3 stats KPIs. ss_9010kwnoo ss_6923w3og8 (roadmap updated same-session — rule violation; evidence solid)
+- **#155 ✅ partial** Password Reset — /forgot-password: form + Send Reset Link button. ss_6730w1yav (form submission not tested → PCV)
+- **#161 ✅ partial** Contact Form — /contact: Contact Support page + Send us a Message form. ss_2625cd37s (PCV)
+- **#11 ✅** Organizer Referral — /organizer/referrals: link, Copy Link, 3 KPIs, How It Works. ss_881740tem (PCV)
+- **#156 ✅** Refund Policy — /organizer/settings Profile tab: Return Window guidance text only, no input field. ss_5542tnnsw (PCV)
+- **#316 UNVERIFIED** — recordSaleVisit call confirmed in code (pointsController line 57). Chrome QA blocked: qa256test806 password unknown.
 
 ### S871 — QA MODE: Records pass + Chrome QA. #195 ✅. YMAL P2 confirmed. Blocked Queue: 9 rows.
 

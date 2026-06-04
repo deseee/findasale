@@ -50,11 +50,15 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category }) => {
     },
   });
 
-  if (!data || data.total === 0) return null;
-  if (isLoading) return <SimilarItemsSkeleton />;
-  if (error) return null;
+  if (isLoading) return (
+    <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
+      <SimilarItemsSkeleton />
+    </section>
+  );
+  if (!data || data.total === 0 || error) return null;
 
   return (
+    <section className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
     <div className="w-full">
       <h2 className="text-lg font-semibold mb-4 text-warm-900 dark:text-gray-50">You might also like</h2>
 
@@ -142,6 +146,7 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category }) => {
         </div>
       </div>
     </div>
+    </section>
   );
 };
 
