@@ -12,7 +12,7 @@ Review at session start — any FAIL entries need investigation.
 | findasale-nightly-context | Daily 2am | — | — | Refreshes context.md |
 | context-freshness-check | Daily 8am | — | — | Flags stale STATE.md/context.md |
 | findasale-health-scout | Weekly Sun 11pm | — | — | Security + code quality scan |
-| findasale-competitor-monitor | Weekly Mon 8am | PASS | 2026-05-07 | Competitor + industry intel (merged) |
+| findasale-competitor-monitor | Weekly Mon 8am | PASS | 2026-06-04 | Competitor + industry intel (merged) |
 | findasale-ux-spotcheck | Weekly Wed 9am | — | — | Rotating organizer/shopper flow review |
 | findasale-monthly-digest | Monthly 1st 9am | — | — | Feature digest + changelog |
 | findasale-workflow-retrospective | Monthly 8th 9am | — | — | Meta workflow audit (merged from bi-weekly) |
@@ -60,3 +60,4 @@ Review at session start — any FAIL entries need investigation.
 | findasale-competitor-monitor | 2026-05-14 | PASS | Top signal: EstateSail April 10 update confirms steady monthly shipping cadence with organizer-quality features (tag filtering, Square tax separation, safety locks) — now the most active builder in the space; EstateSales.NET $100 fee frustration still unaddressed and confirmed as top acquisition signal; Stripe cross-border payouts now GA; 3 content pieces generated (social post, 3 subject lines, blog brief) |
 | findasale-competitor-monitor | 2026-05-21 | PASS | Top signal: 2026 industry survey — organizers using QR + online preview + contactless payments earn 33% more per sale and draw 41% more under-40 buyers; EstateSales.NET Trustpilot 2.5/5 confirmed and publicly searchable; no new EstateSail update detected (may be slowing); 3 content pieces generated (social post, 3 subject lines, blog brief) |
 | findasale-competitor-monitor | 2026-05-28 | PASS | Top signal: Organizer profit margins compressed 32% since 2018 (17.2% → 11.7%) — efficiency tools have stronger financial urgency than ever; EstateSail news blog silent since January (building quietly, not broadcasting); Stripe onboarding simplified May 14 (KvK + external account requirements dropped); 3 content pieces generated (social post on margin squeeze, 3 subject lines, blog brief on margin/efficiency) |
+| findasale-competitor-monitor | 2026-06-04 | PASS | Top signal: Baby Boomer liquidation wave accelerating (11,200 turning 65/day, $247.6M market +7.5% YoY) — demand-side tailwind strongest yet; ESNM app (Estate Sales Near Me) confirmed as active shopper-discovery entrant; Stripe many-to-many payments live — enables cleaner consignment payouts; 3 content pieces generated (social post on margin/efficiency, 3 subject lines, blog brief on margin compression) |
