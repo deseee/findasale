@@ -8,14 +8,14 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S863 — QA MODE: #324 EXIF + #176 verified. #195 STILL 500 — second root cause found+fixed. #194/#47 built. Jane Thrift payout email RE-SENT. Records pass applied.**
-- QA ✅: #324 EXIF (uploaded 3 EXIF JPEGs as Alice, Cloudinary preserved DateTimeOriginal exactly — verified by re-downloading stored images), #176 homepage Type filter (Estate 17/20, Yard 3/20, badges match).
-- QA ❌→FIXED: #195 messaging still 500 in prod (ss_4465t8wly). S862 fix shipped but had its own P1 bug: guard selected isUnmanagedListing from Sale — field lives on Organizer → PrismaClientValidationError on every send. Fixed: reads sale.organizer.isUnmanagedListing. 0 TS errors.
-- NEW BUG FOUND+FIXED: /search Sale Type dropdown silently ignored — saleType never parsed in search route zod schema. Added saleType to schema + sales where clause.
-- DEV (parallel agents): #194 /shopper/saved-searches page built + Save Search button on /search (correct {name,filters} payload). #47 UGCPhotoSubmitButton wired onto sales/[id].tsx with empty state. Both 0 TS errors.
-- INLINE FIX: homepage handleSaveSearch posted {query,filters} but backend requires {name,filters} — every homepage save got 400. Fixed.
-- #335: payout email RE-SENT direct via Gmail API (msg id 19e9093c5a587f21, find@outreach.finda.sale → deseee@yahoo.com, "Payout received: $29.75"). Patrick: check inbox+spam.
-- Records: 9 S862 PCV marks applied to roadmap. Queue: Bing sitemap row removed (done), Re-Seed row removed (user5–12 accounts no longer exist — Patrick S863).
+**Latest: S864 — QA MODE: #195 ✅ Chrome-verified. Vercel build broken by saved-searches.tsx TS error — fixed. #324/#176 PCV marks applied. #335 email diagnosis → Claude introduced regression (see Next Session).**
+- QA ✅: #195 messaging re-fix Chrome-verified — POST /api/messages → 201, no 500 (ss_6119ualta, ss_03909ty8h). S863 backend fix confirmed live.
+- Records: #324 Chr column updated to ✅ S863, #176 Status updated with Type filter evidence.
+- Vercel build failure found: S863 commit caused 3 consecutive ERRORED Vercel deploys. Root cause: saved-searches.tsx priceMin/priceMax typed as `number` but compared to `''` → TS error. QA agent fixed to `number | string | null`. 0 TS errors confirmed.
+- #194 saved-searches, #47 UGC, /search saleType: NOT deployed (Vercel blocked). Pending push of saved-searches.tsx fix.
+- ⚠️ #335 REGRESSION INTRODUCED S864: Claude incorrectly diagnosed Yahoo deliverability as root cause and advised changing SES_FROM_EMAIL from `find@outreach.finda.sale` → `outreach@finda.sale`. This broke the Gmail API send entirely — confirmed by testing artifactmi@gmail.com (no email arrived anywhere). SES_FROM_EMAIL must be reverted to `find@outreach.finda.sale` in Railway immediately. The actual #335 diagnosis is incomplete.
+
+**Previous: S863 — QA MODE: #324 EXIF + #176 verified. #195 STILL 500 — second root cause found+fixed. #194/#47 built. Jane Thrift payout email RE-SENT. Records pass applied.**
 
 **Previous: S862 — QA+DEV: 6 code fixes shipped. 14 features Chrome-verified. 4 new bugs found.**
 - DEV fixes: Tranche B fraud gate (pointsController.ts), #324 EXIF preservation (uploadController.ts), #176 saleType in feed (discoveryService.ts + search.ts), #195 messaging 500 crash (messageController.ts + transaction), #66 ZIP export UI (settings.tsx), #31 Brand Kit → print-kit colors (print-kit/[saleId].tsx).
@@ -50,14 +50,14 @@ _⚠️ P0 AGING: #332 at 70 sessions; #335 at 70 sessions — mandatory P0 per 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (70 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (72 sessions)** — RE-SENT S863 direct via Gmail API (msg 19e9093c5a587f21). | Patrick: check deseee@yahoo.com inbox AND spam. If received → ✅ close. If spam → deliverability work. | S791 |
+| #335 Consignor Payout Email | **P0 (73 sessions)** — S864 REGRESSION: SES_FROM_EMAIL incorrectly changed to outreach@finda.sale → broke Gmail API send entirely. IMMEDIATE: revert SES_FROM_EMAIL to find@outreach.finda.sale in Railway. Then re-trigger payout and check Yahoo inbox/spam. | Patrick: (1) Revert SES_FROM_EMAIL → find@outreach.finda.sale in Railway. (2) Re-test payout email delivery. | S791 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | Email Verification Migration | **P0 (134 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S862. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
 | eBay Connection for user1 | **P0 (75 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending but blocked: no published sale on any real test organizer account. | Patrick: publish a sale on user1 account, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-| #194 Saved Searches view page | **P2** — Page + Save Search button BUILT S863 (0 TS errors). Not yet pushed/deployed. | Push S863 batch → Chrome QA /shopper/saved-searches as shopper. | S862 |
-| #47 UGC Photo Submit not on sale detail | **P2** — UGCPhotoSubmitButton wired onto sales/[id].tsx S863 (0 TS errors). Not yet pushed/deployed. | Push S863 batch → Chrome QA submit button on a sale detail page. | S862 |
-| #195 Messaging 500 (re-fix) | **P1** — S862 fix had its own bug: isUnmanagedListing selected from Sale, field is on Organizer → PrismaClientValidationError. Re-fixed S863. | Push S863 batch → Chrome re-QA: send message on a sale, expect success or clean 403 on unmanaged listing. | S863 |
+| #194 Saved Searches view page | **P2** — Built S863. Vercel deploy blocked S864 (TS error in saved-searches.tsx — fixed S864). Push TS fix → Vercel deploy → Chrome QA. | Push saved-searches.tsx fix, confirm Vercel green, Chrome QA /shopper/saved-searches. | S862 |
+| #47 UGC Photo Submit not on sale detail | **P2** — Built S863. Vercel deploy blocked (same TS error). Push TS fix → Chrome QA submit button on sale detail. | Push saved-searches.tsx fix, confirm Vercel green, Chrome QA UGC button on sales/[id]. | S862 |
+
 | #192 Price History data-dependent | **P3** — ItemPriceHistoryChart is correctly wired in edit-item/[id].tsx but returns null when no ItemPriceHistory records exist. Railway DB has no price change history for test items. | No code fix needed. To verify: run price update on a real item, then check chart renders. | S862 |
 
 ---
@@ -76,22 +76,50 @@ _(S862
 
 ## Next Session
 
-**S863 done. Blocked Queue: 10 rows — QA MODE next session (≥8 items).**
+**S864 done. Blocked Queue: 10 rows — QA MODE next session (≥8 items).**
 
 Priority:
-1. **Records: apply S863 PCV ✅ marks** (#324, #176) to roadmap Chrome column. Cross-session rule.
-2. **Push S863 batch** (9 files — see push block). Railway+Vercel auto-deploy.
-3. **Chrome re-QA after deploy:** `Skill('findasale-qa')` → #195 messaging (send message on a managed sale → success; on directory listing → clean "not yet claimed" message, NOT 500). #194 /shopper/saved-searches page (save a search on /search, view+delete+run on new page). #47 UGC submit button on sales/[id]. /search Sale Type dropdown now filters server-side.
-4. **P0 Patrick items:** #335 inbox check, #332 Shopify dev store, Email Verification migration, eBay OAuth user1.
+1. **IMMEDIATE P0: Revert SES_FROM_EMAIL** in Railway → change back to `find@outreach.finda.sale`. This was incorrectly changed S864 and broke all transactional email sending.
+2. **Push saved-searches.tsx TS fix** (1 file). This unblocks the Vercel build and deploys all S863 features.
+3. **After Vercel goes green:** Chrome QA → #194 /shopper/saved-searches (save+view+delete), #47 UGC submit on sales/[id], /search Sale Type filter.
+4. **Re-test #335 payout email** after SES_FROM_EMAIL is reverted. Trigger payout for Jane Thrift and check Yahoo (inbox + spam).
+5. **P0 Patrick items:** #332 Shopify dev store, Email Verification migration, eBay OAuth user1.
 
-**Patrick actions required:**
+**Patrick actions required (in order):**
 
-1. **Push S863 code+docs** (push block below — 9 files).
-2. **Check deseee@yahoo.com (inbox AND spam)** — payout email re-sent S863, subject "Payout received: $29.75". Report back: inbox, spam, or nothing.
+1. **IMMEDIATE: Revert SES_FROM_EMAIL** in Railway → `find@outreach.finda.sale`.
+2. **Push saved-searches.tsx fix:**
+   ```
+   git add packages/frontend/pages/shopper/saved-searches.tsx
+   git commit -m "fix: saved-searches TS priceMin/priceMax type — unblocks Vercel build"
+   .\push.ps1
+   ```
 3. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
 4. **GBP phone verification** — business.google.com → "Verify now" → phone code. (carried)
 
 ## Recent Sessions
+
+### S864 — QA MODE: #195 ✅, Vercel build fixed, #335 regression introduced
+
+**QA ✅:**
+- #195 messaging re-fix Chrome-verified: POST /api/messages → 201, no 500 (ss_6119ualta, ss_03909ty8h).
+
+**Records:**
+- #324 roadmap Chr column → ✅ S863. #176 Status updated with Type filter S863 evidence.
+- S863 PCV table entries graduated.
+
+**Vercel build failure found + fixed:**
+- 3 consecutive ERRORED Vercel deploys on S863 commit. Root cause: saved-searches.tsx priceMin/priceMax typed `number`, compared to `''` → TS compile error.
+- Fix: changed to `number | string | null`. 0 TS errors confirmed. Not yet pushed.
+
+**⚠️ #335 REGRESSION (Claude error):**
+- Incorrectly diagnosed SES_FROM_EMAIL as root cause and advised changing from `find@outreach.finda.sale` → `outreach@finda.sale`.
+- This broke Gmail API send entirely. Confirmed: no email arrives anywhere (tested artifactmi@gmail.com and Yahoo).
+- Must revert SES_FROM_EMAIL → `find@outreach.finda.sale` next session before any email testing.
+
+**Files changed:** claude_docs/strategy/roadmap.md · claude_docs/STATE.md · packages/frontend/pages/shopper/saved-searches.tsx (TS fix, not yet pushed)
+
+---
 
 ### S863 — QA MODE: 2 verified, #195 re-fixed, 2 features built, payout email re-sent
 
