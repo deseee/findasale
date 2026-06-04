@@ -330,6 +330,17 @@ async function sendOrganizerDigestEmail(stats: OrganizerWeeklyStats): Promise<vo
  * Main job: send weekly digests to all organizers with active sales
  */
 export async function sendOrganizerWeeklyDigest(): Promise<void> {
+  // KILL SWITCH (May 18 2026 incident): this job mass-sent 5,000+ digest emails to
+  // scraped directory organizers, blowing Google Workspace's 2,000/day send limit 2.5x
+  // and getting outreach@finda.sale sending-clamped (all transactional email dead).
+  // Default OFF — must be deliberately enabled via Railway env var. Same pattern as
+  // OUTREACH_ENABLED (defense-in-depth: gate exists at cron registration AND here,
+  // because this function is also callable directly / via internal job runners).
+  if (process.env.ORGANIZER_DIGEST_ENABLED !== 'true') {
+    console.log('[OrganizerDigest] ORGANIZER_DIGEST_ENABLED is not true — aborting send run');
+    return;
+  }
+
   console.log('[OrganizerDigest] Starting weekly organizer digest job...');
 
   try {
@@ -337,11 +348,41 @@ export async function sendOrganizerWeeklyDigest(): Promise<void> {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+    // RECIPIENT FILTER (root cause of the May 18 2026 incident):
+    // The old filter was only `isUnmanagedListing: { not: true }` + a recent sale.
+    // Freshly bulk-imported scraped organizers can carry recent PUBLISHED/ENDED sales,
+    // and a scraper bug or partial import can leave isUnmanagedListing unset/false —
+    // on May 18 this matched 5,000+ scraped directory orgs and blasted them all.
+    // Each condition below structurally excludes scraped/directory-imported records:
+    //
+    // - isClaimed: true            → scrapers create organizers with isClaimed=false;
+    //                                only organizer-managed accounts are true.
+    //                                (DB check 2026-06-04: 63,069 scraped orgs are false.)
+    // - isUnmanagedListing: false  → strict equality (not `{ not: true }`) so a NULL
+    //                                from a partial import cannot slip through.
+    // - user.password not null     → scraped orgs get stub users with no password;
+    //                                a real registered account always has one (or OAuth —
+    //                                see note below).
+    // - user.emailVerified: true   → scraped/stub users never complete email verification;
+    //                                also guarantees we only email addresses the owner
+    //                                actually confirmed (CAN-SPAM safety).
+    // - email not @system.finda.sale → excludes internal system stub accounts.
+    //
+    // NOTE on OAuth: OAuth-only users have password=null. If a real organizer ever signs
+    // up via Google/Facebook OAuth and gets excluded here, relax the password condition
+    // to `OR: [{ password: { not: null } }, { oauthProvider: { not: null } }]` — but do
+    // NOT drop isClaimed/isUnmanagedListing/emailVerified, which are the scrape guards.
+    // DB-verified 2026-06-04: this filter matches exactly the 2 genuine organizers the
+    // old query matched (Artifact MI, Kelly's Estate Sales) and 0 of the 16,788 scraped
+    // orgs that have published/ended sales.
     const organizers = await prisma.organizer.findMany({
       where: {
-        isUnmanagedListing: { not: true },
+        isClaimed: true,
+        isUnmanagedListing: false,
         user: {
           email: { not: { endsWith: '@system.finda.sale' } },
+          password: { not: null },
+          emailVerified: true,
         },
         sales: {
           some: {
@@ -354,6 +395,22 @@ export async function sendOrganizerWeeklyDigest(): Promise<void> {
     });
 
     console.log(`[OrganizerDigest] Found ${organizers.length} organizers with active sales`);
+
+    // VOLUME FUSE (May 18 2026 incident): a registered-organizer digest list past 300
+    // recipients means either explosive legitimate growth (raise this deliberately) or
+    // a recipient-query regression re-sweeping scraped orgs. Either way, do not send —
+    // the Google Workspace account caps at 2,000 sends/day and a runaway digest kills
+    // all transactional email for the rest of the day. Abort and alert via error log.
+    const MAX_DIGEST_RECIPIENTS = 300;
+    if (organizers.length > MAX_DIGEST_RECIPIENTS) {
+      console.error(
+        `[OrganizerDigest] VOLUME FUSE TRIPPED: query matched ${organizers.length} organizers ` +
+        `(limit ${MAX_DIGEST_RECIPIENTS}). Aborting without sending. If this growth is legitimate, ` +
+        `raise MAX_DIGEST_RECIPIENTS deliberately; otherwise the recipient filter has regressed ` +
+        `(see May 18 2026 scraped-organizer blast incident).`
+      );
+      return;
+    }
 
     let sent = 0;
     let errors = 0;

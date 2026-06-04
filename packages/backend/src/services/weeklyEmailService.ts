@@ -187,6 +187,20 @@ export const sendWeeklyEmails = async (): Promise<void> => {
 
     console.log(`[WeeklyEmail] Found ${activeUsers.length} active users to email`);
 
+    // VOLUME FUSE (May 18 2026 organizer-digest incident, same-pattern hardening):
+    // the Google Workspace sending account caps at 2,000 emails/day; no single job
+    // may be able to exceed 1,000 sends/run. If the active-shopper list legitimately
+    // grows past this, raise the cap deliberately alongside a sending-infra upgrade.
+    const MAX_WEEKLY_EMAIL_RECIPIENTS = 1000;
+    if (activeUsers.length > MAX_WEEKLY_EMAIL_RECIPIENTS) {
+      console.error(
+        `[WeeklyEmail] VOLUME FUSE TRIPPED: query matched ${activeUsers.length} users ` +
+        `(limit ${MAX_WEEKLY_EMAIL_RECIPIENTS}). Aborting without sending — verify the ` +
+        `recipient query has not regressed before raising the cap.`
+      );
+      return;
+    }
+
     // Get upcoming sales in next 14 days with items
     const twoWeeksFromNow = new Date();
     twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14);
