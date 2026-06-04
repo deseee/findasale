@@ -28,8 +28,8 @@ interface SavedSearchFilters {
   radius?: number;
   lat?: number;
   lng?: number;
-  priceMin?: number;
-  priceMax?: number;
+  priceMin?: number | string | null;
+  priceMax?: number | string | null;
   condition?: string;
   saleStatus?: string;
   dateFrom?: string;
