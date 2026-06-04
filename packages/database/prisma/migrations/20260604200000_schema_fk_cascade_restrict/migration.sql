@@ -33,6 +33,16 @@ DELETE FROM "AppraisalResponse" WHERE "responderId" NOT IN (SELECT "id" FROM "Us
 DELETE FROM "AppraisalDispute" WHERE "raisedByUserId" NOT IN (SELECT "id" FROM "User");
 DELETE FROM "Organizer" WHERE "userId" NOT IN (SELECT "id" FROM "User");
 
+-- Delete Messages in orphaned Conversations before deleting those Conversations
+DELETE FROM "Message" WHERE "conversationId" IN (
+  SELECT "id" FROM "Conversation" WHERE "organizerId" NOT IN (SELECT "id" FROM "Organizer")
+);
+-- Delete orphaned Conversations (organizerId → Organizer, required FK)
+DELETE FROM "Conversation" WHERE "organizerId" NOT IN (SELECT "id" FROM "Organizer");
+
+-- Delete orphaned UserAchievement rows (achievementId → Achievement, required FK)
+DELETE FROM "UserAchievement" WHERE "achievementId" NOT IN (SELECT "id" FROM "Achievement");
+
 -- Optional FK orphan cleanup (SET NULL rather than DELETE — preserve the parent record)
 UPDATE "Conversation" SET "saleId" = NULL WHERE "saleId" IS NOT NULL AND "saleId" NOT IN (SELECT "id" FROM "Sale");
 UPDATE "Item" SET "saleId" = NULL WHERE "saleId" IS NOT NULL AND "saleId" NOT IN (SELECT "id" FROM "Sale");
