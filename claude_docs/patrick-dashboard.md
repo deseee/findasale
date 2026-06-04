@@ -1,4 +1,18 @@
-# Patrick's Dashboard — S865c Wrap (BUG/AUDIT, deep pass)
+# Patrick's Dashboard — S865d Wrap (BUG/AUDIT, deep pass)
+
+---
+
+## ✅ #335 VERIFIED END-TO-END (S865e)
+
+Ran the real production payout as Artifact: POST payout → 201 ($29.75 Cash, Jane Thrift) → email sent with no bounce → **landed in deseee@yahoo.com INBOX** (not spam) from find@outreach.finda.sale. The feature works. A 7th test payout record ($29.75, noted "Claude QA") was created — tell me if you want it deleted.
+
+**Two new bugs found during the test (queued P1):** (1) OAuth sign-in doesn't replace an existing logged-in session — with user1's cookie present, signing in with Google as Artifact kept returning user1 until an explicit logout (this is why the test kept 404ing at first). (2) `/api/auth/me` returns the user's bcrypt password hash in the JSON — security fix needed. Both are in the Blocked Queue for dev dispatch.
+
+**Note:** I had to log out your finda.sale browser session to break the cookie conflict — you'll need to sign back in on your tabs.
+
+## ✅ RESOLVED — email sending is restored, outreach re-enabled
+
+The Google sending suspension **auto-lifted ~8 hours after all bulk sending was paused** this morning. Verified at 12:05 PM: an external test send produced NO bounce (during the suspension, every send bounced within 60 seconds). No admin console action was needed. Outreach was re-enabled the same hour: `OUTREACH_ENABLED=true` in Railway (verified) + GitHub workflow re-enabled (verified — next run at the next 4-hour window). The weekly digest stays OFF until you decide otherwise. Tomorrow's scheduled task confirms Yahoo placement (inbox vs spam) and that no new bounces appear; after that, re-trigger the Jane Thrift payout email for the final #335 ✅.
 
 ---
 
