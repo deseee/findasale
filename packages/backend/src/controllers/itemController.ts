@@ -3291,6 +3291,7 @@ export const getSimilarItems = async (req: Request, res: Response) => {
         id: { not: itemId },
         isActive: true,
         saleId: { not: null },
+        sale: { status: 'PUBLISHED' },
       },
       select: {
         id: true,
