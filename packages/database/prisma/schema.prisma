@@ -4551,8 +4551,6 @@ model DirectoryClaimEmail {
   @@index([touch4SentAt])
   @@index([status, touch4SentAt, touch1SentAt]) // Sentry NODEJS-2N: outreachEmailsCron findMany WHERE status NOT IN (...) AND touch4SentAt IS NULL ORDER BY touch1SentAt
   @@index([sentAt]) // Sentry NODEJS-2M: outreachEmailsCron findFirst WHERE sentAt != null ORDER BY sentAt DESC
-  @@index([organizerId]) // Sentry NODEJS-2P: emailDiscoveryService findFirst WHERE organizerId — FK join, no index → full table scan (1120ms)
-  @@index([emailAddress]) // Sentry NODEJS-2P: outreachEmailsCron cross-run dedup findFirst WHERE emailAddress — full table scan per candidate
 }
 
 // ADR-074: Metro Sync — top eBay sold items per metro area, synced nightly by metroSyncCron
