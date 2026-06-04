@@ -143,9 +143,9 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
     if (saleId) {
       const sale = await prisma.sale.findUnique({
         where: { id: saleId },
-        select: { id: true, isUnmanagedListing: true },
+        select: { id: true, organizer: { select: { isUnmanagedListing: true } } },
       });
-      if (sale?.isUnmanagedListing) {
+      if (sale?.organizer?.isUnmanagedListing) {
         return res.status(403).json({
           message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
           code: 'UNMANAGED_LISTING',

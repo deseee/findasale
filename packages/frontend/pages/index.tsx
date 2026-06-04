@@ -265,8 +265,8 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
     setIsSavingSearch(true);
     try {
       await api.post('/saved-searches', {
-        query: searchQuery.trim(),
-        filters: { dateFilter },
+        name: searchQuery.trim(),
+        filters: { q: searchQuery.trim(), dateFilter, saleType: saleTypeFilter || undefined },
       });
       showToast('Search saved!', 'success');
     } catch (error: any) {

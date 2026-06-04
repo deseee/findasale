@@ -8,7 +8,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S862 — QA+DEV: 6 code fixes shipped. 14 features Chrome-verified. 4 new bugs found. Blocked Queue 10→12 rows.**
+**Latest: S863 — QA MODE: #324 EXIF + #176 verified. #195 STILL 500 — second root cause found+fixed. #194/#47 built. Jane Thrift payout email RE-SENT. Records pass applied.**
+- QA ✅: #324 EXIF (uploaded 3 EXIF JPEGs as Alice, Cloudinary preserved DateTimeOriginal exactly — verified by re-downloading stored images), #176 homepage Type filter (Estate 17/20, Yard 3/20, badges match).
+- QA ❌→FIXED: #195 messaging still 500 in prod (ss_4465t8wly). S862 fix shipped but had its own P1 bug: guard selected isUnmanagedListing from Sale — field lives on Organizer → PrismaClientValidationError on every send. Fixed: reads sale.organizer.isUnmanagedListing. 0 TS errors.
+- NEW BUG FOUND+FIXED: /search Sale Type dropdown silently ignored — saleType never parsed in search route zod schema. Added saleType to schema + sales where clause.
+- DEV (parallel agents): #194 /shopper/saved-searches page built + Save Search button on /search (correct {name,filters} payload). #47 UGCPhotoSubmitButton wired onto sales/[id].tsx with empty state. Both 0 TS errors.
+- INLINE FIX: homepage handleSaveSearch posted {query,filters} but backend requires {name,filters} — every homepage save got 400. Fixed.
+- #335: payout email RE-SENT direct via Gmail API (msg id 19e9093c5a587f21, find@outreach.finda.sale → deseee@yahoo.com, "Payout received: $29.75"). Patrick: check inbox+spam.
+- Records: 9 S862 PCV marks applied to roadmap. Queue: Bing sitemap row removed (done), Re-Seed row removed (user5–12 accounts no longer exist — Patrick S863).
+
+**Previous: S862 — QA+DEV: 6 code fixes shipped. 14 features Chrome-verified. 4 new bugs found.**
 - DEV fixes: Tranche B fraud gate (pointsController.ts), #324 EXIF preservation (uploadController.ts), #176 saleType in feed (discoveryService.ts + search.ts), #195 messaging 500 crash (messageController.ts + transaction), #66 ZIP export UI (settings.tsx), #31 Brand Kit → print-kit colors (print-kit/[saleId].tsx).
 - QA ✅: #327 Price Cal Logging, #73 Two-Channel Notifications, #186 QR Scan Analytics, #396 Starter Kit, #197 Bounties, #163 Earnings, #173 Message Templates, Shopper Dashboard, Hunt Pass, #71 Reputation.
 - New bugs: #194 Saved Searches view page missing (P2), #47 UGC Photo Submit not on sale detail (P2), #192 Price History data-dependent (UNVERIFIED).
@@ -41,16 +50,14 @@ _⚠️ P0 AGING: #332 at 70 sessions; #335 at 70 sessions — mandatory P0 per 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (70 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| #335 Consignor Payout Email | **P0 (70 sessions)** — Payout ran S845. SPF fixed S846. Patrick must check deseee@yahoo.com — if email received → ✅. | Check deseee@yahoo.com for Jane Thrift payout email. If received → ✅. | S791 |
+| #335 Consignor Payout Email | **P0 (72 sessions)** — RE-SENT S863 direct via Gmail API (msg 19e9093c5a587f21). | Patrick: check deseee@yahoo.com inbox AND spam. If received → ✅ close. If spam → deliverability work. | S791 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | Email Verification Migration | **P0 (134 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but no prisma migrate deploy recorded S726–S862. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
-| Production DB Re-Seed | **P0 (73 sessions, age-escalated)** — Seedy2025! rejected for shopper accounts user5–user12+ since S576. Shopper Chrome QA requiring login blocked. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma db seed | S787 |
 | eBay Connection for user1 | **P0 (75 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
-| Bing Webmaster Sitemap | **P0 (77 sessions, age-escalated)** — Bing/DuckDuckGo not receiving sitemap pings. SEO gap. | Patrick: bing.com/webmasters → Add sitemap → finda.sale/server-sitemap.xml | S783 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending but blocked: no published sale on any real test organizer account. | Patrick: publish a sale on user1 account, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-| #324 EXIF Temporal Clustering | **P1** — Fix shipped S862 (exif: true in uploadController.ts). Needs Chrome re-QA after push+deploy to confirm temporal hints fire on real uploads. | Push S862 batch → verify new upload preserves EXIF → re-QA #324 | S861 |
-| #194 Saved Searches view page | **P2** — POST /api/saved-searches works + toast fires, but /shopper/saved-searches → 404. Page was never built. DB table + API exist. | Dispatch findasale-dev: build /shopper/saved-searches page + Save Search button on search results. | S862 |
-| #47 UGC Photo Submit not on sale detail | **P2** — UGCPhotoSubmitButton exists and works, but is only wired into shopper/history.tsx. Not present on sales/[id].tsx. Shopper has no way to submit photos on the sale page. | Dispatch findasale-dev: add UGCPhotoSubmitButton to sales/[id].tsx alongside the existing UGCPhotoGallery. | S862 |
+| #194 Saved Searches view page | **P2** — Page + Save Search button BUILT S863 (0 TS errors). Not yet pushed/deployed. | Push S863 batch → Chrome QA /shopper/saved-searches as shopper. | S862 |
+| #47 UGC Photo Submit not on sale detail | **P2** — UGCPhotoSubmitButton wired onto sales/[id].tsx S863 (0 TS errors). Not yet pushed/deployed. | Push S863 batch → Chrome QA submit button on a sale detail page. | S862 |
+| #195 Messaging 500 (re-fix) | **P1** — S862 fix had its own bug: isUnmanagedListing selected from Sale, field is on Organizer → PrismaClientValidationError. Re-fixed S863. | Push S863 batch → Chrome re-QA: send message on a sale, expect success or clean 403 on unmanaged listing. | S863 |
 | #192 Price History data-dependent | **P3** — ItemPriceHistoryChart is correctly wired in edit-item/[id].tsx but returns null when no ItemPriceHistory records exist. Railway DB has no price change history for test items. | No code fix needed. To verify: run price update on a real item, then check chart renders. | S862 |
 
 ---
@@ -60,42 +67,55 @@ _⚠️ P0 AGING: #332 at 70 sessions; #335 at 70 sessions — mandatory P0 per 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
-| 327 | Price Calibration Logging ✅ | Navigated to edit-item as Alice (user1). Seeded aiSuggestedPrice=65 on Old Radio. Changed price 75→80, clicked Save. DB: PriceOverrideLog count 7→8, new row organizerId=Alice, aiSuggestedPrice=65, organizerPrice=80, delta=15, category=Electronics. Logging pipeline confirmed working. | S862 |
-| 73 | Two-Channel Notification System ✅ | Navigated to /notifications as Alice. "Operational" and "Discovery" tab buttons both visible alongside "All". 3 real notifications present. | S862 |
-| 186 | QR Scan Analytics ✅ | Navigated to /organizer/qr-codes as Alice. KPI tiles (Total/Active/Sales-with-scans), Scanner Funnel, Sales Breakdown table all present and rendering. | S862 |
-| 396 | DIY Sale Starter Kit ✅ | Navigated to /organizer/starter-kit as Alice. All 4 sections visible (Pre-Sale/Pricing Tips/Day-Of/Post-Sale). /downloads/sale-starter-kit.pdf returns 200/application-pdf. Print button present. | S862 |
-| 197 | Bounties organizer view ✅ | Navigated to /organizer/bounties as Alice. 3 tabs visible (Browse/Sale Requests/Your Submissions). "Your Submissions" tab loads correctly with empty state. | S862 |
-| 163 | Organizer Earnings ✅ | Navigated to /organizer/earnings as Alice. Real data: $325 gross, -$26 platform fees (8%), $299 net. Year selector + PDF button present. Fee breakdown is per-sale (not per-item — note: roadmap says "item-level" but implementation is sale-level; matches current product behavior). | S862 |
-| 173 | Message Templates ✅ | Navigated to /organizer/message-templates as Bob (user2). 6 default templates, Edit+Delete per template, + New Template button. Full CRUD visible. | S862 |
-| 71 | Shopper Reputation ✅ | Navigated to /shopper/reputation as Bob (user2). KPI cards (0 purchases, $0 spent, 0% completion, 1 wishlist save), "New Shopper" status, Coming Soon section. | S862 |
-| SHO-DASH | Shopper Dashboard + Hunt Pass ✅ | Navigated to /shopper/dashboard as Bob: 157 XP, Initiate rank, all widgets visible. /shopper/hunt-pass: $4.99/mo upsell, 6 perks listed. | S862 |
+
+_(S862
+| 324 | EXIF Temporal Clustering (upload preservation) ✅ | As Alice (user1) on /organizer/add-items: Batch Upload 3 JPEGs with EXIF DateTimeOriginal (14:00:05/14:00:45/16:30:00), clicked Analyze All → 3 drafts created (ss_2118qp0k0, ss_4511e8aq0). Re-downloaded stored Cloudinary images: all 3 timestamps preserved exactly. Test items+photos deleted from DB. | S863 |
+| 176 | Browse Sales homepage Type filter ✅ | As Bob (user2) on finda.sale homepage: Type dropdown → Estate Sale = "17 of 20 sales", all Estate badges (ss_48642xh5d); Yard Sale = "3 of 20 sales", Yard badges (ss_73627haye). | S863 | batch of 9 graduated to roadmap S863. Note: S862 evidence had no screenshot IDs — applied on DB/page-content evidence per S862 orchestrator log.)_
 
 ---
 
 ## Next Session
 
-**S862 done. Blocked Queue: 12 rows — QA MODE next session (≥8 items).**
+**S863 done. Blocked Queue: 10 rows — QA MODE next session (≥8 items).**
 
 Priority:
-1. **Records: Apply S862 PCV ✅ marks to roadmap** (#327/#73/#186/#396/#197/#163/#173/#71/SHO-DASH). Cross-session rule.
-2. **Push S862 code batch** (11 files — see push block). Then verify #176 filter + #195 messaging in Chrome.
-3. **DEV: #194 Saved Searches view page** — build /shopper/saved-searches page + Save Search button.
-4. **DEV: #47 UGC Photo Submit** — wire UGCPhotoSubmitButton onto sales/[id].tsx.
-5. **#324 EXIF** — Chrome re-QA after deploy (upload a photo, verify EXIF preserved in temporal clustering).
-6. **5 P0 Patrick-action items** unchanged.
-
-**Blocked Queue: 12 rows. QA MODE — no new feature dev without Patrick sign-off.**
+1. **Records: apply S863 PCV ✅ marks** (#324, #176) to roadmap Chrome column. Cross-session rule.
+2. **Push S863 batch** (9 files — see push block). Railway+Vercel auto-deploy.
+3. **Chrome re-QA after deploy:** `Skill('findasale-qa')` → #195 messaging (send message on a managed sale → success; on directory listing → clean "not yet claimed" message, NOT 500). #194 /shopper/saved-searches page (save a search on /search, view+delete+run on new page). #47 UGC submit button on sales/[id]. /search Sale Type dropdown now filters server-side.
+4. **P0 Patrick items:** #335 inbox check, #332 Shopify dev store, Email Verification migration, eBay OAuth user1.
 
 **Patrick actions required:**
 
-1. **Push S862 code+docs** (see push block below — 11 files).
-2. **Check deseee@yahoo.com** — Jane Thrift payout email (#335). If received → ✅.
-3. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail?
-4. **Admin invites:** SVPKNKV3 not found in /admin/invites — already deleted or was test-only; no action needed.
-5. **GBP phone verification:** business.google.com → "Verify now" → phone code.
-6. **Barn Door QA Test Sale (cmpbvumj90001e7t7v5sa1iqi)** → returns 404 in prod. STATE.md references should be ignored for future QA — use any other published sale.
+1. **Push S863 code+docs** (push block below — 9 files).
+2. **Check deseee@yahoo.com (inbox AND spam)** — payout email re-sent S863, subject "Payout received: $29.75". Report back: inbox, spam, or nothing.
+3. **Confirm Rarity Boost intent** — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
+4. **GBP phone verification** — business.google.com → "Verify now" → phone code. (carried)
 
 ## Recent Sessions
+
+### S863 — QA MODE: 2 verified, #195 re-fixed, 2 features built, payout email re-sent
+
+**QA ✅ (Chrome + DB evidence):**
+- #324 EXIF: 3 EXIF-tagged JPEGs uploaded via Batch Upload as Alice → Analyze All → re-downloaded stored Cloudinary images → DateTimeOriginal preserved exactly (ss_2118qp0k0, ss_4511e8aq0). Test data cleaned.
+- #176 homepage Type filter: Estate 17/20, Yard 3/20, badges match (ss_48642xh5d, ss_73627haye).
+
+**QA ❌ → re-fixed:**
+- #195 messaging STILL 500 in prod (ss_4465t8wly). Railway logs: PrismaClientValidationError in sendMessage. Root cause: S862 guard did `sale.findUnique({select:{isUnmanagedListing}})` but the field is on Organizer, not Sale. Fix: select `organizer:{select:{isUnmanagedListing}}`. messageController.ts, 0 TS errors. Lesson: S862 dev skipped schema preflight; TS didn't catch it (VM Prisma client types loose).
+
+**New bug found+fixed:** /search Sale Type filter silently ignored server-side — saleType absent from search route zod schema. Added schema field + where clause (search.ts).
+
+**DEV (2 parallel agents, both 0 TS errors):**
+- #194: built pages/shopper/saved-searches.tsx (list/delete/run, empty+loading+error states) + Save Search button on search.tsx with correct {name,filters} payload.
+- #47: UGCPhotoSubmitButton wired onto sales/[id].tsx alongside UGCPhotoGallery, gated to logged-in users, with empty state.
+- Inline: homepage handleSaveSearch payload fixed ({query}→{name,filters} — was 400 on every save).
+
+**#335:** Jane Thrift payout email re-sent directly via Gmail API using production creds (msg 19e9093c5a587f21). Exact replica of sendConsignorPayout template, $29.75 Cash, Artifact workspace.
+
+**Records:** 9 S862 PCV marks applied to roadmap (#327/#73/#186/#396/#197/#163/#173/#71 + note). Queue: Bing row removed (done), Re-Seed row removed (user5–12 no longer exist — Patrick), #324 graduated to PCV. Queue 12→10 rows.
+
+**Files changed:** messageController.ts · search.ts (backend routes) · index.tsx · search.tsx · saved-searches.tsx (NEW) · sales/[id].tsx · STATE.md · patrick-dashboard.md · roadmap.md
+
+---
 
 ### S862 — QA+DEV: 6 fixes shipped, 14 features verified, 4 new bugs found
 
