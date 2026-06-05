@@ -13,7 +13,13 @@ export const getPriceHistory = async (req: AuthRequest, res: Response) => {
       select: {
         saleId: true,
         draftStatus: true,
-        sale: { select: { status: true, organizerId: true } }
+        sale: {
+          select: {
+            status: true,
+            organizerId: true,
+            organizer: { select: { userId: true } }, // needed to compare against req.user.id
+          }
+        }
       }
     });
 
@@ -22,8 +28,9 @@ export const getPriceHistory = async (req: AuthRequest, res: Response) => {
     }
 
     // Organizers can always see price history for their own items (including ENDED sales)
+    // Note: sale.organizerId is Organizer.id (not User.id) — must compare via organizer.userId
     const requestingUserId = req.user?.id;
-    const isOwner = requestingUserId && item.sale!.organizerId === requestingUserId;
+    const isOwner = requestingUserId && item.sale!.organizer?.userId === requestingUserId;
     const isAdmin = req.user?.role === 'ADMIN';
 
     if (!isOwner && !isAdmin) {
