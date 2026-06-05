@@ -10,7 +10,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **⚠️ S865-auto (Jun 5) URGENT: Email suspension RE-TRIPPED. Pipeline sent 8,317+ emails → Google Workspace daily limit hit. GH workflow DISABLED, OUTREACH_ENABLED=false set. Patrick must reactivate outreach@finda.sale at admin.google.com. See Blocked Queue #335.**
 
-**Latest: S886 — DEV + RECORDS. P3 "View sale" link closed (review.tsx:1239 already correct — no fix needed). P2 POS draftStatus/PENDING_REVIEW fix dispatched (terminalController.ts + pos.tsx QR path). Records: AuctionNinja BQ note cleaned. TS 0 errors confirmed. Blocked Queue: 4 rows (#335 P1 URGENT still open).**
+**S886 — QA + DEV + RECORDS. P2 POS draftStatus fix ✅ Chrome-verified search path (ss_5792yv22r), CODE-ONLY QR toast. P3 "View sale" 404 closed (false positive — code already correct). Records: STATE.md cleaned, BQ 4 rows.**
 
 **Latest: S885 — QA MODE. Rarity Boost 15 XP ✅ Chrome-verified (ss_10072ub1r). Add-items pipeline ✅ Chrome-verified end-to-end (upload→analyze→approve→live). POS core UI ✅ verified. 2 new bugs found: P3 (review page "View sale" 404), P2 (POS search shows PENDING_REVIEW items). Blocked Queue: 5 rows (was 5, +1 #335 emergency).**
 
@@ -81,7 +81,7 @@ _S886: P3 review link fix ✅ Chrome-verified S886 — removed. P2 POS filter fi
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| — | P2 POS draftStatus fix | CODE-ONLY S886 — terminalController.ts rejects PENDING_REVIEW at checkout; pos.tsx QR scan path shows "pending review" toast. Chrome verify: scan PENDING_REVIEW item QR in POS, confirm toast appears. | S886 |
+| — | P2 POS PENDING_REVIEW fix — search path | ✅ Chrome-verified S886 — /organizer/pos as Alice (user1). Searched "Kirkland" (item cmp4o68ic000i1o8telljqpa8, draftStatus=PENDING_REVIEW). Result: "No available items match that search." Confirms PENDING_REVIEW items excluded from POS search. API: /api/items/cmp4o68ic000i1o8telljqpa8 returns draftStatus=PENDING_REVIEW, status=AVAILABLE — old status check would miss it, new draftStatus check catches it. QR toast CODE-ONLY (camera QR not simulatable in browser). ss_5792yv22r | S886 |
 | — | P3 fix: review success "View sale" link | ✅ Chrome-verified S886 — /organizer/add-items/[saleId]/review as Alice (user1). Clicked "View sale →" → landed on /sales/59c49908... "QA Active Sale S875 — Mixed Goods" — no 404. ss_4845b09um | S886 |
 | — | P2 fix: POS AVAILABLE-only item search | ✅ Chrome-verified S886 — /organizer/pos as Alice (user1). Typed "Pyrex" in search → "No available items match that search." PENDING_REVIEW item excluded from results. Network: GET /api/items?...&status=AVAILABLE confirmed. ss_9781ji8rx | S886 |
 _(Y-axis formatter + #192 ENDED sale: applied to roadmap S883)_
@@ -151,29 +151,39 @@ _(S862
 
 ## Next Session
 
-**S885 done. Blocked Queue: 5 rows (2 new bugs added). Rarity Boost ✅ closed. Add-items pipeline ✅ Chrome-verified. POS core ✅ verified, 2 bugs found + filed.**
+**S886 done. BQ: 4 rows. POS PENDING_REVIEW fix ✅ search-verified. QR toast CODE-ONLY pending physical QR test.**
 
-**S886 plan:**
-- **[RECORDS]** Apply S885 PCVs to roadmap: Rarity Boost → Chr ✅ S885, Add-items pipeline → new roadmap entry Chr ✅ S885.
-- ~~**[DEV]** P3 fix (1-liner): Review success page "View sale" → `/sales/[id]` not `/sale/[id]`.~~ **CLOSED** — Code check 2026-06-05: review.tsx:1239 already uses `/sales/${saleId}`.
-- **[DEV — DONE]** P2 fix dispatched S886: terminalController.ts adds draftStatus check (rejects PENDING_REVIEW at checkout with clear message). pos.tsx QR scan path now shows "This item is pending review and cannot be sold yet". TS 0 errors. **[Chrome QA]** Verify POS QR scan rejects PENDING_REVIEW item with correct toast.
-- **[Chrome QA]** Verify both fixes after push.
-- **[Optional]** eBay OAuth on user1 at /organizer/settings/ebay.
-
-**⚠️ URGENT — Email suspension re-tripped Jun 5 (S865-auto scheduled task):**
-- outreach pipeline sent 8,317+ "Weekend Estate Sale Digest" emails at 6:02–6:03 AM, hit Google Workspace daily sending limit → suspension re-triggered.
-- DONE (automated): GH workflow pipeline-outreach-emails.yml DISABLED, OUTREACH_ENABLED=false set in Railway.
-- **Patrick must:** Go to admin.google.com → Directory → Users → outreach@finda.sale → **Reactivate**.
-- After reactivation: keep volumes VERY LOW for 2+ weeks (domain warming required). Do NOT re-enable the outreach pipeline until a volume-throttle strategy is in place.
-- S865d external test email landed in Yahoo inbox ✅ (not spam) — domain reputation was fine before this re-trip.
+**S887 plan — SCRAPER + ENRICHMENT AUDIT:**
+- **[RESEARCH]** Full scraper/enrichment system audit. Scope:
+  - Facebook Marketplace scraper (`sources/facebook-marketplace.ts`, `scrape-facebook-marketplace.yml`) — what's it returning? Is it live? Last successful run?
+  - Facebook Events scraper (`sources/search-facebook-events.ts`, `scrape-facebook-events.yml`) — same questions
+  - AuctionNinja (`sources/auctionNinjaScraper.ts`, `scrape-auctionninja.yml`) — DISABLED per Cloudflare blocking. S887 commit "AuctionNinja+FB via Railway API" — what changed? Is it now working via Railway cron?
+  - AuctionZip (`sources/auctionZipScraper.ts`, `scrape-auctionzip.yml`) — health check
+  - EstateSalesNet (`sources/estatesalesnet.ts`) — health check
+  - GarageSaleFinder (`sources/garageSaleFinder.ts`) — health check
+  - NAA directory (`sources/naaAuctioneerDirectory.ts`, `scrape-naa.yml`) — health check
+  - Website enrichment pipeline (`enrichment.ts`, `pipeline-website-enrichment.yml`) — running? results?
+  - WARM lead enrichment — DB shows 208 addressable WARM orgs. Has daily enrichment job improved this?
+  - Geocoding — 6,760 sales not geocoded per S756 pool audit. Current count?
+  - Email discovery pipeline (`pipeline-email-discovery.yml`) — status
+- **Session type:** RESEARCH. Read source files + GH workflow schedules + DB counts. Do NOT dispatch dev fixes without Patrick review.
+- **Output:** One audit doc at `claude_docs/audits/scraper-audit-2026-06-05.md` with status table: source → enabled/disabled → last known success → current issue → recommended action.
 
 **Patrick actions required:**
-1. Push block below (STATE.md + patrick-dashboard.md — no code changes this session)
-2. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks eBay QA)
-3. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
-4. **URGENT: Reactivate outreach@finda.sale** — admin.google.com → Directory → Users → outreach@finda.sale → Reactivate
+1. Push block below (STATE.md + patrick-dashboard.md)
+2. #335 URGENT: Reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate (email suspension still active)
 
 ## Recent Sessions
+
+### S886 — QA + DEV + RECORDS. P2 POS fix verified. P3 false positive closed. BQ: 4 rows.
+
+**P2 POS PENDING_REVIEW fix (terminalController.ts + pos.tsx):** Item search path ✅ Chrome-verified S886 — searched "Kirkland" (PENDING_REVIEW, status=AVAILABLE) in POS as Alice → "No available items match that search." (ss_5792yv22r). API confirms draftStatus field returned correctly. QR scan toast CODE-ONLY (camera limitation). Commit 272f1876 deployed.
+
+**P3 "View sale" 404 — CLOSED as false positive:** review.tsx:1239 already uses `/sales/${saleId}`. Filed S885, closed S886 after code check.
+
+**Records:** STATE.md cleaned (AuctionNinja BQ note updated, BQ count corrected to 4).
+
+**Blocked Queue: 4 rows** (#332 P0 + AuctionNinja P2 + #335 P1 URGENT + #230 P3)
 
 ### S886 — DEV MODE. P3 + P2 bug fixes shipped + Chrome-verified. Roadmap PCVs applied. Blocked Queue: 3 rows.
 
