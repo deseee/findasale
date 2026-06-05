@@ -629,7 +629,7 @@ export const getItemById = async (req: Request, res: Response) => {
 
 export const getItemsBySaleId = async (req: Request, res: Response) => {
   try {
-    const { saleId } = req.query;
+    const { saleId, status: statusFilter, q: searchQuery, limit: limitParam } = req.query;
     // Try to get user from AuthRequest (optional — public endpoint)
     const user = (req as any).user;
 
@@ -646,9 +646,24 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
       ...PUBLIC_ITEM_FILTER,
     };
 
+    // POS / organizer item search: respect ?status=AVAILABLE to exclude PENDING_REVIEW items,
+    // and ?q= for title/description text filtering. Both params are optional (public browse ignores them).
+    if (statusFilter === 'AVAILABLE') {
+      filterWhere.status = 'AVAILABLE';
+    }
+    if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
+      const q = searchQuery.trim();
+      filterWhere.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const takeLimit = limitParam ? Math.min(parseInt(limitParam as string, 10) || 500, 500) : 500;
+
     let items = await prisma.item.findMany({
       where: filterWhere,
-      take: 500,
+      take: takeLimit,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
