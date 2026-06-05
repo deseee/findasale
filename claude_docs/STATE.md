@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S880 — QA MODE. #192 ✅ Chrome-verified (ENDED sale price history renders). /organizer/customers: not linked from nav — closed from queue. NEW P2 REGRESSION: /shopper/bounties 500 (#197 was ✅ S862, S868 FK migration broke it — getCommunityBounties controller, DB query confirmed OK). P3: chart Y-axis "000001" float display bug. Blocked Queue: 9 rows (QA MODE continues).**
+**Latest: S881 — QA MODE. Bounties P2 fix + Y-axis P3 fix both code-complete (0 TS errors), pending push. Chrome QA: holds/crews/reputation/notifications/loot-legend ✅. Loot-legend page has no roadmap entry (P3). #192 Chr → S880 applied to roadmap. Blocked Queue: 9 rows (QA MODE continues).**
+
+**S880: #192 ✅ Chrome-verified (ENDED sale price history renders). /organizer/customers: not linked from nav — closed from queue. NEW P2 REGRESSION: /shopper/bounties 500 (#197 was ✅ S862, S868 FK migration broke it — getCommunityBounties controller, DB query confirmed OK). P3: chart Y-axis "000001" float display bug.**
 
 **S879: Records: #166→Chr ✅ S878 applied. #192 P2: 2 root-cause bugs found + inline fixed (missing optionalAuthenticate on route + organizerId vs userId comparison error in controller). Push ✅ confirmed (commit 6d8bab8 Jun 5). Admin dead links S878 finding = FALSE POSITIVE. New P3: /organizer/customers → 404.**
 - **S874: Records pass applied + YMAL fix deployed.** S874 PCVs staged → roadmap applied S875.
@@ -66,8 +68,8 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-| #197 Bounties — community API 500 | **P2 REGRESSION S880** — GET /api/bounties/community → 500 on /shopper/bounties. Toast "Failed to load bounties". Was ✅ S862, S868 FK migration likely broke it. DB has data (1 record confirmed). Root: getCommunityBounties in bountyController.ts L687 — may be stale Prisma client post-S868 or `user: { isNot: null }` filter invalid for required relation in Prisma 5. | Dispatch findasale-dev: check Railway Prisma client version vs schema; fix getCommunityBounties; re-run prisma generate on Railway | S880 |
-| Price History Y-axis float display | **P3 S880** — /organizer/edit-item chart shows "000001" as top Y-axis label instead of "$93.50" — floating point precision bug in chart scale formatter. | Fix price formatter to round Y-axis labels | S880 |
+| #197 Bounties — community API 500 | **P2 REGRESSION S880** — GET /api/bounties/community → 500 on /shopper/bounties. Toast "Failed to load bounties". Was ✅ S862, S868 FK migration broke it. Root confirmed S881: `user: { isNot: null }` filter invalid in Prisma 5 for required relation. **Fix code-complete S881** (bountyController.ts L691 — filter removed). **Pending push + Chrome QA post-deploy.** | Push then Chrome-verify /shopper/bounties loads bounties | S880 |
+| Price History Y-axis float display | **P3 S880** — /organizer/edit-item chart shows "000001" as top Y-axis label — floating point precision bug. **Fix code-complete S881** (ItemPriceHistoryChart.tsx L81 — `$${Math.round(v)}`). **Pending push + Chrome QA post-deploy.** | Push then Chrome-verify Y-axis shows whole dollar values | S880 |
 
 ---
 
@@ -119,21 +121,44 @@ _(S862
 
 ## Next Session
 
-**S879 done. Blocked Queue: 9 rows (admin dead links removed — false positive; /organizer/customers P3 added — net zero). #192 fix deployed inline — needs push + re-verify. QA MODE continues (≥8 rows).**
+**S881 done. Blocked Queue: 9 rows. QA MODE continues (≥8 rows). 2 code fixes ready to push.**
 
-**S881 plan:**
-- **[P2 REGRESSION — dispatch first]** Bounties 500: `Skill('findasale-dev')` → fix getCommunityBounties in bountyController.ts. Root cause likely stale Prisma client post-S868 or invalid `user: { isNot: null }` filter. Check Railway Prisma client. #197 was ✅ S862 — restore it.
-- **[Chrome QA]** Continue page sweep — /shopper/holds, /shopper/crews, /shopper/loot-log, /shopper/reputation, /shopper/notifications.
-- **[Records]** Apply S880 #192 PCV to roadmap Chr column.
-- **[P3]** Price History Y-axis float label "000001" — dispatch dev for formatter fix.
+**S882 plan:**
+- **[PUSH FIRST]** Push bountyController.ts + ItemPriceHistoryChart.tsx + roadmap.md + STATE.md + patrick-dashboard.md.
+- **[Chrome QA post-deploy]** Verify /shopper/bounties loads bounties (no 500 toast). Verify /organizer/edit-item Y-axis shows whole dollar values. If both ✅, remove both from Blocked Queue.
+- **[Chrome QA continued]** Continue organizer page sweep — /organizer/pickup-scheduler, /organizer/auction, /organizer/seo, /organizer/buyers.
+- **[Records]** Apply any new PCVs from this session sweep (holds/crews/reputation/notifications/loot-legend).
 
 **Patrick actions required:**
-1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
-2. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
+1. Push: `git add packages/backend/src/controllers/bountyController.ts packages/frontend/components/ItemPriceHistoryChart.tsx claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md` then `git commit -m "S881: fix bounties Prisma filter P2, Y-axis float formatter P3, #192 Chr S880"` then `.\push.ps1`
+2. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
 3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
 4. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
 5. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
+6. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
 ## Recent Sessions
+
+### S881 — QA MODE: 2 code fixes (Bounties P2 + Y-axis P3). Page sweep (holds/crews/reputation/notifications/loot-legend ✅). #192 Chr S880 applied to roadmap.
+
+**Code fixes (both pending push, 0 TS errors):**
+- **#197 Bounties P2 FIXED** — bountyController.ts L691: `user: { isNot: null }` removed. Root: required relation in Prisma 5 rejects `isNot: null` filter. Confirmed pre-fix 500 via Chrome (ss_4376fclh0).
+- **Price History Y-axis P3 FIXED** — ItemPriceHistoryChart.tsx L81: `$${v}` → `$${Math.round(v)}`. Fixes float precision "000001" display.
+
+**Records pass:**
+- roadmap.md #192 Chr column → ✅ S880. Notes updated with ENDED sale evidence (ss_6019d9p8a ss_2365m7h2q, S879 fix: optionalAuthenticate + organizerId namespace correction).
+
+**Chrome QA sweep (as Bob Smith/user2):**
+- /shopper/holds ✅ — "My Holds" heading, empty state, Browse Sales CTA. ss_7117y07i1
+- /shopper/crews ✅ — "Explorer's Crews" heading, "Coming soon" subtitle, "What are Crews?" explainer. ss_6622aic03
+- /shopper/loot-log → 404 by design — no index page; detail at /loot-log/[purchaseId]. Feature #50 already ✅ S823.
+- /shopper/reputation ✅ — "Your Reputation" heading, "Your Status" card (New Shopper, 0 purchases, 0% completion), welcome message, KPI cards. ss_7872rzcqr
+- /shopper/notifications ✅ — "Notifications" heading, All/Operational/Discovery tabs, Unread (11) filter, real notifications with dismiss buttons. URL normalizes to /notifications. ss_9136wp2rx
+- /shopper/loot-legend ✅ — "Loot Legend" heading, Hunt Pass upsell, empty state. ss_0415ir8yt. ⚠️ No roadmap entry — P3 gap.
+- /shopper/bounties ❌ confirmed "Failed to load bounties" 500 toast. Fix pending push.
+- /shopper/bounties/submissions ✅ — "My Bounty Submissions", All/Pending/Approved/Declined tabs, "No submissions yet" empty state. ss_0993xirdk
+- /shopper/purchases → 404 by design (no page, no roadmap entry; purchases accessed via /shopper/loot-log/[id]).
+
+**Blocked Queue: 9 rows** (unchanged — both fixes code-complete but pending push+Chrome QA)
 
 ### S880 — QA MODE: #192 ✅ Chrome-verified (ENDED sale). Wide page sweep (12 pages). P2 regression found (Bounties 500). /organizer/customers closed — not linked anywhere.
 
