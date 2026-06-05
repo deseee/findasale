@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { Resend } from 'resend';
 
 /**
  * Transactional email service — uses Gmail API (same auth as outreach).
@@ -7,49 +8,132 @@ import { google } from 'googleapis';
  */
 
 // ---------------------------------------------------------------------------
-// Daily email counter — shared across all senders including outreachEmailsCron
+// Daily email quota — DB-backed, persists across Railway restarts/deploys.
+// Replaces the in-memory Map that was resetting to zero on every process start,
+// allowing the pipeline to re-send the full daily quota after each deploy.
+// Root cause of the 8,317-email blast on Jun 5 (S887).
 // ---------------------------------------------------------------------------
-const DAILY_LIMIT = 2000;
-const dailyCounts = new Map<string, number>();
+
+// Hard limit: refuse to send beyond this. Leaves 500-email buffer below the
+// Google Workspace Business Starter 2,000/day cap.
+const HARD_LIMIT = parseInt(process.env.GMAIL_DAILY_HARD_LIMIT || '1500', 10);
+// Alert threshold: send an out-of-band Resend alert when count crosses this.
+const ALERT_THRESHOLD = Math.floor(HARD_LIMIT * 0.75);
+// Who gets the alert email.
+const ALERT_RECIPIENT = process.env.QUOTA_ALERT_EMAIL || 'deseee@yahoo.com';
 
 function getTodayKey(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
-/** Increment the counter and emit threshold warnings. Returns the new count. */
-export function incrementDailyEmailCount(jobName: string, recipient: string): number {
-  const key = getTodayKey();
-  const prev = dailyCounts.get(key) ?? 0;
-  const count = prev + 1;
-  dailyCounts.set(key, count);
+/** Send an out-of-band alert via Resend (bypasses Gmail — safe even when Gmail is throttled). */
+async function sendQuotaAlert(count: number, limit: number, reason: 'warning' | 'hard_stop'): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error('[EmailService] RESEND_API_KEY not set — cannot send quota alert');
+    return;
+  }
+  try {
+    const resend = new Resend(apiKey);
+    const subject = reason === 'hard_stop'
+      ? `🚨 Gmail send BLOCKED — daily limit reached (${count}/${limit})`
+      : `⚠️ Gmail quota warning — ${count}/${limit} emails sent today`;
+    const html = `
+      <p><strong>${reason === 'hard_stop' ? '🚨 BLOCKED' : '⚠️ WARNING'}:</strong> outreach@finda.sale has sent <strong>${count} of ${limit}</strong> allowed emails today.</p>
+      <p>${reason === 'hard_stop'
+        ? 'Further sends are <strong>blocked by the application</strong> until midnight UTC. No action needed — the pipeline will resume tomorrow.'
+        : `Approaching the daily hard limit. The pipeline will auto-block at ${limit} sends.`
+      }</p>
+      <p>To change the limit: set <code>GMAIL_DAILY_HARD_LIMIT</code> in Railway env vars (current: ${limit}).</p>
+      <p style="color:#666;font-size:12px">FindA.Sale · emailService.ts quota guard</p>
+    `;
+    await resend.emails.send({
+      from: 'FindA.Sale Alerts <noreply@finda.sale>',
+      to: ALERT_RECIPIENT,
+      subject,
+      html,
+    });
+    console.log(`[EmailService] Quota alert sent to ${ALERT_RECIPIENT} (${reason}, count=${count})`);
+  } catch (err) {
+    console.error('[EmailService] Failed to send quota alert via Resend:', err);
+  }
+}
 
-  // Evict yesterday's keys to keep the map from growing indefinitely
-  for (const k of dailyCounts.keys()) {
-    if (k !== key) dailyCounts.delete(k);
+/**
+ * Increment the DB-backed daily counter and enforce send limits.
+ * Throws QuotaExceededError if the hard limit is reached.
+ * Sends a Resend alert at ALERT_THRESHOLD (once per day) and at hard stop.
+ *
+ * Call this BEFORE sending via Gmail. If it throws, do not send.
+ */
+export async function checkAndIncrementQuota(jobName: string, recipient: string): Promise<number> {
+  // Lazy import to avoid circular dep (prisma.ts imports from lib files)
+  const { prisma } = await import('./prisma');
+  const date = getTodayKey();
+
+  // Atomic increment — upsert ensures no race condition between concurrent runs
+  const log = await prisma.emailQuotaLog.upsert({
+    where: { date },
+    update: { count: { increment: 1 } },
+    create: { date, count: 1 },
+  });
+
+  const count = log.count;
+  console.log(`[EmailService] Daily quota: ${count}/${HARD_LIMIT} (${jobName} → ${recipient})`);
+
+  // --- Hard stop ---
+  if (count > HARD_LIMIT) {
+    // Alert only on the first email that crosses the limit (count === HARD_LIMIT + 1)
+    if (count === HARD_LIMIT + 1) {
+      await sendQuotaAlert(count, HARD_LIMIT, 'hard_stop');
+    }
+    throw new QuotaExceededError(`Daily Gmail quota exceeded: ${count}/${HARD_LIMIT}. Send blocked.`);
   }
 
-  console.log(`[EmailService] Send #${count} today (${jobName} → ${recipient})`);
-
-  if (count === 1500) {
-    console.error(`[EmailService] ⚠️ WARNING: 1,500 emails sent today — approaching Gmail 2,000/day limit`);
-  } else if (count === 1800) {
-    console.error(`[EmailService] 🔴 CRITICAL: 1,800 emails sent today — ${DAILY_LIMIT - count} remaining`);
-  } else if (count === 1950) {
-    console.error(`[EmailService] 🚨 EMERGENCY: 1,950/2000 daily limit reached — subsequent sends may fail`);
+  // --- Warning threshold (once per day) ---
+  if (count >= ALERT_THRESHOLD) {
+    const alreadyAlerted = log.alertSentAt
+      && log.alertSentAt.toISOString().slice(0, 10) === date;
+    if (!alreadyAlerted) {
+      // Mark alerted before sending to avoid duplicate alerts if two sends hit this simultaneously
+      await prisma.emailQuotaLog.update({
+        where: { date },
+        data: { alertSentAt: new Date() },
+      });
+      await sendQuotaAlert(count, HARD_LIMIT, 'warning');
+    }
   }
 
   return count;
 }
 
-/** Query current daily usage. Safe to call from any job or admin route. */
-export function getDailyEmailCount(): { date: string; sent: number; remaining: number; percentUsed: number } {
+/** Custom error so callers can distinguish quota refusals from other failures. */
+export class QuotaExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'QuotaExceededError';
+  }
+}
+
+/**
+ * @deprecated Use checkAndIncrementQuota() which is DB-backed.
+ * Kept for backward compatibility — now async and delegates to DB counter.
+ */
+export async function incrementDailyEmailCount(jobName: string, recipient: string): Promise<number> {
+  return checkAndIncrementQuota(jobName, recipient);
+}
+
+/** Query current daily usage from DB. */
+export async function getDailyEmailCount(): Promise<{ date: string; sent: number; remaining: number; percentUsed: number }> {
+  const { prisma } = await import('./prisma');
   const date = getTodayKey();
-  const sent = dailyCounts.get(date) ?? 0;
+  const log = await prisma.emailQuotaLog.findUnique({ where: { date } });
+  const sent = log?.count ?? 0;
   return {
     date,
     sent,
-    remaining: Math.max(0, DAILY_LIMIT - sent),
-    percentUsed: Math.round((sent / DAILY_LIMIT) * 100),
+    remaining: Math.max(0, HARD_LIMIT - sent),
+    percentUsed: Math.round((sent / HARD_LIMIT) * 100),
   };
 }
 
@@ -77,10 +161,6 @@ function createGmailClient() {
   return google.gmail({ version: 'v1', auth: oauth2Client });
 }
 
-/**
- * RFC 2047 encode a header value if it contains non-ASCII characters.
- * Uses Base64 encoding: =?UTF-8?B?<base64>?=
- */
 function encodeSubject(subject: string): string {
   // eslint-disable-next-line no-control-regex
   if (/^[\x00-\x7F]*$/.test(subject)) return subject;
@@ -90,11 +170,6 @@ function encodeSubject(subject: string): string {
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
-/**
- * Build an RFC 2822 raw email and Base64url-encode it for the Gmail API.
- * Sends multipart/alternative with text/plain + text/html — required for Yahoo delivery.
- * List-Unsubscribe headers are required by Yahoo/Gmail bulk sender policy (Feb 2024).
- */
 function buildRawMessage(options: {
   from: string;
   to: string | string[];
@@ -143,6 +218,11 @@ function buildRawMessage(options: {
 
 export const emailService = {
   emails: {
+    /**
+     * Send a transactional email via Gmail API.
+     * Checks and increments the DB-backed daily quota before sending.
+     * Throws QuotaExceededError if the hard limit is reached — caller should catch and abort.
+     */
     send: async (options: {
       from: string;
       to: string | string[];
@@ -153,7 +233,8 @@ export const emailService = {
       jobName?: string;
     }) => {
       const recipient = Array.isArray(options.to) ? options.to[0] : options.to;
-      incrementDailyEmailCount(options.jobName ?? 'unknown', recipient);
+      // Quota check BEFORE send — throws QuotaExceededError if at hard limit
+      await checkAndIncrementQuota(options.jobName ?? 'unknown', recipient);
 
       const gmail = createGmailClient();
       const raw = buildRawMessage(options);
