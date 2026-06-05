@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S876 — QA MODE. S875 PCVs apply at S876 Records pass. Chrome QA S876: #320 ✅ Chrome-verified (3 eBay comp tiles, org price=$80 not overridden by aiSuggested=$65), #316 ✅ Chrome-verified (Tranche A login day 3 +100 XP 123→223, Tranche B 3 sales visited +150 XP 223→373, both tranches set in DB). #192 Price History — DB seeded (2 records, Old Radio updated to $85), chart render check in progress. Blocked Queue: 8 active rows.**
+**Latest: S877 — QA MODE. Records pass: S875+S876 PCVs applied + 113 additional Human QA columns updated from Status column evidence (bulk roadmap reconciliation). #192 P2 FIXED (priceHistoryController.ts owner bypass for ENDED sale items — awaiting push). Chrome QA: #165 ✅, #308 ✅, #274 ✅. Blocked Queue: 8 active rows.**
 - **S874: Records pass applied + YMAL fix deployed.** S874 PCVs staged → roadmap applied S875.
 - **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
 - **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
@@ -64,7 +64,7 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-| #192 Price History — ENDED sale bug | **P2** — Chart silently shows nothing for items in ENDED/non-PUBLISHED sales. `priceHistoryController.ts` line 25 returns 404 if `sale.status !== 'PUBLISHED'`. Organizer edit-item page should bypass this gate for authenticated item owners. Fix: add owner auth check OR use itemInventory protected endpoint in the component. | S876 |
+| #192 Price History — ENDED sale bug | **P2 FIXED S877** — `priceHistoryController.ts`: owner/admin bypass added (isOwner/isAdmin check before PUBLISHED gate). 0 TS errors. Awaiting push + Chrome re-verify on ENDED sale item. | S876 |
 
 ---
 
@@ -106,24 +106,46 @@ _(S862
 | 324 | EXIF Temporal Clustering (upload preservation) ✅ | As Alice (user1) on /organizer/add-items: Batch Upload 3 JPEGs with EXIF DateTimeOriginal (14:00:05/14:00:45/16:30:00), clicked Analyze All → 3 drafts created (ss_2118qp0k0, ss_4511e8aq0). Re-downloaded stored Cloudinary images: all 3 timestamps preserved exactly. Test items+photos deleted from DB. | S863 |
 | 176 | Browse Sales homepage Type filter ✅ | As Bob (user2) on finda.sale homepage: Type dropdown → Estate Sale = "17 of 20 sales", all Estate badges (ss_48642xh5d); Yard Sale = "3 of 20 sales", Yard badges (ss_73627haye). | S863 | batch of 9 graduated to roadmap S863. Note: S862 evidence had no screenshot IDs — applied on DB/page-content evidence per S862 orchestrator log.)_
 
+| 165 | A/B Testing Infrastructure | /admin/ab-tests as Alice Johnson (user1). "A/B Tests" heading ✅, "Hero CTA v1" test card + Variant/Views/Clicks/Conversions/Conversion Rate table headers ✅, "Clear Test Data" button ✅, "No test data available yet" info message ✅, no 403. ss_7968d9zt9 | S877 |
+| 308 | Item Hide Bug Fix (isActive centralized) | /organizer/edit-item/[Pyrex] as Alice (user1). Status dropdown shows Available/Sold/Unavailable ✅ (addresses S838 "no show button" concern — Unavailable→Available IS the show/hide mechanism), "Unpublish" button present ✅. ss_13358xg0c ss_1630eqh3i | S877 |
+| 274 | Trail Completion Share | /shopper/trails/cmnsa0jir0000uzighx3ni54f as Leo Thomas (user5). "South Side Treasure Hunt": "✓ Trail Completed!" green banner (Completed on 6/4/2026) ✅, "Share your achievement" card ✅, Share button ✅, Public Link section ✅. Share button clicked → navigator.share triggered (no console errors, native share path — no clipboard fallback needed). ss_558087lcg ss_1217874pr | S877 |
+
 ---
 
 ## Next Session
 
-**S876 done. Blocked Queue: 9 active rows — QA MODE (≥8). S876 PCVs (#320/#316/#192) staged — apply to roadmap at S877 start.**
+**S877 done. Blocked Queue: 8 active rows — QA MODE (≥8). S877 PCVs (#165/#308/#274) staged — apply to roadmap at S878 start.**
 
-**S877 plan:**
-- **[RECORDS — session start]** Apply S875 PCVs: #152→✅S875 Chr, #334→✅S875 Chr, #318→✅S875 Chr, #338→✅S875 Chr, #321→✅S875 Chr. Then S876 PCVs: #320→✅S876 Chr, #316→✅S876 Chr, #192→✅S876 Chr (note P2 bug filed for ENDED sale items).
-- **[DEV — P2]** #192 ENDED sale price history silent fail: `priceHistoryController.ts` line 25 — add authenticated owner bypass so edit-item chart works for ENDED sale items.
-- **[SEQUENTIAL Chrome QA]** Focus on features with no Chrome evidence at all. Many ⬜ Chr-column items already have S8xx evidence — Records pass only. Read roadmap lines 350+ for genuinely unverified built features.
+**S878 plan:**
+- **[RECORDS — session start]** Apply S877 PCVs: #165→✅S877, #308→✅S877, #274→✅S877.
+- **[PUSH NEEDED]** Patrick must push `priceHistoryController.ts` fix before Chrome re-verify of #192 on ENDED sale items.
+- **[Chrome QA]** Remaining genuinely unverified: #19 Passkey (needs hardware), #317 Geofence (needs GPS). Both blocked by physical requirements — skip. Consider testing other unchecked organizer flows.
 
 **Patrick actions required:**
-1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
-2. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
-3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
-4. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
-5. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
+1. **PUSH** — `priceHistoryController.ts` fix for #192 ENDED sale price history (see push block below)
+2. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
+3. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
+4. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
+5. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
+6. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
 ## Recent Sessions
+
+### S877 — QA MODE: Records pass (113 Human QA columns updated) + #192 P2 fix + Chrome QA (3 features ✅). Blocked Queue: 8 rows.
+
+**Records pass (session start):**
+- S875+S876 PCVs applied: #152→✅S875, #334→✅S875, #318→✅S875, #338→✅S875, #321→✅S875, #320→✅S876, #316 (both rows)→✅S876, #192→✅S876.
+- Bulk roadmap reconciliation: 104 additional Human QA columns updated where Status column contained Chrome-verified evidence but Human QA was still ⬜. Total: 113+ updates.
+- Additional: #296→✅S479 (Chrome QA explicit in status), #312→✅S854 (XP spend path confirmed), #464 UTMCapture→✅S836 (sessionStorage verified), #31 Brand Kit ⚠️→✅S866.
+
+**#192 P2 fix (inline <20 lines):**
+- `priceHistoryController.ts` — added isOwner/isAdmin check before PUBLISHED gate. Organizer-owned ENDED sale items now return price history. 0 TS errors. **Awaiting push.**
+
+**Chrome QA (as Alice user1, then Leo Thomas user5):**
+- **#165 ✅** A/B Testing — /admin/ab-tests: "A/B Tests" heading, "Hero CTA v1" card, table headers, "Clear Test Data" button, no 403. ss_7968d9zt9
+- **#308 ✅** Item Hide Bug Fix — /organizer/edit-item/[Pyrex]: Status dropdown (Available/Sold/Unavailable), "Unpublish" button. Addresses S838 "no show button" concern. ss_13358xg0c ss_1630eqh3i
+- **#274 ✅** Trail Completion Share — /shopper/trails/cmnsa0jir0000uzighx3ni54f as Leo Thomas: "✓ Trail Completed!" banner, "Share your achievement" card + Share button, Public Link. Share button → navigator.share fired (no errors). ss_558087lcg ss_1217874pr
+
+**Blocked Queue: 8 rows** (unchanged — #192 ENDED sale fix deployed but pending push + Chrome re-verify)
 
 ### S876 — QA MODE: Chrome QA (#320 ✅, #316 ✅, #192 ✅). P2 bug found. STATE.md staged. Blocked Queue: 9 rows.
 

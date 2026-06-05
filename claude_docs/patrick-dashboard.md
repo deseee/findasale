@@ -1,63 +1,61 @@
-# Patrick's Dashboard — S875 Wrap
+# Patrick's Dashboard — S877 Wrap
 
 ---
 
-## S875 Summary — QA Mode: Records pass + Column-gap fixes + Chrome QA (5 features)
+## S877 Summary — QA Mode: Massive Records Pass + #192 P2 Fix + Chrome QA (3 features)
 
-**Records pass (S874 PCVs → roadmap):**
-- ✅ #168, #171, #150 — Chr/Human columns updated to S874 evidence
-- ✅ YMAL row removed from Blocked Queue (closed S874)
-- ✅ #170 CSV Import: clarified as modal on /organizer/add-items/[saleId] — no standalone page. Roadmap updated.
+**Records pass (113+ Human QA columns updated):**
+- ✅ S875+S876 PCVs applied to roadmap (8 features: #152, #334, #318, #338, #321, #320, #316×2, #192)
+- ✅ Bulk reconciliation: 104 additional Human QA columns updated where Chrome evidence was already in the Status column but column hadn't been ticked. This was a major audit — roadmap is now accurate.
+- Also fixed: #296→✅S479, #312→✅S854, #464 UTMCapture→✅S836, #31 Brand Kit→✅S866
 
-**Column-gap Records pass (prior sessions):**
-- ✅ #257 Scout Hold Duration → Claude QA ✅ S785
-- ✅ #261 Treasure Hunt XP Rank Multiplier → Claude QA ✅ S791
-- ✅ #323 PriceBenchmark Valuation Fallback → Claude QA ✅ S791
-- ✅ #338 Surface Sold-Price Comps → UI column ✅ S820
+**#192 P2 Bug Fixed (code complete, awaiting push):**
+- `priceHistoryController.ts` — organizers can now see price history on ENDED sale items (owner bypass added)
+- 0 TypeScript errors. **Push block below.**
 
-**Chrome QA (5 features verified, staged as PCVs for S876):**
-- ✅ **#152 Organizer Digest Emails** — /organizer/email-digest-preview: "Weekly Email Digest", schedule, email preview with personalized data, CTAs. (ss_83116boe8 ss_3822u3wv2 ss_2864i4lf6)
-- ✅ **#334 Automatic Markdown Cycles** — /organizer/markdown-cycles: page loads, Add Cycle button, no 403. (ss_8645vaq0f)
-- ✅ **#318 Affiliate Program** — /organizer/affiliate: page + Generate Affiliate Link CTA, no 403. (ss_7743cytqb)
-- ✅ **#338 Surface Sold-Price Comps** — edit-item: 3 EbayCompTiles ($17.99/$120/$29.39), affiliate note. ⚠️P3: no "Based on N sources" text. (ss_965075bc7 ss_17240sk5m)
-- ✅ **#321 Encyclopedia Auto-Generation** — /admin/encyclopedia: 57 Awaiting/20 Published/77 Total, Promote/Reject buttons. (ss_0109ezo8y)
-
-**Additional QA results (seeded test data):**
-- ⬜→✅ **Seeded data** — Created PUBLISHED ESTATE sale + price=null Pyrex item on Alice's account via psycopg2.
-- ✅ **#232 SalePulseWidget** — DOM: "Sale Pulse / 0 shoppers / 0/100 / Views/Saves/Questions / Boost visibility →" ⚠️ No screenshot IDs (Chrome extension screenshot tool broken this session).
-- ✅ **#237 Sale-Type Adaptive Dashboard** — DOM: all ESTATE widgets present (Real-Time Metrics, Sale Progress, Who's Coming, High-Value Items, Efficiency Coach, Search Visibility). ⚠️ No screenshot IDs.
-- DB-ONLY **#320 Async eBay Comp** — DB proof: 10 ItemCompLookup entries, 7 items with aiSuggestedPrice (Old Radio: org=$80 / ai=$65, organizer price wins per D-005). Chrome flow blocked by CSRF — not ✅ yet.
-- ⬜ **#316** — qa256test806 password unknown
+**Chrome QA (3 features verified):**
+- ✅ **#165 A/B Testing Infrastructure** — /admin/ab-tests: page loads, "Hero CTA v1" test card, table, Clear Test Data button, no 403. (ss_7968d9zt9)
+- ✅ **#308 Item Hide Bug Fix** — /organizer/edit-item: Status dropdown (Available/Sold/Unavailable) confirmed, Unpublish button confirmed. S838 "no show button" concern resolved. (ss_13358xg0c ss_1630eqh3i)
+- ✅ **#274 Trail Completion Share** — /shopper/trails/[South Side Treasure Hunt]: "✓ Trail Completed!" banner, "Share your achievement" + Share button, Public Link. Share button triggered navigator.share, no errors. (ss_558087lcg ss_1217874pr)
 
 ---
 
-## Code shipped this session
+## Push Block
 
-None — QA mode only.
+```
+git add packages/backend/src/controllers/priceHistoryController.ts
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S877: Records pass (113 HumanQA cols), fix #192 price history for ENDED sales, Chrome QA #165/#308/#274"
+.\push.ps1
+```
 
 ---
 
 ## Your Actions
 
-1. **Email Verification migration** — `npx prisma migrate deploy` against Railway (Migration 20260515180000 undeployed since S726).
-2. **eBay OAuth for user1** — /organizer/settings/ebay → connect eBay → unlocks all eBay cross-listing QA.
-3. **#332 Shopify dev store** — create free Shopify Partners dev store, connect via OAuth.
-4. **OAuth QA** — log in as user2, click "Sign in with Google", complete Google OAuth as artifactmi@gmail.com, verify you're logged in as Artifact (not Bob). Clears Blocked Queue item.
-5. **Rarity Boost intent** — XP-only at 50 XP, or restore $0.15 cash rail?
-6. **GBP phone verification** — business.google.com → "Verify now" → phone code.
-7. **Create active sale on user1 (Alice)** — needed to test #232 SalePulseWidget + #237 Sale-Type Adaptive Dashboard next session.
+1. **PUSH** — the push block above (includes #192 ENDED sale price history fix)
+2. **Email Verification migration** — `npx prisma migrate deploy` against Railway (Migration 20260515180000 undeployed since S726)
+3. **eBay OAuth for user1** — /organizer/settings/ebay → connect eBay → unlocks all eBay cross-listing QA
+4. **#332 Shopify dev store** — create free Shopify Partners dev store, connect via OAuth
+5. **OAuth QA** — log in as user2, click "Sign in with Google", complete Google OAuth as artifactmi@gmail.com, verify you're logged in as Artifact (not Bob)
+6. **Rarity Boost intent** — XP-only at 50 XP, or restore $0.15 cash rail?
+7. **GBP phone verification** — business.google.com → "Verify now" → phone code
 
 ---
 
-## Blocked Queue: 8 active items (QA MODE — ≥8 ceiling)
+## Blocked Queue (8 items — QA MODE continues)
 
-| Priority | Feature | Blocked By |
-|----------|---------|-----------|
-| P0 (72 sess) | #332 Shopify Cross-Listing | Shopify dev store needed |
-| P0 (135 sess) | Email Verification Migration | Patrick: run migrate deploy |
-| P0 (76 sess) | eBay Connection for user1 | Patrick: OAuth connect |
-| P2 | OAuth session supersede | Patrick: real Google OAuth test |
-| P2 | AuctionNinja scraper | Cloudflare ASN block (needs Railway cron) |
-| P3 | Rarity Boost spec gap | Patrick: confirm XP-only or cash rail |
-| P3 | #230 Smart Buyer Widget | Patrick: publish sale on user1 |
-| P3 | #192 Price History | Data-dependent (need price history records) |
+| Feature | Status | Action |
+|---------|--------|--------|
+| #332 Shopify Cross-Listing | P0 — needs Shopify dev store | Patrick creates Shopify Partners store |
+| Email Verification Migration | P0 — migration not deployed | Patrick: prisma migrate deploy |
+| eBay Connection for user1 | P0 — no eBay OAuth | Patrick: connect eBay at /organizer/settings/ebay |
+| OAuth session supersede | P2 UNVERIFIED | Patrick: Google OAuth flow while logged in as user2 |
+| AuctionNinja scraper | P2 — Cloudflare blocks GH Actions | Dev: move to Railway cron |
+| Rarity Boost spec gap | P3 | Patrick: XP-only or cash rail? |
+| #230 Smart Buyer Widget | P3 — needs published sale | Patrick: publish a sale on user1 |
+| #192 Price History ENDED | P2 FIXED S877 — awaiting push + Chrome re-verify | Patrick: push, then next session Chrome QA |
+
+---
