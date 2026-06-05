@@ -29,6 +29,8 @@ import { emailDiscoveryJob } from '../jobs/emailDiscoveryJob';
 import { runOrganizerWebsiteAddressEnrichment } from '../jobs/organizerWebsiteAddressCron';
 import { runAutoSeedOutreach } from '../jobs/autoSeedOutreachCron';
 import { runMonthlyTrendReport } from '../jobs/monthlyTrendReportJob';
+import { runGmailOAuthHealthCheck, runDailySendSummary, runSuspensionDetect } from '../jobs/gmailHealthCron';
+import { runDeliverabilityMonitor } from '../jobs/deliverabilityMonitorJob';
 
 /**
  * Allowlisted job-name → job logic function.
@@ -44,6 +46,10 @@ const JOB_MAP: Record<string, () => Promise<unknown>> = {
   'organizer-website-address': runOrganizerWebsiteAddressEnrichment,
   'auto-seed-outreach': runAutoSeedOutreach,
   'monthly-trend-report': runMonthlyTrendReport,
+  'gmail-health-check': runGmailOAuthHealthCheck,
+  'daily-send-summary': runDailySendSummary,
+  'suspension-detect': runSuspensionDetect,
+  'deliverability-monitor': runDeliverabilityMonitor,
 };
 
 /**
