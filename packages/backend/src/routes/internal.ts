@@ -76,6 +76,7 @@ import { runOsmScraper } from '../services/scraper/osmScraper';
 import { scrapeGarageSaleFinder } from '../services/scraper/sources/garageSaleFinder';
 import { runAuctionZipScraper } from '../services/scraper/sources/auctionZipScraper';
 import { scrapeAuctionNinja } from '../services/scraper/sources/auctionNinjaScraper';
+import { runFacebookMarketplaceScraper } from '../services/scraper/sources/facebook-marketplace';
 import { scrapeNAADirectory } from '../services/scraper/sources/naaAuctioneerDirectory';
 import { runAlaskaPhase2Scraper } from '../services/scraper/sources/alaskaPhase2Scraper';
 import { runArizonaPhase2Scraper } from '../services/scraper/sources/arizonaPhase2Scraper';
@@ -645,6 +646,17 @@ router.post('/scraper/run-auction-ninja', requireSecret, async (req: express.Req
   scrapeAuctionNinja().catch(err => {
     console.error('[AuctionNinja] scraper error:', err);
     Sentry.captureException(err, { tags: { scraper: '[AuctionNinja]', type: 'scraper_failure' } });
+  });
+});
+
+// POST /api/internal/scraper/run-facebook-marketplace
+// GitHub Actions triggers this; Railway's IP bypasses Facebook's Azure ASN block.
+router.post('/scraper/run-facebook-marketplace', requireSecret, async (req: express.Request, res: express.Response) => {
+  const organizerId = typeof req.body?.organizerId === 'string' ? req.body.organizerId : undefined;
+  res.status(202).json({ message: 'Facebook Marketplace scraper started' });
+  runFacebookMarketplaceScraper(organizerId).catch(err => {
+    console.error('[FacebookMarketplace] scraper error:', err);
+    Sentry.captureException(err, { tags: { scraper: '[FacebookMarketplace]', type: 'scraper_failure' } });
   });
 });
 

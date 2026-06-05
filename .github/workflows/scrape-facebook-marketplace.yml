@@ -1,10 +1,16 @@
 name: Scrape Facebook Marketplace
 
+# How this works:
+# GitHub Actions triggers the schedule and calls the Railway backend API.
+# The Railway backend (running on a non-Azure IP) makes the actual HTTP request to
+# Facebook's GraphQL endpoint — bypassing the ASN-based block that silently returned
+# HTML error pages to GitHub Actions runners (AWS us-east-1/us-east-2).
+# The endpoint returns 202 immediately and runs the scrape asynchronously.
+# See roadmap #380.
+
 on:
-  # PARKED S[current] — GitHub Actions Azure IPs are silently blocked by Facebook.
-  # Scraper ran for multiple months and produced ZERO ingested listings (confirmed via DB query).
-  # Keeping workflow_dispatch so it can be manually triggered if residential proxy is added.
-  # schedule removed — do not re-enable without IP solution. See roadmap #380.
+  schedule:
+    - cron: '0 4 * * 2'  # Tuesdays at 04:00 UTC
   workflow_dispatch:
 
 concurrency:
@@ -13,33 +19,27 @@ concurrency:
 
 jobs:
   scrape:
+    name: Trigger Facebook Marketplace Scraper via Railway
     runs-on: ubuntu-latest
-    timeout-minutes: 90  # 43 metros × 3 queries × jitter ≈ 45–75 min worst case
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
-        run: corepack enable
-
-      - name: Install dependencies
-        run: pnpm install --filter backend --filter database
-
-      - name: Generate Prisma client
-        run: cd packages/database && npx prisma generate
+      - name: Trigger Facebook Marketplace scrape
         env:
-          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
-
-      - name: Run Facebook Marketplace scraper
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          FB_MARKETPLACE_ORGANIZER_ID: ${{ secrets.FB_MARKETPLACE_ORGANIZER_ID }}
+          OUTREACH_SECRET: ${{ secrets.INTERNAL_API_TOKEN }}
+          RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
         run: |
-          cd packages/backend
-          ./node_modules/.bin/ts-node src/scripts/run-facebook-marketplace.ts
+          echo "Triggering Facebook Marketplace scraper via Railway backend..."
+          curl -X POST \
+            -H "x-internal-secret: ${OUTREACH_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "${RAILWAY_BACKEND_URL}/api/internal/scraper/run-facebook-marketplace" \
+            --fail-with-body --connect-timeout 10 --max-time 30
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.error('Facebook Marketplace scraper trigger failed');

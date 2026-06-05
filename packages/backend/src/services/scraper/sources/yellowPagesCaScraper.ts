@@ -333,6 +333,10 @@ export async function runYellowPagesCaScraper(): Promise<{ fetched: number; matc
         console.log(
           `[YellowPagesCA] Completed keyword="${keyword}" province=${province} — pages=${page}, matched so far=${totalMatched}`
         );
+
+        // Pause between keyword+province combos — avoids triggering rate limiting
+        // on successive searches against the same YP.ca endpoint
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
 

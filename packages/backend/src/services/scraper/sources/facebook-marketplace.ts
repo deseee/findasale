@@ -6,11 +6,14 @@
 
 import axios from 'axios';
 import { RateLimiter } from '../rateLimiter';
-import { ingestScrapedListing, ScrapedItem } from '../index';
+import { ingestScrapedListing, getOrCreateSystemOrganizer, ScrapedItem } from '../index';
 import { jitterDelay, getRandomUserAgent, getRandomReferer } from '../userAgents';
 
 const FB_GRAPHQL_ENDPOINT = 'https://www.facebook.com/api/graphql/';
 const FB_DOC_ID = '7111939778879383';
+
+/** Hard cap on metros processed per run. Prevents unbounded request growth as the metro list expands. */
+const MAX_METROS_PER_RUN = 50;
 
 interface FBGraphQLVariable {
   count: number;
@@ -45,8 +48,15 @@ interface FBListingNode {
     listing_price?: {
       formatted_amount?: string;
     };
+    primary_listing_photo?: {
+      image?: {
+        uri?: string;
+      };
+    };
     location?: {
       reverse_geocode?: {
+        city?: string;
+        state?: string;
         city_page?: {
           display_name?: string;
         };
@@ -149,7 +159,13 @@ function parseFBListings(response: FBGraphQLResponse, metro: string): ScrapedIte
       const id = listing?.id;
       const title = listing?.marketplace_listing_title;
       const priceStr = listing?.listing_price?.formatted_amount;
-      const city = listing?.location?.reverse_geocode?.city_page?.display_name;
+      const geocode = listing?.location?.reverse_geocode;
+      // Prefer direct city/state fields from the response; fall back to city_page display_name / metro slug
+      const city = geocode?.city ?? geocode?.city_page?.display_name;
+      const state = geocode?.state ?? metro.split('-').pop()?.toUpperCase() ?? '';
+      // Capture primary listing photo if present
+      const photoUri = listing?.primary_listing_photo?.image?.uri;
+      const photoUrls: string[] = photoUri ? [photoUri] : [];
 
       if (!id || !title || !city) {
         continue;
@@ -169,7 +185,7 @@ function parseFBListings(response: FBGraphQLResponse, metro: string): ScrapedIte
         title,
         address: '', // FB doesn't provide street address in search results
         city,
-        state: metro.split('-').pop()?.toUpperCase() ?? '', // Parse state abbreviation from metro slug (e.g. 'grand-rapids-mi' → 'MI')
+        state,
         startDate: new Date(),
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default 30 days from now
         sourceUrl: `https://www.facebook.com/marketplace/item/${id}/`,
@@ -177,7 +193,7 @@ function parseFBListings(response: FBGraphQLResponse, metro: string): ScrapedIte
         sourceItemId: `fb-${id}`,
         saleType: 'RETAIL',
         description: undefined,
-        photoUrls: undefined,
+        photoUrls,
         organizerName: undefined,
         organizerEmail: undefined,
         scrapedMetadata: {
@@ -310,4 +326,74 @@ export async function scrapeFacebookMarketplace(
     console.error(`[FacebookMarketplace] Scrape failed for ${metro}:`, error);
     throw error;
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// Orchestrator — called by the Railway internal API route
+// ---------------------------------------------------------------------------
+
+const ALL_METROS = [
+  'new-york-ny', 'los-angeles-ca', 'chicago-il', 'houston-tx', 'phoenix-az',
+  'philadelphia-pa', 'san-antonio-tx', 'san-diego-ca', 'dallas-tx', 'san-jose-ca',
+  'austin-tx', 'jacksonville-fl', 'fort-worth-tx', 'columbus-oh', 'charlotte-nc',
+  'san-francisco-ca', 'indianapolis-in', 'seattle-wa', 'denver-co', 'washington-dc',
+  'boston-ma', 'el-paso-tx', 'nashville-tn', 'detroit-mi', 'oklahoma-city-ok',
+  'memphis-tn', 'new-orleans-la', 'louisville-ky', 'baltimore-md', 'portland-or',
+  'las-vegas-nv', 'milwaukee-wi', 'albuquerque-nm', 'tucson-az', 'fresno-ca',
+  'mesa-az', 'sacramento-ca', 'atlanta-ga', 'kansas-city-mo', 'long-beach-ca',
+  'raleigh-nc', 'miami-fl', 'grand-rapids-mi',
+];
+
+/**
+ * Run the Facebook Marketplace scraper across all metros.
+ * Called by POST /api/internal/scraper/run-facebook-marketplace on Railway.
+ * Railway's IP is not on Azure — Facebook's GraphQL endpoint responds correctly.
+ */
+export async function runFacebookMarketplaceScraper(organizerId?: string): Promise<void> {
+  const resolvedOrganizerId = organizerId ?? await getOrCreateSystemOrganizer();
+
+  // Apply cap to prevent unbounded request growth as the metro list expands
+  const metros = ALL_METROS.slice(0, MAX_METROS_PER_RUN);
+  if (ALL_METROS.length > MAX_METROS_PER_RUN) {
+    console.warn(
+      `[FacebookMarketplace] Metro list has ${ALL_METROS.length} entries — capped at ${MAX_METROS_PER_RUN} per run (MAX_METROS_PER_RUN)`
+    );
+  }
+
+  console.log(
+    `[FacebookMarketplace] Starting full run — ${metros.length} metros, organizer: ${resolvedOrganizerId}`
+  );
+
+  const rateLimiter = new RateLimiter({ requestsPerSecond: 0.5, maxRetries: 2 });
+  const totals = { created: 0, updated: 0, skipped: 0, failed: 0 };
+  let metroSuccess = 0;
+  let metroFailed = 0;
+
+  for (const metro of metros) {
+    try {
+      const stats = await scrapeFacebookMarketplace(metro, resolvedOrganizerId, rateLimiter);
+      totals.created += stats.created;
+      totals.updated += stats.updated;
+      totals.skipped += stats.skipped;
+      totals.failed  += stats.failed;
+      metroSuccess++;
+      console.log(
+        `[FacebookMarketplace] ${metro} — ${stats.created}c / ${stats.updated}u / ${stats.skipped}s / ${stats.failed}f`
+      );
+    } catch (err) {
+      metroFailed++;
+      console.error(
+        `[FacebookMarketplace] ${metro} failed:`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+
+  console.log(
+    `[FacebookMarketplace] Complete — ${metroSuccess}/${metros.length} metros OK, ` +
+    `${totals.created} created, ${totals.updated} updated, ` +
+    `${totals.skipped} skipped, ${totals.failed} item-level failures, ` +
+    `${metroFailed} metro-level failures`
+  );
 }
