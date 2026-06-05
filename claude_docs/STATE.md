@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S881 — QA MODE. Bounties P2 fix + Y-axis P3 fix both code-complete (0 TS errors), pending push. Chrome QA: holds/crews/reputation/notifications/loot-legend ✅. Loot-legend page has no roadmap entry (P3). #192 Chr → S880 applied to roadmap. Blocked Queue: 9 rows (QA MODE continues).**
+**Latest: S882 — QA MODE. #197 Bounties P2 ✅ Patrick-confirmed (no error toast post S881 fix). Y-axis P3 ✅ Chrome-verified (ss_9355qlny8). Wide organizer page sweep: 24 pages ✅, 4×404 not-linked (P3). Blocked Queue: 7 rows (QA MODE continues).**
 
 **S880: #192 ✅ Chrome-verified (ENDED sale price history renders). /organizer/customers: not linked from nav — closed from queue. NEW P2 REGRESSION: /shopper/bounties 500 (#197 was ✅ S862, S868 FK migration broke it — getCommunityBounties controller, DB query confirmed OK). P3: chart Y-axis "000001" float display bug.**
 
@@ -68,8 +68,6 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-| #197 Bounties — community API 500 | **P2 REGRESSION S880** — GET /api/bounties/community → 500 on /shopper/bounties. Toast "Failed to load bounties". Was ✅ S862, S868 FK migration broke it. Root confirmed S881: `user: { isNot: null }` filter invalid in Prisma 5 for required relation. **Fix code-complete S881** (bountyController.ts L691 — filter removed). **Pending push + Chrome QA post-deploy.** | Push then Chrome-verify /shopper/bounties loads bounties | S880 |
-| Price History Y-axis float display | **P3 S880** — /organizer/edit-item chart shows "000001" as top Y-axis label — floating point precision bug. **Fix code-complete S881** (ItemPriceHistoryChart.tsx L81 — `$${Math.round(v)}`). **Pending push + Chrome QA post-deploy.** | Push then Chrome-verify Y-axis shows whole dollar values | S880 |
 
 ---
 
@@ -77,6 +75,7 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| — | Price History Y-axis formatter | ✅ Chrome-verified S882 — /organizer/edit-item/f319b119 as Alice (user1). Y-axis shows $94/$84/$78/$72 — whole dollar values, no float "000001" bug. Math.round() fix confirmed. ss_9355qlny8 | S882 |
 | 192 | Price History — ENDED sale fix | ✅ Chrome-verified S880 — As Alice (user1) on /organizer/edit-item/f319b119-73fb-4399-a397-55fd2240bff1 (Old Radio, ENDED sale). Price History heading visible, orange step-line chart rendered, Jun 2→Jun 4 X-axis, $78→$84 Y-axis range, 2 data points. DOM confirmed via get_page_text. ss_6019d9p8a ss_2365m7h2q | S880 |
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
 
@@ -121,22 +120,58 @@ _(S862
 
 ## Next Session
 
-**S881 done. Blocked Queue: 9 rows. QA MODE continues (≥8 rows). 2 code fixes ready to push.**
+**S882 done. Blocked Queue: 7 rows. QA MODE continues (≥8 threshold, now below — but items remain until verified).**
 
-**S882 plan:**
-- **[PUSH FIRST]** Push bountyController.ts + ItemPriceHistoryChart.tsx + roadmap.md + STATE.md + patrick-dashboard.md.
-- **[Chrome QA post-deploy]** Verify /shopper/bounties loads bounties (no 500 toast). Verify /organizer/edit-item Y-axis shows whole dollar values. If both ✅, remove both from Blocked Queue.
-- **[Chrome QA continued]** Continue organizer page sweep — /organizer/pickup-scheduler, /organizer/auction, /organizer/seo, /organizer/buyers.
-- **[Records]** Apply any new PCVs from this session sweep (holds/crews/reputation/notifications/loot-legend).
+**S883 plan:**
+- **[Records]** Apply S882 PCVs to roadmap: Y-axis formatter ✅ S882.
+- **[Chrome QA]** Continue organizer page sweep — remaining linked pages not yet hit this session (starter-kit, bounties/organizer side, discount-rules deep test).
+- **[Chrome QA]** Shopper-side pages not yet swept this session.
+- **[P3 unbuilt pages]** /organizer/pickup-scheduler, /organizer/auction, /organizer/seo, /organizer/buyers all 404 but not linked from nav — same disposition as /organizer/customers (close, no user impact).
 
 **Patrick actions required:**
-1. Push: `git add packages/backend/src/controllers/bountyController.ts packages/frontend/components/ItemPriceHistoryChart.tsx claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md` then `git commit -m "S881: fix bounties Prisma filter P2, Y-axis float formatter P3, #192 Chr S880"` then `.\push.ps1`
-2. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
-3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
-4. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
-5. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
-6. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
+1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
+2. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
+3. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
+4. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
+5. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
 ## Recent Sessions
+
+### S882 — QA MODE: #197 Bounties ✅ (Patrick-confirmed). Y-axis P3 ✅ Chrome-verified. Wide organizer page sweep (24 pages ✅, 4×404 not-linked P3).
+
+**#197 Bounties ✅:** Patrick confirmed /shopper/bounties no longer shows "Failed to load bounties" error toast after S881 bountyController.ts fix deployed.
+
+**Y-axis formatter P3 ✅:** /organizer/edit-item/f319b119 (Old Radio, ENDED) as Alice (user1). Price History chart Y-axis: $94/$84/$78/$72 — whole dollar values, no float "000001" bug. Math.round() fix confirmed. ss_9355qlny8
+
+**Organizer page sweep (Alice/user1, all ✅ unless noted):**
+- /organizer/appraisals ✅ ss_2010xghaz — Crowdsourced Appraisals, Submit New Request, My Requests/Community Feed tabs
+- /organizer/checklist ✅ ss_3457pe0h0 — Sale Launch Checklist, 15 items, progress bar
+- /organizer/color-rules → /organizer/discount-rules ✅ ss_7756iqq57 — redirect works, Discount Rules, empty state
+- /organizer/flip-report ✅ ss_51812bc76 — 2 sales listed
+- /organizer/hubs ✅ ss_93834e9a7 — Market Hubs, 4 hub types, "Coming Soon" CTA
+- /organizer/inventory ✅ ss_3774kri1x — 3 real items, search/filter panel
+- /organizer/line-queue ✅ ss_8102zh9r4 — Choose a Sale, PUBLISHED card
+- /organizer/offline ✅ ss_2782z08pz — Offline Sync Manager, Online status
+- /organizer/payouts ✅ ss_70338sonn — Stripe balance, payout schedule
+- /organizer/photo-ops ✅ ss_0754v7s78 — Choose a Sale, Set Up Photo Ops link
+- /organizer/profile → /organizer/settings?tab=profile ✅ ss_5496a85x2 — Founding Organizer badge
+- /organizer/promote ✅ ss_4990qg027 — Promote Sale, PUBLISHED card
+- /organizer/qr-codes ✅ ss_915606wm3 — QR Scan Analytics, 3 KPIs
+- /organizer/reputation ✅ ss_27555v8ml — Reputation Score 0.1/5.0, New Organizer badge
+- /organizer/sales ✅ ss_7420pgtiu — Manage Sales, 2 cards
+- /organizer/send-update ✅ ss_3428a61g6 — Send Update, Choose a Sale
+- /organizer/shopify ✅ ss_7561swcoc — Not Connected, Connect form
+- /organizer/stripe-connect ✅ ss_5670hfcot — Consignor Payouts, empty state, TEAMS-only
+- /organizer/subscription ✅ ss_0542pwyli — TEAMS plan, Active, Plan Limits
+- /organizer/ugc-moderation ✅ ss_7189smrfj — UGC Photo Moderation, empty state
+- /organizer/webhooks ✅ ss_1611p2uug — Webhooks, empty state, Add webhook button
+- /organizer/bounties ✅ ss_75464uvh3 — Item Bounties, 3 tabs, "Work in progress" badge
+- /organizer/message-templates ✅ ss_2006j30aw — 4 templates, Edit/Delete/New
+- /organizer/print-inventory ✅ ss_6361k3641 — 2 sales, 6 items, $380.00 total value
+
+**P3 not-linked 404s (no user impact — not in nav):**
+- /organizer/pickup-scheduler, /organizer/auction, /organizer/seo, /organizer/buyers — all 404, no frontend links found. Same disposition as /organizer/customers (S880 — closed, no user impact).
+
+**Blocked Queue: 7 rows** (removed #197 Bounties ✅ + Y-axis float ✅)
 
 ### S881 — QA MODE: 2 code fixes (Bounties P2 + Y-axis P3). Page sweep (holds/crews/reputation/notifications/loot-legend ✅). #192 Chr S880 applied to roadmap.
 

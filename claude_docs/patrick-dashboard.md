@@ -1,76 +1,59 @@
-# Patrick's Dashboard — S881 Wrap
+# Patrick's Dashboard — S882 Wrap
 
 ---
 
-## S881 Summary — QA Mode: 2 Bug Fixes Coded + Page Sweep
+## S882 Summary — QA Mode: 2 Fixes Verified + Full Organizer Page Sweep
 
-**2 fixes code-complete, pending push (0 TypeScript errors):**
+**Both S881 fixes confirmed live:**
 
-**#197 Bounties P2 FIXED:**
-- Root cause: `user: { isNot: null }` filter in bountyController.ts throws 500 in Prisma 5 because `userId` is required (non-nullable). S868 FK migration enforced this.
-- Fix: removed the filter (1 line). All bounties always have a user — filter was redundant.
-- Confirmed pre-fix: Chrome showed "Failed to load bounties" toast. ss_4376fclh0
+**#197 Bounties P2 ✅ Confirmed:**
+- /shopper/bounties no longer shows "Failed to load bounties" error toast. Patrick-confirmed post-deploy.
+- Removed from Blocked Queue.
 
-**Price History Y-axis P3 FIXED:**
-- Root cause: tickFormatter was `$${v}` — float values like 92.40000001 display as "$92.40000001".
-- Fix: `$${Math.round(v)}` — rounds to nearest dollar for clean Y-axis labels.
+**Price History Y-axis P3 ✅ Chrome-verified:**
+- /organizer/edit-item/[Old Radio] as Alice. Y-axis shows $94/$84/$78/$72 — clean whole dollars, no float bug. ss_9355qlny8
+- Removed from Blocked Queue.
 
-**Page sweep (Chrome QA as Bob Smith/user2):**
-- ✅ /shopper/holds — "My Holds", empty state, Browse Sales CTA. ss_7117y07i1
-- ✅ /shopper/crews — "Explorer's Crews", "Coming soon" subtitle. ss_6622aic03
-- ✅ /shopper/reputation — "Your Reputation", status card (New Shopper), KPIs. ss_7872rzcqr
-- ✅ /shopper/notifications — 3 tabs, Unread (11), real notifications with dismiss buttons. ss_9136wp2rx
-- ✅ /shopper/loot-legend — "Loot Legend" heading, Hunt Pass upsell, empty state. ss_0415ir8yt
-- ✅ /shopper/bounties/submissions — "My Bounty Submissions", 4-tab filter. ss_0993xirdk
-- ℹ️ /shopper/loot-log → 404 by design (index not built; detail lives at /loot-log/[id]) — feature #50 ✅ S823
-- ℹ️ /shopper/purchases → 404 by design (no page exists)
-- ⚠️ /shopper/loot-legend has NO roadmap entry — P3 gap
+**Organizer page sweep — 24 pages ✅, 0 broken linked pages:**
+All linked organizer pages load correctly. Notable pages verified for the first time this session: appraisals, checklist, color-rules (redirects to discount-rules), flip-report, hubs, inventory, line-queue, offline, payouts, photo-ops, profile, promote, qr-codes, reputation, sales, send-update, shopify, stripe-connect, subscription, ugc-moderation, webhooks, bounties, message-templates, print-inventory.
 
-**Records pass:**
-- roadmap.md #192 Chr updated → ✅ S880 (ENDED sale evidence added to Notes).
+**P3 not-linked 404s (no user impact):**
+/organizer/pickup-scheduler, /organizer/auction, /organizer/seo, /organizer/buyers — 404, not linked from any nav or component. Same as /organizer/customers (closed S880). No action needed.
 
 ---
 
-## Push Block — Do This First
+## Blocked Queue: 7 items
 
-```
-git add packages/backend/src/controllers/bountyController.ts
-git add packages/frontend/components/ItemPriceHistoryChart.tsx
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S881: fix bounties Prisma filter P2, Y-axis float formatter P3, #192 Chr S880"
-.\push.ps1
-```
+QA MODE continues until queue drops below 8. No new feature dev.
 
-**After push deploys (~2 min for Railway, ~1 min for Vercel):**
-- Check /shopper/bounties — should load bounties list, no "Failed to load" toast
-- Check /organizer/edit-item on any item with price history — Y-axis should show "$78" not "$78.00000001"
+| Item | Priority | Status |
+|------|----------|--------|
+| #332 Shopify Cross-Listing | P0 | Needs your Shopify Partners dev store |
+| Email Verification Migration | P0 | Needs `npx prisma migrate deploy` |
+| eBay Connection for user1 | P0 | Needs your eBay OAuth |
+| OAuth session supersede | P2 | Needs Google OAuth flow with you |
+| AuctionNinja scraper | P2 | Cloudflare-blocked, needs Railway cron |
+| Rarity Boost spec gap | P3 | Needs your decision |
+| #230 Smart Buyer Widget | P3 | Needs published sale on user1 |
 
 ---
 
 ## Your Actions
 
-1. **⬆️ PUSH NOW** — push block above (bounties fix + Y-axis fix + roadmap + wrap docs)
-2. **Email Verification migration** — `npx prisma migrate deploy` against Railway (Migration 20260515180000 undeployed since S726)
-3. **eBay OAuth for user1** — /organizer/settings/ebay → connect eBay → unlocks all eBay cross-listing QA
-4. **#332 Shopify dev store** — create free Shopify Partners dev store, connect via OAuth
-5. **OAuth QA** — log in as user2, click "Sign in with Google", complete as artifactmi@gmail.com, verify /api/auth/me returns Artifact not Bob
-6. **Rarity Boost intent** — XP-only at 50 XP, or restore $0.15 cash rail?
-7. **GBP phone verification** — business.google.com → "Verify now" → phone code
+1. **Email Verification migration** — `npx prisma migrate deploy` against Railway (Migration 20260515180000 undeployed since S726)
+2. **eBay OAuth for user1** — /organizer/settings/ebay → connect eBay → unlocks all eBay cross-listing QA
+3. **#332 Shopify dev store** — create free Shopify Partners dev store, connect via OAuth
+4. **OAuth QA** — log in as user2, click "Sign in with Google", complete as artifactmi@gmail.com, verify /api/auth/me returns Artifact not Bob
+5. **Rarity Boost intent** — XP-only at 50 XP, or restore $0.15 cash rail?
+6. **GBP phone verification** — business.google.com → "Verify now" → phone code
 
 ---
 
-## Blocked Queue (9 items — QA MODE continues)
+## Push Block (STATE.md + dashboard only this session — no code changes)
 
-| Feature | Status | Action |
-|---------|--------|--------|
-| #332 Shopify Cross-Listing | P0 — needs Shopify dev store | Patrick creates Shopify Partners store |
-| Email Verification Migration | P0 — migration not deployed | Patrick: prisma migrate deploy |
-| eBay Connection for user1 | P0 — no eBay OAuth | Patrick: connect eBay at /organizer/settings/ebay |
-| OAuth session supersede | P2 UNVERIFIED | Patrick: Google OAuth flow while logged in as user2 |
-| AuctionNinja scraper | P2 — Cloudflare blocks GH Actions | Dev: move to Railway cron |
-| #197 Bounties — community 500 | P2 — **fix coded S881, pending push+Chrome QA** | Push → verify /shopper/bounties loads |
-| Rarity Boost spec gap | P3 | Patrick: XP-only or cash rail? |
-| #230 Smart Buyer Widget | P3 — Human QA pending | Patrick: publish sale on user1, check dashboard |
-| Price History Y-axis float | P3 — **fix coded S881, pending push+Chrome QA** | Push → verify Y-axis shows whole dollars |
+```
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S882: bounties+Y-axis verified, organizer page sweep 24✅, Blocked Queue 9→7"
+.\push.ps1
+```
