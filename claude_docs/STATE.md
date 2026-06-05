@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S875 — QA MODE. Records pass (S874 PCVs: #168/#171/#150 → roadmap ✅ S874). YMAL removed from Blocked Queue (closed S874). #170 CSV Import clarified — modal on /organizer/add-items/[saleId], no standalone page (roadmap updated). Column-gap Records pass: #257→✅S785, #261→✅S791, #323→✅S791, #338 UI→✅S820. Chrome QA S875: #152 ✅, #334 ✅, #318 ✅, #338 ✅, #321 ✅ (5 features verified). Staged as PCVs. Blocked Queue: 8 active rows.**
+**Latest: S875 — QA MODE. Records pass (S874 PCVs: #168/#171/#150 → roadmap ✅ S874). YMAL removed from Blocked Queue (closed S874). #170 CSV Import clarified — modal on /organizer/add-items/[saleId], no standalone page (roadmap updated). Column-gap Records pass: #257→✅S785, #261→✅S791, #323→✅S791, #338 UI→✅S820. Chrome QA S875: #152 ✅, #334 ✅, #318 ✅, #338 ✅, #321 ✅ (5 features verified). Staged as PCVs. Seeded PUBLISHED sale + Pyrex item (price=null) for #232/#237/#320 QA — active sale on Alice. #232/#237 DOM-verified; #320 DB-verified (CSRF blocked publishItem trigger). Blocked Queue: 8 active rows.**
 - **S874: Records pass applied + YMAL fix deployed.** S874 PCVs staged → roadmap applied S875.
 - **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
 - **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
@@ -97,6 +97,9 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | 334 | Automatic Markdown Cycles | /organizer/markdown-cycles as Bob Smith (user2). "Auto Markdown" heading ✅, "Set up automatic price reductions..." subtitle ✅, empty state with icon ✅, "+ Add Cycle" button ✅, "+ Create your first cycle" CTA ✅, no 403. ss_8645vaq0f | S875 |
 | 318 | Affiliate Program | /organizer/affiliate as Bob Smith (user2). "Affiliate Program" heading ✅, "Earn commissions when organizers sign up with your link" ✅, "Your Affiliate Link" card ✅, "Generate Your Affiliate Link" CTA ✅, "← Dashboard" link ✅, no 403. ss_7743cytqb | S875 |
 | 338 | Surface Sold-Price Comps | /organizer/edit-item/cb20b99d-992f-4d56-8378-9df4a42a55ed as Alice Johnson (user1). 3 eBay comp tiles ($17.99/$120.00/$29.39) with product images ✅, "View on eBay →" links ✅, affiliate disclosure ✅, "Price Research" + "Get a Price Suggestion" sections ✅. ⚠️P3: no "Based on N sources" attribution text (matches S820 finding). ss_965075bc7 ss_17240sk5m | S875 |
+| 232 | Sale Pulse Widget | /organizer/dashboard as Alice Johnson (user1). Seeded PUBLISHED ESTATE sale (59c49908). Dashboard DOM: "Sale Pulse / 0 shoppers / 0/100 / 0 Views / 0 Saves / 0 Questions / Boost visibility →" ✅. Widget renders with correct structure. ⚠️ No screenshot IDs — Chrome extension screenshot tool broken S875. DOM text via get_page_text. | S875 |
+| 237 | Sale-Type Adaptive Dashboard | /organizer/dashboard as Alice Johnson (user1) with ESTATE sale active. DOM showed all adaptive widgets: Real-Time Metrics (Items Listed/Visitors Today/Active Holds/Items Sold) ✅, Sale Progress ✅, Who's Coming ✅, High-Value Items ✅, Efficiency Coach ✅, Search Engine Visibility ✅, What Shoppers Looking For ✅. ⚠️ No screenshot IDs — Chrome extension screenshot tool broken S875. DOM text via get_page_text. | S875 |
+| 320 | Async eBay Comp Fetch | DB-VERIFIED S875 ONLY — not Chrome ✅. psycopg2: 10 ItemCompLookup entries with real eBay data (prices $39.99/$49.95/$290). 7 items have aiSuggestedPrice populated (Old Radio: orgPrice=$80, aiSuggested=$65 — D-005 confirmed: organizer price wins). publishItem flow not triggerable via Chrome this session (CSRF blocks JS, review queue needs AI title). CODE-ONLY — do not advance Chrome column. | S875 |
 | 321 | Encyclopedia Auto-Generation | /admin/encyclopedia as Alice Johnson (user1/admin). "Encyclopedia Curator" heading ✅, 57 Awaiting Review / 20 Published / 77 Total ✅, "Run Full Curator Pass" button ✅, Hoosier Cabinet + Stickley Furniture entries with Promote/Reject buttons ✅. ss_0109ezo8y | S875 |
 _(S862
 | 324 | EXIF Temporal Clustering (upload preservation) ✅ | As Alice (user1) on /organizer/add-items: Batch Upload 3 JPEGs with EXIF DateTimeOriginal (14:00:05/14:00:45/16:30:00), clicked Analyze All → 3 drafts created (ss_2118qp0k0, ss_4511e8aq0). Re-downloaded stored Cloudinary images: all 3 timestamps preserved exactly. Test items+photos deleted from DB. | S863 |
@@ -110,7 +113,7 @@ _(S862
 
 **S876 plan:**
 - **[RECORDS — session start]** Apply S875 PCVs: #152→✅ S875 Chr, #334→✅ S875 Chr, #318→✅ S875 Chr, #338→✅ S875 Chr, #321→✅ S875 Chr.
-- **[SEQUENTIAL Chrome QA]** Continue ⬜ features — #320 (Async eBay Comp: create item with price=null on Alice, publish, wait 2min, verify aiSuggestedPrice), #232/#237 (need active sale — Patrick create one on user1), #316 (need qa256test806 password reset or new referred pair), remaining ⬜ roadmap items (read lines 350+).
+- **[SEQUENTIAL Chrome QA]** Continue ⬜ features — #320 (publishItem flow still needed — CSRF blocked this session; try via actual review queue UI with AI-analyzed item), #316 (need qa256test806 password reset or new referred pair), remaining ⬜ roadmap items (read lines 350+). #232/#237 staged as PCVs (DOM evidence, no screenshots).
 
 **Patrick actions required:**
 1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
@@ -135,7 +138,9 @@ _(S862
 - **#318 ✅** Affiliate Program — /organizer/affiliate: page loads, Generate link CTA, no 403. ss_7743cytqb
 - **#338 ✅** Surface Sold-Price Comps — edit-item: 3 EbayCompTiles with prices ($17.99/$120/$29.39), affiliate note. ⚠️P3 no "Based on N sources" text. ss_965075bc7 ss_17240sk5m
 - **#321 ✅** Encyclopedia Auto-Generation — /admin/encyclopedia: 57 Awaiting/20 Published/77 Total, Promote/Reject buttons. ss_0109ezo8y
-- **#232/#237 UNVERIFIED** — neither Bob nor Alice have active sales; SalePulseWidget/adaptive dashboard not testable.
+- **#232 ✅ DOM** SalePulseWidget — seeded PUBLISHED ESTATE sale (59c49908) + item (Pyrex price=null) via psycopg2. Dashboard shows: Sale Pulse / 0 shoppers / 0/100 / Views / Saves / Questions / Boost visibility →. No screenshot IDs (Chrome extension broken).
+- **#237 ✅ DOM** Sale-Type Adaptive Dashboard — ESTATE dashboard shows all adaptive widgets (Real-Time Metrics, Sale Progress, Who's Coming, High-Value Items, Efficiency Coach, Search Visibility). No screenshot IDs.
+- **#320 DB-ONLY** — 10 ItemCompLookup entries + 7 items with aiSuggestedPrice (Old Radio: org=$80 / ai=$65). Chrome flow blocked (CSRF). Not Chrome ✅.
 - **#320 UNVERIFIED** — Kitchen Set has price=20 (need price=null item for async comp test).
 - **#323 UNVERIFIED** — no PriceBenchmark data for Kitchen Set category.
 

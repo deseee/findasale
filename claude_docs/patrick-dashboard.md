@@ -22,9 +22,11 @@
 - ✅ **#338 Surface Sold-Price Comps** — edit-item: 3 EbayCompTiles ($17.99/$120/$29.39), affiliate note. ⚠️P3: no "Based on N sources" text. (ss_965075bc7 ss_17240sk5m)
 - ✅ **#321 Encyclopedia Auto-Generation** — /admin/encyclopedia: 57 Awaiting/20 Published/77 Total, Promote/Reject buttons. (ss_0109ezo8y)
 
-**Unverified this session (blocked/data-dependent):**
-- ⬜ **#232/#237** — need active sale on user1 (Alice) account
-- ⬜ **#320** — need item with price=null to trigger async eBay comp fetch
+**Additional QA results (seeded test data):**
+- ⬜→✅ **Seeded data** — Created PUBLISHED ESTATE sale + price=null Pyrex item on Alice's account via psycopg2.
+- ✅ **#232 SalePulseWidget** — DOM: "Sale Pulse / 0 shoppers / 0/100 / Views/Saves/Questions / Boost visibility →" ⚠️ No screenshot IDs (Chrome extension screenshot tool broken this session).
+- ✅ **#237 Sale-Type Adaptive Dashboard** — DOM: all ESTATE widgets present (Real-Time Metrics, Sale Progress, Who's Coming, High-Value Items, Efficiency Coach, Search Visibility). ⚠️ No screenshot IDs.
+- DB-ONLY **#320 Async eBay Comp** — DB proof: 10 ItemCompLookup entries, 7 items with aiSuggestedPrice (Old Radio: org=$80 / ai=$65, organizer price wins per D-005). Chrome flow blocked by CSRF — not ✅ yet.
 - ⬜ **#316** — qa256test806 password unknown
 
 ---
