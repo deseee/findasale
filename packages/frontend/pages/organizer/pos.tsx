@@ -1118,7 +1118,20 @@ export default function POSPage() {
         api
           .get<Item>(`/items/${itemId}`)
           .then(res => {
-            addToCart(res.data);
+            const scannedItem = res.data;
+            if (scannedItem.draftStatus && scannedItem.draftStatus !== 'PUBLISHED') {
+              setQrScanStatus('error');
+              setQrScanMessage('This item is pending review and cannot be sold yet');
+              setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 3000);
+              return;
+            }
+            if (scannedItem.status !== 'AVAILABLE') {
+              setQrScanStatus('error');
+              setQrScanMessage('This item is not available for sale');
+              setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 3000);
+              return;
+            }
+            addToCart(scannedItem);
             showToast('✓ Item added to cart', 'success');
             setQrScanStatus('scanning');
             setQrScanMessage('');
