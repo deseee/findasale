@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { suppressionService } from '../services/suppressionService';
 import { batchSyncLeadTiersToMailerLite } from '../services/mailerliteService';
-import { incrementDailyEmailCount } from '../lib/emailService';
+import { checkAndIncrementQuota, getDailyEmailCount, QuotaExceededError } from '../lib/emailService';
 
 // Tier-specific T1 templates (strategy doc §2.1–2.3). T2–T4 are shared across tiers.
 // Token format: [Token Name] — replaced by renderTemplate() below.
@@ -219,6 +219,21 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
   if (process.env.OUTREACH_TEST_EMAIL) {
     console.log(`[OutreachCron] TEST MODE — all sends redirected to ${process.env.OUTREACH_TEST_EMAIL}`);
   }
+
+  // Pre-run quota check — abort the entire window if daily hard limit already reached.
+  // This prevents any sends even if multiple Railway instances start simultaneously.
+  try {
+    const quota = await getDailyEmailCount();
+    const hardLimit = parseInt(process.env.GMAIL_DAILY_HARD_LIMIT || '1500', 10);
+    if (quota.sent >= hardLimit) {
+      console.error(`[OutreachCron] ABORT: daily quota already at ${quota.sent}/${hardLimit} — no sends this window`);
+      return;
+    }
+    console.log(`[OutreachCron] Quota check: ${quota.sent}/${hardLimit} used (${quota.remaining} remaining)`);
+  } catch (err) {
+    console.error('[OutreachCron] Quota pre-check failed — proceeding with caution:', err);
+  }
+
   try {
     // Email links must resolve in recipients' inboxes — localhost fallback would silently break in production.
     // Backend routes (/api/outreach/pixel, /api/outreach/unsubscribe) live on Railway, not Vercel.
@@ -615,12 +630,22 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
           continue;
         }
 
+        // Quota gate — throws QuotaExceededError if daily hard limit reached.
+        // Must come before gmail.users.messages.send to prevent over-sending.
+        try {
+          await checkAndIncrementQuota('outreachEmailsCron', toEmail);
+        } catch (quotaErr) {
+          if (quotaErr instanceof QuotaExceededError) {
+            console.error(`[OutreachCron] QUOTA EXCEEDED — aborting remaining sends for this window`);
+            break;
+          }
+          throw quotaErr;
+        }
+
         await gmail.users.messages.send({
           userId: 'me',
           requestBody: { raw: rawMessage },
         });
-
-        incrementDailyEmailCount('outreachEmailsCron', toEmail);
 
         // Log SENT event for CAN-SPAM audit trail
         try {

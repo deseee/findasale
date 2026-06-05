@@ -4852,3 +4852,23 @@ model SearchNotification {
   @@unique([email, searchQuery])
   @@index([searchQuery, isActive])
 }
+
+// Daily Gmail quota tracker — persists across Railway restarts.
+// Replaces the in-memory Map in emailService.ts that reset on every deploy.
+// alertSentAt tracks when the last threshold-alert email was sent (once per day).
+model EmailQuotaLog {
+  date        String   @id              // YYYY-MM-DD
+  count       Int      @default(0)
+  alertSentAt DateTime?                 // last time a threshold alert was dispatched
+  updatedAt   DateTime @updatedAt
+}
+
+// Daily Gmail quota tracker — persists across Railway restarts/deploys.
+// Replaces the in-memory Map in emailService.ts that reset on every deploy.
+// alertSentAt tracks when the last threshold-alert email was sent (once per day).
+model EmailQuotaLog {
+  date        String    @id              // YYYY-MM-DD
+  count       Int       @default(0)
+  alertSentAt DateTime?                  // last time a threshold alert was dispatched
+  updatedAt   DateTime  @updatedAt
+}
