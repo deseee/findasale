@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S884 — Records: S883 PCVs applied (18 rows). Rarity Boost UI fix ✅ code-complete (coupons.tsx 50→15 XP, pending push). Chrome QA BLOCKED (extension permission prompt — Patrick action needed). Blocked Queue: 4 rows.**
+**Latest: S885 — QA MODE. Rarity Boost 15 XP ✅ Chrome-verified (ss_10072ub1r). Add-items pipeline ✅ Chrome-verified end-to-end (upload→analyze→approve→live). POS core UI ✅ verified. 2 new bugs found: P3 (review page "View sale" 404), P2 (POS search shows PENDING_REVIEW items). Blocked Queue: 3 rows.**
+
+**S884 — Records: S883 PCVs applied (18 rows). Rarity Boost UI fix ✅ code-complete (coupons.tsx 50→15 XP, pending push). Chrome QA BLOCKED (extension permission prompt — Patrick action needed). Blocked Queue: 4 rows.**
 
 **S883 — QA MODE. Records: S882 PCVs applied. 18 pages Chrome-verified. #293 eBay conditionNotes ✅ Human-verified (eBay Inventory API confirms live on listing 137309459090). OAuth supersede ✅ Patrick-verified. Email migration ✅ confirmed deployed May 15. Game Design: Rarity Boost locked at 15 XP + $0.50 cash rail (separate sprint). UI bug (50 XP displayed) → dev dispatch queued. Blocked Queue: 5 rows.**
 
@@ -59,14 +61,15 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 ## Blocked Queue
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
-_⚠️ P0 AGING: #332 at 72+ sessions — mandatory P0 per CLAUDE.md §10a._
-_S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed and deployed._
+_⚠️ P0 AGING: #332 at 73+ sessions — mandatory P0 per CLAUDE.md §10a._
+_S885: Rarity Boost UI ✅ Chrome-verified S885 — removed from queue. 2 new bugs added._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #332 Shopify Cross-Listing | **P0 (72 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
+| #332 Shopify Cross-Listing | **P0 (73 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
-| Rarity Boost cash rail | **P2** — UI fix ✅ S884 (coupons.tsx 50→15 XP, 0 TS errors, pending push+Chrome QA). Cash rail ($0.50) requires BoostPurchase Stripe service (not yet built) — separate sprint. | Separate sprint for cash rail | S883 |
+| POS item search shows PENDING_REVIEW items | **P2** — POS /organizer/pos search returns PENDING_REVIEW items in results for any query. Backend correctly rejects cash sale with 400 ("sold or unavailable") but organizer has no idea why. Root: posController search query doesn't filter `status: 'AVAILABLE'`. | Fix POS item search to only return AVAILABLE items. Add visible error toast when cart item is rejected at checkout. | S885 |
+| Review success page "View sale" 404 | **P3** — After approving items in Smart Review Queue, "View sale →" button links to `/sale/[id]` (404) instead of `/sales/[id]`. Correct URL is `/sales/[id]`. | Fix link in review success page component. 1-line fix. | S885 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 
 ---
@@ -76,6 +79,8 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
 _(Y-axis formatter + #192 ENDED sale: applied to roadmap S883)_
+| — | Rarity Boost 15 XP display | ✅ Chrome-verified S885 — /coupons as Alice (user1). Organizer tab → Shopper tab → "Boosts & Bonuses" section: "Rarity Boost — Spend 15 XP to boost rarity rolls on next photo uploads." Button: "Activate Rarity Boost (15 XP)". Confirms S884 coupons.tsx fix deployed. ss_10072ub1r | S885 |
+| — | Add-items upload → Analyze → publish pipeline | ✅ Chrome-verified S885 — /organizer/add-items/59c49908... as Alice (user1). Batch Upload: file_upload → "✓ 1 photo selected". Analyze All → Smart Review Queue → "Vintage Table Lamp, Mid-Century Modern Style, Wood Base" (62% confidence, Lamps/Furniture, SMART tags). Clicked Approve → "QUEUE CLEAR — All 2 items are live." Verified on /sales/59c49908...: lamp card visible alongside Pyrex. ss_3920p8trb ss_57255gxkm ss_5660w5ek0 | S885 |
 | 293 | eBay conditionNotes data parity | ✅ Human-verified S883 — Zoom B3 (ebayListingId 137309459090, Artifact account). Set conditionNotes "All knobs and switches function correctly. No cosmetic damage." via PUT /api/items/:id → re-push via POST /api/ebay/organizer/sales/:saleId/ebay-push. eBay Inventory API confirmed conditionDescription = "Grade B — Very good condition\n\nAll knobs and switches function correctly. No cosmetic damage.\n\nZoom B3..." Full pipeline: DB save ✅ → buildConditionDescription() includes conditionNotes between grade+description ✅ → push updates live listing ✅ → eBay API confirms value live ✅. | S883 |
 | — | OAuth session supersede | ✅ Human-verified S883 — Patrick logged in as user2 (Bob Smith JWT active), clicked Sign in with Google as artifactmi@gmail.com. /api/auth/me response confirms: id=cmnxueo790003tfv8nx6rlmjt, email=artifactmi@gmail.com, oauthProvider=google. Session correctly superseded to Artifact account. OAuthBridge fix confirmed working in prod. | S883 |
 | — | Email Verification Migration | ✅ Confirmed deployed S883 — DB query confirms migration 20260515180000_add_email_verification_token_expiry applied 2026-05-15 19:32 UTC. All 4 columns present in User table (emailVerificationToken, emailVerificationTokenExpiry, emailVerified, emailVerifiedAt). Blocked Queue entry was stale — migration was deployed May 15. | S883 |
@@ -140,20 +145,33 @@ _(S862
 
 ## Next Session
 
-**S884 done. Blocked Queue: 4 rows. QA MODE cleared. Rarity Boost UI fix pending push. Chrome blocked mid-session — deep-test flows deferred.**
+**S885 done. Blocked Queue: 5 rows (2 new bugs added). Rarity Boost ✅ closed. Add-items pipeline ✅ Chrome-verified. POS core ✅ verified, 2 bugs found + filed.**
 
-**S885 plan:**
-- **[PUSH FIRST]** Push coupons.tsx + roadmap.md + STATE.md + patrick-dashboard.md.
-- **[Chrome QA]** Patrick: check Chrome extension side panel for pending permission prompt, then resume. Deep-test add-items flow (upload photo → Analyze → review → publish). POS flow as organizer (mark item sold via POS).
-- **[Chrome QA post-push]** Verify /coupons shows "Activate Rarity Boost (15 XP)" — clears Rarity Boost from queue.
+**S886 plan:**
+- **[RECORDS]** Apply S885 PCVs to roadmap: Rarity Boost → Chr ✅ S885, Add-items pipeline → new roadmap entry Chr ✅ S885.
+- **[DEV]** P3 fix (1-liner): Review success page "View sale" → `/sales/[id]` not `/sale/[id]`. Dispatch findasale-dev.
+- **[DEV]** P2 fix: POS search filter — add `status: 'AVAILABLE'` filter to item search query in posController. Also add visible error toast when cash sale rejected 400. Dispatch findasale-dev.
+- **[Chrome QA]** Verify both fixes after push.
+- **[Optional]** eBay OAuth on user1 at /organizer/settings/ebay.
 
 **Patrick actions required:**
-1. **Check Chrome extension side panel** — dismiss any pending permission prompt to unblock QA
-2. Push: see push block below
-3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
-4. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
+1. Push block below (STATE.md + patrick-dashboard.md — no code changes this session)
+2. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks eBay QA)
+3. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
 
 ## Recent Sessions
+
+### S885 — QA MODE. Rarity Boost ✅. Add-items pipeline ✅. POS core ✅. 2 bugs filed. Blocked Queue: 5 rows.
+
+**S884 push confirmed** — commit 00973398 "S884: Rarity Boost 50→15 XP UI fix". coupons.tsx deployed to Vercel.
+
+**Rarity Boost 15 XP ✅ Chrome-verified** — /coupons Shopper tab → Boosts & Bonuses → "Activate Rarity Boost (15 XP)". S884 fix confirmed live. ss_10072ub1r. Closed from Blocked Queue.
+
+**Add-items pipeline ✅ Chrome-verified end-to-end** — Batch Upload → file_upload → Analyze All → Smart Review Queue → AI: "Vintage Table Lamp, Mid-Century Modern Style, Wood Base" (62% confidence, SMART tags). Approve → "QUEUE CLEAR — All 2 items are live." ss_3920p8trb ss_57255gxkm. Live on sale detail page confirmed. ss_5660w5ek0. Test item cleaned up via psycopg2.
+
+**POS core UI ✅** — /organizer/pos: sale auto-selects, item search, add to cart, Cash selected (green highlight), numpad with correct change calculation ($50→Change $5), Record Cash Sale button activates. API fires. Two bugs found (see Blocked Queue).
+
+**Blocked Queue: 5 rows** (−1 Rarity Boost closed, +2 new bugs)
 
 ### S884 — Records pass (S883 PCVs applied to roadmap). Rarity Boost UI fix coded. Chrome blocked. Blocked Queue: 4 rows (QA mode cleared).
 
