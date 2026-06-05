@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S882 — QA MODE. #197 Bounties P2 ✅ Patrick-confirmed (no error toast post S881 fix). Y-axis P3 ✅ Chrome-verified (ss_9355qlny8). Wide organizer page sweep: 24 pages ✅, 4×404 not-linked (P3). Blocked Queue: 7 rows (QA MODE continues).**
+**Latest: S883 — QA MODE. Records: S882 PCVs applied to roadmap (Y-axis formatter + #192 ENDED sale). Wide sweep: 18 pages/features Chrome-verified (organizer starter-kit, discount-rules modal, create-sale wizard, XP Store, map, guide, calendar, search, pricing, cities, categories, trending, sale detail, storefront, shopper trades/explorer-profile/homepage). No new bugs. Blocked Queue: 7 rows.**
+
+**S882: #197 Bounties P2 ✅ Patrick-confirmed (no error toast post S881 fix). Y-axis P3 ✅ Chrome-verified (ss_9355qlny8). Wide organizer page sweep: 24 pages ✅, 4×404 not-linked (P3). Blocked Queue: 7 rows (QA MODE continues).**
 
 **S880: #192 ✅ Chrome-verified (ENDED sale price history renders). /organizer/customers: not linked from nav — closed from queue. NEW P2 REGRESSION: /shopper/bounties 500 (#197 was ✅ S862, S868 FK migration broke it — getCommunityBounties controller, DB query confirmed OK). P3: chart Y-axis "000001" float display bug.**
 
@@ -75,8 +77,25 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| — | Price History Y-axis formatter | ✅ Chrome-verified S882 — /organizer/edit-item/f319b119 as Alice (user1). Y-axis shows $94/$84/$78/$72 — whole dollar values, no float "000001" bug. Math.round() fix confirmed. ss_9355qlny8 | S882 |
-| 192 | Price History — ENDED sale fix | ✅ Chrome-verified S880 — As Alice (user1) on /organizer/edit-item/f319b119-73fb-4399-a397-55fd2240bff1 (Old Radio, ENDED sale). Price History heading visible, orange step-line chart rendered, Jun 2→Jun 4 X-axis, $78→$84 Y-axis range, 2 data points. DOM confirmed via get_page_text. ss_6019d9p8a ss_2365m7h2q | S880 |
+_(Y-axis formatter + #192 ENDED sale: applied to roadmap S883)_
+| — | Organizer starter-kit | ✅ Chrome-verified S883 — /organizer/starter-kit as Alice (user1). "Sale Day Starter Kit" heading, Pre-Sale Checklist with checkboxes, Download PDF + Print buttons, Back to dashboard link. ss_8106nlgh7 | S883 |
+| — | Discount rules create modal | ✅ Chrome-verified S883 — /organizer/discount-rules as Alice (user1). "Discount Rules" page loads, empty state. Clicked "+ Add Rule" → "Create Discount Rule" modal with Color Tag, Label, Discount %, Active From, Active Until fields. ss_68366qf20 ss_067153c7v | S883 |
+| — | Create sale wizard (#138 + #411) | ✅ Chrome-verified S883 — /organizer/create-sale as Alice (user1). "Step 1 of 5: What kind of sale are you putting on?" — 5 sale types: Estate Sale ✅ (selected), Yard & Moving ✅, Auction ✅, Market & Pop-Up ✅, Dorm Dash ✅. 5-step sidebar visible. ss_3060qw90j | S883 |
+| — | XP Store (/coupons) | ✅ Chrome-verified S883 — /coupons as Alice (user1). "XP Store" heading, Streak 1, 373 XP, INITIATE rank, Shopper/Organizer tabs, Discount Coupons: Standard $0.75/100XP, Deluxe $2/200XP, Premium $5/500XP (disabled). ss_62793so06 ss_56365kcxa | S883 |
+| — | Map page | ✅ Chrome-verified S883 — /map as Bob (user2). "Sales Near You" 85 sales, map with pins, Plan Your Route/Heatmap/My Location buttons, date filters (All Dates/Today/This Weekend/This Week), type filters (All Types/Estate/Yard/Auction/Flea Market/Consignment/Retail Store/Vendor Booth). ss_0552v7zh2 | S883 |
+| — | Guide page | ✅ Chrome-verified S883 — /guide as Bob (user2). "Organizer Guide" heading, full sidebar nav (Getting Started, Creating a Sale, Adding Items, Community Appraisals, Managing Inventory, Auction Items, Shopper Communication, Payouts, QR Code Marketing, Push Notifications, Referral Program), content loaded. ss_17131y4gc | S883 |
+| — | Calendar page | ✅ Chrome-verified S883 — /calendar as Bob (user2). "Sale Calendar" June 2026 month view, Prev/Next navigation, real sales on dates, "Remind Me by Email" buttons, today (Jun 4) highlighted orange. ss_195917ziu | S883 |
+| — | Shopper trades (#218) | ✅ Chrome-verified S883 — /shopper/trades as Bob (user2). "Trades" heading, "Trade and swap items with other shoppers." subtitle, "Coming Soon — Feature in development" badge, Back to Dashboard button. ss_2861pyk7b | S883 |
+| — | Shopper explorer-profile | ✅ Chrome-verified S883 — /shopper/explorer-profile as Bob (user2). "Explorer Profile" heading, "0 finds" badge, "Your Explorer Identity" section, Explorer Bio textarea, Specialties input with Add button, Item Categories section. ss_4271dkl4t | S883 |
+| — | Homepage | ✅ Chrome-verified S883 — finda.sale/ as Bob (user2). "Discover Amazing Deals" hero, search bar, "Dallas is heating up 58 sales this week" trending banner, "Today's Treasure Hunt" card (JEWELRY, +3 Hunt Pass XP), map mini widget (20 active sales), "Featured Sales" 20 of 20. ss_75552983d ss_8844zq96l ss_7466lun9p | S883 |
+| — | Sale detail (directory listing) | ✅ Chrome-verified S883 — /sales/cmpt9uf2q00k38cehfsx5h9i5 as Bob (user2). "Colossal estate sale in house, garage, workshop, pole barn" — hero photo, dates, photo strip, "What's inside" description, WHEN/WHERE sections, map sidebar with pin, Directions button, "Organized By: Creative Solutions" with Storefront button, Items empty state with "Remind Me by Email", share buttons (X/Twitter/Threads/Pinterest/Nextdoor/TikTok). ss_3721kp9fj ss_45238s0r1 ss_46272tzgq | S883 |
+| — | Search page | ✅ Chrome-verified S883 — /search?q=vintage as Bob (user2). Search bar, "Save Search" + "View saved searches" links, Filters sidebar (Price Range/Condition/Category/Sale Type), All/Sales(10)/Items(10) tabs, "Plan Route for All Sales" button, real results with TODAY badges. ss_9502geaos | S883 |
+| — | Pricing page | ✅ Chrome-verified S883 — /pricing as Bob (user2/PRO). "Sell smarter." headline, 6 feature tiles, Free/$29 PRO (✓ Current Plan)/$79 TEAMS tiers with feature lists. Correct prices match D-007. ss_3228c6qzt ss_1209ystwv | S883 |
+| — | Cities page (#187) | ✅ Chrome-verified S883 — /cities as Bob (user2). "Browse Sales by City" heading, 200+ cities across 200 cities, state-grouped (Alabama/Arizona/Arkansas/...), city links with sale counts. ss_4392ish2n | S883 |
+| — | Categories page (#180) | ✅ Chrome-verified S883 — /categories as Bob (user2). "Browse by Category" heading, category grid with item counts (Comics 30, Coins & Currency 7, Magazines 6, Pipe Fittings 6, Collectibles 5, etc.). ss_1606pzfyk | S883 |
+| — | Trending page | ✅ Chrome-verified S883 — /trending as Bob (user2). "Trending This Week" heading, "Hot Sales" section with #1/#2/#3 HOT badges, real sale cards (Hammond Estate Sale, Collectors Auction June 9th, etc.) with hearts/items/date stats. ss_8926p6wv6 | S883 |
+| — | QA sale detail (Bob shopper view) | ✅ Chrome-verified S883 — /sales/59c49908-72f2-4e92-ade9-02bfcfdd9230 as Bob (user2). "QA Active Sale S875 — Mixed Goods", Live now badge, Jun 4-7 Grand Rapids MI, "Going (0)" button, "Notify me of new items" button, Live Activity widget, INVENTORY "1 items", "Find similar items on eBay", Filter by category, HOLDS & SHIPPING info (48h hold), Photo Station card, Treasure Hunt card, Share sidebar (Copy/Facebook/X/Threads). ss_23185ngzl ss_136359q2w | S883 |
+| — | Organizer storefront | ✅ Chrome-verified S883 — /organizer/storefront/cmomwf8ya000x11qwvtqmk3i9 as Bob (user2). "Kelly's Estate Sales" organizer page, "KE" avatar, ESTATE SALES type, "Sale live now" badge, Grand Rapids MI, Share/Follow buttons, "Quality Sales You Can Trust" tagline, 2 Sales / 2019 Est., bio, "Follow Kelly's Estate Sales" CTA. ss_0286gmk6l | S883 |
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
 
 | 31 | Brand Kit save | As Alice (user1/PRO) on /organizer/brand-kit: scrolled to Save Brand Kit, clicked → "Saving..." (ss_2548h9vun) → green toast "Brand Kit updated successfully" (ss_9229rauhl). DB updatedAt confirmed 16:34 UTC. TEAMS Advanced Brand Customization gated ✅. Downloadable Brand Assets section visible ✅. | S866 |
@@ -120,13 +139,12 @@ _(S862
 
 ## Next Session
 
-**S882 done. Blocked Queue: 7 rows. QA MODE continues (≥8 threshold, now below — but items remain until verified).**
+**S883 done. Blocked Queue: 7 rows. QA MODE continues.**
 
-**S883 plan:**
-- **[Records]** Apply S882 PCVs to roadmap: Y-axis formatter ✅ S882.
-- **[Chrome QA]** Continue organizer page sweep — remaining linked pages not yet hit this session (starter-kit, bounties/organizer side, discount-rules deep test).
-- **[Chrome QA]** Shopper-side pages not yet swept this session.
-- **[P3 unbuilt pages]** /organizer/pickup-scheduler, /organizer/auction, /organizer/seo, /organizer/buyers all 404 but not linked from nav — same disposition as /organizer/customers (close, no user impact).
+**S884 plan:**
+- **[Records]** Apply S883 PCVs to roadmap (18 entries — starter-kit, discount-rules, create-sale wizard, XP Store, map, guide, calendar, trades, explorer-profile, homepage, sale detail ×2, search, pricing, cities, categories, trending, organizer storefront). Cross-session rule: roadmap Chrome column updated by Records agent at start of S884.
+- **[Chrome QA]** Blocked Queue items needing attention: OAuth supersede (Patrick-only), eBay connection (Patrick-only), Email verification migration (Patrick-only), Rarity Boost spec (Patrick decision).
+- **[Chrome QA]** If Blocked Queue has remaining testable items — deep-test add-items flow (upload photo → Analyze → review → publish item) and POS flow as organizer.
 
 **Patrick actions required:**
 1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
@@ -134,7 +152,36 @@ _(S862
 3. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
 4. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
 5. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
+
 ## Recent Sessions
+
+### S883 — QA MODE: Records pass (S882 PCVs applied). Wide sweep: 18 pages/features Chrome-verified. No new bugs. Blocked Queue: 7 rows.
+
+**Records pass (session start):** S882 PCVs applied to roadmap.md — Y-axis formatter ✅ S882 added to #192 Notes. (#192 ENDED sale already applied S881.)
+
+**Chrome QA sweep (Alice/user1 then Bob/user2, all ✅):**
+- /organizer/starter-kit ✅ ss_8106nlgh7 — "Sale Day Starter Kit", Pre-Sale Checklist, Download PDF + Print buttons
+- /organizer/discount-rules ✅ ss_68366qf20 ss_067153c7v — Create Rule modal: Color Tag, Label, Discount %, Active From/Until fields
+- /organizer/create-sale ✅ ss_3060qw90j — Step 1 of 5, all 5 sale types (Estate, Yard, Auction, Market+Pop-Up, Dorm Dash), 5-step sidebar
+- /coupons (XP Store) ✅ ss_62793so06 ss_56365kcxa — 373 XP, INITIATE, 3 Discount Coupon tiers, Shopper/Organizer tabs
+- /map ✅ ss_0552v7zh2 — 85 sales, pins, all type/date filters, Plan Your Route/Heatmap/My Location
+- /guide ✅ ss_17131y4gc — Organizer Guide, full sidebar nav, content loaded
+- /calendar ✅ ss_195917ziu — June 2026, real sales, "Remind Me by Email" buttons, today highlighted
+- /shopper/trades ✅ ss_2861pyk7b — "Coming Soon" badge
+- /shopper/explorer-profile ✅ ss_4271dkl4t — Explorer Bio, Specialties, Item Categories
+- Homepage ✅ ss_75552983d ss_8844zq96l — "Discover Amazing Deals", Treasure Hunt card, map 20 sales, Featured Sales 20 of 20
+- Sale detail (directory) ✅ ss_3721kp9fj ss_45238s0r1 — real photos, description, WHEN/WHERE, map, share buttons
+- /search?q=vintage ✅ ss_9502geaos — Filters sidebar, Save Search, All/Sales(10)/Items(10) tabs, Plan Route button
+- /pricing ✅ ss_3228c6qzt ss_1209ystwv — Free/$29 PRO (✓ Current Plan for Bob)/$79 TEAMS, correct prices
+- /cities ✅ ss_4392ish2n — 200+ cities, state-grouped
+- /categories ✅ ss_1606pzfyk — Browse by Category grid with item counts
+- /trending ✅ ss_8926p6wv6 — #1/#2/#3 HOT badges, real sale data
+- QA sale detail (Bob shopper) ✅ ss_23185ngzl ss_136359q2w — Going/Notify buttons, Live Activity, inventory, Photo Station, Treasure Hunt, Share sidebar
+- /organizer/storefront ✅ ss_0286gmk6l — "Kelly's Estate Sales", 2 Sales/2019 Est., Follow/Share buttons
+
+**No new bugs found.** /organizer/new-sale 404 by design (correct URL is /organizer/create-sale). Homepage card blank images are correct behavior for directory listings without platform-uploaded photos.
+
+**Blocked Queue: 7 rows** (unchanged — no new bugs, no closures this session)
 
 ### S882 — QA MODE: #197 Bounties ✅ (Patrick-confirmed). Y-axis P3 ✅ Chrome-verified. Wide organizer page sweep (24 pages ✅, 4×404 not-linked P3).
 
