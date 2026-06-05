@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S877 — QA MODE. Records pass: S875+S876 PCVs applied + 113 additional Human QA columns updated from Status column evidence (bulk roadmap reconciliation). #192 P2 FIXED (priceHistoryController.ts owner bypass for ENDED sale items — awaiting push). Chrome QA: #165 ✅, #308 ✅, #274 ✅. Blocked Queue: 8 active rows.**
+**Latest: S878 — QA MODE. Records pass: S877 PCVs applied (#165/#308/#274) + 6 additional Chr/Hum column fixes (#319/#325/#328→Chr ✅ S830, #350→Chr ✅ S797, #142→Chr ⚠️ S805, #166→Hum ✅ S837). Chrome QA: #166 ✅. P3 bugs: dead admin nav links (/admin/notify-me, /admin/confidence-scores both 404). Blocked Queue: 8 active rows + P3 dead links.**
 - **S874: Records pass applied + YMAL fix deployed.** S874 PCVs staged → roadmap applied S875.
 - **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
 - **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
@@ -64,6 +64,7 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
+| Admin nav dead links | **P3 S878** — /admin/notify-me and /admin/confidence-scores both return 404 despite being listed as navigation links on the /admin dashboard. Admin management pages not built. | Build pages or remove dead nav links from admin dashboard | S878 |
 | #192 Price History — ENDED sale bug | **P2 FIXED S877** — `priceHistoryController.ts`: owner/admin bypass added (isOwner/isAdmin check before PUBLISHED gate). 0 TS errors. Awaiting push + Chrome re-verify on ENDED sale item. | S876 |
 
 ---
@@ -106,6 +107,7 @@ _(S862
 | 324 | EXIF Temporal Clustering (upload preservation) ✅ | As Alice (user1) on /organizer/add-items: Batch Upload 3 JPEGs with EXIF DateTimeOriginal (14:00:05/14:00:45/16:30:00), clicked Analyze All → 3 drafts created (ss_2118qp0k0, ss_4511e8aq0). Re-downloaded stored Cloudinary images: all 3 timestamps preserved exactly. Test items+photos deleted from DB. | S863 |
 | 176 | Browse Sales homepage Type filter ✅ | As Bob (user2) on finda.sale homepage: Type dropdown → Estate Sale = "17 of 20 sales", all Estate badges (ss_48642xh5d); Yard Sale = "3 of 20 sales", Yard badges (ss_73627haye). | S863 | batch of 9 graduated to roadmap S863. Note: S862 evidence had no screenshot IDs — applied on DB/page-content evidence per S862 orchestrator log.)_
 
+| 166 | Beta Invite Codes | /admin/invites as Alice (user1): "Beta Invite Codes" heading ✅, "Generate Invite Code" button → code 4J9U3B95 with "unused" status ✅, Copy URL/Code only/Delete actions ✅. /register?invite=4J9U3B95: green banner "✓ Invite code 4J9U3B95 applied" ✅, role pre-set to "Sale Organizer" ✅, Business Information section ✅. ss_37115t11z ss_3815rn9fy ss_44402fzrx | S878 |
 | 165 | A/B Testing Infrastructure | /admin/ab-tests as Alice Johnson (user1). "A/B Tests" heading ✅, "Hero CTA v1" test card + Variant/Views/Clicks/Conversions/Conversion Rate table headers ✅, "Clear Test Data" button ✅, "No test data available yet" info message ✅, no 403. ss_7968d9zt9 | S877 |
 | 308 | Item Hide Bug Fix (isActive centralized) | /organizer/edit-item/[Pyrex] as Alice (user1). Status dropdown shows Available/Sold/Unavailable ✅ (addresses S838 "no show button" concern — Unavailable→Available IS the show/hide mechanism), "Unpublish" button present ✅. ss_13358xg0c ss_1630eqh3i | S877 |
 | 274 | Trail Completion Share | /shopper/trails/cmnsa0jir0000uzighx3ni54f as Leo Thomas (user5). "South Side Treasure Hunt": "✓ Trail Completed!" green banner (Completed on 6/4/2026) ✅, "Share your achievement" card ✅, Share button ✅, Public Link section ✅. Share button clicked → navigator.share triggered (no console errors, native share path — no clipboard fallback needed). ss_558087lcg ss_1217874pr | S877 |
@@ -114,12 +116,13 @@ _(S862
 
 ## Next Session
 
-**S877 done. Blocked Queue: 8 active rows — QA MODE (≥8). S877 PCVs (#165/#308/#274) staged — apply to roadmap at S878 start.**
+**S878 done. Blocked Queue: 8 active rows + P3 dead-links — QA MODE (≥8). S878 PCV (#166) staged — apply to roadmap at S879 start.**
 
-**S878 plan:**
-- **[RECORDS — session start]** Apply S877 PCVs: #165→✅S877, #308→✅S877, #274→✅S877.
+**S879 plan:**
+- **[RECORDS — session start]** Apply S878 PCV: #166→Chr ✅ S878.
 - **[PUSH NEEDED]** Patrick must push `priceHistoryController.ts` fix before Chrome re-verify of #192 on ENDED sale items.
-- **[Chrome QA]** Remaining genuinely unverified: #19 Passkey (needs hardware), #317 Geofence (needs GPS). Both blocked by physical requirements — skip. Consider testing other unchecked organizer flows.
+- **[Chrome QA]** Continue sweeping unverified organizer/shopper flows. Consider: /organizer/pos, /organizer/edit-sale, shopper flows as Bob (user2).
+- **[P3 fix]** Dead admin nav links (/admin/notify-me, /admin/confidence-scores) — dispatch findasale-dev to either build stub pages or remove links.
 
 **Patrick actions required:**
 1. **PUSH** — `priceHistoryController.ts` fix for #192 ENDED sale price history (see push block below)
@@ -129,6 +132,29 @@ _(S862
 5. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
 6. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
 ## Recent Sessions
+
+### S878 — QA MODE: Records pass (9 features reconciled) + Chrome QA (#166 ✅). P3 bugs found. Blocked Queue: 8 rows.
+
+**Records pass (session start):**
+- S877 PCVs applied: #165→Chr ✅ S877, #308→Chr ✅ S877, #274→Chr ✅ S877.
+- Additional Chr/Hum column reconciliation (notes had evidence, columns were ⬜):
+  - #319/#325/#328 → Chr ✅ S830 (Notes: "CHROME VERIFIED S830" confirmed)
+  - #350 → Chr ✅ S797 (Notes: "Chrome-verified S797" confirmed)
+  - #142 → Chr ⚠️ S805 (Notes: "CHROME VERIFIED S805 (partial)")
+  - #166 → Hum ✅ S837 (Notes: "Human QA S837" — Hum column was ⬜)
+
+**Chrome QA (as Alice Johnson user1):**
+- **#166 ✅** Beta Invite Codes — /admin/invites: "Beta Invite Codes" heading, Generate form, code 4J9U3B95 generated with "unused" status, Copy URL/Code only/Delete actions. /register?invite=4J9U3B95: green banner "✓ Invite code 4J9U3B95 applied", role pre-set to "Sale Organizer", Business Information section visible. ss_37115t11z ss_3815rn9fy ss_44402fzrx
+- Admin dashboard (/admin): KPIs ($158 MRR), CA Canada filter, Organizer Funnel, Outreach Email Pipeline, Data Integrity section, 13 admin nav links all visible. ss_8269vpe3h
+- /admin/demand-signals ✅ "Unmet Demand Signals" — city filter, min-searches filter, real data (5 queries). ss_8584nasdk
+- /organizer/members ✅ — "Team Members" page, Invite Team Member form, role dropdown, Send Invite button, "Your Team" 0 members empty state. ss_2864i0e7t
+
+**P3 bugs found:**
+- /admin/notify-me → 404 (dead admin nav link — admin dashboard links to this but page doesn't exist)
+- /admin/confidence-scores → 404 (dead admin nav link — same issue)
+- #291 Lucky Roll / Mystery Box → /shopper/lucky-roll 404 (not built; roadmap Chr/Hum remain ⬜)
+
+**Blocked Queue: 8 rows + 1 P3 dead-links entry added**
 
 ### S877 — QA MODE: Records pass (113 Human QA columns updated) + #192 P2 fix + Chrome QA (3 features ✅). Blocked Queue: 8 rows.
 
