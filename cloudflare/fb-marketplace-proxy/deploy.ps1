@@ -1,9 +1,9 @@
-# Cloudflare Worker — Facebook Marketplace Proxy — One-Shot Deploy
+# Cloudflare Worker - Facebook Marketplace Proxy - One-Shot Deploy
 #
 # Run this from PowerShell. It will:
 #   1. Prompt for your Cloudflare API token
-#      (create one at https://dash.cloudflare.com/profile/api-tokens with
-#       "Workers Scripts:Edit" — or reuse an existing one)
+#      (create one at https://dash.cloudflare.com/profile/api-tokens
+#       with "Workers Scripts:Edit" - or reuse an existing one)
 #   2. Generate a fresh PROXY_TOKEN
 #   3. Deploy the worker
 #   4. Set the PROXY_TOKEN secret on the worker
@@ -30,7 +30,7 @@ if (-not $env:CLOUDFLARE_API_TOKEN) {
 }
 
 # 2) Generate a fresh PROXY_TOKEN (shared secret between Worker and Railway).
-#    32 random bytes hex-encoded — same strength as openssl rand -hex 32.
+#    32 random bytes hex-encoded - same strength as openssl rand -hex 32.
 $bytes = New-Object byte[] 32
 [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
 $PROXY_TOKEN = -join ($bytes | ForEach-Object { $_.ToString('x2') })
@@ -46,7 +46,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Extract the worker URL from output (looks like "https://findasale-fb-proxy.<sub>.workers.dev")
+# Extract the worker URL from output (e.g. https://findasale-fb-proxy.<sub>.workers.dev)
 $workerUrl = $null
 if ($deployOutput -match 'https://findasale-fb-proxy\.[a-z0-9-]+\.workers\.dev') {
     $workerUrl = $matches[0]
@@ -62,7 +62,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # 5) Output Railway env-var values
 Write-Host ""
-Write-Host "=== DONE — Worker deployed ===" -ForegroundColor Green
+Write-Host "=== DONE - Worker deployed ===" -ForegroundColor Green
 Write-Host ""
 Write-Host "Copy these into Railway -> backend service -> Variables:" -ForegroundColor Cyan
 Write-Host ""
