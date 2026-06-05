@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S879 — QA MODE. Records: #166→Chr ✅ S878 applied. #192 P2: 2 root-cause bugs found + inline fixed (missing optionalAuthenticate on route + organizerId vs userId comparison error in controller). Needs push + re-verify. Admin dead links S878 finding = FALSE POSITIVE: /admin/waitlist ✅ + /admin/organizer-confidence ✅ both work; agent visited wrong URLs. New P3: /organizer/customers → 404. Blocked Queue: 9 rows (QA MODE continues).**
+**Latest: S880 — QA MODE. #192 ✅ Chrome-verified (ENDED sale price history renders). /organizer/customers: not linked from nav — closed from queue. NEW P2 REGRESSION: /shopper/bounties 500 (#197 was ✅ S862, S868 FK migration broke it — getCommunityBounties controller, DB query confirmed OK). P3: chart Y-axis "000001" float display bug. Blocked Queue: 9 rows (QA MODE continues).**
+
+**S879: Records: #166→Chr ✅ S878 applied. #192 P2: 2 root-cause bugs found + inline fixed (missing optionalAuthenticate on route + organizerId vs userId comparison error in controller). Push ✅ confirmed (commit 6d8bab8 Jun 5). Admin dead links S878 finding = FALSE POSITIVE. New P3: /organizer/customers → 404.**
 - **S874: Records pass applied + YMAL fix deployed.** S874 PCVs staged → roadmap applied S875.
 - **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
 - **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
@@ -64,8 +66,8 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-| #192 Price History — ENDED sale bug | **P2 FIXED S879** — S877 fix had 2 root-cause bugs: (1) route had no `optionalAuthenticate` middleware so req.user was always undefined; (2) isOwner compared Sale.organizerId (Organizer PK) vs req.user.id (User PK) — wrong ID namespaces. Both fixed S879: route now uses optionalAuthenticate, controller queries organizer.userId for comparison. 0 TS errors. Awaiting push + Chrome re-verify. | S879 |
-| /organizer/customers page | **P3 S879** — Navigated /organizer/customers as Alice (user1) → 404. Page file does not exist. May be linked from organizer nav. | Build stub page or remove any nav link referencing this URL | S879 |
+| #197 Bounties — community API 500 | **P2 REGRESSION S880** — GET /api/bounties/community → 500 on /shopper/bounties. Toast "Failed to load bounties". Was ✅ S862, S868 FK migration likely broke it. DB has data (1 record confirmed). Root: getCommunityBounties in bountyController.ts L687 — may be stale Prisma client post-S868 or `user: { isNot: null }` filter invalid for required relation in Prisma 5. | Dispatch findasale-dev: check Railway Prisma client version vs schema; fix getCommunityBounties; re-run prisma generate on Railway | S880 |
+| Price History Y-axis float display | **P3 S880** — /organizer/edit-item chart shows "000001" as top Y-axis label instead of "$93.50" — floating point precision bug in chart scale formatter. | Fix price formatter to round Y-axis labels | S880 |
 
 ---
 
@@ -73,7 +75,7 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| 192 | Price History — ENDED sale fix | As Alice (user1) on /organizer/edit-item/f319b119-73fb-4399-a397-55fd2240bff1 (Old Radio, ENDED sale): navigate to page, scroll to Price History section. Should render step chart with 2 data points ($80 Jun 3 → $85 Jun 5). UNVERIFIED — fix deployed S879 but not yet Chrome-verified. Requires push of priceHistory.ts + priceHistoryController.ts first. | S879 |
+| 192 | Price History — ENDED sale fix | ✅ Chrome-verified S880 — As Alice (user1) on /organizer/edit-item/f319b119-73fb-4399-a397-55fd2240bff1 (Old Radio, ENDED sale). Price History heading visible, orange step-line chart rendered, Jun 2→Jun 4 X-axis, $78→$84 Y-axis range, 2 data points. DOM confirmed via get_page_text. ss_6019d9p8a ss_2365m7h2q | S880 |
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
 
 | 31 | Brand Kit save | As Alice (user1/PRO) on /organizer/brand-kit: scrolled to Save Brand Kit, clicked → "Saving..." (ss_2548h9vun) → green toast "Brand Kit updated successfully" (ss_9229rauhl). DB updatedAt confirmed 16:34 UTC. TEAMS Advanced Brand Customization gated ✅. Downloadable Brand Assets section visible ✅. | S866 |
@@ -119,20 +121,39 @@ _(S862
 
 **S879 done. Blocked Queue: 9 rows (admin dead links removed — false positive; /organizer/customers P3 added — net zero). #192 fix deployed inline — needs push + re-verify. QA MODE continues (≥8 rows).**
 
-**S880 plan:**
-- **[PUSH FIRST]** Push S879 fixes: `priceHistory.ts` + `priceHistoryController.ts` + `roadmap.md` + `STATE.md` + `patrick-dashboard.md`
-- **[Chrome QA — after deploy]** Re-verify #192 as Alice on /organizer/edit-item/f319b119-73fb-4399-a397-55fd2240bff1 (Old Radio, ENDED sale) — Price History chart should render.
-- **[Chrome QA]** Switch to Bob (user2) for shopper flows not yet verified.
-- **[P3]** /organizer/customers → 404 — dispatch dev to build stub or fix nav link if it exists.
+**S881 plan:**
+- **[P2 REGRESSION — dispatch first]** Bounties 500: `Skill('findasale-dev')` → fix getCommunityBounties in bountyController.ts. Root cause likely stale Prisma client post-S868 or invalid `user: { isNot: null }` filter. Check Railway Prisma client. #197 was ✅ S862 — restore it.
+- **[Chrome QA]** Continue page sweep — /shopper/holds, /shopper/crews, /shopper/loot-log, /shopper/reputation, /shopper/notifications.
+- **[Records]** Apply S880 #192 PCV to roadmap Chr column.
+- **[P3]** Price History Y-axis float label "000001" — dispatch dev for formatter fix.
 
 **Patrick actions required:**
-1. **PUSH** — `packages/backend/src/routes/priceHistory.ts` + `packages/backend/src/controllers/priceHistoryController.ts` (S879 #192 re-fix: optionalAuthenticate + organizerId correction)
-2. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
-3. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
-4. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
-5. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
-6. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
+1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
+2. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
+3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
+4. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
+5. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
 ## Recent Sessions
+
+### S880 — QA MODE: #192 ✅ Chrome-verified (ENDED sale). Wide page sweep (12 pages). P2 regression found (Bounties 500). /organizer/customers closed — not linked anywhere.
+
+**#192 Price History ENDED sale — ✅ VERIFIED:**
+- As Alice (user1) on /organizer/edit-item/f319b119 (Old Radio, ENDED sale). Price History heading visible, orange step-line chart, Jun 2→Jun 4, $78→$84 Y-axis, 2 data points. DOM confirmed + screenshots. ss_6019d9p8a ss_2365m7h2q.
+- S879 fix (optionalAuthenticate + organizerId correction) confirmed live.
+
+**Page sweep (all ✅):**
+- Alice: /organizer/consignors, /organizer/pos, /organizer/fraud-signals, /organizer/locations, /organizer/workspace
+- Bob (user2): /shopper/dashboard, /shopper/wishlist (1 item), /shopper/hunt-pass, /shopper/guild-primer (Initiate 192 XP), /shopper/league (Leo Sage 2005 XP), /shopper/trails, /shopper/achievements (3/12), /shopper/explorer-profile
+
+**P2 REGRESSION found — #197 Bounties:**
+- /shopper/bounties: GET /api/bounties/community → 500. Toast "Failed to load bounties". Was ✅ S862, broke after S868 FK migration. DB query confirmed working (1 record). Prisma client or filter issue in getCommunityBounties L687. Added to Blocked Queue.
+
+**Closed from Blocked Queue:**
+- /organizer/customers: no page file, no tsx/component link anywhere — unbuilt, no user impact.
+
+**P3 noted:** Price History chart top Y-axis label shows "000001" instead of "$93.50" — float precision in chart scale formatter.
+
+**Blocked Queue: 9 rows** (removed /organizer/customers, added Bounties regression + Y-axis bug — net zero)
 
 ### S879 — QA MODE: Records pass (#166 Chr ✅) + #192 P2 re-fix + Chrome sweep. Admin dead-links P3 closed (false positive). New P3: /organizer/customers 404.
 
