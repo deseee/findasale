@@ -12,6 +12,20 @@ import { jitterDelay, getRandomUserAgent, getRandomReferer } from '../userAgents
 const FB_GRAPHQL_ENDPOINT = 'https://www.facebook.com/api/graphql/';
 const FB_DOC_ID = '7111939778879383';
 
+/**
+ * Cloudflare Worker proxy — bypasses Facebook's IP block on GCP/Railway ASNs.
+ * Live test 2026-06-05: direct Railway call returns 0 listings (HTML response);
+ * via CF Worker (AS13335) returns real GraphQL JSON. See
+ * cloudflare/fb-marketplace-proxy/worker.js for the proxy implementation.
+ *
+ * If both env vars are set, requests are routed through the Worker. Otherwise
+ * the scraper falls back to direct Facebook calls (the historical behavior;
+ * useful for local dev or if the Worker is unavailable).
+ */
+const FB_PROXY_URL = process.env.FB_MARKETPLACE_PROXY_URL;
+const FB_PROXY_TOKEN = process.env.FB_MARKETPLACE_PROXY_TOKEN;
+const USE_FB_PROXY = Boolean(FB_PROXY_URL && FB_PROXY_TOKEN);
+
 /** Hard cap on metros processed per run. Prevents unbounded request growth as the metro list expands. */
 const MAX_METROS_PER_RUN = 50;
 
@@ -262,20 +276,38 @@ export async function scrapeFacebookMarketplace(
           },
         };
 
+        // Route through Cloudflare Worker when configured (bypasses GCP ASN block).
+        // The Worker forwards the same form-urlencoded body to Facebook from
+        // Cloudflare's edge IPs (AS13335). See worker.js for upstream headers —
+        // we only attach bearer auth here when proxying.
+        const requestBody = `doc_id=${FB_DOC_ID}&variables=${JSON.stringify(variables)}`;
+        const requestHeaders: Record<string, string> = {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        };
+        let targetUrl: string;
+        if (USE_FB_PROXY) {
+          targetUrl = FB_PROXY_URL as string;
+          requestHeaders['Authorization'] = `Bearer ${FB_PROXY_TOKEN}`;
+        } else {
+          targetUrl = FB_GRAPHQL_ENDPOINT;
+          // Direct-call browser-impersonation headers (legacy path; mostly blocked
+          // from Railway, retained for local dev fallback).
+          requestHeaders['sec-fetch-site'] = 'same-origin';
+          requestHeaders['User-Agent'] = getRandomUserAgent();
+          requestHeaders['Accept'] = '*/*';
+          requestHeaders['Origin'] = 'https://www.facebook.com';
+          requestHeaders['Referer'] =
+            getRandomReferer() || 'https://www.facebook.com/marketplace/';
+          requestHeaders['Accept-Encoding'] = 'gzip, deflate, br';
+        }
+
         const response = await axios.post<FBGraphQLResponse>(
-          FB_GRAPHQL_ENDPOINT,
-          `doc_id=${FB_DOC_ID}&variables=${JSON.stringify(variables)}`,
+          targetUrl,
+          requestBody,
           {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'sec-fetch-site': 'same-origin',
-              'User-Agent': getRandomUserAgent(),
-              'Accept': '*/*',
-              'Origin': 'https://www.facebook.com',
-              'Referer': getRandomReferer() || 'https://www.facebook.com/marketplace/',
-              'Accept-Encoding': 'gzip, deflate, br',
-            },
-            timeout: 20000,
+            headers: requestHeaders,
+            // Slightly longer timeout when proxying — extra hop to CF edge.
+            timeout: USE_FB_PROXY ? 25000 : 20000,
           }
         );
 
@@ -363,6 +395,9 @@ export async function runFacebookMarketplaceScraper(organizerId?: string): Promi
 
   console.log(
     `[FacebookMarketplace] Starting full run — ${metros.length} metros, organizer: ${resolvedOrganizerId}`
+  );
+  console.log(
+    `[FacebookMarketplace] Transport: ${USE_FB_PROXY ? `CLOUDFLARE_WORKER (${FB_PROXY_URL})` : 'DIRECT (no proxy env vars set)'}`
   );
 
   const rateLimiter = new RateLimiter({ requestsPerSecond: 0.5, maxRetries: 2 });

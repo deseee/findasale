@@ -1,0 +1,7 @@
+name = "findasale-fb-proxy"
+main = "worker.js"
+compatibility_date = "2026-05-05"
+
+# Secrets (set via `wrangler secret put PROXY_TOKEN`):
+#   PROXY_TOKEN — shared secret. Railway must send Bearer <PROXY_TOKEN>
+#                 in FB_MARKETPLACE_PROXY_TOKEN.
