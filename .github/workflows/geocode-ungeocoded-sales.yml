@@ -4,17 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       batch_size:
-        description: 'Sales per batch (max 500, default 200)'
+        description: 'Sales per batch (max 500, default 500)'
         required: false
-        default: '200'
+        default: '500'
       source:
         description: 'Filter by sourceName (leave empty for all ungeocoded: GarageSaleFinder + FacebookEvents)'
         required: false
         default: ''
   schedule:
-    # Run nightly at 2 AM UTC — after GarageSaleFinder scrape (6 AM UTC) has populated new records
-    # and well before the geocodingAuditJob runs (6 AM UTC next day)
+    # Run 3× daily — backlog clearing mode (15,792 ungeocoded + ~785 new/day from GarageSaleFinder)
+    # 02:00 UTC — after nightly scrapes; 10:00 UTC — mid-day pass; 18:00 UTC — evening pass
     - cron: '0 2 * * *'
+    - cron: '0 10 * * *'
+    - cron: '0 18 * * *'
 
 jobs:
   geocode:
@@ -32,7 +34,7 @@ jobs:
 
           curl -s -f \
             -H "x-scraper-key: ${{ secrets.INTERNAL_SCRAPER_KEY }}" \
-            "${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/geocode-ungeocoded-sales/batch?limit=${{ github.event.inputs.batch_size || 200 }}&offset=0${SOURCE_PARAM}" \
+            "${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/geocode-ungeocoded-sales/batch?limit=${{ github.event.inputs.batch_size || 500 }}&offset=0${SOURCE_PARAM}" \
             -o /tmp/ungeocoded_sales.json
 
           SALE_COUNT=$(python3 -c "import json; d=json.load(open('/tmp/ungeocoded_sales.json')); print(len(d['sales']))")
@@ -147,27 +149,38 @@ jobs:
               zip_code = (sale.get('zip') or '').strip()
               source = sale.get('sourceName', 'unknown')
 
-              if not address or not city or not state:
-                  print(f"[{i+1}/{len(sales)}] Skipping {sale_id} — missing address fields")
+              if not city or not state:
+                  print(f"[{i+1}/{len(sales)}] Skipping {sale_id} — missing city/state")
                   not_found += 1
                   continue
 
-              full_address = f"{address}, {city}, {state}"
-              if zip_code:
-                  full_address += f" {zip_code}"
+              is_city_only = not address
 
-              print(f"[{i+1}/{len(sales)}] Geocoding [{source}] {full_address}")
+              if is_city_only:
+                  # Facebook Events city-only record — geocode to city center
+                  city_query = f"{city}, {state}, US"
+                  print(f"[{i+1}/{len(sales)}] City-center geocoding [{source}] {city_query}")
+                  lat, lng, strat = nominatim_freetext(city_query)
+                  if lat is None:
+                      # Fallback: try with state spelled out via freetext
+                      lat, lng, strat = nominatim_freetext(f"{city} {state} United States")
+              else:
+                  full_address = f"{address}, {city}, {state}"
+                  if zip_code:
+                      full_address += f" {zip_code}"
 
-              # Strategy 1: Nominatim structured
-              lat, lng, strat = nominatim_structured(address, city, state, zip_code)
+                  print(f"[{i+1}/{len(sales)}] Geocoding [{source}] {full_address}")
 
-              # Strategy 2: Nominatim freetext
-              if lat is None:
-                  lat, lng, strat = nominatim_freetext(full_address)
+                  # Strategy 1: Nominatim structured
+                  lat, lng, strat = nominatim_structured(address, city, state, zip_code)
 
-              # Strategy 3: Census (no rate limit)
-              if lat is None:
-                  lat, lng, strat = census_geocode(address, city, state, zip_code)
+                  # Strategy 2: Nominatim freetext
+                  if lat is None:
+                      lat, lng, strat = nominatim_freetext(full_address)
+
+                  # Strategy 3: Census (no rate limit)
+                  if lat is None:
+                      lat, lng, strat = census_geocode(address, city, state, zip_code)
 
               if lat is not None:
                   results.append({'id': sale_id, 'lat': lat, 'lng': lng})

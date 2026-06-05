@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S887 — DEV MODE. AuctionNinja → Railway cron (sourceRegistry.ts). DB-backed Gmail quota guard deployed: EmailQuotaLog migration ✅, hard stop 1500/day, Resend alert at 75% to deseee@gmail.com. Gmail monitoring crons added: OAuth health check (06:30), daily send summary (08:00), suspension detect (*/2h), bounce alert wired. Sale ending soon flood = expected one-time backfill. #335 code guard live — OUTREACH_ENABLED still false, account in 18h suspension window.**
+**S887 — DEV MODE + SCRAPER AUDIT. AuctionNinja → Railway cron live. DB-backed Gmail quota guard deployed (EmailQuotaLog, hard stop 1500/day). Gmail monitoring crons active (OAuth health/send summary/suspension detect). Scraper audit complete: 48,701 sales in DB, 15,792 (32%) un-geocoded — geocoding job net-negative (+785/day GSF ingest vs ~200/day cleared). FB Marketplace: 0 records ever. FB Events: 96% un-geocoded. NAA: declared BROKEN. AuctionNinja/AuctionZip: 0 organizer records. 462 WARM leads email-ready but no outreach record. Outreach still trickling 7/day despite OUTREACH_ENABLED=false — root cause unclear. BQ: 17 rows (6 P1/P2 from S887 audit + 7 P2/P3 added S887 Records pass).**
 
 **⚠️ S865-auto (Jun 5) URGENT: Email suspension RE-TRIPPED. Pipeline sent 8,317+ emails → Google Workspace daily limit hit. GH workflow DISABLED, OUTREACH_ENABLED=false set. Patrick must reactivate outreach@finda.sale at admin.google.com. See Blocked Queue #335.**
 
@@ -69,6 +69,7 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
 _⚠️ P0 AGING: #332 at 73+ sessions — mandatory P0 per CLAUDE.md §10a._
 _S886: P3 review link fix ✅ Chrome-verified S886 — removed. P2 POS filter fix ✅ Chrome-verified S886 — removed. Blocked Queue: 4 rows (#335 P1 URGENT outreach suspension + #332 + AuctionNinja + #230)._
+_S887 Records pass: 6 new rows added from scraper audit (P1/P2). S887 Records pass #2: 7 additional rows added (P2/P3). Blocked Queue: 17 rows total._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
@@ -76,6 +77,19 @@ _S886: P3 review link fix ✅ Chrome-verified S886 — removed. P2 POS filter fi
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870. **S887: Railway cron added** — `cronSchedule: '0 6 * * 3'` in sourceRegistry.ts. Pending verification that Railway IPs aren't also Cloudflare-blocked (test: `railway run --service backend npx ts-node packages/backend/src/scripts/run-auctionninja.ts`). | Verify Railway cron fires Wed 06:00 UTC and returns >0 results | S868 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 | #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. | S865-auto / Jun 5 |
+| Outreach still sending despite OUTREACH_ENABLED=false | **P1 URGENT** — 7 DB sends confirmed today at 07:59 UTC (DirectoryClaimEmail.sentAt). Railway env var not propagating or backend cron not respecting the flag. Risk: re-trips Gmail suspension before outreach@finda.sale is fully reactivated. Root cause: either Railway needs restart after env set, or GH Actions workflow fires unconditionally. Must fix before re-enabling outreach. | S887 |
+| Geocoding backlog net-negative | **P1** — 15,792 sales (32%) lack lat/lng. GarageSaleFinder adds ~785 un-geocoded records/day; nightly geocoding job clears only ~200/day. Net: +585 more un-geocoded per day. Map page, proximity search, "sales near you", and distance display all broken for 32% of inventory. Fix: run geocoding 3× daily with batch_size=500, or loop until queue empty in single run. Tool citation: Railway DB confirmed via psycopg2. | S887 |
+| Facebook Events 96% un-geocoded | **P1** — 1,460 of 1,519 FB Events sales have no lat/lng; 1,307 have no street address — city-only records fail Nominatim structured geocoding. Fix: city-center fallback (city+state → approximate lat/lng). All 1,460 FB Events sales absent from /map and proximity search. | S887 |
+| NAA scraper explicitly broken | **P1** — Source file declares "STATUS: BROKEN — JS-rendered, cannot scrape with plain fetch. Verified broken: 2026-05-23." Schedule commented out. 0 records in DB ever. Auctioneers.org uses Novi AMS (JS-rendered). Fix requires Playwright/Puppeteer or Novi AMS API access. Decision needed: invest or accept the gap and rely on AuctionZip/AuctionNinja instead. | S887 |
+| AuctionNinja/AuctionZip both 0 organizer records | **P2** — AuctionNinja: 0 records under directoryMostRecentSource IN ('AuctionNinja','AuctionNinja-Directory') despite active weekly workflow (Cloudflare ASN block documented S868). AuctionZip: 0 records under directoryMostRecentSource='AuctionZip'; only 9 organizers with auctionzip.com in website field (manual/legacy). Suspect deduplication merge silently overwriting source attribution. Both scrapers producing zero organizer pipeline value. | S887 |
+| 462 WARM leads email-ready, no outreach record | **P2** — 462 WARM-tier organizers have contactEmail but no DirectoryClaimEmail record. Outreach-ready leads sitting outside the acquisition funnel. Tool citation: Railway DB confirmed via psycopg2. Fix: backfill DirectoryClaimEmail PENDING records for these 462 before resuming outreach — warmest untouched leads in the pipeline. | S887 |
+| Facebook Events: paid search API key unmonitored | **P2** — `search-facebook-events.ts` has no key-health check. If Serper.dev/Brave/ScaleSerp keys expire, all 184 FB Events imports/week silently stop with no alert. No monitoring or fallback. | Add key-health check or alert to FB Events scraper; add key expiry to ops monitoring | S887 |
+| Outreach queue hygiene: stale PENDING + BOUNCED records | **P2** — 2,206 of 2,243 PENDING DirectoryClaimEmail records are >30 days old (oldest from 2026-05-05). 480 BOUNCED records with no cleanup/suppression logic. Stale pipeline may degrade deliverability when outreach resumes. | Suppress or archive BOUNCED records; age-out stale PENDING records; hygiene pass before outreach re-enable | S887 |
+| Sale Ending Soon rate cap missing | **P2** — 15,751 unnotified PUBLISHED sales + 2,558 ending in next 48h. Hourly cron has no per-run cap; as subscriber counts grow, could send thousands of emails per run. Rate cap fix dispatched S887 (in-flight — pending push). | Verify rate cap fix is pushed and deployed; confirm hourly cron respects cap under load | S887 |
+| AuctionNinja internal.ts call site broken + AuctionZip proxy | **P2** — AuctionNinja `internal.ts` called `scrapeAuctionNinja()` with wrong args and threw on every run. AuctionZip workflow also not using Railway proxy pattern. Both fixes dispatched S887 (in-flight — pending push). | Push fixes + run verification: AuctionNinja Railway cron returns >0 results; AuctionZip proxy pattern confirmed | S887 |
+| Facebook Events `dateApproximate` not surfaced to shoppers | **P3** — `dateApproximate=true` flag exists in scrapedMetadata but is not displayed on sale cards or sale detail pages. Shoppers may act on inaccurate end dates for city-only FB Events records. | Display "Dates approximate" label on sale cards/detail for FB Events records with dateApproximate=true | S887 |
+| WARM tier website enrichment at 3.5% coverage | **P3** — 1,382 of 39,246 WARM orgs have a website after weeks of daily enrichment. Email discovery can't run without a website. May need additional enrichment sources beyond current job. | Investigate enrichment sources; consider adding supplemental data provider or expanding query strategies | S887 |
+| GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — 14,331 GSF records lack lat/lng. Geocoding fix dispatched S887 (3× daily + batch_size=500, in-flight — pending push). GSF sales excluded from organizer outreach by design (consumer yard sales). | Verify geocoding cadence fix is pushed + deployed; confirm GSF records begin clearing from backlog | S887 |
 
 ---
 
@@ -153,23 +167,16 @@ _(S862
 
 ## Next Session
 
-**S887 done. BQ: 4 rows. Gmail quota guard deployed. AuctionNinja Railway cron live. Monitoring crons active. Audit running in parallel.**
+**S887 done. BQ: 10 rows (+6 from scraper audit). Gmail quota guard deployed. AuctionNinja Railway cron live. Monitoring crons active. Scraper audit complete — see `claude_docs/audits/scraper-audit-2026-06-05.md`.**
 
 **S888 plan:**
-- **[RESEARCH]** Full scraper/enrichment system audit. Scope:
-  - Facebook Marketplace scraper (`sources/facebook-marketplace.ts`, `scrape-facebook-marketplace.yml`) — what's it returning? Is it live? Last successful run?
-  - Facebook Events scraper (`sources/search-facebook-events.ts`, `scrape-facebook-events.yml`) — same questions
-  - AuctionNinja (`sources/auctionNinjaScraper.ts`, `scrape-auctionninja.yml`) — DISABLED per Cloudflare blocking. S887 commit "AuctionNinja+FB via Railway API" — what changed? Is it now working via Railway cron?
-  - AuctionZip (`sources/auctionZipScraper.ts`, `scrape-auctionzip.yml`) — health check
-  - EstateSalesNet (`sources/estatesalesnet.ts`) — health check
-  - GarageSaleFinder (`sources/garageSaleFinder.ts`) — health check
-  - NAA directory (`sources/naaAuctioneerDirectory.ts`, `scrape-naa.yml`) — health check
-  - Website enrichment pipeline (`enrichment.ts`, `pipeline-website-enrichment.yml`) — running? results?
-  - WARM lead enrichment — DB shows 208 addressable WARM orgs. Has daily enrichment job improved this?
-  - Geocoding — 6,760 sales not geocoded per S756 pool audit. Current count?
-  - Email discovery pipeline (`pipeline-email-discovery.yml`) — status
-- **Session type:** RESEARCH. Read source files + GH workflow schedules + DB counts. Do NOT dispatch dev fixes without Patrick review.
-- **Output:** One audit doc at `claude_docs/audits/scraper-audit-2026-06-05.md` with status table: source → enabled/disabled → last known success → current issue → recommended action.
+- **[DEV]** Scraper/enrichment fixes from audit. Dispatch `findasale-dev` for:
+  - Geocoding: increase batch cadence (3×/day or loop-until-empty) to clear net-negative backlog
+  - Facebook Events: add city-center fallback geocoding for city-only records (1,307 sales)
+  - Outreach OUTREACH_ENABLED=false leak: confirm root cause (Railway restart needed? GH Actions unconditional trigger?) and plug the gap
+  - AuctionZip: investigate deduplication merge silently dropping directoryMostRecentSource
+  - 462 WARM leads backfill: create DirectoryClaimEmail PENDING records for emailable leads with no outreach record
+- **Session type:** DEV. Use audit findings as spec — root causes are documented in `scraper-audit-2026-06-05.md`. No new research needed.
 
 **Patrick actions required:**
 1. Push block below (STATE.md + patrick-dashboard.md)

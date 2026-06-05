@@ -5,6 +5,25 @@ import { sendPushNotification } from '../utils/webpush';
 import { buildEmail } from '../services/emailTemplateService';
 import { emailService } from '../lib/emailService';
 
+// Daily send cap: max 500 emails/day. Counter resets at midnight UTC.
+// In-memory is fine — Railway restarts reset it daily anyway.
+const DAILY_EMAIL_CAP = 500;
+let dailyEmailsSent = 0;
+let dailyCapResetDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+
+function checkAndIncrementDailyCap(): boolean {
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  if (todayUtc !== dailyCapResetDate) {
+    dailyEmailsSent = 0;
+    dailyCapResetDate = todayUtc;
+  }
+  if (dailyEmailsSent >= DAILY_EMAIL_CAP) {
+    return false; // cap reached
+  }
+  dailyEmailsSent++;
+  return true;
+}
+
 interface EmailTemplate {
   subject: string;
   html: string;
@@ -114,10 +133,21 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
         for (const subscriber of sale.subscribers) {
           // Send email if subscriber has email
           if (subscriber.email) {
+            // Daily send cap check
+            if (!checkAndIncrementDailyCap()) {
+              console.warn(
+                `[saleEndingSoonJob] Daily email cap (${DAILY_EMAIL_CAP}) reached — skipping remaining sends for today`
+              );
+              return; // exit processSaleEndingSoonNotifications early
+            }
+
             // Suppression check before sending
             const { suppressionService } = await import('../services/suppressionService');
             const isSuppressed = await suppressionService.isSuppressed(subscriber.email);
-            if (isSuppressed) continue;
+            if (isSuppressed) {
+              dailyEmailsSent--; // undo the increment — suppressed emails don't count
+              continue;
+            }
 
             try {
               await emailService.emails.send({

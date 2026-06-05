@@ -35,22 +35,35 @@ export async function getBatchOfUngeocodedSales(req: Request, res: Response): Pr
     const offset = parseInt(req.query.offset as string) || 0;
     const sourceName = req.query.source as string | undefined;
 
-    const whereClause = {
-      lat: null,
-      address: { not: '' },
-      city: { not: '' },
-      state: { not: '' },
-      ...(sourceName
-        ? { sourceName }
-        : {
-            OR: [
-              // Scraped sources that never provide coordinates
-              { sourceName: { in: ['GarageSaleFinder', 'Facebook Events'] } },
-              // Platform sales (organizer-created) that were published without geocoding
-              { sourceName: null, status: 'PUBLISHED' },
-            ],
-          }),
-    };
+    // Two categories of ungeocoded sales:
+    // 1. Sales with a full street address (GarageSaleFinder, platform sales, FB Events w/ slug)
+    // 2. Facebook Events city-only records (address='', city+state present) — use city-center fallback
+    const whereClause = sourceName
+      ? {
+          lat: null,
+          city: { not: '' },
+          state: { not: '' },
+          sourceName,
+        }
+      : {
+          lat: null,
+          city: { not: '' },
+          state: { not: '' },
+          OR: [
+            // Scraped sources with full addresses
+            {
+              sourceName: { in: ['GarageSaleFinder', 'Facebook Events'] },
+              address: { not: '' },
+            },
+            // Facebook Events city-only records (no street address — city-center fallback)
+            {
+              sourceName: 'Facebook Events',
+              address: '',
+            },
+            // Platform sales (organizer-created) published without geocoding
+            { sourceName: null, status: 'PUBLISHED', address: { not: '' } },
+          ],
+        };
 
     const [sales, total] = await Promise.all([
       prisma.sale.findMany({

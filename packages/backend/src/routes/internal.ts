@@ -75,7 +75,6 @@ import { runUtahLicensingScraper } from '../services/scraper/sources/utahLicensi
 import { runOsmScraper } from '../services/scraper/osmScraper';
 import { scrapeGarageSaleFinder } from '../services/scraper/sources/garageSaleFinder';
 import { runAuctionZipScraper } from '../services/scraper/sources/auctionZipScraper';
-import { scrapeAuctionNinja } from '../services/scraper/sources/auctionNinjaScraper';
 import { runFacebookMarketplaceScraper } from '../services/scraper/sources/facebook-marketplace';
 import { scrapeNAADirectory } from '../services/scraper/sources/naaAuctioneerDirectory';
 import { runAlaskaPhase2Scraper } from '../services/scraper/sources/alaskaPhase2Scraper';
@@ -641,9 +640,12 @@ router.post('/scraper/run-auctionzip', requireSecret, async (req: express.Reques
 });
 
 // POST /api/internal/scraper/run-auction-ninja
+// GitHub Actions triggers this endpoint; Railway's IP bypasses Cloudflare's ASN block
+// that rejects GitHub Actions runners (AWS us-east-1/us-east-2) directly.
+// Uses runScrapeRun so the system organizer + rate limiter are wired up correctly.
 router.post('/scraper/run-auction-ninja', requireSecret, async (req: express.Request, res: express.Response) => {
   res.status(202).json({ message: 'AuctionNinja scraper started' });
-  scrapeAuctionNinja().catch(err => {
+  runScrapeRun('AuctionNinja', 'national-us').catch(err => {
     console.error('[AuctionNinja] scraper error:', err);
     Sentry.captureException(err, { tags: { scraper: '[AuctionNinja]', type: 'scraper_failure' } });
   });
