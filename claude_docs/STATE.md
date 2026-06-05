@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S878 — QA MODE. Records pass: S877 PCVs applied (#165/#308/#274) + 6 additional Chr/Hum column fixes (#319/#325/#328→Chr ✅ S830, #350→Chr ✅ S797, #142→Chr ⚠️ S805, #166→Hum ✅ S837). Chrome QA: #166 ✅. P3 bugs: dead admin nav links (/admin/notify-me, /admin/confidence-scores both 404). Blocked Queue: 8 active rows + P3 dead links.**
+**Latest: S879 — QA MODE. Records: #166→Chr ✅ S878 applied. #192 P2: 2 root-cause bugs found + inline fixed (missing optionalAuthenticate on route + organizerId vs userId comparison error in controller). Needs push + re-verify. Admin dead links S878 finding = FALSE POSITIVE: /admin/waitlist ✅ + /admin/organizer-confidence ✅ both work; agent visited wrong URLs. New P3: /organizer/customers → 404. Blocked Queue: 9 rows (QA MODE continues).**
 - **S874: Records pass applied + YMAL fix deployed.** S874 PCVs staged → roadmap applied S875.
 - **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
 - **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
@@ -64,8 +64,8 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-| Admin nav dead links | **P3 S878** — /admin/notify-me and /admin/confidence-scores both return 404 despite being listed as navigation links on the /admin dashboard. Admin management pages not built. | Build pages or remove dead nav links from admin dashboard | S878 |
-| #192 Price History — ENDED sale bug | **P2 FIXED S877** — `priceHistoryController.ts`: owner/admin bypass added (isOwner/isAdmin check before PUBLISHED gate). 0 TS errors. Awaiting push + Chrome re-verify on ENDED sale item. | S876 |
+| #192 Price History — ENDED sale bug | **P2 FIXED S879** — S877 fix had 2 root-cause bugs: (1) route had no `optionalAuthenticate` middleware so req.user was always undefined; (2) isOwner compared Sale.organizerId (Organizer PK) vs req.user.id (User PK) — wrong ID namespaces. Both fixed S879: route now uses optionalAuthenticate, controller queries organizer.userId for comparison. 0 TS errors. Awaiting push + Chrome re-verify. | S879 |
+| /organizer/customers page | **P3 S879** — Navigated /organizer/customers as Alice (user1) → 404. Page file does not exist. May be linked from organizer nav. | Build stub page or remove any nav link referencing this URL | S879 |
 
 ---
 
@@ -73,6 +73,7 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| 192 | Price History — ENDED sale fix | As Alice (user1) on /organizer/edit-item/f319b119-73fb-4399-a397-55fd2240bff1 (Old Radio, ENDED sale): navigate to page, scroll to Price History section. Should render step chart with 2 data points ($80 Jun 3 → $85 Jun 5). UNVERIFIED — fix deployed S879 but not yet Chrome-verified. Requires push of priceHistory.ts + priceHistoryController.ts first. | S879 |
 | 303 | Photo Station Shopper Page | /sales/cmpbvumj90001e7t7v5sa1iqi/photo-station as user5 (Leo Thomas). Page loads ✅ ss_65158fo38. "Share Your Find" + "Location Access Required" gate expected post-#317 geofencing. XP award + Already Scanned state UNVERIFIED (requires real GPS). | S839 |
 
 | 31 | Brand Kit save | As Alice (user1/PRO) on /organizer/brand-kit: scrolled to Save Brand Kit, clicked → "Saving..." (ss_2548h9vun) → green toast "Brand Kit updated successfully" (ss_9229rauhl). DB updatedAt confirmed 16:34 UTC. TEAMS Advanced Brand Customization gated ✅. Downloadable Brand Assets section visible ✅. | S866 |
@@ -116,22 +117,50 @@ _(S862
 
 ## Next Session
 
-**S878 done. Blocked Queue: 8 active rows + P3 dead-links — QA MODE (≥8). S878 PCV (#166) staged — apply to roadmap at S879 start.**
+**S879 done. Blocked Queue: 9 rows (admin dead links removed — false positive; /organizer/customers P3 added — net zero). #192 fix deployed inline — needs push + re-verify. QA MODE continues (≥8 rows).**
 
-**S879 plan:**
-- **[RECORDS — session start]** Apply S878 PCV: #166→Chr ✅ S878.
-- **[PUSH NEEDED]** Patrick must push `priceHistoryController.ts` fix before Chrome re-verify of #192 on ENDED sale items.
-- **[Chrome QA]** Continue sweeping unverified organizer/shopper flows. Consider: /organizer/pos, /organizer/edit-sale, shopper flows as Bob (user2).
-- **[P3 fix]** Dead admin nav links (/admin/notify-me, /admin/confidence-scores) — dispatch findasale-dev to either build stub pages or remove links.
+**S880 plan:**
+- **[PUSH FIRST]** Push S879 fixes: `priceHistory.ts` + `priceHistoryController.ts` + `roadmap.md` + `STATE.md` + `patrick-dashboard.md`
+- **[Chrome QA — after deploy]** Re-verify #192 as Alice on /organizer/edit-item/f319b119-73fb-4399-a397-55fd2240bff1 (Old Radio, ENDED sale) — Price History chart should render.
+- **[Chrome QA]** Switch to Bob (user2) for shopper flows not yet verified.
+- **[P3]** /organizer/customers → 404 — dispatch dev to build stub or fix nav link if it exists.
 
 **Patrick actions required:**
-1. **PUSH** — `priceHistoryController.ts` fix for #192 ENDED sale price history (see push block below)
+1. **PUSH** — `packages/backend/src/routes/priceHistory.ts` + `packages/backend/src/controllers/priceHistoryController.ts` (S879 #192 re-fix: optionalAuthenticate + organizerId correction)
 2. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
 3. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
 4. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
 5. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
 6. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
 ## Recent Sessions
+
+### S879 — QA MODE: Records pass (#166 Chr ✅) + #192 P2 re-fix + Chrome sweep. Admin dead-links P3 closed (false positive). New P3: /organizer/customers 404.
+
+**Records pass (session start):**
+- S878 PCV applied: #166→Chr ✅ S878 (roadmap updated).
+
+**#192 Price History ENDED sale fix (inline, 2 files, <20 lines):**
+- Root cause 1: `priceHistory.ts` route had no auth middleware — `req.user` always undefined. Fixed: `optionalAuthenticate` added.
+- Root cause 2: `priceHistoryController.ts` isOwner check compared `sale.organizerId` (Organizer table PK) vs `req.user.id` (User table PK) — different ID namespaces, always false. Fixed: query now includes `organizer: { select: { userId: true } }` and isOwner uses `organizer.userId`.
+- 0 TS errors. **Awaiting push + Chrome re-verify.**
+
+**Chrome QA sweep (Alice/user1):**
+- Edit Sale (Live) ✅ — "Edit Sale (Live)" + LIVE badge + Close Early + live-edit warning + Duplicate This Sale. ss_4284cbeqg
+- /organizer/holds ✅ — Active Holds, filter by sale, sort Expiring Soon/Recently Added, empty state. ss_74980t1l2
+- /shopper/haul-posts ✅ — Community Hauls, Share Your Haul button, empty state. ss_4149exmdb
+- /organizer/calendar ✅ — June 2026 view, QA sale on correct dates, today highlighted, Upcoming Sales sidebar. ss_79368nehw
+- /organizer/command-center ✅ — 4 KPI cards (1 Active Sale / 1 Item / $0 / 0 Pending), All systems go. ss_2460vpxo6
+- /organizer/ripples ✅ — Views/Shares/Saves/Total Activity KPIs (14 views), Activity Trend. ss_61779hyks
+- /admin/waitlist ✅ — Shopper Notify Me Waitlist, filter + empty table. ss_54642a2y8
+- /admin/organizer-confidence ✅ — Directory Confidence Scores, 5 organizers listed. ss_995385yol
+
+**S878 P3 closed — false positive:**
+- S878 agent reported /admin/notify-me + /admin/confidence-scores as dead links. Actual admin nav links → /admin/waitlist + /admin/organizer-confidence. Both ✅ confirmed. No dead links. Admin nav dead links entry removed from Blocked Queue.
+
+**New P3 found:**
+- /organizer/customers → 404. Page does not exist. Added to Blocked Queue.
+
+**Blocked Queue: 9 rows** (removed admin dead links false positive, added /organizer/customers P3 — net zero)
 
 ### S878 — QA MODE: Records pass (9 features reconciled) + Chrome QA (#166 ✅). P3 bugs found. Blocked Queue: 8 rows.
 
