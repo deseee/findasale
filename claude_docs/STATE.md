@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S883 — QA MODE. Records: S882 PCVs applied to roadmap (Y-axis formatter + #192 ENDED sale). Wide sweep: 18 pages/features Chrome-verified (organizer starter-kit, discount-rules modal, create-sale wizard, XP Store, map, guide, calendar, search, pricing, cities, categories, trending, sale detail, storefront, shopper trades/explorer-profile/homepage). No new bugs. Blocked Queue: 7 rows.**
+**Latest: S883 — QA MODE. Records: S882 PCVs applied. 18 pages Chrome-verified. #293 eBay conditionNotes ✅ Human-verified (eBay Inventory API confirms live on listing 137309459090). OAuth supersede ✅ Patrick-verified. Email migration ✅ confirmed deployed May 15. Game Design: Rarity Boost locked at 15 XP + $0.50 cash rail (separate sprint). UI bug (50 XP displayed) → dev dispatch queued. Blocked Queue: 5 rows.**
 
 **S882: #197 Bounties P2 ✅ Patrick-confirmed (no error toast post S881 fix). Y-axis P3 ✅ Chrome-verified (ss_9355qlny8). Wide organizer page sweep: 24 pages ✅, 4×404 not-linked (P3). Blocked Queue: 7 rows (QA MODE continues).**
 
@@ -63,12 +63,8 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (72 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| Email Verification Migration | **P0 (135 sessions, age-escalated)** — Migration 20260515180000 exists in migrations/ but never deployed. Token expiry not enforced in prod DB. | Patrick: cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy && npx prisma generate | S726 |
-| eBay Connection for user1 | **P0 (76 sessions, age-escalated)** — No eBay OAuth on organizer QA account. Blocks #293, #298, all eBay push QA. | Patrick: connect eBay to user1 at /organizer/settings/ebay via OAuth | S785 |
-| OAuth session supersede | **P2 UNVERIFIED S870** — OAuthBridge !user guard fix confirmed in code (\_app.tsx). Chrome QA attempted S870 but requires completing real Google OAuth flow while logged in as a different user. | Patrick: log in as user2 (JWT active), click "Sign in with Google" as artifact account, verify /api/auth/me returns artifact not user2 | S870 |
-
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
-| Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
+| Rarity Boost UI bug + cash rail | **P2** — UI shows 50 XP (wrong). Backend correctly uses 15 XP. Cash rail ($0.50) requires BoostPurchase Stripe service (not yet built). Game Design locked: 15 XP + $0.50 cash rail (separate sprint). | Dispatch findasale-dev: fix coupons.tsx line 390 `50 XP` → `15 XP` (one-liner). Cash rail: separate sprint. | S883 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 
 ---
@@ -78,6 +74,9 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
 _(Y-axis formatter + #192 ENDED sale: applied to roadmap S883)_
+| 293 | eBay conditionNotes data parity | ✅ Human-verified S883 — Zoom B3 (ebayListingId 137309459090, Artifact account). Set conditionNotes "All knobs and switches function correctly. No cosmetic damage." via PUT /api/items/:id → re-push via POST /api/ebay/organizer/sales/:saleId/ebay-push. eBay Inventory API confirmed conditionDescription = "Grade B — Very good condition\n\nAll knobs and switches function correctly. No cosmetic damage.\n\nZoom B3..." Full pipeline: DB save ✅ → buildConditionDescription() includes conditionNotes between grade+description ✅ → push updates live listing ✅ → eBay API confirms value live ✅. | S883 |
+| — | OAuth session supersede | ✅ Human-verified S883 — Patrick logged in as user2 (Bob Smith JWT active), clicked Sign in with Google as artifactmi@gmail.com. /api/auth/me response confirms: id=cmnxueo790003tfv8nx6rlmjt, email=artifactmi@gmail.com, oauthProvider=google. Session correctly superseded to Artifact account. OAuthBridge fix confirmed working in prod. | S883 |
+| — | Email Verification Migration | ✅ Confirmed deployed S883 — DB query confirms migration 20260515180000_add_email_verification_token_expiry applied 2026-05-15 19:32 UTC. All 4 columns present in User table (emailVerificationToken, emailVerificationTokenExpiry, emailVerified, emailVerifiedAt). Blocked Queue entry was stale — migration was deployed May 15. | S883 |
 | — | Organizer starter-kit | ✅ Chrome-verified S883 — /organizer/starter-kit as Alice (user1). "Sale Day Starter Kit" heading, Pre-Sale Checklist with checkboxes, Download PDF + Print buttons, Back to dashboard link. ss_8106nlgh7 | S883 |
 | — | Discount rules create modal | ✅ Chrome-verified S883 — /organizer/discount-rules as Alice (user1). "Discount Rules" page loads, empty state. Clicked "+ Add Rule" → "Create Discount Rule" modal with Color Tag, Label, Discount %, Active From, Active Until fields. ss_68366qf20 ss_067153c7v | S883 |
 | — | Create sale wizard (#138 + #411) | ✅ Chrome-verified S883 — /organizer/create-sale as Alice (user1). "Step 1 of 5: What kind of sale are you putting on?" — 5 sale types: Estate Sale ✅ (selected), Yard & Moving ✅, Auction ✅, Market & Pop-Up ✅, Dorm Dash ✅. 5-step sidebar visible. ss_3060qw90j | S883 |
