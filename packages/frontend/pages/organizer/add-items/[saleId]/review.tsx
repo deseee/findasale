@@ -1236,7 +1236,7 @@ const ReviewPage = () => {
                 </p>
                 <div className="flex gap-3 justify-center">
                   <Link
-                    href={`/sale/${saleId}`}
+                    href={`/sales/${saleId}`}
                     className="px-4 py-2 rounded-lg bg-[#C8552B] text-white text-sm font-semibold hover:bg-[#b04825] transition-colors"
                   >
                     View sale →
