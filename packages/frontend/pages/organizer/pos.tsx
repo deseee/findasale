@@ -47,6 +47,7 @@ interface Item {
   title: string;
   price: number | null;
   status: string;
+  draftStatus?: string | null;
   photoUrls: string[];
   sku: string | null;
 }
