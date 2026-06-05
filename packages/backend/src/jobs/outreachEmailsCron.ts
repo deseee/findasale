@@ -336,6 +336,29 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
     // Three-pass query: HOT → WARM → COLD, then fallback to untiered/ENTERPRISE if quota remains
     const recordsToSend: any[] = [];
 
+    // Sentry slow query fix (2026-06-05): `include: { organizer: true }` was fetching all
+    // 80+ Organizer columns for every candidate record. The send loop only needs 4 organizer
+    // fields. Replaced with explicit select to eliminate the full table scan on Organizer
+    // and reduce per-row data transfer from ~4 KB to ~150 bytes.
+    const OUTREACH_SELECT = {
+      id: true,
+      organizerId: true,
+      emailAddress: true,
+      sentAt: true,
+      touch1SentAt: true,
+      touch2SentAt: true,
+      touch3SentAt: true,
+      touch4SentAt: true,
+      organizer: {
+        select: {
+          leadTier: true,
+          licenseState: true,
+          address: true,
+          businessName: true,
+        },
+      },
+    } as const;
+
     if (hotQuota > 0) {
       const hotRecords = await prisma.directoryClaimEmail.findMany({
         where: {
@@ -343,7 +366,7 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
           ...exhaustedFilter,
           organizer: { ...baseWhere.organizer, leadTier: 'HOT' },
         },
-        include: { organizer: true },
+        select: OUTREACH_SELECT,
         take: hotQuota * CANDIDATE_MULTIPLIER,
         orderBy: [{ touch1SentAt: { sort: 'asc', nulls: 'first' } }],
       });
@@ -357,7 +380,7 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
           ...exhaustedFilter,
           organizer: { ...baseWhere.organizer, leadTier: 'WARM' },
         },
-        include: { organizer: true },
+        select: OUTREACH_SELECT,
         take: warmQuota * CANDIDATE_MULTIPLIER,
         orderBy: [{ touch1SentAt: { sort: 'asc', nulls: 'first' } }],
       });
@@ -371,7 +394,7 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
           ...exhaustedFilter,
           organizer: { ...baseWhere.organizer, leadTier: 'COLD' },
         },
-        include: { organizer: true },
+        select: OUTREACH_SELECT,
         take: coldQuota * CANDIDATE_MULTIPLIER,
         orderBy: [{ touch1SentAt: { sort: 'asc', nulls: 'first' } }],
       });
@@ -392,7 +415,7 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
             AND: [{ OR: [{ leadTier: 'ENTERPRISE' }, { leadTier: null }] }],
           },
         },
-        include: { organizer: true },
+        select: OUTREACH_SELECT,
         take: untieredQuota * CANDIDATE_MULTIPLIER,
         orderBy: [{ touch1SentAt: { sort: 'asc', nulls: 'first' } }],
       });
