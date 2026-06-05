@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S887 — DEV MODE. AuctionNinja → Railway cron (sourceRegistry.ts). DB-backed Gmail quota guard deployed: EmailQuotaLog migration ✅, hard stop 1500/day, Resend alert at 75% to deseee@gmail.com. Gmail monitoring crons added: OAuth health check (06:30), daily send summary (08:00), suspension detect (*/2h), bounce alert wired. Sale ending soon flood = expected one-time backfill. #335 code guard live — OUTREACH_ENABLED still false, account in 18h suspension window.**
+
 **⚠️ S865-auto (Jun 5) URGENT: Email suspension RE-TRIPPED. Pipeline sent 8,317+ emails → Google Workspace daily limit hit. GH workflow DISABLED, OUTREACH_ENABLED=false set. Patrick must reactivate outreach@finda.sale at admin.google.com. See Blocked Queue #335.**
 
 **S886 — QA + DEV + RECORDS. P2 POS draftStatus fix ✅ Chrome-verified search path (ss_5792yv22r), CODE-ONLY QR toast. P3 "View sale" 404 closed (false positive — code already correct). Records: STATE.md cleaned, BQ 4 rows.**
@@ -71,7 +73,7 @@ _S886: P3 review link fix ✅ Chrome-verified S886 — removed. P2 POS filter fi
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (73 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment. Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
+| AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870. **S887: Railway cron added** — `cronSchedule: '0 6 * * 3'` in sourceRegistry.ts. Pending verification that Railway IPs aren't also Cloudflare-blocked (test: `railway run --service backend npx ts-node packages/backend/src/scripts/run-auctionninja.ts`). | Verify Railway cron fires Wed 06:00 UTC and returns >0 results | S868 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 | #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. | S865-auto / Jun 5 |
 
@@ -151,9 +153,9 @@ _(S862
 
 ## Next Session
 
-**S886 done. BQ: 4 rows. POS PENDING_REVIEW fix ✅ search-verified. QR toast CODE-ONLY pending physical QR test.**
+**S887 done. BQ: 4 rows. Gmail quota guard deployed. AuctionNinja Railway cron live. Monitoring crons active. Audit running in parallel.**
 
-**S887 plan — SCRAPER + ENRICHMENT AUDIT:**
+**S888 plan:**
 - **[RESEARCH]** Full scraper/enrichment system audit. Scope:
   - Facebook Marketplace scraper (`sources/facebook-marketplace.ts`, `scrape-facebook-marketplace.yml`) — what's it returning? Is it live? Last successful run?
   - Facebook Events scraper (`sources/search-facebook-events.ts`, `scrape-facebook-events.yml`) — same questions
@@ -171,11 +173,27 @@ _(S862
 
 **Patrick actions required:**
 1. Push block below (STATE.md + patrick-dashboard.md)
-2. #335 URGENT: Reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate (email suspension still active)
+2. #335: Once 18h suspension clears (~Jun 6), set `OUTREACH_ENABLED=true` in Railway to resume outreach. Keep volumes low (domain warming — max 200/day).
+3. GBP phone verification: business.google.com → "Verify now" → phone code (carried)
+4. AuctionNinja verify: next Wednesday after 06:00 UTC check Railway logs for scraper results
 
 ## Recent Sessions
 
-### S886 — QA + DEV + RECORDS. P2 POS fix verified. P3 false positive closed. BQ: 4 rows.
+### S887 — DEV MODE. AuctionNinja Railway cron. DB-backed Gmail quota guard. 4 Gmail monitoring crons. BQ: 4 rows.
+
+**AuctionNinja Railway cron:** `cronSchedule: '0 6 * * 3'` added to `sourceRegistry.ts`. GH workflow already disabled. `initScraperCron()` in index.ts picks it up automatically. No index.ts change needed. Pending verification Wed 06:00 UTC.
+
+**Gmail quota guard (root cause fix):** In-memory `dailyCounts` Map replaced with DB-backed `EmailQuotaLog` table. Root cause of 8,317-email blast: counter reset to 0 on every Railway restart/deploy. Fix: Prisma upsert atomic increment. Hard stop at `GMAIL_DAILY_HARD_LIMIT` (default 1500). Resend out-of-band alert at 75% threshold + hard stop to `deseee@gmail.com`. Migration `20260706000000_add_email_quota_log` ✅ deployed. Per-send quota gate moved to BEFORE Gmail send in outreachEmailsCron.
+
+**Gmail monitoring crons** (`gmailHealthCron.ts`): (1) `runGmailOAuthHealthCheck` daily 06:30 UTC — tests refresh token, Resend alert if broken. (2) `runDailySendSummary` daily 08:00 UTC — yesterday's quota digest email. (3) `runSuspensionDetect` every 2h — alerts if pipeline quota-blocked. (4) `deliverabilityMonitorJob.ts` TODO wired — Resend bounce alert at >2% rate. All 4 added to JOB_MAP + index.ts import.
+
+**Sale ending soon flood:** 100+ log lines on deploy = expected one-time backfill of directory-seeded sales with `endingSoonNotified=false`. Actual emails only go to `sale.subscribers`. Idempotency guard prevents re-sends.
+
+**#335 status:** Account Active but in 18h sending suspension (auto-clears). OUTREACH_ENABLED=false still set. Code guard now in place — won't blast again.
+
+**Blocked Queue: 4 rows** (#332 P0 + AuctionNinja P2 code-complete + #335 code guard live + #230 P3)
+
+### S886 — QA + DEV + RECORDS. P2 POS fix verified. P3 false positive closed. BQ: 4 rows. P2 POS fix verified. P3 false positive closed. BQ: 4 rows.
 
 **P2 POS PENDING_REVIEW fix (terminalController.ts + pos.tsx):** Item search path ✅ Chrome-verified S886 — searched "Kirkland" (PENDING_REVIEW, status=AVAILABLE) in POS as Alice → "No available items match that search." (ss_5792yv22r). API confirms draftStatus field returned correctly. QR scan toast CODE-ONLY (camera limitation). Commit 272f1876 deployed.
 
