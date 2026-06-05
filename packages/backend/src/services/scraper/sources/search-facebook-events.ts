@@ -562,5 +562,8 @@ export async function scrapeFacebookEventsForMetro(
     if (item) items.push(item);
   }
 
+  // Throttle: 1.5–2.5s between metro calls to avoid rate-limiting search APIs
+  await jitterDelay(1500, 2500);
+
   return items;
 }

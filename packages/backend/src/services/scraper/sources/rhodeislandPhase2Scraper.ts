@@ -200,6 +200,9 @@ export async function runRhodeIslandPhase2Scraper(): Promise<void> {
   // Step 1: Discover field names
   const { nameField, addressField, cityField, phoneField, typeField, zipField } = await discoverFields();
 
+  // Pause between field-discovery request and main query request
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
   // Step 2: Build filtered query
   const whereClause = buildWhereClause(nameField, typeField);
   const queryUrl = `${SOCRATA_ENDPOINT}?$where=${encodeURIComponent(whereClause)}&$limit=1000`;

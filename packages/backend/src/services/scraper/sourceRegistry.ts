@@ -102,6 +102,8 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     type: 'directory',
     runMode: 'metro-loop',
     enabled: true,
+    // No cronSchedule — triggered via GitHub Actions (GH Actions → Railway API POST).
+    // Railway cron removed to avoid cost; GH Actions is the durable scheduler.
     qualityTier: 'medium',
     legalNote: 'No explicit scraper ban — rate limit strictly, public fields only',
     run: scrapeAuctionNinja,

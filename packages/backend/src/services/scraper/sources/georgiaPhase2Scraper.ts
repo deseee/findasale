@@ -22,6 +22,11 @@
 import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
 
+/** Pause execution for the given number of milliseconds. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const VERIFY_URL = 'https://verify.sos.ga.gov/verification/';
 const ECORP_URL = 'https://ecorp.sos.ga.gov/BusinessSearch';
 
@@ -237,6 +242,9 @@ export async function runGeorgiaPhase2Scraper(): Promise<void> {
     const eventValidationMatch = verifyHtml.match(/name="__EVENTVALIDATION"\s+value="([^"]+)"/);
 
     if (viewStateMatch && eventValidationMatch) {
+      // Brief pause between GET (page load) and POST (search submission)
+      await sleep(1500);
+
       const searchBody = new URLSearchParams();
       searchBody.append('__VIEWSTATE', viewStateMatch[1]);
       searchBody.append('__EVENTVALIDATION', eventValidationMatch[1]);
@@ -287,6 +295,9 @@ export async function runGeorgiaPhase2Scraper(): Promise<void> {
       const tokenMatch = ecorpHtml.match(/name="__RequestVerificationToken"\s+(?:type="hidden"\s+)?value="([^"]+)"/);
 
       if (viewStateMatch) {
+        // Brief pause between GET (page load) and POST (search submission)
+        await sleep(1500);
+
         const searchBody = new URLSearchParams();
         if (tokenMatch) searchBody.append('__RequestVerificationToken', tokenMatch[1]);
         searchBody.append('__VIEWSTATE', viewStateMatch[1]);
