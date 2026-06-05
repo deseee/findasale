@@ -1,54 +1,45 @@
-# Patrick's Dashboard — S883 Wrap
+# Patrick's Dashboard — S884 Wrap
 
 ---
 
-## S883 Summary — QA Mode: Wide Site Sweep (18 Pages/Features ✅), No New Bugs
+## S884 Summary — Records Pass + Rarity Boost Fix. Chrome Blocked.
 
-**Records pass:** S882 PCVs applied to roadmap. Y-axis formatter fix confirmed in #192 notes.
+**Records pass:** 18 S883 PCV entries applied to roadmap Chrome columns — #396, #310, #138, #411, #175, #139, #378, #183, #218, #266, #176, #177, #179, #60, #187, #180, #189, #154.
 
-**18 pages/features Chrome-verified this session:**
+**Rarity Boost UI fix (code-complete, pending push):**
+- coupons.tsx: All "50 XP" references for Rarity Boost → "15 XP". Button label, description, disabled threshold, gate message. Matches locked game design (D-006: 15 XP + $0.50 cash rail in separate sprint). 0 TS errors.
 
-Organizer: starter-kit (Sale Day Starter Kit PDF), discount-rules (create rule modal working), create-sale wizard (all 5 sale types including Dorm Dash), XP Store (373 XP, Initiate rank, coupon tiers).
-
-Shopper/Public: map (85 sales, all filters), guide (full sidebar), calendar (June 2026), trades (Coming Soon), explorer-profile, homepage (Discover Amazing Deals, Treasure Hunt, Featured Sales), sale detail pages ×2 (directory + platform sale), search (filters, Save Search, Plan Route), pricing (Free/$29/$79 correct), cities (200+ cities), categories (Browse by Category grid), trending (#1/#2/#3 HOT badges), organizer storefront (Kelly's Estate Sales profile).
-
-**No bugs found.** All pages loading and functional. The platform is in solid shape across both organizer and shopper surfaces.
+**Chrome QA BLOCKED:** Extension timed out on all operations — waiting on a permission prompt in the side panel. Deep-test flows (add-items upload, POS mark-sold) deferred to S885.
 
 ---
 
-## Blocked Queue: 7 items
-
-QA MODE continues until queue drops below 8. No new feature dev.
+## Blocked Queue: 4 items (QA Mode CLEARED — was 9 rows, now 4)
 
 | Item | Priority | Status |
 |------|----------|--------|
 | #332 Shopify Cross-Listing | P0 | Needs your Shopify Partners dev store |
-| Email Verification Migration | P0 | Needs `npx prisma migrate deploy` |
-| eBay Connection for user1 | P0 | Needs your eBay OAuth |
-| OAuth session supersede | P2 | Needs Google OAuth flow with you |
 | AuctionNinja scraper | P2 | Cloudflare-blocked, needs Railway cron |
-| Rarity Boost spec gap | P3 | Needs your decision |
+| Rarity Boost cash rail | P2 | UI ✅ coded S884. Cash rail = separate Stripe sprint |
 | #230 Smart Buyer Widget | P3 | Needs published sale on user1 |
 
 ---
 
 ## Your Actions
 
-1. **Email Verification migration** — `npx prisma migrate deploy` against Railway (Migration 20260515180000 undeployed since S726)
-2. **eBay OAuth for user1** — /organizer/settings/ebay → connect eBay → unlocks all eBay cross-listing QA
-3. **#332 Shopify dev store** — create free Shopify Partners dev store, connect via OAuth
-4. **OAuth QA** — log in as user2, click "Sign in with Google", complete as artifactmi@gmail.com, verify /api/auth/me returns Artifact not Bob
-5. **Rarity Boost intent** — XP-only at 50 XP, or restore $0.15 cash rail?
-6. **GBP phone verification** — business.google.com → "Verify now" → phone code
+1. **⚠️ Check Chrome extension side panel** — dismiss pending permission prompt to unblock Chrome QA for next session
+2. **Push block below** — deploy Rarity Boost fix + roadmap updates
+3. **eBay OAuth for user1** — /organizer/settings/ebay → connect eBay → unlocks all eBay cross-listing QA
+4. **GBP phone verification** — business.google.com → "Verify now" → phone code
 
 ---
 
-## Push Block (STATE.md + dashboard + roadmap this session)
+## Push Block
 
 ```
+git add packages/frontend/pages/coupons.tsx
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "S883: 18 pages Chrome-verified, S882 PCVs applied to roadmap, no new bugs"
+git commit -m "S884: Rarity Boost 50→15 XP UI fix, S883 PCVs to roadmap, QA mode cleared"
 .\push.ps1
 ```

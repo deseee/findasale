@@ -379,19 +379,19 @@ const CouponsPage = () => {
                         Rarity Boost
                       </h4>
                       <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
-                        Spend 50 XP to boost the rarity rolls on your next photo uploads at a sale.
+                        Spend 15 XP to boost the rarity rolls on your next photo uploads at a sale.
                         Higher chance of rolling a rare find.
                       </p>
                       <button
                         onClick={() => setShowRarityBoostModal(true)}
-                        disabled={spendableXp < 50}
+                        disabled={spendableXp < 15}
                         className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
                       >
-                        Activate Rarity Boost (50 XP)
+                        Activate Rarity Boost (15 XP)
                       </button>
-                      {spendableXp < 50 && (
+                      {spendableXp < 15 && (
                         <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-2">
-                          You need at least 50 XP. Earn XP by scanning QR codes, completing purchases, and checking in at sales.
+                          You need at least 15 XP. Earn XP by scanning QR codes, completing purchases, and checking in at sales.
                         </p>
                       )}
                     </div>

@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S883 — QA MODE. Records: S882 PCVs applied. 18 pages Chrome-verified. #293 eBay conditionNotes ✅ Human-verified (eBay Inventory API confirms live on listing 137309459090). OAuth supersede ✅ Patrick-verified. Email migration ✅ confirmed deployed May 15. Game Design: Rarity Boost locked at 15 XP + $0.50 cash rail (separate sprint). UI bug (50 XP displayed) → dev dispatch queued. Blocked Queue: 5 rows.**
+**Latest: S884 — Records: S883 PCVs applied (18 rows). Rarity Boost UI fix ✅ code-complete (coupons.tsx 50→15 XP, pending push). Chrome QA BLOCKED (extension permission prompt — Patrick action needed). Blocked Queue: 4 rows.**
+
+**S883 — QA MODE. Records: S882 PCVs applied. 18 pages Chrome-verified. #293 eBay conditionNotes ✅ Human-verified (eBay Inventory API confirms live on listing 137309459090). OAuth supersede ✅ Patrick-verified. Email migration ✅ confirmed deployed May 15. Game Design: Rarity Boost locked at 15 XP + $0.50 cash rail (separate sprint). UI bug (50 XP displayed) → dev dispatch queued. Blocked Queue: 5 rows.**
 
 **S882: #197 Bounties P2 ✅ Patrick-confirmed (no error toast post S881 fix). Y-axis P3 ✅ Chrome-verified (ss_9355qlny8). Wide organizer page sweep: 24 pages ✅, 4×404 not-linked (P3). Blocked Queue: 7 rows (QA MODE continues).**
 
@@ -64,7 +66,7 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (72 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
-| Rarity Boost UI bug + cash rail | **P2** — UI shows 50 XP (wrong). Backend correctly uses 15 XP. Cash rail ($0.50) requires BoostPurchase Stripe service (not yet built). Game Design locked: 15 XP + $0.50 cash rail (separate sprint). | Dispatch findasale-dev: fix coupons.tsx line 390 `50 XP` → `15 XP` (one-liner). Cash rail: separate sprint. | S883 |
+| Rarity Boost cash rail | **P2** — UI fix ✅ S884 (coupons.tsx 50→15 XP, 0 TS errors, pending push+Chrome QA). Cash rail ($0.50) requires BoostPurchase Stripe service (not yet built) — separate sprint. | Separate sprint for cash rail | S883 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 
 ---
@@ -138,21 +140,31 @@ _(S862
 
 ## Next Session
 
-**S883 done. Blocked Queue: 7 rows. QA MODE continues.**
+**S884 done. Blocked Queue: 4 rows. QA MODE cleared. Rarity Boost UI fix pending push. Chrome blocked mid-session — deep-test flows deferred.**
 
-**S884 plan:**
-- **[Records]** Apply S883 PCVs to roadmap (18 entries — starter-kit, discount-rules, create-sale wizard, XP Store, map, guide, calendar, trades, explorer-profile, homepage, sale detail ×2, search, pricing, cities, categories, trending, organizer storefront). Cross-session rule: roadmap Chrome column updated by Records agent at start of S884.
-- **[Chrome QA]** Blocked Queue items needing attention: OAuth supersede (Patrick-only), eBay connection (Patrick-only), Email verification migration (Patrick-only), Rarity Boost spec (Patrick decision).
-- **[Chrome QA]** If Blocked Queue has remaining testable items — deep-test add-items flow (upload photo → Analyze → review → publish item) and POS flow as organizer.
+**S885 plan:**
+- **[PUSH FIRST]** Push coupons.tsx + roadmap.md + STATE.md + patrick-dashboard.md.
+- **[Chrome QA]** Patrick: check Chrome extension side panel for pending permission prompt, then resume. Deep-test add-items flow (upload photo → Analyze → review → publish). POS flow as organizer (mark item sold via POS).
+- **[Chrome QA post-push]** Verify /coupons shows "Activate Rarity Boost (15 XP)" — clears Rarity Boost from queue.
 
 **Patrick actions required:**
-1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
-2. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
-3. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
-4. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
-5. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
+1. **Check Chrome extension side panel** — dismiss any pending permission prompt to unblock QA
+2. Push: see push block below
+3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
+4. GBP phone verification — business.google.com → "Verify now" → phone code (carried)
 
 ## Recent Sessions
+
+### S884 — Records pass (S883 PCVs applied to roadmap). Rarity Boost UI fix coded. Chrome blocked. Blocked Queue: 4 rows (QA mode cleared).
+
+**Records pass:** 18 S883 PCV entries applied to roadmap.md Chrome columns — #396, #310, #138, #411, #175, #139, #378, #183, #218, #266, #176, #177, #179, #60, #187, #180, #189, #154. #60 pricing ⚠️→✅ S883.
+
+**Rarity Boost UI fix (code-complete, pending push):**
+- coupons.tsx: `50 XP` → `15 XP` across display text, button label, gate threshold, and gate message (5 lines in one block). 0 TS errors. Matches locked game design (15 XP, cash rail separate sprint).
+
+**Chrome QA blocked:** Extension timeout on all operations — "waiting on permission prompt in side panel." Deep-test flows (add-items, POS) deferred to S885 once Patrick clears the prompt.
+
+**Blocked Queue: 4 rows** (QA mode ceiling cleared — was 9 rows, now 4)
 
 ### S883 — QA MODE: Records pass (S882 PCVs applied). Wide sweep: 18 pages/features Chrome-verified. No new bugs. Blocked Queue: 7 rows.
 
