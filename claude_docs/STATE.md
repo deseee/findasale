@@ -10,7 +10,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **⚠️ S865-auto (Jun 5) URGENT: Email suspension RE-TRIPPED. Pipeline sent 8,317+ emails → Google Workspace daily limit hit. GH workflow DISABLED, OUTREACH_ENABLED=false set. Patrick must reactivate outreach@finda.sale at admin.google.com. See Blocked Queue #335.**
 
-**Latest: S886 — DEV MODE. P3 fix (review 'View sale' link) ✅ Chrome-verified (ss_4845b09um). P2 fix (POS AVAILABLE-only filter) ✅ Chrome-verified (ss_9781ji8rx). Roadmap PCVs applied: #175 Rarity Boost ✅ S885, #142 photo pipeline ✅ S885. Blocked Queue: 4 rows.**
+**Latest: S886 — DEV + RECORDS. P3 "View sale" link closed (review.tsx:1239 already correct — no fix needed). P2 POS draftStatus/PENDING_REVIEW fix dispatched (terminalController.ts + pos.tsx QR path). Records: AuctionNinja BQ note cleaned. TS 0 errors confirmed. Blocked Queue: 4 rows (#335 P1 URGENT still open).**
 
 **Latest: S885 — QA MODE. Rarity Boost 15 XP ✅ Chrome-verified (ss_10072ub1r). Add-items pipeline ✅ Chrome-verified end-to-end (upload→analyze→approve→live). POS core UI ✅ verified. 2 new bugs found: P3 (review page "View sale" 404), P2 (POS search shows PENDING_REVIEW items). Blocked Queue: 5 rows (was 5, +1 #335 emergency).**
 
@@ -71,7 +71,7 @@ _S886: P3 review link fix ✅ Chrome-verified S886 — removed. P2 POS filter fi
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (73 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
-| AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
+| AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment. Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 | #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. | S865-auto / Jun 5 |
 
@@ -81,6 +81,7 @@ _S886: P3 review link fix ✅ Chrome-verified S886 — removed. P2 POS filter fi
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| — | P2 POS draftStatus fix | CODE-ONLY S886 — terminalController.ts rejects PENDING_REVIEW at checkout; pos.tsx QR scan path shows "pending review" toast. Chrome verify: scan PENDING_REVIEW item QR in POS, confirm toast appears. | S886 |
 | — | P3 fix: review success "View sale" link | ✅ Chrome-verified S886 — /organizer/add-items/[saleId]/review as Alice (user1). Clicked "View sale →" → landed on /sales/59c49908... "QA Active Sale S875 — Mixed Goods" — no 404. ss_4845b09um | S886 |
 | — | P2 fix: POS AVAILABLE-only item search | ✅ Chrome-verified S886 — /organizer/pos as Alice (user1). Typed "Pyrex" in search → "No available items match that search." PENDING_REVIEW item excluded from results. Network: GET /api/items?...&status=AVAILABLE confirmed. ss_9781ji8rx | S886 |
 _(Y-axis formatter + #192 ENDED sale: applied to roadmap S883)_
@@ -154,8 +155,8 @@ _(S862
 
 **S886 plan:**
 - **[RECORDS]** Apply S885 PCVs to roadmap: Rarity Boost → Chr ✅ S885, Add-items pipeline → new roadmap entry Chr ✅ S885.
-- **[DEV]** P3 fix (1-liner): Review success page "View sale" → `/sales/[id]` not `/sale/[id]`. Dispatch findasale-dev.
-- **[DEV]** P2 fix: POS search filter — add `status: 'AVAILABLE'` filter to item search query in posController. Also add visible error toast when cash sale rejected 400. Dispatch findasale-dev.
+- ~~**[DEV]** P3 fix (1-liner): Review success page "View sale" → `/sales/[id]` not `/sale/[id]`.~~ **CLOSED** — Code check 2026-06-05: review.tsx:1239 already uses `/sales/${saleId}`.
+- **[DEV — DONE]** P2 fix dispatched S886: terminalController.ts adds draftStatus check (rejects PENDING_REVIEW at checkout with clear message). pos.tsx QR scan path now shows "This item is pending review and cannot be sold yet". TS 0 errors. **[Chrome QA]** Verify POS QR scan rejects PENDING_REVIEW item with correct toast.
 - **[Chrome QA]** Verify both fixes after push.
 - **[Optional]** eBay OAuth on user1 at /organizer/settings/ebay.
 

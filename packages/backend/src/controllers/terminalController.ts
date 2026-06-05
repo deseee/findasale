@@ -139,6 +139,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
           id: true,
           title: true,
           status: true,
+          draftStatus: true,
           sale: { select: { id: true, organizerId: true } },
         },
       });
@@ -155,6 +156,9 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
         }
         if (item.status !== 'AVAILABLE') {
           return res.status(400).json({ message: `"${item.title}" is sold or unavailable` });
+        }
+        if (item.draftStatus !== null && item.draftStatus !== 'PUBLISHED') {
+          return res.status(400).json({ message: `"${item.title}" is pending review and cannot be sold yet` });
         }
       }
     }
@@ -539,7 +543,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     if (itemIds.length > 0) {
       const fetched = await prisma.item.findMany({
         where: { id: { in: itemIds }, saleId },
-        select: { id: true, title: true, status: true },
+        select: { id: true, title: true, status: true, draftStatus: true },
       });
       dbItems = Object.fromEntries(fetched.map(item => [item.id, item]));
 
@@ -549,6 +553,9 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
         }
         if (dbItems[itemId].status !== 'AVAILABLE') {
           return res.status(400).json({ message: `"${dbItems[itemId].title}" is sold or unavailable` });
+        }
+        if (dbItems[itemId].draftStatus !== null && dbItems[itemId].draftStatus !== 'PUBLISHED') {
+          return res.status(400).json({ message: `"${dbItems[itemId].title}" is pending review and cannot be sold yet` });
         }
       }
     }
