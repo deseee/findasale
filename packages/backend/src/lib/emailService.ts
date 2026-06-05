@@ -48,7 +48,7 @@ async function sendQuotaAlert(count: number, limit: number, reason: 'warning' | 
       <p style="color:#666;font-size:12px">FindA.Sale · emailService.ts quota guard</p>
     `;
     await resend.emails.send({
-      from: 'FindA.Sale Alerts <noreply@finda.sale>',
+      from: process.env.SES_FROM_EMAIL || 'FindA.Sale Alerts <alerts@send.finda.sale>',
       to: ALERT_RECIPIENT,
       subject,
       html,
