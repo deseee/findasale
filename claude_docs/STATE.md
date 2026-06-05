@@ -10,6 +10,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **⚠️ S865-auto (Jun 5) URGENT: Email suspension RE-TRIPPED. Pipeline sent 8,317+ emails → Google Workspace daily limit hit. GH workflow DISABLED, OUTREACH_ENABLED=false set. Patrick must reactivate outreach@finda.sale at admin.google.com. See Blocked Queue #335.**
 
+**Latest: S886 — DEV MODE. P3 fix (review 'View sale' link) ✅ Chrome-verified (ss_4845b09um). P2 fix (POS AVAILABLE-only filter) ✅ Chrome-verified (ss_9781ji8rx). Roadmap PCVs applied: #175 Rarity Boost ✅ S885, #142 photo pipeline ✅ S885. Blocked Queue: 4 rows.**
+
 **Latest: S885 — QA MODE. Rarity Boost 15 XP ✅ Chrome-verified (ss_10072ub1r). Add-items pipeline ✅ Chrome-verified end-to-end (upload→analyze→approve→live). POS core UI ✅ verified. 2 new bugs found: P3 (review page "View sale" 404), P2 (POS search shows PENDING_REVIEW items). Blocked Queue: 5 rows (was 5, +1 #335 emergency).**
 
 **S884 — Records: S883 PCVs applied (18 rows). Rarity Boost UI fix ✅ code-complete (coupons.tsx 50→15 XP, pending push). Chrome QA BLOCKED (extension permission prompt — Patrick action needed). Blocked Queue: 4 rows.**
@@ -64,14 +66,12 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
 _⚠️ P0 AGING: #332 at 73+ sessions — mandatory P0 per CLAUDE.md §10a._
-_S885: Rarity Boost UI ✅ Chrome-verified S885 — removed from queue. 2 new bugs added._
+_S886: P3 review link fix ✅ Chrome-verified S886 — removed. P2 POS filter fix ✅ Chrome-verified S886 — removed. Blocked Queue: 4 rows (#335 P1 URGENT outreach suspension + #332 + AuctionNinja + #230)._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing | **P0 (73 sessions)** — Requires Shopify OAuth; no test store available | Create free Shopify Partners dev store, connect via OAuth | S791 |
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
-| POS item search shows PENDING_REVIEW items | **P2** — POS /organizer/pos search returns PENDING_REVIEW items in results for any query. Backend correctly rejects cash sale with 400 ("sold or unavailable") but organizer has no idea why. Root: posController search query doesn't filter `status: 'AVAILABLE'`. | Fix POS item search to only return AVAILABLE items. Add visible error toast when cart item is rejected at checkout. | S885 |
-| Review success page "View sale" 404 | **P3** — After approving items in Smart Review Queue, "View sale →" button links to `/sale/[id]` (404) instead of `/sales/[id]`. Correct URL is `/sales/[id]`. | Fix link in review success page component. 1-line fix. | S885 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 | #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. | S865-auto / Jun 5 |
 
@@ -81,6 +81,8 @@ _S885: Rarity Boost UI ✅ Chrome-verified S885 — removed from queue. 2 new bu
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| — | P3 fix: review success "View sale" link | ✅ Chrome-verified S886 — /organizer/add-items/[saleId]/review as Alice (user1). Clicked "View sale →" → landed on /sales/59c49908... "QA Active Sale S875 — Mixed Goods" — no 404. ss_4845b09um | S886 |
+| — | P2 fix: POS AVAILABLE-only item search | ✅ Chrome-verified S886 — /organizer/pos as Alice (user1). Typed "Pyrex" in search → "No available items match that search." PENDING_REVIEW item excluded from results. Network: GET /api/items?...&status=AVAILABLE confirmed. ss_9781ji8rx | S886 |
 _(Y-axis formatter + #192 ENDED sale: applied to roadmap S883)_
 | — | Rarity Boost 15 XP display | ✅ Chrome-verified S885 — /coupons as Alice (user1). Organizer tab → Shopper tab → "Boosts & Bonuses" section: "Rarity Boost — Spend 15 XP to boost rarity rolls on next photo uploads." Button: "Activate Rarity Boost (15 XP)". Confirms S884 coupons.tsx fix deployed. ss_10072ub1r | S885 |
 | — | Add-items upload → Analyze → publish pipeline | ✅ Chrome-verified S885 — /organizer/add-items/59c49908... as Alice (user1). Batch Upload: file_upload → "✓ 1 photo selected". Analyze All → Smart Review Queue → "Vintage Table Lamp, Mid-Century Modern Style, Wood Base" (62% confidence, Lamps/Furniture, SMART tags). Clicked Approve → "QUEUE CLEAR — All 2 items are live." Verified on /sales/59c49908...: lamp card visible alongside Pyrex. ss_3920p8trb ss_57255gxkm ss_5660w5ek0 | S885 |
@@ -171,6 +173,16 @@ _(S862
 4. **URGENT: Reactivate outreach@finda.sale** — admin.google.com → Directory → Users → outreach@finda.sale → Reactivate
 
 ## Recent Sessions
+
+### S886 — DEV MODE. P3 + P2 bug fixes shipped + Chrome-verified. Roadmap PCVs applied. Blocked Queue: 3 rows.
+
+**Records pass:** S885 PCVs applied to roadmap.md — #175 Coupons/Rarity Boost → Chr ✅ S885, #142 Photo Upload pipeline → Chr ✅ S885 (was ⚠️ S805).
+
+**P3 fix (review.tsx line 1239):** "View sale →" button in Smart Review Queue success state: `/sale/${saleId}` → `/sales/${saleId}`. ✅ Chrome-verified S886 — navigated to review page, clicked "View sale →", landed on /sales/59c49908... with "QA Active Sale S875 — Mixed Goods" confirmed. ss_4845b09um.
+
+**P2 fix (itemController.ts lines 632–652):** POS item search now honors `?status=AVAILABLE` query param from frontend — PENDING_REVIEW items excluded from search results. Pre-existing "Vintage Pyrex Bowls Set (4pc)" PENDING_REVIEW item correctly absent from POS search. ✅ Chrome-verified S886. ss_9781ji8rx.
+
+**Blocked Queue: 4 rows** (−2: P3 review link ✅ + P2 POS filter ✅ both fixed and verified; #335 P1 URGENT + #332 + AuctionNinja + #230 remain)
 
 ### S885 — QA MODE. Rarity Boost ✅. Add-items pipeline ✅. POS core ✅. 2 bugs filed. Blocked Queue: 5 rows.
 
@@ -474,21 +486,4 @@ Workflow secrets `DATABASE_URL` and `DIRECT_URL` were stale. Updated both via Gi
 - Root cause 3 UNRESOLVED: GitHub Actions runners get Cloudflare IP block (11KB challenge page vs full 325KB). Scraper returns 0 results even with correct URL + selector. Railway cron attempted (wrong) and reverted. GitHub Actions schedule re-enabled. Status: BROKEN — see Next Session investigation guide.
 
 **Schema FK audit — ✅ DEPLOYED TO RAILWAY PROD:**
-4 migrations applied in order (required 3 deploy attempts due to orphan rows in Conversation and UserAchievement):
-1. `20260604000000_add_directoryclaimemail_indexes` — IF NOT EXISTS no-op (indexes pre-existed)
-2. `20260604100000_favorite_user_cascade_delete` — `onDelete: Cascade` on Favorite.user (fixes Sentry null-user error)
-3. `20260604200000_schema_fk_cascade_restrict` — orphan cleanup + 53 FK constraints (CASCADE/RESTRICT/SetNull) + 32 new indexes
-4. `20260604300000_nullable_fields_setnull` — Review.userId, Message.senderId, EncyclopediaEntry.authorId, EncyclopediaRevision.authorId made nullable + SET NULL
-
-**Files changed:** `packages/database/prisma/schema.prisma` · 4 migration SQL files · `auctionNinjaScraper.ts` · `run-auctionninja.ts` (NEW) · `.github/workflows/scrape-auctionninja.yml` · `packages/backend/src/index.ts` (Railway cron added + reverted, net: no change)
-
-**Blocked Queue: 16 → 17 rows** (AuctionNinja Cloudflare block added).
-
-### S867 — QA MODE: 3 P2 bugs confirmed, 1 UNVERIFIED, no code shipped
-
-**QA findings (all Chrome-verified):**
-
-- **UGC "Tag Your Find" button ❌ P2 CONFIRMED** — Renders `bg-white border-2` in dark mode: jarring white rectangle in dark UI. Button IS in the correct location (Community Photos section header on sale detail page), but styling is wrong. (zoom screenshot confirmed white-on-dark; ss_8686xfj8m)
-- **Sale Type filter resets on Search submit ❌ P2 CONFIRMED** — Navigated /search. Set Sale Type = Estate Sale via dropdown (URL updated to `?q=&saleType=ESTATE`). Typed "furniture" in search box, clicked Search. URL became `?q=furniture` — saleType dropped. Dropdown reverted to "All Types". Results showed non-estate listings. (ss_1011915a0)
-- **ZIP export copy mismatch ❌ P2 CONFIRMED** — Settings → Help tab → "Your Data" section: text reads "Limited to once per 24 hours" covering both Download My Data and Download Sale & Item Data (ZIP) buttons. Code confirmed settings.tsx line 2005. Backend enforces 1/month for ZIP. (ss_33535rwau)
-- **YMAL black gap ⚠️ P2 UNVERIFIED** — "You might also like" section appeared on Alice's archive sale but rendered empty (no item cards loaded). Cannot confirm 300px gap without a live active sale with AI-generated recommendations. Data-dependent.
+4 migrations applied in order (required 3 deploy attempts due to orphan ro
