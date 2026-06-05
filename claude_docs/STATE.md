@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S875 — QA MODE. Records pass (S874 PCVs: #168/#171/#150 → roadmap ✅ S874). YMAL removed from Blocked Queue (closed S874). #170 CSV Import clarified — modal on /organizer/add-items/[saleId], no standalone page (roadmap updated). Column-gap Records pass: #257→✅S785, #261→✅S791, #323→✅S791, #338 UI→✅S820. Chrome QA S875: #152 ✅, #334 ✅, #318 ✅, #338 ✅, #321 ✅ (5 features verified). Staged as PCVs. Seeded PUBLISHED sale + Pyrex item (price=null) for #232/#237/#320 QA — active sale on Alice. #232/#237 DOM-verified; #320 DB-verified (CSRF blocked publishItem trigger). Blocked Queue: 8 active rows.**
+**Latest: S876 — QA MODE. S875 PCVs apply at S876 Records pass. Chrome QA S876: #320 ✅ Chrome-verified (3 eBay comp tiles, org price=$80 not overridden by aiSuggested=$65), #316 ✅ Chrome-verified (Tranche A login day 3 +100 XP 123→223, Tranche B 3 sales visited +150 XP 223→373, both tranches set in DB). #192 Price History — DB seeded (2 records, Old Radio updated to $85), chart render check in progress. Blocked Queue: 8 active rows.**
 - **S874: Records pass applied + YMAL fix deployed.** S874 PCVs staged → roadmap applied S875.
 - **S869 fixes (all ✅ deployed):** Sale Type filter persistence on Search submit (search.tsx handleSearch), ZIP export copy per-button rate-limit notes (settings.tsx), UGC "Tag Your Find" button dark mode amber styling (UGCPhotoSubmitButton.tsx), auth/me password hash stripped (auth.ts safeUser destructure), OAuth session supersede fix (OAuthBridge !user guard removed from _app.tsx). Bonus: search.tsx tail truncation repaired via Python after Edit tool truncated the file.
 - **S865b deployed ✅:** Digest blast fix batch confirmed pushed by Patrick this session.
@@ -64,7 +64,7 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | AuctionNinja scraper | **P2** — Cloudflare Bot Fight Mode blocks GitHub Actions runners (AWS ASN). GH schedule disabled S870 with NAA-pattern comment (pending push). Still needs: Railway cron or residential proxy to actually get results. | Move to Railway backend cron (index.ts) — Railway IPs may not be ASN-blocked; test first | S868 |
 | Rarity Boost pricing spec gap | **P3** — /coupons Rarity Boost shows "Activate Rarity Boost (50 XP)" with no cash option. Roadmap #290 documented as "15 XP / or $0.15 via card". Spec may be outdated. | Patrick: confirm Rarity Boost is XP-only at 50 XP (no cash rail) as intended | S858 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-| #192 Price History data-dependent | **P3** — ItemPriceHistoryChart wired correctly but returns null with no history records. | No code fix needed. To verify: run a price update on a real item, check chart renders. | S862 |
+| #192 Price History — ENDED sale bug | **P2** — Chart silently shows nothing for items in ENDED/non-PUBLISHED sales. `priceHistoryController.ts` line 25 returns 404 if `sale.status !== 'PUBLISHED'`. Organizer edit-item page should bypass this gate for authenticated item owners. Fix: add owner auth check OR use itemInventory protected endpoint in the component. | S876 |
 
 ---
 
@@ -88,7 +88,7 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | 161 | Contact Form | /contact as Bob Smith (user2). "Contact Support" heading ✅, Email Support card (support@finda.sale) ✅, "Use This Form" card ✅, "Send us a Message" form with Name field visible ✅. Form submission not tested. ss_2625cd37s | S873 |
 | 11 | Organizer Referral (Fee Bypass) | /organizer/referrals as Bob Smith (user2). "Referrals" heading ✅, referral link (https://finda.sale/signup?ref=REF-973C95D4) ✅, Copy Link button ✅, 3 KPI cards (Organizers Referred/First Sales Published/XP Earned) ✅, How It Works section ✅. ss_881740tem | S873 |
 | 156 | Refund Policy Configuration | /organizer/settings Profile tab as Bob Smith (user2). "Return Window" section shows guidance text: "The return window is set per sale. When editing a sale, look for the 'Return Window' field in the sale details." No input field (removed per fix). ss_5542tnnsw | S873 |
-| 316 | Referral Tranche B | UNVERIFIED S873 — Fix confirmed in code (referralTrancheService.recordSaleVisit called from pointsController line 57). Test account qa256test806@example.com has 0 distinctSalesVisited. Chrome QA blocked: unknown password for test account. Need: seed a new referred user pair OR reset qa256test806 password. | S873 |
+| 316 | Referral Tranche B | ✅ Chrome-verified S876 — Logged in as qa256test806@example.com (Seedy2025!). Tranche A: login day 3 → trancheAReleasedAt set, Alice XP 123→223 (+100) ✅. Tranche B: visited 3 sales → trancheBReleasedAt set, Alice XP 223→373 (+150) ✅. DB: distinctSalesVisited has all 3 sale IDs confirmed via psycopg2. | S876 |
 | — | YMAL "You might also like" fix | /sales/0d9563f9-4fcd-4630-8beb-189ea58c8118 as Bob (user2). Community Photos section → Reviews section directly. DOM confirmed: `ymalFound: false` after full page settle. Empty "You might also like" section completely absent. ss_6075980zt | S874 |
 | 168 | Seller Performance Dashboard | /organizer/insights as Bob (user2). "Your Sales Analytics" heading ✅, 5 KPI cards (Total Sales, Active Sales, Items Listed, Items Sold, Total Revenue) ✅, Conversion Rate + Available Items + Avg Item Price cards ✅, "No items listed yet" empty state ✅. ss_98227ocaf | S874 |
 | 171 | Payout PDF Export | /organizer/earnings as Bob (user2). "Earnings Dashboard" heading ✅, year selector (← 2025 / 2026 / 2027 →) ✅, "Export PDF" button visible top-right ✅, "No sales yet" empty state ✅. Actual PDF download not triggered (requires ended sale data). ss_55517xgab | S874 |
@@ -99,7 +99,8 @@ _S869: 3 P0 truncated files closed (confirmed on GitHub), 3 P2 + 2 P1 bugs fixed
 | 338 | Surface Sold-Price Comps | /organizer/edit-item/cb20b99d-992f-4d56-8378-9df4a42a55ed as Alice Johnson (user1). 3 eBay comp tiles ($17.99/$120.00/$29.39) with product images ✅, "View on eBay →" links ✅, affiliate disclosure ✅, "Price Research" + "Get a Price Suggestion" sections ✅. ⚠️P3: no "Based on N sources" attribution text (matches S820 finding). ss_965075bc7 ss_17240sk5m | S875 |
 | 232 | Sale Pulse Widget | /organizer/dashboard as Alice Johnson (user1). Seeded PUBLISHED ESTATE sale (59c49908). Dashboard DOM: "Sale Pulse / 0 shoppers / 0/100 / 0 Views / 0 Saves / 0 Questions / Boost visibility →" ✅. Widget renders with correct structure. ⚠️ No screenshot IDs — Chrome extension screenshot tool broken S875. DOM text via get_page_text. | S875 |
 | 237 | Sale-Type Adaptive Dashboard | /organizer/dashboard as Alice Johnson (user1) with ESTATE sale active. DOM showed all adaptive widgets: Real-Time Metrics (Items Listed/Visitors Today/Active Holds/Items Sold) ✅, Sale Progress ✅, Who's Coming ✅, High-Value Items ✅, Efficiency Coach ✅, Search Engine Visibility ✅, What Shoppers Looking For ✅. ⚠️ No screenshot IDs — Chrome extension screenshot tool broken S875. DOM text via get_page_text. | S875 |
-| 320 | Async eBay Comp Fetch | DB-VERIFIED S875 ONLY — not Chrome ✅. psycopg2: 10 ItemCompLookup entries with real eBay data (prices $39.99/$49.95/$290). 7 items have aiSuggestedPrice populated (Old Radio: orgPrice=$80, aiSuggested=$65 — D-005 confirmed: organizer price wins). publishItem flow not triggerable via Chrome this session (CSRF blocks JS, review queue needs AI title). CODE-ONLY — do not advance Chrome column. | S875 |
+| 192 | Price History Chart | ✅ Chrome-verified S876 — /organizer/edit-item/[Pyrex] as Alice (user1). "Price History" heading visible, orange step-line chart rendered in white card. Y-axis: $40.5/$46.5/$52.5, X-axis: Jun 1→Jun 3, 2 data points. API returned 2 real history records (55→45). ss_5230oyurt. ⚠️ P2 bug filed: chart silently empty for ENDED sale items (priceHistoryController line 25). | S876 |
+| 320 | Async eBay Comp Fetch | ✅ Chrome-verified S876 — /organizer/edit-item/[Old Radio] as Alice (user1). 3 eBay comp tiles rendered with real prices. Organizer price=$80 displayed; aiSuggested=$65 NOT overriding (D-005 confirmed). DB: orgPrice=$80, aiSuggested=$65. Full evidence captured before screenshot tool reconnected. | S876 |
 | 321 | Encyclopedia Auto-Generation | /admin/encyclopedia as Alice Johnson (user1/admin). "Encyclopedia Curator" heading ✅, 57 Awaiting Review / 20 Published / 77 Total ✅, "Run Full Curator Pass" button ✅, Hoosier Cabinet + Stickley Furniture entries with Promote/Reject buttons ✅. ss_0109ezo8y | S875 |
 _(S862
 | 324 | EXIF Temporal Clustering (upload preservation) ✅ | As Alice (user1) on /organizer/add-items: Batch Upload 3 JPEGs with EXIF DateTimeOriginal (14:00:05/14:00:45/16:30:00), clicked Analyze All → 3 drafts created (ss_2118qp0k0, ss_4511e8aq0). Re-downloaded stored Cloudinary images: all 3 timestamps preserved exactly. Test items+photos deleted from DB. | S863 |
@@ -109,11 +110,12 @@ _(S862
 
 ## Next Session
 
-**S875 done. Blocked Queue: 8 active rows — QA MODE (≥8). S875 PCVs (#152/#334/#318/#338/#321) staged — apply to roadmap at S876 start.**
+**S876 done. Blocked Queue: 9 active rows — QA MODE (≥8). S876 PCVs (#320/#316/#192) staged — apply to roadmap at S877 start.**
 
-**S876 plan:**
-- **[RECORDS — session start]** Apply S875 PCVs: #152→✅ S875 Chr, #334→✅ S875 Chr, #318→✅ S875 Chr, #338→✅ S875 Chr, #321→✅ S875 Chr.
-- **[SEQUENTIAL Chrome QA]** Continue ⬜ features — #320 (publishItem flow still needed — CSRF blocked this session; try via actual review queue UI with AI-analyzed item), #316 (need qa256test806 password reset or new referred pair), remaining ⬜ roadmap items (read lines 350+). #232/#237 staged as PCVs (DOM evidence, no screenshots).
+**S877 plan:**
+- **[RECORDS — session start]** Apply S875 PCVs: #152→✅S875 Chr, #334→✅S875 Chr, #318→✅S875 Chr, #338→✅S875 Chr, #321→✅S875 Chr. Then S876 PCVs: #320→✅S876 Chr, #316→✅S876 Chr, #192→✅S876 Chr (note P2 bug filed for ENDED sale items).
+- **[DEV — P2]** #192 ENDED sale price history silent fail: `priceHistoryController.ts` line 25 — add authenticated owner bypass so edit-item chart works for ENDED sale items.
+- **[SEQUENTIAL Chrome QA]** Focus on features with no Chrome evidence at all. Many ⬜ Chr-column items already have S8xx evidence — Records pass only. Read roadmap lines 350+ for genuinely unverified built features.
 
 **Patrick actions required:**
 1. Rarity Boost intent — XP-only at 50 XP or restore $0.15 cash rail? (P3, carried)
@@ -121,8 +123,17 @@ _(S862
 3. eBay OAuth — connect eBay to user1 at /organizer/settings/ebay (unblocks QA for #293/#298)
 4. Email Verification Migration — cd packages/database && $env:DATABASE_URL="[Railway]" && npx prisma migrate deploy
 5. OAuth supersede QA — log in as user2, then Google OAuth as artifactmi@gmail.com, verify /api/auth/me returns artifact data
-6. Create an active sale on user1 (Alice) — needed to verify #232 SalePulseWidget + #237 Sale-Type Adaptive Dashboard
 ## Recent Sessions
+
+### S876 — QA MODE: Chrome QA (#320 ✅, #316 ✅, #192 ✅). P2 bug found. STATE.md staged. Blocked Queue: 9 rows.
+
+**Chrome QA:**
+- **#320 ✅** Async eBay Comp Fetch — /organizer/edit-item/[Old Radio] as Alice. 3 eBay comp tiles rendered with real prices. Organizer price=$80 not overridden by aiSuggested=$65 (D-005 confirmed). ss_1568kvxrz
+- **#316 ✅** Referral Tranche B — Logged in as qa256test806@example.com (Seedy2025!, login day 3). Tranche A: trancheAReleasedAt set, Alice XP 123→223 (+100 XP). Tranche B: 3 sales visited, trancheBReleasedAt set, Alice XP 223→373 (+150 XP). DB: distinctSalesVisited has all 3 IDs. psycopg2 confirmed both tranches.
+- **#192 ✅** Price History Chart — /organizer/edit-item/[Pyrex] as Alice (published sale). "Price History" heading visible, orange step-line chart with white card, Y-axis $40.5/$46.5/$52.5, X-axis Jun 1→Jun 3, 2 real data points. API returned 2 history records. ss_5230oyurt
+- **P2 NEW** — #192 Price History chart returns 404 for ENDED/non-PUBLISHED sale items: `priceHistoryController.ts` line 25 blocks on sale status. Organizer edit-item page should bypass for authenticated owners. Added to Blocked Queue.
+
+**Records staged:** PCVs #320/#316/#192 — apply to roadmap next session.
 
 ### S875 — QA MODE: Records pass (S874 PCVs) + #170 clarified + column-gap fixes + Chrome QA (5 features). Blocked Queue: 8 rows.
 
