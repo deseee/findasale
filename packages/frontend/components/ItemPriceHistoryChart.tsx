@@ -78,7 +78,7 @@ export default function ItemPriceHistoryChart({ itemId, currentPrice }: Props) {
               tick={{ fontSize: 11, fill: '#9ca3af' }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v: number) => `$${v}`}
+              tickFormatter={(v: number) => `$${Math.round(v)}`}
             />
             <Tooltip
               formatter={(value: number, _: string, entry: any) => [

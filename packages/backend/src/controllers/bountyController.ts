@@ -688,7 +688,7 @@ export const getCommunityBounties = async (req: AuthRequest, res: Response) => {
   try {
     const { category, radiusMiles, offset = '0', limit = '20' } = req.query;
 
-    const where: any = { saleId: null, status: 'OPEN', user: { isNot: null } };
+    const where: any = { saleId: null, status: 'OPEN' };
 
     if (category && category !== '') {
       where.category = category as string;
