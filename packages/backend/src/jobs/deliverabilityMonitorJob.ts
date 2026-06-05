@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { Resend } from 'resend';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 
@@ -11,8 +12,8 @@ import { cronGuard } from '../utils/cronGuard';
  * Runs: Every Sunday at 19:00 UTC
  */
 
-// Weekly Sunday 19:00 UTC
-cron.schedule('0 19 * * 0', cronGuard({ jobName: 'deliverabilityMonitor' }, async () => {
+/** Core deliverability check logic — exported so it can be added to JOB_MAP. */
+export async function runDeliverabilityMonitor(): Promise<void> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   // Count email suppressions (bounces + complaints) in the last 7 days
@@ -41,9 +42,38 @@ cron.schedule('0 19 * * 0', cronGuard({ jobName: 'deliverabilityMonitor' }, asyn
     if (bounceRate > 0.02) {
       const alertMsg = `⚠️ High bounce rate: ${bouncePercentage}% (${recentSuppressions}/${recentSent}) — exceeds 2% threshold`;
       console.warn(`[deliverability:alert] ${alertMsg}`);
-      // TODO: send alert email via existing email service (e.g., Resend, Nodemailer)
+
+      const apiKey = process.env.RESEND_API_KEY;
+      if (!apiKey) {
+        console.error('[deliverability] RESEND_API_KEY not set — cannot send bounce alert');
+      } else {
+        try {
+          const resend = new Resend(apiKey);
+          await resend.emails.send({
+            from: process.env.SES_FROM_EMAIL || 'FindA.Sale Alerts <alerts@send.finda.sale>',
+            to: process.env.QUOTA_ALERT_EMAIL || 'deseee@gmail.com',
+            subject: `⚠️ High bounce rate: ${bouncePercentage}% (${recentSuppressions}/${recentSent})`,
+            html: `
+              <p><strong>⚠️ WARNING:</strong> The outreach bounce rate over the last 7 days has exceeded the 2% threshold.</p>
+              <ul>
+                <li><strong>Bounce rate:</strong> ${bouncePercentage}%</li>
+                <li><strong>Suppressions (bounces + complaints):</strong> ${recentSuppressions}</li>
+                <li><strong>Total sent:</strong> ${recentSent}</li>
+              </ul>
+              <p>High bounce rates risk Gmail account suspension and inbox deliverability. Review recent sends and suppress problematic addresses.</p>
+              <p style="color:#666;font-size:12px">FindA.Sale · deliverabilityMonitorJob.ts · weekly Sunday 19:00 UTC</p>
+            `,
+          });
+          console.log(`[deliverability] Bounce alert sent to ${process.env.QUOTA_ALERT_EMAIL || 'deseee@gmail.com'}`);
+        } catch (err) {
+          console.error('[deliverability] Failed to send bounce alert via Resend:', err);
+        }
+      }
     }
   } else {
     console.log('[deliverability] Weekly check: no sends in last 7 days');
   }
-}));
+}
+
+// Weekly Sunday 19:00 UTC
+cron.schedule('0 19 * * 0', cronGuard({ jobName: 'deliverabilityMonitor' }, runDeliverabilityMonitor));
