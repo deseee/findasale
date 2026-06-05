@@ -13,7 +13,7 @@ export const getPriceHistory = async (req: AuthRequest, res: Response) => {
       select: {
         saleId: true,
         draftStatus: true,
-        sale: { select: { status: true } }
+        sale: { select: { status: true, organizerId: true } }
       }
     });
 
@@ -21,14 +21,21 @@ export const getPriceHistory = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Return 404 if sale is not published (don't leak resource existence via 403)
-    if (item.sale!.status !== 'PUBLISHED') {
-      return res.status(404).json({ message: 'Item not found' });
-    }
+    // Organizers can always see price history for their own items (including ENDED sales)
+    const requestingUserId = req.user?.id;
+    const isOwner = requestingUserId && item.sale!.organizerId === requestingUserId;
+    const isAdmin = req.user?.role === 'ADMIN';
 
-    // P1-B: Return 404 if item itself is not published/visible
-    if (item.draftStatus && item.draftStatus !== 'PUBLISHED') {
-      return res.status(404).json({ message: 'Item not found' });
+    if (!isOwner && !isAdmin) {
+      // Return 404 if sale is not published (don't leak resource existence via 403)
+      if (item.sale!.status !== 'PUBLISHED') {
+        return res.status(404).json({ message: 'Item not found' });
+      }
+
+      // P1-B: Return 404 if item itself is not published/visible
+      if (item.draftStatus && item.draftStatus !== 'PUBLISHED') {
+        return res.status(404).json({ message: 'Item not found' });
+      }
     }
 
     const history = await prisma.itemPriceHistory.findMany({
