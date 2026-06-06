@@ -180,29 +180,40 @@ _(S862
 
 ## Next Session
 
-**S890 done (QA verification sweep, all 16 BQ items). BQ: 16 rows (−1 rate cap resolved, +1 FB Marketplace 0-records). The S887 audit fixes are mostly DEPLOYED but two have post-deploy behavior bugs (geocoding fetch-ordering, FB Events never-reached). Next session = DEV MODE to action the S890 root causes — they are concrete and 1–2 of them are quick wins.**
+**PRIMARY (Patrick's directive): Chrome MCP harvest of AuctionZip — free, proven path to ~25k auctioneers. Run this first.**
 
-**ALREADY CODED in S890 (in the push block — verify after deploy):**
-- Geocoding: status=PUBLISHED filter + oldest-first (internalGeocodingController.ts). After deploy, the next workflow run should drain the ~1,164 live un-geocoded; watch `SELECT COUNT(*) FROM "Sale" WHERE lat IS NULL AND status='PUBLISHED'` drop.
-- FB Events key-health alert (run-search-facebook-events.ts).
-- "Dates approximate" label (sales/[id].tsx + SaleCard.tsx) — Chrome-verify on a city-only FB Events sale.
+**DISPATCH STUB — AuctionZip Chrome harvest (main session, Chrome MCP, sequential):**
+- **Why:** auctionzip.com Cloudflare-403s Railway's datacenter IP (S891 confirmed a UA swap does NOT help — hard challenge/IP block). But it loads fine in a real browser / residential IP — the S890 Chrome investigation parsed 235 auctioneers from letter A alone. AuctionZip is a slow-changing directory, so ONE harvest = months of value. No paid service needed.
+- **Steps:** For each of the 26 pages `https://www.auctionzip.com/Auctioneer-Directory/{A..Z}.html`: navigate via Chrome MCP → extract auctioneer rows using the parser logic already in `packages/backend/src/services/scraper/sources/auctionZipScraper.ts` (anchors `/XX-Auctioneers/<id>.html`; prefer company-name over contact; US-states filter, skip Canadian provinces). Accumulate, then bulk-insert through `getOrCreateScrapedOrganizer` (set source/directoryMostRecentSource='AuctionZip'). Watch for in-page pagination per letter.
+- **Expected output:** `SELECT COUNT(*) FROM "Organizer" WHERE directoryMostRecentSource='AuctionZip'` rises from 0 toward ~25k. Stage progress; harvest may span many pages. Use DB writes via psycopg2/the pipeline — do NOT bypass dedup.
+- **Constraints:** Chrome MCP = one browser, sequential. Read seed creds before any login (not needed for the public directory). VM bash/git was corrupted S891 — use file tools + psycopg2, trust Windows git.
 
-**S891 plan (post-S890-deploy — code shipped, these are the open follow-ups):**
-- **[OPS — quick]** Re-trigger `Geocode Ungeocoded Sales` workflow_dispatch (new backend code is live now). Then re-check `COUNT WHERE lat IS NULL AND status='PUBLISHED'` — should drop below 1,164 (211 FB Events via city-center should clear; GSF 953 may partly resist). This is the proof the geocoding fix works.
-- **[OPS — quick]** Run the NAA scraper (sitemap fix deployed; NAA pages are static, not Cloudflare-blocked) → confirm >0 NAA organizers.
-- **[DECISION → Patrick] AuctionZip:** parser is fixed but auctionzip.com Cloudflare-403s Railway's IP. Choose: (a) generalize the FB CF Worker to a generic GET forwarder + route AuctionZip through it (cheap, uncertain — CF edge IPs may also be blocked), (b) paid residential proxy, or (c) drop AuctionZip. ~25k records at stake.
-- **[DECISION → Patrick] FB Marketplace:** free CF Worker proxy proven a dead end (FB returns 0 through it). Choose: paid residential proxy + session auth, or DROP. Recommend DROP unless FB becomes a priority.
-- **[DEV] Shopify #332:** core bugs fixed S890. Remaining for a future pass (Patrick decisions): OAuth flow, inbound webhook, token encryption. A real custom-app store is still needed for live end-to-end QA.
-- **Deferred until #335 outreach resume (OUTREACH_ENABLED=false):** 462 WARM backfill, queue hygiene (2,206 stale / 480 BOUNCED), WARM enrichment.
+**Also pending after the S891 push deploys:**
+- **[Chrome QA] SEO-1 + SEO-2** (shipped S891): after Vercel rebuild — `curl -s https://finda.sale/sales/{id} | grep -E 'og:title|application/ld'` non-empty (SEO-1); `curl -s https://finda.sale/ | grep -ic 'rel="canonical"'` = 1 with value `https://finda.sale` (SEO-2); then Facebook Sharing Debugger on a sale URL to confirm the unfurl renders.
+- **[OPS] Geocoding** (S891 empty-address GSF fix live): trigger `Geocode Ungeocoded Sales` workflow_dispatch → `COUNT WHERE lat IS NULL AND status='PUBLISHED'` should drop below 716 (the ~310 GSF empty-address + 19 FB Events clear via city-center).
+- **[OPS] NAA scraper run** (sitemap fix deployed, static pages) → confirm >0 NAA organizers.
 
-**Patrick actions / decisions:**
-1. Push block below — **docs only** (STATE.md + patrick-dashboard.md); all S890 code already pushed + deployed green.
-2. Re-trigger geocode workflow_dispatch (now that new code is live) + run NAA scraper — both quick wins.
-3. Decisions: AuctionZip transport (proxy/drop) + FB Marketplace (paid proxy/drop).
-4. #335 RESUME when ready (reactivate Gmail → OUTREACH_ENABLED=true → re-enable workflow; no leak — S889/S890 confirmed).
-5. #332 Shopify dev store for eventual live QA; GBP phone verification (carried).
+**Decisions still open (Patrick):**
+- **FB Marketplace:** free CF Worker proven a dead end (0 listings — needs an authenticated session). DROP recommended unless prioritized.
+- **AuctionZip recurring:** after the one-time Chrome harvest, decide if ongoing automation is worth a CF-worker GET-forwarder experiment or a paid Cloudflare-solving API free tier.
+- **#332 Shopify:** core bugs fixed; OAuth/webhook/token-encryption + a real custom-app store remain for a future pass.
+- **#335 outreach resume:** reactivate Gmail → OUTREACH_ENABLED=true → re-enable workflow (no leak per S889/S890). Deferred items (462 backfill, queue hygiene, WARM enrichment) wait for this.
+
+**⚠️ S891 environment note:** the VM bash/git mount was corrupted this session — it showed phantom file truncations (e.g. auctionZipScraper.ts cut at L261) and false ~600-line deletions. The real Windows files are intact (verified via Read/Edit file tools). Next session: trust `git status` on Windows, not VM bash, for repo state; use file tools + psycopg2 for verification.
 
 ## Recent Sessions
+
+### S891 — DEV MODE. Shopper-discovery SEO audit + 2 P1 fixes; geocoding drain unblocked; AuctionZip UA test ruled out → Chrome harvest queued.
+
+**SEO (the demand flywheel — never deferred):**
+- **SEO-1 (P1, FIXED + pushed):** sale detail pages shipped an empty server-side `<head>`. Root cause: client-side `isLoading` early-return skipped all the existing og/JSON-LD/canonical markup, so shared sale links unfurled blank on FB/iMessage/Slack/WhatsApp. Fixed sales/[id].tsx to render the head pre-mount (mirrors city/[slug].tsx SSR/ISR, which was already correct). City pages were healthy (7 JSON-LD types).
+- **SEO-2 (P1, FIXED + pushed):** homepage emitted two conflicting canonicals (one `/index`). Root cause: `_app.tsx` global canonical built from `router.asPath` (='/index' on the statically-built homepage) + every page missing a Next.js `key` so page+global canonicals never collapsed. Fixed across 17 pages (path normalize + `key="canonical"`). Audit doc: claude_docs/audits/seo-shopper-discovery-2026-06-05.md → roadmap BROKEN rows SEO1/SEO2.
+
+**Geocoding (2nd root cause):** drain was stuck — S890 fix had moved it 1,164→716 but stalled. Found a leftover `address<>''` filter + a city-only fallback scoped only to Facebook Events that excluded ~310 PUBLISHED GSF rows (empty street address, valid city/state/zip). Broadened batch whereClause to require only city+state (internalGeocodingController.ts) → all 716 now qualify, geocoded to city-center via the workflow's existing is_city_only path. Confirmed via psycopg2 that GSF carries no source coordinates (0 lat/lng in scrapedMetadata), so city-center is the only viable path — no speculative coord-extraction written.
+
+**AuctionZip:** swapped the self-identifying bot UA to `getRandomUserAgent()` (matching AuctionNinja, whose only transport difference this was). Deployed + re-run → STILL HTTP 403 on every letter page → confirms a hard Cloudflare datacenter-IP/challenge block, not a UA heuristic. Free server-side path exhausted → one-time Chrome MCP harvest queued (Patrick's directive; the directory loads fine via real browser/residential IP).
+
+**Method/tooling:** 3 parallel general-purpose dev agents (SEO-1, SEO-2, geocoding) + 1 inline AuctionZip edit. All TS-verified 0 errors. ⚠️ VM git mount corrupted (phantom truncations + false ~600-line deletions); Windows files verified intact via file tools. Pushblocks provided for the SEO batch (17 files + controller + roadmap + audit doc) and the AuctionZip UA change.
 
 ### S890 — QA MODE. Full 16-item Blocked Queue verification sweep (DB + code, no browser). 1 closed, 2 root-caused, all annotated. BQ: 16 rows.
 

@@ -1,4 +1,21 @@
-# Patrick's Dashboard — S890 Wrap
+# Patrick's Dashboard — S891 Wrap
+
+---
+
+## S891 — SEO fixes, geocoding unblocked, and the AuctionZip plan
+
+Plain-English of what I did this session:
+
+- ✅ **Shopper-discovery SEO — two real bugs found and fixed.**
+  - **Shared sale links were unfurling blank.** When you text or post a link to a specific sale, the preview (title + image) was coming up empty, because the sale page was building its preview info too late for Facebook/iMessage/Slack to see it. Fixed — previews will render once this deploys. (Your city pages were already done right; this was just the individual sale pages.)
+  - **The homepage was sending Google two conflicting "official URL" signals** (one of them pointed at `/index`), which weakens its ranking. Fixed across 17 pages at once.
+  - Full write-up saved at `claude_docs/audits/seo-shopper-discovery-2026-06-05.md`.
+- ✅ **Geocoding (the map) — found why it stalled and fixed it.** After S890's fix it had started draining (1,164 → 716), then got stuck. The reason: ~310 GarageSaleFinder sales have no street address but DO have a city/zip, and a leftover filter was skipping them entirely. Fixed so they geocode to the city center like the Facebook ones. (I also confirmed GarageSaleFinder doesn't give us exact coordinates, so city-center is genuinely the best we can do for those.)
+- ❌ **AuctionZip — the free fix didn't work, but we learned something useful.** I tried the cheap experiment (make our scraper look like a normal browser, the way AuctionNinja does). Deployed it, re-ran it — still blocked, 403 on every page. So it's not about how we look; auctionzip.com is hard-blocking our server's IP at the network level. **The good news:** the site loads fine in a real browser, and it's a slow-changing directory, so I can just harvest all ~25k auctioneers **once, for free, by driving your browser** — no proxy, no monthly cost. That's queued as the very next thing to do.
+
+**What you need to do now:** push the two pushblocks (SEO batch + the AuctionZip change). Next session I'll run the free Chrome harvest to pull in the AuctionZip auctioneers. Also still pending whenever you want: re-trigger the geocode workflow to confirm the drain, and a quick check that the SEO fixes deployed.
+
+**One heads-up:** my behind-the-scenes environment glitched this session and showed some files as broken/truncated — I checked, your actual files are fine. Just flagging it so it's on record.
 
 ---
 
