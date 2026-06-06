@@ -1,4 +1,70 @@
-# Patrick's Dashboard — S894 Wrap
+# Patrick's Dashboard — S895 QA Session
+
+---
+
+## 🔴 P1 Bug Found — You Can't Log Out (Needs a Fix Before More QA)
+
+During this session's Chrome QA, I hit a blocker: after heavy login/logout testing, the **logout endpoint started returning a rate-limit error (429)**. The page cleaned up its local state, but the actual login cookie wasn't cleared. So every time the page reloaded, it read the cookie and logged me back in automatically — I couldn't get a clean logged-out session no matter what.
+
+This blocks re-testing the CTA1 fix (the "Remind Me" button) because I can't verify the logged-out experience while this bug exists.
+
+**The fix is straightforward:** the logout endpoint is mistakenly sharing the same rate-limiter as the login endpoint. Logout should never be rate-limited — if someone can't log out, that's a real problem. I'll dispatch findasale-dev to fix this at the start of next session.
+
+---
+
+## ⚠️ Audit Alerts — 2026-06-06
+
+Two other issues found during the automated Saturday morning site audit. Neither is blocking users right now, but both need a dev pass soon.
+
+**HIGH — Dark text invisible in dark mode (83 spots across 25 components)**
+We have 83 places across 25 files where the text color has no dark-mode version — labels go near-invisible in dark mode. Worst-hit: Performance Dashboard, Checkout modal, Hunt Pass modal, date picker. It's a bulk find-and-replace job — straightforward for dev, just needs dispatching.
+
+**MEDIUM — 28 React errors on homepage (error #418 / #425)**
+The homepage fires 28 background JavaScript errors on every load (SSR/client mismatch). The page looks fine, but it's a red flag for intermittent glitches. Needs a dev look.
+
+Full findings: `claude_docs/audits/weekly-audit-2026-06-06.md`
+
+---
+
+## ✅ Everything confirmed working this audit
+
+- **Homepage, pricing, login** — dark mode, copy, layout: all good
+- **Sale detail page** — SEO-1 fix live (browser tab shows sale name), GuestSaleAlert box working for logged-out visitors, dead-end "Remind Me" button correctly hidden
+- **Search, map, categories** — all loading with real data; map shows all 7 sale types
+- **Admin access control** — non-admin organizer hitting `/admin` gets "Access Denied", not a 500
+- **Organizer dashboard** — loads clean, plan status correct
+
+---
+
+## ✅ S895 Session Work Complete
+
+**NAA auctioneer scraper triggered.** The fix for the NAA directory scraper was coded back in S890 and confirmed on GitHub. This session I triggered it via GitHub Actions (`workflow_dispatch`). It was still running when the session wrapped — next session I'll verify the count in the database (should be ~2,000+ auctioneer records if it ran cleanly).
+
+**Geocoding confirmed draining.** Down to 350 ungeocoded published sales (was 360 last session, 539 a few sessions ago). No action needed — it's working.
+
+**Roadmap bookkeeping done.** Applied the two pending verifications from S894: the homepage canonical/meta tag fix (SEO-2) is now marked as verified in the roadmap, and the CTA1 deployment is noted (Chrome re-verify pending the logout fix).
+
+---
+
+## 📋 What you need to know
+
+**Production only has 7 test accounts (user1–user7), all organizers.** Shopper side (dashboard, favorites, notifications) can't be tested without a shopper account in production.
+
+**Mobile viewport test skipped** — the resize tool didn't work this session. Needs a manual check.
+
+---
+
+## 🛠️ What you need to push
+
+```
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "S895 wrap: QA session, logout P1 BQ, NAA scraper triggered, PCVs applied to roadmap"
+.\push.ps1
+```
+
+_(No code changes this session — all pushes are doc files only.)_
 
 ---
 
@@ -106,28 +172,4 @@ So instead of "drop the vertical," I went ahead and **coded two of the three fix
 
 **Facebook Marketplace** still has 0 records despite the proxy work in S888 — it needs a live test run + log check to see if the rate-limit cleared.
 
-**Shopify (#332) — I reviewed the code against Shopify's docs (no account needed).** Verdict: **not ready** — and the blocker isn't just "you don't have a store." There are real code problems: there's no actual "Sign in with Shopify" flow (it asks users to paste a token by hand, which contradicts our own help guide that promises a one-click connect), we're pinned to a Shopify API version they no longer support, and the code that's supposed to mark an item sold-out in Shopify is written wrong and would fail silently. So even if you had a store, the integration wouldn't fully work — so I **fixed the core bugs this session** (in the push): the sold-out sync now uses Shopify's correct method, the API version is current, and the help guide now describes the real connect steps instead of a flow that doesn't exist. What I did NOT do (flagged for your call later): build a true one-click "Sign in with Shopify" flow, add a Shopify→FindA.Sale webhook (sync is one-way for now), or encrypt the stored token. Bottom line: the code is now correct; you'll still need to connect a real custom-app store to do the final live test.
-
-**Everything below is coded and in this push** (type-checked clean, ready to deploy): geocoding skip-ended + oldest-first, FB Events key alert, "Dates approximate" label, AuctionZip parser, NAA sitemap crawl, Shopify core fixes — **8 code files total.**
-
-**Outreach items are all still open but correctly on hold** while sending is paused (462 ready leads, queue cleanup, website enrichment at 3.5%). These should be done as part of turning outreach back on, not before.
-
-**Confirmed safe:** the outreach "leak" is fully stopped — zero emails sent since Jun 5 morning.
-
----
-
-## S888 Summary — DEV: Facebook Marketplace IP bypass shipped via Cloudflare Worker.
-
-**Problem fixed:** Railway runs on GCP (AS396982), and Facebook's GraphQL endpoint silently blocks GCP/AWS/Azure ASNs — returns `200 OK` with HTML content but zero listings. That's why FB Marketplace has 0 records in the DB after months of scheduled runs. Live test 2026-06-05 confirmed direct Railway calls return 0 listings; same call routed through a Cloudflare Worker (AS13335) returned a real GraphQL JSON response (rate-limited from earlier testing, but reaching the FB API).
-
-**What got built:**
-- `cloudflare/fb-marketplace-proxy/worker.js` — Cloudflare Worker. POST /fb-graphql with bearer auth forwards the form-urlencoded body to facebook.com/api/graphql/ from CF's edge IPs.
-- `cloudflare/fb-marketplace-proxy/wrangler.toml` — deploy config (mirrors the existing image-proxy worker pattern).
-- `packages/backend/src/services/scraper/sources/facebook-marketplace.ts` — adds `USE_FB_PROXY` env-driven branch. When `FB_MARKETPLACE_PROXY_URL` and `FB_MARKETPLACE_PROXY_TOKEN` are both set, the scraper sends requests through the Worker. Otherwise falls back to direct (preserves local-dev behavior).
-
-**Free tier headroom:** 100k requests/day on the Cloudflare free plan. Scraper does ~129 requests per full pass (43 metros × 3 queries) — well under the cap, even at multiple runs/day.
-
-**S888 status (Jun 5 — SHIPPED + LIVE):**
-- ✅ Code pushed (commits `dd745249` + `beb520f5` + `a641dd42`).
-- ✅ Cloudflare Worker deployed at `https://findasale-fb-proxy.findasale.workers.dev`. Subdomain enabled, PROXY_TOKEN secret set. Health check returns 200 OK.
-- ✅ Rail
+**Shopify (#332) — I reviewed the code against Shopify's docs (no account needed).** Verdict: **not ready** — and the blocker isn't just "you don't have a store." There are real code problems: there's no actual "Sign in with Shopify" flow (it asks users to paste a token by hand, which contradicts our own help guide that promises a one-click connect), we're pinned to a Shopify API version they no longer support, and the code that's supposed to mark an item sold-out in Shopify is written wrong and would fail silently. So even if you had a store, the integration wouldn't fully work — so I **fixed the core bugs this session** (in the push): the sold-out sync now uses Shopify's correct method, the API version is current, and the help guide now describes the real connect steps instead of a flow that doesn't exist. What I did NOT do (flagged for your call later): build a true one-click "Sign in with Shopify" flow, add a Shopify→FindA.Sale webhook (sync is one-way for now), or enc

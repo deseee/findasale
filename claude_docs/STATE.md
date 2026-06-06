@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S895 — QA MODE (2026-06-06). Weekly audit: 15 routes Chrome-tested, 2 new BQ entries (text-warm-900 D-002 violations + React hydration errors). QA work: roadmap PCVs applied (SEO-2 Human QA ✅ S894 web_fetch; CTA1 noted as deployed commit 270fd5e4, Chrome QA BLOCKED by P1 logout bug). NAA scraper triggered via GitHub Actions workflow_dispatch (run in progress at wrap — verify DB count next session). Geocoding draining normally (350 PUBLISHED ungeocoded, down from 360). NEW P1: POST /auth/logout rate-limited (429) → httpOnly JWT cookie not cleared → users re-authenticate on every page load, cannot achieve logged-out state. BQ: 13→15 (weekly audit) →16 (+logout P1). Full audit report: claude_docs/audits/weekly-audit-2026-06-06.md.**
+
 **S894 — QA MODE. Records pass: SEO-1+GUEST1 PCVs applied; BQ cleaned 19→13; S890 push verified; CTA1+SEO-2 PCVs staged.**
 Records: roadmap.md Chr column updated (SEO-1 ✅ S892, GUEST1 ✅ S893). BQ 19→13: removed AuctionNinja RESOLVED, AuctionZip RESOLVED, merged auction row, SEO-1 LIVE-VERIFIED S892, CTA1 Chrome-verified S894, SEO-2 web_fetch-verified S894. S890 push verify: all 6 files on GitHub main (SaleCard sha 6e48e50, run-search-facebook-events sha e330401, internalGeocodingController sha 7f884de, shopifyService sha 7662b5e, naaAuctioneerDirectory sha e0e8488, shopify.tsx sha 95c0e78). CTA1 fix (sales/[id].tsx L1494+L1888) in local file but NOT on GitHub — pushblock provided below. Geocoding: 360 PUBLISHED ungeocoded (down from 539 — S891/S893 fix still draining ✅).
 
@@ -91,6 +93,8 @@ _S887 Records pass: 6 new rows added from scraper audit (P1/P2). S887 Records pa
 _S889 BUG MODE: "Outreach still sending despite OUTREACH_ENABLED=false" CLOSED — propagation-lag false alarm, not an active leak. Removed from queue. Evidence: all send paths gated at sendOutreachEmails() outreachEmailsCron.ts:201; backend redeployed 22:39 UTC Jun 5; ZERO DirectoryClaimEmail sends since 07:59 Jun 5 across 4 cron windows (psycopg2 + Railway deploy logs deployment 0352c24e); GH workflow pipeline-outreach-emails.yml disabled = 2nd layer. Blocked Queue: 16 rows._
 _S890 QA MODE: full 16-item DB/code verification sweep (no browser — data items). **#12 Sale-Ending-Soon rate cap CLOSED** — confirmed deployed on main (saleEndingSoonJob.ts: DAILY_EMAIL_CAP=500 + per-send suppression check, GitHub sha 180fff9). All other rows annotated with S890 tool evidence (psycopg2 + GitHub main reads); root causes refined where found. Blocked Queue: 15 rows._
 _S894 Records pass: AuctionNinja RESOLVED + AuctionZip RESOLVED + merged auction row RESOLVED + SEO-1 LIVE-VERIFIED S892 + CTA1 Chrome-verified S894 + SEO-2 web_fetch-verified S894 → all 6 removed. Blocked Queue: 13 rows._
+_S895 weekly audit (2026-06-06): 2 new rows added — text-warm-900 D-002 violations (HIGH) + React hydration errors (MEDIUM). Blocked Queue: 15 rows._
+_S895 QA wrap: +1 P1 logout rate-limiter bug (POST /auth/logout 429 → JWT cookie persists → re-auth on page load). Blocked Queue: 16 rows._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
@@ -107,6 +111,9 @@ _S894 Records pass: AuctionNinja RESOLVED + AuctionZip RESOLVED + merged auction
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
 | FB Marketplace 0 records — CF Worker proxy is a DEAD END | **P2 — S890 DEFINITIVELY DIAGNOSED via live run + Railway logs (02:22-02:25 UTC Jun 6).** Proxy env vars confirmed live; run logged `[FacebookMarketplace] Transport: CLOUDFLARE_WORKER (https://findasale-fb-proxy.findasale.workers.dev/fb-graphql)` — so the proxy IS in use. Result: **every query in every metro returned "Found 0 listings"** (garage/yard/estate × jacksonville/fort-worth/columbus/charlotte/sf/indy/seattle/denver…), 0 created across the board, no errors. FB returns empty results even through Cloudflare's edge IPs (datacenter-IP soft-block; FB Marketplace search increasingly requires an authenticated session). **The free-Cloudflare-Worker approach (S888) does not and will not work for FB Marketplace.** Options: paid residential/mobile proxies + session auth, or DROP FB Marketplace. Recommend DROP unless FB listings become a priority — high effort, brittle, ToS-risky. | Patrick decision: invest in residential proxy + auth, or drop FB Marketplace | S890 |
+| `text-warm-900` dark mode violations — 83 instances, 25 files (D-002) | **HIGH** — `grep -rn "text-warm-900" packages/frontend --include="*.tsx" | grep -v "dark:"` returned 83 matches. Top offenders: MetricsGrid (19), CheckoutModal (10), TopItemsTable (9), PostPerformanceCard (5), HuntPassModal (4), DateRangeSelector (4), SalesNearYou (3). Text appears invisible in dark mode — affects checkout, performance dashboard, hunt pass modal, date pickers. Systematic D-002 violation. Full file list in `claude_docs/audits/weekly-audit-2026-06-06.md`. | Dispatch `Skill('findasale-dev')` for a bulk `text-warm-900 dark:text-warm-100` replacement pass across all 25 files | S895 |
+| React hydration errors #418/#425 on homepage | **MEDIUM** — `read_console_messages` at 4:03 AM Jun 6 captured 28+ EXCEPTION entries (React minified errors #418/#425) from `framework-fb0e2df9cfa23940.js`. SSR/client render mismatch. Page renders visually but mismatch can cause intermittent state corruption or flash. | Dev investigation: find which component reads browser-only APIs (window/localStorage/navigator/Date locale) during SSR. Common culprit: date formatting or device-detection hooks. | S895 |
+| Logout endpoint rate-limiter → cannot achieve logged-out state | **P1** — S895 Chrome QA confirmed: POST /api/auth/logout returns 429 on heavy auth sessions. Client-side cleanup (setUser(null), localStorage clear, clearSessionMarker) runs regardless, but httpOnly JWT cookie persists. Next page load calls initAuth() → GET /auth/me → valid cookie re-authenticates user → cannot achieve clean logged-out state. Root cause: rate limiter applies to logout endpoint same as login. **Blocks CTA1 Chrome re-verify.** Fix: exempt POST /auth/logout from all rate limiters (logout must always succeed server-side), or implement server-side token invalidation list. | Dispatch `Skill('findasale-dev')`: exempt logout route from rate limiter. Then re-run CTA1 Chrome QA with fresh browser session. | S895 |
 
 ---
 
@@ -188,13 +195,14 @@ _(S862
 
 ## Next Session
 
-**S894 completed:** Records pass (SEO-1+GUEST1 PCVs applied to roadmap, BQ 19→13, S890 push verified). CTA1 Chrome-verified (PCV staged → S895). SEO-2 web_fetch-verified (PCV staged → S895).
+**S895 completed:** QA session. Weekly audit done (claude_docs/audits/weekly-audit-2026-06-06.md — 15 routes, 2 new BQ entries). PCVs applied to roadmap.md (SEO-2 Human QA ✅ S894 web_fetch; CTA1 deployment noted, Chrome QA blocked by P1 logout bug). NAA scraper triggered (GitHub Actions workflow_dispatch, run in progress at wrap). Geocoding draining normally (350 PUBLISHED ungeocoded). New P1 (logout rate-limiter) added to BQ.
 
-**Pending for next session:**
-- **[PUSH] CTA1 fix** (`packages/frontend/pages/sales/[id].tsx` — L1494 + L1888 RemindMeButton now `{user && ...}`; S893 code, S894 Chrome-verified). Push → Chrome-verify: logged-out sale page → "Remind Me by Email" absent.
-- **[Records] Apply S894 PCVs to roadmap.md** (CTA1 Chr ✅ S894 line 141, SEO-2 Chr ✅ S894 line 139) — evidence in Pending Chrome Verifications table.
-- **[PUSH] NAA scraper** (naaAuctioneerDirectory.ts fix coded S890, confirmed on GitHub sha e0e8488, never run) → trigger run → confirm >0 NAA organizers in DB.
-- **[OPS] Geocoding** continues draining (360 PUBLISHED ungeocoded; monitoring only).
+**Priority for next session:**
+- **[P1 BUG] Logout rate-limiter** — dispatch `Skill('findasale-dev')`: exempt POST /auth/logout from rate limiters. This unblocks CTA1 Chrome QA. After fix deploys, re-run CTA1 Chrome QA from clean browser session.
+- **[OPS] Confirm NAA scraper results** — `SELECT COUNT(*) FROM "Organizer" WHERE "directoryMostRecentSource"='NAAFindAnAuctioneer'`; if 0, check GitHub Actions run log for errors.
+- **[BQ] text-warm-900 dark mode bulk fix** — dispatch `Skill('findasale-dev')`: `text-warm-900 dark:text-warm-100` replacement across 25 files (83 instances). File list in claude_docs/audits/weekly-audit-2026-06-06.md.
+- **[BQ] React hydration errors** — dispatch `Skill('findasale-dev')`: find SSR/client mismatch causing React #418/#425 on homepage.
+- **[OPS] Geocoding** — monitoring only; PUBLISHED ungeocoded at 350 and draining.
 
 **Decisions still open (Patrick):**
 - **FB Marketplace:** free CF Worker proven dead end (0 listings). DROP recommended.
@@ -203,6 +211,24 @@ _(S862
 - **#335 outreach resume:** reactivate Gmail → OUTREACH_ENABLED=true → re-enable workflow. Deferred items (462 backfill, queue hygiene, WARM enrichment) wait for this.
 
 ## Recent Sessions
+
+### S895 — QA MODE (2026-06-06). Weekly audit + PCVs applied + NAA scraper triggered + P1 logout bug found.
+
+**Weekly audit:** 15 routes Chrome-tested. SEO-1/GUEST1/CTA1 confirmed live ✅. Admin access control ✅. 2 new BQ entries: text-warm-900 D-002 violations (HIGH — 83 instances/25 files) + React hydration errors (MEDIUM — #418/#425 on homepage). Shopper flows UNVERIFIED. Full report: claude_docs/audits/weekly-audit-2026-06-06.md.
+
+**PCVs applied to roadmap.md (cross-session rule — applied this session for S894 evidence):**
+- SEO-2 (line 139) Human QA col: `P` → `✅ S894 web_fetch`. Evidence: web_fetch finda.sale/ returned exactly 1 canonical, no duplicate og:/twitter: meta.
+- CTA1 (line 141) Status: updated to note S894 deployment (commit 270fd5e4) + Chrome QA BLOCKED by P1 logout bug.
+
+**NAA scraper:** Triggered GitHub Actions `scrape-naa.yml` workflow_dispatch. Run #1 in progress at wrap. Verify >0 NAA organizer records in DB next session.
+
+**Geocoding:** PUBLISHED ungeocoded = 350 (down from 360 at S894). Draining normally. No action needed.
+
+**P1 bug found — logout rate-limiter:**
+- S895 Chrome QA: POST /api/auth/logout → 429. Client cleanup (setUser(null) etc.) ran but httpOnly JWT cookie persisted. Every subsequent page load re-authenticated the user from the valid cookie. Cannot achieve logged-out state.
+- Root cause: the logout endpoint shares the same rate limiter as login. Logout must be exempt.
+- Blocks: CTA1 Chrome re-verification (cannot test the logged-out sale page experience).
+- Added to BQ as P1. BQ: 13→15 (audit) →16 (logout).
 
 ### S894 — QA MODE. Records pass: SEO-1+GUEST1 PCVs applied; BQ 19→13; CTA1+SEO-2 PCVs staged.
 
@@ -296,14 +322,4 @@ _(S862
 **#332 Shopify:** NOT READY (code bugs, see BQ) — store connection is downstream of the dev fixes.
 
 **S890 part 3 — Patrick said dispatch the auction + Shopify fixes in parallel. 3 more agents, all TS-verified (0 errors backend + frontend, combined check):**
-- **AuctionZip FIX CODED** (auctionZipScraper.ts) — parser rewritten to current markup; Chrome-validated 235 auctioneers from page A.
-- **NAA FIX CODED** (naaAuctioneerDirectory.ts) — sitemap crawl (2,378 member URLs), 5 samples validated; BROKEN comment corrected.
-- **Shopify CORE BUGS FIXED** (shopifyService.ts + connect-shopify.ts) — sold-sync 3-step flow, API 2025-10, inventory_management flag, guide rewrite, 422/429 handling. OAuth/webhook/encryption flagged for future.
-- **Total S890 code changeset: 8 files** (4 part-2 + 4 part-3), all 0 TS errors. **Pending push.**
-- **Ops follow-up (post-deploy, S890 LIVE RESULTS — all log/DB-verified):**
-  - ✅ **AuctionNinja: 0 → 576 organizer records** (Patrick ran it). RESOLVED — Railway IP not blocked by auctionninja.com.
-  - ❌ **AuctionZip: HTTP 403 on every letter page A-V** (Railway logs 02:24 UTC Jun 6). Parser fix is correct but auctionzip.com is Cloudflare-protected and 403s Railway's IP before parsing. Needs a proxy/headless transport (decision). NOT a code-quality issue.
-  - ❌ **FB Marketplace: CF Worker proxy is a DEAD END.** Live run logged `Transport: CLOUDFLARE_WORKER` (proxy confirmed in use) but returned "Found 0 listings" for every query/metro. FB soft-blocks datacenter+CF-edge IPs. Free-proxy approach won't work — recommend DROP or paid residential proxy + auth (decision).
-  - ⚠️ **Geocoding: DEPLOYED but UNPROVEN** — live un-geocoded count still exactly 1,164 (953 GSF + 211 FB Events) post-deploy; the run that fired hit old code or pre-deploy schedule. Needs a fresh geocode workflow_dispatch now that new backend is live, then re-check count drops.
-  - ⏳ **NAA: not yet run** — sitemap-crawl fix deployed; run the scraper to populate (NAA member pages are static, not Cloudflare-blocked, so should succeed unlike AuctionZip).
-  - ⏳ **AuctionZip/Geocoding/NAA + Shopify store** carry to S891.
+- **AuctionZip FIX CODED** (auctionZipScraper.ts) — parser r
