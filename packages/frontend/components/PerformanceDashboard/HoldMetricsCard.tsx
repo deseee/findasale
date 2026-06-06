@@ -27,11 +27,11 @@ const HoldMetricsCard: React.FC<HoldMetricsCardProps> = ({ data }) => {
 
   return (
     <div className="bg-white rounded-lg shadow p-6 border-l-4 border-amber-600">
-      <h3 className="text-lg font-semibold text-warm-900 mb-4">Hold Performance</h3>
+      <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Hold Performance</h3>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="text-center">
-          <p className="text-3xl font-bold text-warm-900">{data.holdsCreated}</p>
+          <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{data.holdsCreated}</p>
           <p className="text-xs text-warm-600 mt-1">Created</p>
         </div>
         <div className="text-center">
@@ -64,7 +64,7 @@ const HoldMetricsCard: React.FC<HoldMetricsCardProps> = ({ data }) => {
         <div className="mt-4 pt-4 border-t border-warm-200">
           <div className="flex items-center justify-between text-sm">
             <span className="text-warm-700">Conversion Rate</span>
-            <span className="font-semibold text-warm-900">
+            <span className="font-semibold text-warm-900 dark:text-warm-100">
               {((data.holdsConverted / data.holdsCreated) * 100).toFixed(0)}%
             </span>
           </div>

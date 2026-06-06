@@ -56,7 +56,7 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
 
         {/* Benefits */}
         <div className="mb-5 p-4 bg-purple-50 rounded-lg border border-purple-200">
-          <h3 className="font-semibold text-warm-900 mb-3">Hunt Pass Benefits</h3>
+          <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-3">Hunt Pass Benefits</h3>
           <ul className="space-y-2 text-sm text-warm-700">
             <li className="flex items-start gap-2">
               <span className="text-purple-600 font-bold">✓</span>
@@ -79,7 +79,7 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
             <span>Monthly price</span>
             <span>${price.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between font-bold text-warm-900 border-t pt-1 mt-1">
+          <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t pt-1 mt-1">
             <span>Recurring charge</span>
             <span>${price.toFixed(2)}/month</span>
           </div>
@@ -88,11 +88,11 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
         <p className="text-xs text-warm-500 mb-5">
           You&apos;ll be taken to a secure Stripe checkout page. This is a recurring monthly
           subscription — cancel anytime from your profile. By subscribing you agree to our{' '}
-          <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
+          <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
             Terms of Service
           </a>{' '}
           and{' '}
-          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
             Privacy Policy
           </a>.
         </p>

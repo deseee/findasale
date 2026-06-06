@@ -35,7 +35,7 @@ const SaleSelector: React.FC<SaleSelectorProps> = ({ onSaleChange, selectedSaleI
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-2 bg-white border border-warm-300 rounded-lg text-left text-warm-900 font-medium hover:border-warm-400 transition-colors"
+        className="w-full px-4 py-2 bg-white border border-warm-300 rounded-lg text-left text-warm-900 dark:text-warm-100 font-medium hover:border-warm-400 transition-colors"
       >
         <div className="flex justify-between items-center">
           <span>{selectedSale?.title || 'Select a Sale'}</span>
@@ -61,7 +61,7 @@ const SaleSelector: React.FC<SaleSelectorProps> = ({ onSaleChange, selectedSaleI
                   selectedSaleId === sale.id ? 'bg-amber-50' : ''
                 }`}
               >
-                <div className="font-medium text-warm-900">{sale.title}</div>
+                <div className="font-medium text-warm-900 dark:text-warm-100">{sale.title}</div>
                 {sale.endDate && (
                   <div className="text-xs text-warm-600">
                     Ends: {new Date(sale.endDate).toLocaleDateString()}

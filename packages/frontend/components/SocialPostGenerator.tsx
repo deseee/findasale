@@ -71,7 +71,7 @@ const SocialPostGenerator: React.FC<Props> = ({ saleId, saleTitle, onClose }) =>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-warm-200">
           <div>
-            <h2 className="text-xl font-bold text-warm-900">📣 Social Media Post</h2>
+            <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">📣 Social Media Post</h2>
             <p className="text-sm text-warm-500 mt-0.5">{saleTitle}</p>
           </div>
           <button onClick={onClose} className="text-warm-400 hover:text-warm-600 text-2xl leading-none">×</button>
@@ -163,7 +163,7 @@ const SocialPostGenerator: React.FC<Props> = ({ saleId, saleTitle, onClose }) =>
                   </span>
                   <span className="text-xs text-warm-400">{generatedPost.length} chars</span>
                 </div>
-                <p className="text-sm text-warm-900 whitespace-pre-wrap leading-relaxed">{generatedPost}</p>
+                <p className="text-sm text-warm-900 dark:text-warm-100 whitespace-pre-wrap leading-relaxed">{generatedPost}</p>
               </div>
 
               <div className="flex gap-2">

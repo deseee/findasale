@@ -41,7 +41,7 @@ const ReferralWidget: React.FC = () => {
   if (isError) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 className="text-2xl font-bold mb-4 text-warm-900">Share & Earn</h2>
+        <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-warm-100">Share & Earn</h2>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-700">Failed to load referral information. Please try again.</p>
         </div>

@@ -82,11 +82,11 @@ const TopItemsTable: React.FC<TopItemsTableProps> = ({ items }) => {
       <table className="w-full">
         <thead>
           <tr className="border-b border-warm-200 bg-warm-50">
-            <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Item</th>
-            <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900">Category</th>
+            <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Item</th>
+            <th className="px-4 py-3 text-left text-sm font-semibold text-warm-900 dark:text-warm-100">Category</th>
             <th
               onClick={() => handleSort('units')}
-              className="px-4 py-3 text-right text-sm font-semibold text-warm-900 cursor-pointer hover:bg-warm-100"
+              className="px-4 py-3 text-right text-sm font-semibold text-warm-900 dark:text-warm-100 cursor-pointer hover:bg-warm-100"
             >
               <div className="flex items-center justify-end gap-2">
                 <span>Units Sold</span>
@@ -95,7 +95,7 @@ const TopItemsTable: React.FC<TopItemsTableProps> = ({ items }) => {
             </th>
             <th
               onClick={() => handleSort('revenue')}
-              className="px-4 py-3 text-right text-sm font-semibold text-warm-900 cursor-pointer hover:bg-warm-100"
+              className="px-4 py-3 text-right text-sm font-semibold text-warm-900 dark:text-warm-100 cursor-pointer hover:bg-warm-100"
             >
               <div className="flex items-center justify-end gap-2">
                 <span>Revenue</span>
@@ -104,7 +104,7 @@ const TopItemsTable: React.FC<TopItemsTableProps> = ({ items }) => {
             </th>
             <th
               onClick={() => handleSort('avgPrice')}
-              className="px-4 py-3 text-right text-sm font-semibold text-warm-900 cursor-pointer hover:bg-warm-100"
+              className="px-4 py-3 text-right text-sm font-semibold text-warm-900 dark:text-warm-100 cursor-pointer hover:bg-warm-100"
             >
               <div className="flex items-center justify-end gap-2">
                 <span>Avg Price</span>
@@ -113,7 +113,7 @@ const TopItemsTable: React.FC<TopItemsTableProps> = ({ items }) => {
             </th>
             <th
               onClick={() => handleSort('healthScore')}
-              className="px-4 py-3 text-right text-sm font-semibold text-warm-900 cursor-pointer hover:bg-warm-100"
+              className="px-4 py-3 text-right text-sm font-semibold text-warm-900 dark:text-warm-100 cursor-pointer hover:bg-warm-100"
             >
               <div className="flex items-center justify-end gap-2">
                 <span>Health</span>
@@ -137,13 +137,13 @@ const TopItemsTable: React.FC<TopItemsTableProps> = ({ items }) => {
                 </Link>
               </td>
               <td className="px-4 py-3 text-sm text-warm-700 capitalize">{item.category}</td>
-              <td className="px-4 py-3 text-sm text-right font-medium text-warm-900">
+              <td className="px-4 py-3 text-sm text-right font-medium text-warm-900 dark:text-warm-100">
                 {item.unitsSold}
               </td>
-              <td className="px-4 py-3 text-sm text-right font-medium text-warm-900">
+              <td className="px-4 py-3 text-sm text-right font-medium text-warm-900 dark:text-warm-100">
                 ${item.totalRevenue.toFixed(2)}
               </td>
-              <td className="px-4 py-3 text-sm text-right font-medium text-warm-900">
+              <td className="px-4 py-3 text-sm text-right font-medium text-warm-900 dark:text-warm-100">
                 ${item.avgPrice.toFixed(2)}
               </td>
               <td className="px-4 py-3 text-sm text-right">

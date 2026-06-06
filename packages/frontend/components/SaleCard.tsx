@@ -67,6 +67,7 @@ interface SaleCardProps {
 const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [showToday, setShowToday] = useState(false); // false on SSR; computed client-side to avoid hydration mismatch
   const { isLowBandwidth } = useNetworkQuality();
 
   // L-004 edge: treat empty-string / whitespace-only photo URLs as "no photo".
@@ -91,6 +92,19 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
     setImgError(false);
   }, [optimizedUrl]);
 
+  // Compute "happening today" client-side only to avoid SSR/CSR date mismatch (hydration #418)
+  useEffect(() => {
+    if (!sale.startDate || !sale.endDate) return;
+    try {
+      const now = new Date();
+      const start = new Date(sale.startDate);
+      const end = new Date(sale.endDate);
+      setShowToday(start <= now && now <= end);
+    } catch {
+      setShowToday(false);
+    }
+  }, [sale.startDate, sale.endDate]);
+
   const formatSaleDate = (dateString: string | null | undefined): string => {
     if (!dateString) return 'TBA';
     try {
@@ -101,20 +115,6 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
       return 'TBA';
     }
   };
-
-  const isHappeningToday = (): boolean => {
-    if (!sale.startDate || !sale.endDate) return false;
-    try {
-      const now = new Date();
-      const start = new Date(sale.startDate);
-      const end = new Date(sale.endDate);
-      return start <= now && now <= end;
-    } catch {
-      return false;
-    }
-  };
-
-  const showToday = isHappeningToday();
 
   const getStatusBadge = (): BadgeConfig | null => {
     if (sale.isSold) return { label: 'SOLD', classes: 'bg-warm-700 text-white' };

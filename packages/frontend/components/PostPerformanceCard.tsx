@@ -48,7 +48,7 @@ export default function PostPerformanceCard({
   return (
     <div className="card p-6">
       <div className="mb-6">
-        <h3 className="text-lg font-semibold text-warm-900 mb-2">Post Performance</h3>
+        <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">Post Performance</h3>
         <p className="text-warm-600 text-sm">Last 7 days of social link clicks</p>
       </div>
 
@@ -60,14 +60,14 @@ export default function PostPerformanceCard({
         </div>
         <div className="bg-warm-50 rounded-lg p-4">
           <p className="text-warm-600 text-xs font-semibold uppercase mb-1">Top Source</p>
-          <p className="text-lg font-semibold text-warm-900">{topSource?.source || 'N/A'}</p>
+          <p className="text-lg font-semibold text-warm-900 dark:text-warm-100">{topSource?.source || 'N/A'}</p>
           {topSource && <p className="text-xs text-warm-500">{topSource.count} clicks</p>}
         </div>
       </div>
 
       {/* 7-Day Sparkline */}
       <div className="mb-4">
-        <p className="text-sm font-semibold text-warm-900 mb-3">7-Day Trend</p>
+        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">7-Day Trend</p>
         {stats.clicksByDay.length > 0 ? (
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={stats.clicksByDay}>
@@ -105,12 +105,12 @@ export default function PostPerformanceCard({
       {/* Source Breakdown */}
       {stats.topSources.length > 0 && (
         <div className="border-t border-warm-200 pt-4">
-          <p className="text-sm font-semibold text-warm-900 mb-3">Top Sources</p>
+          <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">Top Sources</p>
           <div className="space-y-2">
             {stats.topSources.map((source) => (
               <div key={source.source} className="flex justify-between items-center">
                 <span className="text-sm text-warm-700 capitalize">{source.source}</span>
-                <span className="text-sm font-semibold text-warm-900">{source.count}</span>
+                <span className="text-sm font-semibold text-warm-900 dark:text-warm-100">{source.count}</span>
               </div>
             ))}
           </div>

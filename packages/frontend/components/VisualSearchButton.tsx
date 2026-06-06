@@ -93,7 +93,7 @@ const VisualSearchButton: React.FC<VisualSearchButtonProps> = ({ onResults }) =>
               className="w-16 h-16 rounded object-cover"
             />
             <div className="flex-1 flex flex-col justify-center">
-              <p className="text-sm font-medium text-warm-900">Photo selected</p>
+              <p className="text-sm font-medium text-warm-900 dark:text-warm-100">Photo selected</p>
               {isLoading && (
                 <p className="text-xs text-warm-500 mt-1">Analyzing image...</p>
               )}
