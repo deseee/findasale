@@ -168,6 +168,7 @@ import outreachRoutes from './routes/outreach';                      // Phase 1:
 import earningsPdfRoutes from './routes/earningsPdf';           // Payout PDF Export
 import abTestRoutes from './routes/abTest';                     // A/B Testing Infrastructure
 import feedbackRoutes from './routes/feedback';                 // User Feedback
+import testimonialRoutes from './routes/testimonials';          // Outward Email Automation #2a: testimonial capture
 import bidsRoutes from './routes/bids';                         // Shopper bids page
 import xpController from './controllers/xpController';          // Phase 2a: Explorer's Guild XP system
 import supportRoutes from './routes/support';                  // #128: Automated Support Stack
@@ -251,6 +252,7 @@ import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase
 // websiteEnrichmentJob, organizerWebsiteAddressCron removed — no longer scheduled in-process.
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
+import { scheduleOutwardEmailAutomationsCron } from './jobs/outwardEmailAutomationsJob'; // Outward Email Automations: recap + review/testimonial asks (daily 10:00 UTC)
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -621,6 +623,7 @@ app.use('/api/unsubscribe', unsubscribeRoutes);                        // Unsubs
 app.use('/api/earnings', earningsPdfRoutes);                           // Payout PDF Export (/api/earnings/pdf)
 app.use('/api/ab', abTestRoutes);                                      // A/B Testing Infrastructure
 app.use('/api/feedback', feedbackRoutes);                              // User Feedback
+app.use('/api/testimonials', testimonialRoutes);                       // Outward Email Automation #2a: testimonial capture
 app.use('/api/bids', bidsRoutes);                                      // Shopper bids page
 app.use('/api/xp', xpController);                                      // Phase 2a: Explorer's Guild XP system
 app.use('/api/support', supportRoutes);                                 // #128: Automated Support Stack
@@ -753,6 +756,8 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #309: Register consignor expiry notice cron (daily at 2 AM UTC)
   scheduleConsignorExpiryNoticeCron();
+
+  scheduleOutwardEmailAutomationsCron();
 
   // Feature #651: Register nightly AI listing enrichment cron (daily at 4 AM UTC)
   scheduleListingEnrichmentCron();
