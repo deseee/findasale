@@ -143,7 +143,7 @@ export default function MonthlyReportPage({ report, slug, error }: PageProps) {
       <Head>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <link rel="canonical" href={canonicalUrl} />
+        <link rel="canonical" href={canonicalUrl} key="canonical" />
         {/* Open Graph */}
         <meta property="og:type" content="article" />
         <meta property="og:title" content={title} />

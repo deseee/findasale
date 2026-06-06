@@ -130,7 +130,7 @@ export default function ThisWeekendPage({
       <Head>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <link rel="canonical" href={canonicalUrl} />
+        <link rel="canonical" href={canonicalUrl} key="canonical" />
         <meta name="robots" content="index, follow" />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />

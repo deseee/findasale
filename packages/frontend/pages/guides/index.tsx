@@ -130,7 +130,7 @@ export default function GuidesIndexPage({ organizer, shopper }: GuidesIndexProps
           content="Step-by-step guides for organizers and shoppers on FindA.Sale."
         />
         <meta property="og:url" content="https://finda.sale/guides" />
-        <link rel="canonical" href="https://finda.sale/guides" />
+        <link rel="canonical" href="https://finda.sale/guides" key="canonical" />
       </Head>
 
       <div className="min-h-screen bg-warm-100 dark:bg-warm-900">

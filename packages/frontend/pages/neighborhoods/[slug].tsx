@@ -54,7 +54,7 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
       <Head>
         <title>{pageTitle}</title>
         <meta name="description" content={metaDesc} />
-        <link rel="canonical" href={canonicalUrl} />
+        <link rel="canonical" href={canonicalUrl} key="canonical" />
         {/* Open Graph */}
         <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={metaDesc} />
