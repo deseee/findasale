@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { format } from 'date-fns';
+
 import { Lock } from 'lucide-react';
 import { getOptimizedUrl, getLqipUrl, getSaleImageUrl } from '../lib/imageUtils';
 import { formatUnlockTime } from '../lib/rankEarlyAccess';
@@ -110,7 +110,11 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'TBA';
-      return format(date, 'MMM d');
+      // Use UTC values to match SSR output and prevent React hydration mismatch #418/#425.
+      // format(date, 'MMM d') from date-fns uses local timezone on the client but UTC on
+      // the server, producing different strings and triggering hydration errors on every SaleCard.
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${months[date.getUTCMonth()]} ${date.getUTCDate()}`;
     } catch {
       return 'TBA';
     }

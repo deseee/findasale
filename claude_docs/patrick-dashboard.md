@@ -1,37 +1,32 @@
-# Patrick's Dashboard — S897 QA Session
+# Patrick's Dashboard — S898 QA Session
 
 ---
 
-## ✅ Nothing to Push — Wrap Docs Only
+## 🚀 Push Needed — SaleCard.tsx Fix
 
-The S896 pushblock was already deployed (commit cd8ebe7). This session was verification-only — shopper flows QA.
+One file changed this session. Push it to resolve the persistent homepage hydration errors.
 
 ```
+git add packages/frontend/components/SaleCard.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S897 wrap: shopper flows QA complete, BQ 16→14, STATE.md + dashboard updated"
+git commit -m "S898: fix SaleCard hydration #418/#425 — use UTC date formatting; D-002 wrap docs"
 .\push.ps1
 ```
 
 ---
 
-## ✅ S897 Completed — What I Did
+## ✅ S898 Completed — What I Did
 
-**The S896 pushblock deployed successfully (commit cd8ebe7).** All three fixes are live — logout no longer rate-limited, homepage hydration errors resolved, 83 dark mode text violations fixed across 24 components.
+**Found and fixed the root cause of the homepage React hydration errors** (26× error #418, 2× #425 on every page load). The first fix (showToday useEffect, deployed last session) was correct but only partial. The real culprit was `formatSaleDate()` in SaleCard.tsx, which called date-fns `format(date, 'MMM d')` during render. This function uses the local timezone on the client but UTC on the server — so a sale starting at midnight UTC would show "Jun 15" on the server and "Jun 14" on a browser in UTC-5, causing a hydration mismatch on every SaleCard on the homepage.
 
-**Logout confirmed working.** I logged in as Leo Thomas (user5), clicked Logout — clean redirect to /login, no rate-limit toast, nav showed Login + Register, refresh kept the logged-out state. The P1 logout bug is closed.
+Fix: removed the date-fns `format` import entirely. Replaced with `months[date.getUTCMonth()] + ' ' + date.getUTCDate()` — always UTC, same on server and client. TypeScript comes back clean (0 errors). After you push this, the hydration errors should be gone.
 
-**Shopper flows fully tested.** A previous weekly audit incorrectly said there were no shopper accounts in production (user1–user7 only). That's wrong — user5 (Leo Thomas) is a shopper. I logged in as Leo and tested the full shopper experience:
+**Dark mode D-002 closed.** Verified in Chrome: PerformanceDashboard readable in dark mode (ss_1751wzkxe), HuntPassModal readable in dark mode (ss_4554ems7i). CheckoutModal couldn't be browser-tested because there are no items with shipping enabled in the database, but code inspection confirmed all text elements have the correct dark: classes. That BQ row is resolved.
 
-- **Dashboard, 4 tabs:** Overview with his Ranger rank (2,005 XP) ✅ — Subscribed ("No organizers followed yet" + Browse Sales button) ✅ — Pickups ("No pickup appointments yet") ✅ — Brands (typed "Pottery Barn", hit Add, reloaded — brand saved to server) ✅
-- **Notifications:** Bell icon opened 27-item unread panel ✅ — /notifications page showed All/Operational/Discovery tabs ✅ — clicked a message notification and landed in the correct conversation thread ✅
-- **Wishlists page:** Two named collections ("Vintage Jewelry" + "Mid-Century Modern Hunt") showed correctly ✅
-- **RSVP on a sale:** Clicked the Going button — "Going (0)" flipped to "✓ You're going (1)" ✅
-- **Wishlist heart on a sale:** Tapped the heart icon on a sale detail page — turned red/filled, aria-label changed from "Add to wishlist" to "Remove from wishlist" ✅
+**Blocked Queue: 14 → 13.** D-002 removed. Hydration row updated with the new root cause and fix (pending Chrome re-verify after this push).
 
-**Blocked Queue: 16 → 14.** NAA row removed (resolved last session). Logout bug row removed (resolved this session). Dark mode and hydration rows updated to "fix deployed, Chrome verify pending."
-
-**Next session:** CTA1 QA (now unblocked — test the sale page logged-out), Chrome verify the dark mode + hydration fixes, then apply these shopper flow verifications to the roadmap.
+**Next session** will be a Records pass (apply S897+S898 PCVs to roadmap), then Chrome re-verify the hydration fix post-deploy.
 
 ## S894 — Bookkeeping + verification session complete; one pending push
 
