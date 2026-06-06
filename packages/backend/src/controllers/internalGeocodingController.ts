@@ -38,15 +38,20 @@ export async function getBatchOfUngeocodedSales(req: Request, res: Response): Pr
     // Two categories of ungeocoded sales:
     // 1. Sales with a full street address (GarageSaleFinder, platform sales, FB Events w/ slug)
     // 2. Facebook Events city-only records (address='', city+state present) — use city-center fallback
+    // Only geocode PUBLISHED (live/future) sales — ENDED/DRAFT sales never appear
+    // on the map, so geocoding them wastes the batch budget. This filter drops the
+    // working set from ~15.8k to ~1.2k and lets the real active backlog drain.
     const whereClause = sourceName
       ? {
           lat: null,
+          status: 'PUBLISHED',
           city: { not: '' },
           state: { not: '' },
           sourceName,
         }
       : {
           lat: null,
+          status: 'PUBLISHED',
           city: { not: '' },
           state: { not: '' },
           OR: [
@@ -61,7 +66,7 @@ export async function getBatchOfUngeocodedSales(req: Request, res: Response): Pr
               address: '',
             },
             // Platform sales (organizer-created) published without geocoding
-            { sourceName: null, status: 'PUBLISHED', address: { not: '' } },
+            { sourceName: null, address: { not: '' } },
           ],
         };
 
@@ -76,7 +81,7 @@ export async function getBatchOfUngeocodedSales(req: Request, res: Response): Pr
           zip: true,
           sourceName: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
         take: limit,
         skip: offset,
       }),

@@ -1428,6 +1428,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                       <div className="font-semibold text-base mb-2" style={{ fontFamily: '"Inter Tight", "Inter", sans-serif' }}>
                         {format(parseISO(sale.startDate), 'EEE MMM d')} → {format(parseISO(sale.endDate), 'EEE MMM d, yyyy')}
                       </div>
+                      {(sale.scrapedMetadata as any)?.dateApproximate === true && (
+                        <p className="text-xs mb-2 text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">
+                          Dates approximate
+                        </p>
+                      )}
                       <div className="flex flex-col gap-1 text-sm">
                         {[{ date: sale.startDate, label: format(parseISO(sale.startDate), 'EEEE, MMMM d') },
                           ...(sale.startDate !== sale.endDate ? [{ date: sale.endDate, label: format(parseISO(sale.endDate), 'EEEE, MMMM d') }] : [])
