@@ -1885,7 +1885,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                       Add Your First Item
                     </Link>
                   ) : (
-                    {user && <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={false} />}
+                    user ? <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={false} /> : null
                   )}
                 </div>
               ) : (() => {
