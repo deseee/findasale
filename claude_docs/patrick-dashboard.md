@@ -1,4 +1,24 @@
-# Patrick's Dashboard — S893 Wrap
+# Patrick's Dashboard — S894 Wrap
+
+---
+
+## S894 — Bookkeeping + verification session complete; one pending push
+
+What I did this session:
+
+- ✅ **Updated the roadmap for two earlier wins.** The sale-page link-preview fix (from S892) and the 'Get alerts' email box fix (from S893) are both now officially marked as Chrome-verified in the roadmap. Cross-session rule satisfied.
+- ✅ **Cleaned out the blocklist.** The Blocked Queue went from 19 items down to 13 — removed 6 rows that were either already resolved (AuctionZip, AuctionNinja) or confirmed fixed this session (the SEO fixes, the CTA1 button).
+- ✅ **Confirmed all 6 S890 code fixes are live on GitHub.** Every file from that push batch (dateApproximate label, geocoding fix, FB Events alert, Shopify rewrite, NAA scraper, Shopify guide) is confirmed on GitHub with the right SHA.
+- ✅ **Verified the homepage canonical fix is clean.** Did a live check: the homepage now has exactly one canonical URL (`https://finda.sale`) and no duplicate preview tags. Confirmed via a real fetch of the live site.
+- 🐛 **CTA1 fix — confirmed working, still needs your push.** Tested it live in Chrome: on a sale page while logged out, the 'Remind Me by Email' button is correctly hidden (both spots — action bar and empty inventory section). The fix is in your local file but the code is **not yet on GitHub**. You need to push `packages/frontend/pages/sales/[id].tsx`.
+
+**What you need to push now:**
+1. `packages/frontend/pages/sales/[id].tsx` — the CTA1 fix (hides 'Remind Me by Email' for logged-out visitors)
+2. `claude_docs/STATE.md` — updated this session
+3. `claude_docs/patrick-dashboard.md` — this file
+4. `claude_docs/strategy/roadmap.md` — SEO-1 + GUEST1 Chrome columns updated
+
+**Still no action needed on geocoding** — it's draining on its own (360 ungeocoded, down from 539).
 
 ---
 
