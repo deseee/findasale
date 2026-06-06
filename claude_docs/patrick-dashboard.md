@@ -36,7 +36,15 @@
 
 **AuctionNinja:** Moved from GitHub Actions (Cloudflare-blocked) to Railway backend cron. Runs Wednesdays 06:00 UTC. Won't know if it works until next Wednesday — check Railway logs.
 
-**#335 (email suspension):** Code guard now prevents recurrence. Account is in the automatic 18-hour suspension window from the Jun 5 blast. Once it clears (~Jun 6 midnight), set `OUTREACH_ENABLED=true` in Railway to resume. Keep volumes at 200/day max during domain warming.
+**#335 (email suspension):** Code guard now prevents recurrence. Account is in the automatic 18-hour suspension window from the Jun 5 blast. Once it clears (~Jun 6 midnight), see the resume procedure below.
+
+**S889 — "outreach still sending" investigated, no leak found.** The trickle of sends you were worried about stopped on its own after the Jun 5 evening backend redeploy. What happened: the kill-switch (`OUTREACH_ENABLED=false`) was set in Railway during S887, but a running server keeps its old settings until it restarts — so the last 7 emails (07:59 UTC Jun 5) went out on the old setting. The backend redeployed at 22:39 UTC Jun 5 and picked up the new value. Since then: zero sends across every 4-hour window. Two independent safeguards are now active (the disabled GitHub workflow AND the backend kill-switch), so nothing will send until you deliberately resume. No code change was needed — the system was already wired correctly.
+
+**Safe resume procedure (when you're ready, after the Gmail account is reactivated):**
+1. Reactivate `outreach@finda.sale` at admin.google.com → Directory → Users → Reactivate (Google's UI, only you can do this).
+2. In Railway, set `OUTREACH_ENABLED=true` on the backend service. (The backend auto-redeploys and picks it up.)
+3. Re-enable the GitHub workflow **"Pipeline — Outreach Emails"** (it was disabled Jun 5; flipping the Railway flag alone will NOT resume sending — the workflow is the trigger).
+4. Safeguards that protect you during warmup: backend enforces a per-window quota (daily quota ÷ 6) and a hard daily cap of 1,500 sends (EmailQuotaLog), with a Resend alert at 75%. Keep the warmup quota low (~200/day) for the first 2+ weeks.
 
 ---
 
@@ -45,7 +53,7 @@
 | Item | Priority | Status |
 |------|----------|--------|
 | #332 Shopify Cross-Listing | P0 | Needs your Shopify Partners dev store (73+ sessions) |
-| #335 Email suspension | P1 | Code guard deployed. **YOUR ACTION:** Set `OUTREACH_ENABLED=true` in Railway once suspension clears (~Jun 6). Max 200/day. |
+| #335 Email suspension | P1 | Code guard deployed; S889 confirmed no active leak. **YOUR ACTION (when ready to resume):** reactivate Gmail account → set `OUTREACH_ENABLED=true` in Railway → re-enable the "Pipeline — Outreach Emails" GitHub workflow. Max 200/day during warmup. |
 | AuctionNinja scraper | P2 | Railway cron added S887. Verify next Wednesday 06:00 UTC in Railway logs. |
 | #230 Smart Buyer Widget | P3 | Needs published sale on user1 |
 
