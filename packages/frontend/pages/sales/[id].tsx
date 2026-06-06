@@ -2624,4 +2624,23 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
             saleType: series.saleType ?? null,
             sales: Array.isArray(series.sales) ? series.sales : [],
           };
-    
+            }
+      } catch (seriesErr) {
+        // EventSeries is non-critical enrichment — log and continue with null
+        console.error('[getStaticProps] EventSeries fetch failed:', seriesErr);
+      }
+    }
+
+    return {
+      props: { ogData, initialData, eventSeriesData, noindex },
+      revalidate: 3600,
+    };
+  } catch (err) {
+    // Network/timeout/parse failure — render the shell, let the client fetch and ISR retry
+    console.error('[getStaticProps] sale fetch failed:', err);
+    return {
+      props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false },
+      revalidate: 3600,
+    };
+  }
+};
