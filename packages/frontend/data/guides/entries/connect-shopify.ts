@@ -22,25 +22,35 @@ If you don't have a Shopify store, this guide doesn't apply yet.
 
 ---
 
-## Step 1. Connect your Shopify store
+## Step 1. Create a custom app in Shopify
 
-1. Go to **Settings → Integrations → Shopify**.
-2. Enter your Shopify store URL (example: \`your-store.myshopify.com\`).
-3. Tap **Connect**. You'll be redirected to Shopify to authorize the integration.
-4. Approve the permissions and return to FindA.Sale.
+FindA.Sale connects to your store using a Shopify custom app access token. You create the app once in your Shopify admin and paste the token into FindA.Sale.
 
-The connection is active immediately. No webhook setup needed on your end — FindA.Sale handles it.
+1. In your Shopify admin, go to **Settings → Apps and sales channels → Develop apps**.
+2. Tap **Create an app**, give it a name (for example, "FindA.Sale"), and create it.
+3. Open the **Configuration** tab and configure **Admin API scopes**. Enable **\`write_products\`** and **\`write_inventory\`**.
+4. Save, then open the **API credentials** tab and tap **Install app**.
+5. Copy the **Admin API access token** (it starts with \`shpat_\`). Shopify shows this token only once, so copy it now.
 
 ---
 
-## Step 2. Push an item to Shopify
+## Step 2. Paste your credentials into FindA.Sale
+
+1. Go to **Shopify** in your organizer dashboard (\`/organizer/shopify\`).
+2. Enter your **Shop Domain** (example: \`your-store.myshopify.com\`).
+3. Paste the **Admin API access token** you copied from Shopify.
+4. Tap **Connect Shopify**.
+
+The connection is active immediately once the token is accepted.
+
+---
+
+## Step 3. Push an item to Shopify
 
 1. Open any item in your inventory or review queue.
-2. Find the **Shopify** toggle.
-3. Toggle it on.
-4. Tap **Save**.
+2. Tap **Push to Shopify**.
 
-The item appears in your Shopify store as a product within a minute or two. Whether it appears as a draft or an active listing depends on how your store is configured — by default, it publishes as active.
+The item is created in your Shopify store as a product. By default it publishes as an active listing, with inventory set to 1 and tracked by Shopify.
 
 ---
 
@@ -50,11 +60,13 @@ The item appears in your Shopify store as a product within a minute or two. Whet
 |-----------------|---------------|
 | Item name | Product title |
 | Description / notes | Body HTML |
-| Asking price | Price |
+| Asking price | Variant price |
 | Photos (all) | Product images |
-| Condition | Metafield (condition) |
+| Category | Product type |
+| Tags | Product tags |
+| SKU | Variant SKU |
 
-Condition maps to a Shopify product metafield. If your theme doesn't display metafields, customers won't see it — but it's stored and available if you customize your theme later.
+Inventory is set to 1 and tracked by Shopify when the item is pushed, so the product sells out after one sale.
 
 ---
 
@@ -71,44 +83,37 @@ Shopify is for your online storefront. The in-person sale tools stay in FindA.Sa
 
 ## Sold-status sync
 
-When an item sells on Shopify, FindA.Sale marks it sold automatically. This requires the Shopify webhook that FindA.Sale sets up when you first connect — it's automatic, you don't need to configure anything.
+When an item sells through FindA.Sale (in-person or online), the matching Shopify product is automatically set to out-of-stock so it stops selling on your storefront.
 
-When an item sells through FindA.Sale (in-person or online), the Shopify product is updated to out-of-stock automatically.
-
-Either way, you don't sell the same item twice.
+Sync currently runs one direction: FindA.Sale → Shopify. If an item sells **on Shopify first**, FindA.Sale is not notified automatically — mark it sold in FindA.Sale yourself so the two stay in agreement. Two-way (Shopify → FindA.Sale) sync is planned but not available yet.
 
 ---
 
 ## Remove an item from Shopify
 
-To stop showing an item in your Shopify store:
-1. Open the item in FindA.Sale.
-2. Toggle Shopify off.
-3. Save.
-
-The product is unpublished in your Shopify store (not deleted). If you want it deleted from Shopify entirely, do that from your Shopify admin.
+FindA.Sale does not currently unpublish or delete items from Shopify on its own. To take a product down, open your Shopify admin and unpublish or delete it there. (When an item sells through FindA.Sale, its Shopify product is automatically set to out-of-stock so it stops selling — see Sold-status sync above.)
 
 ---
 
 ## Common questions
 
 **Do I need TEAMS tier to use this?**
-Yes. Shopify cross-listing is a TEAMS feature. If you're on PRO or below, this integration won't appear in Settings.
+Yes. Shopify cross-listing is a TEAMS feature. If you're on PRO or below, the Shopify page won't be available.
 
 **Can I control whether items publish as draft or active in Shopify?**
-Not yet from FindA.Sale directly. To have items publish as drafts by default, contact Shopify support and adjust your API publishing defaults, or toggle items manually in Shopify after they appear.
+Not yet from FindA.Sale directly. Items are pushed as active by default. To change a product to a draft, edit it in your Shopify admin after it appears.
 
 **What if my Shopify store has existing products with the same name?**
 FindA.Sale creates new products — it doesn't match or update existing ones. You'll end up with duplicates if you push items you've already listed manually. Clean up the manual duplicates in Shopify after switching to this workflow.
 
 **Can I push all my items at once?**
-Not with a single button yet. You toggle Shopify per item. If you have a large inventory, work through your review queue and toggle items in batches.
+Not with a single button yet. You push items one at a time with **Push to Shopify**. If you have a large inventory, work through your review queue and push items in batches.
 
 **What happens to the Shopify product if I delete the item in FindA.Sale?**
-The product stays in Shopify. Deleting it from FindA.Sale disconnects the sync but doesn't remove it from your store. Delete it in Shopify separately if needed.
+The product stays in Shopify. Removing it from FindA.Sale does not remove it from your store — delete it in Shopify separately if needed.
 
 **Does Shopify pricing stay in sync if I change the price in FindA.Sale?**
-Yes. Price changes in FindA.Sale push to Shopify within a few minutes as long as the Shopify toggle is on.
+Not automatically. The price is sent to Shopify only at the moment you push the item. If you change the price in FindA.Sale afterward, update it in your Shopify admin to match. (Pushing the same item again creates a second product in Shopify rather than updating the first, so edit in Shopify rather than re-pushing.)
 
 ---
 
