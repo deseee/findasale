@@ -233,6 +233,11 @@ says "rewrite the whole file." Announce approach before every file write:
 **Read before write:** MUST read any existing file before editing it.
 Write-without-read is a rule violation, not a guideline.
 
+**Edit tool BAN (HARD — survives compression):** The Cowork `Edit` tool is BANNED from all FindA.Sale file modifications until Anthropic fixes the truncation bug. It silently drops trailing file content after ~250 lines or after stacked sequential edits — causing mass corruption (13 files, 380 lines deleted, documented S900). Use ONLY:
+- **Python via bash** for any file that already exists (especially files >100 lines)
+- **`Write` tool** for new files or intentional full rewrites (read the existing file first)
+**Never use `Edit` tool.** If an agent returns output that used `Edit`, reject the changeset and re-dispatch with this rule explicit in the prompt.
+
 **Batch work:** Continue until blocked, not until comfortable. Only valid
 stops: (a) needs Patrick's input, (b) ambiguous failure, (c) batch complete.
 Do not ask "shall I continue?" mid-batch.
