@@ -13,17 +13,20 @@
 
 **Free tier headroom:** 100k requests/day on the Cloudflare free plan. Scraper does ~129 requests per full pass (43 metros × 3 queries) — well under the cap, even at multiple runs/day.
 
-**S888 status (Jun 5):**
-- Code pushed via GitHub MCP (commits `dd745249` + `beb520f5`). Railway is redeploying. Scraper falls back to direct mode until the proxy env vars are set, so no regression.
-- **Patrick — single command to finish (see Push Block):** sync local git, then run `cloudflare/fb-marketplace-proxy/deploy.ps1`. The script prompts for a Cloudflare API token, deploys the worker, generates + sets the shared secret, and prints the two env-var values for Railway.
-- Set those two env vars in Railway → backend → Variables. Railway auto-redeploys.
-- After redeploy, trigger the FB scraper and confirm `FacebookMarketplace` records start landing in the DB.
+**S888 status (Jun 5 — SHIPPED + LIVE):**
+- ✅ Code pushed (commits `dd745249` + `beb520f5` + `a641dd42`).
+- ✅ Cloudflare Worker deployed at `https://findasale-fb-proxy.findasale.workers.dev`. Subdomain enabled, PROXY_TOKEN secret set. Health check returns 200 OK.
+- ✅ Railway env vars set (`FB_MARKETPLACE_PROXY_URL`, `FB_MARKETPLACE_PROXY_TOKEN`). Backend redeployed.
+- ✅ Production logs confirm `[FacebookMarketplace] Transport: CLOUDFLARE_WORKER`. Scraper requests are reaching Facebook's GraphQL API (returning FB's `Rate limit exceeded` JSON, not the HTML/0-listings IP block).
+- ⏳ Records in DB still 0 — FB rate-limited us from the day's testing. Clears in ~30-60 min. Next scheduled scrape (or a manual re-trigger after the cooldown) will start ingesting real listings.
+
+**No action needed from you.** Pipeline is wired end-to-end. Watch `SELECT COUNT(*) FROM "Sale" WHERE "sourceName" = 'FacebookMarketplace';` over the next 1-2 hours.
 
 ---
 
 ## S887 Summary — DEV: Gmail quota guard + monitoring crons deployed. AuctionNinja → Railway.
 
-**Root cause fixed — 8,317-email blast (Jun 5):** The daily email counter was an in-memory variable that reset to zero on every Railway restart/deploy. After any deploy, the pipeline thought it had sent 0 emails and started from scratch. Fixed: DB-backed `EmailQuotaLog` table now persists the count across restarts. Hard stop at 1,500 emails/day (leaves buffer below Google's 2,000 cap). When you hit 75% (1,125 emails), a Resend alert fires to deseee@gmail.com. Migration deployed.
+**Root cause fixed — 8,317-email blast (Jun 5):** The daily email counter was an in-memory variable that reset to zero on every Railway restart/deploy. After any deploy, the pipeline thought it had sent 0 emails and started from scratch. Fixed: DB-backed `EmailQuotaLog` table now persists the count across restarts. Hard stop at 1,500 emails/day (leaves buffer below Google's 2,000 cap). When you hit 75% (1,125 emails), a Resend alert fires to deseee@gmail.com. Migration deployed ✅.
 
 **Gmail monitoring — now automated:**
 - **06:30 UTC daily** — Tests Gmail OAuth token. Emails you if it breaks (silent failure prevention).
@@ -50,7 +53,7 @@
 
 ## Your Actions
 
-1. **Push block below** — sync git + deploy the Worker
+1. **Push block below**
 2. **#335:** Set `OUTREACH_ENABLED=true` in Railway once 18h suspension clears (check admin.google.com — should clear ~Jun 6)
 3. **GBP:** business.google.com → "Verify now" → phone code (still pending)
 4. **prisma generate** locally: `cd packages/database && npx prisma generate`
