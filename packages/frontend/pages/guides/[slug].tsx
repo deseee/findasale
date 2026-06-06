@@ -217,7 +217,7 @@ export default function GuidePage({ guide, relatedGuides }: GuidePageProps) {
           content={`${guide.title} — a step-by-step guide from FindA.Sale.`}
         />
         <meta property="og:url" content={canonical} />
-        <link rel="canonical" href={canonical} />
+        <link rel="canonical" href={canonical} key="canonical" />
       </Head>
 
       <div className="min-h-screen bg-warm-100 dark:bg-warm-900">

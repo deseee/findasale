@@ -46,7 +46,7 @@ const NeighborhoodsPage = () => {
         />
         <meta property="og:url" content="https://finda.sale/neighborhoods" />
         <meta property="og:image" content="https://finda.sale/og-image.png" />
-        <link rel="canonical" href="https://finda.sale/neighborhoods" />
+        <link rel="canonical" href="https://finda.sale/neighborhoods" key="canonical" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

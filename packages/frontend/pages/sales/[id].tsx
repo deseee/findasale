@@ -659,7 +659,16 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     });
   };
 
-  if (isLoading) {
+  // SEO1: Only short-circuit to the bare (head-less) loading/error states AFTER the
+  // component has mounted on the client. During the server render and the first
+  // pre-mount client pass, `sale` from useQuery is always undefined (the query has
+  // not resolved), which previously caused these early returns to fire and ship an
+  // EMPTY <head> — blank og:title/JSON-LD for social unfurlers and crawlers.
+  // When `!mounted`, we fall through to the SSR head-rendering block below, which
+  // renders the full og + JSON-LD markup from the getServerSideProps props
+  // (ogData / initialData / eventSeriesData). This keeps all interactive/CSR
+  // behavior identical once mounted, and is purely additive to SSR head output.
+  if (mounted && isLoading) {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <main className="container mx-auto px-4 py-8">
@@ -679,7 +688,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     );
   }
 
-  if (isError || !sale) {
+  if (mounted && (isError || !sale)) {
     // Bug #19: Check for 429 rate limit vs 404 not found
     const status = (queryError as any)?.response?.status;
     const is429 = status === 429;
@@ -703,20 +712,25 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     );
   }
 
-  const isOrganizer = user?.id === sale.organizer.userId;
-  const saleStartDate = parseISO(sale.startDate);
-  const saleEndDate = parseISO(sale.endDate);
+  // SEO1: During the server render and pre-mount client pass, `sale` (from useQuery)
+  // is undefined. These constants must be null-safe so we can fall through to the
+  // SSR head-rendering block below (which renders og + JSON-LD from getServerSideProps
+  // props) without crashing. Once mounted, `sale` is always defined here, so all
+  // downstream interactive behavior is unchanged.
+  const isOrganizer = !!sale && user?.id === sale.organizer.userId;
+  const saleStartDate = sale ? parseISO(sale.startDate) : null;
+  const saleEndDate = sale ? parseISO(sale.endDate) : null;
   const now = new Date();
-  const saleHasStarted = now >= saleStartDate;
-  const saleHasEnded = now >= saleEndDate;
+  const saleHasStarted = saleStartDate ? now >= saleStartDate : false;
+  const saleHasEnded = saleEndDate ? now >= saleEndDate : false;
 
   // M-005: Type used for the display badge + meta copy. Organizer intent wins;
   // scraped listings with an untrusted default get title-based inference.
-  const displaySaleType = resolveSaleType(
+  const displaySaleType = sale ? resolveSaleType(
     sale.saleType,
     sale.title,
     sale.organizer?.isUnmanagedListing
-  );
+  ) : null;
   const displaySaleTypeLabel = displaySaleType
     ? (SALE_TYPE_LABELS[displaySaleType] ?? displaySaleType.replace(/_/g, ' '))
     : null;
@@ -957,7 +971,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         sale ? (
           <Head>
             <title>{sale.title} – FindA.Sale</title>
-            <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} />
+            <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} key="canonical" />
             <meta name="description" content={`${displaySaleTypeLabel || 'Sale'} in ${sale.city}, ${sale.state} — browse items and get directions on FindA.Sale.`} />
             <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
             <meta property="og:description" content={sale.description} />
@@ -2501,25 +2515,4 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     if (sale.organizer?.id) {
       try {
         const seriesController = new AbortController();
-        const seriesTimeout = setTimeout(() => seriesController.abort(), 2000);
-        const seriesRes = await fetch(
-          `${apiUrl}/sales/organizer/${sale.organizer.id}/recurring`,
-          { signal: seriesController.signal }
-        );
-        clearTimeout(seriesTimeout);
-        if (seriesRes.ok) {
-          const seriesData = await seriesRes.json();
-          if (seriesData?.isRecurring) {
-            eventSeriesData = seriesData;
-          }
-        }
-      } catch {
-        // Non-fatal — EventSeries JSON-LD is a GEO enhancement, not critical
-      }
-    }
-
-    return { props: { ogData, initialData, noindex, eventSeriesData } };
-  } catch {
-    return { props: { ogData: null, initialData: null, noindex: false, eventSeriesData: null } }
-  }
-}
+        cons

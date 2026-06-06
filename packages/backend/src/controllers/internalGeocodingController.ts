@@ -37,10 +37,18 @@ export async function getBatchOfUngeocodedSales(req: Request, res: Response): Pr
 
     // Two categories of ungeocoded sales:
     // 1. Sales with a full street address (GarageSaleFinder, platform sales, FB Events w/ slug)
-    // 2. Facebook Events city-only records (address='', city+state present) — use city-center fallback
+    // 2. City-only records (address='', city+state present) — use city/ZIP-center fallback.
+    //    Both GarageSaleFinder and Facebook Events frequently hide the street address;
+    //    these rows still carry city+state (+zip) and geocode fine to a city center.
     // Only geocode PUBLISHED (live/future) sales — ENDED/DRAFT sales never appear
     // on the map, so geocoding them wastes the batch budget. This filter drops the
     // working set from ~15.8k to ~1.2k and lets the real active backlog drain.
+    //
+    // The previous version restricted the city-only fallback to sourceName='Facebook Events',
+    // which silently excluded ~310 GarageSaleFinder rows that have address='' but valid
+    // city/state/zip — they were never fetched into any batch and could never drain.
+    // Requiring only city<>'' AND state<>'' (already enforced above) covers every
+    // ungeocoded PUBLISHED row regardless of whether it has a street address.
     const whereClause = sourceName
       ? {
           lat: null,
@@ -54,20 +62,6 @@ export async function getBatchOfUngeocodedSales(req: Request, res: Response): Pr
           status: 'PUBLISHED',
           city: { not: '' },
           state: { not: '' },
-          OR: [
-            // Scraped sources with full addresses
-            {
-              sourceName: { in: ['GarageSaleFinder', 'Facebook Events'] },
-              address: { not: '' },
-            },
-            // Facebook Events city-only records (no street address — city-center fallback)
-            {
-              sourceName: 'Facebook Events',
-              address: '',
-            },
-            // Platform sales (organizer-created) published without geocoding
-            { sourceName: null, address: { not: '' } },
-          ],
         };
 
     const [sales, total] = await Promise.all([

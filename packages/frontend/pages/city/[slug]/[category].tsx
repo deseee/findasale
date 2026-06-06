@@ -118,7 +118,7 @@ export default function CityCategoryPage({
         <title>{title}</title>
         <meta name="description" content={description} />
         <meta name="keywords" content={`${categoryPlural.toLowerCase()} ${cityName} ${cityState}, antiques, furniture, vintage, collectibles`} />
-        <link rel="canonical" href={canonicalUrl} />
+        <link rel="canonical" href={canonicalUrl} key="canonical" />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonicalUrl} />

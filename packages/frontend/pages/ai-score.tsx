@@ -155,7 +155,7 @@ export default function AiScorePage() {
           content="Check how visible any FindA.Sale page is to AI search assistants. Free GEO analysis tool."
         />
         <meta property="og:url" content="https://finda.sale/ai-score" />
-        <link rel="canonical" href="https://finda.sale/ai-score" />
+        <link rel="canonical" href="https://finda.sale/ai-score" key="canonical" />
         <meta name="robots" content="index, follow" />
       </Head>
 

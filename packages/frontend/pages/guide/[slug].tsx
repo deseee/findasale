@@ -66,7 +66,7 @@ export default function GuidePage({
       <Head>
         <title>{metaTitle}</title>
         <meta name="description" content={metaDescription} />
-        <link rel="canonical" href={canonicalUrl} />
+        <link rel="canonical" href={canonicalUrl} key="canonical" />
 
         {/* Open Graph */}
         <meta property="og:type" content="website" />

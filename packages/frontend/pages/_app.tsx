@@ -399,13 +399,23 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
   // Support per-page layouts via getLayout function
   const getLayout = (Component as any).getLayout || ((page: React.ReactNode) => <Layout>{page}</Layout>);
 
-  // Canonical URL: strip query params, always point to finda.sale (non-www)
-  const canonicalUrl = `https://finda.sale${router.asPath.split('?')[0]}`;
+  // Canonical URL: strip query params, always point to finda.sale (non-www).
+  // SEO2: On the statically-generated homepage, router.asPath resolves to the
+  // file-system route name "/index" during static generation, which baked
+  // https://finda.sale/index into the homepage HTML and conflicted with the
+  // page-level canonical (https://finda.sale). Normalise "/index" and "/" so the
+  // root always emits the bare origin with no trailing slash. The shared
+  // key="canonical" lets Next.js Head collapse this global tag and any page-level
+  // canonical into a SINGLE element (the page-level one, rendered later, wins),
+  // eliminating duplicate canonical tags site-wide.
+  const rawPath = router.asPath.split('?')[0].split('#')[0];
+  const normalizedPath = rawPath === '/index' || rawPath === '/' ? '' : rawPath;
+  const canonicalUrl = `https://finda.sale${normalizedPath}`;
 
   return (
     <SessionProvider session={session} basePath="/api/auth">
       <Head>
-        <link rel="canonical" href={canonicalUrl} />
+        <link rel="canonical" href={canonicalUrl} key="canonical" />
       </Head>
       <ToastProvider>
         <AuthProvider>
