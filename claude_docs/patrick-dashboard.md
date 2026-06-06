@@ -1,4 +1,22 @@
-# Patrick's Dashboard — S892 Wrap
+# Patrick's Dashboard — S893 Wrap
+
+---
+
+## S893 — AuctionZip filled in + a QA catch + a quick bug fix
+
+What I did this session:
+
+- ✅ **4,893 auction house records added to the directory.** The AuctionZip harvest we talked about is done — 4,498 new organizers created, 395 existing ones updated. All flagged as auction houses, all in the US. The directory is now significantly larger on the auction side.
+- ✅ **"Get alerts for this sale" box for logged-out visitors — confirmed working.** I tested this live (on a real published sale, as a logged-out visitor): the email box works, the confirmation shows, and the database captured the email. The S892 feature works as intended.
+- 🐛 **Found and fixed a small leak from S892:** One of the S892 changes was supposed to hide the "Remind Me by Email" button for people who aren't logged in (since it doesn't work for them). It was correctly hidden in one spot, but I found it was still showing up in two other places on the same page (the action bar and the inventory section). Both are now fixed. Zero errors. It just needs to be pushed so the fix goes live.
+- 📊 **Geocoding is making progress on its own** — 539 sales still need map locations (was 716 last session). No action needed; it's draining by itself.
+- ⏳ **NAA auction houses still at 0** — the code fix was written back in S890 but the push never happened. Still sitting in your pushblock queue.
+
+**What you need to push next:**
+1. The CTA1 fix: `packages/frontend/pages/sales/[id].tsx` (the two RemindMeButton auth-gate additions)
+2. Check if the NAA fix (naaAuctioneerDirectory.ts from S890) was ever pushed — if not, it's in that session's pushblock.
+
+Once the CTA1 fix is live, next session I'll verify it in Chrome and also apply the SEO-1 roadmap update.
 
 ---
 
@@ -92,93 +110,4 @@ So instead of "drop the vertical," I went ahead and **coded two of the three fix
 **S888 status (Jun 5 — SHIPPED + LIVE):**
 - ✅ Code pushed (commits `dd745249` + `beb520f5` + `a641dd42`).
 - ✅ Cloudflare Worker deployed at `https://findasale-fb-proxy.findasale.workers.dev`. Subdomain enabled, PROXY_TOKEN secret set. Health check returns 200 OK.
-- ✅ Railway env vars set (`FB_MARKETPLACE_PROXY_URL`, `FB_MARKETPLACE_PROXY_TOKEN`). Backend redeployed.
-- ✅ Production logs confirm `[FacebookMarketplace] Transport: CLOUDFLARE_WORKER`. Scraper requests are reaching Facebook's GraphQL API (returning FB's `Rate limit exceeded` JSON, not the HTML/0-listings IP block).
-- ⏳ Records in DB still 0 — FB rate-limited us from the day's testing. Clears in ~30-60 min. Next scheduled scrape (or a manual re-trigger after the cooldown) will start ingesting real listings.
-
-**No action needed from you.** Pipeline is wired end-to-end. Watch `SELECT COUNT(*) FROM "Sale" WHERE "sourceName" = 'FacebookMarketplace';` over the next 1-2 hours.
-
----
-
-## S887 Summary — DEV: Gmail quota guard + monitoring crons deployed. AuctionNinja → Railway.
-
-**Root cause fixed — 8,317-email blast (Jun 5):** The daily email counter was an in-memory variable that reset to zero on every Railway restart/deploy. After any deploy, the pipeline thought it had sent 0 emails and started from scratch. Fixed: DB-backed `EmailQuotaLog` table now persists the count across restarts. Hard stop at 1,500 emails/day (leaves buffer below Google's 2,000 cap). When you hit 75% (1,125 emails), a Resend alert fires to deseee@gmail.com. Migration deployed ✅.
-
-**Gmail monitoring — now automated:**
-- **06:30 UTC daily** — Tests Gmail OAuth token. Emails you if it breaks (silent failure prevention).
-- **08:00 UTC daily** — Yesterday's send count summary (only if emails were sent).
-- **Every 2 hours** — Checks if pipeline is quota-blocked and alerts you if so.
-- **Sundays 19:00 UTC** — Bounce rate check. Alerts if >2% bounce rate.
-
-**AuctionNinja:** Moved from GitHub Actions (Cloudflare-blocked) to Railway backend cron. Runs Wednesdays 06:00 UTC. Won't know if it works until next Wednesday — check Railway logs.
-
-**#335 (email suspension):** Code guard now prevents recurrence. Account is in the automatic 18-hour suspension window from the Jun 5 blast. Once it clears (~Jun 6 midnight), see the resume procedure below.
-
-**S889 — "outreach still sending" investigated, no leak found.** The trickle of sends you were worried about stopped on its own after the Jun 5 evening backend redeploy. What happened: the kill-switch (`OUTREACH_ENABLED=false`) was set in Railway during S887, but a running server keeps its old settings until it restarts — so the last 7 emails (07:59 UTC Jun 5) went out on the old setting. The backend redeployed at 22:39 UTC Jun 5 and picked up the new value. Since then: zero sends across every 4-hour window. Two independent safeguards are now active (the disabled GitHub workflow AND the backend kill-switch), so nothing will send until you deliberately resume. No code change was needed — the system was already wired correctly.
-
-**Safe resume procedure (when you're ready, after the Gmail account is reactivated):**
-1. Reactivate `outreach@finda.sale` at admin.google.com → Directory → Users → Reactivate (Google's UI, only you can do this).
-2. In Railway, set `OUTREACH_ENABLED=true` on the backend service. (The backend auto-redeploys and picks it up.)
-3. Re-enable the GitHub workflow **"Pipeline — Outreach Emails"** (it was disabled Jun 5; flipping the Railway flag alone will NOT resume sending — the workflow is the trigger).
-4. Safeguards that protect you during warmup: backend enforces a per-window quota (daily quota ÷ 6) and a hard daily cap of 1,500 sends (EmailQuotaLog), with a Resend alert at 75%. Keep the warmup quota low (~200/day) for the first 2+ weeks.
-
----
-
-## Blocked Queue: 16 items (S890 verified)
-
-**Quick wins queued for next session (code/ops):**
-
-| Item | Priority | Status after S890 |
-|------|----------|--------|
-| Geocoding backlog | P1 | Root cause found — process oldest-first instead of newest-first. Small fix, unblocks 15,792 sales. |
-| Facebook Events on map | P1 | Run geocoding tool with source="Facebook Events" → drains 1,307 instantly. No code needed. |
-| FB Events search-key monitoring | P2 | Add alert if search API keys expire (already 5 days stale). |
-| `dateApproximate` label | P3 | Small frontend add — show "Dates approximate" on FB Events cards. |
-| FB Marketplace 0 records | P2 | S888 proxy shipped but still 0 — needs a live run + log check. |
-
-**Needs YOUR decision or action:**
-
-| Item | Priority | What's needed from you |
-|------|----------|--------|
-| #332 Shopify Cross-Listing | P0 | Create a free Shopify Partners dev store + connect it — 0 stores connected, can't test without one (blocked 99 sessions). |
-| Auction vertical (AuctionNinja + AuctionZip + NAA) | P1/P2 | All 3 produce zero records. Decide: invest in a real fix for one, or drop auction organizers. |
-| #335 Email suspension | P1 | No active leak (verified). When ready to resume: reactivate Gmail → `OUTREACH_ENABLED=true` → re-enable the GitHub workflow. Max ~200/day during warmup. |
-| #230 Smart Buyer Widget | P3 | Needs a published sale on user1 to do the final human check. |
-
-**On hold until outreach resumes (don't do before #335):** 462 ready WARM leads (queue rows), outreach queue cleanup (2,206 stale / 480 bounced), WARM website enrichment (3.5%).
-
-**Closed this session:** Sale Ending Soon rate cap — verified live in production.
-
----
-
-## Your Actions
-
-1. **Push block below**
-2. **#335:** Set `OUTREACH_ENABLED=true` in Railway once 18h suspension clears (check admin.google.com — should clear ~Jun 6)
-3. **GBP:** business.google.com → "Verify now" → phone code (still pending)
-4. **prisma generate** locally: `cd packages/database && npx prisma generate`
-
----
-
-## Push Block — S888 (one-shot deploy)
-
-S888 code was pushed via MCP. Sync local git, push STATE.md, then run the deploy script.
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git fetch origin main
-git pull origin main
-# STATE.md was updated locally this session — push it now:
-git add claude_docs/STATE.md
-git commit -m "S888: STATE.md wrap (FB Marketplace IP bypass shipped)"
-.\push.ps1
-
-# Then deploy the Cloudflare Worker (one command, prompts for CF token):
-cd cloudflare\fb-marketplace-proxy
-.\deploy.ps1
-# Copy the two env-var lines it prints into Railway -> backend -> Variables.
-# Railway will auto-redeploy.
-```
-
-If you don't have a Cloudflare API token, create one here (Workers Scripts: Edit):
-https://dash.cloudflare.com/profile/api-tokens
+- ✅ Rail
