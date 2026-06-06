@@ -88,49 +88,82 @@ async function fetchPage(url: string): Promise<string | null> {
 }
 
 /**
+ * Decode the common HTML entities that appear in directory link text and
+ * collapse whitespace so company names compare cleanly in the dedup pass.
+ */
+function decodeName(raw: string): string {
+  return raw
+    .trim()
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Parse auctioneer rows from a directory letter page.
  *
- * Each row has the structure:
- *   <div class="... auc-directory__table--table-row">
- *     <div class="auc-directory__table--header--auc--company">
- *       <a class="auc-link" href="/[STATE]-Auctioneers/[ID].html">Company Name</a>
+ * AuctionZip redesigned the directory markup — the old
+ * `auc-directory__table--table-row` / `--city-state` classes no longer exist,
+ * which is why the previous regex matched zero rows. The current markup renders
+ * one block per auctioneer:
+ *
+ *   <div class="auc-directory__table--header--body-wrapper">
+ *     <div class="auc-directory__table--header--auc-name">
+ *       <a class="auc-link" href="/NH-Auctioneers/1254442.html">Abare, Mark</a>
  *     </div>
- *     <div class="auc-directory__table--header--auc--city-state">City, STATE</div>
+ *     <div class="auc-directory__table--header--auc--company">
+ *       <a class="auc-link" href="/NH-Auctioneers/1254442.html">MV Auction Center (MVAC)</a>
+ *     </div>
  *   </div>
+ *
+ * Both anchors share the same `/[STATE]-Auctioneers/[ID].html` href. We prefer
+ * the company name, falling back to the contact name when no company is listed.
+ * The state comes from the two-letter code in the href; the directory no longer
+ * exposes a city, so `city` is emitted empty (downstream upsert tolerates it).
  */
 function parseDirectoryPage(html: string): AuctionZipEntry[] {
   const entries: AuctionZipEntry[] = [];
 
-  // Match each table row block
-  // We extract: profile href, company name, city/state text
-  const rowPattern =
-    /auc-directory__table--table-row[\s\S]*?auc-directory__table--header--auc--company[^>]*>\s*<a[^>]+href=['"]([^'"]+)['"][^>]*>([^<]+)<\/a>[\s\S]*?auc-directory__table--header--auc--city-state[^>]*>([^<]+)</g;
+  // One block per auctioneer. Splitting on the wrapper class isolates each
+  // entry so the company/name anchors can't bleed across rows.
+  const blocks = html.split('auc-directory__table--header--body-wrapper');
 
-  let match: RegExpExecArray | null;
-  while ((match = rowPattern.exec(html)) !== null) {
-    const href = match[1].trim();
-    const companyName = match[2].trim().replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ');
-    const cityStateRaw = match[3].trim();
+  // blocks[0] is the page prefix before the first wrapper — skip it.
+  for (let i = 1; i < blocks.length; i++) {
+    const block = blocks[i];
 
-    // Extract STATE from city/state string "City, ST"
-    const csMatch = cityStateRaw.match(/^(.+),\s*([A-Z]{2})\s*$/);
-    if (!csMatch) continue;
+    // Profile href gives us both the auctioneer ID and the state.
+    const hrefMatch = block.match(/href=['"]\/([A-Z]{2})-Auctioneers\/(\d+)\.html['"]/);
+    if (!hrefMatch) continue;
 
-    const city = csMatch[1].trim();
-    const state = csMatch[2].trim();
+    const state = hrefMatch[1];
+    const auctioneerId = hrefMatch[2];
 
-    // Skip non-US entries (Canadian provinces etc.)
-    if (!US_STATES.has(state)) continue;
+    // Prefer the company-name anchor; fall back to the contact-name anchor.
+    const companyMatch = block.match(
+      /auc-directory__table--header--auc--company[^>]*>\s*<a[^>]*>([^<]+)<\/a>/
+    );
+    const nameMatch = block.match(
+      /auc-directory__table--header--auc-name[^>]*>\s*<a[^>]*>([^<]+)<\/a>/
+    );
+    const companyName = decodeName(
+      (companyMatch && companyMatch[1]) || (nameMatch && nameMatch[1]) || ''
+    );
+    if (!companyName) continue;
 
     // Skip obviously closed entries
     if (companyName.toLowerCase().includes('(closed)')) continue;
 
-    // Extract auctioneer ID from href e.g. /OH-Auctioneers/99797.html
-    const idMatch = href.match(/\/(\d+)\.html$/);
-    if (!idMatch) continue;
-    const auctioneerId = idMatch[1];
+    // Skip non-US entries (Canadian provinces etc.)
+    if (!US_STATES.has(state)) continue;
 
-    const profileUrl = href.startsWith('http') ? href : `${BASE_URL}${href}`;
+    // The directory no longer lists a city; leave it blank.
+    const city = '';
+    const profileUrl = `${BASE_URL}/${state}-Auctioneers/${auctioneerId}.html`;
 
     entries.push({ auctioneerId, companyName, city, state, profileUrl });
   }

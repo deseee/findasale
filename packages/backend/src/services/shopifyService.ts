@@ -16,7 +16,7 @@ export function getShopifyClient(organizer: Organizer): AxiosInstance {
   }
 
   return axios.create({
-    baseURL: `https://${organizer.shopifyShopDomain}/admin/api/2024-01`,
+    baseURL: `https://${organizer.shopifyShopDomain}/admin/api/2025-10`,
     headers: {
       'X-Shopify-Access-Token': organizer.shopifyAccessToken,
       'Content-Type': 'application/json',
@@ -71,6 +71,7 @@ export async function pushItemToShopify(
             sku: item.sku || itemId,
             inventory_quantity: 1,
             track_inventory: true,
+            inventory_management: 'shopify',
           },
         ],
       },
@@ -104,7 +105,9 @@ export async function pushItemToShopify(
       variantId: listing.shopifyVariantId || '',
     };
   } catch (error: any) {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    const status = error.response?.status;
+
+    if (status === 401 || status === 403) {
       // Token expired or revoked
       await prisma.organizer.update({
         where: { id: organizer.id },
@@ -115,6 +118,24 @@ export async function pushItemToShopify(
       });
       throw new Error('Shopify authentication failed. Please reconnect.');
     }
+
+    if (status === 422) {
+      // Validation error from Shopify (e.g. bad field, duplicate SKU)
+      const details =
+        error.response?.data?.errors &&
+        typeof error.response.data.errors === 'object'
+          ? Object.entries(error.response.data.errors)
+              .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+              .join('; ')
+          : 'Shopify rejected the product data.';
+      throw new Error(`Shopify rejected this item: ${details}`);
+    }
+
+    if (status === 429) {
+      // Rate limited by Shopify
+      throw new Error('Shopify is rate limiting requests right now. Please try again in a minute.');
+    }
+
     throw error;
   }
 }
@@ -136,12 +157,34 @@ export async function markShopifyItemSold(itemId: string): Promise<void> {
 
     const client = getShopifyClient(listing.organizer);
 
-    // Update inventory to 0
+    // Set inventory to 0 on Shopify.
+    // shopifyVariantId is a VARIANT id, not an inventory_item_id, and
+    // inventory_levels requires both an inventory_item_id and a location_id.
+    // Resolve both at runtime: GET the variant for its inventory_item_id,
+    // GET the primary location for a location_id, then set the level to 0.
     if (listing.shopifyVariantId) {
-      await client.put(`/inventory_levels/adjust.json`, {
-        inventory_item_id: listing.shopifyVariantId,
-        available_adjustment: -1,
-      });
+      // 1. Resolve the variant's inventory_item_id
+      const variantResp = await client.get(`/variants/${listing.shopifyVariantId}.json`);
+      const inventoryItemId = variantResp.data?.variant?.inventory_item_id;
+
+      // 2. Resolve a location_id (use the first/primary location)
+      const locationsResp = await client.get(`/locations.json`);
+      const locations = locationsResp.data?.locations || [];
+      const locationId =
+        locations.find((l: any) => l.active)?.id || locations[0]?.id;
+
+      // 3. Set available inventory to 0 at that location
+      if (inventoryItemId && locationId) {
+        await client.post(`/inventory_levels/set.json`, {
+          location_id: locationId,
+          inventory_item_id: inventoryItemId,
+          available: 0,
+        });
+      } else {
+        console.error(
+          `[Shopify] Could not resolve inventory_item_id (${inventoryItemId}) or location_id (${locationId}) for item ${itemId}`
+        );
+      }
     }
 
     // Update listing status
