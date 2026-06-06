@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S896 — QA MODE (2026-06-06). 3 BQ fixes CODED + pending Patrick push. NAA RESOLVED (1,151 organizers confirmed in DB). CTA1 Chrome QA BLOCKED until logout fix deploys. BQ: 16→15 (NAA resolved), fixes coded for logout/dark-mode/hydration (BQ rows remain open until push + Chrome verify). Logout bug confirmed live via Chrome (ss_3161s6ouz: 429 toast; ss_04637m5dv: re-auth from cookie).**
+**S897 — QA MODE (2026-06-06). Shopper flows QA COMPLETE (Leo Thomas user5 — dashboard/brands/wishlists/RSVP/wishlist). S896 push confirmed deployed (cd8ebe7 — logout/hydration/dark mode D-002). Logout Chrome-verified ✅ ss_8330v4z5n. BQ: 16→14 (NAA + logout resolved). CTA1 now UNBLOCKED. Dark mode + hydration Chrome verify still needed.**
 
 **S895 — QA MODE (2026-06-06). Weekly audit: 15 routes Chrome-tested, 2 new BQ entries (text-warm-900 D-002 violations + React hydration errors). QA work: roadmap PCVs applied (SEO-2 Human QA ✅ S894 web_fetch; CTA1 noted as deployed commit 270fd5e4, Chrome QA BLOCKED by P1 logout bug). NAA scraper triggered via GitHub Actions workflow_dispatch (run in progress at wrap — verify DB count next session). Geocoding draining normally (350 PUBLISHED ungeocoded, down from 360). NEW P1: POST /auth/logout rate-limited (429) → httpOnly JWT cookie not cleared → users re-authenticate on every page load, cannot achieve logged-out state. BQ: 13→15 (weekly audit) →16 (+logout P1). Full audit report: claude_docs/audits/weekly-audit-2026-06-06.md.**
 
@@ -98,6 +98,7 @@ _S894 Records pass: AuctionNinja RESOLVED + AuctionZip RESOLVED + merged auction
 _S895 weekly audit (2026-06-06): 2 new rows added — text-warm-900 D-002 violations (HIGH) + React hydration errors (MEDIUM). Blocked Queue: 15 rows._
 _S895 QA wrap: +1 P1 logout rate-limiter bug (POST /auth/logout 429 → JWT cookie persists → re-auth on page load). Blocked Queue: 16 rows._
 _S896 QA MODE: NAA RESOLVED (1,151 organizer records confirmed via psycopg2 — GH Actions run S895 succeeded). 3 BQ fixes CODED + pending push: (1) logout/index.ts — exempt /logout from authLimiter skip check; (2) SaleCard.tsx — defer isHappeningToday() to useEffect (hydration fix); (3) 24 components/pages — text-warm-900 → dark:text-warm-100. Logout bug confirmed live via Chrome (ss_3161s6ouz/ss_04637m5dv). Blocked Queue: 16→15 (NAA row resolved)._
+_S897 QA MODE: S896 push cd8ebe7 confirmed deployed — all 3 fixes live on Railway. Shopper flows QA complete: Leo Thomas (user5) full sweep — dashboard Overview/Subscribed/Pickups/Brands, notifications, wishlists, RSVP toggle, wishlist heart. Logout Chrome-verified ✅ ss_8330v4z5n → RESOLVED + removed from BQ. NAA row removed. Dark mode D-002 + hydration: deployed, Chrome verify pending. BQ: 16→14._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
@@ -106,7 +107,6 @@ _S896 QA MODE: NAA RESOLVED (1,151 organizer records confirmed via psycopg2 — 
 | #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. **S890 re-verified leak PLUGGED:** 0 DirectoryClaimEmail sends since Jun 5 08:00 UTC (psycopg2). No active sending. Only the Gmail reactivation + Jane Thrift re-send remain (Patrick). | S865-auto / Jun 5 |
 | Geocoding backlog → 2nd ROOT CAUSE FIXED S891, pending OPS verify | **P1** — S890 fix (status='PUBLISHED' + oldest-first) deployed; count moved **1,164→716** (psycopg2 S891, so it IS draining). **S891 found the remaining blocker:** a leftover `address<>''` filter + a city-only fallback scoped only to Facebook Events excluded **~310 PUBLISHED GSF rows** that have empty street address but valid city/state/zip (verified zip present on all 310) — never fetched into any batch. **FIX SHIPPED (internalGeocodingController.ts):** batch whereClause broadened to require only city+state present → all 716 now qualify; the workflow's existing is_city_only path geocodes them to city center. GSF carries NO source coords (psycopg2: 0 lat/lng in scrapedMetadata) so city-center is the only path. TS 0 errors. | OPS: trigger `Geocode Ungeocoded Sales` workflow_dispatch → confirm `COUNT WHERE lat IS NULL AND status='PUBLISHED'` drops below 716 | S887 |
 | Facebook Events 96% un-geocoded → unblocked by geocoding fix | **P1** — 1,460 ungeocoded, 1,307 city-only, 211 live (psycopg2 S890). City-center fallback code was correct but never reached. **S890:** the geocoding fix above (status=PUBLISHED + oldest-first) means the 211 LIVE FB Events records now get fetched + city-center-geocoded on the next run. The 1,096 ENDED FB Events are intentionally skipped. Optional: a `source=Facebook Events` workflow_dispatch run for an immediate drain. | After geocoding push, confirm live FB Events get lat/lng | S887 |
-| Auction vertical — NAA → **RESOLVED S896** | **P1 → RESOLVED** — S895 GitHub Actions `scrape-naa.yml` workflow_dispatch ran. S896 psycopg2 confirmed: **1,151 Organizer records** with `directoryMostRecentSource='NAAFindAnAuctioneer'`. Scraper + push both confirmed working. | — | S887 |
 | 462 WARM leads email-ready, no outreach record | **P2** — **S890 UNCHANGED: still exactly 462** (psycopg2). Note: backfill-organizer-contacts.yml backfills CONTACT data (email/phone), NOT DirectoryClaimEmail rows — that queue-row backfill was never built. Correctly deferred while OUTREACH_ENABLED=false (#335). Do during outreach resume. | Backfill DirectoryClaimEmail PENDING for the 462 as part of #335 resume | S887 |
 | Facebook Events: paid search API key unmonitored → FIX CODED (pending push) | **P2** — **S890 FIX CODED** (run-search-facebook-events.ts, TS-verified): if ALL THREE of BRAVE/SERPER/SCALESERP keys are absent, logs console.error + fires a Resend alert to QUOTA_ALERT_EMAIL (deseee@gmail.com) — mirrors gmailHealthCron.ts pattern; does not crash. Surfaces the silent-failure. | Push → confirm alert fires if keys removed | S887 |
 | Outreach queue hygiene: stale PENDING + BOUNCED records | **P2** — **S890 UNCHANGED (psycopg2):** 2,206 PENDING >30 days old, 480 BOUNCED, 1 OPTED_OUT, 659 SENT. No suppression/age-out logic. Hygiene pass before outreach resume. | Suppress/archive BOUNCED; age-out stale PENDING; hygiene pass before re-enable | S887 |
@@ -114,9 +114,8 @@ _S896 QA MODE: NAA RESOLVED (1,151 organizer records confirmed via psycopg2 — 
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
 | FB Marketplace 0 records — CF Worker proxy is a DEAD END | **P2 — S890 DEFINITIVELY DIAGNOSED via live run + Railway logs (02:22-02:25 UTC Jun 6).** Proxy env vars confirmed live; run logged `[FacebookMarketplace] Transport: CLOUDFLARE_WORKER (https://findasale-fb-proxy.findasale.workers.dev/fb-graphql)` — so the proxy IS in use. Result: **every query in every metro returned "Found 0 listings"** (garage/yard/estate × jacksonville/fort-worth/columbus/charlotte/sf/indy/seattle/denver…), 0 created across the board, no errors. FB returns empty results even through Cloudflare's edge IPs (datacenter-IP soft-block; FB Marketplace search increasingly requires an authenticated session). **The free-Cloudflare-Worker approach (S888) does not and will not work for FB Marketplace.** Options: paid residential/mobile proxies + session auth, or DROP FB Marketplace. Recommend DROP unless FB listings become a priority — high effort, brittle, ToS-risky. | Patrick decision: invest in residential proxy + auth, or drop FB Marketplace | S890 |
-| `text-warm-900` dark mode violations — D-002 → **FIX CODED S896 (pending push)** | **HIGH → FIX CODED** — S896 dev agent applied `dark:text-warm-100` to all static violations. Post-fix grep: 0 static violations remain (2 remaining instances are ternary runtime dark-mode checks — correct pattern, not D-002 violations). Files changed: 24 components + pages (see S896 pushblock). `grep -rn "text-warm-900" packages/frontend --include="*.tsx" | grep -v "dark:" | grep -v node_modules` → 0 results. | Push Patrick's S896 pushblock → Chrome-verify dark mode on checkout + dashboard | S895 |
-| React hydration errors #418/#425 on homepage | **MEDIUM → FIX CODED S896 (pending push)** — Root cause: `SaleCard.tsx` called `isHappeningToday()` during render, which calls `new Date()` — timezone-sensitive, differs between SSR (UTC) and client timezone. Fixed: `useState(false)` + `useEffect` defers the computation to client after hydration. Post-fix: zero render-time `new Date()` calls in SaleCard.tsx. | Push Patrick's S896 pushblock → verify no React hydration errors in browser console on homepage | S895 |
-| Logout endpoint rate-limiter → cannot achieve logged-out state | **P1 → FIX CODED S896 (pending push)** — S896 Chrome QA confirmed: POST /api/auth/logout returns 429, client cleanup ran but cookie persisted, next page re-authenticated (ss_3161s6ouz / ss_04637m5dv). Fix: `packages/backend/src/index.ts` L438 — added `\|\| req.path === '/logout'` to the authLimiter skip check (was: `/me` and `/refresh`; now includes `/logout`). 1-line change, inline (within 20-line threshold). **Blocks CTA1 Chrome re-verify until push + Railway deploy.** | Push S896 pushblock → wait for Railway deploy → re-run CTA1 Chrome QA from fresh browser session | S895 |
+| `text-warm-900` dark mode violations — D-002 → **FIX DEPLOYED S897 (cd8ebe7), Chrome verify pending** | **HIGH → FIX DEPLOYED S897** — S896 dev agent applied `dark:text-warm-100` to all static violations. Post-fix grep: 0 static violations remain (2 remaining instances are ternary runtime dark-mode checks — correct pattern, not D-002 violations). Files changed: 24 components + pages (see S896 pushblock). `grep -rn "text-warm-900" packages/frontend --include="*.tsx" | grep -v "dark:" | grep -v node_modules` → 0 results. | Chrome-verify dark mode on CheckoutModal, PerformanceDashboard, HuntPassModal (fix deployed cd8ebe7) | S895 |
+| React hydration errors #418/#425 on homepage | **MEDIUM → FIX DEPLOYED S897 (cd8ebe7), Chrome verify pending** — Root cause: `SaleCard.tsx` called `isHappeningToday()` during render, which calls `new Date()` — timezone-sensitive, differs between SSR (UTC) and client timezone. Fixed: `useState(false)` + `useEffect` defers the computation to client after hydration. Post-fix: zero render-time `new Date()` calls in SaleCard.tsx. | Open homepage in Chrome DevTools console — confirm zero React hydration errors #418/#425 (fix deployed cd8ebe7) | S895 |
 
 ---
 
@@ -124,6 +123,15 @@ _S896 QA MODE: NAA RESOLVED (1,151 organizer records confirmed via psycopg2 — 
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| — | Logout rate-limiter fix — clean redirect | Navigated to finda.sale as Leo Thomas (user5). Clicked Logout. Clean redirect to /login — no 429 toast. Nav shows Login + Register. Refreshed — logged-out state persisted. ss_8330v4z5n | S897 |
+| — | Shopper dashboard — Overview tab | Navigated /shopper/dashboard as Leo Thomas (user5@example.com). Ranger rank card (2,005 XP) ✅, QR code ✅, referral CTA ✅, quick-action tiles ✅. Dark mode correct. ss_7137f8yne, ss_8746rgevf, ss_8690d1ikb | S897 |
+| — | Shopper dashboard — Subscribed tab | As user5: clicked Subscribed tab (JS .click(), URL →#subscribed). "No organizers followed yet" + Browse Sales CTA. Dark mode correct. D-003 ✅. ss_0769aas4z | S897 |
+| — | Shopper dashboard — Pickups tab | As user5: clicked Pickups tab. "No pickup appointments yet" + explainer. Dark mode correct. D-003 ✅. ss_2093734df | S897 |
+| — | Shopper dashboard — Brands add + persist | As user5: clicked Brands tab. Typed "Pottery Barn" → clicked Add → brand appeared in list. Full page reload — brand persisted (server-side save confirmed). ss_7642d8yxi, ss_5371anhj6, ss_6095eysf5 | S897 |
+| — | Notifications dropdown + /notifications page + routing | As user5: bell icon clicked (27 unread) — dropdown opened ss_3970ompns. /notifications — All/Operational/Discovery tabs, unread orange dots ss_9978s0w2u. Clicked "New message from Bob Smith" → correct /messages/[id] thread ss_4602ahmz7. | S897 |
+| — | /wishlists page | Navigated /shopper/wishlists as user5. Collections: "Vintage Jewelry" + "Mid-Century Modern Hunt" (0 items each). Correct empty state. ss_5547dpc3u | S897 |
+| — | Sale page RSVP toggle | As user5 on /sales/cmp0t1nki00h7si3dky88ygeh. Clicked RSVP button. "Going (0)" → "✓ You're going (1)" — green filled toggle, count updated. ss_4522hzw2t | S897 |
+| — | Sale page wishlist heart (sale-level favorites) | As user5 on /sales/cmp0t1nki00h7si3dky88ygeh. Clicked heart (aria-label="Add to wishlist" via JS). aria-label toggled to "Remove from wishlist". Red filled heart displayed. Server-side save confirmed. ss_413014505 | S897 |
 | — | GUEST1 — GuestSaleAlert no-login email capture (S892 feature) | ✅ Chrome-verified S893 — Navigated to https://finda.sale/sales/cmpw9mmi401sbj8zfkx7f80oh as logged-out guest (Login/Register in nav confirmed). Scrolled to GuestSaleAlert. Entered qaguest-s893@test.com. Clicked "Get alerts". Saw "✓ You're on the list — we'll email you when new items are added." DB confirmed: SearchNotification record id=snmq1zvhipevzoe0, email=qaguest-s893@test.com, searchQuery=estate treasures 84:..., city=Norfolk, isActive=true, createdAt=2026-06-06 06:51. ss_4884utc9f | S893 |
 | — | CTA1 — Logged-out sale page "Remind Me by Email" absent | ✅ Chrome-verified S894 — Navigated https://finda.sale/sales/cmpw9mmi401sbj8zfkx7f80oh as logged-out guest. "Remind Me by Email" absent from top action bar (L1494) and inventory empty state (L1888). Only GuestSaleAlert "Get alerts" visible. Fix in local sales/[id].tsx — pending GitHub push. | S894 |
 | — | SEO-2 — Homepage canonical dedupe + og/twitter meta | ✅ S894 web_fetch-verified — web_fetch https://finda.sale/ returned exactly 1 canonical (https://finda.sale); no duplicate og: or twitter: meta tags found. | S894 |
@@ -198,13 +206,14 @@ _(S862
 
 ## Next Session
 
-**S896 completed:** QA MODE. 3 BQ fixes coded (logout rate-limiter / hydration / dark mode). NAA RESOLVED (1,151 organizers). Logout bug confirmed live via Chrome. Push block provided below — Patrick must push + wait for Railway deploy, then CTA1 Chrome QA can run.
+**S897 completed:** QA MODE. Shopper flows QA complete (Leo Thomas user5). S896 fixes deployed + logout Chrome-verified. BQ: 16→14. CTA1 unblocked.
 
 **Priority for next session:**
-1. **[FIRST ACTION] Push the S896 pushblock** (Patrick) — 27 files. After Railway deploys (~3 min), proceed to CTA1 QA.
-2. **[CTA1 Chrome QA]** — Open fresh browser tab, navigate `https://finda.sale/sales/cmpw9mmi401sbj8zfkx7f80oh` without being logged in. Verify: "Remind Me by Email" absent, GuestSaleAlert present, logout works. Stage PCV for next session's roadmap chr update.
-3. **[BQ] Continue QA — pick next P1/P2 item** from the queue (geocoding OPS verify, FB Events drain, outreach hygiene when #335 resumes).
-4. **[OPS] Geocoding** — monitoring only; PUBLISHED ungeocoded at 350 and draining normally.
+1. **[CTA1 Chrome QA]** — Navigate `https://finda.sale/sales/cmpw9mmi401sbj8zfkx7f80oh` as logged-out user. Verify "Remind Me by Email" absent, GuestSaleAlert present, logout works clean. Stage PCV.
+2. **[Dark mode D-002 Chrome verify]** — Visit /organizer/checkout (CheckoutModal), PerformanceDashboard, HuntPassModal in dark mode. Confirm text readable (10 dark: violations fixed in cd8ebe7). Stage PCV.
+3. **[Hydration Chrome verify]** — Open homepage in Chrome, check DevTools console for React hydration errors. Confirm zero #418/#425 (SaleCard.tsx fix deployed cd8ebe7). Stage PCV.
+4. **[Records: Apply S897 PCVs]** — Invoke findasale-records to apply S897 Pending Chrome Verifications to roadmap.md Chrome column (9 new PCV rows).
+5. **[BQ] Continue QA** — geocoding OPS verify (workflow_dispatch → confirm PUBLISHED ungeocoded drops further), FB Events drain check.
 
 **Decisions still open (Patrick):**
 - **FB Marketplace:** free CF Worker proven dead end (0 listings). DROP recommended.
@@ -213,6 +222,28 @@ _(S862
 - **#335 outreach resume:** reactivate Gmail → OUTREACH_ENABLED=true → re-enable workflow. Deferred items (462 backfill, queue hygiene, WARM enrichment) wait for this.
 
 ## Recent Sessions
+
+### S897 — QA MODE (2026-06-06). Shopper flows QA complete. S896 fixes confirmed deployed. BQ: 16→14.
+
+**S896 push confirmed (cd8ebe7):** All 3 coded fixes live on Railway — logout rate-limiter fix, SaleCard.tsx hydration fix, 24-file dark mode D-002 bulk fix. No push needed this session.
+
+**Logout Chrome-verified ✅ (ss_8330v4z5n):** As Leo Thomas (user5) — clicked Logout → clean redirect to /login, no 429. Logged-out state persisted after refresh. P1 BQ row → RESOLVED, removed. CTA1 QA now unblocked.
+
+**S895 audit false claim corrected:** Weekly audit claimed "no shopper accounts in production (user1–user7 only, all organizers)." Incorrect — user5 Leo Thomas is a shopper. Logged in and ran full shopper QA sweep.
+
+**Shopper flows QA — Leo Thomas (user5@example.com, Seedy2025!) — full sweep:**
+- Dashboard Overview: Ranger rank (2,005 XP), QR code, referral CTA, quick-action tiles. Dark mode correct. ss_7137f8yne, ss_8746rgevf, ss_8690d1ikb
+- Dashboard Subscribed: "No organizers followed yet" + Browse Sales CTA. D-003 ✅. ss_0769aas4z
+- Dashboard Pickups: "No pickup appointments yet" + explainer. D-003 ✅. ss_2093734df
+- Dashboard Brands: Typed "Pottery Barn" → Add → appeared in list → full reload → persisted (server-side confirmed). ss_7642d8yxi, ss_5371anhj6, ss_6095eysf5
+- Notifications: Dropdown 27 unread ss_3970ompns + /notifications page All/Operational/Discovery tabs ss_9978s0w2u + routing to message thread ss_4602ahmz7
+- /wishlists: "Vintage Jewelry" + "Mid-Century Modern Hunt" collections (0 items). ss_5547dpc3u
+- RSVP toggle: /sales/cmp0t1nki00h7si3dky88ygeh — "Going (0)" → "✓ You're going (1)". ss_4522hzw2t
+- Wishlist heart: aria-label "Add to wishlist" → clicked → "Remove from wishlist". Red filled heart. ss_413014505
+
+**BQ:** NAA row removed (RESOLVED S896). Logout row removed (RESOLVED S897). Dark mode + hydration rows updated to FIX DEPLOYED S897. BQ: 16→14.
+
+**9 PCVs staged** in Pending Chrome Verifications for next session's roadmap.md Chrome column update.
 
 ### S896 — QA MODE (2026-06-06). 3 BQ fixes coded. NAA confirmed RESOLVED. CTA1 Chrome QA blocked by logout bug (confirmed live).
 
@@ -284,61 +315,3 @@ _(S862
 
 **S892 PCV (cross-session rule):** GUEST1 ✅ added to Pending Chrome Verifications. SEO-1 PCV from S892 still pending roadmap.md Chrome column update → findasale-records next session.
 
-### S892 — DEV + RECORDS. Growth reactivation audit + SEO-1 real fix (live-verified) + logged-out conversion-leak plugs. SEO-2 in progress.
-
-**SEO-1 — the demand flywheel, genuinely fixed this time:**
-- S891 logged SEO-1 as "FIXED" via a "render head pre-mount" change, but that did NOT server-render the head (Pages Router: a client-side `isLoading` early-return still ships a blank `<head>`) — shared sale links kept unfurling blank on FB/iMessage/Slack.
-- S892 converted `pages/sales/[id].tsx` to `getStaticProps`+ISR (`fallback:'blocking'`) so the existing og/JSON-LD/canonical markup renders server-side. Verified in code (getStaticPaths L2517, getStaticProps L2526).
-- **LIVE-VERIFIED (genuine end-to-end, not code-only):** web_fetch of a live published sale returned full sale-specific OG tags; the Facebook Sharing Debugger scraped the URL -> HTTP 200 and built a correct preview — real og:title "Home decor galore! — FindA.Sale", og:description, and a Cloudinary og:image. -> roadmap SEO1 BROKEN->FIXED S892; evidence also staged in Pending Chrome Verifications.
-
-**Logged-out conversion-leak plugs (sale pages):**
-- Added `GuestSaleAlert` no-login email capture for logged-out visitors (component L288 / render L1550) — closes the leak where favorite/remind buttons forced /login.
-- Hid the dead-end "Remind Me by Email" button for logged-out users (it only worked logged-in, L1534); logged-out users now see only the working "Get alerts" box.
-
-**SEO-2 — IN PROGRESS:** parallel dev task deduping double-emitted og/twitter meta tags + fixing the homepage conflicting canonical, building on S891's canonical-`key` work. Not yet complete -> roadmap SEO2 = in-progress S892.
-
-**Growth audit -> 3 strategy docs** (claude_docs/strategy/): growth-reactivation-plan-2026-06-05.md, growth-knockon-and-creative-levers-2026-06-05.md, turn-it-back-on-checklist-week-of-2026-06-05.md.
-
-**⚠️ DEV-ENV finding:** VM pnpm `tsc` is broken (MODULE_NOT_FOUND) — prior subagents' "tsc clean" reports were unreliable. Verify via `next build`, not VM `tsc`, going forward.
-
-**Records reconciliation:** S891 entry retained (audit + first SEO-1 attempt + geocoding 2nd-root-cause + AuctionZip UA ruled out). Drift flagged: the SEO-1 root fix + live verification belong to S892, not S891. BQ computed = 18 rows (2 closed-but-not-removed: AuctionNinja RESOLVED + merged AuctionNinja/AuctionZip row; SEO-1 now live-verified/clearing). Trimmed Recent Sessions to the 5 most recent (S892/S891/S890/S887/S886) per T5 — older entries (S885->S868) removed; full history in git + COMPLETED_PHASES.md.
-
-### S891 — DEV MODE. Shopper-discovery SEO audit + 2 P1 fixes; geocoding drain unblocked; AuctionZip UA test ruled out → Chrome harvest queued.
-
-**SEO (the demand flywheel — never deferred):**
-- **SEO-1 (P1, FIXED + pushed):** sale detail pages shipped an empty server-side `<head>`. Root cause: client-side `isLoading` early-return skipped all the existing og/JSON-LD/canonical markup, so shared sale links unfurled blank on FB/iMessage/Slack/WhatsApp. Fixed sales/[id].tsx to render the head pre-mount (mirrors city/[slug].tsx SSR/ISR, which was already correct). City pages were healthy (7 JSON-LD types).
-- **SEO-2 (P1, FIXED + pushed):** homepage emitted two conflicting canonicals (one `/index`). Root cause: `_app.tsx` global canonical built from `router.asPath` (='/index' on the statically-built homepage) + every page missing a Next.js `key` so page+global canonicals never collapsed. Fixed across 17 pages (path normalize + `key="canonical"`). Audit doc: claude_docs/audits/seo-shopper-discovery-2026-06-05.md → roadmap BROKEN rows SEO1/SEO2.
-
-**Geocoding (2nd root cause):** drain was stuck — S890 fix had moved it 1,164→716 but stalled. Found a leftover `address<>''` filter + a city-only fallback scoped only to Facebook Events that excluded ~310 PUBLISHED GSF rows (empty street address, valid city/state/zip). Broadened batch whereClause to require only city+state (internalGeocodingController.ts) → all 716 now qualify, geocoded to city-center via the workflow's existing is_city_only path. Confirmed via psycopg2 that GSF carries no source coordinates (0 lat/lng in scrapedMetadata), so city-center is the only viable path — no speculative coord-extraction written.
-
-**AuctionZip:** swapped the self-identifying bot UA to `getRandomUserAgent()` (matching AuctionNinja, whose only transport difference this was). Deployed + re-run → STILL HTTP 403 on every letter page → confirms a hard Cloudflare datacenter-IP/challenge block, not a UA heuristic. Free server-side path exhausted → one-time Chrome MCP harvest queued (Patrick's directive; the directory loads fine via real browser/residential IP).
-
-**Method/tooling:** 3 parallel general-purpose dev agents (SEO-1, SEO-2, geocoding) + 1 inline AuctionZip edit. All TS-verified 0 errors. ⚠️ VM git mount corrupted (phantom truncations + false ~600-line deletions); Windows files verified intact via file tools. Pushblocks provided for the SEO batch (17 files + controller + roadmap + audit doc) and the AuctionZip UA change.
-
-### S890 — QA MODE. Full 16-item Blocked Queue verification sweep (DB + code, no browser). 1 closed, 2 root-caused, all annotated. BQ: 16 rows.
-
-**Method:** psycopg2 against Railway public proxy + GitHub `main` file reads + local Grep. No Chrome (all 16 items are data/code-verifiable). Every finding has a tool citation.
-
-**Closed:** #12 Sale-Ending-Soon rate cap — confirmed DEPLOYED on main (saleEndingSoonJob.ts sha 180fff9: DAILY_EMAIL_CAP=500 + per-send suppression check). Removed from queue.
-
-**Root-caused (new, actionable):**
-- **Geocoding backlog (P1):** workflow IS live + working (6,366 geocoded Jun 5, 331 Jun 6) but backlog frozen at 15,792 because `getBatchOfUngeocodedSales` fetches newest-500 (createdAt desc, offset 0) = 100% GarageSaleFinder; older backlog never drains. Fix = oldest-first ordering. Quick win for S891.
-- **FB Events 96% un-geocoded (P1):** city-center fallback is correct + deployed but never executes — the 1,307 city-only records sit below GSF at offset 0. Workflow already has a `source` input → a `source=Facebook Events` run drains them now. No code needed for the drain.
-
-**Confirmed still-open (tool evidence, unchanged from S887):** 462 WARM leads no DirectoryClaimEmail (still 462); queue hygiene (2,206 PENDING >30d, 480 BOUNCED); WARM enrichment 3.5% (1,382/39,246); FB Events key unmonitored (lastScrapedAt Jun 1, 5-day stale); dateApproximate not surfaced (Grep: absent from frontend).
-
-**Auction vertical DEAD (consolidated 3 BQ rows):** AuctionNinja (Railway cron removed → GH Actions Cloudflare-blocked), AuctionZip (not even registered in sourceRegistry), NAA (JS-rendered, declared broken) — all 0 sales + 0 organizers. The "rely on the other two" fallback is invalid. Needs a Patrick decision: proxy/headless transport for ≥1 source, or drop the vertical.
-
-**New finding (BQ +1):** FB Marketplace still 0 records / lastScrapedAt NULL despite S888's Cloudflare Worker proxy. Needs a live run + log check.
-
-**#335:** leak re-verified PLUGGED — 0 DirectoryClaimEmail sends since Jun 5 08:00 UTC. Only Gmail reactivation (Patrick) + Jane Thrift re-send remain.
-
-**S890 part 2 — dispatched the remaining (Patrick said go). 3 agents:**
-- **DEV (4 files, TS-verified 0 errors, PENDING PUSH):** (1) geocoding status=PUBLISHED filter + oldest-first → working set 15,792→1,164 (skips 14,628 ENDED sales per Patrick's call); (2) FB Events search-key health alert; (3) "Dates approximate" label on sales/[id].tsx + SaleCard.tsx. Files: internalGeocodingController.ts, run-search-facebook-events.ts, sales/[id].tsx, SaleCard.tsx.
-- **AUCTION INVESTIGATION (no code) — reverses "dead vertical":** all 3 cheaply fixable, no paid proxy/Playwright. AuctionZip = stale CSS regex (~25k records, S-effort parser rewrite, BEST ROI); NAA = sitemap member pages are static (M-effort crawl, "needs Playwright" was wrong); AuctionNinja = relay correct, needs live trigger to confirm (S→M). Full report retained in this session; per-source BQ rows updated.
-- **SHOPIFY REVIEW (no account) — NOT READY:** no OAuth (manual-token model contradicts the guide); API 2024-01 unsupported; markShopifyItemSold inventory call malformed (silent sold-sync failure); no webhook; plaintext token. Needs DEV fix before any store QA. Details in #332 BQ row.
-
-**#332 Shopify:** NOT READY (code bugs, see BQ) — store connection is downstream of the dev fixes.
-
-**S890 part 3 — Patrick said dispatch the auction + Shopify fixes in parallel. 3 more agents, all TS-verified (0 errors backend + frontend, combined check):**
-- **AuctionZip FIX CODED** (auctionZipScraper.ts) — parser r

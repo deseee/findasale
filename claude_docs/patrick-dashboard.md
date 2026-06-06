@@ -1,62 +1,37 @@
-# Patrick's Dashboard — S896 QA Session
+# Patrick's Dashboard — S897 QA Session
 
 ---
 
-## 🔴 You Need to Push (27 Files) — Then CTA1 QA Can Happen
+## ✅ Nothing to Push — Wrap Docs Only
 
-Three BQ fixes are coded and sitting in your working directory. Push them and Railway will deploy the logout fix automatically (~3 min). After deploy, CTA1 can be re-tested.
+The S896 pushblock was already deployed (commit cd8ebe7). This session was verification-only — shopper flows QA.
 
 ```
-git add packages/backend/src/index.ts
-git add packages/frontend/components/SaleCard.tsx
-git add packages/frontend/components/BulkConfirmModal.tsx
-git add packages/frontend/components/CheckoutModal.tsx
-git add packages/frontend/components/DateRangeSelector.tsx
-git add packages/frontend/components/FeedbackMenu.tsx
-git add packages/frontend/components/HuntPassModal.tsx
-git add packages/frontend/components/InstallPrompt.tsx
-git add packages/frontend/components/ItemSearch.tsx
-git add packages/frontend/components/PerformanceDashboard/HoldMetricsCard.tsx
-git add packages/frontend/components/PerformanceDashboard/MetricsGrid.tsx
-git add packages/frontend/components/PerformanceDashboard/RecommendationsPanel.tsx
-git add packages/frontend/components/PerformanceDashboard/TopItemsTable.tsx
-git add packages/frontend/components/PostPerformanceCard.tsx
-git add packages/frontend/components/QuickReplyPicker.tsx
-git add packages/frontend/components/RSVPAttendeesModal.tsx
-git add packages/frontend/components/RecentlyViewed.tsx
-git add packages/frontend/components/ReferralWidget.tsx
-git add packages/frontend/components/SaleSelector.tsx
-git add packages/frontend/components/SalesNearYou.tsx
-git add packages/frontend/components/SocialPostGenerator.tsx
-git add packages/frontend/components/VisualSearchButton.tsx
-git add packages/frontend/pages/index.tsx
-git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git add packages/frontend/pages/organizer/print-inventory.tsx
-git add "packages/frontend/pages/organizer/print-kit/[saleId].tsx"
-git add "packages/frontend/pages/sales/[id].tsx"
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S896 QA: logout rate-limiter fix, hydration fix, dark mode D-002 bulk fix (24 files)"
+git commit -m "S897 wrap: shopper flows QA complete, BQ 16→14, STATE.md + dashboard updated"
 .\push.ps1
 ```
 
 ---
 
-## ✅ S896 Completed — What I Did
+## ✅ S897 Completed — What I Did
 
-**NAA auctioneer directory — working.** The scraper triggered last session (S895) via GitHub Actions completed successfully. I checked the database: **1,151 auctioneer records** are now in there, all tagged as coming from the NAA directory. That item is closed.
+**The S896 pushblock deployed successfully (commit cd8ebe7).** All three fixes are live — logout no longer rate-limited, homepage hydration errors resolved, 83 dark mode text violations fixed across 24 components.
 
-**Geocoding still draining normally.** Still at ~350 ungeocoded published sales, down from 360 last session. No action needed.
+**Logout confirmed working.** I logged in as Leo Thomas (user5), clicked Logout — clean redirect to /login, no rate-limit toast, nav showed Login + Register, refresh kept the logged-out state. The P1 logout bug is closed.
 
-**Three bugs fixed (all pending your push):**
+**Shopper flows fully tested.** A previous weekly audit incorrectly said there were no shopper accounts in production (user1–user7 only). That's wrong — user5 (Leo Thomas) is a shopper. I logged in as Leo and tested the full shopper experience:
 
-1. **You can't log out — fixed.** I confirmed the bug live: clicked Logout, got a "Rate limited, wait 84 seconds" toast, but the login cookie stayed. Navigating anywhere logged me right back in as Bob Smith. The fix is a one-line change: the logout endpoint was incorrectly sharing the same rate-limiter as login. Logout should never be rate-limited. Now it won't be.
+- **Dashboard, 4 tabs:** Overview with his Ranger rank (2,005 XP) ✅ — Subscribed ("No organizers followed yet" + Browse Sales button) ✅ — Pickups ("No pickup appointments yet") ✅ — Brands (typed "Pottery Barn", hit Add, reloaded — brand saved to server) ✅
+- **Notifications:** Bell icon opened 27-item unread panel ✅ — /notifications page showed All/Operational/Discovery tabs ✅ — clicked a message notification and landed in the correct conversation thread ✅
+- **Wishlists page:** Two named collections ("Vintage Jewelry" + "Mid-Century Modern Hunt") showed correctly ✅
+- **RSVP on a sale:** Clicked the Going button — "Going (0)" flipped to "✓ You're going (1)" ✅
+- **Wishlist heart on a sale:** Tapped the heart icon on a sale detail page — turned red/filled, aria-label changed from "Add to wishlist" to "Remove from wishlist" ✅
 
-2. **28 React errors on homepage — fixed.** Root cause found: the sale card component was calling a "is this sale happening today?" check during the initial server render, which uses the server's clock (UTC), then the browser render used the browser's clock (your local time). React saw the mismatch and threw 28 errors. Fixed — the check is now deferred until after the page loads in the browser. No more mismatch.
+**Blocked Queue: 16 → 14.** NAA row removed (resolved last session). Logout bug row removed (resolved this session). Dark mode and hydration rows updated to "fix deployed, Chrome verify pending."
 
-3. **Dark text invisible in dark mode — 83 spots fixed.** The bulk find-and-replace ran across 24 components and pages. Zero static violations remain. If you use the app in dark mode, all that text should now be visible.
-
-**CTA1 QA (logged-out sale page):** Still blocked until you push and Railway deploys the logout fix (~3 min after push). Once deployed, next session will re-verify: navigate the sale page while logged out, confirm the "Remind Me by Email" button is gone, GuestSaleAlert is visible.
+**Next session:** CTA1 QA (now unblocked — test the sale page logged-out), Chrome verify the dark mode + hydration fixes, then apply these shopper flow verifications to the roadmap.
 
 ## S894 — Bookkeeping + verification session complete; one pending push
 
