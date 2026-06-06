@@ -667,5 +667,4 @@ export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
     return { props: { initialSalesData: null }, revalidate: 60 };
   }
 };
-
-export d
+export default HomePage;
