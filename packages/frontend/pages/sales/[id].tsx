@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { GetServerSidePropsContext } from 'next';
+import { GetStaticPaths, GetStaticProps } from 'next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
@@ -665,7 +665,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   // not resolved), which previously caused these early returns to fire and ship an
   // EMPTY <head> — blank og:title/JSON-LD for social unfurlers and crawlers.
   // When `!mounted`, we fall through to the SSR head-rendering block below, which
-  // renders the full og + JSON-LD markup from the getServerSideProps props
+  // renders the full og + JSON-LD markup from the getStaticProps props
   // (ogData / initialData / eventSeriesData). This keeps all interactive/CSR
   // behavior identical once mounted, and is purely additive to SSR head output.
   if (mounted && isLoading) {
@@ -714,7 +714,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 
   // SEO1: During the server render and pre-mount client pass, `sale` (from useQuery)
   // is undefined. These constants must be null-safe so we can fall through to the
-  // SSR head-rendering block below (which renders og + JSON-LD from getServerSideProps
+  // SSR head-rendering block below (which renders og + JSON-LD from getStaticProps
   // props) without crashing. Once mounted, `sale` is always defined here, so all
   // downstream interactive behavior is unchanged.
   const isOrganizer = !!sale && user?.id === sale.organizer.userId;
@@ -967,7 +967,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         // Rendering <SaleOGMeta> again here would inject duplicate OG tags into <head>.
         ogHead
       ) : (
-        // CSR fallback — used only when getServerSideProps didn't return ogData
+        // CSR fallback — used only when getStaticProps didn't return ogData
         sale ? (
           <Head>
             <title>{sale.title} – FindA.Sale</title>
@@ -2428,20 +2428,46 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 export default SaleDetailPage;
 
 /**
- * Feature #33 — Share Card Factory
- * Fetch sale data server-side so OG meta tags are present in the initial HTML
- * before client-side React hydration. This is required for Facebook/Twitter bots
- * which do not execute JavaScript when scraping pages.
+ * Feature #33 — Share Card Factory + SEO-1 fix
+ * Fetch sale data at build/revalidation time (ISR) so OG meta tags + JSON-LD are
+ * present in the initial HTML before client-side React hydration. This is required
+ * for Facebook/Twitter/iMessage/Slack/WhatsApp bots which do not execute JavaScript
+ * when scraping pages.
+ *
+ * SEO-1: Converted from getServerSideProps → getStaticProps + ISR (fallback:'blocking')
+ * to match the working pattern in pages/city/[slug].tsx. Rationale: getServerSideProps
+ * hit the backend/DB on every crawler request and spiked Railway load; ISR caches the
+ * rendered page and revalidates on a fixed interval.
  */
-export async function getServerSideProps(context: GetServerSidePropsContext) {
-  const { id } = context.params as { id: string };
-  const apiUrl =
+
+// Server-only API base. Prefer INTERNAL_API_URL (e.g. Railway internal) to avoid a
+// public round-trip during build/revalidation; fall back to the public API URL.
+function resolveApiBase(): string | null {
+  return (
     process.env.INTERNAL_API_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
-    null;
+    null
+  );
+}
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  // Sale IDs are effectively unbounded and change constantly — do NOT pre-render any
+  // at build time. fallback:'blocking' renders on first request, then ISR caches it.
+  return {
+    paths: [],
+    fallback: 'blocking',
+  };
+};
+
+export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ params }) => {
+  const id = params?.id as string;
+  const apiUrl = resolveApiBase();
 
   if (!apiUrl) {
-    return { props: { ogData: null, initialData: null, eventSeriesData: null } };
+    return {
+      props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false },
+      revalidate: 3600,
+    };
   }
 
   try {
@@ -2452,15 +2478,19 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
 
     if (!res.ok) {
       if (res.status === 404) {
-        return { notFound: true };
+        // Unknown/deleted sale — return 404 but allow ISR to recheck periodically
+        return { notFound: true, revalidate: 3600 };
       }
-      return { props: { ogData: null, initialData: null, eventSeriesData: null } };
+      return {
+        props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false },
+        revalidate: 3600,
+      };
     }
     const sale = await res.json();
 
     if (!sale?.id || !sale?.title) {
       // Sale body empty or malformed — treat as deleted/missing → proper HTTP 404
-      return { notFound: true };
+      return { notFound: true, revalidate: 3600 };
     }
 
     const ogData: OGSaleData = {
@@ -2497,8 +2527,9 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
         title: item.title || '',
         description: item.description || undefined,
         price: item.price || undefined,
+        photoUrls: item.photoUrls || [],
+        category: item.category || undefined,
         condition: item.condition || undefined,
-        status: item.status || 'AVAILABLE',
       })),
       organizer: {
         businessName: sale.organizer?.businessName || '',
@@ -2515,4 +2546,37 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     if (sale.organizer?.id) {
       try {
         const seriesController = new AbortController();
-        cons
+        const seriesTimeout = setTimeout(() => seriesController.abort(), 3000);
+        const seriesType = sale.saleType ? `?saleType=${encodeURIComponent(sale.saleType)}` : '';
+        const seriesRes = await fetch(
+          `${apiUrl}/sales/organizer/${sale.organizer.id}/recurring${seriesType}`,
+          { signal: seriesController.signal }
+        );
+        clearTimeout(seriesTimeout);
+        if (seriesRes.ok) {
+          const series = await seriesRes.json();
+          eventSeriesData = {
+            isRecurring: Boolean(series.isRecurring),
+            organizerName: series.organizerName ?? null,
+            saleType: series.saleType ?? null,
+            sales: Array.isArray(series.sales) ? series.sales : [],
+          };
+        }
+      } catch (seriesErr) {
+        // Non-fatal — EventSeries JSON-LD is optional enrichment
+        console.error('[sales/[id]] getStaticProps EventSeries fetch error:', seriesErr);
+      }
+    }
+
+    return {
+      props: { ogData, initialData, eventSeriesData, noindex },
+      revalidate: 3600, // ISR: sale data changes more often than city pages → 1 hour
+    };
+  } catch (error) {
+    console.error('[sales/[id]] getStaticProps error:', error);
+    return {
+      props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false },
+      revalidate: 3600,
+    };
+  }
+};
