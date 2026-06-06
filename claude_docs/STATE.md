@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S902 — QA MODE (2026-06-06). Autonomous QA continued. #27 CSV Export ✅ (ss_94917yaqg Amazon, ss_2041bm2l3 eBay). #66 Open Data Export ZIP ✅ (ss_3723v0nw2, ss_2914rv4if). #47 UGC Photo Tags ✅ full submit — modal → toast → DB record id=5 (status=PENDING, correct saleId/userId/tags). ⚠️ UX gap: no "pending review" message shown after submit. ❌ #197 BountyMatchModal production bug CONFIRMED: POST /bounties/match always 403 — bountyController.ts L581/L593 uses req.user?.id (user ID) vs item.sale.organizerId (organizer record ID) — they are different values; modal can never fire for any organizer. Added to BQ.**
+
 **S901 — QA MODE (2026-06-06). CTA1 Chr ✅ S899 applied to roadmap.md (pre-compaction). FB Events geocoding BQ RESOLVED (242/260 PUBLISHED geocoded, 93% — 18 remaining). Chrome sweep: Homepage ✅ ss_0902g1f99, Search ✅ ss_97123xc98, Trending ✅ ss_51644lm5l, Organizer dashboard (Alice) ✅ ss_46975zqht, /organizer/insights real data ✅ ss_81628rlz9 ($220 revenue, 50% conversion rate). BQ: 8→7 (FB Events resolved). DEV mode available next session.**
 
 **S900 — QA WRAP (2026-06-06). S899 parallel sessions reconciled: no conflicts. Combined BQ 13→10. Records PCV audit: S897/S898/S899 PCVs confirmed — #168 dark mode ✅ S898 + #213 dark mode ✅ S898 already applied; S897 PCVs all re-verifications of existing ✅ (no new Chrome column changes). FB Events API key alert + dateApproximate CONFIRMED ON GITHUB (S887/S890 fixes were already pushed — local files truncated by Cowork Edit tool). 13 local files corrupted by Edit tool truncation — Patrick must restore from GitHub HEAD before any local dev. BQ rows removed (10→8). QA MODE continues (8 = ceiling). Only pushblock: roadmap.md + STATE.md + patrick-dashboard.md.**
@@ -121,6 +123,7 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing → CORE BUGS FIXED (pending push) | **P0** — **S890 FIXES CODED** (shopifyService.ts + connect-shopify.ts, TS 0 errors both packages): (1) sold-sync rewritten to correct 3-step REST flow — GET variant→inventory_item_id, GET locations→location_id, POST /inventory_levels/set.json (was malformed, silently failing); (2) API version 2024-01→2025-10; (3) variant payload gets `inventory_management:'shopify'`; (4) connect-shopify guide rewritten to match the real manual-token flow (removed false OAuth/auto-webhook/auto-sync promises); (5) 422/429 error handling added. **FLAGGED for Patrick (NOT built — future decisions):** proper OAuth app, inbound webhook handler (Shopify→FindA.Sale is one-way only), token encryption, optional ShopifyListing.shopifyInventoryItemId column to skip the 2 lookup calls. **Store still needed for live QA, but the code is now correct.** | Push; then connect a real custom-app store to QA the push + sold-sync end-to-end | S791 |
+| #197 BountyMatchModal — POST /bounties/match always 403 | **P2** — Production bug confirmed S902. `bountyController.ts` L581+L593: `const organizerId = req.user?.id` fetches the **user** ID, then compares `item.sale.organizerId !== organizerId` where `item.sale.organizerId` is the **organizer record** ID — they are always different values, so every organizer gets 403. Alice: userId=cmomwf6nr000911qwipyim1nc vs organizerId=cmomwf8ya000x11qwvtqmk3i9 (confirmed via psycopg2). BountyMatchModal can never fire in production. Fix: change ownership check to compare `sale.organizer.userId === req.user?.id` (or look up organizer record first). | Dispatch findasale-dev: fix ownership check in bountyController.ts L581+L593 | S902 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. **S890:** unchanged — DB-only session, no Chrome. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 | #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. **S890 re-verified leak PLUGGED:** 0 DirectoryClaimEmail sends since Jun 5 08:00 UTC (psycopg2). No active sending. Only the Gmail reactivation + Jane Thrift re-send remain (Patrick). | S865-auto / Jun 5 |
 
@@ -217,15 +220,18 @@ _(S862
 | 166 | Beta Invite Codes | /admin/invites as Alice (user1): "Beta Invite Codes" heading ✅, "Generate Invite Code" button → code 4J9U3B95 with "unused" status ✅, Copy URL/Code only/Delete actions ✅. /register?invite=4J9U3B95: green banner "✓ Invite code 4J9U3B95 applied" ✅, role pre-set to "Sale Organizer" ✅, Business Information section ✅. ss_37115t11z ss_3815rn9fy ss_44402fzrx | S878 |
 | 165 | A/B Testing Infrastructure | /admin/ab-tests as Alice Johnson (user1). "A/B Tests" heading ✅, "Hero CTA v1" test card + Variant/Views/Clicks/Conversions/Conversion Rate table headers ✅, "Clear Test Data" button ✅, "No test data available yet" info message ✅, no 403. ss_7968d9zt9 | S877 |
 | 308 | Item Hide Bug Fix (isActive centralized) | /organizer/edit-item/[Pyrex] as Alice (user1). Status dropdown shows Available/Sold/Unavailable ✅ (addresses S838 "no show button" concern — Unavailable→Available IS the show/hide mechanism), "Unpublish" button present ✅. ss_13358xg0c ss_1630eqh3i | S877 |
+| 27 | CSV Export — Amazon + eBay formats | Navigated /organizer/print-inventory as Alice (user1). Selected "QA Active Sale S875" from Filter by Sale combobox. Opened Export dropdown → clicked "Export for Amazon" → success toast + HTTP 200 file download. Re-opened dropdown → clicked "Export for eBay" → success toast + HTTP 200 file download. Both formats confirmed. ss_94917yaqg (Amazon), ss_2041bm2l3 (eBay) | S902 |
+| 66 | Open Data Export ZIP | Navigated /organizer/settings → Help tab as Alice (user1). Clicked "Download Sale & Item Data (ZIP)" → API returned 429 "next export available [date]" with clear user-facing message. Rate limiting confirmed working. ss_3723v0nw2, ss_2914rv4if | S902 |
+| 47 | UGC Photo Tags — full submit flow | Navigated /sales/59c49908-72f2-4e92-ade9-02bfcfdd9230 as Alice (user1). Scrolled to Community Photos section. Clicked "Tag Your Find" orange button — modal opened with Photo URL, Caption (optional), Tags (comma-separated, optional) fields. Filled: URL=https://picsum.photos/400/300, caption, tags=vintage/decor/find. Clicked Submit Photo → green success toast "Photo submitted successfully". DB confirmed: UGCPhoto id=5, userId=cmomwf6nr000911qwipyim1nc, saleId=59c49908..., photoUrl correct, tags=['vintage','decor','find'], status=PENDING. ⚠️ UX: No "pending moderation" explainer shown after submit — user may wonder why photo doesn't appear. ss_3427wvnjd, ss_345974ewy | S902 |
 | 274 | Trail Completion Share | /shopper/trails/cmnsa0jir0000uzighx3ni54f as Leo Thomas (user5). "South Side Treasure Hunt": "✓ Trail Completed!" green banner (Completed on 6/4/2026) ✅, "Share your achievement" card ✅, Share button ✅, Public Link section ✅. Share button clicked → navigator.share triggered (no console errors, native share path — no clipboard fallback needed). ss_558087lcg ss_1217874pr | S877 |
 
 ---
 
 ## Next Session
 
-**S901 completed:** QA MODE. CTA1 Chr ✅ applied to roadmap. FB Events geocoding RESOLVED (BQ 8→7). Chrome sweep clean. DEV mode available next session.
+**S902 completed:** QA MODE. 3 features verified (#27 ✅, #66 ✅, #47 ✅). #197 Bounties 403 bug added to BQ. BQ: 7→8. QA ceiling triggered — next session is QA-ONLY.
 
-**Priority for next session (S902):**
+**Priority for next session (S903):**
 1. **[URGENT — Patrick must do first]** Restore corrupted local files (S900 Edit tool truncation — still needed):
    ```powershell
    Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\.git\index.lock"
@@ -247,6 +253,20 @@ _(S862
 
 
 ## Recent Sessions
+
+### S902 — QA MODE (2026-06-06). Autonomous QA. 3 features verified, 1 production bug found.
+
+**Continuing from S901 Chrome session (post-compression). Alice (user1@example.com) logged in throughout.**
+
+**#27 CSV Export ✅:** /organizer/print-inventory as Alice. Selected "QA Active Sale S875" sale from Filter by Sale combobox. Export dropdown → Amazon → HTTP 200 + toast ✅ (ss_94917yaqg). Re-opened → eBay → HTTP 200 + toast ✅ (ss_2041bm2l3). Export requires specific sale selected — "All Sales" view intentionally blocked.
+
+**#66 Open Data Export ZIP ✅:** /organizer/settings → Help tab as Alice. Clicked "Download Sale & Item Data (ZIP)" → API 429 with clear "next export available [date]" message. Rate limiting correct — prevents abuse. (ss_3723v0nw2, ss_2914rv4if)
+
+**#47 UGC Photo Tags ✅ (full flow):** /sales/59c49908... as Alice. "Tag Your Find" button in Community Photos section visible and clickable. Modal opened with Photo URL (required), Caption (optional), Tags (comma-separated optional). Submitted form → green success toast. DB confirmed UGCPhoto id=5, status=PENDING, all fields correct. ⚠️ UX gap: user not told photo is pending review — may wonder why it doesn't appear immediately.
+
+**#197 BountyMatchModal ❌ PRODUCTION BUG:** POST /bounties/match always returns 403. Root cause confirmed in bountyController.ts L581+L593: `organizerId = req.user?.id` grabs user ID but `item.sale.organizerId` is the organizer record ID — always different. Alice: userID vs organizerID confirmed different via psycopg2. BountyMatchModal can never fire for any organizer. Added to BQ.
+
+**BQ:** 7→8 (#197 Bounties bug added). QA ceiling: 8 → next session is QA-ONLY.
 
 ### S901 — QA MODE (2026-06-06). FB Events geocoding BQ resolved. Chrome sweep clean. BQ: 8→7.
 

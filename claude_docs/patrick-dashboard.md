@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S901 Wrap
+# Patrick's Dashboard — S902 Wrap
 
 ---
 
@@ -15,65 +15,61 @@ cd C:\Users\desee\ClaudeProjects\FindaSale
 git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
 ```
 
-**Why:** If you push without restoring, 380+ lines of production code get deleted from GitHub — including the entire `_app.tsx` providers (RateLimitListener, Sentry, OnboardingShower, etc.) and the complete schema.prisma.
+**Why:** If you push without restoring, 380+ lines of production code get deleted from GitHub — including the entire `_app.tsx` providers and complete schema.prisma.
 
 ---
 
-## ✅ Push — S901 Wrap Docs
+## ✅ Push — S902 Wrap Docs
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
-git add claude_docs/strategy/roadmap.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S901 wrap — FB Events geocoding BQ resolved, BQ 8→7, Chrome sweep clean"
+git commit -m "docs: S902 wrap — #27/#66/#47 QA verified, #197 Bounties 403 bug added to BQ, BQ 7→8"
 .\push.ps1
 ```
 
 ---
 
-## S901 — What I Found
+## S902 — What I Found
 
-### FB Events Geocoding — RESOLVED
+### ✅ #27 CSV Export
+/organizer/print-inventory as Alice. Must select a specific sale (not "All Sales") before Export dropdown activates — that's intentional behavior. Tested Amazon and eBay formats — both returned HTTP 200 with success toasts and file downloads. Working correctly.
 
-The BQ row filed in S887 ("96% of FB Events un-geocoded") is now resolved. I queried the live Railway DB:
+### ✅ #66 Open Data Export ZIP
+/organizer/settings → Help tab → "Download Sale & Item Data (ZIP)" returned HTTP 429 with a clear "next export available [date]" message. Rate-limiting is working exactly as designed.
 
-- S887 baseline: ~96% ungeocoded
-- S901 check: **242 of 260 PUBLISHED FB Events have lat/lng** (93% geocoded — only 18 remaining)
+### ✅ #47 UGC Photo Tags (Full Submit)
+/sales/59c49908 as Alice. "Tag Your Find" button visible in Community Photos section. Modal opened — filled Photo URL, Caption, Tags fields. Submit → green success toast. DB confirmed: UGCPhoto record created with correct saleId, userId, tags=['vintage','decor','find'], status=PENDING. ⚠️ **UX gap**: after submitting, user sees no "pending review" explainer — they may wonder why the photo doesn't appear. Easy fix but not blocking.
 
-The geocoding fix pushed in S890 worked. BQ row removed.
+### ❌ #197 BountyMatchModal — PRODUCTION BUG
+`POST /bounties/match` returns 403 for **every organizer in production**. Root cause confirmed in code: `bountyController.ts` L581+L593 gets `organizerId = req.user?.id` (the User ID) and then compares it against `item.sale.organizerId` (the Organizer record ID) — these are completely different values. Alice's User ID ≠ Alice's Organizer ID (verified via DB query). The BountyMatchModal can **never** fire. Added to BQ for dev fix.
 
-### Chrome Sweep — All Clean
+---
 
-Ran a full smoke test of the live site. Everything is holding:
+## ⚠️ BQ Hit 8 — Next Session is QA-ONLY
 
-| Page | Result |
-|------|--------|
-| Homepage (logged-out) | ✅ ss_0902g1f99 |
-| /search?q=estate+sale | ✅ 10 results, filters, Plan Route ss_97123xc98 |
-| /trending | ✅ Hot sales with HOT badges ss_51644lm5l |
-| Organizer dashboard (Alice) | ✅ LIVE sale, action buttons, storefront ss_46975zqht |
-| /organizer/insights | ✅ $220 revenue, 50% conversion, real data ss_81628rlz9 |
+BQ went from 7→8 with #197 added. The ≥8 ceiling triggers mandatory QA-ONLY mode. No new feature dev until BQ drops below 8.
 
 ---
 
 ## 🔴 Patrick Decisions Required
 
 ### 1. FB Marketplace — DROP or pursue?
-Confirmed dead end: CF Worker proxy (S888) returns 0 listings across every metro. FB soft-blocks datacenter IPs. **Recommendation: DROP.** Graph API OAuth (#365) is the legitimate long-term path.
+Confirmed dead end: CF Worker proxy returns 0 listings. FB soft-blocks datacenter IPs. **Recommendation: DROP.** Graph API OAuth (#365) is the long-term path.
 
 ### 2. #335 Outreach Resume
-Queue is clean (37 PENDING, 0 BOUNCED). When ready:
+When ready:
 1. Reactivate outreach@finda.sale at **admin.google.com → Directory → Users → outreach@finda.sale → Reactivate**
 2. Set `OUTREACH_ENABLED=true` on Railway backend
 3. Re-enable `pipeline-outreach-emails.yml` on GitHub
 4. Re-trigger Jane Thrift payout email after reactivation
 
 ### 3. #332 Shopify
-S890 fixes are on GitHub (correct REST flow, API version 2025-10, error handling). To QA: connect a real Shopify custom-app store.
+S890 fixes are on GitHub (correct REST flow, API version 2025-10). Need a real Shopify custom-app store to QA end-to-end.
 
 ### 4. #230 Smart Buyer Widget
-Publish a sale on user1 (Alice Johnson) → QA agent can then verify SmartBuyerWidget shows shopper data on organizer dashboard.
+Publish a sale on user1 (Alice Johnson) → QA can verify SmartBuyerWidget shows shopper data.
 
 ---
 
@@ -81,25 +77,12 @@ Publish a sale on user1 (Alice Johnson) → QA agent can then verify SmartBuyerW
 
 | Area | Status |
 |------|--------|
-| Blocked Queue | **7 rows** (below ≥8 ceiling — DEV mode available next session) |
-| FB Events geocoding | ✅ RESOLVED S901 — 93% geocoded (18 remaining) |
+| Blocked Queue | **8 rows** — QA-ONLY ceiling triggered for next session |
+| S902 QA results | ✅ #27 CSV Export, #66 Data ZIP, #47 UGC Photo submit |
+| #197 Bounties | ❌ New BQ P2 — POST /bounties/match always 403 (controller bug) |
 | Local files | ⚠️ 13 truncated — restore before dev work (see above) |
 | D-002 dark mode | ✅ RESOLVED S898 Chrome-verified |
-| Geocoding backlog | ✅ 70 un-geocoded PUBLISHED (was 716) |
-| Hydration #418/#425 | ✅ RESOLVED S899 Chrome-verified |
-| Outreach queue | ✅ Clean (37 PENDING) — awaiting Gmail reactivation |
-| CTA1 logged-out | ✅ Chr verified S899 — roadmap updated S901 |
-| FB Marketplace | ❌ Dead end — awaiting your DROP decision |
-| #332 Shopify | ✅ Fixes on GitHub — needs real test store for QA |
-| #335 Outreach | Needs you: reactivate Gmail → OUTREACH_ENABLED=true |
-| NAA scraper | ✅ 1,151 organizer records (S896) |
-
----
-
-## Next Session (S902)
-
-Session type: **DEV MODE** (BQ = 7, below QA ceiling).
-
-1. Restore local files (your action — see urgent block above)
-2. Push S901 wrap docs (pushblock above)
-3. Dispatch dev work on roadmap BROKEN items
+| Hydration errors | ✅ RESOLVED S899 Chrome-verified |
+| Logout bug | ✅ RESOLVED S897 Chrome-verified |
+| FB Events geocoding | ✅ RESOLVED S901 — 93% geocoded |
+| Outreach | 🔴 Suspended — Patrick must reactivate (#335) |
