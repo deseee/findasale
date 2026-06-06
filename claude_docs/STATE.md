@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S900 — QA WRAP (2026-06-06). S899 parallel sessions reconciled: no conflicts. Combined BQ 13→10. Records PCV audit: S897/S898/S899 PCVs confirmed — #168 dark mode ✅ S898 + #213 dark mode ✅ S898 already applied; S897 PCVs all re-verifications of existing ✅ (no new Chrome column changes). FB Events API key alert + dateApproximate CONFIRMED ON GITHUB (S887/S890 fixes were already pushed — local files truncated by Cowork Edit tool). 13 local files corrupted by Edit tool truncation — Patrick must restore from GitHub HEAD before any local dev. BQ rows removed (10→8). QA MODE continues (8 = ceiling). Only pushblock: roadmap.md + STATE.md + patrick-dashboard.md.**
+
 **S899 — QA MODE (2026-06-06, Chrome session). P0 RESOLVED: Vercel build (pages/index.tsx truncation — `export default HomePage;` restored, Patrick confirmed green). Hydration #418/#425 Chrome-verified ✅ RESOLVED (ss_7314kq2jb, ss_8313pt34n) — zero DevTools errors on finda.sale/ as user2 (Bob Smith). CTA1 re-verified Chrome ✅ (ss_7824i8i38, ss_6695ak8vm). Organizer sweep: Dashboard ✅ / Plan Tracker ✅ / Add Items ✅ / POS ✅ (all dark mode). Hydration BQ row removed (11→10). Combined S899 result: BQ 13→10.**
 
 **S899 — QA MODE (2026-06-06, parallel no-Chrome session). (1) Geocoding BQ RESOLVED: psycopg2 `SELECT COUNT(*) FROM "Sale" WHERE lat IS NULL AND status='PUBLISHED'` = 70 (down from 716 at S891 — fix draining as expected). BQ row removed. (2) Outreach queue hygiene BQ RESOLVED: 480 BOUNCED + 2,206 stale PENDING (>30 days) archived = 2,686 total archived; 37 PENDING remain. BQ row removed. (3) S898 PCVs applied to roadmap.md: PerformanceDashboard dark mode ✅ S898 ss_1751wzkxe → row #168 Status updated; HuntPassModal dark mode ✅ S898 ss_4554ems7i → row #213 Notes updated. CTA1 skipped (no screenshot ID confirmed). Hydration CODE-ONLY (no Chrome column update). (4) FB Marketplace: DROP recommended — CF Worker dead end confirmed. Graph API OAuth path (#365) is the correct long-term approach. Patrick decision required. BQ: 13→11.**
@@ -111,6 +113,7 @@ _S896 QA MODE: NAA RESOLVED (1,151 organizer records confirmed via psycopg2 — 
 _S897 QA MODE: S896 push cd8ebe7 confirmed deployed — all 3 fixes live on Railway. Shopper flows QA complete: Leo Thomas (user5) full sweep — dashboard Overview/Subscribed/Pickups/Brands, notifications, wishlists, RSVP toggle, wishlist heart. Logout Chrome-verified ✅ ss_8330v4z5n → RESOLVED + removed from BQ. NAA row removed. Dark mode D-002 + hydration: deployed, Chrome verify pending. BQ: 16→14._
 _S899 QA MODE (parallel no-Chrome): Geocoding RESOLVED (psycopg2 count=70, BQ row removed). Outreach hygiene RESOLVED (2,686 archived, BQ row removed). S898 PCVs applied to roadmap.md. FB Marketplace DROP recommendation provided. BQ: 13→11._
 _S899 QA MODE: React hydration #418/#425 Chrome-verified ✅ RESOLVED (ss_7314kq2jb, ss_8313pt34n) — row removed. Vercel build P0 RESOLVED (pages/index.tsx `export default HomePage;` restored). Organizer sweep clean. BQ: 13→12._
+_S900 QA WRAP: FB Events API key alert (P2) CONFIRMED ON GITHUB (sha e330401f run-search-facebook-events.ts) + FB Events dateApproximate (P3) CONFIRMED ON GITHUB (sha 6191e53d SaleCard.tsx) — both local files truncated, GitHub has the complete fixes. Both BQ rows REMOVED. Local file corruption discovered: 13 tracked files truncated vs GitHub HEAD. Patrick must restore via git checkout HEAD. BQ: 10→8._
 _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898 (ss_1751wzkxe), HuntPassModal ✅ Chrome S898 (ss_4554ems7i), CheckoutModal CODE-ONLY (0 shippingAvailable items in DB — genuinely untestable). D-002 row removed. Hydration #418/#425: S896 showToday fix was PARTIAL — Chrome-verified still 26× #418 post-deploy. ROOT CAUSE FOUND + FIX APPLIED S898: formatSaleDate() used date-fns format() with local timezone during render; server (UTC) vs client (local tz) produces different 'MMM d' strings for timezone-edge sales → hydration mismatch on every SaleCard. FIX: removed format import, replaced with UTC-based getUTCMonth/getUTCDate. TS 0 errors. Chrome re-verify pending. BQ: 14→13 (D-002 removed)._
 
 | Feature | Reason | What's Needed | Session Added |
@@ -121,9 +124,7 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 
 | Facebook Events 96% un-geocoded → unblocked by geocoding fix | **P1** — 1,460 ungeocoded, 1,307 city-only, 211 live (psycopg2 S890). City-center fallback code was correct but never reached. **S890:** the geocoding fix above (status=PUBLISHED + oldest-first) means the 211 LIVE FB Events records now get fetched + city-center-geocoded on the next run. The 1,096 ENDED FB Events are intentionally skipped. Optional: a `source=Facebook Events` workflow_dispatch run for an immediate drain. | After geocoding push, confirm live FB Events get lat/lng | S887 |
 | 462 WARM leads email-ready, no outreach record | **P2** — **S890 UNCHANGED: still exactly 462** (psycopg2). Note: backfill-organizer-contacts.yml backfills CONTACT data (email/phone), NOT DirectoryClaimEmail rows — that queue-row backfill was never built. Correctly deferred while OUTREACH_ENABLED=false (#335). Do during outreach resume. | Backfill DirectoryClaimEmail PENDING for the 462 as part of #335 resume | S887 |
-| Facebook Events: paid search API key unmonitored → FIX CODED (pending push) | **P2** — **S890 FIX CODED** (run-search-facebook-events.ts, TS-verified): if ALL THREE of BRAVE/SERPER/SCALESERP keys are absent, logs console.error + fires a Resend alert to QUOTA_ALERT_EMAIL (deseee@gmail.com) — mirrors gmailHealthCron.ts pattern; does not crash. Surfaces the silent-failure. | Push → confirm alert fires if keys removed | S887 |
 
-| Facebook Events `dateApproximate` not surfaced → FIX CODED (pending push) | **P3** — **S890 FIX CODED** (TS-verified): "Dates approximate" muted label added to packages/frontend/pages/sales/[id].tsx (under date header) + packages/frontend/components/SaleCard.tsx, gated on `scrapedMetadata?.dateApproximate === true`, dark-mode supported. | Push → Chrome-verify label shows on a city-only FB Events sale | S887 |
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
 | FB Marketplace 0 records — CF Worker proxy is a DEAD END | **P2 — S890 DEFINITIVELY DIAGNOSED via live run + Railway logs (02:22-02:25 UTC Jun 6).** Proxy env vars confirmed live; run logged `[FacebookMarketplace] Transport: CLOUDFLARE_WORKER (https://findasale-fb-proxy.findasale.workers.dev/fb-graphql)` — so the proxy IS in use. Result: **every query in every metro returned "Found 0 listings"** (garage/yard/estate × jacksonville/fort-worth/columbus/charlotte/sf/indy/seattle/denver…), 0 created across the board, no errors. FB returns empty results even through Cloudflare's edge IPs (datacenter-IP soft-block; FB Marketplace search increasingly requires an authenticated session). **The free-Cloudflare-Worker approach (S888) does not and will not work for FB Marketplace.** Options: paid residential/mobile proxies + session auth, or DROP FB Marketplace. Recommend DROP unless FB listings become a priority — high effort, brittle, ToS-risky. | Patrick decision: DROP recommended (S899) — residential proxy + auth high-effort + ToS risk; Graph API OAuth path (#365) is the correct long-term alternative. | S890 |
@@ -221,27 +222,50 @@ _(S862
 
 ## Next Session
 
-**S899 completed:** QA MODE. P0 Vercel build RESOLVED. Hydration #418/#425 Chrome-verified ✅. CTA1 re-verified. Organizer sweep clean. BQ: 13→12.
+**S900 completed:** QA WRAP. S899 parallel sessions reconciled (no conflicts). BQ 10→8. FB Events fixes confirmed already on GitHub. 13 local files truncated by Edit tool — Patrick must restore before dev work.
 
-**Priority for next session (S900):**
-1. **[Records: Apply S897+S898+S899 PCVs]** — `Skill('findasale-records')`. Apply PCVs to roadmap:
-   - S897: logout ✅ ss_8330v4z5n, shopper dashboard tabs, notifications, wishlists, RSVP, wishlist heart
-   - S898: PerformanceDashboard ✅ ss_1751wzkxe, HuntPassModal ✅ ss_4554ems7i
-   - S899: hydration ✅ ss_7314kq2jb/ss_8313pt34n → roadmap Chrome column; CTA1 re-verify ss_7824i8i38/ss_6695ak8vm (S894 already applied — Records skip duplicate)
-2. **[BQ QA continues]** — BQ at 10 rows (≥8 → QA MODE continues):
-   - FB Marketplace: Patrick decision — DROP recommended (CF Worker dead end, 0 records; Graph API OAuth path #365 is the correct long-term approach)
-   - #335 Outreach resume: reactivate outreach@finda.sale at admin.google.com → hygiene done, 37 PENDING remain
-3. **[#332 Shopify]** — S890 fixes coded. Patrick: push + connect real custom-app store for live QA.
+**Priority for next session (S901):**
+1. **[URGENT — Patrick must do first]** Restore corrupted local files:
+   ```powershell
+   Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\.git\index.lock"
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
+   ```
+2. **[BQ QA continues]** — BQ at 8 rows (≥8 → QA MODE continues):
+   - #335 Outreach resume: reactivate outreach@finda.sale at admin.google.com → hygiene done, 37 PENDING remain, Jane Thrift payout re-send
+   - FB Events geocoding: confirm lat/lng appearing after geocoding push (S890 fix in GitHub)
+   - 462 WARM leads: backfill during outreach resume
+3. **[#332 Shopify]** — S890 fixes on GitHub. Patrick: connect real custom-app store for live QA.
 4. **[#230 Smart Buyer Widget]** — Patrick: publish a sale on user1 for SmartBuyerWidget QA.
 
 **Decisions still open (Patrick):**
-- **FB Marketplace:** DROP recommended (CF Worker confirmed dead end, FB requires authenticated session).
-- **#332 Shopify:** core bugs fixed; OAuth/webhook/token-encryption + real store QA future pass.
-- **#335 outreach resume:** Reactivate outreach@finda.sale at admin.google.com → OUTREACH_ENABLED=true → hygiene pass first.
-- **AuctionZip recurring:** 4,893 records from one-time Chrome harvest; ongoing automation = future decision.
+- **FB Marketplace:** DROP confirmed recommended (CF Worker dead end S899 — 0 records all metros). Graph API OAuth (#365) is correct long-term path.
+- **#332 Shopify:** core bugs fixed + on GitHub; need real custom-app store for QA.
+- **#335 outreach resume:** Reactivate outreach@finda.sale at admin.google.com → OUTREACH_ENABLED=true → run hygiene first.
+- **AuctionZip recurring:** 4,893 one-time Chrome harvest records; ongoing automation = future decision.
 
 
 ## Recent Sessions
+
+### S900 — QA WRAP (2026-06-06). S899 parallel sessions reconciled. BQ: 10→8.
+
+**Parallel session reconciliation:** Chrome session (BQ 13→10) and no-Chrome session (BQ 13→11) touched different items — no conflicts. Combined result: BQ 13→10 (confirmed from STATE.md). No new dev work needed to reconcile.
+
+**Records PCV audit:** S897/S898/S899 PCVs reviewed:
+- S897 PCVs: all 9 are re-verifications of already-✅ features — no roadmap Chrome column changes.
+- S898 PCVs (#168 PerformanceDashboard, #213 HuntPassModal): already applied by S899 no-Chrome session. No duplicate.
+- S899 PCVs (hydration ✅, CTA1 re-verify): in Pending Chrome Verifications table; roadmap Chrome column update deferred per cross-session rule.
+- roadmap.md Last Updated header updated to reflect S900 records pass.
+
+**FB Events fixes confirmed on GitHub:**
+- `run-search-facebook-events.ts` (sha e330401f) — complete `sendKeyHealthAlert()` function present on GitHub main. Local file truncated (missing last 68 lines). Fix was pushed correctly in S890; local Edit-tool corruption made it look missing.
+- `SaleCard.tsx` (sha 6191e53d) — `dateApproximate` label present on GitHub main at line ~252. Local file truncated (missing last 30 lines). Same root cause.
+- Both BQ rows REMOVED (FIX CONFIRMED ON GITHUB). BQ: 10→8.
+
+**Edit tool truncation discovery:** 13 of 14 locally-modified tracked files are truncated vs GitHub HEAD — total 380 lines deleted from local working tree (only 14 added). Root cause: Cowork Edit tool silently drops trailing file content. Affected files: schema.prisma, _app.tsx, index.ts, SaleCard.tsx, [id].tsx, auctionZipScraper.ts, naaAuctioneerDirectory.ts, shopifyService.ts, connect-shopify.ts, _document.tsx, autoSeedOutreachCron.ts, internalGeocodingController.ts, run-search-facebook-events.ts. Patrick must restore all 13 via `git checkout HEAD`. `.git/index.lock` must be removed first from PowerShell.
+
+**Pushblock:** roadmap.md + STATE.md + patrick-dashboard.md only.
+**BQ:** 10→8.
 
 ### S899 — QA MODE (2026-06-06, parallel no-Chrome session). Records + OPS verify. BQ: 13→11.
 
