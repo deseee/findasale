@@ -13,6 +13,7 @@
  * Usage: npx ts-node src/scripts/run-search-facebook-events.ts
  */
 
+import { Resend } from 'resend';
 import {
   scrapeFacebookEventsForMetro,
   SEARCH_METROS,
@@ -28,6 +29,30 @@ const SERPER_KEY      = process.env.SERPER_API_KEY;
 const SCALESERP_KEY   = process.env.SCALESERP_API_KEY;
 const ORGANIZER_ID    = process.env.FB_EVENTS_ORGANIZER_ID;
 
+/**
+ * Send an out-of-band alert via Resend (matches gmailHealthCron.ts pattern).
+ * Used to surface silent failures — e.g. all search API keys missing/expired.
+ */
+async function sendKeyHealthAlert(subject: string, html: string): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error('[run-fb-events] RESEND_API_KEY not set — cannot send health alert');
+    return;
+  }
+  try {
+    const resend = new Resend(apiKey);
+    await resend.emails.send({
+      from: process.env.SES_FROM_EMAIL || 'FindA.Sale Alerts <alerts@send.finda.sale>',
+      to: process.env.QUOTA_ALERT_EMAIL || 'deseee@gmail.com',
+      subject,
+      html,
+    });
+    console.error(`[run-fb-events] Health alert sent: ${subject}`);
+  } catch (err) {
+    console.error('[run-fb-events] Failed to send Resend health alert:', err);
+  }
+}
+
 async function main() {
   if (!SCRAPER_KEY) {
     throw new Error('INTERNAL_SCRAPER_KEY environment variable is not set');
@@ -37,6 +62,25 @@ async function main() {
   if (!SERPER_KEY)    console.warn('[run-fb-events] No SERPER_API_KEY — Brave/ScaleSerp only, no Serper backup');
   if (!SCALESERP_KEY) console.warn('[run-fb-events] No SCALESERP_API_KEY — no ScaleSerp backup');
   if (!ORGANIZER_ID)  console.log('[run-fb-events] No FB_EVENTS_ORGANIZER_ID — will use system organizer');
+
+  // If ALL three search keys are missing, the scraper produces zero results and
+  // fails silently. Surface this loudly via console + Resend so it doesn't go stale.
+  if (!BRAVE_KEY && !SERPER_KEY && !SCALESERP_KEY) {
+    console.error(
+      '[run-fb-events] 🔴 ALL search API keys missing (BRAVE / SERPER / SCALESERP) — ' +
+      'Facebook Events import will produce ZERO results. This is a silent failure.'
+    );
+    await sendKeyHealthAlert(
+      '🔴 FB Events import DEAD — all search API keys missing',
+      `
+        <p><strong>🔴 CRITICAL:</strong> The Facebook Events import has no usable search API key.</p>
+        <p>All three keys are absent: <code>BRAVE_API_KEY</code>, <code>SERPER_API_KEY</code>, and <code>SCALESERP_API_KEY</code>.</p>
+        <p>The scraper will produce <strong>zero results</strong> until at least one key is restored — the import is effectively dead and failing silently.</p>
+        <p><strong>To fix:</strong> Restore or renew at least one search API key in the GitHub Actions secrets / Railway env vars.</p>
+        <p style="color:#666;font-size:12px">FindA.Sale · run-search-facebook-events.ts</p>
+      `
+    );
+  }
 
   console.log(
     `[run-fb-events] Starting — ${SEARCH_METROS.length} metros, ingest URL: ${INGEST_URL}`

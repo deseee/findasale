@@ -50,6 +50,7 @@ interface Sale {
   locked?: boolean;
   minutesUntilUnlock?: number;
   sourceName?: string; // P2: Disclosure label for scraped sales
+  scrapedMetadata?: Record<string, unknown> | null; // P3: scraped enrichment (e.g. dateApproximate)
 }
 
 interface BadgeConfig {
@@ -244,6 +245,11 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
           <p className="text-xs text-warm-600 dark:text-gray-400">
             {formatSaleDate(sale.startDate)} – {formatSaleDate(sale.endDate)}&nbsp;·&nbsp;{sale.city}, {sale.state}
           </p>
+          {(sale.scrapedMetadata as { dateApproximate?: boolean } | null | undefined)?.dateApproximate === true && (
+            <p className="text-[11px] text-warm-500 dark:text-gray-500 mt-0.5">
+              Dates approximate
+            </p>
+          )}
         </Link>
 
         <div className="pt-3 border-t border-warm-200 dark:border-gray-700 flex flex-col gap-2">
