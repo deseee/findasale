@@ -85,18 +85,18 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       {/* Revenue Card */}
       <div className="bg-white rounded-lg shadow p-6 border-l-4 border-green-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Total Revenue</p>
-        <p className="text-3xl font-bold text-warm-900 mb-3">${data.revenue.total.toFixed(2)}</p>
+        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">${data.revenue.total.toFixed(2)}</p>
         <p className="text-xs text-warm-600 mb-3">
           Net: ${data.revenue.organiserNetRevenue.toFixed(2)}
         </p>
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
             <p className="text-warm-600">Online</p>
-            <p className="font-bold text-warm-900">{data.revenue.sourceCounts.online}</p>
+            <p className="font-bold text-warm-900 dark:text-warm-100">{data.revenue.sourceCounts.online}</p>
           </div>
           <div>
             <p className="text-warm-600">POS</p>
-            <p className="font-bold text-warm-900">{data.revenue.sourceCounts.pos}</p>
+            <p className="font-bold text-warm-900 dark:text-warm-100">{data.revenue.sourceCounts.pos}</p>
           </div>
         </div>
       </div>
@@ -104,7 +104,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       {/* Conversion Rate Card */}
       <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Conversion Rate</p>
-        <p className="text-3xl font-bold text-warm-900 mb-3">
+        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
           {(data.purchasingMetrics.conversionRate * 100).toFixed(1)}%
         </p>
         <p className="text-xs text-warm-600 mb-2">
@@ -113,11 +113,11 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
             <p className="text-warm-600">Buyers</p>
-            <p className="font-bold text-warm-900">{data.purchasingMetrics.totalUniqueBuyers}</p>
+            <p className="font-bold text-warm-900 dark:text-warm-100">{data.purchasingMetrics.totalUniqueBuyers}</p>
           </div>
           <div>
             <p className="text-warm-600">Avg Cart</p>
-            <p className="font-bold text-warm-900">
+            <p className="font-bold text-warm-900 dark:text-warm-100">
               ${data.purchasingMetrics.averageCartValue.toFixed(2)}
             </p>
           </div>
@@ -127,7 +127,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       {/* Health Score Card */}
       <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Avg Health Score</p>
-        <p className="text-3xl font-bold text-warm-900 mb-3">
+        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
           {data.itemMetrics.aggregateHealthScore.toFixed(0)}
         </p>
         <div className="w-full bg-warm-200 rounded-full h-2 mb-2">
@@ -156,7 +156,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       {/* Sell-Through Rate Card */}
       <div className="bg-white rounded-lg shadow p-6 border-l-4 border-amber-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Sell-Through Rate</p>
-        <p className="text-3xl font-bold text-warm-900 mb-3">
+        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
           {totalItems > 0 ? ((soldItems / totalItems) * 100).toFixed(0) : 0}%
         </p>
         <p className="text-xs text-warm-600 mb-3">
@@ -184,20 +184,20 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       {/* Total Items Card */}
       <div className="bg-white rounded-lg shadow p-6 border-l-4 border-indigo-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Total Items Listed</p>
-        <p className="text-3xl font-bold text-warm-900 mb-3">{totalItems}</p>
+        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">{totalItems}</p>
         <p className="text-xs text-warm-600 mb-3">
           {soldItems} sold, {unsoldItems} remaining
         </p>
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
             <p className="text-warm-600">Categories</p>
-            <p className="font-bold text-warm-900">
+            <p className="font-bold text-warm-900 dark:text-warm-100">
               {data.itemMetrics.categoryBreakdown.length}
             </p>
           </div>
           <div>
             <p className="text-warm-600">Top Item</p>
-            <p className="font-bold text-warm-900">
+            <p className="font-bold text-warm-900 dark:text-warm-100">
               {data.itemMetrics.topSellingItems.length > 0
                 ? data.itemMetrics.topSellingItems[0].unitsSold
                 : 0}{' '}
@@ -212,19 +212,19 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Top Item</p>
         {data.itemMetrics.topSellingItems.length > 0 ? (
           <>
-            <p className="text-lg font-bold text-warm-900 mb-2 truncate">
+            <p className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2 truncate">
               {data.itemMetrics.topSellingItems[0].title}
             </p>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <p className="text-warm-600">Units Sold</p>
-                <p className="font-bold text-warm-900">
+                <p className="font-bold text-warm-900 dark:text-warm-100">
                   {data.itemMetrics.topSellingItems[0].unitsSold}
                 </p>
               </div>
               <div>
                 <p className="text-warm-600">Revenue</p>
-                <p className="font-bold text-warm-900">
+                <p className="font-bold text-warm-900 dark:text-warm-100">
                   ${data.itemMetrics.topSellingItems[0].totalRevenue.toFixed(2)}
                 </p>
               </div>
@@ -241,7 +241,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       {/* Hold Conversion Card */}
       <div className="bg-white rounded-lg shadow p-6 border-l-4 border-orange-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Hold Conversion</p>
-        <p className="text-3xl font-bold text-warm-900 mb-3">
+        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
           {data.holdMetrics.holdsCreated > 0
             ? ((data.holdMetrics.holdsConverted / data.holdMetrics.holdsCreated) * 100).toFixed(0)
             : 0}
@@ -253,11 +253,11 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
             <p className="text-warm-600">Expired</p>
-            <p className="font-bold text-warm-900">{data.holdMetrics.holdsExpired}</p>
+            <p className="font-bold text-warm-900 dark:text-warm-100">{data.holdMetrics.holdsExpired}</p>
           </div>
           <div>
             <p className="text-warm-600">Cancelled</p>
-            <p className="font-bold text-warm-900">{data.holdMetrics.holdsCancelled}</p>
+            <p className="font-bold text-warm-900 dark:text-warm-100">{data.holdMetrics.holdsCancelled}</p>
           </div>
         </div>
       </div>
@@ -276,13 +276,13 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
             <p className="text-warm-600">Repeat Buyers</p>
-            <p className="font-bold text-warm-900">
+            <p className="font-bold text-warm-900 dark:text-warm-100">
               {(data.purchasingMetrics.repeatBuyerRate * 100).toFixed(0)}%
             </p>
           </div>
           <div>
             <p className="text-warm-600">Avg Price</p>
-            <p className="font-bold text-warm-900">
+            <p className="font-bold text-warm-900 dark:text-warm-100">
               ${data.revenue.sourceCounts.online > 0 ? (data.revenue.total / (data.revenue.sourceCounts.online + data.revenue.sourceCounts.pos)).toFixed(2) : '—'}
             </p>
           </div>

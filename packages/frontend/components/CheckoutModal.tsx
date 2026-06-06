@@ -106,25 +106,25 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
         <div className="mb-4 p-4 bg-warm-50 rounded-lg text-left space-y-3">
           <div>
             <p className="text-xs text-warm-500">Item</p>
-            <p className="font-semibold text-warm-900">{itemTitle}</p>
+            <p className="font-semibold text-warm-900 dark:text-warm-100">{itemTitle}</p>
           </div>
 
           <div>
             <p className="text-xs text-warm-500">Total Paid</p>
-            <p className="text-lg font-bold text-warm-900">${total.toFixed(2)}</p>
+            <p className="text-lg font-bold text-warm-900 dark:text-warm-100">${total.toFixed(2)}</p>
           </div>
 
           {saleName && (
             <div>
               <p className="text-xs text-warm-500">Sale</p>
-              <p className="font-semibold text-warm-900">{saleName}</p>
+              <p className="font-semibold text-warm-900 dark:text-warm-100">{saleName}</p>
             </div>
           )}
 
           {saleAddress && (
             <div>
               <p className="text-xs text-warm-500">Location & Dates</p>
-              <p className="text-sm text-warm-900">
+              <p className="text-sm text-warm-900 dark:text-warm-100">
                 📍 {saleAddress}
                 {saleDates && <span> | {saleDates}</span>}
               </p>
@@ -150,7 +150,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
     <form onSubmit={handleSubmit}>
       <div className="mb-4 p-3 bg-warm-50 rounded-lg">
         <p className="text-sm text-warm-600">Item</p>
-        <p className="font-semibold text-warm-900">{itemTitle}</p>
+        <p className="font-semibold text-warm-900 dark:text-warm-100">{itemTitle}</p>
       </div>
 
       <div className="mb-4 space-y-1 text-sm">
@@ -180,7 +180,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
             <span>${buyerPremium.toFixed(2)}</span>
           </div>
         )}
-        <div className="flex justify-between font-bold text-warm-900 border-t border-warm-300 pt-2 mt-2">
+        <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 pt-2 mt-2">
           <span>Total Due</span>
           <span>${total.toFixed(2)}</span>
         </div>
@@ -234,15 +234,15 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
         />
         <span className="text-xs text-warm-600 leading-relaxed">
           I understand all sales are final — no returns or refunds. I agree to the{' '}
-          <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
+          <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
             Terms of Service
           </a>{' '}
           and{' '}
-          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
             Privacy Policy
           </a>
           .{' '}
-          <a href="/contact" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900">
+          <a href="/contact" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
             Contact support
           </a>{' '}
           for disputes.
@@ -389,7 +389,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
               onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
               placeholder="e.g. A3F2C891"
               maxLength={8}
-              className="w-full px-3 py-2 border border-warm-300 rounded-lg font-mono tracking-widest text-warm-900 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
+              className="w-full px-3 py-2 border border-warm-300 rounded-lg font-mono tracking-widest text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
               aria-label="Coupon code (optional)" />
             <p className="text-xs text-warm-400 mt-1">
               Coupons are issued after each completed purchase.

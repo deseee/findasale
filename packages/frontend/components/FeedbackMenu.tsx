@@ -146,7 +146,7 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({ isOpen, onClose }) =
               <button
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="flex-1 py-2 px-4 rounded font-medium border border-warm-300 text-warm-900 hover:bg-warm-50 transition"
+                className="flex-1 py-2 px-4 rounded font-medium border border-warm-300 text-warm-900 dark:text-warm-100 hover:bg-warm-50 transition"
               >
                 Not now
               </button>

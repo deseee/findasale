@@ -73,7 +73,7 @@ const ItemSearch: React.FC<ItemSearchProps> = ({
           placeholder={placeholder}
           autoFocus={autoFocus}
           aria-label="Search items across all sales"
-          className="w-full pl-9 pr-8 py-3 border border-warm-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-warm-900 text-sm"
+          className="w-full pl-9 pr-8 py-3 border border-warm-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-warm-900 dark:text-warm-100 text-sm"
         />
         {localValue && (
           <button

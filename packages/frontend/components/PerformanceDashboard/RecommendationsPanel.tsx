@@ -54,7 +54,7 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({
       {/* Seasonal Pricing Tips */}
       {seasonalPricingTips.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-warm-900 mb-4">Seasonal Pricing Tips</h3>
+          <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Seasonal Pricing Tips</h3>
           <div className="space-y-4">
             {seasonalPricingTips.map((tip) => {
               const confidenceBadge = getConfidenceBadge(tip.confidence);
@@ -67,7 +67,7 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({
                 >
                   <div className="flex items-start justify-between gap-4 mb-2">
                     <div>
-                      <h4 className="font-semibold text-warm-900 capitalize mb-1">
+                      <h4 className="font-semibold text-warm-900 dark:text-warm-100 capitalize mb-1">
                         {tip.category}
                       </h4>
                       <p className="text-sm text-warm-700 mb-2">{tip.rationale}</p>
@@ -80,7 +80,7 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({
                   <div className="grid grid-cols-3 gap-4 text-sm">
                     <div>
                       <p className="text-xs text-warm-600 uppercase font-semibold">Base Price</p>
-                      <p className="text-lg font-bold text-warm-900">
+                      <p className="text-lg font-bold text-warm-900 dark:text-warm-100">
                         ${tip.basePrice.toFixed(2)}
                       </p>
                     </div>
@@ -107,7 +107,7 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({
       {/* Action Items */}
       {actionItems.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-warm-900 mb-4">Action Items</h3>
+          <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Action Items</h3>
           <div className="space-y-3">
             {actionItems.map((item, idx) => (
               <div

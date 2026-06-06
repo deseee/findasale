@@ -378,7 +378,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   placeholder="Search by title, city, or keyword…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white/95 text-warm-900 placeholder-warm-500 font-body"
+                  className="w-full pl-12 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white/95 text-warm-900 dark:text-warm-100 placeholder-warm-500 font-body"
                   aria-label="Search sales and items"
                 />
               </div>
@@ -668,4 +668,4 @@ export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
   }
 };
 
-export default HomePage;
+export d

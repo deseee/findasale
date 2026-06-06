@@ -79,7 +79,7 @@ const BulkConfirmModal: React.FC<BulkConfirmModalProps> = ({
       >
         {/* Header */}
         <h3 id="bulk-confirm-modal-title" className={`text-lg font-bold mb-2 ${
-            isDestructive ? 'text-red-900' : 'text-warm-900'
+            isDestructive ? 'text-red-900' : 'text-warm-900 dark:text-warm-100'
           }`}>
           Confirm {operationLabel}
         </h3>

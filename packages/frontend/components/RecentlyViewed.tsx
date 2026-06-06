@@ -27,7 +27,7 @@ const RecentlyViewed: React.FC = () => {
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-warm-900">Recently Viewed</h3>
+        <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Recently Viewed</h3>
         <Link href="/shopper/wishlist" className="text-sm text-amber-600 hover:text-amber-700">
           View wishlist
         </Link>
@@ -50,7 +50,7 @@ const RecentlyViewed: React.FC = () => {
                   </div>
                 )}
               </div>
-              <p className="text-xs text-warm-900 font-medium truncate hover:text-amber-600">
+              <p className="text-xs text-warm-900 dark:text-warm-100 font-medium truncate hover:text-amber-600">
                 {item.title}
               </p>
               {item.price != null && (

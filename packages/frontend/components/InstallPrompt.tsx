@@ -166,7 +166,7 @@ export default function InstallPrompt() {
         <Image src="/icons/icon-72x72.png" alt="FindA.Sale icon" width={48} height={48} className="w-12 h-12 rounded-xl flex-shrink-0" />
 
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-warm-900 text-sm leading-tight">Add FindA.Sale to your home screen</p>
+          <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm leading-tight">Add FindA.Sale to your home screen</p>
           <p className="text-xs text-warm-500 mt-0.5">Quick access to sales near you — no app store needed</p>
         </div>
 

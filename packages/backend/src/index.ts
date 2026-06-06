@@ -435,7 +435,7 @@ const authLimiter = rateLimit({
     // and should never be subject to login-attempt throttling.
     // Also skip auth/refresh — token refresh failures are not auth attacks; counting them
     // burns the IP's budget and causes authenticated users to see 429 on page transitions.
-    if (req.path === '/me' || req.path === '/refresh') return true;
+    if (req.path === '/me' || req.path === '/refresh' || req.path === '/logout') return true;
 
     return false;
   },

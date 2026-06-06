@@ -1625,7 +1625,7 @@ const EditItemPage = () => {
                       setDiscountModalOpen(false);
                       setPendingXpToSpend(null);
                     }}
-                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-warm-900 font-bold py-2 px-4 rounded-lg transition-colors"
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-warm-900 dark:text-warm-100 font-bold py-2 px-4 rounded-lg transition-colors"
                   >
                     Cancel
                   </button>

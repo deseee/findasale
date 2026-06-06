@@ -56,7 +56,7 @@ const RSVPAttendeesModal: React.FC<RSVPAttendeesModalProps> = ({
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 id="rsvp-attendees-modal-title" className="text-2xl font-bold text-warm-900">👤 Going to {saleTitle}</h2>
+          <h2 id="rsvp-attendees-modal-title" className="text-2xl font-bold text-warm-900 dark:text-warm-100">👤 Going to {saleTitle}</h2>
           <button
             onClick={onClose}
             className="text-warm-500 hover:text-warm-700 text-2xl leading-none"
@@ -81,7 +81,7 @@ const RSVPAttendeesModal: React.FC<RSVPAttendeesModalProps> = ({
                 key={attendee.id}
                 className="p-3 bg-warm-50 rounded-lg border border-warm-200"
               >
-                <p className="text-warm-900 font-medium">{attendee.name}</p>
+                <p className="text-warm-900 dark:text-warm-100 font-medium">{attendee.name}</p>
               </li>
             ))}
           </ul>

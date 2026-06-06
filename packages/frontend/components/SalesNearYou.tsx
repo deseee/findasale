@@ -37,7 +37,7 @@ const SalesNearYou: React.FC = () => {
   if (isLoading) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-        <h3 className="text-lg font-semibold text-warm-900 mb-4">Sales Near You</h3>
+        <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Sales Near You</h3>
         <div className="flex gap-4 overflow-x-auto pb-2">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex-shrink-0 w-64 h-20 bg-warm-100 rounded-lg animate-pulse" />
@@ -65,7 +65,7 @@ const SalesNearYou: React.FC = () => {
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-warm-900">Sales Near You</h3>
+        <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Sales Near You</h3>
         <Link href="/" className="text-sm text-amber-600 hover:text-amber-700">
           View all
         </Link>
@@ -75,7 +75,7 @@ const SalesNearYou: React.FC = () => {
           <Link key={sale.id} href={`/sales/${sale.id}`}>
             <div className="flex-shrink-0 w-64 card p-4 hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start mb-2">
-                <h4 className="font-semibold text-warm-900 flex-1 pr-2 line-clamp-2">
+                <h4 className="font-semibold text-warm-900 dark:text-warm-100 flex-1 pr-2 line-clamp-2">
                   {sale.title}
                 </h4>
                 <span className="flex-shrink-0 bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-1 rounded-full">

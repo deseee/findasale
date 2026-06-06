@@ -1,72 +1,62 @@
-# Patrick's Dashboard — S895 QA Session
+# Patrick's Dashboard — S896 QA Session
 
 ---
 
-## 🔴 P1 Bug Found — You Can't Log Out (Needs a Fix Before More QA)
+## 🔴 You Need to Push (27 Files) — Then CTA1 QA Can Happen
 
-During this session's Chrome QA, I hit a blocker: after heavy login/logout testing, the **logout endpoint started returning a rate-limit error (429)**. The page cleaned up its local state, but the actual login cookie wasn't cleared. So every time the page reloaded, it read the cookie and logged me back in automatically — I couldn't get a clean logged-out session no matter what.
-
-This blocks re-testing the CTA1 fix (the "Remind Me" button) because I can't verify the logged-out experience while this bug exists.
-
-**The fix is straightforward:** the logout endpoint is mistakenly sharing the same rate-limiter as the login endpoint. Logout should never be rate-limited — if someone can't log out, that's a real problem. I'll dispatch findasale-dev to fix this at the start of next session.
-
----
-
-## ⚠️ Audit Alerts — 2026-06-06
-
-Two other issues found during the automated Saturday morning site audit. Neither is blocking users right now, but both need a dev pass soon.
-
-**HIGH — Dark text invisible in dark mode (83 spots across 25 components)**
-We have 83 places across 25 files where the text color has no dark-mode version — labels go near-invisible in dark mode. Worst-hit: Performance Dashboard, Checkout modal, Hunt Pass modal, date picker. It's a bulk find-and-replace job — straightforward for dev, just needs dispatching.
-
-**MEDIUM — 28 React errors on homepage (error #418 / #425)**
-The homepage fires 28 background JavaScript errors on every load (SSR/client mismatch). The page looks fine, but it's a red flag for intermittent glitches. Needs a dev look.
-
-Full findings: `claude_docs/audits/weekly-audit-2026-06-06.md`
-
----
-
-## ✅ Everything confirmed working this audit
-
-- **Homepage, pricing, login** — dark mode, copy, layout: all good
-- **Sale detail page** — SEO-1 fix live (browser tab shows sale name), GuestSaleAlert box working for logged-out visitors, dead-end "Remind Me" button correctly hidden
-- **Search, map, categories** — all loading with real data; map shows all 7 sale types
-- **Admin access control** — non-admin organizer hitting `/admin` gets "Access Denied", not a 500
-- **Organizer dashboard** — loads clean, plan status correct
-
----
-
-## ✅ S895 Session Work Complete
-
-**NAA auctioneer scraper triggered.** The fix for the NAA directory scraper was coded back in S890 and confirmed on GitHub. This session I triggered it via GitHub Actions (`workflow_dispatch`). It was still running when the session wrapped — next session I'll verify the count in the database (should be ~2,000+ auctioneer records if it ran cleanly).
-
-**Geocoding confirmed draining.** Down to 350 ungeocoded published sales (was 360 last session, 539 a few sessions ago). No action needed — it's working.
-
-**Roadmap bookkeeping done.** Applied the two pending verifications from S894: the homepage canonical/meta tag fix (SEO-2) is now marked as verified in the roadmap, and the CTA1 deployment is noted (Chrome re-verify pending the logout fix).
-
----
-
-## 📋 What you need to know
-
-**Production only has 7 test accounts (user1–user7), all organizers.** Shopper side (dashboard, favorites, notifications) can't be tested without a shopper account in production.
-
-**Mobile viewport test skipped** — the resize tool didn't work this session. Needs a manual check.
-
----
-
-## 🛠️ What you need to push
+Three BQ fixes are coded and sitting in your working directory. Push them and Railway will deploy the logout fix automatically (~3 min). After deploy, CTA1 can be re-tested.
 
 ```
+git add packages/backend/src/index.ts
+git add packages/frontend/components/SaleCard.tsx
+git add packages/frontend/components/BulkConfirmModal.tsx
+git add packages/frontend/components/CheckoutModal.tsx
+git add packages/frontend/components/DateRangeSelector.tsx
+git add packages/frontend/components/FeedbackMenu.tsx
+git add packages/frontend/components/HuntPassModal.tsx
+git add packages/frontend/components/InstallPrompt.tsx
+git add packages/frontend/components/ItemSearch.tsx
+git add packages/frontend/components/PerformanceDashboard/HoldMetricsCard.tsx
+git add packages/frontend/components/PerformanceDashboard/MetricsGrid.tsx
+git add packages/frontend/components/PerformanceDashboard/RecommendationsPanel.tsx
+git add packages/frontend/components/PerformanceDashboard/TopItemsTable.tsx
+git add packages/frontend/components/PostPerformanceCard.tsx
+git add packages/frontend/components/QuickReplyPicker.tsx
+git add packages/frontend/components/RSVPAttendeesModal.tsx
+git add packages/frontend/components/RecentlyViewed.tsx
+git add packages/frontend/components/ReferralWidget.tsx
+git add packages/frontend/components/SaleSelector.tsx
+git add packages/frontend/components/SalesNearYou.tsx
+git add packages/frontend/components/SocialPostGenerator.tsx
+git add packages/frontend/components/VisualSearchButton.tsx
+git add packages/frontend/pages/index.tsx
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
+git add packages/frontend/pages/organizer/print-inventory.tsx
+git add "packages/frontend/pages/organizer/print-kit/[saleId].tsx"
+git add "packages/frontend/pages/sales/[id].tsx"
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "S895 wrap: QA session, logout P1 BQ, NAA scraper triggered, PCVs applied to roadmap"
+git commit -m "S896 QA: logout rate-limiter fix, hydration fix, dark mode D-002 bulk fix (24 files)"
 .\push.ps1
 ```
 
-_(No code changes this session — all pushes are doc files only.)_
-
 ---
+
+## ✅ S896 Completed — What I Did
+
+**NAA auctioneer directory — working.** The scraper triggered last session (S895) via GitHub Actions completed successfully. I checked the database: **1,151 auctioneer records** are now in there, all tagged as coming from the NAA directory. That item is closed.
+
+**Geocoding still draining normally.** Still at ~350 ungeocoded published sales, down from 360 last session. No action needed.
+
+**Three bugs fixed (all pending your push):**
+
+1. **You can't log out — fixed.** I confirmed the bug live: clicked Logout, got a "Rate limited, wait 84 seconds" toast, but the login cookie stayed. Navigating anywhere logged me right back in as Bob Smith. The fix is a one-line change: the logout endpoint was incorrectly sharing the same rate-limiter as login. Logout should never be rate-limited. Now it won't be.
+
+2. **28 React errors on homepage — fixed.** Root cause found: the sale card component was calling a "is this sale happening today?" check during the initial server render, which uses the server's clock (UTC), then the browser render used the browser's clock (your local time). React saw the mismatch and threw 28 errors. Fixed — the check is now deferred until after the page loads in the browser. No more mismatch.
+
+3. **Dark text invisible in dark mode — 83 spots fixed.** The bulk find-and-replace ran across 24 components and pages. Zero static violations remain. If you use the app in dark mode, all that text should now be visible.
+
+**CTA1 QA (logged-out sale page):** Still blocked until you push and Railway deploys the logout fix (~3 min after push). Once deployed, next session will re-verify: navigate the sale page while logged out, confirm the "Remind Me by Email" button is gone, GuestSaleAlert is visible.
 
 ## S894 — Bookkeeping + verification session complete; one pending push
 

@@ -83,7 +83,7 @@ const QuickReplyPicker: React.FC<Props> = ({ onSelect }) => {
         <div className="absolute bottom-full mb-2 left-0 w-72 bg-white border border-warm-200 rounded-xl shadow-lg z-20 overflow-hidden">
           <div className="p-3 border-b border-warm-100">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold text-warm-900 uppercase tracking-wide">Quick Replies</p>
+              <p className="text-xs font-bold text-warm-900 dark:text-warm-100 uppercase tracking-wide">Quick Replies</p>
               <button onClick={() => setIsAdding(!isAdding)} className="text-xs text-amber-600 hover:underline">
                 {isAdding ? 'Cancel' : '+ New'}
               </button>
@@ -142,7 +142,7 @@ const QuickReplyPicker: React.FC<Props> = ({ onSelect }) => {
                   onClick={() => handleSelect(template)}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-warm-900">{template.title}</p>
+                    <p className="text-xs font-semibold text-warm-900 dark:text-warm-100">{template.title}</p>
                     <p className="text-xs text-warm-500 line-clamp-2 mt-0.5">{template.body}</p>
                   </div>
                   <button

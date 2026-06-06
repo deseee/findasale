@@ -45,7 +45,7 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({ onRangeChange, se
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
               selectedRange === range && !showCustom
                 ? 'bg-amber-600 text-white'
-                : 'bg-warm-100 text-warm-900 hover:bg-warm-200'
+                : 'bg-warm-100 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
             }`}
           >
             Last {range === '7d' ? '7 days' : range === '30d' ? '30 days' : '90 days'}
@@ -56,7 +56,7 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({ onRangeChange, se
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             selectedRange === 'custom' || showCustom
               ? 'bg-amber-600 text-white'
-              : 'bg-warm-100 text-warm-900 hover:bg-warm-200'
+              : 'bg-warm-100 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
           }`}
         >
           Custom
@@ -73,7 +73,7 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({ onRangeChange, se
                 type="date"
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
-                className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900"
+                className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100"
               />
             </div>
             <div className="flex-1">
@@ -83,7 +83,7 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({ onRangeChange, se
                 type="date"
                 value={customTo}
                 onChange={(e) => setCustomTo(e.target.value)}
-                className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900"
+                className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100"
               />
             </div>
           </div>

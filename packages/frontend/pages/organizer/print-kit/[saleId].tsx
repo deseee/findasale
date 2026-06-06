@@ -533,7 +533,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
               </button>
               <button
                 onClick={handleBack}
-                className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"
+                className="bg-warm-200 hover:bg-warm-300 text-warm-900 dark:text-warm-100 font-bold py-2 px-6 rounded-lg transition-colors"
               >
                 ← Back
               </button>
