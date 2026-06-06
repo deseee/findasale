@@ -13,15 +13,16 @@
  * /Auctioneer-Directory/ is explicitly allowed (not listed in Disallow).
  *
  * Rate limiting: 3-second minimum delay between page requests.
- * User-Agent: FindASale-Bot/1.0 (+https://finda.sale)
+ * User-Agent: rotating realistic browser UA via getRandomUserAgent() — matches
+ *   AuctionNinja. The prior self-identifying bot UA was Cloudflare-403'd (S890).
  * Per-run cap: 500 records to avoid hammering the server in one shot.
  */
 
 import { getOrCreateScrapedOrganizer } from '../index';
 import { prisma } from '../../../lib/prisma';
+import { getRandomUserAgent } from '../userAgents';
 
 const BASE_URL = 'https://www.auctionzip.com';
-const USER_AGENT = 'FindASale-Bot/1.0 (+https://finda.sale)';
 const REQUEST_DELAY_MS = 3000; // 3 seconds — conservative, respectful
 const MAX_RECORDS_PER_RUN = 500;
 
@@ -65,7 +66,7 @@ async function fetchPage(url: string): Promise<string | null> {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': USER_AGENT,
+        'User-Agent': getRandomUserAgent(),
         Accept: 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-US,en;q=0.9',
       },
