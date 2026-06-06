@@ -2,6 +2,21 @@
 
 ---
 
+## S890 — Live results after you pushed + ran the scrapers
+
+You pushed (green), then triggered geocode + AuctionNinja + AuctionZip + FB Marketplace. Here's what actually happened, verified in the database and Railway logs:
+
+- ✅ **AuctionNinja — WORKS: 0 → 576 auctioneer records.** Real win. That site doesn't block our server, so it just works now.
+- ❌ **AuctionZip — blocked by Cloudflare.** Our parser fix is correct, but auctionzip.com returns "403 Forbidden" to our server's IP on every page, so we never even get the HTML. Different site, stronger bot protection than AuctionNinja. To get its ~25k auctioneers we'd need a proxy or to drop it — your call.
+- ❌ **FB Marketplace — the proxy approach is a dead end.** I confirmed the run actually went through the Cloudflare proxy (S888's work), but Facebook returned "0 listings" for every search in every city. Facebook blocks datacenter IPs even through the proxy and increasingly requires a logged-in session. The free-proxy path won't work — realistically it's "pay for residential proxies + handle login" or drop FB Marketplace. My recommendation: drop it unless FB becomes a priority.
+- ⚠️ **Geocoding — fix is deployed but not yet proven.** The live count didn't move (still 1,164), because the run that fired caught the old code. Just re-run the "Geocode Ungeocoded Sales" workflow now that the new code is live and it should start dropping (the 211 Facebook Events ones especially).
+- ⏳ **NAA — not run yet.** Fix is deployed; its pages are static (not Cloudflare-blocked), so a run should populate it. Worth trying.
+- ✅ **FB Marketplace proxy env vars:** live and correct on Railway (S888 set them, not me — I verified directly). The problem isn't config, it's Facebook's blocking.
+
+**Two decisions for you:** AuctionZip (proxy vs drop) and FB Marketplace (paid proxy vs drop). Two quick re-runs to do: geocode (re-trigger) and NAA (first run).
+
+---
+
 ## S890 Summary — QA: verified all 16 Blocked Queue items (no guesses — every finding has a DB or code citation).
 
 This was a verification session — I went through the whole queue, checked the live database and the deployed code, and figured out *why* each one is or isn't fixed. Plain-English results:
