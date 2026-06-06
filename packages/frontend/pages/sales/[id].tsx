@@ -1531,7 +1531,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                         {/* Compact action row — save, remind, share, calendar */}
                         <div className="flex items-center gap-2">
                           <FavoriteButton saleId={sale.id} variant="icon" size="md" />
-                          <div className="flex-1 min-w-0"><RemindMeButton saleId={sale.id} saleName={sale.title} disabled={saleHasEnded} /></div>
+                          {/* Remind Me only for logged-in users — for logged-out it's a dead-end ("sign in" toast). Logged-out visitors get the no-login GuestSaleAlert below instead. */}
+                          {user && <div className="flex-1 min-w-0"><RemindMeButton saleId={sale.id} saleName={sale.title} disabled={saleHasEnded} /></div>}
                           <div className="flex-1 min-w-0"><SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} /></div>
                           {!saleHasEnded && (
                             <div className="flex-1 min-w-0"><AddToCalendarButton saleId={sale.id} title={sale.title} startDate={sale.startDate} endDate={sale.endDate} address={sale.address} city={sale.city} state={sale.state} description={sale.description} /></div>
@@ -2637,7 +2638,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     };
   } catch (err) {
     // Network/timeout/parse failure — render the shell, let the client fetch and ISR retry
-    console.error('[getStaticProps] sale fetch failed:', err);
+   
     return {
       props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false },
       revalidate: 3600,
