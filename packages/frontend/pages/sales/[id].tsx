@@ -280,6 +280,54 @@ interface SaleDetailPageProps {
   noindex?: boolean;
 }
 
+/**
+ * GuestSaleAlert — no-login email capture for logged-out sale-page visitors.
+ * Strangers arriving from a shared link can get alerts WITHOUT being bounced to /login.
+ * Reuses the existing public POST /search/notify endpoint (no auth required).
+ */
+const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ saleTitle, saleCity }) => {
+  const [email, setEmail] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post('/search/notify', { email, query: saleTitle, city: saleCity });
+    } catch {
+      // Swallow — show success regardless to avoid leaking whether an email is on file
+    }
+    setSubmitted(true);
+  };
+  return (
+    <div className="rounded-lg border border-[#C8552B]/25 bg-[#C8552B]/5 dark:bg-[#C8552B]/10 p-4">
+      <h3 className="text-sm font-semibold text-[#1A1814] dark:text-[#F2F0EA] mb-0.5">Get alerts for this sale</h3>
+      {submitted ? (
+        <p className="text-sm font-medium text-[#C8552B]">&#10003; You&apos;re on the list &mdash; we&apos;ll email you when new items are added.</p>
+      ) : (
+        <>
+          <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] mb-3">We&apos;ll email you when items are added &mdash; no account needed.</p>
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              required
+              aria-label="Email address for sale alerts"
+              className="flex-1 min-w-0 px-3 py-2 min-h-[44px] text-sm rounded-lg border border-black/15 dark:border-white/15 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#C8552B]"
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 min-h-[44px] rounded-lg bg-[#C8552B] hover:bg-[#b14a25] text-white text-sm font-semibold transition-colors whitespace-nowrap"
+            >
+              Get alerts
+            </button>
+          </form>
+        </>
+      )}
+    </div>
+  );
+};
+
 const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, eventSeriesData, noindex }) => {
   const router = useRouter();
   const { id } = router.query;
@@ -960,6 +1008,17 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     );
   }
 
+  // SEO-1: At this point we have passed the loading guard (line 671), the
+  // error/!sale guard (line 691), and the SSR/pre-mount guard (line 769), so we are
+  // mounted, not loading, not errored, and `sale` is guaranteed defined at runtime.
+  // TypeScript's control-flow analysis can't combine the `mounted` narrowing with the
+  // earlier `!sale` narrowing, so it still sees `sale` as possibly-undefined. This
+  // single guard narrows `sale` to defined for the entire interactive render below
+  // (fixing every direct `sale.` access at once). It never fires at runtime.
+  if (!sale) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       {ogHead ? (
@@ -1484,6 +1543,10 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                         {/* Bug #158: Waitlist — notify me when new items are added */}
                         {user && (sale.status === 'PUBLISHED' || sale.status === 'ACTIVE') && (
                           <SaleWaitlistButton saleId={sale.id} />
+                        )}
+                        {/* No-login email capture for logged-out visitors (no login wall) */}
+                        {!user && (sale.status === 'PUBLISHED' || sale.status === 'ACTIVE') && (
+                          <GuestSaleAlert saleTitle={sale.title} saleCity={sale.city} />
                         )}
                       </div>
                     </>
@@ -2561,22 +2624,4 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
             saleType: series.saleType ?? null,
             sales: Array.isArray(series.sales) ? series.sales : [],
           };
-        }
-      } catch (seriesErr) {
-        // Non-fatal — EventSeries JSON-LD is optional enrichment
-        console.error('[sales/[id]] getStaticProps EventSeries fetch error:', seriesErr);
-      }
-    }
-
-    return {
-      props: { ogData, initialData, eventSeriesData, noindex },
-      revalidate: 3600, // ISR: sale data changes more often than city pages → 1 hour
-    };
-  } catch (error) {
-    console.error('[sales/[id]] getStaticProps error:', error);
-    return {
-      props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false },
-      revalidate: 3600,
-    };
-  }
-};
+    
