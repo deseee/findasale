@@ -1,4 +1,19 @@
-# Patrick's Dashboard — S891 Wrap
+# Patrick's Dashboard — S892 Wrap
+
+---
+
+## S892 — The blank-link-preview bug is actually fixed now (and verified live)
+
+Plain-English of what I did this session:
+
+- ✅ **Shared sale links now show a real preview — confirmed working live.** Last session I thought I'd fixed the "blank preview when you share a sale link" problem, but it turned out the fix didn't actually take (the page was still building the preview too late for Facebook/iMessage to see it). This session I did the proper fix and then **checked it against Facebook's own preview tool** — it now pulls the real sale title ("Home decor galore!"), description, and photo. So this one is genuinely done, not just "should work."
+- ✅ **Plugged a sign-up leak on sale pages for logged-out visitors.** Before, if someone who wasn't logged in landed on a sale and wanted alerts, the buttons just bounced them to a login screen (most people leave at that point). Now logged-out visitors get a simple "Get alerts" email box right on the page — no account needed. I also hid the old "Remind Me by Email" button for logged-out people, since it was a dead end for them.
+- 🔧 **A second SEO cleanup is in progress** (removing some duplicate behind-the-scenes tags + a leftover homepage URL conflict). It's being finished now and will need a quick check next session before I call it done.
+- 📋 **Growth plan written up.** I audited every way we bring people in and wrote three short plans: how to turn the email pipeline back on safely, the highest-leverage growth levers, and a week-of checklist. All saved in `claude_docs/strategy/`.
+
+**What you need to do now:** push the pushblock so these go live. Next session I'll verify the SEO-2 cleanup and run the Chrome checks.
+
+**One heads-up for the record:** the behind-the-scenes type-checker in my work environment is currently broken, which is why a couple of past sessions reported "all clean" when they couldn't actually run it. I've noted it so future sessions double-check the real way (via a build) instead of trusting that tool.
 
 ---
 

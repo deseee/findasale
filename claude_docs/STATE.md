@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S892 — DEV + RECORDS. Growth-channel reactivation audit + SEO-1 REAL FIX (live-verified) + logged-out conversion-leak plugs.** (1) **SEO-1 sale-page blank social unfurl — genuinely FIXED + LIVE-VERIFIED.** S891's "render head pre-mount" attempt did NOT server-render the head (Pages Router: a client-side `isLoading` early-return still ships a blank `<head>`), so shared sale links kept unfurling blank. THIS session converted `pages/sales/[id].tsx` to `getStaticProps`+ISR (`fallback:'blocking'`) so og/JSON-LD/canonical render server-side (verified in code: getStaticPaths L2517 / getStaticProps L2526). **LIVE VERIFICATION (not code-only):** web_fetch of a live published sale returned full sale-specific OG tags; Facebook Sharing Debugger scraped the URL -> HTTP 200 and built a correct preview (real og:title "Home decor galore! — FindA.Sale", og:description, Cloudinary og:image). -> roadmap SEO1 BROKEN->FIXED S892. (2) **Logged-out conversion-leak plugs:** added `GuestSaleAlert` no-login email capture (L288 def / L1550 render) so logged-out visitors get alerts without being forced to /login; hid the dead-end "Remind Me by Email" button for logged-out users (it only worked logged-in — L1534). (3) **SEO-2 (dedupe double-emitted og/twitter meta + homepage conflicting canonical): IN PROGRESS this session** (parallel dev task, building on S891's canonical `key` work). (4) Growth audit -> 3 strategy docs in `claude_docs/strategy/`: growth-reactivation-plan-2026-06-05.md, growth-knockon-and-creative-levers-2026-06-05.md, turn-it-back-on-checklist-week-of-2026-06-05.md. (5) ⚠️ **DEV-ENV FINDING:** the VM pnpm `tsc` binary is broken (MODULE_NOT_FOUND) — this is why prior dev subagents falsely reported "tsc clean." Verify via `next build`, not VM `tsc`, going forward. BQ: 18 rows (SEO-1 now LIVE-VERIFIED/clearing; SEO-2 in-progress).**
+
 **S891 — DEV MODE (SEO + geocoding + auction transport). (1) Shopper-discovery SEO audit → 2 P1 fixes SHIPPED: SEO-1 — sale detail pages now server-render their `<head>` (root cause: client-side `isLoading` early-return shipped a blank head, so shared sale links unfurled blank on FB/iMessage/Slack; fix mirrors city/[slug].tsx SSR/ISR); SEO-2 — deduped conflicting canonical across 17 pages (root cause: `_app.tsx` global canonical from `router.asPath`='/index' on the statically-built homepage + missing Next.js `key` so page+global never collapsed). Audit: claude_docs/audits/seo-shopper-discovery-2026-06-05.md. Both → roadmap BROKEN (SEO1/SEO2). (2) Geocoding drain unblocked — leftover `address<>''` filter + FB-Events-only city fallback excluded ~310 PUBLISHED GSF rows (empty street address, valid city/zip); broadened batch whereClause to city+state (internalGeocodingController.ts). GSF carries no source coords (psycopg2) → city-center is the only path. Live count already moved 1,164→716; fix opens the last 310. (3) AuctionZip UA test (getRandomUserAgent, matching AuctionNinja) deployed + re-run → STILL 403 every page → confirms a hard Cloudflare datacenter-IP/challenge block, NOT a UA heuristic. Free server-side path exhausted → one-time Chrome MCP harvest queued (Patrick's directive; auctionzip.com loads via real browser/residential IP — S890 parsed 235/page). All TS-verified. ⚠️ VM git mount corrupted this session (phantom truncations + false ~600-line deletions); Windows files verified intact via file tools — trust Windows `git status`, not VM bash. BQ: 16 rows (AuctionZip row updated; SEO1/SEO2 in roadmap BROKEN).**
 
 **S890 — QA MODE (DB/code verification sweep, no browser). Worked all 16 Blocked Queue items. Net result: 1 RESOLVED (#12 Sale-Ending-Soon rate cap — confirmed deployed on main + 500/day cap), 2 with NEW actionable root cause (geocoding #5/#6), rest confirmed still-open with tool evidence. Headline findings: (1) GEOCODING is live + working (6,366 sales geocoded Jun 5, 331 Jun 6 — workflow on main, 3×/day, batch 500, city-center + Census fallbacks all present) BUT backlog frozen at 15,792 because the batch endpoint fetches newest-500 (`createdAt desc`, offset 0) which are 100% GarageSaleFinder — the older FB Events + GSF backlog is never drained. (2) FB Events city-center fallback is correct + deployed but NEVER EXECUTES on the 1,307 city-only records because they sit below continuous GSF arrivals at offset 0 — available fix: workflow already supports a `source` input, so a `source=Facebook Events` run drains all 1,307 immediately. (3) AUCTION VERTICAL IS DEAD: AuctionNinja (Railway cron removed, GH Actions Cloudflare-blocked), AuctionZip (not even in sourceRegistry), NAA (JS-rendered/broken) — all 0 records, sales AND organizers. (4) FB MARKETPLACE still 0 records / lastScrapedAt NULL despite S888 Cloudflare Worker. (5) Outreach leak CONFIRMED PLUGGED (0 DirectoryClaimEmail sends since Jun 5 08:00 UTC). Outreach hygiene/backfill/enrichment numbers UNCHANGED from S887 (correctly deferred while OUTREACH_ENABLED=false). All evidence via psycopg2 against Railway public proxy + GitHub main file reads. BQ: 16 rows (−1 #12 rate cap resolved, +1 FB Marketplace).**
@@ -101,8 +103,8 @@ _S890 QA MODE: full 16-item DB/code verification sweep (no browser — data item
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
 | FB Marketplace 0 records — CF Worker proxy is a DEAD END | **P2 — S890 DEFINITIVELY DIAGNOSED via live run + Railway logs (02:22-02:25 UTC Jun 6).** Proxy env vars confirmed live; run logged `[FacebookMarketplace] Transport: CLOUDFLARE_WORKER (https://findasale-fb-proxy.findasale.workers.dev/fb-graphql)` — so the proxy IS in use. Result: **every query in every metro returned "Found 0 listings"** (garage/yard/estate × jacksonville/fort-worth/columbus/charlotte/sf/indy/seattle/denver…), 0 created across the board, no errors. FB returns empty results even through Cloudflare's edge IPs (datacenter-IP soft-block; FB Marketplace search increasingly requires an authenticated session). **The free-Cloudflare-Worker approach (S888) does not and will not work for FB Marketplace.** Options: paid residential/mobile proxies + session auth, or DROP FB Marketplace. Recommend DROP unless FB listings become a priority — high effort, brittle, ToS-risky. | Patrick decision: invest in residential proxy + auth, or drop FB Marketplace | S890 |
-| SEO-1 Sale detail pages — empty SSR head → FIX SHIPPED, pending Chrome QA | **P1** — **S891 FIXED + pushed.** sales/[id].tsx shipped a blank `<head>` server-side (client-side `isLoading` early-return skipped the existing og/JSON-LD/canonical markup) → shared sale links unfurled blank on FB/iMessage/Slack. Fixed to render head pre-mount (mirrors city/[slug].tsx SSR). TS 0 errors. Roadmap BROKEN row SEO1. | Chrome QA after Vercel deploy: `curl -s finda.sale/sales/{id} \| grep -E 'og:title\|application/ld'` non-empty + FB Sharing Debugger unfurl | S891 |
-| SEO-2 Homepage conflicting canonical → FIX SHIPPED, pending Chrome QA | **P1** — **S891 FIXED + pushed.** Homepage emitted two canonicals (one `/index`). Root cause: `_app.tsx` global canonical from `router.asPath` + missing Next.js `key` so page+global never collapsed. Fixed across 17 pages (normalize path + `key="canonical"`). TS 0 errors. Roadmap BROKEN row SEO2. | Chrome QA after deploy: `curl -s finda.sale/ \| grep -ic 'rel="canonical"'` = 1 (value = https://finda.sale) | S891 |
+| ✅ SEO-1 Sale detail pages — SSR head -> LIVE-VERIFIED S892 | **RESOLVED (live-verified)** — S891's "render head pre-mount" attempt did NOT SSR the head (still blank unfurls). S892 converted sales/[id].tsx to getStaticProps+ISR (fallback:'blocking') so og/JSON-LD/canonical render server-side. **Verified LIVE:** web_fetch returned sale-specific og tags; FB Sharing Debugger scraped URL -> 200 + correct preview (og:title "Home decor galore! — FindA.Sale", Cloudinary og:image). Roadmap SEO1 -> FIXED S892; PCV staged. | Next session: findasale-records applies roadmap Chr ✅ from the PCV row (cross-session rule) | S891 |
+| SEO-2 Homepage conflicting canonical + double-emitted og/twitter -> IN PROGRESS S892 | **P1 — IN PROGRESS S892.** S891 deduped canonical across 17 pages (path normalize + Next.js `key`). S892 parallel dev task is finishing it: de-duping double-emitted og/twitter meta tags + the homepage conflicting canonical. Not yet complete. | Complete the dedupe; then Chrome QA: `curl -s finda.sale/ \| grep -ic 'rel="canonical"'` = 1 (value https://finda.sale) + no duplicate og/twitter tags | S891 |
 
 ---
 
@@ -110,6 +112,7 @@ _S890 QA MODE: full 16-item DB/code verification sweep (no browser — data item
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| — | SEO-1 sale-page social unfurl (SSR head) | Live-verified S892 — web_fetch of a live published sale URL returned sale-specific og:title/og:description/og:image (Cloudinary) + JSON-LD rendered server-side; Facebook Sharing Debugger scraped the URL -> HTTP 200 and built a correct preview (real og:title "Home decor galore! — FindA.Sale"). Production scrape via getStaticProps+ISR, not Chrome MCP browser-interaction — genuine end-to-end. | S892 |
 | — | P2 POS PENDING_REVIEW fix — search path | ✅ Chrome-verified S886 — /organizer/pos as Alice (user1). Searched "Kirkland" (item cmp4o68ic000i1o8telljqpa8, draftStatus=PENDING_REVIEW). Result: "No available items match that search." Confirms PENDING_REVIEW items excluded from POS search. API: /api/items/cmp4o68ic000i1o8telljqpa8 returns draftStatus=PENDING_REVIEW, status=AVAILABLE — old status check would miss it, new draftStatus check catches it. QR toast CODE-ONLY (camera QR not simulatable in browser). ss_5792yv22r | S886 |
 | — | P3 fix: review success "View sale" link | ✅ Chrome-verified S886 — /organizer/add-items/[saleId]/review as Alice (user1). Clicked "View sale →" → landed on /sales/59c49908... "QA Active Sale S875 — Mixed Goods" — no 404. ss_4845b09um | S886 |
 | — | P2 fix: POS AVAILABLE-only item search | ✅ Chrome-verified S886 — /organizer/pos as Alice (user1). Typed "Pyrex" in search → "No available items match that search." PENDING_REVIEW item excluded from results. Network: GET /api/items?...&status=AVAILABLE confirmed. ss_9781ji8rx | S886 |
@@ -203,6 +206,25 @@ _(S862
 
 ## Recent Sessions
 
+### S892 — DEV + RECORDS. Growth reactivation audit + SEO-1 real fix (live-verified) + logged-out conversion-leak plugs. SEO-2 in progress.
+
+**SEO-1 — the demand flywheel, genuinely fixed this time:**
+- S891 logged SEO-1 as "FIXED" via a "render head pre-mount" change, but that did NOT server-render the head (Pages Router: a client-side `isLoading` early-return still ships a blank `<head>`) — shared sale links kept unfurling blank on FB/iMessage/Slack.
+- S892 converted `pages/sales/[id].tsx` to `getStaticProps`+ISR (`fallback:'blocking'`) so the existing og/JSON-LD/canonical markup renders server-side. Verified in code (getStaticPaths L2517, getStaticProps L2526).
+- **LIVE-VERIFIED (genuine end-to-end, not code-only):** web_fetch of a live published sale returned full sale-specific OG tags; the Facebook Sharing Debugger scraped the URL -> HTTP 200 and built a correct preview — real og:title "Home decor galore! — FindA.Sale", og:description, and a Cloudinary og:image. -> roadmap SEO1 BROKEN->FIXED S892; evidence also staged in Pending Chrome Verifications.
+
+**Logged-out conversion-leak plugs (sale pages):**
+- Added `GuestSaleAlert` no-login email capture for logged-out visitors (component L288 / render L1550) — closes the leak where favorite/remind buttons forced /login.
+- Hid the dead-end "Remind Me by Email" button for logged-out users (it only worked logged-in, L1534); logged-out users now see only the working "Get alerts" box.
+
+**SEO-2 — IN PROGRESS:** parallel dev task deduping double-emitted og/twitter meta tags + fixing the homepage conflicting canonical, building on S891's canonical-`key` work. Not yet complete -> roadmap SEO2 = in-progress S892.
+
+**Growth audit -> 3 strategy docs** (claude_docs/strategy/): growth-reactivation-plan-2026-06-05.md, growth-knockon-and-creative-levers-2026-06-05.md, turn-it-back-on-checklist-week-of-2026-06-05.md.
+
+**⚠️ DEV-ENV finding:** VM pnpm `tsc` is broken (MODULE_NOT_FOUND) — prior subagents' "tsc clean" reports were unreliable. Verify via `next build`, not VM `tsc`, going forward.
+
+**Records reconciliation:** S891 entry retained (audit + first SEO-1 attempt + geocoding 2nd-root-cause + AuctionZip UA ruled out). Drift flagged: the SEO-1 root fix + live verification belong to S892, not S891. BQ computed = 18 rows (2 closed-but-not-removed: AuctionNinja RESOLVED + merged AuctionNinja/AuctionZip row; SEO-1 now live-verified/clearing). Trimmed Recent Sessions to the 5 most recent (S892/S891/S890/S887/S886) per T5 — older entries (S885->S868) removed; full history in git + COMPLETED_PHASES.md.
+
 ### S891 — DEV MODE. Shopper-discovery SEO audit + 2 P1 fixes; geocoding drain unblocked; AuctionZip UA test ruled out → Chrome harvest queued.
 
 **SEO (the demand flywheel — never deferred):**
@@ -276,317 +298,3 @@ _(S862
 **Records:** STATE.md cleaned (AuctionNinja BQ note updated, BQ count corrected to 4).
 
 **Blocked Queue: 4 rows** (#332 P0 + AuctionNinja P2 + #335 P1 URGENT + #230 P3)
-
-### S886 — DEV MODE. P3 + P2 bug fixes shipped + Chrome-verified. Roadmap PCVs applied. Blocked Queue: 3 rows.
-
-**Records pass:** S885 PCVs applied to roadmap.md — #175 Coupons/Rarity Boost → Chr ✅ S885, #142 Photo Upload pipeline → Chr ✅ S885 (was ⚠️ S805).
-
-**P3 fix (review.tsx line 1239):** "View sale →" button in Smart Review Queue success state: `/sale/${saleId}` → `/sales/${saleId}`. ✅ Chrome-verified S886 — navigated to review page, clicked "View sale →", landed on /sales/59c49908... with "QA Active Sale S875 — Mixed Goods" confirmed. ss_4845b09um.
-
-**P2 fix (itemController.ts lines 632–652):** POS item search now honors `?status=AVAILABLE` query param from frontend — PENDING_REVIEW items excluded from search results. Pre-existing "Vintage Pyrex Bowls Set (4pc)" PENDING_REVIEW item correctly absent from POS search. ✅ Chrome-verified S886. ss_9781ji8rx.
-
-**Blocked Queue: 4 rows** (−2: P3 review link ✅ + P2 POS filter ✅ both fixed and verified; #335 P1 URGENT + #332 + AuctionNinja + #230 remain)
-
-### S885 — QA MODE. Rarity Boost ✅. Add-items pipeline ✅. POS core ✅. 2 bugs filed. Blocked Queue: 5 rows.
-
-**S884 push confirmed** — commit 00973398 "S884: Rarity Boost 50→15 XP UI fix". coupons.tsx deployed to Vercel.
-
-**Rarity Boost 15 XP ✅ Chrome-verified** — /coupons Shopper tab → Boosts & Bonuses → "Activate Rarity Boost (15 XP)". S884 fix confirmed live. ss_10072ub1r. Closed from Blocked Queue.
-
-**Add-items pipeline ✅ Chrome-verified end-to-end** — Batch Upload → file_upload → Analyze All → Smart Review Queue → AI: "Vintage Table Lamp, Mid-Century Modern Style, Wood Base" (62% confidence, SMART tags). Approve → "QUEUE CLEAR — All 2 items are live." ss_3920p8trb ss_57255gxkm. Live on sale detail page confirmed. ss_5660w5ek0. Test item cleaned up via psycopg2.
-
-**POS core UI ✅** — /organizer/pos: sale auto-selects, item search, add to cart, Cash selected (green highlight), numpad with correct change calculation ($50→Change $5), Record Cash Sale button activates. API fires. Two bugs found (see Blocked Queue).
-
-**Blocked Queue: 5 rows** (−1 Rarity Boost closed, +2 new bugs)
-
-### S884 — Records pass (S883 PCVs applied to roadmap). Rarity Boost UI fix coded. Chrome blocked. Blocked Queue: 4 rows (QA mode cleared).
-
-**Records pass:** 18 S883 PCV entries applied to roadmap.md Chrome columns — #396, #310, #138, #411, #175, #139, #378, #183, #218, #266, #176, #177, #179, #60, #187, #180, #189, #154. #60 pricing ⚠️→✅ S883.
-
-**Rarity Boost UI fix (code-complete, pending push):**
-- coupons.tsx: `50 XP` → `15 XP` across display text, button label, gate threshold, and gate message (5 lines in one block). 0 TS errors. Matches locked game design (15 XP, cash rail separate sprint).
-
-**Chrome QA blocked:** Extension timeout on all operations — "waiting on permission prompt in side panel." Deep-test flows (add-items, POS) deferred to S885 once Patrick clears the prompt.
-
-**Blocked Queue: 4 rows** (QA mode ceiling cleared — was 9 rows, now 4)
-
-### S883 — QA MODE: Records pass (S882 PCVs applied). Wide sweep: 18 pages/features Chrome-verified. No new bugs. Blocked Queue: 7 rows.
-
-**Records pass (session start):** S882 PCVs applied to roadmap.md — Y-axis formatter ✅ S882 added to #192 Notes. (#192 ENDED sale already applied S881.)
-
-**Chrome QA sweep (Alice/user1 then Bob/user2, all ✅):**
-- /organizer/starter-kit ✅ ss_8106nlgh7 — "Sale Day Starter Kit", Pre-Sale Checklist, Download PDF + Print buttons
-- /organizer/discount-rules ✅ ss_68366qf20 ss_067153c7v — Create Rule modal: Color Tag, Label, Discount %, Active From/Until fields
-- /organizer/create-sale ✅ ss_3060qw90j — Step 1 of 5, all 5 sale types (Estate, Yard, Auction, Market+Pop-Up, Dorm Dash), 5-step sidebar
-- /coupons (XP Store) ✅ ss_62793so06 ss_56365kcxa — 373 XP, INITIATE, 3 Discount Coupon tiers, Shopper/Organizer tabs
-- /map ✅ ss_0552v7zh2 — 85 sales, pins, all type/date filters, Plan Your Route/Heatmap/My Location
-- /guide ✅ ss_17131y4gc — Organizer Guide, full sidebar nav, content loaded
-- /calendar ✅ ss_195917ziu — June 2026, real sales, "Remind Me by Email" buttons, today highlighted
-- /shopper/trades ✅ ss_2861pyk7b — "Coming Soon" badge
-- /shopper/explorer-profile ✅ ss_4271dkl4t — Explorer Bio, Specialties, Item Categories
-- Homepage ✅ ss_75552983d ss_8844zq96l — "Discover Amazing Deals", Treasure Hunt card, map 20 sales, Featured Sales 20 of 20
-- Sale detail (directory) ✅ ss_3721kp9fj ss_45238s0r1 — real photos, description, WHEN/WHERE, map, share buttons
-- /search?q=vintage ✅ ss_9502geaos — Filters sidebar, Save Search, All/Sales(10)/Items(10) tabs, Plan Route button
-- /pricing ✅ ss_3228c6qzt ss_1209ystwv — Free/$29 PRO (✓ Current Plan for Bob)/$79 TEAMS, correct prices
-- /cities ✅ ss_4392ish2n — 200+ cities, state-grouped
-- /categories ✅ ss_1606pzfyk — Browse by Category grid with item counts
-- /trending ✅ ss_8926p6wv6 — #1/#2/#3 HOT badges, real sale data
-- QA sale detail (Bob shopper) ✅ ss_23185ngzl ss_136359q2w — Going/Notify buttons, Live Activity, inventory, Photo Station, Treasure Hunt, Share sidebar
-- /organizer/storefront ✅ ss_0286gmk6l — "Kelly's Estate Sales", 2 Sales/2019 Est., Follow/Share buttons
-
-**No new bugs found.** /organizer/new-sale 404 by design (correct URL is /organizer/create-sale). Homepage card blank images are correct behavior for directory listings without platform-uploaded photos.
-
-**Blocked Queue: 7 rows** (unchanged — no new bugs, no closures this session)
-
-### S882 — QA MODE: #197 Bounties ✅ (Patrick-confirmed). Y-axis P3 ✅ Chrome-verified. Wide organizer page sweep (24 pages ✅, 4×404 not-linked P3).
-
-**#197 Bounties ✅:** Patrick confirmed /shopper/bounties no longer shows "Failed to load bounties" error toast after S881 bountyController.ts fix deployed.
-
-**Y-axis formatter P3 ✅:** /organizer/edit-item/f319b119 (Old Radio, ENDED) as Alice (user1). Price History chart Y-axis: $94/$84/$78/$72 — whole dollar values, no float "000001" bug. Math.round() fix confirmed. ss_9355qlny8
-
-**Organizer page sweep (Alice/user1, all ✅ unless noted):**
-- /organizer/appraisals ✅ ss_2010xghaz — Crowdsourced Appraisals, Submit New Request, My Requests/Community Feed tabs
-- /organizer/checklist ✅ ss_3457pe0h0 — Sale Launch Checklist, 15 items, progress bar
-- /organizer/color-rules → /organizer/discount-rules ✅ ss_7756iqq57 — redirect works, Discount Rules, empty state
-- /organizer/flip-report ✅ ss_51812bc76 — 2 sales listed
-- /organizer/hubs ✅ ss_93834e9a7 — Market Hubs, 4 hub types, "Coming Soon" CTA
-- /organizer/inventory ✅ ss_3774kri1x — 3 real items, search/filter panel
-- /organizer/line-queue ✅ ss_8102zh9r4 — Choose a Sale, PUBLISHED card
-- /organizer/offline ✅ ss_2782z08pz — Offline Sync Manager, Online status
-- /organizer/payouts ✅ ss_70338sonn — Stripe balance, payout schedule
-- /organizer/photo-ops ✅ ss_0754v7s78 — Choose a Sale, Set Up Photo Ops link
-- /organizer/profile → /organizer/settings?tab=profile ✅ ss_5496a85x2 — Founding Organizer badge
-- /organizer/promote ✅ ss_4990qg027 — Promote Sale, PUBLISHED card
-- /organizer/qr-codes ✅ ss_915606wm3 — QR Scan Analytics, 3 KPIs
-- /organizer/reputation ✅ ss_27555v8ml — Reputation Score 0.1/5.0, New Organizer badge
-- /organizer/sales ✅ ss_7420pgtiu — Manage Sales, 2 cards
-- /organizer/send-update ✅ ss_3428a61g6 — Send Update, Choose a Sale
-- /organizer/shopify ✅ ss_7561swcoc — Not Connected, Connect form
-- /organizer/stripe-connect ✅ ss_5670hfcot — Consignor Payouts, empty state, TEAMS-only
-- /organizer/subscription ✅ ss_0542pwyli — TEAMS plan, Active, Plan Limits
-- /organizer/ugc-moderation ✅ ss_7189smrfj — UGC Photo Moderation, empty state
-- /organizer/webhooks ✅ ss_1611p2uug — Webhooks, empty state, Add webhook button
-- /organizer/bounties ✅ ss_75464uvh3 — Item Bounties, 3 tabs, "Work in progress" badge
-- /organizer/message-templates ✅ ss_2006j30aw — 4 templates, Edit/Delete/New
-- /organizer/print-inventory ✅ ss_6361k3641 — 2 sales, 6 items, $380.00 total value
-
-**P3 not-linked 404s (no user impact — not in nav):**
-- /organizer/pickup-scheduler, /organizer/auction, /organizer/seo, /organizer/buyers — all 404, no frontend links found. Same disposition as /organizer/customers (S880 — closed, no user impact).
-
-**Blocked Queue: 7 rows** (removed #197 Bounties ✅ + Y-axis float ✅)
-
-### S881 — QA MODE: 2 code fixes (Bounties P2 + Y-axis P3). Page sweep (holds/crews/reputation/notifications/loot-legend ✅). #192 Chr S880 applied to roadmap.
-
-**Code fixes (both pending push, 0 TS errors):**
-- **#197 Bounties P2 FIXED** — bountyController.ts L691: `user: { isNot: null }` removed. Root: required relation in Prisma 5 rejects `isNot: null` filter. Confirmed pre-fix 500 via Chrome (ss_4376fclh0).
-- **Price History Y-axis P3 FIXED** — ItemPriceHistoryChart.tsx L81: `$${v}` → `$${Math.round(v)}`. Fixes float precision "000001" display.
-
-**Records pass:**
-- roadmap.md #192 Chr column → ✅ S880. Notes updated with ENDED sale evidence (ss_6019d9p8a ss_2365m7h2q, S879 fix: optionalAuthenticate + organizerId namespace correction).
-
-**Chrome QA sweep (as Bob Smith/user2):**
-- /shopper/holds ✅ — "My Holds" heading, empty state, Browse Sales CTA. ss_7117y07i1
-- /shopper/crews ✅ — "Explorer's Crews" heading, "Coming soon" subtitle, "What are Crews?" explainer. ss_6622aic03
-- /shopper/loot-log → 404 by design — no index page; detail at /loot-log/[purchaseId]. Feature #50 already ✅ S823.
-- /shopper/reputation ✅ — "Your Reputation" heading, "Your Status" card (New Shopper, 0 purchases, 0% completion), welcome message, KPI cards. ss_7872rzcqr
-- /shopper/notifications ✅ — "Notifications" heading, All/Operational/Discovery tabs, Unread (11) filter, real notifications with dismiss buttons. URL normalizes to /notifications. ss_9136wp2rx
-- /shopper/loot-legend ✅ — "Loot Legend" heading, Hunt Pass upsell, empty state. ss_0415ir8yt. ⚠️ No roadmap entry — P3 gap.
-- /shopper/bounties ❌ confirmed "Failed to load bounties" 500 toast. Fix pending push.
-- /shopper/bounties/submissions ✅ — "My Bounty Submissions", All/Pending/Approved/Declined tabs, "No submissions yet" empty state. ss_0993xirdk
-- /shopper/purchases → 404 by design (no page, no roadmap entry; purchases accessed via /shopper/loot-log/[id]).
-
-**Blocked Queue: 9 rows** (unchanged — both fixes code-complete but pending push+Chrome QA)
-
-### S880 — QA MODE: #192 ✅ Chrome-verified (ENDED sale). Wide page sweep (12 pages). P2 regression found (Bounties 500). /organizer/customers closed — not linked anywhere.
-
-**#192 Price History ENDED sale — ✅ VERIFIED:**
-- As Alice (user1) on /organizer/edit-item/f319b119 (Old Radio, ENDED sale). Price History heading visible, orange step-line chart, Jun 2→Jun 4, $78→$84 Y-axis, 2 data points. DOM confirmed + screenshots. ss_6019d9p8a ss_2365m7h2q.
-- S879 fix (optionalAuthenticate + organizerId correction) confirmed live.
-
-**Page sweep (all ✅):**
-- Alice: /organizer/consignors, /organizer/pos, /organizer/fraud-signals, /organizer/locations, /organizer/workspace
-- Bob (user2): /shopper/dashboard, /shopper/wishlist (1 item), /shopper/hunt-pass, /shopper/guild-primer (Initiate 192 XP), /shopper/league (Leo Sage 2005 XP), /shopper/trails, /shopper/achievements (3/12), /shopper/explorer-profile
-
-**P2 REGRESSION found — #197 Bounties:**
-- /shopper/bounties: GET /api/bounties/community → 500. Toast "Failed to load bounties". Was ✅ S862, broke after S868 FK migration. DB query confirmed working (1 record). Prisma client or filter issue in getCommunityBounties L687. Added to Blocked Queue.
-
-**Closed from Blocked Queue:**
-- /organizer/customers: no page file, no tsx/component link anywhere — unbuilt, no user impact.
-
-**P3 noted:** Price History chart top Y-axis label shows "000001" instead of "$93.50" — float precision in chart scale formatter.
-
-**Blocked Queue: 9 rows** (removed /organizer/customers, added Bounties regression + Y-axis bug — net zero)
-
-### S879 — QA MODE: Records pass (#166 Chr ✅) + #192 P2 re-fix + Chrome sweep. Admin dead-links P3 closed (false positive). New P3: /organizer/customers 404.
-
-**Records pass (session start):**
-- S878 PCV applied: #166→Chr ✅ S878 (roadmap updated).
-
-**#192 Price History ENDED sale fix (inline, 2 files, <20 lines):**
-- Root cause 1: `priceHistory.ts` route had no auth middleware — `req.user` always undefined. Fixed: `optionalAuthenticate` added.
-- Root cause 2: `priceHistoryController.ts` isOwner check compared `sale.organizerId` (Organizer table PK) vs `req.user.id` (User table PK) — different ID namespaces, always false. Fixed: query now includes `organizer: { select: { userId: true } }` and isOwner uses `organizer.userId`.
-- 0 TS errors. **Awaiting push + Chrome re-verify.**
-
-**Chrome QA sweep (Alice/user1):**
-- Edit Sale (Live) ✅ — "Edit Sale (Live)" + LIVE badge + Close Early + live-edit warning + Duplicate This Sale. ss_4284cbeqg
-- /organizer/holds ✅ — Active Holds, filter by sale, sort Expiring Soon/Recently Added, empty state. ss_74980t1l2
-- /shopper/haul-posts ✅ — Community Hauls, Share Your Haul button, empty state. ss_4149exmdb
-- /organizer/calendar ✅ — June 2026 view, QA sale on correct dates, today highlighted, Upcoming Sales sidebar. ss_79368nehw
-- /organizer/command-center ✅ — 4 KPI cards (1 Active Sale / 1 Item / $0 / 0 Pending), All systems go. ss_2460vpxo6
-- /organizer/ripples ✅ — Views/Shares/Saves/Total Activity KPIs (14 views), Activity Trend. ss_61779hyks
-- /admin/waitlist ✅ — Shopper Notify Me Waitlist, filter + empty table. ss_54642a2y8
-- /admin/organizer-confidence ✅ — Directory Confidence Scores, 5 organizers listed. ss_995385yol
-
-**S878 P3 closed — false positive:**
-- S878 agent reported /admin/notify-me + /admin/confidence-scores as dead links. Actual admin nav links → /admin/waitlist + /admin/organizer-confidence. Both ✅ confirmed. No dead links. Admin nav dead links entry removed from Blocked Queue.
-
-**New P3 found:**
-- /organizer/customers → 404. Page does not exist. Added to Blocked Queue.
-
-**Blocked Queue: 9 rows** (removed admin dead links false positive, added /organizer/customers P3 — net zero)
-
-### S878 — QA MODE: Records pass (9 features reconciled) + Chrome QA (#166 ✅). P3 bugs found. Blocked Queue: 8 rows.
-
-**Records pass (session start):**
-- S877 PCVs applied: #165→Chr ✅ S877, #308→Chr ✅ S877, #274→Chr ✅ S877.
-- Additional Chr/Hum column reconciliation (notes had evidence, columns were ⬜):
-  - #319/#325/#328 → Chr ✅ S830 (Notes: "CHROME VERIFIED S830" confirmed)
-  - #350 → Chr ✅ S797 (Notes: "Chrome-verified S797" confirmed)
-  - #142 → Chr ⚠️ S805 (Notes: "CHROME VERIFIED S805 (partial)")
-  - #166 → Hum ✅ S837 (Notes: "Human QA S837" — Hum column was ⬜)
-
-**Chrome QA (as Alice Johnson user1):**
-- **#166 ✅** Beta Invite Codes — /admin/invites: "Beta Invite Codes" heading, Generate form, code 4J9U3B95 generated with "unused" status, Copy URL/Code only/Delete actions. /register?invite=4J9U3B95: green banner "✓ Invite code 4J9U3B95 applied", role pre-set to "Sale Organizer", Business Information section visible. ss_37115t11z ss_3815rn9fy ss_44402fzrx
-- Admin dashboard (/admin): KPIs ($158 MRR), CA Canada filter, Organizer Funnel, Outreach Email Pipeline, Data Integrity section, 13 admin nav links all visible. ss_8269vpe3h
-- /admin/demand-signals ✅ "Unmet Demand Signals" — city filter, min-searches filter, real data (5 queries). ss_8584nasdk
-- /organizer/members ✅ — "Team Members" page, Invite Team Member form, role dropdown, Send Invite button, "Your Team" 0 members empty state. ss_2864i0e7t
-
-**P3 bugs found:**
-- /admin/notify-me → 404 (dead admin nav link — admin dashboard links to this but page doesn't exist)
-- /admin/confidence-scores → 404 (dead admin nav link — same issue)
-- #291 Lucky Roll / Mystery Box → /shopper/lucky-roll 404 (not built; roadmap Chr/Hum remain ⬜)
-
-**Blocked Queue: 8 rows + 1 P3 dead-links entry added**
-
-### S877 — QA MODE: Records pass (113 Human QA columns updated) + #192 P2 fix + Chrome QA (3 features ✅). Blocked Queue: 8 rows.
-
-**Records pass (session start):**
-- S875+S876 PCVs applied: #152→✅S875, #334→✅S875, #318→✅S875, #338→✅S875, #321→✅S875, #320→✅S876, #316 (both rows)→✅S876, #192→✅S876.
-- Bulk roadmap reconciliation: 104 additional Human QA columns updated where Status column contained Chrome-verified evidence but Human QA was still ⬜. Total: 113+ updates.
-- Additional: #296→✅S479 (Chrome QA explicit in status), #312→✅S854 (XP spend path confirmed), #464 UTMCapture→✅S836 (sessionStorage verified), #31 Brand Kit ⚠️→✅S866.
-
-**#192 P2 fix (inline <20 lines):**
-- `priceHistoryController.ts` — added isOwner/isAdmin check before PUBLISHED gate. Organizer-owned ENDED sale items now return price history. 0 TS errors. **Awaiting push.**
-
-**Chrome QA (as Alice user1, then Leo Thomas user5):**
-- **#165 ✅** A/B Testing — /admin/ab-tests: "A/B Tests" heading, "Hero CTA v1" card, table headers, "Clear Test Data" button, no 403. ss_7968d9zt9
-- **#308 ✅** Item Hide Bug Fix — /organizer/edit-item/[Pyrex]: Status dropdown (Available/Sold/Unavailable), "Unpublish" button. Addresses S838 "no show button" concern. ss_13358xg0c ss_1630eqh3i
-- **#274 ✅** Trail Completion Share — /shopper/trails/cmnsa0jir0000uzighx3ni54f as Leo Thomas: "✓ Trail Completed!" banner, "Share your achievement" card + Share button, Public Link. Share button → navigator.share fired (no errors). ss_558087lcg ss_1217874pr
-
-**Blocked Queue: 8 rows** (unchanged — #192 ENDED sale fix deployed but pending push + Chrome re-verify)
-
-### S876 — QA MODE: Chrome QA (#320 ✅, #316 ✅, #192 ✅). P2 bug found. STATE.md staged. Blocked Queue: 9 rows.
-
-**Chrome QA:**
-- **#320 ✅** Async eBay Comp Fetch — /organizer/edit-item/[Old Radio] as Alice. 3 eBay comp tiles rendered with real prices. Organizer price=$80 not overridden by aiSuggested=$65 (D-005 confirmed). ss_1568kvxrz
-- **#316 ✅** Referral Tranche B — Logged in as qa256test806@example.com (Seedy2025!, login day 3). Tranche A: trancheAReleasedAt set, Alice XP 123→223 (+100 XP). Tranche B: 3 sales visited, trancheBReleasedAt set, Alice XP 223→373 (+150 XP). DB: distinctSalesVisited has all 3 IDs. psycopg2 confirmed both tranches.
-- **#192 ✅** Price History Chart — /organizer/edit-item/[Pyrex] as Alice (published sale). "Price History" heading visible, orange step-line chart with white card, Y-axis $40.5/$46.5/$52.5, X-axis Jun 1→Jun 3, 2 real data points. API returned 2 history records. ss_5230oyurt
-- **P2 NEW** — #192 Price History chart returns 404 for ENDED/non-PUBLISHED sale items: `priceHistoryController.ts` line 25 blocks on sale status. Organizer edit-item page should bypass for authenticated owners. Added to Blocked Queue.
-
-**Records staged:** PCVs #320/#316/#192 — apply to roadmap next session.
-
-### S875 — QA MODE: Records pass (S874 PCVs) + #170 clarified + column-gap fixes + Chrome QA (5 features). Blocked Queue: 8 rows.
-
-**Records pass (session start):**
-- S874 PCVs applied to roadmap: #168 Chr→✅ S874, #171 Chr→✅ S874 (partial), #150 Chr→✅ S874, Human QA→✅ S837.
-- YMAL entry removed from Blocked Queue (✅ CHROME-VERIFIED S874, closed).
-- #170 CSV Import: clarified as modal on /organizer/add-items/[saleId] — no standalone page exists, /organizer/csv-import 404s by design. Roadmap Status updated, Claude QA→✅ S804.
-- Column-gap Records pass (prior-session verifications): #257→✅S785, #261→✅S791, #323→✅S791, #338 UI→✅S820.
-
-**Chrome QA (Bob Smith/user2 then Alice Johnson/user1):**
-- **#152 ✅** Organizer Digest Emails — /organizer/email-digest-preview: "Weekly Email Digest", schedule, email preview with real data, CTAs, footer. ss_83116boe8 ss_3822u3wv2 ss_2864i4lf6
-- **#334 ✅** Automatic Markdown Cycles — /organizer/markdown-cycles: page loads, Add Cycle button, empty state, no 403. ss_8645vaq0f
-- **#318 ✅** Affiliate Program — /organizer/affiliate: page loads, Generate link CTA, no 403. ss_7743cytqb
-- **#338 ✅** Surface Sold-Price Comps — edit-item: 3 EbayCompTiles with prices ($17.99/$120/$29.39), affiliate note. ⚠️P3 no "Based on N sources" text. ss_965075bc7 ss_17240sk5m
-- **#321 ✅** Encyclopedia Auto-Generation — /admin/encyclopedia: 57 Awaiting/20 Published/77 Total, Promote/Reject buttons. ss_0109ezo8y
-- **#232 ✅ DOM** SalePulseWidget — seeded PUBLISHED ESTATE sale (59c49908) + item (Pyrex price=null) via psycopg2. Dashboard shows: Sale Pulse / 0 shoppers / 0/100 / Views / Saves / Questions / Boost visibility →. No screenshot IDs (Chrome extension broken).
-- **#237 ✅ DOM** Sale-Type Adaptive Dashboard — ESTATE dashboard shows all adaptive widgets (Real-Time Metrics, Sale Progress, Who's Coming, High-Value Items, Efficiency Coach, Search Visibility). No screenshot IDs.
-- **#320 DB-ONLY** — 10 ItemCompLookup entries + 7 items with aiSuggestedPrice (Old Radio: org=$80 / ai=$65). Chrome flow blocked (CSRF). Not Chrome ✅.
-- **#320 UNVERIFIED** — Kitchen Set has price=20 (need price=null item for async comp test).
-- **#323 UNVERIFIED** — no PriceBenchmark data for Kitchen Set category.
-
-### S873 — QA MODE: Records pass + YMAL fix + Chrome QA (6 features). Blocked Queue: 9 rows.
-
-**Records pass:**
-- #195 S871 PCV → roadmap Chr ✅ S871 applied.
-- #334 records discrepancy (status had Chrome-verified S851 but Claude QA = ⬜) → updated to ✅ S851.
-
-**Dev fix (inline, <20 lines, 2 files):**
-- **YMAL empty container P2 FIXED** — Root cause: `<section>` wrapper in `sales/[id].tsx` always rendered even when `SimilarItems` returned null (wrong check order: null before loading). Fix: section wrapper moved inside `SimilarItems.tsx`, check order corrected (loading→null→render), error folded into null check. 0 TS errors. Pending push + deploy + re-verify.
-
-**Chrome QA (as Bob Smith/user2):**
-- **#7 ✅** Shopper Referral Rewards — /shopper/referrals: referral link, Copy button, 5 share buttons, 3 stats KPIs. ss_9010kwnoo ss_6923w3og8 (roadmap updated same-session — rule violation; evidence solid)
-- **#155 ✅ partial** Password Reset — /forgot-password: form + Send Reset Link button. ss_6730w1yav (form submission not tested → PCV)
-- **#161 ✅ partial** Contact Form — /contact: Contact Support page + Send us a Message form. ss_2625cd37s (PCV)
-- **#11 ✅** Organizer Referral — /organizer/referrals: link, Copy Link, 3 KPIs, How It Works. ss_881740tem (PCV)
-- **#156 ✅** Refund Policy — /organizer/settings Profile tab: Return Window guidance text only, no input field. ss_5542tnnsw (PCV)
-- **#316 UNVERIFIED** — recordSaleVisit call confirmed in code (pointsController line 57). Chrome QA blocked: qa256test806 password unknown.
-
-### S871 — QA MODE: Records pass + Chrome QA. #195 ✅. YMAL P2 confirmed. Blocked Queue: 9 rows.
-
-**Records pass (session start):**
-- S866 PCV entries applied to roadmap.md: #31 Chr → ✅ S866 (Save Brand Kit, partial), #194 Chr → ✅ S866 (full Saved Searches flow), #47 Chr → ✅ S866 (Tag Your Find modal opens).
-
-**Chrome QA results:**
-- **#195 Shopper ↔ Organizer Messaging ✅** — /messages as Bob (user2). Leo Thomas thread opened, "QA test message S871" sent, orange bubble appeared instantly at 04:16 PM. No 500 error. Thread history loads. ss_6404xkj76 ss_62888ptc3 ss_9076mfuyt
-- **"You might also like" gap ❌ P2 CONFIRMED** — Navigated to Alice's sale detail. YMAL section renders empty dark container with heading but zero items and no empty state message. No data needed to reproduce — section always shows even with zero recommendations. Bug: should hide or show empty state. ss_60495nt3b
-- **ZIP export copy re-confirmed ✅** — /organizer/settings?tab=help as Bob: "Download My Data" = "Limited to once per 24 hours"; ZIP = "Limited to once per month". Both correct on fresh account. ss_0411xcqp8
-
-**S870 push confirmed:** commit 07f0893 at 20:06 UTC — settings.tsx + scrape-auctionninja.yml ✅
-
-### S870 — QA MODE: 4/5 S869 fixes Chrome-verified. AuctionNinja disabled. ZIP rate-limit fix. Blocked Queue: 9 rows.
-
-**Chrome QA results (sequential):**
-- **Sale Type filter persistence ✅** — URL shows `?q=furniture&saleType=ESTATE` after search submit. Dropdown stays "Estate Sale". All results show Estate Sale badge. ss_9039vdcse ss_8858sjoxz
-- **ZIP export copy ✅** — "Download My Data" = "Limited to once per 24 hours". ZIP = "Limited to once per month". No shared paragraph. ss_3469lkjs6
-- **UGC button dark mode ✅** — Tag Your Find button: bg=amber-900/30, border=amber, text=amber. No white box in dark mode. ss_6053nytyy
-- **auth/me no password hash ✅** — /api/auth/me response: no password, resetToken, resetTokenExpiry, emailVerificationToken fields present.
-- **OAuth session supersede UNVERIFIED** — Requires real Google OAuth flow with Patrick's Gmail. Added to Blocked Queue.
-
-**Parallel work (AuctionNinja + ZIP fix):**
-- **AuctionNinja GH schedule disabled** — Confirmed structural Cloudflare ASN block (GitHub Actions on AWS us-east-1/us-east-2 = datacenter IPs, blocked before headers evaluated). Schedule disabled in scrape-auctionninja.yml with NAA-pattern comment. Fix path: Railway cron or residential proxy. Pending push.
-- **ZIP rate-limit blob parse fixed** — settings.tsx: both export handlers now parse JSON error from blob response before showing toast. "You've already exported today/this month" shown correctly on 429. "Download My Data" shows "Limited to once per 24 hours"; ZIP shows "Limited to once per month". Pending push.
-
-**Blocked Queue: 9 rows** (removed ZIP rate-limit ✅; added OAuth supersede UNVERIFIED)
-
-### S869 — BUG: 5 bugs fixed (3 P2 + 2 P1), deployed green. Blocked Queue 17→9.
-
-**Fixes deployed (all ✅ Vercel + Railway green per Patrick):**
-- **Sale Type filter reset** — handleSearch() now preserves all active filters (saleType, category, condition, saleStatus, sortBy, priceMin, priceMax) on search submit. Was: only passing `q`, dropping saleType. (search.tsx)
-- **ZIP export copy** — Shared paragraph no longer mentions rate limit; each button now has its own note: "Download My Data" = "once per 24 hours", ZIP = "once per month". (settings.tsx)
-- **UGC "Tag Your Find" dark mode** — Replaced bg-white with amber-100/amber-900 amber styling. No more white box in dark mode. (UGCPhotoSubmitButton.tsx)
-- **auth/me password hash** — GET /api/auth/me now destructures password/resetToken/resetTokenExpiry/emailVerificationToken before spreading safeUser. (auth.ts)
-- **OAuth session supersede** — OAuthBridge removed !user guard; exchange always fires on pending oauthProfile. (\_app.tsx)
-
-**Bonus:** search.tsx tail truncated by Edit tool mid-session (Edit tool truncation bug on files >250 lines). Repaired via Python — EmptyState body, Notify Me section, closing tags, export default SearchPage restored.
-
-**Session also confirmed:** S865b pushed ✅ · 3 P0 truncated files confirmed clean on GitHub HEAD ✅
-
-**Blocked Queue:** 17 → 9 (removed: 3 truncated P0s ✅, Sale Type filter ✅, ZIP copy ✅, UGC button ✅, auth/me hash ✅, OAuth supersede ✅). 5 items moved to PCV.
-
-### S868 — BUG+INFRA: Schema FK audit (4 migrations deployed), Foursquare fixed, AuctionNinja partially fixed (Cloudflare-blocked)
-
-**Health monitor findings:**
-- 2 GitHub Actions failures: AuctionNinja scraper (0 results), Foursquare scraper (secrets stale)
-- 1 Sentry slow query: DirectoryClaimEmail 1120ms (indexes already existed — no-op migration added)
-
-**Foursquare scraper — ✅ FIXED:**
-Workflow secrets `DATABASE_URL` and `DIRECT_URL` were stale. Updated both via GitHub Secrets API. Workflow re-triggered → ✅ SUCCESS.
-
-**AuctionNinja scraper — PARTIAL FIX / STILL BROKEN:**
-- Root cause 1 fixed: workflow called `runAuctionNinjaScraper` (nonexistent); actual function is `scrapeAuctionNinja`. Created `packages/backend/src/scripts/run-auctionninja.ts` run script. Updated workflow to use script.
-- Root cause 2 fixed: data moved to `/hire-an-estate-sale-company`. URL updated. Selector updated from `li > a` to `a[href^="https://www.auctionninja.com/"]`.
-- Root cause 3 UNRESOLVED: GitHub Actions runners get Cloudflare IP block (11KB challenge page vs full 325KB). Scraper returns 0 results even with correct URL + selector. Railway cron attempted (wrong) and reverted. GitHub Actions schedule re-enabled. Status: BROKEN — see Next Session investigation guide.
-
-**Schema FK audit — ✅ DEPLOYED TO RAILWAY PROD:**
-4 migrations applied in order (required 3 deploy attempts due to orphan ro
