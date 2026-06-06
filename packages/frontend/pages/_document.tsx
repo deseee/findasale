@@ -35,13 +35,12 @@ export default function Document() {
         <meta name="keywords" content="estate sales, yard sales, garage sales, auctions, flea markets, antiques, thrift, local sales" />
         <meta name="author" content="FindA.Sale" />
 
-        {/* Open Graph structural defaults — page-level <Head> provides og:title, og:description, og:image */}
-        <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="FindA.Sale" />
+        {/* Facebook app id — global, never overridden per-page, so safe in next/document <Head>.
+            NOTE: og:type, og:site_name, and twitter:card defaults were MOVED to _app.tsx
+            (next/head). next/document <Head> tags are NOT deduped against next/head, so any
+            structural default emitted here that a page also sets produced a DUPLICATE tag
+            (FB Sharing Debugger saw twitter:card twice). Keep only never-overridden tags here. */}
         <meta property="fb:app_id" content="4380032288935833" />
-
-        {/* Twitter card type default — page-level <Head> provides twitter:title, twitter:description, twitter:image */}
-        <meta name="twitter:card" content="summary_large_image" />
 
         {/* Viewport — explicit initial-scale=1 so Android PWA renders at true device width (was showing 320px on Pixel 6a — S548) */}
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
