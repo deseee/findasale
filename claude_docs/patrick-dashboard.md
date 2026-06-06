@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S900 Wrap
+# Patrick's Dashboard — S901 Wrap
 
 ---
 
@@ -19,43 +19,41 @@ git checkout HEAD -- packages/backend/src/controllers/internalGeocodingControlle
 
 ---
 
-## ✅ Push — S900 Wrap Docs Only
-
-After the restore above:
+## ✅ Push — S901 Wrap Docs
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S900 wrap — BQ 10→8, FB Events fixes confirmed on GitHub, truncation discovery"
+git commit -m "docs: S901 wrap — FB Events geocoding BQ resolved, BQ 8→7, Chrome sweep clean"
 .\push.ps1
 ```
 
 ---
 
-## S900 — What I Found
+## S901 — What I Found
 
-### Two S899 Sessions Reconciled — No Conflicts
+### FB Events Geocoding — RESOLVED
 
-The two parallel sessions worked on different items and agreed:
-- Chrome session cleared: hydration #418/#425, Vercel P0, CTA1 re-verify, organizer sweep
-- No-Chrome session cleared: geocoding backlog, outreach queue hygiene, S898 PCVs applied to roadmap
+The BQ row filed in S887 ("96% of FB Events un-geocoded") is now resolved. I queried the live Railway DB:
 
-**Combined BQ: 13 → 10** (from S899). S900 brings it to **8** after removing the two FB Events rows.
+- S887 baseline: ~96% ungeocoded
+- S901 check: **242 of 260 PUBLISHED FB Events have lat/lng** (93% geocoded — only 18 remaining)
 
-### FB Events Fixes Were Already on GitHub
+The geocoding fix pushed in S890 worked. BQ row removed.
 
-The S887/S890 coded fixes you pushed were actually complete all along. Your local files just got truncated by the Edit tool:
+### Chrome Sweep — All Clean
 
-- **API key alert fix** (`run-search-facebook-events.ts`) — confirmed on GitHub (sha e330401f). The `sendKeyHealthAlert()` function is there. Your local copy was missing the last 68 lines.
-- **"Dates approximate" label** (`SaleCard.tsx`) — confirmed on GitHub (sha 6191e53d). The label is at line ~252. Your local copy was missing the last 30 lines.
+Ran a full smoke test of the live site. Everything is holding:
 
-**No new push needed for these fixes. They're live.**
-
-### Edit Tool Truncation — Root Cause Found
-
-13 files on your machine are shorter than GitHub. The Cowork Edit tool silently drops the end of files after ~250 lines or after multiple sequential edits. This was a quiet bug across multiple sessions. The restore command above fixes all of them.
+| Page | Result |
+|------|--------|
+| Homepage (logged-out) | ✅ ss_0902g1f99 |
+| /search?q=estate+sale | ✅ 10 results, filters, Plan Route ss_97123xc98 |
+| /trending | ✅ Hot sales with HOT badges ss_51644lm5l |
+| Organizer dashboard (Alice) | ✅ LIVE sale, action buttons, storefront ss_46975zqht |
+| /organizer/insights | ✅ $220 revenue, 50% conversion, real data ss_81628rlz9 |
 
 ---
 
@@ -83,14 +81,14 @@ Publish a sale on user1 (Alice Johnson) → QA agent can then verify SmartBuyerW
 
 | Area | Status |
 |------|--------|
-| Blocked Queue | **8 rows** (≥8 = QA mode continues) |
-| FB Events fixes | ✅ Already on GitHub (S890 push was correct) |
-| Local files | ⚠️ 13 truncated — restore before dev work |
+| Blocked Queue | **7 rows** (below ≥8 ceiling — DEV mode available next session) |
+| FB Events geocoding | ✅ RESOLVED S901 — 93% geocoded (18 remaining) |
+| Local files | ⚠️ 13 truncated — restore before dev work (see above) |
 | D-002 dark mode | ✅ RESOLVED S898 Chrome-verified |
-| Geocoding backlog | ✅ 70 remaining (was 716) |
+| Geocoding backlog | ✅ 70 un-geocoded PUBLISHED (was 716) |
 | Hydration #418/#425 | ✅ RESOLVED S899 Chrome-verified |
 | Outreach queue | ✅ Clean (37 PENDING) — awaiting Gmail reactivation |
-| CTA1 logged-out | ✅ Re-verified S899 |
+| CTA1 logged-out | ✅ Chr verified S899 — roadmap updated S901 |
 | FB Marketplace | ❌ Dead end — awaiting your DROP decision |
 | #332 Shopify | ✅ Fixes on GitHub — needs real test store for QA |
 | #335 Outreach | Needs you: reactivate Gmail → OUTREACH_ENABLED=true |
@@ -98,10 +96,10 @@ Publish a sale on user1 (Alice Johnson) → QA agent can then verify SmartBuyerW
 
 ---
 
-## Next Session (S901)
+## Next Session (S902)
 
-Session type: **QA MODE** (8 rows = at ceiling).
+Session type: **DEV MODE** (BQ = 7, below QA ceiling).
 
 1. Restore local files (your action — see urgent block above)
-2. Push S900 wrap docs (above pushblock)
-3. BQ QA continues — #335, #332 Shopify, #230 Widget
+2. Push S901 wrap docs (pushblock above)
+3. Dispatch dev work on roadmap BROKEN items

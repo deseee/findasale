@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S901 — QA MODE (2026-06-06). CTA1 Chr ✅ S899 applied to roadmap.md (pre-compaction). FB Events geocoding BQ RESOLVED (242/260 PUBLISHED geocoded, 93% — 18 remaining). Chrome sweep: Homepage ✅ ss_0902g1f99, Search ✅ ss_97123xc98, Trending ✅ ss_51644lm5l, Organizer dashboard (Alice) ✅ ss_46975zqht, /organizer/insights real data ✅ ss_81628rlz9 ($220 revenue, 50% conversion rate). BQ: 8→7 (FB Events resolved). DEV mode available next session.**
+
 **S900 — QA WRAP (2026-06-06). S899 parallel sessions reconciled: no conflicts. Combined BQ 13→10. Records PCV audit: S897/S898/S899 PCVs confirmed — #168 dark mode ✅ S898 + #213 dark mode ✅ S898 already applied; S897 PCVs all re-verifications of existing ✅ (no new Chrome column changes). FB Events API key alert + dateApproximate CONFIRMED ON GITHUB (S887/S890 fixes were already pushed — local files truncated by Cowork Edit tool). 13 local files corrupted by Edit tool truncation — Patrick must restore from GitHub HEAD before any local dev. BQ rows removed (10→8). QA MODE continues (8 = ceiling). Only pushblock: roadmap.md + STATE.md + patrick-dashboard.md.**
 
 **S899 — QA MODE (2026-06-06, Chrome session). P0 RESOLVED: Vercel build (pages/index.tsx truncation — `export default HomePage;` restored, Patrick confirmed green). Hydration #418/#425 Chrome-verified ✅ RESOLVED (ss_7314kq2jb, ss_8313pt34n) — zero DevTools errors on finda.sale/ as user2 (Bob Smith). CTA1 re-verified Chrome ✅ (ss_7824i8i38, ss_6695ak8vm). Organizer sweep: Dashboard ✅ / Plan Tracker ✅ / Add Items ✅ / POS ✅ (all dark mode). Hydration BQ row removed (11→10). Combined S899 result: BQ 13→10.**
@@ -122,7 +124,6 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. **S890:** unchanged — DB-only session, no Chrome. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 | #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. **S890 re-verified leak PLUGGED:** 0 DirectoryClaimEmail sends since Jun 5 08:00 UTC (psycopg2). No active sending. Only the Gmail reactivation + Jane Thrift re-send remain (Patrick). | S865-auto / Jun 5 |
 
-| Facebook Events 96% un-geocoded → unblocked by geocoding fix | **P1** — 1,460 ungeocoded, 1,307 city-only, 211 live (psycopg2 S890). City-center fallback code was correct but never reached. **S890:** the geocoding fix above (status=PUBLISHED + oldest-first) means the 211 LIVE FB Events records now get fetched + city-center-geocoded on the next run. The 1,096 ENDED FB Events are intentionally skipped. Optional: a `source=Facebook Events` workflow_dispatch run for an immediate drain. | After geocoding push, confirm live FB Events get lat/lng | S887 |
 | 462 WARM leads email-ready, no outreach record | **P2** — **S890 UNCHANGED: still exactly 462** (psycopg2). Note: backfill-organizer-contacts.yml backfills CONTACT data (email/phone), NOT DirectoryClaimEmail rows — that queue-row backfill was never built. Correctly deferred while OUTREACH_ENABLED=false (#335). Do during outreach resume. | Backfill DirectoryClaimEmail PENDING for the 462 as part of #335 resume | S887 |
 
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
@@ -222,30 +223,46 @@ _(S862
 
 ## Next Session
 
-**S900 completed:** QA WRAP. S899 parallel sessions reconciled (no conflicts). BQ 10→8. FB Events fixes confirmed already on GitHub. 13 local files truncated by Edit tool — Patrick must restore before dev work.
+**S901 completed:** QA MODE. CTA1 Chr ✅ applied to roadmap. FB Events geocoding RESOLVED (BQ 8→7). Chrome sweep clean. DEV mode available next session.
 
-**Priority for next session (S901):**
-1. **[URGENT — Patrick must do first]** Restore corrupted local files:
+**Priority for next session (S902):**
+1. **[URGENT — Patrick must do first]** Restore corrupted local files (S900 Edit tool truncation — still needed):
    ```powershell
    Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\.git\index.lock"
    cd C:\Users\desee\ClaudeProjects\FindaSale
    git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
    ```
-2. **[BQ QA continues]** — BQ at 8 rows (≥8 → QA MODE continues):
-   - #335 Outreach resume: reactivate outreach@finda.sale at admin.google.com → hygiene done, 37 PENDING remain, Jane Thrift payout re-send
-   - FB Events geocoding: confirm lat/lng appearing after geocoding push (S890 fix in GitHub)
-   - 462 WARM leads: backfill during outreach resume
-3. **[#332 Shopify]** — S890 fixes on GitHub. Patrick: connect real custom-app store for live QA.
-4. **[#230 Smart Buyer Widget]** — Patrick: publish a sale on user1 for SmartBuyerWidget QA.
+2. **[BQ = 7, DEV mode available]** Dispatch dev work on roadmap BROKEN items or next priority features.
+3. **[Patrick actions still needed]:**
+   - #335 Outreach: reactivate outreach@finda.sale at admin.google.com → OUTREACH_ENABLED=true (hygiene done, 37 PENDING remain, Jane Thrift payout re-send)
+   - #332 Shopify: connect real custom-app store for live QA (S890 fixes on GitHub)
+   - #230 Smart Buyer Widget: publish a sale on user1
+   - FB Marketplace: Patrick decision — DROP recommended
 
 **Decisions still open (Patrick):**
-- **FB Marketplace:** DROP confirmed recommended (CF Worker dead end S899 — 0 records all metros). Graph API OAuth (#365) is correct long-term path.
+- **FB Marketplace:** DROP confirmed recommended. Graph API OAuth (#365) is correct long-term path.
 - **#332 Shopify:** core bugs fixed + on GitHub; need real custom-app store for QA.
-- **#335 outreach resume:** Reactivate outreach@finda.sale at admin.google.com → OUTREACH_ENABLED=true → run hygiene first.
+- **#335 outreach resume:** Reactivate outreach@finda.sale at admin.google.com → OUTREACH_ENABLED=true.
 - **AuctionZip recurring:** 4,893 one-time Chrome harvest records; ongoing automation = future decision.
 
 
 ## Recent Sessions
+
+### S901 — QA MODE (2026-06-06). FB Events geocoding BQ resolved. Chrome sweep clean. BQ: 8→7.
+
+**CTA1 roadmap update (pre-compaction):** Chr ✅ S899 applied to roadmap.md row CTA1 (ss_7824i8i38, ss_6695ak8vm — logged-out sale page, hasRemindMe=false, hasGetAlerts=true).
+
+**FB Events geocoding RESOLVED:** psycopg2 query confirmed 18 remaining out of 260 PUBLISHED FB Events with null lat (93% geocoded). BQ row REMOVED. Progression: S887 96% ungeocoded → S901 7% ungeocoded.
+
+**Chrome sweep — all clean:**
+- Homepage (logged-out): hero, search bar, Treasure Hunt card. ✅ ss_0902g1f99
+- /search?q=estate+sale: 10 results, Plan Route, filter sidebar. ✅ ss_97123xc98
+- /trending: Hot Sales with #1/#2/#3 HOT badges. ✅ ss_51644lm5l
+- Organizer dashboard (Alice/user1): Welcome + LIVE sale (Jun 4-7) + action buttons + storefront widget. ✅ ss_46975zqht
+- /organizer/insights: "Your Sales Analytics" — Total Sales 2, Active 1, Items 6, Sold 3, Revenue $220, Conversion 50%, Avg $62.83. ✅ ss_81628rlz9
+- /organizer/performance: 404 — expected (roadmap row #168 documents correct path as /organizer/insights; noted S899).
+
+**BQ:** 8→7 (FB Events resolved). Below ≥8 QA ceiling — DEV mode available next session.
 
 ### S900 — QA WRAP (2026-06-06). S899 parallel sessions reconciled. BQ: 10→8.
 
