@@ -527,6 +527,7 @@ model Organizer {
   @@index([directoryConfidenceScore]) // Feature #458: minConfidence filter on public sale search
   @@index([contactEmail]) // Sentry slow query fix 2026-05-30: emailDiscoveryJob WHERE contactEmail IS NULL AND website IS NOT NULL (1020ms)
   @@index([isClaimed, isUnmanagedListing]) // Sentry slow query fix 2026-05-30: OR predicate on isClaimed/isUnmanagedListing prevents individual index use (1460ms)
+  @@index([isUnmanagedListing, isStateLicensed]) // Sentry slow query fix 2026-06-06: websiteEnrichmentJob WHERE isUnmanagedListing=true AND isStateLicensed=true AND website IS NULL (1159ms)
 }
 
 // Feature #354: OrganizerHours — business hours per day of week

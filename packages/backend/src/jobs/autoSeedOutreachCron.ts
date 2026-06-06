@@ -110,6 +110,7 @@ export async function runAutoSeedOutreach(): Promise<void> {
     // Load existing DirectoryClaimEmail organizerIds to avoid duplicates
     const existingClaims = await prisma.directoryClaimEmail.findMany({
       select: { organizerId: true },
+      distinct: ['organizerId'],
     });
     const existingOrgIds = new Set(existingClaims.map(c => c.organizerId));
 
@@ -133,6 +134,7 @@ export async function runAutoSeedOutreach(): Promise<void> {
     // (different organizers may share sam@gmail.com across 48 rows, etc.).
     const existingClaimEmails = await prisma.directoryClaimEmail.findMany({
       select: { emailAddress: true },
+      distinct: ['emailAddress'],
     });
     const existingEmailAddresses = new Set(existingClaimEmails.map(c => c.emailAddress.toLowerCase()));
     const seenEmailAddresses = new Set<string>();
