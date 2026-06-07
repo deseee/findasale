@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
@@ -30,6 +30,12 @@ const FlashDealForm: React.FC<FlashDealFormProps> = ({
   const [discountPct, setDiscountPct] = useState<number>(25);
   const [durationMinutes, setDurationMinutes] = useState<number>(120);
 
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [onCancel]);
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const response = await api.post('/flash-deals', {
@@ -59,7 +65,10 @@ const FlashDealForm: React.FC<FlashDealFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 p-4 bg-warm-50 dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700">
-      <h3 className="text-lg font-semibold text-warm-900 dark:text-white">Create Flash Deal</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-warm-900 dark:text-white">Create Flash Deal</h3>
+        <button type="button" onClick={onCancel} aria-label="Close" className="text-warm-400 dark:text-gray-500 hover:text-warm-700 dark:hover:text-gray-300 transition-colors text-xl leading-none">&times;</button>
+      </div>
 
       {/* Item Select */}
       <div>
