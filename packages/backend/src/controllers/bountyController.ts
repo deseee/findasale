@@ -948,12 +948,8 @@ export const getOrganizerSubmissions = async (req: AuthRequest, res: Response) =
     // Query submissions where the item belongs to one of the organizer's sales
     const submissions = await prisma.bountySubmission.findMany({
       where: {
+        organizerId,
         submittedAt: { gte: thirtyDaysAgo },
-        item: {
-          sale: {
-            organizerId,
-          },
-        },
       },
       include: {
         bounty: {
@@ -988,12 +984,8 @@ export const getOrganizerSubmissions = async (req: AuthRequest, res: Response) =
     // Count total submissions in the same criteria
     const total = await prisma.bountySubmission.count({
       where: {
+        organizerId,
         submittedAt: { gte: thirtyDaysAgo },
-        item: {
-          sale: {
-            organizerId,
-          },
-        },
       },
     });
 

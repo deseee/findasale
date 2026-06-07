@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S906 — QA MODE (2026-06-07). Bug C (messages reply dark mode) ✅ CHROME-VERIFIED (DOM computed styles + visual). Hero search Enter ✅ CHROME-VERIFIED (navigated to /search?q=vintage%20lamp). BountySubmission "Your Submissions" display bug FIXED inline (getOrganizerSubmissions where clause: item.sale.organizerId→organizerId direct field, TS 0 errors). #176 stale roadmap note corrected. BQ: 9→7.**
+
 **S905 — QA MODE (2026-06-07). Bug A (P1 passkey) ✅ CHROME-VERIFIED. #197 BountyMatchModal ✅ CHROME-VERIFIED (BountySubmission DB record confirmed). Bug C (messages dark mode) + Hero search Enter CODED. New P3: BountySubmission "Your Submissions" display bug. BQ: 11→9 (Bug A + #197 resolved).**
 
 **S904 — QA MODE (2026-06-06). Autonomous QA sweep complete. Bug A (P1 passkey auth): CODED — next.config.js beforeFiles + usePasskey.ts double /api/ prefix fixed (TS 0 errors, pushblock below). Bug B (#197 bountyController): already coded S903, still pending push. Bug C (P3 messages reply dark mode): new finding. Hero search Enter (P3): new finding. Full product sweep ✅ — shopper discovery, organizer management all functional. BQ: 8→11 (3 new items). QA-ONLY continues.**
@@ -126,6 +128,7 @@ _S899 QA MODE: React hydration #418/#425 Chrome-verified ✅ RESOLVED (ss_7314kq
 _S900 QA WRAP: FB Events API key alert (P2) CONFIRMED ON GITHUB (sha e330401f run-search-facebook-events.ts) + FB Events dateApproximate (P3) CONFIRMED ON GITHUB (sha 6191e53d SaleCard.tsx) — both local files truncated, GitHub has the complete fixes. Both BQ rows REMOVED. Local file corruption discovered: 13 tracked files truncated vs GitHub HEAD. Patrick must restore via git checkout HEAD. BQ: 10→8._
 _S904 QA MODE: Bug A (P1 passkey auth) CODED this session — next.config.js + usePasskey.ts. Bug C (P3 messages reply dark mode) + Hero search Enter (P3) added as new BQ items. BQ: 8→11._
 _S905 QA MODE: Bug A ✅ CHROME-VERIFIED (passkey routes reach Railway — 403 CSRF confirmed, not 404). #197 ✅ CHROME-VERIFIED (modal opened without 403; BountySubmission DB record id=cmq361vpz000d7andwmuns3p0 created, status=PENDING_REVIEW). Bug C (messages dark mode) + Hero search Enter: CODED pending push. New P3: BountySubmission "Your Submissions" tab shows empty state even after successful submission. BQ: 11→9 (Bug A + #197 removed)._
+_S906 QA MODE: Bug C ✅ CHROME-VERIFIED (DOM + visual ss_4563dqnh2 — gray-800 form on gray-900 page, gray-600 border, shadow). Hero search Enter ✅ CHROME-VERIFIED (ss_8251ipdgd — /search?q=vintage%20lamp navigated). BountySubmission display bug FIXED inline — getOrganizerSubmissions changed from item.sale.organizerId indirect join to direct organizerId field (BountySubmission schema has @id organizerId column). TS 0 errors. Bug C + Hero search BQ rows removed. BQ: 9→7._
 _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898 (ss_1751wzkxe), HuntPassModal ✅ Chrome S898 (ss_4554ems7i), CheckoutModal CODE-ONLY (0 shippingAvailable items in DB — genuinely untestable). D-002 row removed. Hydration #418/#425: S896 showToday fix was PARTIAL — Chrome-verified still 26× #418 post-deploy. ROOT CAUSE FOUND + FIX APPLIED S898: formatSaleDate() used date-fns format() with local timezone during render; server (UTC) vs client (local tz) produces different 'MMM d' strings for timezone-edge sales → hydration mismatch on every SaleCard. FIX: removed format import, replaced with UTC-based getUTCMonth/getUTCDate. TS 0 errors. Chrome re-verify pending. BQ: 14→13 (D-002 removed)._
 
 | Feature | Reason | What's Needed | Session Added |
@@ -135,10 +138,6 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. **S890:** unchanged — DB-only session, no Chrome. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 | #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. **S890 re-verified leak PLUGGED:** 0 DirectoryClaimEmail sends since Jun 5 08:00 UTC (psycopg2). No active sending. Only the Gmail reactivation + Jane Thrift re-send remain (Patrick). | S865-auto / Jun 5 |
 
-
-| Bug C — Messages reply input invisible in dark mode | **P3** — `/messages/[threadId]` reply form (`position:fixed; bottom:0; bg-gray-800`) blends into page background (`bg-gray-900`) — barely visible in dark mode. Textarea and send button not visible to user without knowing to look at very bottom. Confirmed via getBoundingClientRect (form at CSS y=621-703 in 703px viewport) + computed styles (DPR=1.65 screenshot). | CSS fix: add border-t contrast + brighter bg or padding change to make form visible | S904 |
-
-| Hero search — Enter key doesn't navigate | **P3** — Hero search input on homepage has `type="text"` with no `form action` — pressing Enter does nothing. Users who type a search term and press Enter get no feedback. Clicking the search button/icon works. Direct URL `/search?q=...` works. | Add form wrapper with action="/search" or onKeyDown handler | S904 |
 
 | 462 WARM leads email-ready, no outreach record | **P2** — **S890 UNCHANGED: still exactly 462** (psycopg2). Note: backfill-organizer-contacts.yml backfills CONTACT data (email/phone), NOT DirectoryClaimEmail rows — that queue-row backfill was never built. Correctly deferred while OUTREACH_ENABLED=false (#335). Do during outreach resume. | Backfill DirectoryClaimEmail PENDING for the 462 as part of #335 resume | S887 |
 
@@ -151,6 +150,8 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
+| — | Bug C — Messages reply form dark mode (S905 fix) | Navigated finda.sale/messages/cmomwghd500ot11qwsx7oobic as Alice Johnson (shopper). DOM: form bg rgb(31,41,55) (gray-800) vs page rgb(17,24,39) (gray-900). Border-top rgb(75,85,99) (gray-600). Shadow rgba(0,0,0,0.45) 0px -4px 12px. Visual ss_4563dqnh2 shows lighter strip + separator. | S906 |
+| — | Hero search Enter key navigation (S905 fix) | Navigated finda.sale/ as Alice Johnson. Clicked hero input. Typed "vintage lamp". Pressed Enter. URL → /search?q=vintage%20lamp. Results page loaded with 3 sales (ss_8251ipdgd). | S906 |
 | — | Bug A — Passkey auth routes reach Railway (not NextAuth 404) | Navigated to finda.sale as Alice (user1). JS-fetched /api/auth/passkey/authenticate/options and /api/auth/passkey/register/options. Both returned HTTP 403 with Railway CSRF validation message — confirms routes reach Railway backend. Pre-fix: NextAuth catch-all returned 404. Bug A fix confirmed working. ss_525855od8 (modal), ss_6954mly74 (post-submit) | S905 |
 | — | #197 BountyMatchModal — POST /bounties/match fix | Navigated /organizer/bounties as Alice (user1). Clicked "I have this!" on Bob Smith bounty → BountyMatchModal opened (no 403). Selected "QA Active Sale S875" + "Vintage Pyrex Bowls Set ($45.00)". Typed message + clicked Submit → modal closed, green "Submission" toast appeared. DB confirmed: BountySubmission id=cmq361vpz000d7andwmuns3p0, status=PENDING_REVIEW, itemId=90bde6e8 (Pyrex), shopperMessage="QA test S905 — bounty match fix verify". ss_525855od8, ss_6954mly74, ss_64952omqa | S905 |
 |---|---------|----------|---------|
@@ -244,21 +245,21 @@ _(S862
 
 ## Next Session
 
-**S905 completed:** QA MODE. Bug A ✅ Chrome-verified. #197 ✅ Chrome-verified + DB confirmed. Bug C (messages dark mode) + Hero search Enter CODED but not pushed. BQ: 9. QA MODE continues.
+**S906 completed:** QA MODE. Bug C ✅ Chrome-verified. Hero search Enter ✅ Chrome-verified. BountySubmission display bug FIXED (inline — getOrganizerSubmissions direct organizerId). #176 stale roadmap note corrected. BQ: 7. QA MODE continues (7 < 8 ceiling).
 
-**Priority for next session (S906):**
-1. **[PUSH — Bug C + Hero search fixes]** (both coded this session via Python/bash)
+**Priority for next session (S907):**
+1. **[PUSH — S906 fix]** BountySubmission display fix + roadmap.md + STATE.md + patrick-dashboard.md:
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/frontend/pages/messages/[id].tsx
-   git add packages/frontend/pages/index.tsx
-   git commit -m "fix: messages reply dark mode border contrast + shadow; fix: hero search Enter key navigation"
+   git add packages/backend/src/controllers/bountyController.ts
+   git add claude_docs/strategy/roadmap.md
+   git add claude_docs/STATE.md
+   git add claude_docs/patrick-dashboard.md
+   git commit -m "fix: getOrganizerSubmissions use direct organizerId field (was indirect item.sale.organizerId join — submissions never shown); fix: roadmap #176 stale Sales Near You note"
    .\push.ps1
    ```
-   Wait ~2 min Vercel deploy → Chrome-verify: (1) /messages/[id] in dark mode — reply form visible; (2) Homepage hero search — type query, press Enter → /search?q= navigates.
-2. **[P3 new bug — BountySubmission display]** "Your Submissions" tab on /organizer/bounties shows empty even after successful submission. DB has the record. Frontend query likely wrong. Dispatch `findasale-dev` to fix.
-3. **[Doc fix needed]** Update #176 roadmap note — "Sales Near You still missing" is stale (confirmed live ss_5140qm032 S903).
-4. **[Patrick still needed]:**
+2. **[Chrome QA — BountySubmission "Your Submissions"]** After deploy: navigate /organizer/bounties as Alice → "Your Submissions" tab → verify cmq361vpz000d7andwmuns3p0 appears.
+3. **[Patrick still needed]:**
    - #335 Outreach: reactivate outreach@finda.sale at admin.google.com (37 PENDING remain, Jane Thrift payout re-send)
    - #332 Shopify: connect real custom-app store for live QA
    - #230 Smart Buyer: publish a sale on user1 account
@@ -276,6 +277,21 @@ _(S862
 
 
 ## Recent Sessions
+
+### S906 — QA MODE (2026-06-07). Bug C ✅ + Hero search ✅ Chrome-verified. BountySubmission display FIXED. BQ: 9→7.
+
+**Bug C (messages reply dark mode) ✅ CHROME-VERIFIED:** Navigated finda.sale/messages/cmomwghd500ot11qwsx7oobic as Alice Johnson. DOM computed styles: form bg rgb(31,41,55) (gray-800) vs page rgb(17,24,39) (gray-900) — distinct. Border-top rgb(75,85,99) (gray-600). Shadow rgba(0,0,0,0.45) 0px -4px 12px. Visual ss_4563dqnh2 shows lighter strip at page bottom with visible separator. Fix confirmed working.
+
+**Hero search Enter key ✅ CHROME-VERIFIED:** Navigated finda.sale/ as Alice Johnson. Clicked hero input. Typed "vintage lamp" (value confirmed via JS: input.value="vintage lamp"). Pressed Enter. URL changed to /search?q=vintage%20lamp. Search results page loaded with 3 sales (ss_8251ipdgd). onKeyDown handler working correctly.
+
+**BountySubmission "Your Submissions" display bug — FIXED INLINE:** Root cause confirmed: `getOrganizerSubmissions` controller used `item: { sale: { organizerId } }` (indirect join through item→sale) as the where filter. But `BountySubmission` has a direct `organizerId` field (indexed, set correctly at create time). The indirect join failed because item→sale join doesn't guarantee organizerId match on the submission record. Fixed both `findMany` and `count` where clauses to use `{ organizerId, submittedAt: { gte: thirtyDaysAgo } }`. TS 0 errors. Inline edit (<20 lines, single file).
+
+**#176 roadmap stale note corrected:** "Sales near you ⬜ still missing" updated to "Sales Near You ✅ LIVE S903 (ss_5140qm032)".
+
+**PCVs staged:** Bug C ✅ + Hero search ✅ — in Pending Chrome Verifications table above.
+
+**BQ:** 9→7 (Bug C removed, Hero search removed). 7 < 8 ceiling → QA MODE continues but DEV available next session with Patrick sign-off.
+**Push needed:** bountyController.ts + roadmap.md + STATE.md + patrick-dashboard.md.
 
 ### S905 — QA MODE (2026-06-07). Bug A ✅ + #197 ✅ Chrome-verified. Bug C + Hero search CODED. BQ: 11→9.
 
