@@ -1,80 +1,54 @@
-# Patrick's Dashboard — S912 Wrap
+# Patrick's Dashboard — S913 Wrap (2026-06-07)
 
 ---
 
-## ✅ PUSH NOW — Combined S909 + S912
+## ✅ DONE THIS SESSION (no action needed)
+
+- **Bulk-email kill switch** — 8 proactive bulk jobs gated behind `OUTREACH_ENABLED` (new `utils/bulkEmailGate.ts`). You pushed these; Railway redeploying.
+- **2 new daily monitors** — `findasale-email-delivery-health` (06:07) and `findasale-ops-cost-guard` (05:10). Both ran clean once.
+- **Task fleet consolidated** — retired `context-freshness-check` + `ux-spotcheck`; narrowed `health-scout` to security+code-quality; kept `ci-sentry-health` + `brand-drift`.
+- **ImprovMX forward** — `outreach@finda.sale → deseee@gmail.com` is live.
+- **Workspace account** — confirmed active (sending ~200/day, no suspension/OAuth alerts in 20 days).
+
+---
+
+## ✅ PUSH NOW — S913 wrap docs + the bounce/forward job script
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/FlashDealForm.tsx
-git add "packages/frontend/pages/organizer/sales/[id]/flash-deals.tsx"
-git add packages/backend/src/jobs/outwardEmailAutomationsJob.ts
-git add packages/backend/src/services/abandonedSignupEmailService.ts
-git add packages/backend/src/jobs/saleEndingSoonJob.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: email kill-switch — outwardEmailAutomationsJob + abandonedSignupEmailService (OUTREACH_ENABLED gate + isUnmanagedListing filter) + saleEndingSoonJob (quota fix); fix: FlashDealForm X/close button (S909)"
+git add scripts/outreach-mailbox-ops.js
+git commit -m "docs(S913): email-ops hardening wrap + noted findings; add outreach-mailbox-ops job (bounce cleanup + auto-forward)"
 .\push.ps1
 ```
 
-> **Note:** `FlashDealForm.tsx` and `flash-deals.tsx` are from S909 and have been pending. They're included here in the combined push. If you already pushed them separately, skip those two `git add` lines.
+> The 8 gated job files + `bulkEmailGate.ts` were already pushed earlier this session — not repeated here.
 
 ---
 
-## ⚠️ STILL NEEDED — Restore Corrupted Local Files (if not done S904+)
+## ⏳ NEXT SESSION (S914) — Claude owns this; no manual work for you
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
-```
+Blocked this session only because there was no Railway CLI / MCP / creds to reach the outreach mailbox's Gmail API, and Chrome was ruled out. The job is written and waiting at `scripts/outreach-mailbox-ops.js`:
 
----
-
-## S912 — What Got Done
-
-### Email Kill-Switch Audit + Fixes
-
-**Root cause of June 6 continued sends confirmed:** `OUTREACH_ENABLED=false` only gated `outreachEmailsCron.ts`. The `outwardEmailAutomationsJob.ts` is a completely separate daily cron (10:00 UTC) with no kill switch — it ran on schedule and sent the "Still there, Bangor?" email to a scraped organizer.
-
-**Second root cause:** `abandonedSignupEmailService.ts` queried by `createdAt` window with no filter to exclude scraped listings. Scrapers set `isUnmanagedListing: true`; without `isUnmanagedListing: false`, every newly scraped organizer would be targeted by the signup nudge forever.
-
-| File | Fix | Result |
-|------|-----|--------|
-| `outwardEmailAutomationsJob.ts` | Added OUTREACH_ENABLED gate at cron callback top — blocks all 5 outward services in one check | Lines 29-32 confirmed |
-| `abandonedSignupEmailService.ts` | Added OUTREACH_ENABLED gate + `isUnmanagedListing: false` to Prisma query | Lines 168-171 + 178 confirmed |
-| `saleEndingSoonJob.ts` | Added OUTREACH_ENABLED gate + removed in-memory DAILY_EMAIL_CAP (restart-prone) + added QuotaExceededError early-exit | Lines 51-54 + 141-144 confirmed |
-
-**Audited clean (no action needed):**
-- `postSaleRecapEmailService.ts` — covered by job-level gate + naturally filtered (ENDED sales only)
-- `reviewRequestEmailService.ts` — covered by job-level gate + naturally filtered (requires real purchase records)
-- `winBackEmailService.ts` — covered by job-level gate + naturally filtered (real ENDED sales ≥45d)
-- `onboardingEmailService.ts` — not wired to any cron trigger (zero automated send risk)
+1. **Trash the Jun-6 bounce backlog** (targeted: `from:mailer-daemon subject:"one step from going live"`, reversible) — `railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run` then `--apply`.
+2. **Enable auto-forwarding** on the outreach mailbox (address already verified) — `... enable-forwarding`.
+3. **Test forwarding end-to-end** — send to outreach@ + find@outreach, confirm it lands in deseee@gmail.com.
+4. If the Railway CLI is still flaky, that's the blocker — do the Railway-CLI research first.
 
 ---
 
-## Blocked Queue — Current (7 items — DEV mode unlocked)
+## 📋 NOTED FINDINGS (recorded in STATE.md — address before outreach resume)
 
-| # | Item | Priority | Action |
-|---|------|----------|--------|
-| 332 | Shopify bugs fixed — needs real store for QA | P0 (aged) | Patrick: connect real Shopify store |
-| 335 | Outreach sending suspension — Gmail reactivation needed | P1 | Patrick: reactivate outreach@finda.sale at admin.google.com (~Jun 22) |
-| — | 462 WARM leads email-ready, no outreach record | P2 | Do with #335 resume |
-| — | FB Marketplace 0 records — CF Worker dead end | P2 | **Patrick decision: DROP recommended** |
-| 230 | Smart Buyer Widget Human QA | P3 | Patrick: publish sale on user1 to test |
-| — | WARM tier enrichment at 3.5% | P3 | Background |
-| — | GSF 80.7% un-geocoded | P3 | Background |
-
-**BQ = 7. Below the 8-item QA ceiling. DEV mode available next session.**
+- **[P2]** Bounced addresses aren't auto-suppressed → build bounce→`EmailSuppression` before `OUTREACH_ENABLED=true`.
+- **[P2]** All email (incl. payouts/receipts) rides one Gmail account = single point of failure → consider a separate transactional rail.
+- **[P3]** `OUTREACH_ENABLED` also silently pauses opt-in "sale ending soon" emails → consider a separate bulk flag.
+- **[P3]** Backend `/health` 404s → add a real health route.
 
 ---
 
-## Next Session (S913)
-
-1. **PUSH** the combined S909+S912 block above.
-2. **DEV work** — check roadmap.md BROKEN section for highest-priority items.
-
-**Open decisions for you:**
-- FB Marketplace: DROP (recommended) or pursue Graph API OAuth path (#365)?
-- #332 Shopify: connect a real custom-app store to unblock QA
-- #335 Outreach: reactivate outreach@finda.sale at admin.google.com (~Jun 22; Jane Thrift payout re-send is the only urgent transactional email before then)
-- #230 Smart Buyer: publish a sale on user1 to enable QA
+## Decisions still open
+- **#335 outreach resume:** account active; keep `OUTREACH_ENABLED=false` until ~Jun 22 (warming). Jane Thrift payout re-send is the only urgent transactional email.
+- **FB Marketplace:** DROP recommended; Graph API OAuth (#365) = long-term path.
+- **#332 Shopify:** code fixed; needs a real custom-app store for QA.
+- **#230 Smart Buyer:** publish a sale on user1 to enable QA.

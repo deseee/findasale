@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S913 — OPS/EMAIL HARDENING (2026-06-07). Email-system audit + monitoring automation + task-fleet consolidation.** (1) Audited S912 kill-switch — sound + already live on `main` (the "Push pending" note was stale). Knock-on found: only 3 of ~40 Gmail-rail senders (`emailService.emails.send`) were gated. Dispatched dev → gated 8 proactive bulk jobs behind OUTREACH_ENABLED via new `utils/bulkEmailGate.ts` (weeklyEmailJob, notificationJob, presaleSneakPeekJob, curatorEmailJob, organizerWeeklyDigestJob, monthlyTrendReportJob, tierLapseJob warning-cron, abandonedCheckoutJob) — Patrick pushed, redeploying. Transactional + opt-in event mail intentionally left ungated. (2) NEW daily scheduled tasks: `findasale-email-delivery-health` (06:07, 14 checks A–N) + `findasale-ops-cost-guard` (05:10 — deploy health, Google-Maps cost guard, smoke test, backup verify). Both ran clean once (⚠️ caught 5 stale Vercel deploy failures + an UptimeRobot blip — both pre-known/recovered). (3) Task-fleet consolidation: RETIRED `context-freshness-check` (→friction-audit) + `ux-spotcheck` (→full-site-audit new Phase 5); NARROWED `health-scout` to security+code-quality; KEPT `ci-sentry-health` (owns CI+secrets+all-Sentry) + `brand-drift`. (4) ImprovMX root alias `outreach@finda.sale → deseee@gmail.com` LIVE. (5) Workspace account confirmed ACTIVE (sending ~200/day, zero suspension/OAuth/quota alerts in 20d inbox scan). **PENDING → S914 (blocked this session: no Railway CLI/MCP/creds):** run `scripts/outreach-mailbox-ops.js` to (a) trash the Jun-6 abandoned-signup bounce backlog (targeted query `from:mailer-daemon subject:"one step from going live"`) and (b) enable auto-forwarding on the outreach@finda.sale Workspace mailbox (address already verified by Patrick); then test forwarding end-to-end. BQ unchanged (7).
+
 **S912 — BUG MODE (2026-06-07). Email kill-switch audit complete. Root cause of June 6 continued sends: `outwardEmailAutomationsJob.ts` had no OUTREACH_ENABLED gate (daily 10:00 UTC cron runs independently of outreachEmailsCron.ts). 3 fixes shipped: (1) `outwardEmailAutomationsJob.ts` — OUTREACH_ENABLED gate added at cron callback top, blocks all 5 outward services in one check; (2) `abandonedSignupEmailService.ts` — OUTREACH_ENABLED gate added + `isUnmanagedListing: false` filter added to candidate query (scrapers set isUnmanagedListing=true, so scraped organizers were being targeted by the 1h signup nudge); (3) `saleEndingSoonJob.ts` — OUTREACH_ENABLED gate added + in-memory DAILY_EMAIL_CAP removed (same restart-prone root cause as June 5 blast) + QuotaExceededError early-exit added to inner catch block. Audited 4 additional services (postSaleRecapEmailService, reviewRequestEmailService, winBackEmailService, onboardingEmailService) — all clean, no action needed. BQ unchanged (7). Push pending.**
 
 **S911 — RECORDS (2026-06-07). S910 PCVs audited — all 23 map to rows already chr ✅ from prior sessions or admin infrastructure pages (no roadmap rows). No roadmap column changes applied. PCV table cleaned (32 rows removed: S905/S906/S909/S910). roadmap.md Last Updated header updated. BQ unchanged (7). Below ceiling — DEV mode available.**
@@ -119,6 +121,15 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 **Geocoding:** 6,760 sales still not geocoded. Nightly geocoding job addresses gradually.
 
 ---
+
+## S913 Noted Findings (raised this session — not yet actioned)
+
+Surfaced during the S913 email audit; recorded so they aren't lost. None are active outages — all are deferred-risk / tech-debt, most to address BEFORE `OUTREACH_ENABLED=true`.
+
+- **[P2] Bounced addresses are not auto-suppressed.** `EmailSuppression` has only 5 rows total; the Jun-6 abandoned-signup bounces ("reached a limit for sending mail") were never added. Sending to known-bad addresses on outreach resume risks re-tripping the Workspace suspension. Bounces currently live only as mailer-daemon messages in the outreach@finda.sale mailbox, unparsed. → Build bounce → `EmailSuppression` processing BEFORE outreach resumes.
+- **[P2] Single Gmail/Workspace account is a SPOF for ALL email.** `emailService.emails.send` carries transactional mail (payouts, receipts, password resets, messages) AND bulk mail through the one outreach Workspace account; the Jun-5 suspension would have silently killed transactional mail too. → Consider a separate transactional rail (Resend/SES) so a suspension can't break payouts/receipts.
+- **[P3] `OUTREACH_ENABLED` conflates two concerns.** It now gates cold outreach AND opt-in subscriber notifications (`saleEndingSoonJob`) AND bulk digests — so turning off outreach also silently stops opt-in "sale ending soon" emails shoppers requested. → Consider a separate `BULK_EMAIL_ENABLED` / account-health flag distinct from cold-outreach.
+- **[P3] Backend `/health` and `/api/health` return 404.** Monitoring (ops-cost-guard) falls back to the root `200` JSON. → Add a real `/health` route or update monitors to the canonical path.
 
 ## Blocked Queue
 
@@ -271,30 +282,24 @@ _(S862
 
 ## Next Session
 
-**S912 completed:** BUG MODE. Email kill-switch audit. 3 backend files fixed (outwardEmailAutomationsJob.ts + abandonedSignupEmailService.ts + saleEndingSoonJob.ts). Push pending (see patrick-dashboard.md).
+**S914 TOP PRIORITY — finish the outreach-mailbox ops (Claude owns this end-to-end; do NOT hand Patrick manual steps).** This session was blocked: no Railway CLI binary, no Railway MCP, GMAIL_* creds absent from local .env, and Chrome was ruled out for the bulk delete. The job is written and waiting: `scripts/outreach-mailbox-ops.js`.
 
-**Priority for next session (S913):**
-1. **[PUSH REQUIRED]** Patrick must push ALL pending files (S909+S912 combined — see push block in patrick-dashboard.md).
-2. **[DEV available — BQ=7 < 8 ceiling]** Check roadmap.md BROKEN section for highest-priority items. Recommend dispatching `findasale-dev` on next BROKEN item.
-3. **[QA option]** If Patrick prefers QA: further organizer page sweep — remaining pages not yet verified.
+1. **Get Railway access.** Confirm whether the Railway CLI is working this session (it has been flaky — see memory [[project_railway_cli_research_todo]] and do that web research if still broken). With access:
+   - `railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run`  → confirm match count
+   - `railway run --service backend node scripts/outreach-mailbox-ops.js trash --apply`    → moves Jun-6 "one step from going live" mailer-daemon bounces to Trash (targeted, reversible 30d; NOT a blanket delete)
+   - `railway run --service backend node scripts/outreach-mailbox-ops.js enable-forwarding` → turns on auto-forward outreach@finda.sale → deseee@gmail.com (leaveInInbox)
+   - Scope note: token needs gmail.modify + gmail.settings.basic; if 403, the refresh token is send-only and must be re-minted with broader scope.
+2. **Test forwarding end-to-end.** Send a test to outreach@finda.sale AND find@outreach.finda.sale; confirm it lands in deseee@gmail.com (Gmail MCP search). Only then is "eyes on find@outreach" truly done.
+3. **Pre-approve the 2 new daily tasks** (so scheduled runs don't pause on perms): "Run now" once on `findasale-email-delivery-health` + `findasale-ops-cost-guard`.
 
 **Decisions still open (Patrick):**
-- **FB Marketplace:** DROP confirmed recommended. Graph API OAuth (#365) = correct long-term path.
-- **#332 Shopify:** bugs fixed on GitHub; need real store for QA.
-- **#335 outreach resume:** Reactivate outreach@finda.sale → OUTREACH_ENABLED=true (wait until ~Jun 22; Jane Thrift payout re-send is the only urgent transactional email).
-- **AuctionZip recurring:** 4,893 one-time harvest; automation = future decision.
+- **#335 outreach resume:** account is active; keep OUTREACH_ENABLED=false until ~Jun 22 (warming). Jane Thrift payout re-send is the only urgent transactional email.
+- **FB Marketplace:** DROP recommended; Graph API OAuth (#365) = long-term path.
+- **#332 Shopify:** code fixed; needs a real custom-app store for QA.
 - **#230 Smart Buyer:** publish a sale on user1 to enable QA.
 
-**Patrick actions still needed:**
-- Restore 13 corrupted local files (if not yet done):
-  ```powershell
-  git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
-  ```
-- #335 Outreach: reactivate outreach@finda.sale at admin.google.com
-- #332 Shopify: connect real custom-app store
-- #230 Smart Buyer: publish a sale on user1
-
 ## Recent Sessions
+
 
 ### S912 — BUG MODE (2026-06-07). Email kill-switch audit + 3 fixes.
 
