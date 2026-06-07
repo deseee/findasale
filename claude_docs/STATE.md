@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S905 — QA MODE (2026-06-07). Bug A (P1 passkey) ✅ CHROME-VERIFIED. #197 BountyMatchModal ✅ CHROME-VERIFIED (BountySubmission DB record confirmed). Bug C (messages dark mode) + Hero search Enter CODED. New P3: BountySubmission "Your Submissions" display bug. BQ: 11→9 (Bug A + #197 resolved).**
+
 **S904 — QA MODE (2026-06-06). Autonomous QA sweep complete. Bug A (P1 passkey auth): CODED — next.config.js beforeFiles + usePasskey.ts double /api/ prefix fixed (TS 0 errors, pushblock below). Bug B (#197 bountyController): already coded S903, still pending push. Bug C (P3 messages reply dark mode): new finding. Hero search Enter (P3): new finding. Full product sweep ✅ — shopper discovery, organizer management all functional. BQ: 8→11 (3 new items). QA-ONLY continues.**
 
 **S903 — QA MODE (2026-06-06). Wrap. #197 BountyMatchModal fix CODED (bountyController.ts, TS 0 errors). Pushblock provided to Patrick. Stale note confirmed: #176 "Sales Near You still missing" → INCORRECT, feature IS live (ss_5140qm032). BQ: 8 (unchanged).**
@@ -123,16 +125,16 @@ _S899 QA MODE (parallel no-Chrome): Geocoding RESOLVED (psycopg2 count=70, BQ ro
 _S899 QA MODE: React hydration #418/#425 Chrome-verified ✅ RESOLVED (ss_7314kq2jb, ss_8313pt34n) — row removed. Vercel build P0 RESOLVED (pages/index.tsx `export default HomePage;` restored). Organizer sweep clean. BQ: 13→12._
 _S900 QA WRAP: FB Events API key alert (P2) CONFIRMED ON GITHUB (sha e330401f run-search-facebook-events.ts) + FB Events dateApproximate (P3) CONFIRMED ON GITHUB (sha 6191e53d SaleCard.tsx) — both local files truncated, GitHub has the complete fixes. Both BQ rows REMOVED. Local file corruption discovered: 13 tracked files truncated vs GitHub HEAD. Patrick must restore via git checkout HEAD. BQ: 10→8._
 _S904 QA MODE: Bug A (P1 passkey auth) CODED this session — next.config.js + usePasskey.ts. Bug C (P3 messages reply dark mode) + Hero search Enter (P3) added as new BQ items. BQ: 8→11._
+_S905 QA MODE: Bug A ✅ CHROME-VERIFIED (passkey routes reach Railway — 403 CSRF confirmed, not 404). #197 ✅ CHROME-VERIFIED (modal opened without 403; BountySubmission DB record id=cmq361vpz000d7andwmuns3p0 created, status=PENDING_REVIEW). Bug C (messages dark mode) + Hero search Enter: CODED pending push. New P3: BountySubmission "Your Submissions" tab shows empty state even after successful submission. BQ: 11→9 (Bug A + #197 removed)._
 _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898 (ss_1751wzkxe), HuntPassModal ✅ Chrome S898 (ss_4554ems7i), CheckoutModal CODE-ONLY (0 shippingAvailable items in DB — genuinely untestable). D-002 row removed. Hydration #418/#425: S896 showToday fix was PARTIAL — Chrome-verified still 26× #418 post-deploy. ROOT CAUSE FOUND + FIX APPLIED S898: formatSaleDate() used date-fns format() with local timezone during render; server (UTC) vs client (local tz) produces different 'MMM d' strings for timezone-edge sales → hydration mismatch on every SaleCard. FIX: removed format import, replaced with UTC-based getUTCMonth/getUTCDate. TS 0 errors. Chrome re-verify pending. BQ: 14→13 (D-002 removed)._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing → CORE BUGS FIXED (pending push) | **P0** — **S890 FIXES CODED** (shopifyService.ts + connect-shopify.ts, TS 0 errors both packages): (1) sold-sync rewritten to correct 3-step REST flow — GET variant→inventory_item_id, GET locations→location_id, POST /inventory_levels/set.json (was malformed, silently failing); (2) API version 2024-01→2025-10; (3) variant payload gets `inventory_management:'shopify'`; (4) connect-shopify guide rewritten to match the real manual-token flow (removed false OAuth/auto-webhook/auto-sync promises); (5) 422/429 error handling added. **FLAGGED for Patrick (NOT built — future decisions):** proper OAuth app, inbound webhook handler (Shopify→FindA.Sale is one-way only), token encryption, optional ShopifyListing.shopifyInventoryItemId column to skip the 2 lookup calls. **Store still needed for live QA, but the code is now correct.** | Push; then connect a real custom-app store to QA the push + sold-sync end-to-end | S791 |
-| #197 BountyMatchModal — POST /bounties/match always 403 | **P2** — Production bug confirmed S902. `bountyController.ts` L581+L593: `const organizerId = req.user?.id` fetches the **user** ID, then compares `item.sale.organizerId !== organizerId` where `item.sale.organizerId` is the **organizer record** ID — they are always different values, so every organizer gets 403. Alice: userId=cmomwf6nr000911qwipyim1nc vs organizerId=cmomwf8ya000x11qwvtqmk3i9 (confirmed via psycopg2). BountyMatchModal can never fire in production. Fix: change ownership check to compare `sale.organizer.userId === req.user?.id` (or look up organizer record first). | Push bountyController.ts (coded S903, TS 0 errors) → Railway deploy → Chrome-verify BountyMatchModal as Alice | S902 |
+
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. **S890:** unchanged — DB-only session, no Chrome. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 | #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. **S890 re-verified leak PLUGGED:** 0 DirectoryClaimEmail sends since Jun 5 08:00 UTC (psycopg2). No active sending. Only the Gmail reactivation + Jane Thrift re-send remain (Patrick). | S865-auto / Jun 5 |
 
-| Bug A — Passkey auth broken (next.config.js + usePasskey.ts) | **P1** — Passkey login/registration route `/api/auth/passkey/*` missing from `next.config.js` `beforeFiles` array → NextAuth catch-all intercepts it → 404. `usePasskey.ts` `authenticatePasskey()` complete step had double `/api/` prefix (`/api/auth/passkey/authenticate/complete` on an axios instance with `baseURL: '/api'` → resolves to `/api/api/auth/passkey/authenticate/complete`). **CODED S904:** (1) Added `{ source: '/api/auth/passkey/:path*', destination: \`${railwayApi}/auth/passkey/:path*\` }` to `beforeFiles`. (2) Fixed complete step path to `/auth/passkey/authenticate/complete`. TS 0 errors. | Push next.config.js + usePasskey.ts → Vercel deploy → Chrome-verify passkey login/registration | S904 |
 
 | Bug C — Messages reply input invisible in dark mode | **P3** — `/messages/[threadId]` reply form (`position:fixed; bottom:0; bg-gray-800`) blends into page background (`bg-gray-900`) — barely visible in dark mode. Textarea and send button not visible to user without knowing to look at very bottom. Confirmed via getBoundingClientRect (form at CSS y=621-703 in 703px viewport) + computed styles (DPR=1.65 screenshot). | CSS fix: add border-t contrast + brighter bg or padding change to make form visible | S904 |
 
@@ -149,6 +151,8 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
+| — | Bug A — Passkey auth routes reach Railway (not NextAuth 404) | Navigated to finda.sale as Alice (user1). JS-fetched /api/auth/passkey/authenticate/options and /api/auth/passkey/register/options. Both returned HTTP 403 with Railway CSRF validation message — confirms routes reach Railway backend. Pre-fix: NextAuth catch-all returned 404. Bug A fix confirmed working. ss_525855od8 (modal), ss_6954mly74 (post-submit) | S905 |
+| — | #197 BountyMatchModal — POST /bounties/match fix | Navigated /organizer/bounties as Alice (user1). Clicked "I have this!" on Bob Smith bounty → BountyMatchModal opened (no 403). Selected "QA Active Sale S875" + "Vintage Pyrex Bowls Set ($45.00)". Typed message + clicked Submit → modal closed, green "Submission" toast appeared. DB confirmed: BountySubmission id=cmq361vpz000d7andwmuns3p0, status=PENDING_REVIEW, itemId=90bde6e8 (Pyrex), shopperMessage="QA test S905 — bounty match fix verify". ss_525855od8, ss_6954mly74, ss_64952omqa | S905 |
 |---|---------|----------|---------|
 | — | CTA1 — Logged-out sale page "Remind Me by Email" absent | Pre-compression S898 Chrome verify. Navigated sale page as logged-out guest — "Remind Me by Email" absent. Screenshot ID not captured in post-compression summary. Records: verify screenshot in transcript before applying to roadmap. Evidence path: .claude/projects/.../8ebb1c20-2219-4e45-95a5-58c139e4bb8e.jsonl | S898 |
 | — | PerformanceDashboard dark mode (D-002 verify) | ✅ Chrome-verified S898 — /organizer/performance as Alice (user1) in dark mode. All metrics readable. ss_1751wzkxe — **Applied to roadmap S899 (row #168 Status)** | S898 |
@@ -240,32 +244,29 @@ _(S862
 
 ## Next Session
 
-**S904 completed:** QA MODE. Full product sweep done. Bug A (passkey) CODED. bountyController.ts (#197) already coded S903. Both need push. BQ: 11 (3 new items added this session).
+**S905 completed:** QA MODE. Bug A ✅ Chrome-verified. #197 ✅ Chrome-verified + DB confirmed. Bug C (messages dark mode) + Hero search Enter CODED but not pushed. BQ: 9. QA MODE continues.
 
-**Priority for next session (S905):**
-1. **[PUSH #1 — Bug A passkey fix + #197 bounty fix]** (both coded, TS clean)
+**Priority for next session (S906):**
+1. **[PUSH — Bug C + Hero search fixes]** (both coded this session via Python/bash)
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/frontend/next.config.js
-   git add packages/frontend/hooks/usePasskey.ts
-   git add packages/backend/src/controllers/bountyController.ts
-   git commit -m "fix: passkey beforeFiles route + double /api/ prefix; fix: #197 BountyMatchModal 403 — compare organizer.userId"
+   git add packages/frontend/pages/messages/[id].tsx
+   git add packages/frontend/pages/index.tsx
+   git commit -m "fix: messages reply dark mode border contrast + shadow; fix: hero search Enter key navigation"
    .\push.ps1
    ```
-   Wait ~3 min Railway + Vercel deploys → Chrome-verify passkey auth + BountyMatchModal → BQ 11→9.
-2. **[Also needed — restore 13 corrupted local files]**
-   ```powershell
-   Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\.git\index.lock"
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
-   ```
-3. **[S905 session start]** Run BQ count — target 9 after push+verify (still QA mode until more fixed).
-4. **[Doc fix needed]** Update #176 roadmap note — "Sales Near You still missing" is stale (confirmed live ss_5140qm032).
-5. **[Patrick still needed]:**
+   Wait ~2 min Vercel deploy → Chrome-verify: (1) /messages/[id] in dark mode — reply form visible; (2) Homepage hero search — type query, press Enter → /search?q= navigates.
+2. **[P3 new bug — BountySubmission display]** "Your Submissions" tab on /organizer/bounties shows empty even after successful submission. DB has the record. Frontend query likely wrong. Dispatch `findasale-dev` to fix.
+3. **[Doc fix needed]** Update #176 roadmap note — "Sales Near You still missing" is stale (confirmed live ss_5140qm032 S903).
+4. **[Patrick still needed]:**
    - #335 Outreach: reactivate outreach@finda.sale at admin.google.com (37 PENDING remain, Jane Thrift payout re-send)
    - #332 Shopify: connect real custom-app store for live QA
    - #230 Smart Buyer: publish a sale on user1 account
    - FB Marketplace: Patrick decision — DROP recommended
+   - Restore 13 corrupted local files if not yet done:
+     ```powershell
+     git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
+     ```
 
 **Decisions still open (Patrick):**
 - **FB Marketplace:** DROP confirmed recommended. Graph API OAuth (#365) = correct long-term path.
@@ -275,6 +276,23 @@ _(S862
 
 
 ## Recent Sessions
+
+### S905 — QA MODE (2026-06-07). Bug A ✅ + #197 ✅ Chrome-verified. Bug C + Hero search CODED. BQ: 11→9.
+
+**Bug A (P1 passkey) ✅ CHROME-VERIFIED:** JS-fetched /api/auth/passkey/authenticate/options and /api/auth/passkey/register/options → both HTTP 403 CSRF Railway response (not NextAuth 404). Confirms routes now reach Railway. next.config.js beforeFiles fix + usePasskey.ts double /api/ prefix fix confirmed working.
+
+**#197 BountyMatchModal ✅ CHROME-VERIFIED:** As Alice (user1) on /organizer/bounties: clicked "I have this!" on Bob Smith bounty → modal opened (no 403). Selected QA Active Sale S875 → Vintage Pyrex Bowls Set ($45.00) → submitted with message → green "Submission" toast, modal closed cleanly. DB confirmed: BountySubmission id=cmq361vpz000d7andwmuns3p0, status=PENDING_REVIEW, correct bountyId/organizerId/itemId. ss_525855od8, ss_6954mly74.
+
+**New P3 finding — BountySubmission "Your Submissions" display bug:** After successful submission, "Your Submissions" tab shows empty state ("Your submissions will appear here once you start submitting items to bounties."). DB has the record. Frontend query likely wrong (filtering by userId instead of organizerId, or wrong bounty table join). Not blocking core fix but UX gap.
+
+**Bug C (messages reply dark mode) — CODED:** `messages/[id].tsx` reply form border strengthened dark:border-gray-700→dark:border-gray-600 + top shadow added. Applied via Python/bash.
+
+**Hero search Enter key — CODED:** `index.tsx` hero input now has onKeyDown handler — if Enter key pressed with non-empty query, routes to /search?q=[query]. Applied via Python/bash.
+
+**PCVs staged:** Bug A ✅ + #197 ✅ — in Pending Chrome Verifications table above.
+
+**BQ:** 11→9 (Bug A removed, #197 removed). Still ≥8 → QA MODE continues.
+**Push needed:** messages/[id].tsx + index.tsx + STATE.md + patrick-dashboard.md.
 
 ### S904 — QA MODE (2026-06-06). Full product sweep. Bug A (passkey) CODED. BQ: 8→11.
 

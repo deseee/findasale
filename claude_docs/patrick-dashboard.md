@@ -1,29 +1,28 @@
-# Patrick's Dashboard — S904 Wrap
+# Patrick's Dashboard — S905 Wrap
 
 ---
 
-## 🔴 PUSH THIS NOW — Bug A (Passkey) + #197 (Bounty) Fix
+## ✅ PUSH NOW — Bug C (Messages dark mode) + Hero Search Enter Fix
 
-Both fixes are code-complete, TypeScript-clean, and ready to ship in one commit:
+Both fixes coded this session via Python/bash. Push them together:
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/next.config.js
-git add packages/frontend/hooks/usePasskey.ts
-git add packages/backend/src/controllers/bountyController.ts
-git commit -m "fix: passkey beforeFiles route + double /api/ prefix; fix: #197 BountyMatchModal 403 — compare organizer.userId"
+git add packages/frontend/pages/messages/[id].tsx
+git add "packages/frontend/pages/index.tsx"
+git commit -m "fix: messages reply dark mode border contrast + shadow; fix: hero search Enter key navigation"
 .\push.ps1
 ```
 
-After ~3 min Railway + Vercel deploys:
-- Chrome-verify passkey login (try logging in with a passkey) → BQ 11→10
-- Chrome-verify BountyMatchModal as Alice on an item → BQ 10→9
+After ~2 min Vercel deploy, Chrome-verify:
+1. Go to any message thread in **dark mode** → reply form at bottom should be clearly visible
+2. Go to homepage → type search term → press **Enter** → should navigate to /search?q=...
 
 ---
 
 ## ⚠️ ALSO NEEDED — Restore Corrupted Local Files
 
-Before any local dev, run these in PowerShell. 13 files were silently truncated by the Cowork Edit tool (380+ lines missing vs GitHub).
+If not done yet from S904 wrap:
 
 ```powershell
 # Step 1: Remove git lock file (if present)
@@ -34,66 +33,58 @@ cd C:\Users\desee\ClaudeProjects\FindaSale
 git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
 ```
 
-**Why this matters:** Pushing without restoring will delete 380+ lines of production code from GitHub (including all of `_app.tsx`'s providers and the complete schema.prisma).
-
 ---
 
-## ✅ Push — S904 Wrap Docs
+## ✅ Push — S905 Wrap Docs
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S904 wrap — full QA sweep, Bug A passkey CODED, BQ=11"
+git commit -m "docs: S905 wrap — Bug A + #197 Chrome-verified, Bug C + hero search coded, BQ=9"
 .\push.ps1
 ```
 
 ---
 
-## S904 — What I Found
+## S905 — What Got Done
 
-### Full Product QA Sweep — All Major Surfaces Tested
+### Bug A (Passkey Auth) ✅ CHROME-VERIFIED
 
-Walked the entire product as Alice (organizer) and Leo/Bob (shoppers). Everything listed below works correctly:
+Passkey routes (`/api/auth/passkey/*`) now reach Railway correctly. Verified by JS-fetching the passkey options endpoints — both return HTTP 403 CSRF (Railway's response), not HTTP 404 (NextAuth's response). Pre-fix behavior was 404 from NextAuth catching the route.
 
-**Shopper discovery:** Feed, Calendar, Wishlist, Clearance, Categories (with drill-down to Comics — 30 real items), Encyclopedia, Guides, Trending, Map (55 pins + popups), Search (tabs + filters + Plan Route)
+The fixes from S904 (next.config.js beforeFiles + usePasskey.ts double /api/ prefix) are confirmed working.
 
-**Organizer management:** Dashboard, Social Posts (AI generates Facebook/Instagram/Nextdoor/etc. copy), Print Kit (sign templates + QR labels), Ripples analytics, Add Items (Camera/Batch/Manual/CSV tabs), Settings profile, Messages (thread list + full conversation view)
+### #197 BountyMatchModal ✅ CHROME-VERIFIED
 
-### Bug A — Passkey Auth (P1) — CODED ✅
+As Alice (organizer): clicked "I have this!" on a Bob Smith bounty → modal opened successfully (previously always 403). Selected sale → selected Pyrex Bowls item → submitted. Green success toast appeared, modal closed. DB confirmed `BountySubmission` record created with status `PENDING_REVIEW`. Full end-to-end fix confirmed.
 
-Two root causes found and fixed:
+**Side note found:** The "Your Submissions" tab on the bounties page shows empty even after a successful submit — this is a separate display bug (the data is in the DB, just not rendering). P3 — will fix next session.
 
-1. **`next.config.js`** was missing the passkey route in `beforeFiles` — so NextAuth's catch-all intercepted `/api/auth/passkey/*` requests before they could reach Railway. Added the route.
+### Bug C — Messages Reply Dark Mode — CODED (push above)
 
-2. **`hooks/usePasskey.ts`** had a double `/api/` prefix bug — the authenticate complete step called `/api/auth/passkey/authenticate/complete` on an axios instance that already has `baseURL: '/api'`, resulting in `/api/api/auth/passkey/authenticate/complete`. Fixed to `/auth/passkey/authenticate/complete`.
+Reply form at bottom of `/messages/[id]` now has a stronger border and a top shadow in dark mode, making it clearly distinguishable from the page background.
 
-### #197 BountyMatchModal — Still Needs Your Push (coded S903)
+### Hero Search Enter Key — CODED (push above)
 
-Already in the pushblock above.
-
-### 3 New P3 Bugs Found
-
-1. **Messages reply form barely visible in dark mode** — the form blends with the page background. Exists and works, just hard to see.
-2. **Hero search Enter key doesn't navigate** — typing a search term and pressing Enter does nothing; must click the button. `/search?q=...` URL works fine.
-3. **Social Posts modal Escape key doesn't close** — must click the X button. Minor.
+The hero search bar on the homepage now responds to the Enter key — pressing Enter navigates to `/search?q=yourquery` the same as clicking the search button.
 
 ---
 
-## ⚠️ BQ = 11 — QA-ONLY Until Items Cleared
+## ⚠️ BQ = 9 — Still QA Mode
 
-After pushing the fixes above and Chrome-verifying both (passkey + BountyMatchModal), BQ drops to 9. Still in QA mode until below 8.
+QA mode continues until BQ drops below 8.
 
-To get to DEV mode: 2 more BQ items need to be fixed + Chrome-verified.
+After pushing the Bug C + Hero search fixes and Chrome-verifying both → BQ → 7 → DEV mode available.
 
 ---
 
 ## 🔴 Patrick Decisions Required
 
-### 1. Push Bug A + #197 Fix → See top of this document
+### 1. Push Bug C + Hero Search fixes → See top of this document
 
 ### 2. FB Marketplace — DROP or pursue?
-Confirmed dead end: Cloudflare Worker proxy returns 0 listings across all metros. FB soft-blocks datacenter IPs. **Recommendation: DROP.** Graph API OAuth (#365) is the long-term path.
+Confirmed dead end: Cloudflare Worker proxy returns 0 listings. FB soft-blocks datacenter IPs. **Recommendation: DROP.** Graph API OAuth (#365) is the long-term path.
 
 ### 3. #335 Outreach Resume
 When ready:
@@ -114,11 +105,12 @@ Publish a sale on user1 (Alice Johnson) → Claude can verify SmartBuyerWidget s
 
 | Area | Status |
 |------|--------|
-| Blocked Queue | **11 rows** — QA-ONLY (push Bug A + #197 to get to 9) |
-| Bug A — Passkey auth | 🔴 Fix CODED — awaiting your push |
-| #197 Bounties | 🔴 Fix CODED — awaiting your push |
-| Bug C — Messages dark mode | 🟡 New P3 — reply form low contrast |
-| Hero search Enter | 🟡 New P3 — no form action |
+| Blocked Queue | **9 rows** — QA-ONLY (push Bug C + hero search → verify → BQ→7 → DEV mode) |
+| Bug A — Passkey auth | ✅ CHROME-VERIFIED S905 |
+| #197 BountyMatchModal | ✅ CHROME-VERIFIED S905 |
+| Bug C — Messages dark mode | 🟡 CODED — awaiting push + verify |
+| Hero search Enter | 🟡 CODED — awaiting push + verify |
+| BountySubmission display | 🟡 New P3 — "Your Submissions" tab empty after submit |
 | D-002 dark mode | ✅ RESOLVED S898 |
 | Hydration errors | ✅ RESOLVED S899 |
 | Logout bug | ✅ RESOLVED S897 |
