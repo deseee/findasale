@@ -1,8 +1,8 @@
-# Patrick's Dashboard — S909 Wrap
+# Patrick's Dashboard — S910 Wrap
 
 ---
 
-## ✅ PUSH NOW — S909 (Bug fix + docs)
+## ✅ PUSH NOW — S910 (Docs only — no code changes)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -10,11 +10,11 @@ git add packages/frontend/components/FlashDealForm.tsx
 git add packages/frontend/pages/organizer/sales/[id]/flash-deals.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: FlashDealForm — add X/close button and Escape key handler; docs: S909 QA wrap — 5 organizer pages verified, Flash Deal modal P3 resolved, BQ 8→7"
+git commit -m "fix: FlashDealForm — X/close button and Escape key handler (S909); docs: S910 QA wrap — full admin sweep, organizer pages, 23 PCVs staged"
 .\push.ps1
 ```
 
-> **Note:** If you haven't yet pushed the S908 flash-deals page (`pages/organizer/sales/[id]/flash-deals.tsx`), the commit above includes it. If you already pushed it, remove that line from the `git add` block — it won't hurt to re-add it, but it's cleaner not to.
+> **Note:** `FlashDealForm.tsx` and `flash-deals.tsx` are from S909. They're included here in case you haven't pushed them yet. If you already pushed them, skip those two `git add` lines.
 
 ---
 
@@ -27,32 +27,45 @@ git checkout HEAD -- packages/backend/src/controllers/internalGeocodingControlle
 
 ---
 
-## S909 — What Got Done
+## S910 — What Got Done
 
-### Records Pass — No Roadmap Changes Needed
+### Records Pass
+Applied S909 PCVs to roadmap.md: #54 appraisals, #41 flip-report, #309 consignors, #185/#186 qr-codes, #71 reputation — all chr ✅ S909.
 
-All S908/S905/S906 PCVs were checked against roadmap.md. Every one maps to a row already marked chr ✅ from a prior session — no updates needed. Cross-session Chrome column rule satisfied.
-
-### P3 Fix: Flash Deal Modal — X Button + Escape Handler
-
-FlashDealForm.tsx updated (Python via bash — Edit tool banned):
-- Added `×` close button in the modal header (top-right corner, aria-label="Close")
-- Added `useEffect` Escape key listener that calls `onCancel()`
-- TypeScript: 0 errors
-
-**BQ entry RESOLVED. BQ: 8→7. DEV mode available next session.**
-
-### Organizer Pages Sweep — All Clean
-
-5 pages verified as Alice (user1@example.com):
+### Organizer Pages Sweep (3 additional pages)
 
 | Page | Result | Screenshot |
 |------|--------|-----------|
-| /organizer/appraisals | ✅ Crowdsourced Appraisals heading, Submit button, tabs, empty state | ss_6653l8dfe |
-| /organizer/flip-report | ✅ Full report: 60% sell-through, $325 revenue, 3/5 sold, Category Breakdown | ss_2720usq8g, ss_71199syzr |
-| /organizer/consignors | ✅ Consignors heading, + Add Consignor, empty state | ss_3604boua6 |
-| /organizer/qr-codes | ✅ QR Scan Analytics, 3 KPI cards, Scanner Funnel with live sale | ss_68576clbw |
-| /organizer/reputation | ✅ Score 0.1/5.0 real data, Reputation/Reviews tabs, New Organizer Badge | ss_2693dz51y |
+| /organizer/messages | ✅ Redirects to /messages, Leo Thomas thread, Quick Reply | ss_5824bhnnq, ss_8746z9b0g |
+| /organizer/ripples | ✅ Sale Ripples Analytics, 2 sales, Views/Total data, Activity Trend tabs | ss_5284hb0o0, ss_4108mizm6 |
+| /organizer/message-templates | ✅ 4 real templates, New Template form works | ss_71692ih7r, ss_02602x1vt |
+
+### Admin Sweep — All 20 Pages Verified
+
+Every admin page confirmed working as Alice Johnson (user1@example.com/ADMIN):
+
+| Page | Result | Screenshot |
+|------|--------|-----------|
+| /admin | ✅ MRR $158, 7 users, 5 organizers, 50,166 sales, 7D charts | ss_0615ial9z |
+| /admin/users | ✅ Real user table, role filter, search | ss_1261du6pf |
+| /admin/users/[id] | ✅ User detail, role badges | ss_01546bmvk |
+| /admin/sales | ✅ Scraped sales table, status filter | ss_7187e1scz |
+| /admin/feature-flags | ✅ Empty state, "+ Create Flag" button | ss_3742jnbrl |
+| /admin/broadcast | ✅ 71,429-user audience, message fields | ss_9268bnfs9 |
+| /admin/disputes | ✅ "No Disputes" empty state | ss_6530e1lr4 |
+| /admin/reports | ✅ Kelly's Estate Sales 42.9% sell-through, real data | ss_16868x9q7 |
+| /admin/outreach-opens | ✅ 173 organizers opened, real data | ss_7122talog |
+| /admin/organizer-confidence | ✅ 5 orgs, all "Not scored" | ss_2076oirkj |
+| /admin/feedback | ✅ 4 total, 2.5 avg rating | ss_6755hqi1c |
+| /admin/demand-signals | ✅ Real search query data | ss_1597wh9ux |
+| /admin/bid-review | ✅ "All clear ✅" empty state | ss_9929fo7v5 |
+| /admin/creators | ✅ 0 creators, 1 referral | ss_4639t59t2 |
+| /admin/items | ✅ Real items (Vintage Radio, Pyrex, Old Radio) | ss_01147jrgj |
+| /admin/scrape-pool | ✅ 46,692 orgs, Lead Tier chart | ss_4703oq7lp |
+| /admin/scraper | ✅ 6 sources Allowed, GarageSaleFinder last run 6/7 | ss_2410lpep4 |
+| /admin/encyclopedia | ✅ 57 Awaiting / 20 Published / 77 Total, real entries | ss_4862sqo9f |
+| /admin/ab-tests | ✅ Hero CTA v1 card, "No test data yet" | ss_94955q45e |
+| /admin/invites | ✅ Code 4J9U3B95 (unused), Copy URL/Delete | ss_4079b37cv |
 
 ---
 
@@ -68,13 +81,13 @@ FlashDealForm.tsx updated (Python via bash — Edit tool banned):
 | — | WARM tier enrichment at 3.5% | P3 | Background |
 | — | GSF 80.7% un-geocoded | P3 | Background |
 
-**BQ = 7. Below the 8-item QA ceiling. DEV mode is available next session.**
+**BQ = 7. Below the 8-item QA ceiling. DEV mode available next session.**
 
 ---
 
-## Next Session (S910)
+## Next Session (S911)
 
-Records first (apply S909 PCVs to roadmap.md). Then DEV work as you direct — check roadmap.md BROKEN section for next priorities. QA sweep can continue organizer pages not yet hit (messages, ripples, print-inventory, discount-rules, brand-kit).
+Records first: apply S910 PCVs to roadmap.md (23 pages staged). Then DEV work — check roadmap.md BROKEN section for next priorities.
 
 **Open decisions for you:**
 - FB Marketplace: DROP (recommended) or pursue residential proxy path?

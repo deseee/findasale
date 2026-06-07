@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S910 — QA MODE (2026-06-07). Records pass: Applied S909 PCVs to roadmap.md (#54 appraisals, #41 flip-report, #309 consignors, #185/#186 qr-codes, #71 reputation — all chr ✅ S909). Full admin sweep complete: 20/20 admin pages verified with real data. Organizer sweep: /organizer/messages ✅, /organizer/ripples ✅, /organizer/message-templates ✅. BQ unchanged (7 — all 7 items require external action: real Shopify store, outreach reactivation, Patrick publish-sale action, or DROP decision). Below ceiling — DEV mode available.**
+
 **S909 — QA MODE (2026-06-07). Records pass: confirmed no roadmap updates needed for S908/S905/S906 PCVs (all map to rows already chr ✅ from prior sessions — cross-session rule satisfied). P3 inline fix: FlashDealForm.tsx — added X/close button + Escape key handler (Python via bash, 0 TS errors). Chrome QA sweep (all as Alice user1@example.com): /organizer/appraisals ✅ (heading, Submit button, tabs, empty state ss_6653l8dfe), /organizer/flip-report ✅ (60% sell-through, $325 revenue, 3/5 sold, Category Breakdown table ss_2720usq8g, ss_71199syzr), /organizer/consignors ✅ (heading, + Add Consignor, empty state ss_3604boua6), /organizer/qr-codes ✅ (QR Scan Analytics, 3 KPI cards, Scanner Funnel ss_68576clbw), /organizer/reputation ✅ (Score 0.1/5.0 real data, Reputation/Reviews tabs, New Organizer Badge ss_2693dz51y). Flash Deal modal close BQ entry RESOLVED (X button shipped). BQ: 8→7. Below ceiling — DEV mode available next session.**
 
 **S908 — QA MODE (2026-06-07). Records pass: S907 PCVs applied to roadmap.md (4 rows — H-002 RESOLVED, Bounty E2E chr ✅, Explorer's Guild URL chr ✅, Pricing chr ✅). Dev: /organizer/sales/[id]/flash-deals.tsx NEW PAGE created (TS 0 errors). QA findings: Flash Deal button ✅ CONFIRMED WORKING (false positive — gated on PUBLISHED sale, ss_0053mz6eh). Social Posts button ✅ CONFIRMED WORKING (false positive — "Social Media Post" modal with platform selector, ss_8620q0mej). NEW P3: Flash Deal modal missing close/X button. New Chrome verifications: Print Kit ✅, Boost Sale ✅ "Sale Bump" modal, Holds ✅, /organizer/sales ✅, /organizer/plan/[saleId] ✅, /organizer/command-center ✅, /organizer/checklist/[saleId] ✅. BQ: 9→8 (−2 false positives +1 new P3).**
@@ -271,18 +273,40 @@ _(S862
 | — | Sale Plan Tracker (/organizer/plan/[saleId]) | Navigated /organizer/plan/59c49908... as Alice. "Track Your Progress" — "Complete tasks across 6 stages to successfully run your sale." Overall Progress 18%, 7/39 tasks, 6-stage timeline (Setup 4/5 active, Cataloging 3/5, Pre-Sale 0/7, Live 0/9, Wrapping Up 0/8, Complete 0/5). Dark mode correct. ss_4291jxseh | S908 |
 | — | Multi-Sale Command Center (/organizer/command-center) | Navigated /organizer/command-center as Alice. "Multi-Sale Command Center" — Active Sales=1, Total Items=2, Total Revenue=$0.00, Pending Actions=1 (all real data). Technical Alerts: "QA Active Sale S875: 1 item(s) are missing photos." Workspace widget present. Dark mode correct. ss_219765w9p | S908 |
 | — | Sale Checklist (/organizer/checklist/[saleId]) | Navigated /organizer/checklist/59c49908... as Alice. "Sale Checklist" heading, "QA Active Sale S875 — Mixed Goods" subtitle, Overall Progress 7/39 tasks complete, Pre-Sale/Day-Of/Post-Sale collapsible sections. ss_874815fmg | S908 |
+| — | /organizer/messages | Navigated finda.sale/organizer/messages as Alice (user1). Redirected to /messages. Leo Thomas thread loaded with 3 messages and Quick Reply box. Dark mode correct. ss_5824bhnnq, ss_8746z9b0g | S910 |
+| — | /organizer/ripples | Navigated finda.sale/organizer/ripples as Alice (user1). "Sale Ripples Analytics" heading. 2 sales listed with Views/Total data columns. Activity Trend tabs present. Dark mode correct. ss_5284hb0o0, ss_4108mizm6 | S910 |
+| — | /organizer/message-templates | Navigated finda.sale/organizer/message-templates as Alice (user1). 4 real templates loaded. "+ New Template" button → form opens with Name/Category/Response fields. Cancel dismisses. Dark mode correct. ss_71692ih7r, ss_02602x1vt | S910 |
+| — | /admin (Admin Dashboard) | Navigated finda.sale/admin as Alice (user1/ADMIN). MRR $158, 7 users, 5 organizers, 50,166 sales, 132 items. Organizer Funnel + 7-day charts with real data. Dark mode correct. ss_0615ial9z, ss_7346vp5uv | S910 |
+| — | /admin/users | Navigated finda.sale/admin/users as Alice. "Manage Users": search bar, role filter, "Hide scraped organizers" checkbox, real user table. Dark mode correct. ss_1261du6pf | S910 |
+| — | /admin/users/[id] | Navigated /admin/users/[Alice user id] as Alice. User detail: ID, auth method, role badges (USER/ORGANIZER/ADMIN), purchases, Back to users link. Dark mode correct. ss_01546bmvk | S910 |
+| — | /admin/sales | Navigated finda.sale/admin/sales as Alice. "Manage Sales": search, status filter, real scraped sales table. Dark mode correct. ss_7187e1scz | S910 |
+| — | /admin/feature-flags | Navigated finda.sale/admin/feature-flags as Alice. Suggested flags list, empty state, "+ Create Flag" button. Dark mode correct. ss_3742jnbrl | S910 |
+| — | /admin/broadcast | Navigated finda.sale/admin/broadcast as Alice. "Broadcast Message": 71,429-user audience dropdown, Subject + Message Body fields. Dark mode correct. ss_9268bnfs9 | S910 |
+| — | /admin/disputes | Navigated finda.sale/admin/disputes as Alice. All/Open/Under review/Resolved/Closed filters, "No Disputes" empty state. Dark mode correct. ss_6530e1lr4 | S910 |
+| — | /admin/reports | Navigated finda.sale/admin/reports as Alice. Organizer Performance + Revenue tabs. Real data: Kelly's Estate Sales 42.9% sell-through, $325.00 GMV. Export CSV button. ss_16868x9q7 | S910 |
+| — | /admin/outreach-opens | Navigated finda.sale/admin/outreach-opens as Alice. 173 organizers opened outreach. Email/address/website/touch columns. Sorted most-recent first. ss_7122talog | S910 |
+| — | /admin/organizer-confidence | Navigated finda.sale/admin/organizer-confidence as Alice. "Directory Confidence Scores": Low/Moderate/Good legend. 5 organizers listed, all "Not scored". ss_2076oirkj | S910 |
+| — | /admin/feedback | Navigated finda.sale/admin/feedback as Alice. "User Feedback": 4 total, 2.5 avg rating, star breakdown KPIs, search + All Ratings filter. ss_6755hqi1c | S910 |
+| — | /admin/demand-signals | Navigated finda.sale/admin/demand-signals as Alice. "Unmet Demand Signals": city filter, min-searches filter, real search query data. ss_1597wh9ux | S910 |
+| — | /admin/bid-review | Navigated finda.sale/admin/bid-review as Alice. "Bid Review Queue": "No bid IP records — All clear ✅" empty state. ss_9929fo7v5 | S910 |
+| — | /admin/creators | Navigated finda.sale/admin/creators as Alice. "Creator & Affiliate Management": 0 creators, 0 clicks, 0 conversions, 1 referral. Search + table. ss_4639t59t2 | S910 |
+| — | /admin/items | Navigated finda.sale/admin/items as Alice. "Manage Items": search, All Status dropdown, real items table (Vintage Radio $25 AVAILABLE, Vintage Pyrex Bowls $45 PENDING_REVIEW, Old Radio $85 AVAILABLE — all Kelly's Estate Sales). ss_01147jrgj | S910 |
+| — | /admin/scrape-pool | Navigated finda.sale/admin/scrape-pool as Alice. "Scrape Pool Dashboard": 46,692 scraped orgs, Avg Lead Score 24.4, 9% with email, 2% geocoded. Lead Tier chart: COLD 18544, WARM 19512, HOT 8636, ENTERPRISE 0. ss_4703oq7lp | S910 |
+| — | /admin/scraper | Navigated finda.sale/admin/scraper as Alice. "Directory Scraper Management": 6 sources (EstateSalesNet/GarageSaleFinder/FacebookMarketplace/NAAFindAnAuctioneer/AuctionNinja/YellowPagesCA), all "Allowed". GarageSaleFinder last run 6/7/2026 4:23 AM. "Emergency Takedown" action per source. ss_2410lpep4 | S910 |
+| — | /admin/encyclopedia | Navigated finda.sale/admin/encyclopedia as Alice. "Encyclopedia Curator": 57 Awaiting Review, 20 Published, 57 Enriched Pending, 77 Total Entries. "Run Full Curator Pass" button. Real entries (Hoosier Cabinet, Stickley Furniture — Furniture & Home). Promote/Reject actions. ss_4862sqo9f | S910 |
+| — | /admin/ab-tests | Navigated finda.sale/admin/ab-tests as Alice. "A/B Tests": "Hero CTA v1 — Homepage call-to-action button variants" card. Empty table. "No test data available yet." ss_94955q45e | S910 |
+| — | /admin/invites | Navigated finda.sale/admin/invites as Alice. "Beta Invite Codes": Generate New Invite form, real invite code 4J9U3B95 (unused, 6/4/2026). Copy URL/Code only/Delete actions. Sharing instructions visible. ss_4079b37cv | S910 |
 
 ---
 
 ## Next Session
 
-**S909 completed:** QA MODE. Records pass (no roadmap updates needed — all S908/S905/S906 PCVs already chr ✅). P3 inline fix: FlashDealForm.tsx X button + Escape handler shipped. Organizer sweep: /organizer/appraisals ✅, /organizer/flip-report ✅, /organizer/consignors ✅, /organizer/qr-codes ✅, /organizer/reputation ✅. BQ: 8→7 (Flash Deal modal RESOLVED).
+**S910 completed:** QA MODE. Records pass (applied S909 PCVs to roadmap.md — #54, #41, #309, #185/#186, #71 all chr ✅ S909). Full admin sweep: all 20 admin pages verified. Organizer sweep: /organizer/messages ✅, /organizer/ripples ✅, /organizer/message-templates ✅. BQ unchanged (7 — all external dependencies). 23 new PCVs staged.
 
-**Priority for next session (S910):**
-1. **[RECORDS FIRST]** `Skill('findasale-records')` → Apply S909 PCVs to roadmap.md (appraisals #54, flip-report #41, consignors #309, qr-codes #185/#186, reputation #71 — all chr ✅).
-2. **[PUSH REQUIRED]** Patrick must push: `packages/frontend/components/FlashDealForm.tsx` (X/close button fix from S909) + `packages/frontend/pages/organizer/sales/[id]/flash-deals.tsx` (new page from S908 if not yet pushed) + `claude_docs/STATE.md` + `claude_docs/patrick-dashboard.md`.
-3. **[DEV available — BQ=7 < 8 ceiling]** Next roadmap items to tackle as Patrick directs. Recommend checking roadmap.md BROKEN section for highest-priority items.
-4. **[QA]** Continue organizer sweep — pages not yet verified: /organizer/messages, /organizer/ripples, /organizer/print-inventory, /organizer/discount-rules, /organizer/brand-kit.
+**Priority for next session (S911):**
+1. **[RECORDS FIRST]** `Skill('findasale-records')` → Apply S910 PCVs to roadmap.md. Key rows: admin pages (encyclopedia #321, ab-tests #165, invites #166 already chr ✅ from prior sessions — check each). New organizer pages: messages, ripples, message-templates — find matching roadmap rows and update Chr column.
+2. **[PUSH REQUIRED]** Patrick must push pending files: `packages/frontend/components/FlashDealForm.tsx` (X/close button fix from S909) + `packages/frontend/pages/organizer/sales/[id]/flash-deals.tsx` (new page from S908) + `claude_docs/STATE.md` + `claude_docs/patrick-dashboard.md`.
+3. **[DEV available — BQ=7 < 8 ceiling]** Check roadmap.md BROKEN section for highest-priority items. Recommend dispatching `findasale-dev` on next BROKEN item.
 
 **Decisions still open (Patrick):**
 - **FB Marketplace:** DROP confirmed recommended. Graph API OAuth (#365) = correct long-term path.
@@ -301,6 +325,36 @@ _(S862
 - #230 Smart Buyer: publish a sale on user1
 
 ## Recent Sessions
+
+### S910 — QA MODE (2026-06-07). Full admin sweep + organizer pages. BQ unchanged (7).
+
+**Records pass:** Applied S909 PCVs to roadmap.md (#54 appraisals, #41 flip-report, #309 consignors, #185/#186 qr-codes, #71 reputation — all chr ✅ S909).
+
+**Organizer pages verified:** /organizer/messages ✅ (redirects to /messages, Leo Thomas thread, Quick Reply, ss_5824bhnnq), /organizer/ripples ✅ (Sale Ripples Analytics, 2 sales, Views/Total data, ss_5284hb0o0), /organizer/message-templates ✅ (4 templates, New Template form, ss_71692ih7r).
+
+**Admin sweep — all 20 pages ✅:**
+- /admin: MRR $158, 7 users, 5 organizers, 50,166 sales. ss_0615ial9z
+- /admin/users: search + role filter + real user table. ss_1261du6pf
+- /admin/users/[id]: user detail with role badges. ss_01546bmvk
+- /admin/sales: scraped sales table. ss_7187e1scz
+- /admin/feature-flags: "+ Create Flag" button. ss_3742jnbrl
+- /admin/broadcast: 71,429-user audience. ss_9268bnfs9
+- /admin/disputes: "No Disputes" empty state. ss_6530e1lr4
+- /admin/reports: Kelly's Estate Sales 42.9% sell-through real data. ss_16868x9q7
+- /admin/outreach-opens: 173 organizers, real data. ss_7122talog
+- /admin/organizer-confidence: 5 orgs "Not scored". ss_2076oirkj
+- /admin/feedback: 4 total, 2.5 avg rating. ss_6755hqi1c
+- /admin/demand-signals: real search query data. ss_1597wh9ux
+- /admin/bid-review: "All clear ✅" empty state. ss_9929fo7v5
+- /admin/creators: 0 creators, 1 referral. ss_4639t59t2
+- /admin/items: real items table (Vintage Radio, Pyrex, Old Radio). ss_01147jrgj
+- /admin/scrape-pool: 46,692 scraped orgs, Lead Tier chart. ss_4703oq7lp
+- /admin/scraper: 6 sources all Allowed, GarageSaleFinder last run 6/7. ss_2410lpep4
+- /admin/encyclopedia: 57 Awaiting / 20 Published / 77 Total, real entries. ss_4862sqo9f
+- /admin/ab-tests: Hero CTA v1 card, empty test data. ss_94955q45e
+- /admin/invites: code 4J9U3B95 (unused), Copy URL/Delete actions. ss_4079b37cv
+
+**BQ: 7 (unchanged)** — all 7 items blocked by external dependencies (Shopify store, outreach reactivation, Patrick publish-sale, FB Marketplace DROP decision).
 
 ### S907 — QA MODE (2026-06-07). Autonomous QA sweep. H-002 RESOLVED. Bounty E2E ✅. 2 P2 bugs found. BQ: 7→9.
 
