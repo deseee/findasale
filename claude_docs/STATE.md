@@ -8,7 +8,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S910 — QA MODE (2026-06-07). Records pass: Applied S909 PCVs to roadmap.md (#54 appraisals, #41 flip-report, #309 consignors, #185/#186 qr-codes, #71 reputation — all chr ✅ S909). Full admin sweep complete: 20/20 admin pages verified with real data. Organizer sweep: /organizer/messages ✅, /organizer/ripples ✅, /organizer/message-templates ✅. BQ unchanged (7 — all 7 items require external action: real Shopify store, outreach reactivation, Patrick publish-sale action, or DROP decision). Below ceiling — DEV mode available.**
+**S912 — BUG MODE (2026-06-07). Email kill-switch audit complete. Root cause of June 6 continued sends: `outwardEmailAutomationsJob.ts` had no OUTREACH_ENABLED gate (daily 10:00 UTC cron runs independently of outreachEmailsCron.ts). 3 fixes shipped: (1) `outwardEmailAutomationsJob.ts` — OUTREACH_ENABLED gate added at cron callback top, blocks all 5 outward services in one check; (2) `abandonedSignupEmailService.ts` — OUTREACH_ENABLED gate added + `isUnmanagedListing: false` filter added to candidate query (scrapers set isUnmanagedListing=true, so scraped organizers were being targeted by the 1h signup nudge); (3) `saleEndingSoonJob.ts` — OUTREACH_ENABLED gate added + in-memory DAILY_EMAIL_CAP removed (same restart-prone root cause as June 5 blast) + QuotaExceededError early-exit added to inner catch block. Audited 4 additional services (postSaleRecapEmailService, reviewRequestEmailService, winBackEmailService, onboardingEmailService) — all clean, no action needed. BQ unchanged (7). Push pending.**
+
+**S911 — RECORDS (2026-06-07). S910 PCVs audited — all 23 map to rows already chr ✅ from prior sessions or admin infrastructure pages (no roadmap rows). No roadmap column changes applied. PCV table cleaned (32 rows removed: S905/S906/S909/S910). roadmap.md Last Updated header updated. BQ unchanged (7). Below ceiling — DEV mode available.**
 
 **S909 — QA MODE (2026-06-07). Records pass: confirmed no roadmap updates needed for S908/S905/S906 PCVs (all map to rows already chr ✅ from prior sessions — cross-session rule satisfied). P3 inline fix: FlashDealForm.tsx — added X/close button + Escape key handler (Python via bash, 0 TS errors). Chrome QA sweep (all as Alice user1@example.com): /organizer/appraisals ✅ (heading, Submit button, tabs, empty state ss_6653l8dfe), /organizer/flip-report ✅ (60% sell-through, $325 revenue, 3/5 sold, Category Breakdown table ss_2720usq8g, ss_71199syzr), /organizer/consignors ✅ (heading, + Add Consignor, empty state ss_3604boua6), /organizer/qr-codes ✅ (QR Scan Analytics, 3 KPI cards, Scanner Funnel ss_68576clbw), /organizer/reputation ✅ (Score 0.1/5.0 real data, Reputation/Reviews tabs, New Organizer Badge ss_2693dz51y). Flash Deal modal close BQ entry RESOLVED (X button shipped). BQ: 8→7. Below ceiling — DEV mode available next session.**
 
@@ -160,15 +162,6 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
-| — | /organizer/appraisals (#54) — Crowdsourced Appraisals page | Navigated finda.sale/organizer/appraisals as Alice (user1@example.com). "Crowdsourced Appraisals" heading, "Submit New Request" button, My Requests/Community Feed tabs, correct empty state. ss_6653l8dfe | S909 |
-| — | /organizer/flip-report (#41) — Flip Report full data | Navigated finda.sale/organizer/flip-report as Alice (user1). Clicked "QA Test Flip Report Sale — Antiques & Collectibles" (ENDED sale). Full report rendered: 60% sell-through, $325 revenue, 3/5 sold, Category Breakdown table with Lamps/Furniture/Jewelry rows. ss_2720usq8g, ss_71199syzr | S909 |
-| — | /organizer/consignors (#309) — Consignor Portal | Navigated finda.sale/organizer/consignors as Alice (user1). "Consignors" heading, "+ Add Consignor" button, "No consignors yet" empty state correct. ss_3604boua6 | S909 |
-| — | /organizer/qr-codes (#185/#186) — QR Scan Analytics | Navigated finda.sale/organizer/qr-codes as Alice (user1). "QR Scan Analytics" heading, 3 KPI cards (0/0/0 pending real scan data), Scanner Funnel section showing "QA Active Sale S875 — Mixed Goods". ss_68576clbw | S909 |
-| — | /organizer/reputation (#71) — Reputation Score | Navigated finda.sale/organizer/reputation as Alice (user1). "Your Reputation Score" heading, Current Score 0.1/5.0 stars (real data), Reputation/Reviews tabs, "New Organizer Badge" explainer visible. ss_2693dz51y | S909 |
-| — | Bug C — Messages reply form dark mode (S905 fix) | Navigated finda.sale/messages/cmomwghd500ot11qwsx7oobic as Alice Johnson (shopper). DOM: form bg rgb(31,41,55) (gray-800) vs page rgb(17,24,39) (gray-900). Border-top rgb(75,85,99) (gray-600). Shadow rgba(0,0,0,0.45) 0px -4px 12px. Visual ss_4563dqnh2 shows lighter strip + separator. | S906 |
-| — | Hero search Enter key navigation (S905 fix) | Navigated finda.sale/ as Alice Johnson. Clicked hero input. Typed "vintage lamp". Pressed Enter. URL → /search?q=vintage%20lamp. Results page loaded with 3 sales (ss_8251ipdgd). | S906 |
-| — | Bug A — Passkey auth routes reach Railway (not NextAuth 404) | Navigated to finda.sale as Alice (user1). JS-fetched /api/auth/passkey/authenticate/options and /api/auth/passkey/register/options. Both returned HTTP 403 with Railway CSRF validation message — confirms routes reach Railway backend. Pre-fix: NextAuth catch-all returned 404. Bug A fix confirmed working. ss_525855od8 (modal), ss_6954mly74 (post-submit) | S905 |
-| — | #197 BountyMatchModal — POST /bounties/match fix | Navigated /organizer/bounties as Alice (user1). Clicked "I have this!" on Bob Smith bounty → BountyMatchModal opened (no 403). Selected "QA Active Sale S875" + "Vintage Pyrex Bowls Set ($45.00)". Typed message + clicked Submit → modal closed, green "Submission" toast appeared. DB confirmed: BountySubmission id=cmq361vpz000d7andwmuns3p0, status=PENDING_REVIEW, itemId=90bde6e8 (Pyrex), shopperMessage="QA test S905 — bounty match fix verify". ss_525855od8, ss_6954mly74, ss_64952omqa | S905 |
 |---|---------|----------|---------|
 | — | CTA1 — Logged-out sale page "Remind Me by Email" absent | Pre-compression S898 Chrome verify. Navigated sale page as logged-out guest — "Remind Me by Email" absent. Screenshot ID not captured in post-compression summary. Records: verify screenshot in transcript before applying to roadmap. Evidence path: .claude/projects/.../8ebb1c20-2219-4e45-95a5-58c139e4bb8e.jsonl | S898 |
 | — | PerformanceDashboard dark mode (D-002 verify) | ✅ Chrome-verified S898 — /organizer/performance as Alice (user1) in dark mode. All metrics readable. ss_1751wzkxe — **Applied to roadmap S899 (row #168 Status)** | S898 |
@@ -273,45 +266,22 @@ _(S862
 | — | Sale Plan Tracker (/organizer/plan/[saleId]) | Navigated /organizer/plan/59c49908... as Alice. "Track Your Progress" — "Complete tasks across 6 stages to successfully run your sale." Overall Progress 18%, 7/39 tasks, 6-stage timeline (Setup 4/5 active, Cataloging 3/5, Pre-Sale 0/7, Live 0/9, Wrapping Up 0/8, Complete 0/5). Dark mode correct. ss_4291jxseh | S908 |
 | — | Multi-Sale Command Center (/organizer/command-center) | Navigated /organizer/command-center as Alice. "Multi-Sale Command Center" — Active Sales=1, Total Items=2, Total Revenue=$0.00, Pending Actions=1 (all real data). Technical Alerts: "QA Active Sale S875: 1 item(s) are missing photos." Workspace widget present. Dark mode correct. ss_219765w9p | S908 |
 | — | Sale Checklist (/organizer/checklist/[saleId]) | Navigated /organizer/checklist/59c49908... as Alice. "Sale Checklist" heading, "QA Active Sale S875 — Mixed Goods" subtitle, Overall Progress 7/39 tasks complete, Pre-Sale/Day-Of/Post-Sale collapsible sections. ss_874815fmg | S908 |
-| — | /organizer/messages | Navigated finda.sale/organizer/messages as Alice (user1). Redirected to /messages. Leo Thomas thread loaded with 3 messages and Quick Reply box. Dark mode correct. ss_5824bhnnq, ss_8746z9b0g | S910 |
-| — | /organizer/ripples | Navigated finda.sale/organizer/ripples as Alice (user1). "Sale Ripples Analytics" heading. 2 sales listed with Views/Total data columns. Activity Trend tabs present. Dark mode correct. ss_5284hb0o0, ss_4108mizm6 | S910 |
-| — | /organizer/message-templates | Navigated finda.sale/organizer/message-templates as Alice (user1). 4 real templates loaded. "+ New Template" button → form opens with Name/Category/Response fields. Cancel dismisses. Dark mode correct. ss_71692ih7r, ss_02602x1vt | S910 |
-| — | /admin (Admin Dashboard) | Navigated finda.sale/admin as Alice (user1/ADMIN). MRR $158, 7 users, 5 organizers, 50,166 sales, 132 items. Organizer Funnel + 7-day charts with real data. Dark mode correct. ss_0615ial9z, ss_7346vp5uv | S910 |
-| — | /admin/users | Navigated finda.sale/admin/users as Alice. "Manage Users": search bar, role filter, "Hide scraped organizers" checkbox, real user table. Dark mode correct. ss_1261du6pf | S910 |
-| — | /admin/users/[id] | Navigated /admin/users/[Alice user id] as Alice. User detail: ID, auth method, role badges (USER/ORGANIZER/ADMIN), purchases, Back to users link. Dark mode correct. ss_01546bmvk | S910 |
-| — | /admin/sales | Navigated finda.sale/admin/sales as Alice. "Manage Sales": search, status filter, real scraped sales table. Dark mode correct. ss_7187e1scz | S910 |
-| — | /admin/feature-flags | Navigated finda.sale/admin/feature-flags as Alice. Suggested flags list, empty state, "+ Create Flag" button. Dark mode correct. ss_3742jnbrl | S910 |
-| — | /admin/broadcast | Navigated finda.sale/admin/broadcast as Alice. "Broadcast Message": 71,429-user audience dropdown, Subject + Message Body fields. Dark mode correct. ss_9268bnfs9 | S910 |
-| — | /admin/disputes | Navigated finda.sale/admin/disputes as Alice. All/Open/Under review/Resolved/Closed filters, "No Disputes" empty state. Dark mode correct. ss_6530e1lr4 | S910 |
-| — | /admin/reports | Navigated finda.sale/admin/reports as Alice. Organizer Performance + Revenue tabs. Real data: Kelly's Estate Sales 42.9% sell-through, $325.00 GMV. Export CSV button. ss_16868x9q7 | S910 |
-| — | /admin/outreach-opens | Navigated finda.sale/admin/outreach-opens as Alice. 173 organizers opened outreach. Email/address/website/touch columns. Sorted most-recent first. ss_7122talog | S910 |
-| — | /admin/organizer-confidence | Navigated finda.sale/admin/organizer-confidence as Alice. "Directory Confidence Scores": Low/Moderate/Good legend. 5 organizers listed, all "Not scored". ss_2076oirkj | S910 |
-| — | /admin/feedback | Navigated finda.sale/admin/feedback as Alice. "User Feedback": 4 total, 2.5 avg rating, star breakdown KPIs, search + All Ratings filter. ss_6755hqi1c | S910 |
-| — | /admin/demand-signals | Navigated finda.sale/admin/demand-signals as Alice. "Unmet Demand Signals": city filter, min-searches filter, real search query data. ss_1597wh9ux | S910 |
-| — | /admin/bid-review | Navigated finda.sale/admin/bid-review as Alice. "Bid Review Queue": "No bid IP records — All clear ✅" empty state. ss_9929fo7v5 | S910 |
-| — | /admin/creators | Navigated finda.sale/admin/creators as Alice. "Creator & Affiliate Management": 0 creators, 0 clicks, 0 conversions, 1 referral. Search + table. ss_4639t59t2 | S910 |
-| — | /admin/items | Navigated finda.sale/admin/items as Alice. "Manage Items": search, All Status dropdown, real items table (Vintage Radio $25 AVAILABLE, Vintage Pyrex Bowls $45 PENDING_REVIEW, Old Radio $85 AVAILABLE — all Kelly's Estate Sales). ss_01147jrgj | S910 |
-| — | /admin/scrape-pool | Navigated finda.sale/admin/scrape-pool as Alice. "Scrape Pool Dashboard": 46,692 scraped orgs, Avg Lead Score 24.4, 9% with email, 2% geocoded. Lead Tier chart: COLD 18544, WARM 19512, HOT 8636, ENTERPRISE 0. ss_4703oq7lp | S910 |
-| — | /admin/scraper | Navigated finda.sale/admin/scraper as Alice. "Directory Scraper Management": 6 sources (EstateSalesNet/GarageSaleFinder/FacebookMarketplace/NAAFindAnAuctioneer/AuctionNinja/YellowPagesCA), all "Allowed". GarageSaleFinder last run 6/7/2026 4:23 AM. "Emergency Takedown" action per source. ss_2410lpep4 | S910 |
-| — | /admin/encyclopedia | Navigated finda.sale/admin/encyclopedia as Alice. "Encyclopedia Curator": 57 Awaiting Review, 20 Published, 57 Enriched Pending, 77 Total Entries. "Run Full Curator Pass" button. Real entries (Hoosier Cabinet, Stickley Furniture — Furniture & Home). Promote/Reject actions. ss_4862sqo9f | S910 |
-| — | /admin/ab-tests | Navigated finda.sale/admin/ab-tests as Alice. "A/B Tests": "Hero CTA v1 — Homepage call-to-action button variants" card. Empty table. "No test data available yet." ss_94955q45e | S910 |
-| — | /admin/invites | Navigated finda.sale/admin/invites as Alice. "Beta Invite Codes": Generate New Invite form, real invite code 4J9U3B95 (unused, 6/4/2026). Copy URL/Code only/Delete actions. Sharing instructions visible. ss_4079b37cv | S910 |
 
 ---
 
 ## Next Session
 
-**S910 completed:** QA MODE. Records pass (applied S909 PCVs to roadmap.md — #54, #41, #309, #185/#186, #71 all chr ✅ S909). Full admin sweep: all 20 admin pages verified. Organizer sweep: /organizer/messages ✅, /organizer/ripples ✅, /organizer/message-templates ✅. BQ unchanged (7 — all external dependencies). 23 new PCVs staged.
+**S912 completed:** BUG MODE. Email kill-switch audit. 3 backend files fixed (outwardEmailAutomationsJob.ts + abandonedSignupEmailService.ts + saleEndingSoonJob.ts). Push pending (see patrick-dashboard.md).
 
-**Priority for next session (S911):**
-1. **[RECORDS FIRST]** `Skill('findasale-records')` → Apply S910 PCVs to roadmap.md. Key rows: admin pages (encyclopedia #321, ab-tests #165, invites #166 already chr ✅ from prior sessions — check each). New organizer pages: messages, ripples, message-templates — find matching roadmap rows and update Chr column.
-2. **[PUSH REQUIRED]** Patrick must push pending files: `packages/frontend/components/FlashDealForm.tsx` (X/close button fix from S909) + `packages/frontend/pages/organizer/sales/[id]/flash-deals.tsx` (new page from S908) + `claude_docs/STATE.md` + `claude_docs/patrick-dashboard.md`.
-3. **[DEV available — BQ=7 < 8 ceiling]** Check roadmap.md BROKEN section for highest-priority items. Recommend dispatching `findasale-dev` on next BROKEN item.
+**Priority for next session (S913):**
+1. **[PUSH REQUIRED]** Patrick must push ALL pending files (S909+S912 combined — see push block in patrick-dashboard.md).
+2. **[DEV available — BQ=7 < 8 ceiling]** Check roadmap.md BROKEN section for highest-priority items. Recommend dispatching `findasale-dev` on next BROKEN item.
+3. **[QA option]** If Patrick prefers QA: further organizer page sweep — remaining pages not yet verified.
 
 **Decisions still open (Patrick):**
 - **FB Marketplace:** DROP confirmed recommended. Graph API OAuth (#365) = correct long-term path.
 - **#332 Shopify:** bugs fixed on GitHub; need real store for QA.
-- **#335 outreach resume:** Reactivate outreach@finda.sale → OUTREACH_ENABLED=true.
+- **#335 outreach resume:** Reactivate outreach@finda.sale → OUTREACH_ENABLED=true (wait until ~Jun 22; Jane Thrift payout re-send is the only urgent transactional email).
 - **AuctionZip recurring:** 4,893 one-time harvest; automation = future decision.
 - **#230 Smart Buyer:** publish a sale on user1 to enable QA.
 
@@ -325,6 +295,39 @@ _(S862
 - #230 Smart Buyer: publish a sale on user1
 
 ## Recent Sessions
+
+### S912 — BUG MODE (2026-06-07). Email kill-switch audit + 3 fixes.
+
+**Root cause:** `outwardEmailAutomationsJob.ts` (daily 10:00 UTC cron) had no `OUTREACH_ENABLED` gate — it ran independently of `outreachEmailsCron.ts`. The June 6 "Still there, Bangor?" send came from this job calling `sendAbandonedSignupNudges()`, which also lacked its own gate and was targeting scraped organizers (`isUnmanagedListing: true`).
+
+**Files fixed:**
+- `packages/backend/src/jobs/outwardEmailAutomationsJob.ts` — OUTREACH_ENABLED gate added at cron callback top (lines 29-32); blocks all 5 outward services in one check.
+- `packages/backend/src/services/abandonedSignupEmailService.ts` — OUTREACH_ENABLED gate added (lines 168-171) + `isUnmanagedListing: false` filter added to Prisma query (line 178); excludes scraped organizers from signup nudge candidates.
+- `packages/backend/src/jobs/saleEndingSoonJob.ts` — OUTREACH_ENABLED gate added (lines 51-54) + in-memory `DAILY_EMAIL_CAP` removed (same restart-prone root cause as June 5 blast) + `QuotaExceededError` early-exit added to inner catch block (lines 141-144).
+
+**Audited (no action needed):** `postSaleRecapEmailService.ts` (covered by job-level gate + naturally filtered to ENDED sales), `reviewRequestEmailService.ts` (covered by job-level gate + requires real purchase records), `winBackEmailService.ts` (covered by job-level gate + requires real ENDED sales ≥45d), `onboardingEmailService.ts` (not wired to any cron trigger — no automated sends possible).
+
+**Push:** All 3 backend files pending push (combined with S909 frontend files — see patrick-dashboard.md for full push block).
+
+---
+
+### S911 — RECORDS (2026-06-07). S910 PCVs audited — no roadmap column changes needed. BQ unchanged (7).
+
+**Records pass:** Audited all 23 S910 PCVs (3 organizer pages + 20 admin pages). Findings:
+- /organizer/messages (#195): already chr ✅ S871 — no change
+- /organizer/ripples (#51): already chr ✅ S804 — no change  
+- /organizer/message-templates (#173): already chr ✅ S804 — no change
+- /admin/encyclopedia (#321): already chr ✅ S875 — no change
+- /admin/ab-tests (#165): already chr ✅ S877 — no change
+- /admin/invites (#166): already chr ✅ S878 — no change
+- /admin/disputes (#167): already chr ✅ S834/S835 — no change
+- All other admin pages (/admin, /admin/users, /admin/users/[id], /admin/sales, /admin/feature-flags, /admin/broadcast, /admin/reports, /admin/outreach-opens, /admin/organizer-confidence, /admin/feedback, /admin/demand-signals, /admin/bid-review, /admin/creators, /admin/items, /admin/scrape-pool, /admin/scraper): no dedicated roadmap rows — admin infrastructure pages.
+
+**PCV table cleaned:** Removed S909 (5 rows), S910 (23 rows), S905/S906 (4 rows, processed S909 records pass but not yet cleared). 32 rows removed.
+
+**roadmap.md Last Updated** header updated to reflect S911 records pass.
+
+**BQ: 7 (unchanged).**
 
 ### S910 — QA MODE (2026-06-07). Full admin sweep + organizer pages. BQ unchanged (7).
 

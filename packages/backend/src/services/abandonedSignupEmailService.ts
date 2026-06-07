@@ -165,12 +165,17 @@ export async function sendAbandonedSignup1h(organizerId: string): Promise<boolea
  * sale already ran-and-finished is never re-nudged.
  */
 export async function sendAbandonedSignupNudges(): Promise<void> {
+  if (process.env.OUTREACH_ENABLED !== 'true') {
+    console.log('[abandonedSignup] Skipped — OUTREACH_ENABLED is not "true"');
+    return;
+  }
   const now = Date.now();
   const windowStart = new Date(now - MAX_AGE_MS); // registered no earlier than 24h ago
   const windowEnd = new Date(now - MIN_AGE_MS); // registered at least 1h ago
 
   const candidates = await prisma.organizer.findMany({
     where: {
+      isUnmanagedListing: false, // exclude scraped/unmanaged organizers (never real signups)
       createdAt: { gte: windowStart, lte: windowEnd },
       // Never activated: no published or ended sale
       NOT: {

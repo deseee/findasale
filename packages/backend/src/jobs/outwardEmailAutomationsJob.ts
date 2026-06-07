@@ -26,6 +26,10 @@ export function scheduleOutwardEmailAutomationsCron(): void {
   cron.schedule(
     '0 10 * * *',
     cronGuard({ jobName: 'outwardEmailAutomationsJob' }, async () => {
+      if (process.env.OUTREACH_ENABLED !== 'true') {
+        console.log('[outwardEmailAutomations] Skipped — OUTREACH_ENABLED is not "true"');
+        return;
+      }
       console.log('[outwardEmailAutomations] Starting daily run...');
       await sendPostSaleRecaps();
       await sendOrganizerTestimonialAsks();

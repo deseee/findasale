@@ -1,20 +1,23 @@
-# Patrick's Dashboard — S910 Wrap
+# Patrick's Dashboard — S912 Wrap
 
 ---
 
-## ✅ PUSH NOW — S910 (Docs only — no code changes)
+## ✅ PUSH NOW — Combined S909 + S912
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/components/FlashDealForm.tsx
-git add packages/frontend/pages/organizer/sales/[id]/flash-deals.tsx
+git add "packages/frontend/pages/organizer/sales/[id]/flash-deals.tsx"
+git add packages/backend/src/jobs/outwardEmailAutomationsJob.ts
+git add packages/backend/src/services/abandonedSignupEmailService.ts
+git add packages/backend/src/jobs/saleEndingSoonJob.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: FlashDealForm — X/close button and Escape key handler (S909); docs: S910 QA wrap — full admin sweep, organizer pages, 23 PCVs staged"
+git commit -m "fix: email kill-switch — outwardEmailAutomationsJob + abandonedSignupEmailService (OUTREACH_ENABLED gate + isUnmanagedListing filter) + saleEndingSoonJob (quota fix); fix: FlashDealForm X/close button (S909)"
 .\push.ps1
 ```
 
-> **Note:** `FlashDealForm.tsx` and `flash-deals.tsx` are from S909. They're included here in case you haven't pushed them yet. If you already pushed them, skip those two `git add` lines.
+> **Note:** `FlashDealForm.tsx` and `flash-deals.tsx` are from S909 and have been pending. They're included here in the combined push. If you already pushed them separately, skip those two `git add` lines.
 
 ---
 
@@ -27,45 +30,25 @@ git checkout HEAD -- packages/backend/src/controllers/internalGeocodingControlle
 
 ---
 
-## S910 — What Got Done
+## S912 — What Got Done
 
-### Records Pass
-Applied S909 PCVs to roadmap.md: #54 appraisals, #41 flip-report, #309 consignors, #185/#186 qr-codes, #71 reputation — all chr ✅ S909.
+### Email Kill-Switch Audit + Fixes
 
-### Organizer Pages Sweep (3 additional pages)
+**Root cause of June 6 continued sends confirmed:** `OUTREACH_ENABLED=false` only gated `outreachEmailsCron.ts`. The `outwardEmailAutomationsJob.ts` is a completely separate daily cron (10:00 UTC) with no kill switch — it ran on schedule and sent the "Still there, Bangor?" email to a scraped organizer.
 
-| Page | Result | Screenshot |
-|------|--------|-----------|
-| /organizer/messages | ✅ Redirects to /messages, Leo Thomas thread, Quick Reply | ss_5824bhnnq, ss_8746z9b0g |
-| /organizer/ripples | ✅ Sale Ripples Analytics, 2 sales, Views/Total data, Activity Trend tabs | ss_5284hb0o0, ss_4108mizm6 |
-| /organizer/message-templates | ✅ 4 real templates, New Template form works | ss_71692ih7r, ss_02602x1vt |
+**Second root cause:** `abandonedSignupEmailService.ts` queried by `createdAt` window with no filter to exclude scraped listings. Scrapers set `isUnmanagedListing: true`; without `isUnmanagedListing: false`, every newly scraped organizer would be targeted by the signup nudge forever.
 
-### Admin Sweep — All 20 Pages Verified
+| File | Fix | Result |
+|------|-----|--------|
+| `outwardEmailAutomationsJob.ts` | Added OUTREACH_ENABLED gate at cron callback top — blocks all 5 outward services in one check | Lines 29-32 confirmed |
+| `abandonedSignupEmailService.ts` | Added OUTREACH_ENABLED gate + `isUnmanagedListing: false` to Prisma query | Lines 168-171 + 178 confirmed |
+| `saleEndingSoonJob.ts` | Added OUTREACH_ENABLED gate + removed in-memory DAILY_EMAIL_CAP (restart-prone) + added QuotaExceededError early-exit | Lines 51-54 + 141-144 confirmed |
 
-Every admin page confirmed working as Alice Johnson (user1@example.com/ADMIN):
-
-| Page | Result | Screenshot |
-|------|--------|-----------|
-| /admin | ✅ MRR $158, 7 users, 5 organizers, 50,166 sales, 7D charts | ss_0615ial9z |
-| /admin/users | ✅ Real user table, role filter, search | ss_1261du6pf |
-| /admin/users/[id] | ✅ User detail, role badges | ss_01546bmvk |
-| /admin/sales | ✅ Scraped sales table, status filter | ss_7187e1scz |
-| /admin/feature-flags | ✅ Empty state, "+ Create Flag" button | ss_3742jnbrl |
-| /admin/broadcast | ✅ 71,429-user audience, message fields | ss_9268bnfs9 |
-| /admin/disputes | ✅ "No Disputes" empty state | ss_6530e1lr4 |
-| /admin/reports | ✅ Kelly's Estate Sales 42.9% sell-through, real data | ss_16868x9q7 |
-| /admin/outreach-opens | ✅ 173 organizers opened, real data | ss_7122talog |
-| /admin/organizer-confidence | ✅ 5 orgs, all "Not scored" | ss_2076oirkj |
-| /admin/feedback | ✅ 4 total, 2.5 avg rating | ss_6755hqi1c |
-| /admin/demand-signals | ✅ Real search query data | ss_1597wh9ux |
-| /admin/bid-review | ✅ "All clear ✅" empty state | ss_9929fo7v5 |
-| /admin/creators | ✅ 0 creators, 1 referral | ss_4639t59t2 |
-| /admin/items | ✅ Real items (Vintage Radio, Pyrex, Old Radio) | ss_01147jrgj |
-| /admin/scrape-pool | ✅ 46,692 orgs, Lead Tier chart | ss_4703oq7lp |
-| /admin/scraper | ✅ 6 sources Allowed, GarageSaleFinder last run 6/7 | ss_2410lpep4 |
-| /admin/encyclopedia | ✅ 57 Awaiting / 20 Published / 77 Total, real entries | ss_4862sqo9f |
-| /admin/ab-tests | ✅ Hero CTA v1 card, "No test data yet" | ss_94955q45e |
-| /admin/invites | ✅ Code 4J9U3B95 (unused), Copy URL/Delete | ss_4079b37cv |
+**Audited clean (no action needed):**
+- `postSaleRecapEmailService.ts` — covered by job-level gate + naturally filtered (ENDED sales only)
+- `reviewRequestEmailService.ts` — covered by job-level gate + naturally filtered (requires real purchase records)
+- `winBackEmailService.ts` — covered by job-level gate + naturally filtered (real ENDED sales ≥45d)
+- `onboardingEmailService.ts` — not wired to any cron trigger (zero automated send risk)
 
 ---
 
@@ -74,7 +57,7 @@ Every admin page confirmed working as Alice Johnson (user1@example.com/ADMIN):
 | # | Item | Priority | Action |
 |---|------|----------|--------|
 | 332 | Shopify bugs fixed — needs real store for QA | P0 (aged) | Patrick: connect real Shopify store |
-| 335 | Outreach sending suspension — Gmail reactivation needed | P1 | Patrick: reactivate outreach@finda.sale at admin.google.com |
+| 335 | Outreach sending suspension — Gmail reactivation needed | P1 | Patrick: reactivate outreach@finda.sale at admin.google.com (~Jun 22) |
 | — | 462 WARM leads email-ready, no outreach record | P2 | Do with #335 resume |
 | — | FB Marketplace 0 records — CF Worker dead end | P2 | **Patrick decision: DROP recommended** |
 | 230 | Smart Buyer Widget Human QA | P3 | Patrick: publish sale on user1 to test |
@@ -85,12 +68,13 @@ Every admin page confirmed working as Alice Johnson (user1@example.com/ADMIN):
 
 ---
 
-## Next Session (S911)
+## Next Session (S913)
 
-Records first: apply S910 PCVs to roadmap.md (23 pages staged). Then DEV work — check roadmap.md BROKEN section for next priorities.
+1. **PUSH** the combined S909+S912 block above.
+2. **DEV work** — check roadmap.md BROKEN section for highest-priority items.
 
 **Open decisions for you:**
-- FB Marketplace: DROP (recommended) or pursue residential proxy path?
+- FB Marketplace: DROP (recommended) or pursue Graph API OAuth path (#365)?
 - #332 Shopify: connect a real custom-app store to unblock QA
-- #335 Outreach: reactivate outreach@finda.sale at admin.google.com when ready
+- #335 Outreach: reactivate outreach@finda.sale at admin.google.com (~Jun 22; Jane Thrift payout re-send is the only urgent transactional email before then)
 - #230 Smart Buyer: publish a sale on user1 to enable QA
