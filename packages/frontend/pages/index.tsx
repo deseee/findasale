@@ -378,6 +378,11 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   placeholder="Search by title, city, or keyword…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchQuery.trim()) {
+                      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+                    }
+                  }}
                   className="w-full pl-12 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white/95 text-warm-900 dark:text-warm-100 placeholder-warm-500 font-body"
                   aria-label="Search sales and items"
                 />
