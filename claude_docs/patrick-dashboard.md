@@ -1,75 +1,96 @@
-# Patrick's Dashboard — S902 Wrap
+# Patrick's Dashboard — S903 Wrap
 
 ---
 
-## ⚠️ URGENT — Restore Corrupted Local Files FIRST
+## 🔴 PUSH THIS NOW — #197 Bug Fix
 
-Before doing ANY local development, run these commands in PowerShell. The Cowork Edit tool silently truncated 13 files — your local copies are missing hundreds of lines vs GitHub.
+The BountyMatchModal 403 bug is **code-complete, TypeScript-clean, and ready to ship.** Push this before anything else:
 
 ```powershell
-# Step 1: Remove the git lock file
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/bountyController.ts
+git commit -m "fix: #197 BountyMatchModal always-403 — compare organizer.userId not organizerId"
+.\push.ps1
+```
+
+After Railway deploys (~3 min), click the Bounty Match button on an item to confirm it no longer returns 403. Once Chrome-verified, BQ drops 8→7 and DEV mode is unlocked.
+
+---
+
+## ⚠️ ALSO NEEDED — Restore Corrupted Local Files
+
+Before any local dev, run these in PowerShell. 13 files were silently truncated by the Cowork Edit tool (380+ lines missing vs GitHub).
+
+```powershell
+# Step 1: Remove git lock file (if present)
 Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\.git\index.lock"
 
-# Step 2: Restore all 13 truncated files from GitHub
+# Step 2: Restore all 13 truncated files
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
 ```
 
-**Why:** If you push without restoring, 380+ lines of production code get deleted from GitHub — including the entire `_app.tsx` providers and complete schema.prisma.
+**Why this matters:** Pushing without restoring will delete 380+ lines of production code from GitHub (including all of `_app.tsx`'s providers and the complete schema.prisma).
 
 ---
 
-## ✅ Push — S902 Wrap Docs
+## ✅ Push — S903 Wrap Docs
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S902 wrap — #27/#66/#47 QA verified, #197 Bounties 403 bug added to BQ, BQ 7→8"
+git commit -m "docs: S903 wrap — Chrome QA complete, #197 fix coded + pushblock provided, BQ=8"
 .\push.ps1
 ```
 
 ---
 
-## S902 — What I Found
+## S903 — What I Found
 
-### ✅ #27 CSV Export
-/organizer/print-inventory as Alice. Must select a specific sale (not "All Sales") before Export dropdown activates — that's intentional behavior. Tested Amazon and eBay formats — both returned HTTP 200 with success toasts and file downloads. Working correctly.
+### #197 BountyMatchModal Fix — CODE COMPLETE
+Root cause (confirmed S902 via DB query): `bountyController.ts` compared `req.user?.id` (User record ID) against `item.sale.organizerId` (Organizer record ID) — different tables, always different values, always 403.
 
-### ✅ #66 Open Data Export ZIP
-/organizer/settings → Help tab → "Download Sale & Item Data (ZIP)" returned HTTP 429 with a clear "next export available [date]" message. Rate-limiting is working exactly as designed.
+**Fix applied:** Expanded Prisma include to fetch `organizer: { select: { userId: true } }`, changed ownership check to compare `item.sale.organizer?.userId !== organizerId`. TypeScript: 0 errors. Needs your push to go live.
 
-### ✅ #47 UGC Photo Tags (Full Submit)
-/sales/59c49908 as Alice. "Tag Your Find" button visible in Community Photos section. Modal opened — filled Photo URL, Caption, Tags fields. Submit → green success toast. DB confirmed: UGCPhoto record created with correct saleId, userId, tags=['vintage','decor','find'], status=PENDING. ⚠️ **UX gap**: after submitting, user sees no "pending review" explainer — they may wonder why the photo doesn't appear. Easy fix but not blocking.
+### ⚠️ Stale Roadmap Note Found
+The roadmap says #176 "Sales Near You" is still missing from the homepage. It's not — confirmed live: "Sales Near You · 20 active" is present. Minor doc fix for S904.
 
-### ❌ #197 BountyMatchModal — PRODUCTION BUG
-`POST /bounties/match` returns 403 for **every organizer in production**. Root cause confirmed in code: `bountyController.ts` L581+L593 gets `organizerId = req.user?.id` (the User ID) and then compares it against `item.sale.organizerId` (the Organizer record ID) — these are completely different values. Alice's User ID ≠ Alice's Organizer ID (verified via DB query). The BountyMatchModal can **never** fire. Added to BQ for dev fix.
+### Chrome QA Sweep — All Clean
+- Dashboard: Sale Pulse ✅, Who's Coming ✅, Trending ✅
+- Bounties page: all 3 tabs + empty states ✅
+- Homepage: "This Weekend" filter pill works ✅, Sales Near You present ✅
+- Add-items toolbar: eBay Export + QuickBooks + Buyer Preview ✅
+- Insights: stats load correctly ✅
 
 ---
 
-## ⚠️ BQ Hit 8 — Next Session is QA-ONLY
+## ⚠️ BQ = 8 — QA-ONLY Until #197 Chrome-Verified
 
-BQ went from 7→8 with #197 added. The ≥8 ceiling triggers mandatory QA-ONLY mode. No new feature dev until BQ drops below 8.
+After you push #197 and Railway deploys, have Claude Chrome-verify the BountyMatchModal. That drops BQ to 7 and unlocks DEV mode for the session.
 
 ---
 
 ## 🔴 Patrick Decisions Required
 
-### 1. FB Marketplace — DROP or pursue?
-Confirmed dead end: CF Worker proxy returns 0 listings. FB soft-blocks datacenter IPs. **Recommendation: DROP.** Graph API OAuth (#365) is the long-term path.
+### 1. #197 Fix → Push Now
+See top of this document.
 
-### 2. #335 Outreach Resume
+### 2. FB Marketplace — DROP or pursue?
+Confirmed dead end: Cloudflare Worker proxy returns 0 listings across all metros. FB soft-blocks datacenter IPs. **Recommendation: DROP.** Graph API OAuth (#365) is the long-term path.
+
+### 3. #335 Outreach Resume
 When ready:
 1. Reactivate outreach@finda.sale at **admin.google.com → Directory → Users → outreach@finda.sale → Reactivate**
 2. Set `OUTREACH_ENABLED=true` on Railway backend
 3. Re-enable `pipeline-outreach-emails.yml` on GitHub
 4. Re-trigger Jane Thrift payout email after reactivation
 
-### 3. #332 Shopify
+### 4. #332 Shopify
 S890 fixes are on GitHub (correct REST flow, API version 2025-10). Need a real Shopify custom-app store to QA end-to-end.
 
-### 4. #230 Smart Buyer Widget
-Publish a sale on user1 (Alice Johnson) → QA can verify SmartBuyerWidget shows shopper data.
+### 5. #230 Smart Buyer Widget
+Publish a sale on user1 (Alice Johnson) → Claude can verify SmartBuyerWidget shows shopper data.
 
 ---
 
@@ -77,12 +98,12 @@ Publish a sale on user1 (Alice Johnson) → QA can verify SmartBuyerWidget shows
 
 | Area | Status |
 |------|--------|
-| Blocked Queue | **8 rows** — QA-ONLY ceiling triggered for next session |
-| S902 QA results | ✅ #27 CSV Export, #66 Data ZIP, #47 UGC Photo submit |
-| #197 Bounties | ❌ New BQ P2 — POST /bounties/match always 403 (controller bug) |
+| Blocked Queue | **8 rows** — QA-ONLY until #197 Chrome-verified |
+| #197 Bounties | 🔴 Fix CODED — awaiting your push |
+| S903 Chrome QA | ✅ Dashboard / Bounties / Homepage / Add-Items / Insights |
 | Local files | ⚠️ 13 truncated — restore before dev work (see above) |
-| D-002 dark mode | ✅ RESOLVED S898 Chrome-verified |
-| Hydration errors | ✅ RESOLVED S899 Chrome-verified |
-| Logout bug | ✅ RESOLVED S897 Chrome-verified |
+| D-002 dark mode | ✅ RESOLVED S898 |
+| Hydration errors | ✅ RESOLVED S899 |
+| Logout bug | ✅ RESOLVED S897 |
 | FB Events geocoding | ✅ RESOLVED S901 — 93% geocoded |
 | Outreach | 🔴 Suspended — Patrick must reactivate (#335) |

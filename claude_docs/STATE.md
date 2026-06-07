@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S903 — QA MODE (2026-06-06). Wrap. #197 BountyMatchModal fix CODED (bountyController.ts, TS 0 errors). Pushblock provided to Patrick. Stale note confirmed: #176 "Sales Near You still missing" → INCORRECT, feature IS live (ss_5140qm032). BQ: 8 (unchanged).**
+
 **S902 — QA MODE (2026-06-06). Autonomous QA continued. #27 CSV Export ✅ (ss_94917yaqg Amazon, ss_2041bm2l3 eBay). #66 Open Data Export ZIP ✅ (ss_3723v0nw2, ss_2914rv4if). #47 UGC Photo Tags ✅ full submit — modal → toast → DB record id=5 (status=PENDING, correct saleId/userId/tags). ⚠️ UX gap: no "pending review" message shown after submit. ❌ #197 BountyMatchModal production bug CONFIRMED: POST /bounties/match always 403 — bountyController.ts L581/L593 uses req.user?.id (user ID) vs item.sale.organizerId (organizer record ID) — they are different values; modal can never fire for any organizer. Added to BQ.**
 
 **S901 — QA MODE (2026-06-06). CTA1 Chr ✅ S899 applied to roadmap.md (pre-compaction). FB Events geocoding BQ RESOLVED (242/260 PUBLISHED geocoded, 93% — 18 remaining). Chrome sweep: Homepage ✅ ss_0902g1f99, Search ✅ ss_97123xc98, Trending ✅ ss_51644lm5l, Organizer dashboard (Alice) ✅ ss_46975zqht, /organizer/insights real data ✅ ss_81628rlz9 ($220 revenue, 50% conversion rate). BQ: 8→7 (FB Events resolved). DEV mode available next session.**
@@ -123,7 +125,7 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing → CORE BUGS FIXED (pending push) | **P0** — **S890 FIXES CODED** (shopifyService.ts + connect-shopify.ts, TS 0 errors both packages): (1) sold-sync rewritten to correct 3-step REST flow — GET variant→inventory_item_id, GET locations→location_id, POST /inventory_levels/set.json (was malformed, silently failing); (2) API version 2024-01→2025-10; (3) variant payload gets `inventory_management:'shopify'`; (4) connect-shopify guide rewritten to match the real manual-token flow (removed false OAuth/auto-webhook/auto-sync promises); (5) 422/429 error handling added. **FLAGGED for Patrick (NOT built — future decisions):** proper OAuth app, inbound webhook handler (Shopify→FindA.Sale is one-way only), token encryption, optional ShopifyListing.shopifyInventoryItemId column to skip the 2 lookup calls. **Store still needed for live QA, but the code is now correct.** | Push; then connect a real custom-app store to QA the push + sold-sync end-to-end | S791 |
-| #197 BountyMatchModal — POST /bounties/match always 403 | **P2** — Production bug confirmed S902. `bountyController.ts` L581+L593: `const organizerId = req.user?.id` fetches the **user** ID, then compares `item.sale.organizerId !== organizerId` where `item.sale.organizerId` is the **organizer record** ID — they are always different values, so every organizer gets 403. Alice: userId=cmomwf6nr000911qwipyim1nc vs organizerId=cmomwf8ya000x11qwvtqmk3i9 (confirmed via psycopg2). BountyMatchModal can never fire in production. Fix: change ownership check to compare `sale.organizer.userId === req.user?.id` (or look up organizer record first). | Dispatch findasale-dev: fix ownership check in bountyController.ts L581+L593 | S902 |
+| #197 BountyMatchModal — POST /bounties/match always 403 | **P2** — Production bug confirmed S902. `bountyController.ts` L581+L593: `const organizerId = req.user?.id` fetches the **user** ID, then compares `item.sale.organizerId !== organizerId` where `item.sale.organizerId` is the **organizer record** ID — they are always different values, so every organizer gets 403. Alice: userId=cmomwf6nr000911qwipyim1nc vs organizerId=cmomwf8ya000x11qwvtqmk3i9 (confirmed via psycopg2). BountyMatchModal can never fire in production. Fix: change ownership check to compare `sale.organizer.userId === req.user?.id` (or look up organizer record first). | Push bountyController.ts (coded S903, TS 0 errors) → Railway deploy → Chrome-verify BountyMatchModal as Alice | S902 |
 | #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. **S890:** unchanged — DB-only session, no Chrome. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
 | #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. **S890 re-verified leak PLUGGED:** 0 DirectoryClaimEmail sends since Jun 5 08:00 UTC (psycopg2). No active sending. Only the Gmail reactivation + Jane Thrift re-send remain (Patrick). | S865-auto / Jun 5 |
 
@@ -229,30 +231,58 @@ _(S862
 
 ## Next Session
 
-**S902 completed:** QA MODE. 3 features verified (#27 ✅, #66 ✅, #47 ✅). #197 Bounties 403 bug added to BQ. BQ: 7→8. QA ceiling triggered — next session is QA-ONLY.
+**S903 completed:** QA MODE. Chrome sweep done. #197 fix coded + pushblock provided. BQ: 8 (unchanged, at ceiling).
 
-**Priority for next session (S903):**
-1. **[URGENT — Patrick must do first]** Restore corrupted local files (S900 Edit tool truncation — still needed):
+**Priority for next session (S904):**
+1. **[URGENT — Patrick: push #197 fix first]**
+   ```powershell
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add packages/backend/src/controllers/bountyController.ts
+   git commit -m "fix: #197 BountyMatchModal always-403 — compare organizer.userId not organizerId"
+   .\push.ps1
+   ```
+   Wait ~3 min Railway deploy → Chrome-verify BountyMatchModal as Alice → BQ 8→7 → DEV mode available.
+2. **[Also needed — restore 13 corrupted local files]**
    ```powershell
    Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\.git\index.lock"
    cd C:\Users\desee\ClaudeProjects\FindaSale
    git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
    ```
-2. **[BQ = 7, DEV mode available]** Dispatch dev work on roadmap BROKEN items or next priority features.
-3. **[Patrick actions still needed]:**
-   - #335 Outreach: reactivate outreach@finda.sale at admin.google.com → OUTREACH_ENABLED=true (hygiene done, 37 PENDING remain, Jane Thrift payout re-send)
-   - #332 Shopify: connect real custom-app store for live QA (S890 fixes on GitHub)
-   - #230 Smart Buyer Widget: publish a sale on user1
+3. **[S904 session start]** Run BQ count — BQ=7 (after #197 Chrome-verified) → DEV mode; BQ=8 → QA-ONLY.
+4. **[Doc fix needed]** Update #176 roadmap note — "Sales Near You still missing" is stale (confirmed live ss_5140qm032).
+5. **[Patrick still needed]:**
+   - #335 Outreach: reactivate outreach@finda.sale at admin.google.com (37 PENDING remain, Jane Thrift payout re-send)
+   - #332 Shopify: connect real custom-app store for live QA
+   - #230 Smart Buyer: publish a sale on user1 account
    - FB Marketplace: Patrick decision — DROP recommended
 
 **Decisions still open (Patrick):**
-- **FB Marketplace:** DROP confirmed recommended. Graph API OAuth (#365) is correct long-term path.
-- **#332 Shopify:** core bugs fixed + on GitHub; need real custom-app store for QA.
-- **#335 outreach resume:** Reactivate outreach@finda.sale at admin.google.com → OUTREACH_ENABLED=true.
-- **AuctionZip recurring:** 4,893 one-time Chrome harvest records; ongoing automation = future decision.
+- **FB Marketplace:** DROP confirmed recommended. Graph API OAuth (#365) = correct long-term path.
+- **#332 Shopify:** bugs fixed on GitHub; need real store for QA.
+- **#335 outreach resume:** Reactivate outreach@finda.sale → OUTREACH_ENABLED=true.
+- **AuctionZip recurring:** 4,893 one-time harvest; automation = future decision.
 
 
 ## Recent Sessions
+
+### S903 — QA MODE (2026-06-06). Chrome QA wrap. #197 fix coded. BQ: 8 (at ceiling).
+
+**BQ = 8 throughout. Chrome sweep confirmed all verifiable items — most already chr ✅ from prior sessions.**
+
+**#197 BountyMatchModal fix CODED (pending push):** `packages/backend/src/controllers/bountyController.ts` — expanded Prisma include to fetch `organizer: { select: { userId: true } }`, changed ownership check from `item.sale.organizerId !== organizerId` to `item.sale.organizer?.userId !== organizerId`. TS 0 errors. Pushblock provided to Patrick.
+
+**S903 Chrome QA (Alice Johnson / user1@example.com):**
+- /organizer/dashboard: Sale Pulse renders ✅, Who's Coming empty state ✅, Trending terms ✅ (ss_7508b348v)
+- /organizer/bounties: All 3 tabs + empty states ✅ (ss_8183jup2y, ss_3823fppws)
+- finda.sale homepage: "This Weekend" pill → 5 of 20 ✅; "Sales Near You · 20 active" PRESENT ✅ (ss_8999s91mm, ss_5140qm032)
+- /organizer/add-items/[saleId]: eBay Export + QuickBooks + Buyer Preview toolbar buttons ✅ (ss_9313qni62)
+- /organizer/insights: 2 sales / $220 revenue / 42.9% conversion ✅ (ss_6031snakq)
+
+**⚠️ Stale roadmap note (#176):** "Sales Near You still missing" is INCORRECT — feature IS live. Needs update.
+
+**PCVs staged:** None — all S903-verified items already chr ✅ in roadmap; #197 not pushed, cannot Chrome-verify yet.
+
+**BQ:** 8 (unchanged). **Pushblock:** bountyController.ts + STATE.md + patrick-dashboard.md.
 
 ### S902 — QA MODE (2026-06-06). Autonomous QA. 3 features verified, 1 production bug found.
 
@@ -326,49 +356,3 @@ _(S862
 **Combined BQ:** 13→10 across both S899 sessions (geocoding RESOLVED, outreach hygiene RESOLVED, hydration RESOLVED).
 
 
-### S897 — QA MODE (2026-06-06). Shopper flows QA complete. S896 fixes confirmed deployed. BQ: 16→14.
-
-**S896 push confirmed (cd8ebe7):** All 3 coded fixes live on Railway — logout rate-limiter fix, SaleCard.tsx hydration fix, 24-file dark mode D-002 bulk fix. No push needed this session.
-
-**Logout Chrome-verified ✅ (ss_8330v4z5n):** As Leo Thomas (user5) — clicked Logout → clean redirect to /login, no 429. Logged-out state persisted after refresh. P1 BQ row → RESOLVED, removed. CTA1 QA now unblocked.
-
-**S895 audit false claim corrected:** Weekly audit claimed "no shopper accounts in production (user1–user7 only, all organizers)." Incorrect — user5 Leo Thomas is a shopper. Logged in and ran full shopper QA sweep.
-
-**Shopper flows QA — Leo Thomas (user5@example.com, Seedy2025!) — full sweep:**
-- Dashboard Overview: Ranger rank (2,005 XP), QR code, referral CTA, quick-action tiles. Dark mode correct. ss_7137f8yne, ss_8746rgevf, ss_8690d1ikb
-- Dashboard Subscribed: "No organizers followed yet" + Browse Sales CTA. D-003 ✅. ss_0769aas4z
-- Dashboard Pickups: "No pickup appointments yet" + explainer. D-003 ✅. ss_2093734df
-- Dashboard Brands: Typed "Pottery Barn" → Add → appeared in list → full reload → persisted (server-side confirmed). ss_7642d8yxi, ss_5371anhj6, ss_6095eysf5
-- Notifications: Dropdown 27 unread ss_3970ompns + /notifications page All/Operational/Discovery tabs ss_9978s0w2u + routing to message thread ss_4602ahmz7
-- /wishlists: "Vintage Jewelry" + "Mid-Century Modern Hunt" collections (0 items). ss_5547dpc3u
-- RSVP toggle: /sales/cmp0t1nki00h7si3dky88ygeh — "Going (0)" → "✓ You're going (1)". ss_4522hzw2t
-- Wishlist heart: aria-label "Add to wishlist" → clicked → "Remove from wishlist". Red filled heart. ss_413014505
-
-**BQ:** NAA row removed (RESOLVED S896). Logout row removed (RESOLVED S897). Dark mode + hydration rows updated to FIX DEPLOYED S897. BQ: 16→14.
-
-**9 PCVs staged** in Pending Chrome Verifications for next session's roadmap.md Chrome column update.
-
-### S896 — QA MODE (2026-06-06). 3 BQ fixes coded. NAA confirmed RESOLVED. CTA1 Chrome QA blocked by logout bug (confirmed live).
-
-**NAA RESOLVED:** psycopg2 query confirmed 1,151 Organizer records with `directoryMostRecentSource='NAAFindAnAuctioneer'` — the GH Actions `scrape-naa.yml` workflow_dispatch from S895 succeeded. BQ row marked RESOLVED. BQ: 16→15.
-
-**3 BQ fixes coded (pending Patrick's push):**
-- **Logout P1** (`packages/backend/src/index.ts` L438): added `|| req.path === '/logout'` to the authLimiter skip check. Logout must never be rate-limited — without this fix, the httpOnly JWT cookie persists after rate-limit hit, causing re-authentication on the next page load.
-- **React hydration #418/#425** (`packages/frontend/components/SaleCard.tsx`): root cause = `isHappeningToday()` called during render with `new Date()` → SSR/client timezone mismatch. Fix: `useState(false)` + `useEffect` defers the call to post-hydration. Zero render-time `new Date()` calls remain.
-- **text-warm-900 D-002 dark mode** (24 components/pages): replaced all 83 static `text-warm-900` instances (no `dark:` variant) with `text-warm-900 dark:text-warm-100`. Post-fix grep returns 0 violations (2 remaining instances are ternary runtime checks — correct pattern).
-
-**CTA1 Chrome QA — BLOCKED (confirmed P1 logout bug is live):**
-- Navigated `https://finda.sale/sales/cmpw9mmi401sbj8zfkx7f80oh` as Bob Smith (ss_0960im3by).
-- Clicked Logout → toast: "Rate limited. Please wait 84s before retrying." (ss_3161s6ouz). Nav shows Login/Register (client cleared), but httpOnly cookie persisted.
-- Navigated back → Bob Smith re-authenticated from cookie (ss_04637m5dv). Confirms P1 is live.
-- CTA1 QA cannot complete until logout fix is pushed + deployed to Railway.
-
-**Push:** 27 files. Includes `packages/backend/src/index.ts` (logout fix triggers Railway backend redeploy). Patrick must push via `.\push.ps1` then wait ~3 min for Railway deploy before CTA1 QA.
-
-### S895 — QA MODE (2026-06-06). Weekly audit + PCVs applied + NAA scraper triggered + P1 logout bug found.
-
-**Weekly audit:** 15 routes Chrome-tested. SEO-1/GUEST1/CTA1 confirmed live ✅. Admin access control ✅. 2 new BQ entries: text-warm-900 D-002 violations (HIGH — 83 instances/25 files) + React hydration errors (MEDIUM — #418/#425 on homepage). Shopper flows UNVERIFIED. Full report: claude_docs/audits/weekly-audit-2026-06-06.md.
-
-**PCVs applied to roadmap.md (cross-session rule — applied this session for S894 evidence):**
-- SEO-2 (line 139) Human QA col: `P` → `✅ S894 web_fetch`. Evidence: web_fetch finda.sale/ returned exactly 1 canonical, no duplicate og:/twitter: meta.
-- CTA1 (line 141) Status: up
