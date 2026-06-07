@@ -166,6 +166,7 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
     // Get all shoppers who have saved this sale
     const subscribers = await prisma.saleSubscriber.findMany({
       where: { saleId },
+      take: 500,
       select: { userId: true },
     });
 

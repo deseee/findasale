@@ -90,7 +90,7 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
               {lastSyncTime && ` • Last sync: ${new Date(lastSyncTime).toLocaleTimeString()}`}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button aria-label="Close" onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-6 h-6" />
           </button>
         </div>
