@@ -1,18 +1,20 @@
-# Patrick's Dashboard — S908 Wrap
+# Patrick's Dashboard — S909 Wrap
 
 ---
 
-## ✅ PUSH NOW — S908 (New page + docs)
+## ✅ PUSH NOW — S909 (Bug fix + docs)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/components/FlashDealForm.tsx
 git add packages/frontend/pages/organizer/sales/[id]/flash-deals.tsx
-git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: add /organizer/sales/[id]/flash-deals page; docs: S908 QA wrap — Flash Deal/Social Posts confirmed working, 7 new verifications"
+git commit -m "fix: FlashDealForm — add X/close button and Escape key handler; docs: S909 QA wrap — 5 organizer pages verified, Flash Deal modal P3 resolved, BQ 8→7"
 .\push.ps1
 ```
+
+> **Note:** If you haven't yet pushed the S908 flash-deals page (`pages/organizer/sales/[id]/flash-deals.tsx`), the commit above includes it. If you already pushed it, remove that line from the `git add` block — it won't hurt to re-add it, but it's cleaner not to.
 
 ---
 
@@ -25,72 +27,57 @@ git checkout HEAD -- packages/backend/src/controllers/internalGeocodingControlle
 
 ---
 
-## S908 — What Got Done
+## S909 — What Got Done
 
-### Flash Deal + Social Posts — ✅ FALSE POSITIVES Cleared
+### Records Pass — No Roadmap Changes Needed
 
-S907 flagged both as "inert stubs with no onClick." **Both were wrong.** Both features work correctly when tested on a PUBLISHED sale. They're gated behind `sale.status === 'PUBLISHED'` in CommandCenterCard — so if tested on a draft/ended sale they appear broken.
+All S908/S905/S906 PCVs were checked against roadmap.md. Every one maps to a row already marked chr ✅ from a prior session — no updates needed. Cross-session Chrome column rule satisfied.
 
-- Flash Deal: opens "Create Flash Deal" modal with item dropdown, discount % picker, duration picker (ss_0053mz6eh)
-- Social Posts: opens "Social Media Post" modal with platform selector (Instagram/Facebook/Nextdoor/TikTok/Pinterest) + Generate Post CTA (ss_8620q0mej)
+### P3 Fix: Flash Deal Modal — X Button + Escape Handler
 
-**BQ: removed 2 false positive rows.**
+FlashDealForm.tsx updated (Python via bash — Edit tool banned):
+- Added `×` close button in the modal header (top-right corner, aria-label="Close")
+- Added `useEffect` Escape key listener that calls `onCancel()`
+- TypeScript: 0 errors
 
-### New Page: /organizer/sales/[id]/flash-deals
+**BQ entry RESOLVED. BQ: 8→7. DEV mode available next session.**
 
-Dev agent built this page (it's the URL CommandCenterCard links to — different from the modal). Features:
-- Active Flash Deals list with photo/title/price/countdown
-- Create form: item dropdown, discount % (10–50%), duration (1h–12h)
-- Cancel deal button per deal
-- 60-second auto-refresh
-- Full dark mode, auth gate, Back to Dashboard link
+### Organizer Pages Sweep — All Clean
 
-**Needs your push to go live.**
+5 pages verified as Alice (user1@example.com):
 
-### New P3 Bug: Flash Deal Modal — No Close Button
-
-The Flash Deal modal (opened from CommandCenterCard on dashboard) has no X button and Escape doesn't close it. Must navigate away to dismiss. Will be patched next session (single-component edit, <20 lines).
-
-### S907 PCVs Applied to roadmap.md
-
-Records agent applied 4 roadmap updates:
-- H-002 Leaflet: ⬜ → ✅ RESOLVED S907
-- Bounties #197: chr ✅ S907 (full E2E confirmed)
-- Explorer's Guild #122: chr ✅ S907 (URL = /shopper/guild-primer)
-- Sale Map #139: H-002 RESOLVED note appended
-
-### Organizer Sweep — All Clean
-
-7 new Chrome verifications this session:
-
-| Page | Result |
-|------|--------|
-| Print Kit (/organizer/print-kit/[saleId]) | ✅ All sign/label templates present |
-| Boost Sale — "Sale Bump" modal | ✅ XP or $1 credit card options |
-| Holds (/organizer/holds?saleId=...) | ✅ Correct empty state |
-| Manage Sales (/organizer/sales) | ✅ 2 sales, correct action buttons |
-| Sale Plan Tracker (/organizer/plan/[saleId]) | ✅ 7/39 tasks, 6-stage timeline |
-| Command Center (/organizer/command-center) | ✅ Real data: 1 active sale, 2 items |
-| Checklist (/organizer/checklist/[saleId]) | ✅ 7/39 tasks, 3 category sections |
+| Page | Result | Screenshot |
+|------|--------|-----------|
+| /organizer/appraisals | ✅ Crowdsourced Appraisals heading, Submit button, tabs, empty state | ss_6653l8dfe |
+| /organizer/flip-report | ✅ Full report: 60% sell-through, $325 revenue, 3/5 sold, Category Breakdown | ss_2720usq8g, ss_71199syzr |
+| /organizer/consignors | ✅ Consignors heading, + Add Consignor, empty state | ss_3604boua6 |
+| /organizer/qr-codes | ✅ QR Scan Analytics, 3 KPI cards, Scanner Funnel with live sale | ss_68576clbw |
+| /organizer/reputation | ✅ Score 0.1/5.0 real data, Reputation/Reviews tabs, New Organizer Badge | ss_2693dz51y |
 
 ---
 
-## Blocked Queue — Current (8 items = QA ceiling still active)
+## Blocked Queue — Current (7 items — DEV mode unlocked)
 
 | # | Item | Priority | Action |
 |---|------|----------|--------|
 | 332 | Shopify bugs fixed — needs real store for QA | P0 (aged) | Patrick: connect real Shopify store |
 | 335 | Outreach sending suspension — Gmail reactivation needed | P1 | Patrick: reactivate outreach@finda.sale at admin.google.com |
-| — | Flash Deal modal — no close/X button | P3 | Dev next session |
 | — | 462 WARM leads email-ready, no outreach record | P2 | Do with #335 resume |
 | — | FB Marketplace 0 records — CF Worker dead end | P2 | **Patrick decision: DROP recommended** |
 | 230 | Smart Buyer Widget Human QA | P3 | Patrick: publish sale on user1 to test |
 | — | WARM tier enrichment at 3.5% | P3 | Background |
 | — | GSF 80.7% un-geocoded | P3 | Background |
 
+**BQ = 7. Below the 8-item QA ceiling. DEV mode is available next session.**
+
 ---
 
-## Next Session (S909)
+## Next Session (S910)
 
-QA mode continues (BQ=8 = ceiling). Records pass first to apply S908 PCVs. Then Flash Deal modal close button fix. Then continue organizer sweep.
+Records first (apply S909 PCVs to roadmap.md). Then DEV work as you direct — check roadmap.md BROKEN section for next priorities. QA sweep can continue organizer pages not yet hit (messages, ripples, print-inventory, discount-rules, brand-kit).
 
+**Open decisions for you:**
+- FB Marketplace: DROP (recommended) or pursue residential proxy path?
+- #332 Shopify: connect a real custom-app store to unblock QA
+- #335 Outreach: reactivate outreach@finda.sale at admin.google.com when ready
+- #230 Smart Buyer: publish a sale on user1 to enable QA
