@@ -1,20 +1,18 @@
-# Patrick's Dashboard — S906 Wrap
+# Patrick's Dashboard — S907 Wrap
 
 ---
 
-## ✅ PUSH NOW — S906 Fix (BountySubmission display bug + docs)
+## ✅ PUSH NOW — S907 Docs Wrap (STATE.md + dashboard)
+
+No code changes this session — docs only.
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/bountyController.ts
-git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: getOrganizerSubmissions use direct organizerId field; docs: S906 wrap"
+git commit -m "docs: S907 QA wrap — H-002 RESOLVED, Bounty E2E verified, 2 P2 bugs (Flash Deal + Social Posts stubs)"
 .\push.ps1
 ```
-
-After deploy: navigate to `/organizer/bounties` → "Your Submissions" tab → the Pyrex submission (cmq361vpz000d7andwmuns3p0) should now appear.
 
 ---
 
@@ -33,53 +31,72 @@ git checkout HEAD -- packages/backend/src/controllers/internalGeocodingControlle
 
 ---
 
-## S906 — What Got Done
+## S907 — What Got Done
 
-### Bug C (Messages Reply Dark Mode) ✅ CHROME-VERIFIED
+### H-002 Leaflet Map ✅ RESOLVED
 
-The reply form at the bottom of `/messages/[id]` is now visually distinguishable in dark mode. Confirmed via DOM inspection (gray-800 form on gray-900 page, gray-600 border-top, shadow) and visual screenshot (ss_4563dqnh2).
+Pin popup confirmed working. Navigated `/map` as Alice — 54 sales loaded, all pin types rendered. Clicked green pin → popup: "Gerald Ave Estate Sale", Grand Rapids MI, Jun 5-7 2026, "View Sale →" button. H-002 was wrongly flagged as BROKEN — it's fully functional. (ss_8736lh0zj)
 
-### Hero Search Enter Key ✅ CHROME-VERIFIED
+### Bounty E2E ✅ CHROME-VERIFIED
 
-Typed "vintage lamp" in homepage hero search → pressed Enter → navigated to `/search?q=vintage%20lamp` with results (ss_8251ipdgd). Working.
+Full cross-account flow: Alice submitted Pyrex item on `/organizer/bounties` → Bob approved on `/shopper/bounties` → status changed to APPROVED → Alice notification fired → Alice saw APPROVED on "Your Submissions" tab. S906 fix confirmed live. (ss_1178hfupu, ss_1584bck4b, ss_23937m5g7, ss_5550658mg)
 
-### BountySubmission "Your Submissions" — FIXED
+### Trending + Explore Pages ✅
 
-Root cause: `getOrganizerSubmissions` was filtering by `item.sale.organizerId` (indirect join through 3 tables) instead of the direct `organizerId` field that's on every `BountySubmission` record. Result: organizer submissions were always invisible to organizers. Fixed both `findMany` and `count` where clauses. TS 0 errors. Single file, <20 lines changed.
+`/trending` loaded with Hot Sales and ranked cards. Item drill-down to `/items/cmp5s7yws000jaez9syc3uibr` ("Steve Yzerman Rubber Duck" $21.50) worked. All 7 Explore tabs verified: Feed, Calendar, Wishlist, Clearance, Categories (including Comics drill-down), Encyclopedia, Guides.
 
-### #176 Roadmap Note — CORRECTED
+### Pricing ✅ S388 Confirmed
 
-"Sales Near You still missing" was stale (feature has been live since S903). Updated in roadmap.md.
+PRO=$29/mo, TEAMS=$79/mo live on `/pricing`. Alice shows "Current Plan" badge on TEAMS tier. Matches locked decisions from S388.
+
+### Explorer's Guild URL Confirmed
+
+The correct URL is `/shopper/guild-primer` — NOT `/guild` or `/shopper/guild` (both 404). Found via bash. Worth knowing if linking to it anywhere.
 
 ---
 
-## BQ = 7 — DEV Mode Available
+## 🔴 2 New P2 Bugs Found
 
-BQ dropped to 7 (below 8 ceiling). Next session can include DEV work.
+### Flash Deal Button — Inert Stub
+
+`/organizer/dashboard` "Create Flash Deal" button does nothing. No onClick handler. `/organizer/flash-deals` → 404. Feature not implemented — just a placeholder button. **Added to BQ.**
+
+### Social Posts Button — Inert Stub
+
+`/organizer/dashboard` "Social Posts" button does nothing. No onClick handler. **Added to BQ.**
+
+Both will be dispatched to `findasale-dev` next session per your S907 instruction to dispatch fixes after the batch.
+
+---
+
+## BQ = 9 — QA MODE Continues
+
+BQ went 7→9 (2 new P2 items). Still at or above the 8-item ceiling. Next session is QA + Records + targeted dev fixes for the two new bugs.
 
 ---
 
 ## 🔴 Patrick Decisions Required
 
-### 1. Push S906 fix → See top of this document
+### 1. Push S907 docs → See top of this document
 
-### 2. Chrome verify after deploy
-Navigate `/organizer/bounties` → "Your Submissions" tab → confirm Pyrex submission appears.
+### 2. FB Marketplace — DROP or pursue?
 
-### 3. FB Marketplace — DROP or pursue?
-Confirmed dead end: Cloudflare Worker proxy returns 0 listings. **Recommendation: DROP.** Graph API OAuth (#365) is the long-term path.
+Confirmed dead end (see S890). **Recommendation: DROP.** Graph API OAuth (#365) is the correct long-term path.
 
-### 4. #335 Outreach Resume
+### 3. #335 Outreach Resume
+
 When ready:
 1. Reactivate outreach@finda.sale at **admin.google.com → Directory → Users → outreach@finda.sale → Reactivate**
 2. Set `OUTREACH_ENABLED=true` on Railway backend
 3. Re-enable `pipeline-outreach-emails.yml` on GitHub
 4. Re-trigger Jane Thrift payout email after reactivation
 
-### 5. #332 Shopify
-S890 fixes are on GitHub (correct REST flow, API version 2025-10). Need a real Shopify custom-app store to QA end-to-end.
+### 4. #332 Shopify
 
-### 6. #230 Smart Buyer Widget
+S890 code fixes are on GitHub (correct REST flow, API version 2025-10). Need a real Shopify custom-app store to QA end-to-end.
+
+### 5. #230 Smart Buyer Widget
+
 Publish a sale on user1 (Alice Johnson) → Claude can verify SmartBuyerWidget shows shopper data.
 
 ---
@@ -88,15 +105,17 @@ Publish a sale on user1 (Alice Johnson) → Claude can verify SmartBuyerWidget s
 
 | Area | Status |
 |------|--------|
-| Blocked Queue | **7 rows** — DEV mode available |
-| Bug A — Passkey auth | ✅ CHROME-VERIFIED S905 |
-| #197 BountyMatchModal | ✅ CHROME-VERIFIED S905 |
+| Blocked Queue | **9 rows** — QA MODE (≥8 ceiling) |
+| H-002 Leaflet map | ✅ CHROME-VERIFIED S907 — RESOLVED |
+| Bounty E2E flow | ✅ CHROME-VERIFIED S907 |
+| BountySubmission display | ✅ CHROME-VERIFIED S907 (S906 fix confirmed) |
 | Bug C — Messages dark mode | ✅ CHROME-VERIFIED S906 |
 | Hero search Enter | ✅ CHROME-VERIFIED S906 |
-| BountySubmission display | 🟡 FIXED (pending push + verify) |
+| Flash Deal button | ❌ P2 — inert stub, added to BQ S907 |
+| Social Posts button | ❌ P2 — inert stub, added to BQ S907 |
+| Pricing (S388) | ✅ PRO=$29, TEAMS=$79 confirmed live |
+| Explorer's Guild URL | ✅ /shopper/guild-primer confirmed |
 | D-002 dark mode | ✅ RESOLVED S898 |
 | Hydration errors | ✅ RESOLVED S899 |
-| Logout bug | ✅ RESOLVED S897 |
-| FB Events geocoding | ✅ RESOLVED S901 — 93% geocoded |
 | Outreach | 🔴 Suspended — Patrick must reactivate (#335) |
 | Local files | ⚠️ 13 truncated — restore before dev work (see above) |

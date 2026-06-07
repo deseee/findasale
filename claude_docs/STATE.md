@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S907 — QA MODE (2026-06-07). Autonomous QA sweep complete. H-002 Leaflet map ✅ RESOLVED (pin popup "Gerald Ave Estate Sale" confirmed ss_8736lh0zj). Bounty E2E ✅ full flow (Alice submit → Bob approve → APPROVED → Alice notification). BountySubmission "Your Submissions" ✅ S906 fix confirmed (Pyrex record visible ss_5550658mg). Explorer's Guild URL: /shopper/guild-primer (not /guild or /shopper/guild — both 404). Pricing ✅ PRO=$29, TEAMS=$79 confirmed. 2 new P2 bugs: Flash Deal button (no onClick, /organizer/flash-deals → 404) + Social Posts button (no onClick). BQ: 7→9.**
+
 **S906 — QA MODE (2026-06-07). Bug C (messages reply dark mode) ✅ CHROME-VERIFIED (DOM computed styles + visual). Hero search Enter ✅ CHROME-VERIFIED (navigated to /search?q=vintage%20lamp). BountySubmission "Your Submissions" display bug FIXED inline (getOrganizerSubmissions where clause: item.sale.organizerId→organizerId direct field, TS 0 errors). #176 stale roadmap note corrected. BQ: 9→7.**
 
 **S905 — QA MODE (2026-06-07). Bug A (P1 passkey) ✅ CHROME-VERIFIED. #197 BountyMatchModal ✅ CHROME-VERIFIED (BountySubmission DB record confirmed). Bug C (messages dark mode) + Hero search Enter CODED. New P3: BountySubmission "Your Submissions" display bug. BQ: 11→9 (Bug A + #197 resolved).**
@@ -145,6 +147,10 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
 | FB Marketplace 0 records — CF Worker proxy is a DEAD END | **P2 — S890 DEFINITIVELY DIAGNOSED via live run + Railway logs (02:22-02:25 UTC Jun 6).** Proxy env vars confirmed live; run logged `[FacebookMarketplace] Transport: CLOUDFLARE_WORKER (https://findasale-fb-proxy.findasale.workers.dev/fb-graphql)` — so the proxy IS in use. Result: **every query in every metro returned "Found 0 listings"** (garage/yard/estate × jacksonville/fort-worth/columbus/charlotte/sf/indy/seattle/denver…), 0 created across the board, no errors. FB returns empty results even through Cloudflare's edge IPs (datacenter-IP soft-block; FB Marketplace search increasingly requires an authenticated session). **The free-Cloudflare-Worker approach (S888) does not and will not work for FB Marketplace.** Options: paid residential/mobile proxies + session auth, or DROP FB Marketplace. Recommend DROP unless FB listings become a priority — high effort, brittle, ToS-risky. | Patrick decision: DROP recommended (S899) — residential proxy + auth high-effort + ToS risk; Graph API OAuth path (#365) is the correct long-term alternative. | S890 |
 
+| Flash Deal dashboard button — inert stub (no onClick, /organizer/flash-deals → 404) | **P2** — S907 Chrome: /organizer/dashboard as Alice (user1). Clicked "Create Flash Deal" button → no action, no navigation. JS: `<button>` with no onClick handler. /organizer/flash-deals → 404. Unimplemented stub. | Implement /organizer/flash-deals route + page + wire onClick | S907 |
+
+| Social Posts dashboard button — inert stub (no onClick) | **P2** — S907 Chrome: /organizer/dashboard as Alice (user1). Clicked "Social Posts" button → no action. JS: `<button>` with no onClick handler. Unimplemented stub. | Implement Social Posts modal/flow + wire onClick | S907 |
+
 ---
 
 ## Pending Chrome Verifications
@@ -240,43 +246,64 @@ _(S862
 | 66 | Open Data Export ZIP | Navigated /organizer/settings → Help tab as Alice (user1). Clicked "Download Sale & Item Data (ZIP)" → API returned 429 "next export available [date]" with clear user-facing message. Rate limiting confirmed working. ss_3723v0nw2, ss_2914rv4if | S902 |
 | 47 | UGC Photo Tags — full submit flow | Navigated /sales/59c49908-72f2-4e92-ade9-02bfcfdd9230 as Alice (user1). Scrolled to Community Photos section. Clicked "Tag Your Find" orange button — modal opened with Photo URL, Caption (optional), Tags (comma-separated, optional) fields. Filled: URL=https://picsum.photos/400/300, caption, tags=vintage/decor/find. Clicked Submit Photo → green success toast "Photo submitted successfully". DB confirmed: UGCPhoto id=5, userId=cmomwf6nr000911qwipyim1nc, saleId=59c49908..., photoUrl correct, tags=['vintage','decor','find'], status=PENDING. ⚠️ UX: No "pending moderation" explainer shown after submit — user may wonder why photo doesn't appear. ss_3427wvnjd, ss_345974ewy | S902 |
 | 274 | Trail Completion Share | /shopper/trails/cmnsa0jir0000uzighx3ni54f as Leo Thomas (user5). "South Side Treasure Hunt": "✓ Trail Completed!" green banner (Completed on 6/4/2026) ✅, "Share your achievement" card ✅, Share button ✅, Public Link section ✅. Share button clicked → navigator.share triggered (no console errors, native share path — no clipboard fallback needed). ss_558087lcg ss_1217874pr | S877 |
+| — | H-002 Map pin popup (Leaflet) — RESOLVED | Navigated finda.sale/map as Alice (user1). 54 sales with pins. Clicked green pin → popup: "Gerald Ave Estate Sale", Grand Rapids MI, Jun 5-7 2026, "View Sale →" button. H-002 RESOLVED. ss_8736lh0zj | S907 |
+| — | BountySubmission "Your Submissions" — S906 fix confirmed | Navigated /organizer/bounties as Alice (user1) → "Your Submissions" tab → Pyrex submission (cmq361vpz000d7andwmuns3p0) visible: "Vintage Pyrex Bowls Set", PENDING_REVIEW, correct date. S906 fix confirmed in production. ss_5550658mg | S907 |
+| — | Bounty E2E — Alice submit → Bob approve → APPROVED | Alice submitted Pyrex item. Bob navigated /shopper/bounties → saw submission → clicked Approve → APPROVED. Alice notification fired. Alice saw APPROVED on "Your Submissions". ss_1178hfupu, ss_1584bck4b (Bob approve), ss_23937m5g7 (cross-account) | S907 |
+| — | Trending page + item drill-down | Navigated /trending as Alice. Hot Sales rendered. ss_1700v3uqu, ss_1826nkwve, ss_0812bxklh. Clicked trending item → /items/cmp5s7yws000jaez9syc3uibr "Steve Yzerman Rubber Duck" $21.50 rendered. ss_6722zw9h2 | S907 |
+| — | Explore pages — Feed/Calendar/Wishlist/Clearance/Categories/Encyclopedia/Guides | Feed ss_9712cx57s ✅. Calendar ss_3065rpkjt ✅. Wishlist ss_9422fogj9 ✅. Clearance ss_1564jtidk ✅. Categories ss_3583znp71 ✅ + Comics drill-down ss_54059osb2 ✅. Encyclopedia ss_92426lq6z ✅. Guides ss_1586niuxi ✅. | S907 |
+| — | User dropdown XP bar | Clicked user avatar as Alice. Dropdown: name, XP progress bar, rank badge, settings/logout. ss_3601f6067, ss_5434ttna5 | S907 |
+| — | Settings → Profile tab | Navigated /organizer/settings?tab=profile as Alice. Business name, contact info, bio fields. Dark mode correct. ss_6440nm7p8 | S907 |
+| — | Explorer's Guild (/shopper/guild-primer) | Navigated /shopper/guild-primer as Alice (URL confirmed via bash — /guild + /shopper/guild both 404). Guild page: rank tiers, XP table, badge gallery. ss_666742ptn, ss_7020zo3bf | S907 |
+| — | Pricing page — S388 prices confirmed | Navigated /pricing as Alice (user1/TEAMS). PRO=$29/mo ✅, TEAMS=$79/mo ✅. "Current Plan" badge on TEAMS. Matches D-007/S388 locked decisions. ss_6352uibw4, ss_5329igvjy | S907 |
 
 ---
 
 ## Next Session
 
-**S906 completed:** QA MODE. Bug C ✅ Chrome-verified. Hero search Enter ✅ Chrome-verified. BountySubmission display bug FIXED (inline — getOrganizerSubmissions direct organizerId). #176 stale roadmap note corrected. BQ: 7. QA MODE continues (7 < 8 ceiling).
+**S907 completed:** QA MODE. Autonomous QA sweep. H-002 RESOLVED, Bounty E2E ✅, BountySubmission fix ✅, Trending/Explore ✅. 2 P2 bugs found (Flash Deal + Social Posts stubs). BQ: 7→9.
 
-**Priority for next session (S907):**
-1. **[PUSH — S906 fix]** BountySubmission display fix + roadmap.md + STATE.md + patrick-dashboard.md:
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/backend/src/controllers/bountyController.ts
-   git add claude_docs/strategy/roadmap.md
-   git add claude_docs/STATE.md
-   git add claude_docs/patrick-dashboard.md
-   git commit -m "fix: getOrganizerSubmissions use direct organizerId field (was indirect item.sale.organizerId join — submissions never shown); fix: roadmap #176 stale Sales Near You note"
-   .\push.ps1
-   ```
-2. **[Chrome QA — BountySubmission "Your Submissions"]** After deploy: navigate /organizer/bounties as Alice → "Your Submissions" tab → verify cmq361vpz000d7andwmuns3p0 appears.
-3. **[Patrick still needed]:**
-   - #335 Outreach: reactivate outreach@finda.sale at admin.google.com (37 PENDING remain, Jane Thrift payout re-send)
-   - #332 Shopify: connect real custom-app store for live QA
-   - #230 Smart Buyer: publish a sale on user1 account
-   - FB Marketplace: Patrick decision — DROP recommended
-   - Restore 13 corrupted local files if not yet done:
-     ```powershell
-     git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
-     ```
+**Priority for next session (S908):**
+1. **[RECORDS FIRST]** `Skill('findasale-records')` → Apply S907 PCVs to roadmap.md. H-002 → RESOLVED, Bounty E2E chr ✅, BountySubmission "Your Submissions" chr ✅, Trending/Explore pages chr ✅, Explorer's Guild URL confirmed (/shopper/guild-primer).
+2. **[DEV — Patrick S907 authorization]** `Skill('findasale-dev')` → Flash Deal: implement /organizer/flash-deals route + page + wire "Create Flash Deal" dashboard button onClick.
+3. **[DEV — Patrick S907 authorization]** `Skill('findasale-dev')` → Social Posts: implement Social Posts modal/flow + wire dashboard button onClick.
+4. **[QA after dev]** `Skill('findasale-qa')` for each once deployed.
 
 **Decisions still open (Patrick):**
 - **FB Marketplace:** DROP confirmed recommended. Graph API OAuth (#365) = correct long-term path.
 - **#332 Shopify:** bugs fixed on GitHub; need real store for QA.
 - **#335 outreach resume:** Reactivate outreach@finda.sale → OUTREACH_ENABLED=true.
 - **AuctionZip recurring:** 4,893 one-time harvest; automation = future decision.
+- **#230 Smart Buyer:** publish a sale on user1 to enable QA.
 
+**Patrick actions still needed:**
+- Restore 13 corrupted local files (if not yet done):
+  ```powershell
+  git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
+  ```
+- #335 Outreach: reactivate outreach@finda.sale at admin.google.com
+- #332 Shopify: connect real custom-app store
+- #230 Smart Buyer: publish a sale on user1
 
 ## Recent Sessions
+
+### S907 — QA MODE (2026-06-07). Autonomous QA sweep. H-002 RESOLVED. Bounty E2E ✅. 2 P2 bugs found. BQ: 7→9.
+
+**H-002 Leaflet map pin popup ✅ RESOLVED:** Navigated finda.sale/map as Alice (user1). 54 sales with pins. Clicked green pin → popup: "Gerald Ave Estate Sale", Grand Rapids MI, Jun 5-7 2026, "View Sale →" button. H-002 RESOLVED. ss_8736lh0zj
+
+**BountySubmission "Your Submissions" ✅ S906 fix confirmed:** /organizer/bounties as Alice → "Your Submissions" tab → Pyrex submission (cmq361vpz000d7andwmuns3p0) visible: "Vintage Pyrex Bowls Set", PENDING_REVIEW, correct date. S906 fix confirmed in production. ss_5550658mg
+
+**Bounty E2E full flow ✅:** Alice submitted Pyrex item → Bob approved via /shopper/bounties → APPROVED status → Alice notification fired → Alice saw APPROVED on "Your Submissions". Full cross-account flow. ss_1178hfupu, ss_1584bck4b, ss_23937m5g7
+
+**Trending + Explore ✅ (multiple pages):** /trending (ss_1700v3uqu, ss_1826nkwve, ss_0812bxklh), item drill-down /items/cmp5s7yws000jaez9syc3uibr (Steve Yzerman Rubber Duck $21.50, ss_6722zw9h2). Feed (ss_9712cx57s), Calendar (ss_3065rpkjt), Wishlist (ss_9422fogj9), Clearance (ss_1564jtidk), Categories + Comics drill-down (ss_3583znp71, ss_54059osb2), Encyclopedia (ss_92426lq6z), Guides (ss_1586niuxi).
+
+**Additional verified:** User dropdown XP bar (ss_3601f6067, ss_5434ttna5). Settings Profile tab (ss_6440nm7p8). Explorer's Guild at /shopper/guild-primer — confirmed via bash find (not /guild or /shopper/guild, both 404) — ss_666742ptn, ss_7020zo3bf. Pricing: PRO=$29, TEAMS=$79, Alice "Current Plan" TEAMS badge — ss_6352uibw4, ss_5329igvjy.
+
+**Flash Deal button ❌ P2:** /organizer/dashboard "Create Flash Deal" → no action. `<button>` with no onClick. /organizer/flash-deals → 404. Added to BQ.
+
+**Social Posts button ❌ P2:** /organizer/dashboard "Social Posts" → no action. `<button>` with no onClick. Added to BQ.
+
+**PCVs staged:** 9 new rows — H-002, BountySubmission fix, Bounty E2E, Trending/item, Explore (7 pages), user dropdown, settings, Explorer's Guild, Pricing.
+**BQ:** 7→9 (Flash Deal + Social Posts added). 9 ≥ 8 → QA MODE continues.
 
 ### S906 — QA MODE (2026-06-07). Bug C ✅ + Hero search ✅ Chrome-verified. BountySubmission display FIXED. BQ: 9→7.
 
