@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { buildEmail } from '../services/emailTemplateService';
 import { emailService } from '../lib/emailService';
+import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -116,6 +117,7 @@ export const processAbandonedCheckouts = async (): Promise<void> => {
 
 // Run every hour to check for abandoned checkouts
 cron.schedule('0 * * * *', cronGuard({ jobName: 'abandonedCheckoutJob' }, async () => {
+  if (!bulkEmailEnabled()) { console.log('[abandonedCheckoutJob] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
   console.log('[AbandonedCheckout] Running abandoned checkout recovery job...');
   await processAbandonedCheckouts();
   console.log('[AbandonedCheckout] Abandoned checkout recovery job completed successfully');

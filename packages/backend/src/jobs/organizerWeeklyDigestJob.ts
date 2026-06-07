@@ -15,11 +15,13 @@
 import cron from 'node-cron';
 import { sendOrganizerWeeklyDigest } from '../services/organizerAnalyticsService';
 import { cronGuard } from '../utils/cronGuard';
+import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 
 if (process.env.ORGANIZER_DIGEST_ENABLED !== 'true') {
   console.log('[OrganizerDigest] ORGANIZER_DIGEST_ENABLED is not set to true — skipping cron registration');
 } else {
   cron.schedule('0 9 * * 1', cronGuard({ jobName: 'organizerWeeklyDigestJob' }, async () => {
+    if (!bulkEmailEnabled()) { console.log('[organizerWeeklyDigestJob] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
     console.log('📧 Running organizer weekly digest job...');
     await sendOrganizerWeeklyDigest();
   }));
