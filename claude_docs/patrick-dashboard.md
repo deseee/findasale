@@ -1,54 +1,73 @@
-# Patrick's Dashboard — S913 Wrap (2026-06-07)
+# Patrick's Dashboard — S914 Wrap (2026-06-07)
 
 ---
 
-## ✅ DONE THIS SESSION (no action needed)
+## 🔴 ACTION NEEDED FROM YOU (in order)
 
-- **Bulk-email kill switch** — 8 proactive bulk jobs gated behind `OUTREACH_ENABLED` (new `utils/bulkEmailGate.ts`). You pushed these; Railway redeploying.
-- **2 new daily monitors** — `findasale-email-delivery-health` (06:07) and `findasale-ops-cost-guard` (05:10). Both ran clean once.
-- **Task fleet consolidated** — retired `context-freshness-check` + `ux-spotcheck`; narrowed `health-scout` to security+code-quality; kept `ci-sentry-health` + `brand-drift`.
-- **ImprovMX forward** — `outreach@finda.sale → deseee@gmail.com` is live.
-- **Workspace account** — confirmed active (sending ~200/day, no suspension/OAuth alerts in 20 days).
-
----
-
-## ✅ PUSH NOW — S913 wrap docs + the bounce/forward job script
+### 1. Push the bounce pipeline (bounceSuppressService.ts + index.ts)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add scripts/outreach-mailbox-ops.js
-git commit -m "docs(S913): email-ops hardening wrap + noted findings; add outreach-mailbox-ops job (bounce cleanup + auto-forward)"
+git add packages/backend/src/services/bounceSuppressService.ts
+git add packages/backend/src/index.ts
+git commit -m "feat: bounce → EmailSuppression pipeline (daily 06:00 UTC cron) + /api/health route"
 .\push.ps1
 ```
 
-> The 8 gated job files + `bulkEmailGate.ts` were already pushed earlier this session — not repeated here.
+> `bounceSuppressService.ts` is a new 229-line file — NOT on GitHub yet. Without this push, the bounce-auto-suppression cron never ships.
 
 ---
 
-## ⏳ NEXT SESSION (S914) — Claude owns this; no manual work for you
+### 2. Re-mint the Gmail OAuth token (required for mailbox ops + bounce cron)
 
-Blocked this session only because there was no Railway CLI / MCP / creds to reach the outreach mailbox's Gmail API, and Chrome was ruled out. The job is written and waiting at `scripts/outreach-mailbox-ops.js`:
+The current `GMAIL_REFRESH_TOKEN` only has `gmail.send` scope. Two things need it upgraded:
+- The **mailbox ops script** (`trash bounce backlog` + `enable forwarding`) → needs `gmail.modify` + `gmail.settings.basic`
+- The **bounce cron** (`bounceSuppressService.ts`, 06:00 UTC daily) → needs `gmail.modify` to list + trash processed bounces
 
-1. **Trash the Jun-6 bounce backlog** (targeted: `from:mailer-daemon subject:"one step from going live"`, reversible) — `railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run` then `--apply`.
-2. **Enable auto-forwarding** on the outreach mailbox (address already verified) — `... enable-forwarding`.
-3. **Test forwarding end-to-end** — send to outreach@ + find@outreach, confirm it lands in deseee@gmail.com.
-4. If the Railway CLI is still flaky, that's the blocker — do the Railway-CLI research first.
+**Steps:**
+1. Google Cloud Console → your OAuth app → Credentials → edit the OAuth client
+2. Add scope `https://mail.google.com/` (full access covers both modify + settings)
+3. Run the OAuth consent flow to generate a new refresh token
+4. In Railway → backend service → Variables → update `GMAIL_REFRESH_TOKEN` with the new value
+5. Redeploy backend so it picks up the new token
+
+**Until this is done:** the bounce cron will throw a 403 at 06:00 UTC every day and do nothing.
 
 ---
 
-## 📋 NOTED FINDINGS (recorded in STATE.md — address before outreach resume)
+### 3. Close/merge PR #18 on GitHub
 
-- **[P2]** Bounced addresses aren't auto-suppressed → build bounce→`EmailSuppression` before `OUTREACH_ENABLED=true`.
-- **[P2]** All email (incl. payouts/receipts) rides one Gmail account = single point of failure → consider a separate transactional rail.
-- **[P3]** `OUTREACH_ENABLED` also silently pauses opt-in "sale ending soon" emails → consider a separate bulk flag.
-- **[P3]** Backend `/health` 404s → add a real health route.
+Railway auto-created this PR adding `COPY --from=builder /app/scripts ./scripts` to `Dockerfile.production`. Review it at https://github.com/deseee/findasale/pull/18 and close or merge — don't leave it open.
+
+---
+
+### 4. After token is re-minted — run mailbox ops (Claude will handle this next session)
+
+Claude owns the `scripts/outreach-mailbox-ops.js` run end-to-end. You don't need to do anything except confirm the token is updated and let Claude know next session.
+
+---
+
+## ✅ DONE THIS SESSION
+
+- **Root cause confirmed:** Gmail token scope is `gmail.send` only — that's why every mailbox op 403'd. Not a bug in the script; just needs the token re-minted.
+- **Bounce pipeline coded:** `bounceSuppressService.ts` complete, 0 TS errors. Daily cron registered in `index.ts`. Will run at 06:00 UTC daily once pushed + token fixed.
+- **Railway CLI confirmed working** in the VM (`railway run --service backend` correctly injects env vars).
+- **`/health` + `/api/health` endpoints:** `health.ts` + `healthController.ts` are on GitHub (S913 push). Railway deployment QUEUED — if still QUEUED at next session start, Claude will cache-bust the Dockerfile.
+
+---
+
+## ⚠️ NOTED FINDINGS (pre-outreach-resume checklist)
+
+- **[P2]** Bounce auto-suppression now coded but blocked on Gmail token scope (fix above).
+- **[P2]** All email (payouts, receipts, password resets) still rides one Gmail account — suspension kills everything. Architect decision needed on a separate transactional rail (Resend/SES).
+- **[P3]** `OUTREACH_ENABLED=false` also silently pauses opt-in "sale ending soon" emails. Consider a separate `BULK_EMAIL_ENABLED` flag.
+- **[P3]** Railway deploy QUEUED — may be stuck; Claude will cache-bust at next session start if not resolved.
 
 ---
 
 ## Decisions still open
-- **#335 outreach resume:** account active; keep `OUTREACH_ENABLED=false` until ~Jun 22 (warming). Jane Thrift payout re-send is the only urgent transactional email.
+
+- **#335 outreach resume:** account active; keep `OUTREACH_ENABLED=false` until ~Jun 22 (warming). Jane Thrift payout re-send is still the only urgent transactional email.
 - **FB Marketplace:** DROP recommended; Graph API OAuth (#365) = long-term path.
 - **#332 Shopify:** code fixed; needs a real custom-app store for QA.
 - **#230 Smart Buyer:** publish a sale on user1 to enable QA.

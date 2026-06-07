@@ -282,15 +282,37 @@ _(S862
 
 ## Next Session
 
-**S914 TOP PRIORITY — finish the outreach-mailbox ops (Claude owns this end-to-end; do NOT hand Patrick manual steps).** This session was blocked: no Railway CLI binary, no Railway MCP, GMAIL_* creds absent from local .env, and Chrome was ruled out for the bulk delete. The job is written and waiting: `scripts/outreach-mailbox-ops.js`.
+**S915 FIRST ACTIONS (in order):**
 
-1. **Get Railway access.** Confirm whether the Railway CLI is working this session (it has been flaky — see memory [[project_railway_cli_research_todo]] and do that web research if still broken). With access:
-   - `railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run`  → confirm match count
-   - `railway run --service backend node scripts/outreach-mailbox-ops.js trash --apply`    → moves Jun-6 "one step from going live" mailer-daemon bounces to Trash (targeted, reversible 30d; NOT a blanket delete)
-   - `railway run --service backend node scripts/outreach-mailbox-ops.js enable-forwarding` → turns on auto-forward outreach@finda.sale → deseee@gmail.com (leaveInInbox)
-   - Scope note: token needs gmail.modify + gmail.settings.basic; if 403, the refresh token is send-only and must be re-minted with broader scope.
-2. **Test forwarding end-to-end.** Send a test to outreach@finda.sale AND find@outreach.finda.sale; confirm it lands in deseee@gmail.com (Gmail MCP search). Only then is "eyes on find@outreach" truly done.
-3. **Pre-approve the 2 new daily tasks** (so scheduled runs don't pause on perms): "Run now" once on `findasale-email-delivery-health` + `findasale-ops-cost-guard`.
+1. **Push bounceSuppressService.ts + index.ts via push.ps1** (Patrick action):
+   ```powershell
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add packages/backend/src/services/bounceSuppressService.ts
+   git add packages/backend/src/index.ts
+   git commit -m "feat: bounce → EmailSuppression pipeline (daily 06:00 UTC cron) + /api/health route"
+   .\push.ps1
+   ```
+
+2. **Re-mint Gmail OAuth token** (Patrick action — required before mailbox ops will work):
+   - Go to Google Cloud Console → your OAuth app → Credentials
+   - Add scope `https://mail.google.com/` (full access — needed for trash + forwarding)
+   - Run the OAuth consent flow to get a new refresh token
+   - Update `GMAIL_REFRESH_TOKEN` env var on Railway backend service
+   - **Without this, bounceSuppressService.ts cron (06:00 UTC daily) will fail at runtime**
+
+3. **Close or merge PR #18** on GitHub (Railway auto-created Dockerfile change) — review at https://github.com/deseee/findasale/pull/18
+
+4. **After token re-mint — run mailbox ops** (Claude owns this end-to-end):
+   ```powershell
+   # Install Railway CLI if needed: npm install -g @railway/cli
+   $env:RAILWAY_TOKEN="[from CLAUDE.md]"
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run
+   railway run --service backend node scripts/outreach-mailbox-ops.js trash --apply
+   railway run --service backend node scripts/outreach-mailbox-ops.js enable-forwarding
+   ```
+
+5. **BQ = 7 → DEV available.** After push, consider dispatching Shopify (#332) or transactional rail SPOF work.
 
 **Decisions still open (Patrick):**
 - **#335 outreach resume:** account is active; keep OUTREACH_ENABLED=false until ~Jun 22 (warming). Jane Thrift payout re-send is the only urgent transactional email.
@@ -300,6 +322,25 @@ _(S862
 
 ## Recent Sessions
 
+
+### S914 — INFRA (2026-06-07). Email audit follow-through; bounce pipeline coded; mailbox ops blocked by OAuth scope.
+
+**Root cause identified (DEFINITIVE):** `GMAIL_REFRESH_TOKEN` in Railway was minted with only `gmail.send` scope. The `scripts/outreach-mailbox-ops.js` trash + forwarding operations require `gmail.modify` + `gmail.settings.basic` (or `https://mail.google.com/`). Every "Request had insufficient authentication scopes" 403 this session traced to this single root cause. Cannot be fixed autonomously — Patrick must re-mint with the broader scope.
+
+**Completed:**
+- `bounceSuppressService.ts` (229 lines) — code complete, 0 TS errors. Searches for mailer-daemon bounces, extracts bounced addresses, upserts to EmailSuppression (suppressionReason: BOUNCED, bounceHard: true), trashes processed messages. Registered as daily 06:00 UTC cron in index.ts. **NOT on GitHub — push required.**
+- `packages/backend/src/index.ts` — updated with bounceSuppressService import, cron registration, and /api/health route mount. **NOT on GitHub — push required.**
+- Railway CLI v5.4.2 confirmed working in VM with project token (railway run --service backend correctly injects Railway env vars).
+- `health.ts` + `healthController.ts` — on GitHub (S913 push), Railway deployment QUEUED (may be stuck — cache-bust Dockerfile if still QUEUED at S915 start).
+
+**Blocked:**
+- Mailbox ops (trash bounce backlog + enable forwarding): blocked by Gmail scope. Patrick must re-mint token with `https://mail.google.com/` scope and update GMAIL_REFRESH_TOKEN on Railway.
+- bounceSuppressService.ts runtime cron: will throw 403 at 06:00 UTC until token re-minted.
+- PR #18 (https://github.com/deseee/findasale/pull/18): Railway auto-created, open. Patrick must review.
+
+**BQ: 7 (unchanged).**
+
+---
 
 ### S912 — BUG MODE (2026-06-07). Email kill-switch audit + 3 fixes.
 
