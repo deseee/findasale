@@ -102,7 +102,7 @@ export const usePasskey = () => {
 
       // Step 3: Send assertion to server for verification
       const completeResponse = await api.post(
-        '/api/auth/passkey/authenticate/complete',
+        '/auth/passkey/authenticate/complete',
         {
           id: assertion.id,
           response: assertion.response,
