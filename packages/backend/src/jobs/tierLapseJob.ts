@@ -8,6 +8,7 @@ import {
   markTierLapseWarning,
 } from '../services/tierLapseService';
 import { emailService } from '../lib/emailService';
+import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -152,6 +153,7 @@ cron.schedule('0 23 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
 
 // Run tier-lapse warning queue daily at 8 AM UTC (12 AM EST)
 cron.schedule('0 8 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
+  if (!bulkEmailEnabled()) { console.log('[tierLapseJob] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
   console.log('[TierLapse] Running tier-lapse warning queue job...');
   try {
     await queueTierLapseWarningsJob();

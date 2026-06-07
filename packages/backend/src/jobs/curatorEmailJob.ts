@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { regionConfig } from '../config/regionConfig';
 import { emailService } from '../lib/emailService';
+import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL   = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -212,6 +213,7 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
 // ─── Schedule: every Monday at 8 AM ───────────────────────────────────────────────────────────────────────────────────
 
 cron.schedule('0 8 * * 1', cronGuard({ jobName: 'curatorEmailJob' }, async () => {
+  if (!bulkEmailEnabled()) { console.log('[curatorEmailJob] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
   console.log('📧 Running weekly curator email digest…');
   await sendWeeklyCuratorDigest();
 }));

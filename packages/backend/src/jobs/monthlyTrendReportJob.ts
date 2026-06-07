@@ -16,6 +16,7 @@
 import { prisma } from '../lib/prisma';
 import { emailService } from '../lib/emailService';
 import { buildMonthlyTrendReportEmail } from '../templates/monthlyTrendReport';
+import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -48,6 +49,7 @@ export interface OrganizerTrendData {
 }
 
 export async function runMonthlyTrendReport(): Promise<void> {
+  if (!bulkEmailEnabled()) { console.log('[monthlyTrendReport] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
   const now = new Date();
 
   // Current month window: past 30 days
