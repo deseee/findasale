@@ -22,17 +22,20 @@ interface ProcessResult {
 }
 
 // ---------------------------------------------------------------------------
-// Gmail client factory — identical pattern to lib/emailService.ts
+// Gmail client factory — prefers GMAIL_MAILBOX_REFRESH_TOKEN (needs gmail.modify
+// scope to list/get/trash messages). Falls back to GMAIL_REFRESH_TOKEN.
+// Same pattern as scripts/outreach-mailbox-ops.js.
 // ---------------------------------------------------------------------------
 function createGmailClient() {
-  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !process.env.GMAIL_REFRESH_TOKEN) {
-    throw new Error('[bounceSuppressService] Missing GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, or GMAIL_REFRESH_TOKEN');
+  const token = process.env.GMAIL_MAILBOX_REFRESH_TOKEN || process.env.GMAIL_REFRESH_TOKEN;
+  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !token) {
+    throw new Error('[bounceSuppressService] Missing GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, or GMAIL_MAILBOX_REFRESH_TOKEN (or GMAIL_REFRESH_TOKEN)');
   }
   const oauth2Client = new google.auth.OAuth2(
     process.env.GMAIL_CLIENT_ID,
     process.env.GMAIL_CLIENT_SECRET
   );
-  oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+  oauth2Client.setCredentials({ refresh_token: token });
   return google.gmail({ version: 'v1', auth: oauth2Client });
 }
 
