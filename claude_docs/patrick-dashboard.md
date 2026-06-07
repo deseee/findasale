@@ -1,121 +1,96 @@
-# Patrick's Dashboard — S907 Wrap
+# Patrick's Dashboard — S908 Wrap
 
 ---
 
-## ✅ PUSH NOW — S907 Docs Wrap (STATE.md + dashboard)
-
-No code changes this session — docs only.
+## ✅ PUSH NOW — S908 (New page + docs)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/pages/organizer/sales/[id]/flash-deals.tsx
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S907 QA wrap — H-002 RESOLVED, Bounty E2E verified, 2 P2 bugs (Flash Deal + Social Posts stubs)"
+git commit -m "feat: add /organizer/sales/[id]/flash-deals page; docs: S908 QA wrap — Flash Deal/Social Posts confirmed working, 7 new verifications"
 .\push.ps1
 ```
 
 ---
 
-## ⚠️ ALSO NEEDED — Restore Corrupted Local Files
-
-If not done yet from S904 wrap:
+## ⚠️ STILL NEEDED — Restore Corrupted Local Files (if not done S904+)
 
 ```powershell
-# Step 1: Remove git lock file (if present)
-Remove-Item "C:\Users\desee\ClaudeProjects\FindaSale\.git\index.lock"
-
-# Step 2: Restore all 13 truncated files
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git checkout HEAD -- packages/backend/src/controllers/internalGeocodingController.ts packages/backend/src/index.ts packages/backend/src/jobs/autoSeedOutreachCron.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/scraper/sources/auctionZipScraper.ts packages/backend/src/services/scraper/sources/naaAuctioneerDirectory.ts packages/backend/src/services/shopifyService.ts packages/database/prisma/schema.prisma packages/frontend/components/SaleCard.tsx packages/frontend/data/guides/entries/connect-shopify.ts packages/frontend/pages/_app.tsx packages/frontend/pages/_document.tsx "packages/frontend/pages/sales/[id].tsx"
 ```
 
 ---
 
-## S907 — What Got Done
+## S908 — What Got Done
 
-### H-002 Leaflet Map ✅ RESOLVED
+### Flash Deal + Social Posts — ✅ FALSE POSITIVES Cleared
 
-Pin popup confirmed working. Navigated `/map` as Alice — 54 sales loaded, all pin types rendered. Clicked green pin → popup: "Gerald Ave Estate Sale", Grand Rapids MI, Jun 5-7 2026, "View Sale →" button. H-002 was wrongly flagged as BROKEN — it's fully functional. (ss_8736lh0zj)
+S907 flagged both as "inert stubs with no onClick." **Both were wrong.** Both features work correctly when tested on a PUBLISHED sale. They're gated behind `sale.status === 'PUBLISHED'` in CommandCenterCard — so if tested on a draft/ended sale they appear broken.
 
-### Bounty E2E ✅ CHROME-VERIFIED
+- Flash Deal: opens "Create Flash Deal" modal with item dropdown, discount % picker, duration picker (ss_0053mz6eh)
+- Social Posts: opens "Social Media Post" modal with platform selector (Instagram/Facebook/Nextdoor/TikTok/Pinterest) + Generate Post CTA (ss_8620q0mej)
 
-Full cross-account flow: Alice submitted Pyrex item on `/organizer/bounties` → Bob approved on `/shopper/bounties` → status changed to APPROVED → Alice notification fired → Alice saw APPROVED on "Your Submissions" tab. S906 fix confirmed live. (ss_1178hfupu, ss_1584bck4b, ss_23937m5g7, ss_5550658mg)
+**BQ: removed 2 false positive rows.**
 
-### Trending + Explore Pages ✅
+### New Page: /organizer/sales/[id]/flash-deals
 
-`/trending` loaded with Hot Sales and ranked cards. Item drill-down to `/items/cmp5s7yws000jaez9syc3uibr` ("Steve Yzerman Rubber Duck" $21.50) worked. All 7 Explore tabs verified: Feed, Calendar, Wishlist, Clearance, Categories (including Comics drill-down), Encyclopedia, Guides.
+Dev agent built this page (it's the URL CommandCenterCard links to — different from the modal). Features:
+- Active Flash Deals list with photo/title/price/countdown
+- Create form: item dropdown, discount % (10–50%), duration (1h–12h)
+- Cancel deal button per deal
+- 60-second auto-refresh
+- Full dark mode, auth gate, Back to Dashboard link
 
-### Pricing ✅ S388 Confirmed
+**Needs your push to go live.**
 
-PRO=$29/mo, TEAMS=$79/mo live on `/pricing`. Alice shows "Current Plan" badge on TEAMS tier. Matches locked decisions from S388.
+### New P3 Bug: Flash Deal Modal — No Close Button
 
-### Explorer's Guild URL Confirmed
+The Flash Deal modal (opened from CommandCenterCard on dashboard) has no X button and Escape doesn't close it. Must navigate away to dismiss. Will be patched next session (single-component edit, <20 lines).
 
-The correct URL is `/shopper/guild-primer` — NOT `/guild` or `/shopper/guild` (both 404). Found via bash. Worth knowing if linking to it anywhere.
+### S907 PCVs Applied to roadmap.md
 
----
+Records agent applied 4 roadmap updates:
+- H-002 Leaflet: ⬜ → ✅ RESOLVED S907
+- Bounties #197: chr ✅ S907 (full E2E confirmed)
+- Explorer's Guild #122: chr ✅ S907 (URL = /shopper/guild-primer)
+- Sale Map #139: H-002 RESOLVED note appended
 
-## 🔴 2 New P2 Bugs Found
+### Organizer Sweep — All Clean
 
-### Flash Deal Button — Inert Stub
+7 new Chrome verifications this session:
 
-`/organizer/dashboard` "Create Flash Deal" button does nothing. No onClick handler. `/organizer/flash-deals` → 404. Feature not implemented — just a placeholder button. **Added to BQ.**
-
-### Social Posts Button — Inert Stub
-
-`/organizer/dashboard` "Social Posts" button does nothing. No onClick handler. **Added to BQ.**
-
-Both will be dispatched to `findasale-dev` next session per your S907 instruction to dispatch fixes after the batch.
-
----
-
-## BQ = 9 — QA MODE Continues
-
-BQ went 7→9 (2 new P2 items). Still at or above the 8-item ceiling. Next session is QA + Records + targeted dev fixes for the two new bugs.
-
----
-
-## 🔴 Patrick Decisions Required
-
-### 1. Push S907 docs → See top of this document
-
-### 2. FB Marketplace — DROP or pursue?
-
-Confirmed dead end (see S890). **Recommendation: DROP.** Graph API OAuth (#365) is the correct long-term path.
-
-### 3. #335 Outreach Resume
-
-When ready:
-1. Reactivate outreach@finda.sale at **admin.google.com → Directory → Users → outreach@finda.sale → Reactivate**
-2. Set `OUTREACH_ENABLED=true` on Railway backend
-3. Re-enable `pipeline-outreach-emails.yml` on GitHub
-4. Re-trigger Jane Thrift payout email after reactivation
-
-### 4. #332 Shopify
-
-S890 code fixes are on GitHub (correct REST flow, API version 2025-10). Need a real Shopify custom-app store to QA end-to-end.
-
-### 5. #230 Smart Buyer Widget
-
-Publish a sale on user1 (Alice Johnson) → Claude can verify SmartBuyerWidget shows shopper data.
-
----
-
-## Project Status — Quick View
-
-| Area | Status |
+| Page | Result |
 |------|--------|
-| Blocked Queue | **9 rows** — QA MODE (≥8 ceiling) |
-| H-002 Leaflet map | ✅ CHROME-VERIFIED S907 — RESOLVED |
-| Bounty E2E flow | ✅ CHROME-VERIFIED S907 |
-| BountySubmission display | ✅ CHROME-VERIFIED S907 (S906 fix confirmed) |
-| Bug C — Messages dark mode | ✅ CHROME-VERIFIED S906 |
-| Hero search Enter | ✅ CHROME-VERIFIED S906 |
-| Flash Deal button | ❌ P2 — inert stub, added to BQ S907 |
-| Social Posts button | ❌ P2 — inert stub, added to BQ S907 |
-| Pricing (S388) | ✅ PRO=$29, TEAMS=$79 confirmed live |
-| Explorer's Guild URL | ✅ /shopper/guild-primer confirmed |
-| D-002 dark mode | ✅ RESOLVED S898 |
-| Hydration errors | ✅ RESOLVED S899 |
-| Outreach | 🔴 Suspended — Patrick must reactivate (#335) |
-| Local files | ⚠️ 13 truncated — restore before dev work (see above) |
+| Print Kit (/organizer/print-kit/[saleId]) | ✅ All sign/label templates present |
+| Boost Sale — "Sale Bump" modal | ✅ XP or $1 credit card options |
+| Holds (/organizer/holds?saleId=...) | ✅ Correct empty state |
+| Manage Sales (/organizer/sales) | ✅ 2 sales, correct action buttons |
+| Sale Plan Tracker (/organizer/plan/[saleId]) | ✅ 7/39 tasks, 6-stage timeline |
+| Command Center (/organizer/command-center) | ✅ Real data: 1 active sale, 2 items |
+| Checklist (/organizer/checklist/[saleId]) | ✅ 7/39 tasks, 3 category sections |
+
+---
+
+## Blocked Queue — Current (8 items = QA ceiling still active)
+
+| # | Item | Priority | Action |
+|---|------|----------|--------|
+| 332 | Shopify bugs fixed — needs real store for QA | P0 (aged) | Patrick: connect real Shopify store |
+| 335 | Outreach sending suspension — Gmail reactivation needed | P1 | Patrick: reactivate outreach@finda.sale at admin.google.com |
+| — | Flash Deal modal — no close/X button | P3 | Dev next session |
+| — | 462 WARM leads email-ready, no outreach record | P2 | Do with #335 resume |
+| — | FB Marketplace 0 records — CF Worker dead end | P2 | **Patrick decision: DROP recommended** |
+| 230 | Smart Buyer Widget Human QA | P3 | Patrick: publish sale on user1 to test |
+| — | WARM tier enrichment at 3.5% | P3 | Background |
+| — | GSF 80.7% un-geocoded | P3 | Background |
+
+---
+
+## Next Session (S909)
+
+QA mode continues (BQ=8 = ceiling). Records pass first to apply S908 PCVs. Then Flash Deal modal close button fix. Then continue organizer sweep.
+

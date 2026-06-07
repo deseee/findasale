@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S908 — QA MODE (2026-06-07). Records pass: S907 PCVs applied to roadmap.md (4 rows — H-002 RESOLVED, Bounty E2E chr ✅, Explorer's Guild URL chr ✅, Pricing chr ✅). Dev: /organizer/sales/[id]/flash-deals.tsx NEW PAGE created (TS 0 errors). QA findings: Flash Deal button ✅ CONFIRMED WORKING (false positive — gated on PUBLISHED sale, ss_0053mz6eh). Social Posts button ✅ CONFIRMED WORKING (false positive — "Social Media Post" modal with platform selector, ss_8620q0mej). NEW P3: Flash Deal modal missing close/X button. New Chrome verifications: Print Kit ✅, Boost Sale ✅ "Sale Bump" modal, Holds ✅, /organizer/sales ✅, /organizer/plan/[saleId] ✅, /organizer/command-center ✅, /organizer/checklist/[saleId] ✅. BQ: 9→8 (−2 false positives +1 new P3).**
+
 **S907 — QA MODE (2026-06-07). Autonomous QA sweep complete. H-002 Leaflet map ✅ RESOLVED (pin popup "Gerald Ave Estate Sale" confirmed ss_8736lh0zj). Bounty E2E ✅ full flow (Alice submit → Bob approve → APPROVED → Alice notification). BountySubmission "Your Submissions" ✅ S906 fix confirmed (Pyrex record visible ss_5550658mg). Explorer's Guild URL: /shopper/guild-primer (not /guild or /shopper/guild — both 404). Pricing ✅ PRO=$29, TEAMS=$79 confirmed. 2 new P2 bugs: Flash Deal button (no onClick, /organizer/flash-deals → 404) + Social Posts button (no onClick). BQ: 7→9.**
 
 **S906 — QA MODE (2026-06-07). Bug C (messages reply dark mode) ✅ CHROME-VERIFIED (DOM computed styles + visual). Hero search Enter ✅ CHROME-VERIFIED (navigated to /search?q=vintage%20lamp). BountySubmission "Your Submissions" display bug FIXED inline (getOrganizerSubmissions where clause: item.sale.organizerId→organizerId direct field, TS 0 errors). #176 stale roadmap note corrected. BQ: 9→7.**
@@ -118,6 +120,7 @@ _S772 reconciliation: graduated/closed rows removed — reconciled into strategy
 _⚠️ P0 AGING: #332 at 73+ sessions — mandatory P0 per CLAUDE.md §10a._
 _S886: P3 review link fix ✅ Chrome-verified S886 — removed. P2 POS filter fix ✅ Chrome-verified S886 — removed. Blocked Queue: 4 rows (#335 P1 URGENT outreach suspension + #332 + AuctionNinja + #230)._
 _S887 Records pass: 6 new rows added from scraper audit (P1/P2). S887 Records pass #2: 7 additional rows added (P2/P3). Blocked Queue: 17 rows total._
+_S908 QA MODE: Flash Deal stub (P2) + Social Posts stub (P2) REMOVED — S907 false positives (both gated on PUBLISHED sale, both work correctly). New P3 added: Flash Deal modal missing close button. BQ: 9→8._
 _S889 BUG MODE: "Outreach still sending despite OUTREACH_ENABLED=false" CLOSED — propagation-lag false alarm, not an active leak. Removed from queue. Evidence: all send paths gated at sendOutreachEmails() outreachEmailsCron.ts:201; backend redeployed 22:39 UTC Jun 5; ZERO DirectoryClaimEmail sends since 07:59 Jun 5 across 4 cron windows (psycopg2 + Railway deploy logs deployment 0352c24e); GH workflow pipeline-outreach-emails.yml disabled = 2nd layer. Blocked Queue: 16 rows._
 _S890 QA MODE: full 16-item DB/code verification sweep (no browser — data items). **#12 Sale-Ending-Soon rate cap CLOSED** — confirmed deployed on main (saleEndingSoonJob.ts: DAILY_EMAIL_CAP=500 + per-send suppression check, GitHub sha 180fff9). All other rows annotated with S890 tool evidence (psycopg2 + GitHub main reads); root causes refined where found. Blocked Queue: 15 rows._
 _S894 Records pass: AuctionNinja RESOLVED + AuctionZip RESOLVED + merged auction row RESOLVED + SEO-1 LIVE-VERIFIED S892 + CTA1 Chrome-verified S894 + SEO-2 web_fetch-verified S894 → all 6 removed. Blocked Queue: 13 rows._
@@ -147,9 +150,7 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
 | FB Marketplace 0 records — CF Worker proxy is a DEAD END | **P2 — S890 DEFINITIVELY DIAGNOSED via live run + Railway logs (02:22-02:25 UTC Jun 6).** Proxy env vars confirmed live; run logged `[FacebookMarketplace] Transport: CLOUDFLARE_WORKER (https://findasale-fb-proxy.findasale.workers.dev/fb-graphql)` — so the proxy IS in use. Result: **every query in every metro returned "Found 0 listings"** (garage/yard/estate × jacksonville/fort-worth/columbus/charlotte/sf/indy/seattle/denver…), 0 created across the board, no errors. FB returns empty results even through Cloudflare's edge IPs (datacenter-IP soft-block; FB Marketplace search increasingly requires an authenticated session). **The free-Cloudflare-Worker approach (S888) does not and will not work for FB Marketplace.** Options: paid residential/mobile proxies + session auth, or DROP FB Marketplace. Recommend DROP unless FB listings become a priority — high effort, brittle, ToS-risky. | Patrick decision: DROP recommended (S899) — residential proxy + auth high-effort + ToS risk; Graph API OAuth path (#365) is the correct long-term alternative. | S890 |
 
-| Flash Deal dashboard button — inert stub (no onClick, /organizer/flash-deals → 404) | **P2** — S907 Chrome: /organizer/dashboard as Alice (user1). Clicked "Create Flash Deal" button → no action, no navigation. JS: `<button>` with no onClick handler. /organizer/flash-deals → 404. Unimplemented stub. | Implement /organizer/flash-deals route + page + wire onClick | S907 |
-
-| Social Posts dashboard button — inert stub (no onClick) | **P2** — S907 Chrome: /organizer/dashboard as Alice (user1). Clicked "Social Posts" button → no action. JS: `<button>` with no onClick handler. Unimplemented stub. | Implement Social Posts modal/flow + wire onClick | S907 |
+| Flash Deal modal — missing close/X button | **P3** — S908 Chrome: CommandCenterCard "Flash Deal" opens "Create Flash Deal" modal (correctly — feature IS wired, was S907 false positive). Modal has no X/close button and Escape key does not dismiss it. User must navigate away to close. ss_0053mz6eh | Add X/close button and Escape key handler to FlashDealModal component | S908 |
 
 ---
 
@@ -255,18 +256,28 @@ _(S862
 | — | Settings → Profile tab | Navigated /organizer/settings?tab=profile as Alice. Business name, contact info, bio fields. Dark mode correct. ss_6440nm7p8 | S907 |
 | — | Explorer's Guild (/shopper/guild-primer) | Navigated /shopper/guild-primer as Alice (URL confirmed via bash — /guild + /shopper/guild both 404). Guild page: rank tiers, XP table, badge gallery. ss_666742ptn, ss_7020zo3bf | S907 |
 | — | Pricing page — S388 prices confirmed | Navigated /pricing as Alice (user1/TEAMS). PRO=$29/mo ✅, TEAMS=$79/mo ✅. "Current Plan" badge on TEAMS. Matches D-007/S388 locked decisions. ss_6352uibw4, ss_5329igvjy | S907 |
+| — | Flash Deal button — CONFIRMED WORKING (S907 false positive) | Navigated /organizer/dashboard as Alice (user1). QA Active Sale S875 (PUBLISHED). Clicked "⚡ Flash Deal" → modal opened: "Create Flash Deal" header, Select Item dropdown, Discount % picker (10-50%), Duration picker (1h-12h), "Create Flash Deal" button. Feature wired and functional on PUBLISHED sale. S907 "no onClick" = false positive (S907 tested non-PUBLISHED sale or timing issue). ss_0053mz6eh | S908 |
+| — | Social Posts button — CONFIRMED WORKING (S907 false positive) | Navigated /organizer/dashboard as Alice (user1). QA Active Sale S875 (PUBLISHED). Clicked "📱 Social Posts" → "Social Media Post" modal opened: platform selector (Instagram/Facebook/Nextdoor/TikTok/Pinterest), "Highlights to mention" textarea, "✨ Generate Post" CTA. Feature wired and functional. S907 "no onClick" = false positive. ss_8620q0mej | S908 |
+| — | Print Kit (/organizer/print-kit/[saleId]) | Clicked "Print Kit" from CommandCenterCard as Alice. Navigated /organizer/print-kit/59c49908... Sign Templates (Yard Sign/Directional/Table Tents/Tear-Off Flyer/Full Kit), QR Item Labels (4×3" Labels/Avery 5160/Hang Tags/Price Sheet), Label Sheet Composer. Print button present. Dark mode correct. ss_0754ce5s3 | S908 |
+| — | Boost Sale — "Sale Bump" modal | Clicked "⭐ Boost Sale" from CommandCenterCard as Alice. "Sale Bump" modal: "Push your sale to the top of search and map results for 1 hour." 100 XP (Balance: 393 XP) or $1.00 credit card options. "Spend 100 XP" CTA. X close button present. ss_9641x4rpq | S908 |
+| — | Holds (/organizer/holds?saleId=...) | Clicked "Holds" from CommandCenterCard as Alice. Navigated /organizer/holds?saleId=59c49908... Sale pre-selected, Expiring Soon/Recently Added sort, correct empty state. Dark mode correct. ss_2532u03ma | S908 |
+| — | Manage Sales (/organizer/sales) | Navigated /organizer/sales as Alice. "Manage Sales" heading, 2 sales listed (QA Test Flip Report + QA Active Sale S875), correct action buttons (Pin/Edit/Items/Settle for ended, Pin/Edit/Items for live). Placeholder images load correctly for sales with no hero photo. ss_3050n2jq6 | S908 |
+| — | Sale Plan Tracker (/organizer/plan/[saleId]) | Navigated /organizer/plan/59c49908... as Alice. "Track Your Progress" — "Complete tasks across 6 stages to successfully run your sale." Overall Progress 18%, 7/39 tasks, 6-stage timeline (Setup 4/5 active, Cataloging 3/5, Pre-Sale 0/7, Live 0/9, Wrapping Up 0/8, Complete 0/5). Dark mode correct. ss_4291jxseh | S908 |
+| — | Multi-Sale Command Center (/organizer/command-center) | Navigated /organizer/command-center as Alice. "Multi-Sale Command Center" — Active Sales=1, Total Items=2, Total Revenue=$0.00, Pending Actions=1 (all real data). Technical Alerts: "QA Active Sale S875: 1 item(s) are missing photos." Workspace widget present. Dark mode correct. ss_219765w9p | S908 |
+| — | Sale Checklist (/organizer/checklist/[saleId]) | Navigated /organizer/checklist/59c49908... as Alice. "Sale Checklist" heading, "QA Active Sale S875 — Mixed Goods" subtitle, Overall Progress 7/39 tasks complete, Pre-Sale/Day-Of/Post-Sale collapsible sections. ss_874815fmg | S908 |
 
 ---
 
 ## Next Session
 
-**S907 completed:** QA MODE. Autonomous QA sweep. H-002 RESOLVED, Bounty E2E ✅, BountySubmission fix ✅, Trending/Explore ✅. 2 P2 bugs found (Flash Deal + Social Posts stubs). BQ: 7→9.
+**S908 completed:** QA MODE. Records pass applied (S907 PCVs → roadmap.md). Dev: /organizer/sales/[id]/flash-deals.tsx created. QA: Flash Deal + Social Posts ✅ CONFIRMED (S907 false positives). New P3: Flash Deal modal no close button. Organizer sweep: Print Kit/Boost Sale/Holds/Manage Sales/Plan/Command Center/Checklist all ✅. BQ: 9→8.
 
-**Priority for next session (S908):**
-1. **[RECORDS FIRST]** `Skill('findasale-records')` → Apply S907 PCVs to roadmap.md. H-002 → RESOLVED, Bounty E2E chr ✅, BountySubmission "Your Submissions" chr ✅, Trending/Explore pages chr ✅, Explorer's Guild URL confirmed (/shopper/guild-primer).
-2. **[DEV — Patrick S907 authorization]** `Skill('findasale-dev')` → Flash Deal: implement /organizer/flash-deals route + page + wire "Create Flash Deal" dashboard button onClick.
-3. **[DEV — Patrick S907 authorization]** `Skill('findasale-dev')` → Social Posts: implement Social Posts modal/flow + wire dashboard button onClick.
-4. **[QA after dev]** `Skill('findasale-qa')` for each once deployed.
+**Priority for next session (S909):**
+1. **[RECORDS FIRST]** `Skill('findasale-records')` → Apply S908 PCVs to roadmap.md (Flash Deal confirmed ✅, Social Posts confirmed ✅, Print Kit/Boost Sale/Holds/Manage Sales/Plan/Command Center/Checklist all ✅).
+2. **[PUSH REQUIRED]** Patrick must push: `packages/frontend/pages/organizer/sales/[id]/flash-deals.tsx` (new file from S908 dev agent).
+3. **[DEV P3]** `Skill('findasale-dev')` → Flash Deal modal: add X/close button + Escape key handler to FlashDealModal component (single-component edit, <20 lines).
+4. **[QA]** After push: verify /organizer/sales/[id]/flash-deals page loads correctly.
+5. **[QA CONTINUES]** BQ=8, still at ceiling. Continue organizer sweep — check /organizer/appraisals, /organizer/flip-report, /organizer/consignors, /organizer/qr-codes, /organizer/reputation.
 
 **Decisions still open (Patrick):**
 - **FB Marketplace:** DROP confirmed recommended. Graph API OAuth (#365) = correct long-term path.
