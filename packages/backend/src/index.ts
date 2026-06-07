@@ -253,6 +253,7 @@ import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
 import { scheduleOutwardEmailAutomationsCron } from './jobs/outwardEmailAutomationsJob'; // Outward Email Automations: recap + review/testimonial asks (daily 10:00 UTC)
+import { bounceSuppressService } from './services/bounceSuppressService'; // Bounce → EmailSuppression processor (daily 06:00 UTC)
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -497,6 +498,11 @@ app.use(requestTimeout(30000));
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({ message: 'FindA.Sale API is running!' });
+});
+
+// Bare /health — uptime monitors that don't use /api prefix (no auth required)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Routes
@@ -785,6 +791,21 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-073: Geocoding success rate audit cron (daily at 6 AM UTC)
   scheduleGeocodingAuditCron();
+
+  // Bounce → EmailSuppression processor — daily at 06:00 UTC
+  // Scans outreach@finda.sale inbox for mailer-daemon/postmaster bounces and suppresses addresses.
+  (() => {
+    const cronLib = require('node-cron');
+    cronLib.schedule('0 6 * * *', async () => {
+      try {
+        const summary = await bounceSuppressService.processBounces();
+        console.log('[bounceSuppressCron] Summary:', JSON.stringify(summary));
+      } catch (err: any) {
+        console.error('[bounceSuppressCron] Uncaught error:', err.message);
+      }
+    }, { timezone: 'UTC' });
+    console.log('[bounceSuppressCron] Registered: daily 06:00 UTC');
+  })();
 
   // Feature #75: Tier grace period finalization cron
   startTierGraceCron();
