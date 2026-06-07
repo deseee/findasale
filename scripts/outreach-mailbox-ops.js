@@ -7,8 +7,9 @@
  * targeted bulk-cleanup job (NOT a blanket inbox delete) + the auto-forward enabler so
  * we stop missing bounces/notices from this address.
  *
- * AUTH: reads GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN from env
- * (same creds lib/emailService.ts uses). Run where those exist, e.g. on Railway:
+ * AUTH: reads GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_MAILBOX_REFRESH_TOKEN from env
+ * (falls back to GMAIL_REFRESH_TOKEN). GMAIL_MAILBOX_REFRESH_TOKEN needs the full
+ * https://mail.google.com/ scope for trash/forwarding ops. Run on Railway:
  *
  *     railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run
  *     railway run --service backend node scripts/outreach-mailbox-ops.js trash --apply
@@ -31,12 +32,13 @@ const QUERY = 'from:mailer-daemon subject:"one step from going live"';
 const FORWARD_TO = 'deseee@gmail.com';
 
 function gmailClient() {
-  const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN } = process.env;
-  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
-    throw new Error('Missing GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN in env.');
+  const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_MAILBOX_REFRESH_TOKEN, GMAIL_REFRESH_TOKEN } = process.env;
+  const token = GMAIL_MAILBOX_REFRESH_TOKEN || GMAIL_REFRESH_TOKEN;
+  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !token) {
+    throw new Error('Missing GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_MAILBOX_REFRESH_TOKEN (or GMAIL_REFRESH_TOKEN) in env.');
   }
   const oauth2 = new google.auth.OAuth2(GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET);
-  oauth2.setCredentials({ refresh_token: GMAIL_REFRESH_TOKEN });
+  oauth2.setCredentials({ refresh_token: token });
   return google.gmail({ version: 'v1', auth: oauth2 });
 }
 

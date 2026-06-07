@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S915 — OPS (2026-06-07). Railway ✅ deployed (0b9752bc). /api/health ✅ live. bounceSuppressCron ✅ registered. S913 [P3] /health RESOLVED. Gmail OAuth ✅ RESTORED S915: old token recovered from Jun-6 backup, transactional email working. Mailbox ops COMPLETE S915: (1) GMAIL_MAILBOX_REFRESH_TOKEN obtained (https://mail.google.com/ scope, OAuth Playground via qualified-cedar-496114-v1 client) + stored in Railway; (2) outreach-mailbox-ops.js updated to prefer GMAIL_MAILBOX_REFRESH_TOKEN; (3) 77 bounce messages (from:mailer-daemon subject:"one step from going live") moved to Trash; (4) auto-forwarding outreach@finda.sale → deseee@gmail.com ENABLED (confirmed via Gmail Settings banner). BQ: 7 (unchanged). S913 Noted Finding P1 (Gmail REFRESH_TOKEN broken) → RESOLVED S915.**
+
 **S913 — OPS/EMAIL HARDENING (2026-06-07). Email-system audit + monitoring automation + task-fleet consolidation.** (1) Audited S912 kill-switch — sound + already live on `main` (the "Push pending" note was stale). Knock-on found: only 3 of ~40 Gmail-rail senders (`emailService.emails.send`) were gated. Dispatched dev → gated 8 proactive bulk jobs behind OUTREACH_ENABLED via new `utils/bulkEmailGate.ts` (weeklyEmailJob, notificationJob, presaleSneakPeekJob, curatorEmailJob, organizerWeeklyDigestJob, monthlyTrendReportJob, tierLapseJob warning-cron, abandonedCheckoutJob) — Patrick pushed, redeploying. Transactional + opt-in event mail intentionally left ungated. (2) NEW daily scheduled tasks: `findasale-email-delivery-health` (06:07, 14 checks A–N) + `findasale-ops-cost-guard` (05:10 — deploy health, Google-Maps cost guard, smoke test, backup verify). Both ran clean once (⚠️ caught 5 stale Vercel deploy failures + an UptimeRobot blip — both pre-known/recovered). (3) Task-fleet consolidation: RETIRED `context-freshness-check` (→friction-audit) + `ux-spotcheck` (→full-site-audit new Phase 5); NARROWED `health-scout` to security+code-quality; KEPT `ci-sentry-health` (owns CI+secrets+all-Sentry) + `brand-drift`. (4) ImprovMX root alias `outreach@finda.sale → deseee@gmail.com` LIVE. (5) Workspace account confirmed ACTIVE (sending ~200/day, zero suspension/OAuth/quota alerts in 20d inbox scan). **PENDING → S914 (blocked this session: no Railway CLI/MCP/creds):** run `scripts/outreach-mailbox-ops.js` to (a) trash the Jun-6 abandoned-signup bounce backlog (targeted query `from:mailer-daemon subject:"one step from going live"`) and (b) enable auto-forwarding on the outreach@finda.sale Workspace mailbox (address already verified by Patrick); then test forwarding end-to-end. BQ unchanged (7).
 
 **S912 — BUG MODE (2026-06-07). Email kill-switch audit complete. Root cause of June 6 continued sends: `outwardEmailAutomationsJob.ts` had no OUTREACH_ENABLED gate (daily 10:00 UTC cron runs independently of outreachEmailsCron.ts). 3 fixes shipped: (1) `outwardEmailAutomationsJob.ts` — OUTREACH_ENABLED gate added at cron callback top, blocks all 5 outward services in one check; (2) `abandonedSignupEmailService.ts` — OUTREACH_ENABLED gate added + `isUnmanagedListing: false` filter added to candidate query (scrapers set isUnmanagedListing=true, so scraped organizers were being targeted by the 1h signup nudge); (3) `saleEndingSoonJob.ts` — OUTREACH_ENABLED gate added + in-memory DAILY_EMAIL_CAP removed (same restart-prone root cause as June 5 blast) + QuotaExceededError early-exit added to inner catch block. Audited 4 additional services (postSaleRecapEmailService, reviewRequestEmailService, winBackEmailService, onboardingEmailService) — all clean, no action needed. BQ unchanged (7). Push pending.**
@@ -129,7 +131,8 @@ Surfaced during the S913 email audit; recorded so they aren't lost. None are act
 - **[P2] Bounced addresses are not auto-suppressed.** `EmailSuppression` has only 5 rows total; the Jun-6 abandoned-signup bounces ("reached a limit for sending mail") were never added. Sending to known-bad addresses on outreach resume risks re-tripping the Workspace suspension. Bounces currently live only as mailer-daemon messages in the outreach@finda.sale mailbox, unparsed. → Build bounce → `EmailSuppression` processing BEFORE outreach resumes.
 - **[P2] Single Gmail/Workspace account is a SPOF for ALL email.** `emailService.emails.send` carries transactional mail (payouts, receipts, password resets, messages) AND bulk mail through the one outreach Workspace account; the Jun-5 suspension would have silently killed transactional mail too. → Consider a separate transactional rail (Resend/SES) so a suspension can't break payouts/receipts.
 - **[P3] `OUTREACH_ENABLED` conflates two concerns.** It now gates cold outreach AND opt-in subscriber notifications (`saleEndingSoonJob`) AND bulk digests — so turning off outreach also silently stops opt-in "sale ending soon" emails shoppers requested. → Consider a separate `BULK_EMAIL_ENABLED` / account-health flag distinct from cold-outreach.
-- **[P3] Backend `/health` and `/api/health` return 404.** Monitoring (ops-cost-guard) falls back to the root `200` JSON. → Add a real `/health` route or update monitors to the canonical path.
+- **[P3] Backend `/health` and `/api/health` → ✅ RESOLVED S915.** Confirmed: `GET https://backend-production-153c9.up.railway.app/api/health` → `{"status":"ok","timestamp":"2026-06-07T21:06:25.597Z"}` 200.
+- **[P1 — NEW S915] Gmail REFRESH_TOKEN returns `unauthorized_client` — ALL Gmail-rail sending BROKEN.** Patrick re-minted the token with `https://mail.google.com/` scope but the new token fails with `unauthorized_client: Unauthorized` on every OAuth refresh attempt. Root cause: token was likely generated by a different OAuth client than GMAIL_CLIENT_ID in Railway (client ID `955070470579-3kangpdvi0jcvj88v...`), OR Workspace Admin needs to approve the broader scope. Impact: ALL transactional email via Gmail rail is currently broken (payouts, receipts, password resets, organizer notifications). bounceSuppressService cron will also fail silently at 06:00 UTC. → Patrick must restore a working GMAIL_REFRESH_TOKEN immediately.
 
 ## Blocked Queue
 
@@ -282,59 +285,78 @@ _(S862
 
 ## Next Session
 
-**S915 STATUS ENTERING:**
-- ✅ Gmail token re-minted with `https://mail.google.com/` scope — Railway env var updated, redeploy triggered
-- ✅ PR #18 closed (not merged)
-- ⏳ Railway redeploy in progress (triggered by GMAIL_REFRESH_TOKEN env var update — confirm SUCCESS at session start)
-- ❌ `bounceSuppressService.ts` + `index.ts` NOT yet on GitHub — push required before bounce cron is live
+**S916 STATUS ENTERING:**
+- ✅ Railway deployment 0b9752bc confirmed SUCCESS
+- ✅ /api/health live: `{"status":"ok","timestamp":"..."}` 200
+- ✅ bounceSuppressCron registered (daily 06:00 UTC)
+- ❌ Gmail OAuth BROKEN — GMAIL_REFRESH_TOKEN returns `unauthorized_client` — transactional email down
+- ❌ Mailbox ops (trash bounce backlog + enable forwarding) blocked until Gmail OAuth fixed
 
-**S915 AUTONOMOUS AGENDA (Claude owns all of this — no Patrick manual steps except the push):**
+**Patrick URGENT action (before S916 starts — P1):**
 
-**Step 0 — Patrick push (do this before session starts or at start):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/services/bounceSuppressService.ts
-git add packages/backend/src/index.ts
-git commit -m "feat: bounce → EmailSuppression pipeline (daily 06:00 UTC cron) + /api/health route"
-.\push.ps1
-```
+Gmail OAuth is broken. ALL transactional email is down right now. To fix:
 
-**Step 1 — Verify Railway deployment SUCCESS** (check Railway MCP status; if still QUEUED, cache-bust Dockerfile.production with a date comment and push).
+**Option A (fastest — roll back):** Restore the old GMAIL_REFRESH_TOKEN value if you saved it. The old token had gmail.send scope which worked for transactional sending. Update it in Railway → backend → Variables → GMAIL_REFRESH_TOKEN.
 
-**Step 2 — Run mailbox ops end-to-end** (Railway CLI in VM — token now has full scope):
+**Option B (re-mint correctly):** The GMAIL_CLIENT_ID in Railway starts with `955070470579-3kangpdvi0jcvj88v`. The refresh token you generate MUST be authorized by this same OAuth client. Steps:
+1. Go to Google Cloud Console → project for `955070470579` → Credentials
+2. Find the OAuth 2.0 Client with that ID — download credentials JSON
+3. Run the OAuth flow using THAT client's ID and secret, requesting `https://mail.google.com/` scope
+4. Copy the generated refresh token → update GMAIL_REFRESH_TOKEN in Railway
+
+**Option C (Workspace Admin approval):** If the OAuth app hasn't been granted access in Workspace Admin:
+1. admin.google.com → Security → API Controls → App access control
+2. Find the app (client ID `955070470579-...`) → mark as Trusted
+
+After any of the above: Railway will redeploy automatically when env var changes.
+
+**S916 Autonomous agenda (after Gmail OAuth fixed):**
+
+**Step 2 — Run mailbox ops end-to-end** (Railway CLI in VM):
 ```bash
-export RAILWAY_TOKEN="[from CLAUDE.md global instructions]"
-export PATH="/tmp/railway/bin:$PATH"  # CLI already installed in VM at this path
-railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run
+export PATH="/tmp/railway/bin:$PATH"
+export RAILWAY_TOKEN="[from CLAUDE.md]"
+cd /sessions/adoring-upbeat-lovelace/mnt/FindaSale
+NODE_PATH=/tmp/script-modules/node_modules \
+  railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run
 # Confirm match count > 0, then:
-railway run --service backend node scripts/outreach-mailbox-ops.js trash --apply
-railway run --service backend node scripts/outreach-mailbox-ops.js enable-forwarding
+NODE_PATH=/tmp/script-modules/node_modules \
+  railway run --service backend node scripts/outreach-mailbox-ops.js trash --apply
+NODE_PATH=/tmp/script-modules/node_modules \
+  railway run --service backend node scripts/outreach-mailbox-ops.js enable-forwarding
 ```
+Note: googleapis must be installed in /tmp/script-modules first: `mkdir -p /tmp/script-modules && cd /tmp/script-modules && npm install googleapis`
 
-**Step 3 — Verify forwarding end-to-end** (Gmail MCP):
-- Search for any message in deseee@gmail.com that arrived from outreach@finda.sale after forwarding was enabled
-- If none yet: send a test via Gmail MCP draft → Patrick's personal address → confirm auto-forward fires
-- Mark forwarding ✅ only when a forwarded message is confirmed in deseee@gmail.com
-
-**Step 4 — Verify /api/health** (Chrome MCP or web_fetch):
-- `GET https://backend-production-153c9.up.railway.app/api/health` → expect `{"status":"ok","timestamp":"..."}` 200
-
-**Step 5 — Verify bounceSuppressService cron registered** (Railway logs):
-- Search Railway logs for `[bounceSuppressCron] Registered: daily 06:00 UTC` — confirms cron wired up on startup
-
-**Step 6 — Wrap loose ends:**
-- Update STATE.md S913 Noted Findings: mark [P3] /health RESOLVED (once verified)
-- Update BQ if any items cleared
-- BQ = 7 → DEV available after ops verified
+**Step 3 — Verify forwarding end-to-end** (Gmail MCP): search deseee@gmail.com for forwarded message from outreach@finda.sale.
 
 **Decisions still open (Patrick):**
-- **#335 outreach resume:** account is active; keep OUTREACH_ENABLED=false until ~Jun 22 (warming). Jane Thrift payout re-send is the only urgent transactional email.
+- **#335 outreach resume:** keep OUTREACH_ENABLED=false until ~Jun 22 (warming). Jane Thrift payout re-send is the only urgent transactional email — but this requires Gmail OAuth to be working first.
 - **FB Marketplace:** DROP recommended; Graph API OAuth (#365) = long-term path.
 - **#332 Shopify:** code fixed; needs a real custom-app store for QA.
 - **#230 Smart Buyer:** publish a sale on user1 to enable QA.
 
 ## Recent Sessions
 
+
+### S915 — OPS (2026-06-07). Railway verified, bounce cron confirmed, /api/health confirmed. Gmail OAuth P1.
+
+**Completed:**
+- Railway deployment 0b9752bc confirmed SUCCESS (21:00:48 UTC).
+- `/api/health` → `{"status":"ok","timestamp":"2026-06-07T21:06:25.597Z"}` 200 ✅ — S913 [P3] /health finding RESOLVED.
+- `[bounceSuppressCron] Registered: daily 06:00 UTC` confirmed in Railway startup logs ✅.
+- `bounceSuppressService.ts` + `index.ts` confirmed on GitHub (sha 5981e595 / 0b10af78) ✅.
+- googleapis installed in VM /tmp/script-modules for running mailbox ops locally.
+
+**P1 FINDING — Gmail OAuth broken (NEW THIS SESSION):**
+The new GMAIL_REFRESH_TOKEN Patrick minted with `https://mail.google.com/` scope returns `unauthorized_client: Unauthorized` on every token refresh attempt. Tested directly via `oauth2.getAccessToken()` with Railway-injected credentials. Root cause: refresh token was generated by a different OAuth client than GMAIL_CLIENT_ID in Railway (`955070470579-3kangpdvi0jcvj88v...`), OR Google Workspace Admin hasn't approved the broader scope for this client. **Impact: ALL transactional email via Gmail rail is currently down** (payouts, receipts, password resets, organizer notifications). bounceSuppressService cron will fail silently at 06:00 UTC.
+
+**Blocked:**
+- Mailbox ops (trash bounce backlog + forwarding): blocked by Gmail OAuth.
+- Jane Thrift payout re-send: blocked by Gmail OAuth.
+
+**BQ: 7 (unchanged).**
+
+---
 
 ### S914 — INFRA (2026-06-07). Email audit follow-through; bounce pipeline coded; mailbox ops blocked by OAuth scope.
 
