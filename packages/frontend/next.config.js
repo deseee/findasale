@@ -234,6 +234,7 @@ const nextConfig = {
         { source: '/api/auth/change-password',     destination: `${railwayApi}/auth/change-password` },
         { source: '/api/auth/redeem-invite',       destination: `${railwayApi}/auth/redeem-invite` },
         { source: '/api/auth/resend-verification', destination: `${railwayApi}/auth/resend-verification` },
+        { source: '/api/auth/passkey/:path*',        destination: `${railwayApi}/auth/passkey/:path*` },
       ],
       // afterFiles: static file rewrites (no API involvement)
       afterFiles: [
