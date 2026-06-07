@@ -902,7 +902,7 @@ const BroadcastComposer: React.FC<BroadcastComposerProps> = ({
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-warm-200 dark:border-gray-700">
           {onClose ? (
-            <button type="button" onClick={onClose} className="text-warm-500 dark:text-gray-400">
+            <button type="button" aria-label="Go back" onClick={onClose} className="text-warm-500 dark:text-gray-400">
               <Icon name="x" size={18} />
             </button>
           ) : (

@@ -9,7 +9,7 @@ import {
   listSourcesController,
   updateSourceController,
 } from '../controllers/pricingController';
-import { requireOrganizer } from '../middleware/auth'; // TODO: Verify middleware exists
+import { requireOrganizer } from '../middleware/auth';
 
 const router = Router();
 

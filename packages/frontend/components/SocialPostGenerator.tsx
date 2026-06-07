@@ -74,7 +74,7 @@ const SocialPostGenerator: React.FC<Props> = ({ saleId, saleTitle, onClose }) =>
             <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">📣 Social Media Post</h2>
             <p className="text-sm text-warm-500 mt-0.5">{saleTitle}</p>
           </div>
-          <button onClick={onClose} className="text-warm-400 hover:text-warm-600 text-2xl leading-none">×</button>
+          <button aria-label="Close" onClick={onClose} className="text-warm-400 hover:text-warm-600 text-2xl leading-none">×</button>
         </div>
 
         <div className="p-6 space-y-5">

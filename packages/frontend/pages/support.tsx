@@ -512,7 +512,7 @@ const Support: React.FC = () => {
                   <div className={styles.chatWidget}>
                     <div className={styles.chatHeader}>
                       <h3>Support Chat</h3>
-                      <button onClick={() => setShowChat(false)} className={styles.closeChat}>
+                      <button aria-label="Close chat" onClick={() => setShowChat(false)} className={styles.closeChat}>
                         ✕
                       </button>
                     </div>
