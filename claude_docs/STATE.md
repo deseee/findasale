@@ -282,37 +282,50 @@ _(S862
 
 ## Next Session
 
-**S915 FIRST ACTIONS (in order):**
+**S915 STATUS ENTERING:**
+- ✅ Gmail token re-minted with `https://mail.google.com/` scope — Railway env var updated, redeploy triggered
+- ✅ PR #18 closed (not merged)
+- ⏳ Railway redeploy in progress (triggered by GMAIL_REFRESH_TOKEN env var update — confirm SUCCESS at session start)
+- ❌ `bounceSuppressService.ts` + `index.ts` NOT yet on GitHub — push required before bounce cron is live
 
-1. **Push bounceSuppressService.ts + index.ts via push.ps1** (Patrick action):
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/backend/src/services/bounceSuppressService.ts
-   git add packages/backend/src/index.ts
-   git commit -m "feat: bounce → EmailSuppression pipeline (daily 06:00 UTC cron) + /api/health route"
-   .\push.ps1
-   ```
+**S915 AUTONOMOUS AGENDA (Claude owns all of this — no Patrick manual steps except the push):**
 
-2. **Re-mint Gmail OAuth token** (Patrick action — required before mailbox ops will work):
-   - Go to Google Cloud Console → your OAuth app → Credentials
-   - Add scope `https://mail.google.com/` (full access — needed for trash + forwarding)
-   - Run the OAuth consent flow to get a new refresh token
-   - Update `GMAIL_REFRESH_TOKEN` env var on Railway backend service
-   - **Without this, bounceSuppressService.ts cron (06:00 UTC daily) will fail at runtime**
+**Step 0 — Patrick push (do this before session starts or at start):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/services/bounceSuppressService.ts
+git add packages/backend/src/index.ts
+git commit -m "feat: bounce → EmailSuppression pipeline (daily 06:00 UTC cron) + /api/health route"
+.\push.ps1
+```
 
-3. **Close or merge PR #18** on GitHub (Railway auto-created Dockerfile change) — review at https://github.com/deseee/findasale/pull/18
+**Step 1 — Verify Railway deployment SUCCESS** (check Railway MCP status; if still QUEUED, cache-bust Dockerfile.production with a date comment and push).
 
-4. **After token re-mint — run mailbox ops** (Claude owns this end-to-end):
-   ```powershell
-   # Install Railway CLI if needed: npm install -g @railway/cli
-   $env:RAILWAY_TOKEN="[from CLAUDE.md]"
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run
-   railway run --service backend node scripts/outreach-mailbox-ops.js trash --apply
-   railway run --service backend node scripts/outreach-mailbox-ops.js enable-forwarding
-   ```
+**Step 2 — Run mailbox ops end-to-end** (Railway CLI in VM — token now has full scope):
+```bash
+export RAILWAY_TOKEN="[from CLAUDE.md global instructions]"
+export PATH="/tmp/railway/bin:$PATH"  # CLI already installed in VM at this path
+railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run
+# Confirm match count > 0, then:
+railway run --service backend node scripts/outreach-mailbox-ops.js trash --apply
+railway run --service backend node scripts/outreach-mailbox-ops.js enable-forwarding
+```
 
-5. **BQ = 7 → DEV available.** After push, consider dispatching Shopify (#332) or transactional rail SPOF work.
+**Step 3 — Verify forwarding end-to-end** (Gmail MCP):
+- Search for any message in deseee@gmail.com that arrived from outreach@finda.sale after forwarding was enabled
+- If none yet: send a test via Gmail MCP draft → Patrick's personal address → confirm auto-forward fires
+- Mark forwarding ✅ only when a forwarded message is confirmed in deseee@gmail.com
+
+**Step 4 — Verify /api/health** (Chrome MCP or web_fetch):
+- `GET https://backend-production-153c9.up.railway.app/api/health` → expect `{"status":"ok","timestamp":"..."}` 200
+
+**Step 5 — Verify bounceSuppressService cron registered** (Railway logs):
+- Search Railway logs for `[bounceSuppressCron] Registered: daily 06:00 UTC` — confirms cron wired up on startup
+
+**Step 6 — Wrap loose ends:**
+- Update STATE.md S913 Noted Findings: mark [P3] /health RESOLVED (once verified)
+- Update BQ if any items cleared
+- BQ = 7 → DEV available after ops verified
 
 **Decisions still open (Patrick):**
 - **#335 outreach resume:** account is active; keep OUTREACH_ENABLED=false until ~Jun 22 (warming). Jane Thrift payout re-send is the only urgent transactional email.

@@ -2,9 +2,9 @@
 
 ---
 
-## 🔴 ACTION NEEDED FROM YOU (in order)
+## 🔴 ONE ACTION NEEDED FROM YOU
 
-### 1. Push the bounce pipeline (bounceSuppressService.ts + index.ts)
+### Push the bounce pipeline (bounceSuppressService.ts + index.ts)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -14,60 +14,55 @@ git commit -m "feat: bounce → EmailSuppression pipeline (daily 06:00 UTC cron)
 .\push.ps1
 ```
 
-> `bounceSuppressService.ts` is a new 229-line file — NOT on GitHub yet. Without this push, the bounce-auto-suppression cron never ships.
+> `bounceSuppressService.ts` is a new 229-line file — NOT on GitHub yet. Without this push, the bounce-auto-suppression cron never ships. Everything else is handled.
 
 ---
 
-### 2. Re-mint the Gmail OAuth token (required for mailbox ops + bounce cron)
+### Also push the wrap docs (do this as a second commit):
 
-The current `GMAIL_REFRESH_TOKEN` only has `gmail.send` scope. Two things need it upgraded:
-- The **mailbox ops script** (`trash bounce backlog` + `enable forwarding`) → needs `gmail.modify` + `gmail.settings.basic`
-- The **bounce cron** (`bounceSuppressService.ts`, 06:00 UTC daily) → needs `gmail.modify` to list + trash processed bounces
-
-**Steps:**
-1. Google Cloud Console → your OAuth app → Credentials → edit the OAuth client
-2. Add scope `https://mail.google.com/` (full access covers both modify + settings)
-3. Run the OAuth consent flow to generate a new refresh token
-4. In Railway → backend service → Variables → update `GMAIL_REFRESH_TOKEN` with the new value
-5. Redeploy backend so it picks up the new token
-
-**Until this is done:** the bounce cron will throw a 403 at 06:00 UTC every day and do nothing.
-
----
-
-### 3. Close/merge PR #18 on GitHub
-
-Railway auto-created this PR adding `COPY --from=builder /app/scripts ./scripts` to `Dockerfile.production`. Review it at https://github.com/deseee/findasale/pull/18 and close or merge — don't leave it open.
-
----
-
-### 4. After token is re-minted — run mailbox ops (Claude will handle this next session)
-
-Claude owns the `scripts/outreach-mailbox-ops.js` run end-to-end. You don't need to do anything except confirm the token is updated and let Claude know next session.
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "docs(S914): email audit wrap — Gmail scope fixed, mailbox ops unblocked for S915"
+.\push.ps1
+```
 
 ---
 
 ## ✅ DONE THIS SESSION
 
-- **Root cause confirmed:** Gmail token scope is `gmail.send` only — that's why every mailbox op 403'd. Not a bug in the script; just needs the token re-minted.
-- **Bounce pipeline coded:** `bounceSuppressService.ts` complete, 0 TS errors. Daily cron registered in `index.ts`. Will run at 06:00 UTC daily once pushed + token fixed.
-- **Railway CLI confirmed working** in the VM (`railway run --service backend` correctly injects env vars).
-- **`/health` + `/api/health` endpoints:** `health.ts` + `healthController.ts` are on GitHub (S913 push). Railway deployment QUEUED — if still QUEUED at next session start, Claude will cache-bust the Dockerfile.
+- **Gmail token re-minted** — New token with `https://mail.google.com/` scope is live in Railway env vars. All mailbox ops (trash bounce backlog, enable forwarding, bounce cron) are now unblocked.
+- **Railway redeploy triggered** — Env var update triggered a fresh deploy (unsticking the QUEUED status).
+- **PR #18 closed** — Dockerfile change PR closed (not merged — `railway run` runs scripts locally, no container change needed).
+- **Bounce pipeline coded** — `bounceSuppressService.ts` complete, 0 TS errors. Daily 06:00 UTC cron registered in `index.ts`. Ships when you push.
+- **`/health` + `/api/health` endpoints** — `health.ts` + `healthController.ts` on GitHub from S913.
+- **S914 email audit findings** — Gmail scope was root cause of all mailbox op failures this session.
 
 ---
 
-## ⚠️ NOTED FINDINGS (pre-outreach-resume checklist)
+## 🤖 S915 IS FULLY AUTONOMOUS
 
-- **[P2]** Bounce auto-suppression now coded but blocked on Gmail token scope (fix above).
-- **[P2]** All email (payouts, receipts, password resets) still rides one Gmail account — suspension kills everything. Architect decision needed on a separate transactional rail (Resend/SES).
+After you push the bounce pipeline, S915 runs end-to-end with no further Patrick action:
+
+1. Verify Railway deployed successfully (cache-bust if still QUEUED)
+2. Run `outreach-mailbox-ops.js trash` → move Jun-6 bounce emails to Trash
+3. Run `outreach-mailbox-ops.js enable-forwarding` → enable auto-forward to deseee@gmail.com
+4. Verify forwarding confirmed (Gmail MCP check)
+5. Verify `/api/health` returns 200
+6. Check Railway logs for `[bounceSuppressCron] Registered: daily 06:00 UTC`
+
+---
+
+## ⚠️ NOTED FINDINGS (not blocking S915)
+
+- **[P2]** All email (payouts, receipts, password resets) rides one Gmail account — suspension kills everything. Architect decision needed on a separate transactional rail (Resend/SES).
 - **[P3]** `OUTREACH_ENABLED=false` also silently pauses opt-in "sale ending soon" emails. Consider a separate `BULK_EMAIL_ENABLED` flag.
-- **[P3]** Railway deploy QUEUED — may be stuck; Claude will cache-bust at next session start if not resolved.
 
 ---
 
 ## Decisions still open
 
-- **#335 outreach resume:** account active; keep `OUTREACH_ENABLED=false` until ~Jun 22 (warming). Jane Thrift payout re-send is still the only urgent transactional email.
+- **#335 outreach resume:** account active; keep `OUTREACH_ENABLED=false` until ~Jun 22 (warming). Jane Thrift payout re-send is the only urgent transactional email.
 - **FB Marketplace:** DROP recommended; Graph API OAuth (#365) = long-term path.
 - **#332 Shopify:** code fixed; needs a real custom-app store for QA.
 - **#230 Smart Buyer:** publish a sale on user1 to enable QA.
