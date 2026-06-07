@@ -586,10 +586,10 @@ export const matchItemToBounties = async (req: AuthRequest, res: Response) => {
     // Fetch item with full details
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { select: { id: true, lat: true, lng: true, organizerId: true } } },
+      include: { sale: { select: { id: true, lat: true, lng: true, organizerId: true, organizer: { select: { userId: true } } } } },
     });
     if (!item) return res.status(404).json({ message: 'Item not found.' });
-    if (!item.sale || item.sale.organizerId !== organizerId) {
+    if (!item.sale || item.sale.organizer?.userId !== organizerId) {
       return res.status(403).json({ message: 'Item does not belong to you.' });
     }
 
