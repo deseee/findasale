@@ -35,6 +35,10 @@ export const createPool = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Item is not available' });
     }
 
+    if (item.sale?.organizer?.isUnmanagedListing) {
+      return res.status(403).json({ message: 'Buying pools are not available for unclaimed listings.', code: 'UNMANAGED_LISTING' });
+    }
+
     // Check if a pool already exists for this item
     const existingPool = await prisma.buyingPool.findFirst({
       where: {
