@@ -311,7 +311,11 @@ export const sendWeeklyDigest = async () => {
     const users = await prisma.user.findMany({
       select: { id: true, email: true, name: true, notificationPrefs: true },
       where: {
-        email: { not: '' },
+        AND: [
+          { email: { not: '' } },
+          // Exclude scraped organizer system accounts (scraper+*@system.finda.sale)
+          { email: { not: { endsWith: '@system.finda.sale' } } },
+        ],
       },
       take: 5000, // cap digest at 5k users per run
     });
