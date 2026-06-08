@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 FindA.Sale Weekly Analytics Report
-Calls GA4 Data API + Google Search Console API via a service account.
+Calls GA4 Data API + Google Search Console API via OAuth2 or service account credentials.
 
 Usage:
   python3 analytics-weekly.py '<SERVICE_ACCOUNT_JSON_STRING>'
-  # OR set env var GOOGLE_SERVICE_ACCOUNT_JSON before running
+  # OR set env var GOOGLE_ANALYTICS_CREDENTIALS_JSON before running
 
 Outputs a markdown-formatted report with actionable insights.
 GA4 Property ID: 539593833
@@ -41,10 +41,12 @@ def main():
     if len(sys.argv) > 1:
         key_json = sys.argv[1]
     if not key_json:
+        key_json = os.environ.get('GOOGLE_ANALYTICS_CREDENTIALS_JSON', '')
+    if not key_json:
         key_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
     if not key_json:
-        print("ERROR: No service account JSON provided.")
-        print("Pass it as argv[1] or set GOOGLE_SERVICE_ACCOUNT_JSON env var.")
+        print("ERROR: No credentials JSON provided.")
+        print("Pass it as argv[1] or set GOOGLE_ANALYTICS_CREDENTIALS_JSON env var.")
         sys.exit(1)
 
     # Strip surrounding quotes if passed from shell
@@ -53,12 +55,11 @@ def main():
     try:
         key_data = json.loads(key_json)
     except json.JSONDecodeError as e:
-        print(f"ERROR: Failed to parse service account JSON: {e}")
+        print(f"ERROR: Failed to parse credentials JSON: {e}")
         sys.exit(1)
 
     install_deps()
 
-    from google.oauth2 import service_account
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
     from google.analytics.data_v1beta.types import (
         RunReportRequest, DateRange, Dimension, Metric, OrderBy
@@ -73,7 +74,23 @@ def main():
         'https://www.googleapis.com/auth/analytics.readonly',
         'https://www.googleapis.com/auth/webmasters.readonly',
     ]
-    creds = service_account.Credentials.from_service_account_info(key_data, scopes=scopes)
+
+    # Support both OAuth2 (Desktop app) and service account credentials
+    if key_data.get('type') == 'oauth2' or 'refresh_token' in key_data:
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        creds = Credentials(
+            token=None,
+            refresh_token=key_data['refresh_token'],
+            token_uri=key_data.get('token_uri', 'https://oauth2.googleapis.com/token'),
+            client_id=key_data['client_id'],
+            client_secret=key_data['client_secret'],
+            scopes=scopes,
+        )
+        creds.refresh(Request())
+    else:
+        from google.oauth2 import service_account
+        creds = service_account.Credentials.from_service_account_info(key_data, scopes=scopes)
 
     today = date.today()
     w1_end   = today - timedelta(days=1)       # last 7 days (yesterday back)

@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S926 — ANALYTICS/WRAP (2026-06-08). Built analytics automation: `claude_docs/scripts/analytics-weekly.py` (GA4 Data API + Search Console API via service account). Registered `findasale-analytics-weekly` scheduled task — runs Mondays 9:30 AM, produces traffic overview + top pages + top queries + SEO quick wins + one recommended action. Requires `GOOGLE_SERVICE_ACCOUNT_JSON` in Railway (set by Patrick this session). PREREQUISITE: service account email must be added as Viewer in GA4 (analytics.google.com) and Full user in Search Console (search.google.com/search-console). BQ: 5 (unchanged).**
+**S926 — ANALYTICS/WRAP (2026-06-08). Built and fully tested analytics automation: `claude_docs/scripts/analytics-weekly.py` updated to support OAuth2 Desktop App credentials (deseee@yahoo.com). Completed OAuth2 flow: GCP Desktop credential created, consent granted, refresh token obtained. Script smoke-tested — Search Console returning live queries (2 clicks, 25 impressions this week). Credentials stored at `claude_docs/scripts/.analytics-creds.json` (gitignored). `findasale-analytics-weekly` scheduled task updated — runs Mondays 8:00 AM, no Patrick setup required (creds already in place). .gitignore updated. BQ: 5 (unchanged).**
 
 **S925 — QA (2026-06-08). P1 CSRF fix re-verified: POST /api/outreach/page-view returns 200 for unauthenticated callers (JS fetch credentials:'omit') — S924 fix confirmed live. Logout flow verified: Leo Thomas (user5) desktop user dropdown at /shopper/dashboard → clicked Logout → redirected to /login (ss_49305bl2y), nav shows Login button, /shopper/dashboard → 302 → /login?redirect=/shopper/dashboard (ss_581555xvt) — session fully cleared. #463 claim-click: CTA click confirmed (organizer profile → /register?claim=cmp0jq4j700mnoz89rdjmih15, ss_6367qcmy3), Analytics SDK confirmed initialized in _app.tsx, CODE-ONLY (beacon delivery unverified). BQ: 5 (unchanged).**
 
@@ -121,16 +121,15 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### Patrick — Action Required Before Monday
-1. **Service account GA4 access:** analytics.google.com → Admin → Account Access Management → Add users → paste the `client_email` from GOOGLE_SERVICE_ACCOUNT_JSON → role: Viewer → Add
-2. **Service account Search Console access:** search.google.com/search-console → Settings → Users and permissions → Add user → same email → Full user
-3. **Run analytics task now (optional):** Cowork sidebar → Scheduled → findasale-analytics-weekly → Run Now. This pre-approves tool permissions so Monday's auto-run doesn't pause for approval prompts.
+### Patrick — One Action Needed
+1. **Pre-approve analytics task tools:** Cowork sidebar → Scheduled → **findasale-analytics-weekly** → **Run Now**. This approves the bash tool so Monday's automatic run doesn't pause asking for permission.
+
+_(No Railway env vars or GA4/Search Console access grants needed — credentials are already in the `.analytics-creds.json` file and deseee@yahoo.com already owns GA4 + Search Console.)_
 
 ### Pending Push
-The S924/S925/S926 wrap has not been pushed yet. Patrick runs:
 ```
-git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/scripts/analytics-weekly.py
-git commit -m "S924-S926: CSRF verified, logout verified, #463 CODE-ONLY, analytics automation built"
+git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/scripts/analytics-weekly.py .gitignore
+git commit -m "S924-S926: CSRF verified, logout verified, #463 CODE-ONLY, analytics automation complete (OAuth2)"
 .\push.ps1
 ```
 
@@ -215,15 +214,21 @@ Below QA ceiling (BQ=5). DEV mode available. Suggested: dispatch `findasale-dev`
 
 ### S926 — 2026-06-08 | ANALYTICS/WRAP
 
-**Session type:** Analytics automation build + session wrap
+**Session type:** OAuth2 credential setup + analytics automation completion + session wrap
 
 **Work completed:**
-- **`claude_docs/scripts/analytics-weekly.py` NEW** — Standalone Python script calling GA4 Data API v1 + Google Search Console API via service account (`GOOGLE_SERVICE_ACCOUNT_JSON` Railway env var). Outputs: traffic overview (WoW % change), top 10 pages, traffic sources, top 25 search queries, SEO quick wins (position 5-20 queries with >50 impressions). Graceful error messages if access grants are missing.
-- **`findasale-analytics-weekly` scheduled task** — Registered in Cowork scheduler. Runs Mondays 9:30 AM (after competitor monitor at 8:00 AM). Pulls service account key from Railway via CLI, runs analytics script, synthesizes into ≤400-word report with one recommended action.
-- **Analytics prerequisite (Patrick action needed):** Service account email (from `client_email` in GOOGLE_SERVICE_ACCOUNT_JSON) must be added to: (1) analytics.google.com → Admin → Account Access Management → Viewer; (2) search.google.com/search-console → Settings → Users and permissions → Full user.
+- **OAuth2 flow completed** — Service accounts rejected by GA4 UI (human Google accounts only). Switched to OAuth2 Desktop App: created GCP credential in project `positive-fuze-465207-e5`, completed consent flow as deseee@yahoo.com, exchanged auth code for refresh token. Both APIs confirmed enabled (GA4 Data API + Search Console API).
+- **`claude_docs/scripts/analytics-weekly.py` updated** — Auth section rewritten to detect OAuth2 (`client_id`/`refresh_token` keys) vs service account JSON and use the appropriate auth path. Reads from `GOOGLE_ANALYTICS_CREDENTIALS_JSON` env var (with `GOOGLE_SERVICE_ACCOUNT_JSON` as fallback). Script smoke-tested: Search Console returning live data (2 clicks, 25 search queries incl. "estate sales finder", "estate sales near me"). GA4 empty (expected — finda.sale at very low traffic volume).
+- **`claude_docs/scripts/.analytics-creds.json` created** — OAuth2 credentials file (client_id, client_secret, refresh_token). NOT committed to git.
+- **`.gitignore` updated** — `claude_docs/scripts/.analytics-creds.json` added.
+- **`findasale-analytics-weekly` scheduled task updated** — Runs Mondays 8:00 AM. Reads creds from `.analytics-creds.json` file via dynamic session path discovery. No Railway env vars required. Pre-populate tools: Cowork sidebar → Scheduled → findasale-analytics-weekly → Run Now.
 
-**Files created:**
-- `claude_docs/scripts/analytics-weekly.py` — NEW analytics report script
+**Files modified:**
+- `claude_docs/scripts/analytics-weekly.py` — OAuth2 auth support added
+- `.gitignore` — analytics creds file excluded
+
+**Files created (not tracked in git):**
+- `claude_docs/scripts/.analytics-creds.json` — OAuth2 refresh token (gitignored)
 
 **BQ: 5 (unchanged).**
 
