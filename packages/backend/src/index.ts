@@ -547,7 +547,7 @@ app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly dig
 app.use('/api/admin', adminRoutes); // Admin panel
 app.use('/api/admin/affiliate', adminAffiliateRoutes); // Admin: Creator/Affiliate management
 if (process.env.NODE_ENV !== 'production') {
-  app.use('/api/dev', devRoutes); // Dev utilities
+  app.use('/api/dev', devRoutes); // Dev utilities — NOT in production (privilege escalation risk)
 }
 app.use('/api/notifications/inbox', notificationInboxRoutes); // Notification inbox
 app.use('/api/waitlist', waitlistRoutes); // Item Waitlist / "Notify Me"

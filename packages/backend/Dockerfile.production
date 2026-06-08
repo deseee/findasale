@@ -44,6 +44,15 @@ RUN cd packages/database && npx prisma generate
 # tsc still emits valid JS — allow non-zero exit so build proceeds.
 RUN cd packages/backend && npx tsc || true
 
+# Build completeness gate: fail Docker build if tsc OOM'd and produced <75% of source files
+# Prevents a partial dist/ from being deployed when the builder runs out of memory.
+RUN cd packages/backend && \
+    SRC=$(find src -name "*.ts" ! -path "*/__tests__/*" | wc -l) && \
+    OUT=$(find dist -name "*.js" | wc -l) && \
+    MIN=$((SRC * 3 / 4)) && \
+    echo "[build-check] tsc emitted $OUT JS from $SRC TS (min: $MIN)" && \
+    [ "$OUT" -ge "$MIN" ] || { echo "FATAL: tsc produced only $OUT/$SRC files — OOM or partial build"; exit 1; }
+
 # --- runner stage ---
 FROM node:20-slim AS runner
 
