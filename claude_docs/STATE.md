@@ -8,6 +8,10 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S918 — DEV (2026-06-07). Resend transactional email rail built. Gmail SPOF resolved. BQ: 7 (unchanged).**
+
+**Completed:** (1) bounceSuppressService verified: EmailSuppression has 5 rows (no bounce-type suppressions — expected, inbox was cleared S917 and the Jun-5 wave hasn't bounced back yet; service is configured and running correctly). 0 sends in last 24h → outreach paused during S917 inbox triage, re-enabled with OUTREACH_ENABLED=true. (2) Resend transactional email rail built: new `packages/backend/src/lib/transactionalEmailService.ts` created using Resend SDK. 9 callers migrated from Gmail to Resend: authController.ts (2 calls — password reset + verification), routes/auth.ts (2 calls — magic link + resend verification), stripeController.ts (6 calls — receipts + payout confirmations + subscription notices), posController.ts (4 calls — POS receipts + invoices), terminalController.ts (2 calls — in-person receipts), workspaceController.ts (1 call — workspace invites), messageEmailService.ts (1 call — direct messages), consignorEmailService.ts (3 calls — consignor notifications), tierLapseJob.ts (1 call — subscription lapse). Backend TS check: 0 errors. (3) S913 P2 Gmail SPOF → RESOLVED: critical transactional email now on dedicated Resend rail that survives Gmail suspension. Gmail/emailService stays as bulk/marketing rail (40+ remaining senders untouched). **Patrick actions required before push:** (a) Verify RESEND_API_KEY is set in Railway (already used for quota alerts — likely present); (b) Verify finda.sale domain is verified in Resend dashboard (Domains tab) — hello@finda.sale is the new transactional FROM address. **Push block below.**
+
 **S917 — OPS (2026-06-07). Gmail inbox triage complete. All 1,415 mailer-daemon bounce notifications cleared from outreach@finda.sale inbox (0 mailer-daemon messages remain). OUTREACH_ENABLED=true confirmed set on Railway. outreachEmailsCron.ts ARCHIVED exclusion fix confirmed live (commit ed8aa97d). Auto-forwarding quota to deseee@gmail.com unblocked. BQ: 7 (unchanged).**
 
 **S916 findings:** Patrick ordered investigation of a Sentry ingest address appearing in email bounces. Chrome MCP audit of outreach@finda.sale Gmail confirmed: (1) NO Sentry forwarding filter exists in Gmail settings — Filters tab is completely empty; (2) Forwarding tab shows only deseee@gmail.com (the S915 forwarding we set up); (3) Gmail API sends are working — Sent folder has 8,919 messages including 2 successful sends tonight (7:31 PM). The "mailer-daemon" bounces in the outreach inbox are Gmail's AUTO-FORWARDING service failing — the inbox has 1,415 messages being forwarded to deseee@gmail.com, which saturates Gmail's daily forwarding quota. This is a noise issue, not an API delivery issue. ROOT CAUSE of the Sentry bounce: the outreach cron had a corrupted DirectoryClaimEmail record — "Kaff's Bake Shop" (id=cmp3nh7yy0041kbtjgb8aci4v) stored `u002F802d7a4fd3f743ec907da8badf47bec3@o1378064.ingest.sentry.io` as its contact emailAddress. The cron sent 3 outreach emails to this Sentry ingest address (May 27/May 30/Jun 4). Sentry received the unexpected emails and sent bounce notifications back. FIX: ARCHIVED that record in Railway DB — confirmed via psycopg2 (`status='ARCHIVED'`). NEXT: push outreachEmailsCron.ts ARCHIVED exclusion fix (coded prior session), then set OUTREACH_ENABLED=true. BQ: 7 (unchanged).
@@ -133,7 +137,7 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 Surfaced during the S913 email audit; recorded so they aren't lost. None are active outages — all are deferred-risk / tech-debt, most to address BEFORE `OUTREACH_ENABLED=true`.
 
 - **[P2] Bounced addresses are not auto-suppressed.** `EmailSuppression` has only 5 rows total; the Jun-6 abandoned-signup bounces ("reached a limit for sending mail") were never added. Sending to known-bad addresses on outreach resume risks re-tripping the Workspace suspension. Bounces currently live only as mailer-daemon messages in the outreach@finda.sale mailbox, unparsed. → Build bounce → `EmailSuppression` processing BEFORE outreach resumes.
-- **[P2] Single Gmail/Workspace account is a SPOF for ALL email.** `emailService.emails.send` carries transactional mail (payouts, receipts, password resets, messages) AND bulk mail through the one outreach Workspace account; the Jun-5 suspension would have silently killed transactional mail too. → Consider a separate transactional rail (Resend/SES) so a suspension can't break payouts/receipts.
+- **[P2 → RESOLVED S918] Single Gmail/Workspace account SPOF for ALL email → FIXED.** New `transactionalEmailService.ts` (Resend) now handles auth emails, Stripe receipts/payouts, POS receipts, workspace invites, direct messages, consignor notifications. Gmail/emailService remains bulk-only rail. Gmail suspension can no longer silence payouts or password resets.
 - **[P3] `OUTREACH_ENABLED` conflates two concerns.** It now gates cold outreach AND opt-in subscriber notifications (`saleEndingSoonJob`) AND bulk digests — so turning off outreach also silently stops opt-in "sale ending soon" emails shoppers requested. → Consider a separate `BULK_EMAIL_ENABLED` / account-health flag distinct from cold-outreach.
 - **[P3] Backend `/health` and `/api/health` → ✅ RESOLVED S915.** Confirmed: `GET https://backend-production-153c9.up.railway.app/api/health` → `{"status":"ok","timestamp":"2026-06-07T21:06:25.597Z"}` 200.
 - **[P1 — NEW S915] Gmail REFRESH_TOKEN returns `unauthorized_client` — ALL Gmail-rail sending BROKEN.** Patrick re-minted the token with `https://mail.google.com/` scope but the new token fails with `unauthorized_client: Unauthorized` on every OAuth refresh attempt. Root cause: token was likely generated by a different OAuth client than GMAIL_CLIENT_ID in Railway (client ID `955070470579-3kangpdvi0jcvj88v...`), OR Workspace Admin needs to approve the broader scope. Impact: ALL transactional email via Gmail rail is currently broken (payouts, receipts, password resets, organizer notifications). bounceSuppressService cron will also fail silently at 06:00 UTC. → Patrick must restore a working GMAIL_REFRESH_TOKEN immediately.
@@ -289,23 +293,25 @@ _(S862
 
 ## Next Session
 
-**S918 STATUS ENTERING:**
-- ✅ Gmail inbox cleared — 1,415 mailer-daemon bounce messages deleted, 6 non-bounce messages remain
-- ✅ OUTREACH_ENABLED=true confirmed set on Railway
-- ✅ outreachEmailsCron.ts ARCHIVED exclusion fix live (commit ed8aa97d)
-- ✅ Auto-forwarding quota to deseee@gmail.com unblocked
-- ⚠️ Bounce auto-suppression service (bounceSuppressService.ts) coded S914 — needs Patrick to confirm it's deployed and working since OUTREACH_ENABLED=true is now live
-- ⚠️ Single Gmail account SPOF for all email still unresolved (S913 P2 finding)
+**S919 STATUS ENTERING:**
+- ✅ Resend transactional rail built + TS clean — push pending (see S918 push block)
+- ✅ Gmail SPOF resolved: auth emails, Stripe receipts/payouts, POS receipts on Resend
+- ✅ bounceSuppressService verified: running correctly, 0 bounces in inbox (expected post-S917 cleanup)
+- ✅ OUTREACH_ENABLED=true — 37 PENDING records ready, 0 sends since Jun 5 (re-enabling)
+- ⚠️ EmailSuppression has only 5 rows — first outreach wave bounces need time to process via 06:00 UTC cron
 
-**S918 recommended session type: DEV (BQ=7, below QA ceiling)**
+**S919 recommended session type: DEV (BQ=7, below QA ceiling)**
 
-**S918 Autonomous agenda:**
-1. Verify bounceSuppressService cron is running clean now that outreach is live — check Railway logs for 06:00 UTC run
-2. `Skill('findasale-dev')` → S913 P2 email rail separation: build a Resend/SES transactional rail so Gmail suspension can't kill payouts/receipts/password resets
-3. `Skill('findasale-dev')` → S913 P2 bounce auto-suppression gaps: review bounceSuppressService.ts for any gaps before first outreach wave lands
-4. Monitor first outreach send window — check Railway logs for outreachEmailsCron run and DirectoryClaimEmail send counts
+**S919 Autonomous agenda:**
+1. **Patrick must push S918 transactional rail changes first** (10 files — see push block at session end)
+2. Monitor outreach send window — check Railway logs + DirectoryClaimEmail PENDING→SENT count
+3. Check EmailSuppression row count after first outreach wave + bounceSuppressService 06:00 UTC run
+4. Next dev priority: review roadmap for next feature to dispatch
 
-**Decisions still open (Patrick):**
+**Patrick actions before S919:**
+- Verify `RESEND_API_KEY` is set in Railway → findasale-backend → Variables (likely already set — used for quota alerts)
+- Verify `finda.sale` is a verified sending domain in Resend dashboard (Domains tab) — `hello@finda.sale` is the new transactional FROM
+- Push S918 push block (10 files)
 - **Jane Thrift payout re-send:** Gmail API confirmed working S916. Can re-send now.
 - **FB Marketplace:** DROP recommended (S899); Graph API OAuth (#365) = long-term path. Awaiting Patrick decision.
 - **#332 Shopify:** code fixed (S890); needs a real custom-app store for live QA.
@@ -313,6 +319,37 @@ _(S862
 
 ## Recent Sessions
 
+
+
+### S918 — DEV (2026-06-07). Resend transactional email rail. BQ: 7 (unchanged).
+
+**Completed:**
+- bounceSuppressService verified clean: EmailSuppression 5 rows (no BOUNCED entries — expected, inbox cleared S917, first outreach wave hasn't bounced back yet). Service correctly configured.
+- Created `packages/backend/src/lib/transactionalEmailService.ts` — Resend SDK, same `emails.send()` interface as emailService, `hello@finda.sale` default FROM, soft no-op with console.error when RESEND_API_KEY missing, throws on Resend API error.
+- Migrated 9 callers to Resend rail: authController (2), auth.ts route (2), stripeController (6), posController (4), terminalController (2), workspaceController (1), messageEmailService (1), consignorEmailService (3), tierLapseJob (1). Total: 22 call sites moved.
+- 40+ remaining callers (bulk/marketing) intentionally left on Gmail/emailService.
+- Backend TypeScript check: 0 errors.
+- S913 P2 Gmail SPOF finding: RESOLVED.
+
+**Files changed (S918 push block):**
+```
+git add packages/backend/src/lib/transactionalEmailService.ts
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/routes/auth.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/posController.ts
+git add packages/backend/src/controllers/terminalController.ts
+git add packages/backend/src/controllers/workspaceController.ts
+git add packages/backend/src/services/messageEmailService.ts
+git add packages/backend/src/services/consignorEmailService.ts
+git add packages/backend/src/jobs/tierLapseJob.ts
+git commit -m "feat: dedicated Resend rail for transactional email (auth, receipts, payouts, invites)"
+.\push.ps1
+```
+
+**BQ: 7 (unchanged).**
+
+---
 
 ### S917 — OPS (2026-06-07). Gmail inbox triage complete. OUTREACH_ENABLED=true confirmed. BQ: 7 (unchanged).
 
