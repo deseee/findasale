@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S920 — QA (2026-06-08). Shopper flow QA: #198 Reviews ✅ Chrome-verified. #196 Buying Pools root cause found (shouldShow threshold 100x too high). #201 Favorites 3 P2 bugs found. #335 BQ corrected (outreach NOT suspended). DB cleanup done. BQ: 7→9.**
+
 **S919 — QA/WRAP (2026-06-08). #230 SmartBuyerWidget confirmed rendering + RESOLVED from BQ. #380 Apify deferred (roadmap updated). #335 Jane Thrift removed (fictional account). BQ: 7→5.**
 
 **S918 — DEV (2026-06-07). Resend transactional email rail built. Gmail SPOF resolved. BQ: 7 (unchanged).**
@@ -80,7 +82,7 @@ Records: roadmap.md Chr column updated (SEO-1 ✅ S892, GUEST1 ✅ S893). BQ 19�
 
 **S887 — DEV MODE + SCRAPER AUDIT. AuctionNinja → Railway cron live. DB-backed Gmail quota guard deployed (EmailQuotaLog, hard stop 1500/day). Gmail monitoring crons active (OAuth health/send summary/suspension detect). Scraper audit complete: 48,701 sales in DB, 15,792 (32%) un-geocoded — geocoding job net-negative (+785/day GSF ingest vs ~200/day cleared). FB Marketplace: 0 records ever. FB Events: 96% un-geocoded. NAA: declared BROKEN. AuctionNinja/AuctionZip: 0 organizer records. 462 WARM leads email-ready but no outreach record. Outreach still trickling 7/day despite OUTREACH_ENABLED=false — root cause unclear. BQ: 17 rows (6 P1/P2 from S887 audit + 7 P2/P3 added S887 Records pass).**
 
-**⚠️ S865-auto (Jun 5) URGENT: Email suspension RE-TRIPPED. Pipeline sent 8,317+ emails → Google Workspace daily limit hit. GH workflow DISABLED, OUTREACH_ENABLED=false set. Patrick must reactivate outreach@finda.sale at admin.google.com. See Blocked Queue #335.**
+**⚠️ S865-auto (Jun 5) URGENT: Email suspension RE-TRIPPED. Pipeline sent 8,317+ emails → Google Workspace daily limit hit. GH workflow DISABLED, OUTREACH_ENABLED=false set. ~~Patrick must reactivate outreach@finda.sale at admin.google.com~~ — S920 CORRECTION: outreach@finda.sale confirmed NOT suspended (Patrick). OUTREACH_ENABLED=false is intentional hold. See Blocked Queue #335.**
 
 **S886 — QA + DEV + RECORDS. P2 POS draftStatus fix ✅ Chrome-verified search path (ss_5792yv22r), CODE-ONLY QR toast. P3 "View sale" 404 closed (false positive — code already correct). Records: STATE.md cleaned, BQ 4 rows.**
 
@@ -172,7 +174,7 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing → CORE BUGS FIXED (pending push) | **P0** — **S890 FIXES CODED** (shopifyService.ts + connect-shopify.ts, TS 0 errors both packages): (1) sold-sync rewritten to correct 3-step REST flow — GET variant→inventory_item_id, GET locations→location_id, POST /inventory_levels/set.json (was malformed, silently failing); (2) API version 2024-01→2025-10; (3) variant payload gets `inventory_management:'shopify'`; (4) connect-shopify guide rewritten to match the real manual-token flow (removed false OAuth/auto-webhook/auto-sync promises); (5) 422/429 error handling added. **FLAGGED for Patrick (NOT built — future decisions):** proper OAuth app, inbound webhook handler (Shopify→FindA.Sale is one-way only), token encryption, optional ShopifyListing.shopifyInventoryItemId column to skip the 2 lookup calls. **Store still needed for live QA, but the code is now correct.** | Push; then connect a real custom-app store to QA the push + sold-sync end-to-end | S791 |
 
-| #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history). **S890 re-verified leak PLUGGED:** 0 DirectoryClaimEmail sends since Jun 5 08:00 UTC (psycopg2). No active sending. Only the Gmail reactivation + Jane Thrift re-send remain (Patrick). | S865-auto / Jun 5 |
+| #335 Outreach Resume — intentional hold | **P2** — S865 blast (8,317+ emails) → GH workflow disabled + OUTREACH_ENABLED=false (both confirmed). **S920 CORRECTION: Patrick confirmed outreach@finda.sale is NOT suspended — account ACTIVE.** OUTREACH_ENABLED=false is deliberate hold pending domain warming (17+ days silence required before resume). Transactional email now on Resend rail (S918) — payouts/auth unaffected by outreach pause. S919: Jane Thrift reference removed (fictional). **37 PENDING DirectoryClaimEmail queue** when ready to resume outreach. | S865-auto / Jun 5 |
 
 
 | 462 WARM leads email-ready, no outreach record | **P2** — **S890 UNCHANGED: still exactly 462** (psycopg2). Note: backfill-organizer-contacts.yml backfills CONTACT data (email/phone), NOT DirectoryClaimEmail rows — that queue-row backfill was never built. Correctly deferred while OUTREACH_ENABLED=false (#335). Do during outreach resume. | Backfill DirectoryClaimEmail PENDING for the 462 as part of #335 resume | S887 |
@@ -182,6 +184,8 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 
 | **[SEC-001]** Admin demand-signals SQL injection (`admin.ts` `/demand-signals?city=`) | **P1** — `$queryRawUnsafe` with manual `replace(/'/g,"''")` string interpolation. Admin-only route (requireAdmin gate) + modern PG mitigates immediate risk, but parameterization required. Fix: convert to `Prisma.sql` tagged template. | `Skill('findasale-dev')` — single-file fix in `packages/backend/src/routes/admin.ts` | S919 |
 | **[SEC-002]** Items upload multer — no MIME filter or size limit | **P1** — `multer({ storage: multer.memoryStorage() })` (items.ts:86) used by `POST /api/items` (images) + two CSV import routes. No fileFilter → arbitrary file types. No fileSize limit → memory DoS possible (5 files × unlimited). | `Skill('findasale-dev')` — add fileFilter + `limits.fileSize` to items.ts multer, separate csvUpload instance | S919 |
+| **#196 Buying Pools — shouldShow threshold 100× too high** | **P1** — `BuyingPoolCard.tsx`: `const shouldShow = itemPrice > 10000 && itemStatus === 'AVAILABLE'`. Prices stored in dollars (e.g. $285, $3500) — neither ever reaches $10,000. Comment says "$100" but threshold is `10000`. No Buying Pool card ever renders for any real item. Fix: change `> 10000` to `> 100` (1-line). | `Skill('findasale-dev')` — 1-line change in `packages/frontend/components/BuyingPoolCard.tsx` | S920 |
+| **#201 Favorites — 3 P2 bugs** | **P2** — (1) Items tab shows "Items (2)" but only 1 item-level Favorite exists (overcounting); (2) Sale-level Favorites not shown on /shopper/wishlist page; (3) /shopper/collections → 404. | `Skill('findasale-dev')` — fix wishlist page + collections route | S920 |
 
 ---
 
@@ -189,6 +193,7 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| — | **#198 Reviews — shopper submit** | ✅ Navigated https://finda.sale/sales/cmpt2oq6q00138cehpgqx3huk as user5 (Leo Thomas). Clicked 5-star button (Submit enabled, orange). Clicked Submit Review. Review appeared: "Leo Thomas — Jun 8, 2026 — ★★★★★ — Great selection of unique finds! Really enjoyed browsing the antiques." Form reset to 0/500. ss_5467x997f, ss_9288c84e3 | S920 |
 | — | CTA1 — Logged-out sale page "Remind Me by Email" absent | Pre-compression S898 Chrome verify. Navigated sale page as logged-out guest — "Remind Me by Email" absent. Screenshot ID not captured in post-compression summary. Records: verify screenshot in transcript before applying to roadmap. Evidence path: .claude/projects/.../8ebb1c20-2219-4e45-95a5-58c139e4bb8e.jsonl | S898 |
 | — | PerformanceDashboard dark mode (D-002 verify) | ✅ Chrome-verified S898 — /organizer/performance as Alice (user1) in dark mode. All metrics readable. ss_1751wzkxe — **Applied to roadmap S899 (row #168 Status)** | S898 |
 | — | HuntPassModal dark mode (D-002 verify) | ✅ Chrome-verified S898 — Navigated /shopper/hunt-pass as Bob Smith (user2). Clicked "Upgrade to Hunt Pass". Modal opened with dark background, white "Upgrade to Hunt Pass" title, "Hunt Pass Benefits" card visible, pricing rows readable in dark mode. ss_4554ems7i + zoom screenshot — **Applied to roadmap S899 (row #213 Notes)** | S898 |
@@ -297,29 +302,47 @@ _(S862
 
 ## Next Session
 
-**S920 STATUS ENTERING:**
-- ✅ SmartBuyerWidget (#230) RESOLVED — removed from BQ
-- ✅ FB Marketplace (#380) DEFERRED — Apify path on roadmap, CF Worker dead end confirmed
-- ✅ #335 Jane Thrift reference removed — no such user exists in DB
-- ✅ send.finda.sale FROM-email domain fix deployed (S918 push block)
-- ⚠️ S918 Resend transactional rail push REQUIRED — 10 files (if Patrick hasn't pushed yet)
-- ⚠️ #335 outreach@finda.sale reactivation STILL NEEDED — Patrick must log in to Google Workspace Admin
+**S921 STATUS ENTERING:**
+- ✅ #198 Reviews Chrome-verified S920 — PCV staged
+- ✅ #335 corrected — outreach@finda.sale NOT suspended; OUTREACH_ENABLED=false intentional hold (P1→P2)
+- ⚠️ BQ=9 — QA-ONLY ceiling (≥8). QA mode required S921.
+- ⚠️ #196 Buying Pools: 1-line fix `BuyingPoolCard.tsx` shouldShow `> 10000` → `> 100`
+- ⚠️ #201 Favorites: 3 P2 bugs (items tab overcounting, saved sales missing, /shopper/collections 404)
+- ⚠️ SEC-001 + SEC-002: security P1 fixes pending (findasale-dev, small targeted changes)
+- ⚠️ S918 Resend rail: confirm Patrick pushed (10 files — check git log)
 
-**S920 session type: DEV (BQ=5, well below QA ceiling)**
+**S921 session type: QA (BQ=9, at ceiling)**
 
-**S920 autonomous agenda:**
-1. Push S918 Resend rail if not yet done (10 files — see S918 push block in Recent Sessions)
-2. Monitor outreach PENDING→SENT count after re-enabling (37 PENDING, OUTREACH_ENABLED=true)
-3. Dispatch findasale-dev on next roadmap item (BQ=5, DEV mode available)
+**S921 autonomous agenda:**
+1. Apply #198 Reviews PCV → roadmap Chrome column (cross-session rule)
+2. Dispatch findasale-dev for #196 (1-line fix) + #201 Favorites bugs
+3. Chrome QA #210 Streaks (verified pre-compaction but no screenshot IDs staged — re-verify)
+4. SEC-001 + SEC-002 security fixes via findasale-dev
 
-**Patrick actions before S920:**
-- ✅ Push S918 Resend transactional rail (10 files) — if not done
-- **#335:** Reactivate outreach@finda.sale at admin.google.com → Directory → Users → Reactivate
+**Patrick actions before S921:**
+- None required — verify S918 push happened (`git log --oneline -3`)
 - **#332 Shopify:** Connect a real custom-app store for QA (code ready)
 
 ## Recent Sessions
 
 
+
+### S920 — 2026-06-08 | QA MODE
+
+**Session type:** QA — shopper flow (#196 Buying Pools, #198 Reviews, #201 Favorites, #210 Streaks)
+
+**Work completed:**
+- **#198 Reviews ✅ Chrome-verified** — Navigated https://finda.sale/sales/cmpt2oq6q00138cehpgqx3huk as user5 (Leo Thomas). Clicked 5-star rating. Clicked Submit Review. Review appeared with correct content. Form reset to 0/500 confirming onSuccess fired. ss_5467x997f, ss_9288c84e3.
+- **#196 Buying Pools root cause** — `BuyingPoolCard.tsx`: `shouldShow = itemPrice > 10000`. Items stored in dollars ($285/$3500) never reach $10k. Fix is 1 line: `> 100`. Added to BQ as P1.
+- **#201 Favorites 3 P2 bugs** — Favorites sub-flows navigated as user5: (1) Items tab overcounts (2 shown, 1 actual), (2) Sale-level Favorites absent from /shopper/wishlist, (3) /shopper/collections → 404. Added to BQ.
+- **#335 corrected** — Patrick confirmed outreach@finda.sale NOT suspended S920. Updated BQ entry, downgraded P1→P2, removed stale "reactivate at admin.google.com" requirement.
+- **DB cleanup** — Deleted test Review cmq5cdxx9000dxq7vmt95figg + Favorites cmq5be3d701bfv7mwny6k4zyb + cmq5bpsy301bmv7mwqi1bp8m7 via psycopg2.
+
+**Files modified:** STATE.md, patrick-dashboard.md
+
+**BQ: 7→9** (+2: #196 Buying Pools, #201 Favorites P2 bugs).
+
+---
 
 ### S919 — 2026-06-08 | AUTOMATED + SECURITY AUDIT
 
