@@ -175,6 +175,7 @@ export async function sendAbandonedSignupNudges(): Promise<void> {
 
   const candidates = await prisma.organizer.findMany({
     where: {
+      isClaimed: true, // exclude scraped organizers (never real signups)
       isUnmanagedListing: false, // exclude scraped/unmanaged organizers (never real signups)
       createdAt: { gte: windowStart, lte: windowEnd },
       // Never activated: no published or ended sale
