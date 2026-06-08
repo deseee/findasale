@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S919 — QA/WRAP (2026-06-08). #230 SmartBuyerWidget confirmed rendering + RESOLVED from BQ. #380 Apify deferred (roadmap updated). #335 Jane Thrift removed (fictional account). BQ: 7→5.**
+
 **S918 — DEV (2026-06-07). Resend transactional email rail built. Gmail SPOF resolved. BQ: 7 (unchanged).**
 
 **Completed:** (1) bounceSuppressService verified: EmailSuppression has 5 rows (no bounce-type suppressions — expected, inbox was cleared S917 and the Jun-5 wave hasn't bounced back yet; service is configured and running correctly). 0 sends in last 24h → outreach paused during S917 inbox triage, re-enabled with OUTREACH_ENABLED=true. (2) Resend transactional email rail built: new `packages/backend/src/lib/transactionalEmailService.ts` created using Resend SDK. 9 callers migrated from Gmail to Resend: authController.ts (2 calls — password reset + verification), routes/auth.ts (2 calls — magic link + resend verification), stripeController.ts (6 calls — receipts + payout confirmations + subscription notices), posController.ts (4 calls — POS receipts + invoices), terminalController.ts (2 calls — in-person receipts), workspaceController.ts (1 call — workspace invites), messageEmailService.ts (1 call — direct messages), consignorEmailService.ts (3 calls — consignor notifications), tierLapseJob.ts (1 call — subscription lapse). Backend TS check: 0 errors. (3) S913 P2 Gmail SPOF → RESOLVED: critical transactional email now on dedicated Resend rail that survives Gmail suspension. Gmail/emailService stays as bulk/marketing rail (40+ remaining senders untouched). **No setup required:** `send.finda.sale` is already verified in Resend (used by quota alert emails); `RESEND_API_KEY` already in Railway. FROM address corrected to `hello@send.finda.sale`. Push and it works. **Push block below.**
@@ -149,6 +151,7 @@ _⚠️ P0 AGING: #332 at 73+ sessions — mandatory P0 per CLAUDE.md §10a._
 _S886: P3 review link fix ✅ Chrome-verified S886 — removed. P2 POS filter fix ✅ Chrome-verified S886 — removed. Blocked Queue: 4 rows (#335 P1 URGENT outreach suspension + #332 + AuctionNinja + #230)._
 _S887 Records pass: 6 new rows added from scraper audit (P1/P2). S887 Records pass #2: 7 additional rows added (P2/P3). Blocked Queue: 17 rows total._
 _S908 QA MODE: Flash Deal stub (P2) + Social Posts stub (P2) REMOVED — S907 false positives (both gated on PUBLISHED sale, both work correctly). New P3 added: Flash Deal modal missing close button. BQ: 9→8._
+_S919 WRAP: #230 RESOLVED (SmartBuyerWidget rendering confirmed — S793 Chrome QA with Leo Thomas still valid; sale extended to Jun 15 S919 confirmed empty state correct for 0 watchers). FB Marketplace RESOLVED (Patrick decision: DEFERRED — Apify path added to roadmap #380). #335 updated: Jane Thrift is fictional — no such user in Railway DB. BQ: 7→5._
 _S909 QA MODE: Records pass confirmed no roadmap PCV updates needed (all S908/S905/S906 PCVs already chr ✅). Flash Deal modal close button FIX SHIPPED (FlashDealForm.tsx X + Escape handler, Python via bash, 0 TS errors). Flash Deal modal BQ entry REMOVED (RESOLVED). BQ: 8→7. Below ceiling — DEV available next session._
 _S889 BUG MODE: "Outreach still sending despite OUTREACH_ENABLED=false" CLOSED — propagation-lag false alarm, not an active leak. Removed from queue. Evidence: all send paths gated at sendOutreachEmails() outreachEmailsCron.ts:201; backend redeployed 22:39 UTC Jun 5; ZERO DirectoryClaimEmail sends since 07:59 Jun 5 across 4 cron windows (psycopg2 + Railway deploy logs deployment 0352c24e); GH workflow pipeline-outreach-emails.yml disabled = 2nd layer. Blocked Queue: 16 rows._
 _S890 QA MODE: full 16-item DB/code verification sweep (no browser — data items). **#12 Sale-Ending-Soon rate cap CLOSED** — confirmed deployed on main (saleEndingSoonJob.ts: DAILY_EMAIL_CAP=500 + per-send suppression check, GitHub sha 180fff9). All other rows annotated with S890 tool evidence (psycopg2 + GitHub main reads); root causes refined where found. Blocked Queue: 15 rows._
@@ -169,15 +172,13 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing → CORE BUGS FIXED (pending push) | **P0** — **S890 FIXES CODED** (shopifyService.ts + connect-shopify.ts, TS 0 errors both packages): (1) sold-sync rewritten to correct 3-step REST flow — GET variant→inventory_item_id, GET locations→location_id, POST /inventory_levels/set.json (was malformed, silently failing); (2) API version 2024-01→2025-10; (3) variant payload gets `inventory_management:'shopify'`; (4) connect-shopify guide rewritten to match the real manual-token flow (removed false OAuth/auto-webhook/auto-sync promises); (5) 422/429 error handling added. **FLAGGED for Patrick (NOT built — future decisions):** proper OAuth app, inbound webhook handler (Shopify→FindA.Sale is one-way only), token encryption, optional ShopifyListing.shopifyInventoryItemId column to skip the 2 lookup calls. **Store still needed for live QA, but the code is now correct.** | Push; then connect a real custom-app store to QA the push + sold-sync end-to-end | S791 |
 
-| #230 Smart Buyer Widget Human QA | **P3** — Claude QA ✅ S793 confirmed. Human QA pending: no published sale on real test organizer account. **S890:** unchanged — DB-only session, no Chrome. | Patrick: publish a sale on user1, then visit organizer dashboard to verify SmartBuyerWidget shows shopper data | S859 |
-| #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history), (3) re-trigger Jane Thrift payout email and confirm Yahoo delivery once account is reactivated. **S890 re-verified leak PLUGGED:** 0 DirectoryClaimEmail sends since Jun 5 08:00 UTC (psycopg2). No active sending. Only the Gmail reactivation + Jane Thrift re-send remain (Patrick). | S865-auto / Jun 5 |
+| #335 Consignor Payout Email + Outreach Sending Suspension RE-TRIPPED | **P1 URGENT** — S865d task confirmed "reached a limit" bounce at 6:03 AM Jun 5. Pipeline (pipeline-outreach-emails.yml) sent 8,317+ "Weekend Estate Sale Digest" emails to scraped contacts overnight, hit Google Workspace daily sending limit. EMERGENCY ACTIONS TAKEN: GH workflow disabled (confirmed "Workflow disabled successfully" Jun 5), OUTREACH_ENABLED=false set in Railway (confirmed `{"keys":["OUTREACH_ENABLED"],"set":true}`). Yahoo delivery: S865d test email landed in inbox (not spam) Jun 4 12:05 PM ✅. "FindA.Sale delivery audit" email not found in Yahoo (blocked before send). Remaining step for #335 ✅: Patrick must (1) reactivate outreach@finda.sale at admin.google.com → Directory → Users → outreach@finda.sale → Reactivate, (2) keep volumes very low for 2+ weeks (domain warming needed — 17 days silence + cold-email history). **S890 re-verified leak PLUGGED:** 0 DirectoryClaimEmail sends since Jun 5 08:00 UTC (psycopg2). No active sending. Only the Gmail reactivation + Jane Thrift re-send remain (Patrick). | S865-auto / Jun 5 |
 
 
 | 462 WARM leads email-ready, no outreach record | **P2** — **S890 UNCHANGED: still exactly 462** (psycopg2). Note: backfill-organizer-contacts.yml backfills CONTACT data (email/phone), NOT DirectoryClaimEmail rows — that queue-row backfill was never built. Correctly deferred while OUTREACH_ENABLED=false (#335). Do during outreach resume. | Backfill DirectoryClaimEmail PENDING for the 462 as part of #335 resume | S887 |
 
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
-| FB Marketplace 0 records — CF Worker proxy is a DEAD END | **P2 — S890 DEFINITIVELY DIAGNOSED via live run + Railway logs (02:22-02:25 UTC Jun 6).** Proxy env vars confirmed live; run logged `[FacebookMarketplace] Transport: CLOUDFLARE_WORKER (https://findasale-fb-proxy.findasale.workers.dev/fb-graphql)` — so the proxy IS in use. Result: **every query in every metro returned "Found 0 listings"** (garage/yard/estate × jacksonville/fort-worth/columbus/charlotte/sf/indy/seattle/denver…), 0 created across the board, no errors. FB returns empty results even through Cloudflare's edge IPs (datacenter-IP soft-block; FB Marketplace search increasingly requires an authenticated session). **The free-Cloudflare-Worker approach (S888) does not and will not work for FB Marketplace.** Options: paid residential/mobile proxies + session auth, or DROP FB Marketplace. Recommend DROP unless FB listings become a priority — high effort, brittle, ToS-risky. | Patrick decision: DROP recommended (S899) — residential proxy + auth high-effort + ToS risk; Graph API OAuth path (#365) is the correct long-term alternative. | S890 |
 
 ---
 
@@ -293,33 +294,45 @@ _(S862
 
 ## Next Session
 
-**S919 STATUS ENTERING:**
-- ✅ Resend transactional rail built + TS clean — push pending (see S918 push block)
-- ✅ Gmail SPOF resolved: auth emails, Stripe receipts/payouts, POS receipts on Resend
-- ✅ bounceSuppressService verified: running correctly, 0 bounces in inbox (expected post-S917 cleanup)
-- ✅ OUTREACH_ENABLED=true — 37 PENDING records ready, 0 sends since Jun 5 (re-enabling)
-- ⚠️ EmailSuppression has only 5 rows — first outreach wave bounces need time to process via 06:00 UTC cron
+**S920 STATUS ENTERING:**
+- ✅ SmartBuyerWidget (#230) RESOLVED — removed from BQ
+- ✅ FB Marketplace (#380) DEFERRED — Apify path on roadmap, CF Worker dead end confirmed
+- ✅ #335 Jane Thrift reference removed — no such user exists in DB
+- ✅ send.finda.sale FROM-email domain fix deployed (S918 push block)
+- ⚠️ S918 Resend transactional rail push REQUIRED — 10 files (if Patrick hasn't pushed yet)
+- ⚠️ #335 outreach@finda.sale reactivation STILL NEEDED — Patrick must log in to Google Workspace Admin
 
-**S919 recommended session type: DEV (BQ=7, below QA ceiling)**
+**S920 session type: DEV (BQ=5, well below QA ceiling)**
 
-**S919 Autonomous agenda:**
-1. **Patrick must push S918 transactional rail changes first** (10 files — see push block at session end)
-2. Monitor outreach send window — check Railway logs + DirectoryClaimEmail PENDING→SENT count
-3. Check EmailSuppression row count after first outreach wave + bounceSuppressService 06:00 UTC run
-4. Next dev priority: review roadmap for next feature to dispatch
+**S920 autonomous agenda:**
+1. Push S918 Resend rail if not yet done (10 files — see S918 push block in Recent Sessions)
+2. Monitor outreach PENDING→SENT count after re-enabling (37 PENDING, OUTREACH_ENABLED=true)
+3. Dispatch findasale-dev on next roadmap item (BQ=5, DEV mode available)
 
-**Patrick actions before S919:**
-- Verify `RESEND_API_KEY` is set in Railway → findasale-backend → Variables (likely already set — used for quota alerts)
-- ~~Resend domain setup~~ — not needed; `send.finda.sale` already verified, `RESEND_API_KEY` already in Railway
-- Push S918 push block (10 files)
-- **Jane Thrift payout re-send:** Gmail API confirmed working S916. Can re-send now.
-- **FB Marketplace:** DROP recommended (S899); Graph API OAuth (#365) = long-term path. Awaiting Patrick decision.
-- **#332 Shopify:** code fixed (S890); needs a real custom-app store for live QA.
-- **#230 Smart Buyer:** publish a sale on user1 to enable human QA.
+**Patrick actions before S920:**
+- ✅ Push S918 Resend transactional rail (10 files) — if not done
+- **#335:** Reactivate outreach@finda.sale at admin.google.com → Directory → Users → Reactivate
+- **#332 Shopify:** Connect a real custom-app store for QA (code ready)
 
 ## Recent Sessions
 
 
+
+### S919 — QA/WRAP (2026-06-08). SmartBuyerWidget BQ closed. Apify deferred on roadmap. BQ: 7→5.
+
+**Completed:**
+- #230 SmartBuyerWidget: Logged in as Alice (user1@example.com, Seedy2025!). Sale S875 end date was Jun 7 (expired) — extended to Jun 15 via edit-sale page. Dashboard confirmed all 4 BASE_WIDGETS rendering: SalePulse (4/100), Who's Coming (empty state — correct for 0 watchers), High-Value Items (empty), Efficiency Coach (60% sell-through). ss_9730k70bl. The "Who's Coming" empty state card IS the SmartBuyerWidget rendering correctly — confirmed. S793 Chrome QA (Leo Thomas, SCOUT rank) remains valid. #230 RESOLVED, removed from BQ.
+- #380 FB Marketplace: Patrick confirmed Apify as DEFERRED (not DROP). Roadmap row updated via Python/bash: parked → DEFERRED with Apify (~$30-50/mo, pre-built scrapers with residential IP + session). BQ entry (CF Worker dead end) removed.
+- #335 cleanup: DB query confirmed Jane Thrift (jthrift@example.com / Jane Thrift) does not exist in Railway DB — fictional account from canary testing. Removed "Jane Thrift re-send" from #335 BQ entry. #335 remains open (Patrick must reactivate outreach@finda.sale at admin.google.com).
+
+**Files Changed:**
+- `claude_docs/strategy/roadmap.md` — row #380 updated (Apify deferred)
+- `claude_docs/STATE.md` — BQ 7→5, S919 added
+- `claude_docs/patrick-dashboard.md` — BQ updated
+
+**BQ: 7→5.** Below ceiling — DEV mode available next session.
+
+---
 
 ### S918 — DEV (2026-06-07). Resend transactional email rail. BQ: 7 (unchanged).
 
@@ -404,25 +417,6 @@ The new GMAIL_REFRESH_TOKEN Patrick minted with `https://mail.google.com/` scope
 **Blocked:**
 - Mailbox ops (trash bounce backlog + forwarding): blocked by Gmail OAuth.
 - Jane Thrift payout re-send: blocked by Gmail OAuth.
-
-**BQ: 7 (unchanged).**
-
----
-
-### S914 — INFRA (2026-06-07). Email audit follow-through; bounce pipeline coded; mailbox ops blocked by OAuth scope.
-
-**Root cause identified (DEFINITIVE):** `GMAIL_REFRESH_TOKEN` in Railway was minted with only `gmail.send` scope. The `scripts/outreach-mailbox-ops.js` trash + forwarding operations require `gmail.modify` + `gmail.settings.basic` (or `https://mail.google.com/`). Every "Request had insufficient authentication scopes" 403 this session traced to this single root cause. Cannot be fixed autonomously — Patrick must re-mint with the broader scope.
-
-**Completed:**
-- `bounceSuppressService.ts` (229 lines) — code complete, 0 TS errors. Searches for mailer-daemon bounces, extracts bounced addresses, upserts to EmailSuppression (suppressionReason: BOUNCED, bounceHard: true), trashes processed messages. Registered as daily 06:00 UTC cron in index.ts. **NOT on GitHub — push required.**
-- `packages/backend/src/index.ts` — updated with bounceSuppressService import, cron registration, and /api/health route mount. **NOT on GitHub — push required.**
-- Railway CLI v5.4.2 confirmed working in VM with project token (railway run --service backend correctly injects Railway env vars).
-- `health.ts` + `healthController.ts` — on GitHub (S913 push), Railway deployment QUEUED (may be stuck — cache-bust Dockerfile if still QUEUED at S915 start).
-
-**Blocked:**
-- Mailbox ops (trash bounce backlog + enable forwarding): blocked by Gmail scope. Patrick must re-mint token with `https://mail.google.com/` scope and update GMAIL_REFRESH_TOKEN on Railway.
-- bounceSuppressService.ts runtime cron: will throw 403 at 06:00 UTC until token re-minted.
-- PR #18 (https://github.com/deseee/findasale/pull/18): Railway auto-created, open. Patrick must review.
 
 **BQ: 7 (unchanged).**
 

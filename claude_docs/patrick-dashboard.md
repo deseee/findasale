@@ -1,28 +1,19 @@
-# Patrick's Dashboard — S918 Wrap (2026-06-07)
+# Patrick's Dashboard — FindA.Sale
+
+**Last Updated: S919 (2026-06-08)**
+**Session Type: DEV available (BQ=5, below 8-item ceiling)**
 
 ---
 
-## ✅ RESEND TRANSACTIONAL EMAIL RAIL BUILT
+## 🟢 CURRENT STATUS
 
-Critical transactional email has been separated from Gmail onto a dedicated Resend rail. A Gmail suspension can no longer silently kill password resets, Stripe receipts, payout confirmations, invoices, or workspace invites.
-
-**What moved to Resend:**
-- Password resets + email verification
-- Stripe receipts, payout confirmations, payment failure notices
-- POS receipts + invoices
-- In-person (terminal) receipts
-- Workspace invites
-- Direct message notifications
-- Consignor notifications (item sold, payout received, item expiring)
-- Subscription lapse warnings
-
-**What stays on Gmail** (bulk/marketing): sale alerts, weekly digests, win-back flows, outreach emails — everything that's not time-sensitive transactional.
+Email infrastructure is solid. Resend transactional rail is code-complete (push needed). Outreach back on. BQ dropped to 5 items — DEV mode fully available.
 
 ---
 
-## 🔴 PUSH REQUIRED — 10 files
+## 🔴 PUSH REQUIRED — S918 Resend transactional rail (10 files)
 
-Run these commands from PowerShell in `C:\Users\desee\ClaudeProjects\FindaSale`:
+If you haven't pushed this yet, run from PowerShell in `C:\Users\desee\ClaudeProjects\FindaSale`:
 
 ```powershell
 git add packages/backend/src/lib/transactionalEmailService.ts
@@ -39,60 +30,61 @@ git commit -m "feat: dedicated Resend rail for transactional email (auth, receip
 .\push.ps1
 ```
 
-Then the wrap docs:
+**Then the S919 wrap docs:**
 
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S918 session wrap — Resend transactional rail"
+git add claude_docs/strategy/roadmap.md
+git commit -m "docs: S919 wrap — BQ 7→5, #230 resolved, #380 Apify deferred"
 .\push.ps1
 ```
 
 ---
 
-## ✅ NO RESEND SETUP REQUIRED
+## ✅ WHAT GOT DONE THIS SESSION (S919)
 
-`send.finda.sale` is already verified in Resend (it's the domain your quota alert emails use). `RESEND_API_KEY` is already in Railway. The transactional rail will work as soon as you push.
+- **#230 SmartBuyerWidget** — confirmed working. Widget renders on organizer dashboard with an active sale. Empty state ("No shoppers watching yet") is correct behavior. Removed from BQ.
+- **#380 FB Marketplace** — Apify path added to roadmap as DEFERRED. CF Worker approach confirmed dead end. Roadmap updated.
+- **#335 Jane Thrift** — confirmed fictional account, doesn't exist in DB. Reference removed from BQ entry.
 
 ---
 
 ## 📬 OUTREACH STATUS
 
 - 37 PENDING records in DirectoryClaimEmail
-- Last send: June 5 (2 days ago)
 - OUTREACH_ENABLED=true on Railway
-- bounceSuppressService: running correctly, 0 bounced addresses in inbox (inbox was cleared in S917 — service will start accumulating suppressions as the new wave bounces back)
+- bounceSuppressService: running correctly
+- Transactional email: on Resend rail (push required to go live)
 
 ---
 
-## PENDING PATRICK DECISIONS / ACTIONS
+## PENDING PATRICK ACTIONS
 
 | Item | Status | What's needed |
 |------|--------|---------------|
-| Jane Thrift payout re-send | ⏳ Ready | Gmail API confirmed working. Re-send when ready. |
-| #365 FB Marketplace OAuth | ⏳ Awaiting decision | DROP recommended (S899). Graph API OAuth = long-term path. |
-| #332 Shopify | ⏳ Code ready | Needs a real custom-app store to QA. |
-| #230 Smart Buyer Widget | ⏳ Blocked | Publish a sale on user1 to enable human QA. |
+| S918 Resend rail push | ⏳ Push needed | 10 files — see push block above |
+| #335 Reactivate outreach@finda.sale | ⏳ Required | admin.google.com → Directory → Users → Reactivate |
+| #332 Shopify | ⏳ Code ready | Connect a real custom-app store to QA end-to-end |
 
 ---
 
-## BLOCKED QUEUE (7 items — below QA ceiling)
+## BLOCKED QUEUE (5 items — DEV MODE available)
 
-| Feature | Status |
-|---------|--------|
-| S749 Shopper payout crash | Blocked: Patrick payment method needed |
-| #332 Shopify | Pending real store QA |
-| #365 FB Marketplace | Awaiting Patrick decision |
-| Map clustering interaction | UNVERIFIED |
-| Sale alert email (shopper) | UNVERIFIED — needs active sale |
-| Admin organizer view | UNVERIFIED |
-| Consignor dashboard | Pending Chrome QA |
+| Feature | Priority | Status |
+|---------|----------|--------|
+| #332 Shopify Cross-Listing | P0 | Code fixed (S890), needs real store QA |
+| #335 Email suspension + outreach resume | P1 | Patrick: reactivate Gmail account |
+| 462 WARM leads with no outreach record | P2 | Backfill after #335 resolved |
+| WARM tier website enrichment (3.5%) | P3 | Needs supplemental source |
+| GarageSaleFinder 80.7% un-geocoded | P3 | GSF-specific geocode strategy needed |
 
 ---
 
 ## PROJECT HEALTH
 
 - **Backend TS:** 0 errors (verified S918)
-- **Gmail SPOF:** RESOLVED (Resend transactional rail live)
-- **Bounce suppression:** Service running, 0 bounces processed (expected — first wave hasn't bounced back yet)
-- **Session type:** DEV (BQ=7, below 8-item QA ceiling)
+- **Gmail SPOF:** RESOLVED (Resend transactional rail ready to push)
+- **Bounce suppression:** Running correctly
+- **BQ:** 5 items (DEV mode — well below 8-item ceiling)
+- **Next priority:** DEV — dispatch next roadmap item

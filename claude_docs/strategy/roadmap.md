@@ -544,7 +544,7 @@ Features fully shipped and verified by both Claude and Patrick. Compact format �
 | 275 | Hunt Pass Cosmetic Add-ons | SHO | PAID_ADDON | ✅ verified S762 |
 | 292 | Post-Sale eBay Push Panel | ORG | SIMPLE | ✅ verified S762 |
 | 378 | Help Library Site Surface (/guides) | BOTH | NA | ✅ verified S742 + Patrick S769 ✅ S883 |
-| 380 | Facebook Marketplace GraphQL Scraper | SYS | NA | ⏸ PARKED S[current] — GitHub Actions Azure IPs silently blocked by Facebook. DB query confirmed 0 listings ever ingested. Cron disabled; workflow_dispatch preserved. Revisit if residential proxy ($10–15/mo) justified by scale. |
+| 380 | Facebook Marketplace via Apify | SYS | NA | ⏸ DEFERRED — CF Worker dead end confirmed S899 (datacenter IPs soft-blocked, returns 0 listings every metro). Apify has pre-built FB Marketplace scrapers with residential IP rotation + session support (~$30-50/mo). Revisit when scale justifies cost. Cron disabled; workflow_dispatch preserved. Meta Content Library API (#383) remains long-term path. |
 | 407 | Flip Tracker ROI Dashboard | ORG | PRO | ✅ Chrome-verified S718 |
 | 418 | Phase 2 Scrapers — Remaining 18 States | SYS | NA | ✅ 18-state audit complete per Patrick S769 |
 | 436 | GEO City×Category Landing Pages (ISR) | PUB | FREE | ✅ verified S762 |
