@@ -105,6 +105,13 @@ export const validateCsrfToken = (req: Request, res: Response, next: NextFunctio
     return next();
   }
 
+  // Public outreach tracking + RFC 8058 unsubscribe — anonymous callers with no browser session.
+  // page-view: fire-and-forget tracker from organizer profile page (outreach prospects not logged in).
+  // unsubscribe POST: RFC 8058 one-click from Gmail/Yahoo mail servers (no cookies, no CSRF context).
+  if (req.path.includes('/outreach/page-view') || req.path.includes('/outreach/unsubscribe')) {
+    return next();
+  }
+
   // JWT Bearer auth is inherently CSRF-safe (attackers cannot set custom headers cross-origin)
   // Skip double-submit cookie check when a valid Bearer token is present
   const authHeader = req.headers['authorization'];
