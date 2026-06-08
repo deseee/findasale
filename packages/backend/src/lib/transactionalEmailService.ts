@@ -10,14 +10,14 @@ import { Resend } from 'resend';
  * Gmail/emailService remains the rail for bulk and marketing emails
  * (sale alerts, newsletters, weekly digests, win-back flows, etc.).
  *
- * FROM domain: finda.sale must be verified in the Resend dashboard.
- * Default sender: hello@finda.sale
+ * FROM domain: send.finda.sale (already verified — used by emailService quota alerts).
+ * Default sender: hello@send.finda.sale
  *
  * Environment variable required in Railway:
  *   RESEND_API_KEY=<from Resend dashboard → API Keys>
  */
 
-const FROM_DEFAULT = 'FindA.Sale <hello@finda.sale>';
+const FROM_DEFAULT = 'FindA.Sale <hello@send.finda.sale>';
 
 export const transactionalEmailService = {
   emails: {
