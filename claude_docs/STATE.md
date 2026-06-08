@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S916 — OPS/INVESTIGATION (2026-06-07). Sentry bounce root cause identified and fixed. Gmail API confirmed working. outreachEmailsCron.ts ARCHIVED fix pending push.**
+**S917 — OPS (2026-06-07). Gmail inbox triage complete. All 1,415 mailer-daemon bounce notifications cleared from outreach@finda.sale inbox (0 mailer-daemon messages remain). OUTREACH_ENABLED=true confirmed set on Railway. outreachEmailsCron.ts ARCHIVED exclusion fix confirmed live (commit ed8aa97d). Auto-forwarding quota to deseee@gmail.com unblocked. BQ: 7 (unchanged).**
 
 **S916 findings:** Patrick ordered investigation of a Sentry ingest address appearing in email bounces. Chrome MCP audit of outreach@finda.sale Gmail confirmed: (1) NO Sentry forwarding filter exists in Gmail settings — Filters tab is completely empty; (2) Forwarding tab shows only deseee@gmail.com (the S915 forwarding we set up); (3) Gmail API sends are working — Sent folder has 8,919 messages including 2 successful sends tonight (7:31 PM). The "mailer-daemon" bounces in the outreach inbox are Gmail's AUTO-FORWARDING service failing — the inbox has 1,415 messages being forwarded to deseee@gmail.com, which saturates Gmail's daily forwarding quota. This is a noise issue, not an API delivery issue. ROOT CAUSE of the Sentry bounce: the outreach cron had a corrupted DirectoryClaimEmail record — "Kaff's Bake Shop" (id=cmp3nh7yy0041kbtjgb8aci4v) stored `u002F802d7a4fd3f743ec907da8badf47bec3@o1378064.ingest.sentry.io` as its contact emailAddress. The cron sent 3 outreach emails to this Sentry ingest address (May 27/May 30/Jun 4). Sentry received the unexpected emails and sent bounce notifications back. FIX: ARCHIVED that record in Railway DB — confirmed via psycopg2 (`status='ARCHIVED'`). NEXT: push outreachEmailsCron.ts ARCHIVED exclusion fix (coded prior session), then set OUTREACH_ENABLED=true. BQ: 7 (unchanged).
 
@@ -289,38 +289,47 @@ _(S862
 
 ## Next Session
 
-**S917 STATUS ENTERING:**
-- ✅ Gmail API sends working (Sent folder: 8,919 messages, 2 successful tonight at 7:31 PM)
-- ✅ Sentry bounce root cause found + fixed (Kaff's Bake Shop record ARCHIVED in DB)
-- ✅ No Sentry forwarding filter ever existed in Gmail
-- ⏳ outreachEmailsCron.ts ARCHIVED fix coded — needs push before OUTREACH_ENABLED=true
-- ⚠️ outreach@finda.sale inbox has 1,415 messages overwhelming the auto-forward quota
+**S918 STATUS ENTERING:**
+- ✅ Gmail inbox cleared — 1,415 mailer-daemon bounce messages deleted, 6 non-bounce messages remain
+- ✅ OUTREACH_ENABLED=true confirmed set on Railway
+- ✅ outreachEmailsCron.ts ARCHIVED exclusion fix live (commit ed8aa97d)
+- ✅ Auto-forwarding quota to deseee@gmail.com unblocked
+- ⚠️ Bounce auto-suppression service (bounceSuppressService.ts) coded S914 — needs Patrick to confirm it's deployed and working since OUTREACH_ENABLED=true is now live
+- ⚠️ Single Gmail account SPOF for all email still unresolved (S913 P2 finding)
 
-**Patrick action before S917:**
-Push the outreachEmailsCron.ts fix (coded last session):
-```
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/jobs/outreachEmailsCron.ts
-git commit -m "fix(outreach): exclude ARCHIVED records from cron candidate query"
-.\push.ps1
-```
-Wait ~5 min for Railway deploy, then set `OUTREACH_ENABLED=true` in Railway → backend → Variables.
+**S918 recommended session type: DEV (BQ=7, below QA ceiling)**
 
-**S917 Autonomous agenda — Gmail Inbox Triage:**
-1. Open Chrome MCP → outreach@finda.sale (account u/6)
-2. Delete/archive all mailer-daemon bounce messages (search: `from:mailer-daemon`, select all → delete — these are forwarding failures, not useful)
-3. Identify and clear any other automated noise (noreply, newsletter, subscription confirmations)
-4. Leave only real human replies or organizer responses in inbox
-5. Verify forwarding is working after volume drops below Gmail's daily forwarding quota
+**S918 Autonomous agenda:**
+1. Verify bounceSuppressService cron is running clean now that outreach is live — check Railway logs for 06:00 UTC run
+2. `Skill('findasale-dev')` → S913 P2 email rail separation: build a Resend/SES transactional rail so Gmail suspension can't kill payouts/receipts/password resets
+3. `Skill('findasale-dev')` → S913 P2 bounce auto-suppression gaps: review bounceSuppressService.ts for any gaps before first outreach wave lands
+4. Monitor first outreach send window — check Railway logs for outreachEmailsCron run and DirectoryClaimEmail send counts
 
 **Decisions still open (Patrick):**
-- **#335 outreach resume:** keep OUTREACH_ENABLED=false until ~Jun 22 (warming). Jane Thrift payout re-send can go now (Gmail API is working).
-- **FB Marketplace:** DROP recommended; Graph API OAuth (#365) = long-term path.
-- **#332 Shopify:** code fixed; needs a real custom-app store for QA.
-- **#230 Smart Buyer:** publish a sale on user1 to enable QA.
+- **Jane Thrift payout re-send:** Gmail API confirmed working S916. Can re-send now.
+- **FB Marketplace:** DROP recommended (S899); Graph API OAuth (#365) = long-term path. Awaiting Patrick decision.
+- **#332 Shopify:** code fixed (S890); needs a real custom-app store for live QA.
+- **#230 Smart Buyer:** publish a sale on user1 to enable human QA.
 
 ## Recent Sessions
 
+
+### S917 — OPS (2026-06-07). Gmail inbox triage complete. OUTREACH_ENABLED=true confirmed. BQ: 7 (unchanged).
+
+**Completed:**
+- Cleared all 1,415 mailer-daemon sending-limit bounce notifications from outreach@finda.sale inbox via repeated Chrome MCP select-all + delete loops (29 batches of 50). Final Chrome search `from:mailer-daemon` returned "No messages matched your search."
+- 6 non-bounce messages remain in inbox (legitimate emails).
+- OUTREACH_ENABLED=true confirmed set on Railway by Patrick.
+- outreachEmailsCron.ts ARCHIVED exclusion fix confirmed live (commit ed8aa97d, deployed S916).
+- Auto-forwarding quota to deseee@gmail.com unblocked — 1,415 messages no longer saturating the daily limit.
+
+**Root cause of inbox flood:** When outreach@finda.sale hit Gmail's daily sending limit in early June 2026, Gmail generated a "You have reached a limit for sending mail" bounce notification for each failed send attempt. All 1,415 landed in the inbox and were queuing for auto-forwarding to deseee@gmail.com, saturating the daily forwarding quota. Now cleared.
+
+**No code changes this session. No push block needed.**
+
+**BQ: 7 (unchanged).**
+
+---
 
 ### S916 — OPS/INVESTIGATION (2026-06-07). Sentry bounce root cause found + fixed. Gmail confirmed working.
 

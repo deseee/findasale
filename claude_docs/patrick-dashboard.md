@@ -1,54 +1,65 @@
-# Patrick's Dashboard — S916 Wrap (2026-06-07)
+# Patrick's Dashboard — S917 Wrap (2026-06-07)
 
 ---
 
-## ✅ SENTRY MYSTERY SOLVED
+## ✅ GMAIL INBOX CLEARED
 
-There was never a Sentry forwarding filter in Gmail. What actually happened:
+All 1,415 mailer-daemon bounce notifications have been deleted from outreach@finda.sale. The inbox now has 6 messages (all real, non-bounce). A search for `from:mailer-daemon` returns "No messages matched your search."
 
-One organizer record ("Kaff's Bake Shop") had a Sentry ingest address as its contact email in the database. The outreach cron sent 3 emails to it in May/June. Sentry bounced them back. **That record is now ARCHIVED in the DB — it won't be targeted again.**
-
-**Gmail API sends are fully working.** The Sent folder has 8,919 messages and 2 successful sends from tonight.
-
-The mailer-daemon bounces flooding the outreach inbox are from Gmail's *auto-forwarding service* (the forwarding we set up to deseee@gmail.com) hitting its own daily rate limit because the inbox has 1,415 messages queued. This is inbox noise — not an email delivery problem. We'll clean it up next session.
+The auto-forwarding quota to deseee@gmail.com is now unblocked — you should stop seeing the flood of mailer-daemon messages there.
 
 ---
 
-## 🔴 PUSH THIS BEFORE FLIPPING OUTREACH ON
+## ✅ OUTREACH IS LIVE
 
-The ARCHIVED exclusion fix is coded but not pushed:
-
-```
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/jobs/outreachEmailsCron.ts
-git commit -m "fix(outreach): exclude ARCHIVED records from cron candidate query"
-.\push.ps1
-```
-
-Wait ~5 min for Railway deploy, **then** set `OUTREACH_ENABLED=true` in Railway → backend service → Variables.
+- **OUTREACH_ENABLED=true** is set on Railway (you confirmed this)
+- **ARCHIVED exclusion fix** is deployed (commit ed8aa97d) — the Sentry ingest address will never be targeted again
+- **outreachEmailsCron** will resume sending on its next scheduled window
 
 ---
 
-## ⏳ NEXT SESSION — Gmail Inbox Triage
+## 🔴 DECISIONS STILL NEEDED
 
-Patrick asked Claude to triage the outreach@finda.sale Gmail inbox and clear all unnecessary emails. That's the S917 agenda:
-- Delete all mailer-daemon bounce messages (forwarding failures — worthless noise)
-- Clear automated newsletters/subscriptions
-- Leave only real organizer replies
-- Verify forwarding starts working once volume drops
-
----
-
-## ⚠️ NOTED FINDINGS (still open)
-
-- **[P2]** All email rides one Gmail account — suspension or token failure kills everything. Consider Resend/SES rail for transactional email.
-- **[P3]** `OUTREACH_ENABLED=false` also silently pauses opt-in "sale ending soon" emails. Consider separate `BULK_EMAIL_ENABLED` flag.
+| Decision | Status |
+|---|---|
+| **Jane Thrift payout re-send** | Gmail API confirmed working. Re-send anytime. |
+| **FB Marketplace** | DROP recommended. Graph API OAuth (#365) is the right long-term path. Need your decision. |
+| **#332 Shopify QA** | Code is fixed. Need a real custom-app Shopify store to QA the push + sold-sync. |
+| **#230 Smart Buyer Widget** | Publish a sale on user1 to enable human QA. |
 
 ---
 
-## Decisions still open
+## ⚠️ OPEN TECH DEBT (from S913 email audit)
 
-- **#335 outreach resume:** push the fix → set `OUTREACH_ENABLED=true`. Jane Thrift payout re-send can go anytime (Gmail API is working).
-- **FB Marketplace:** DROP recommended; Graph API OAuth (#365) = long-term path.
-- **#332 Shopify:** code fixed; needs a real custom-app store for QA.
-- **#230 Smart Buyer:** publish a sale on user1 to enable QA.
+These aren't emergencies but should be addressed now that outreach is live:
+
+- **[P2] No bounce auto-suppression** — bounced addresses from the June incident aren't automatically added to EmailSuppression. The bounceSuppressService cron was coded (S914) but needs verification it's running clean now that OUTREACH_ENABLED=true is live.
+- **[P2] Single Gmail account = single point of failure** — if outreach@finda.sale gets suspended again, payouts, password resets, and receipts all go dark too. We should route transactional mail through Resend or SES separately.
+- **[P3] OUTREACH_ENABLED also pauses opt-in "sale ending soon" emails** — shoppers who opted in don't get notified. Low priority but worth separating eventually.
+
+---
+
+## Blocked Queue — 7 items (below QA ceiling)
+
+All 7 BQ items are blocked on external dependencies, not code:
+
+| # | Item | Blocked On |
+|---|---|---|
+| #332 | Shopify QA | Patrick: connect real custom-app store |
+| #230 | Smart Buyer Widget QA | Patrick: publish sale on user1 |
+| #335 | Consignor Payout + Outreach Resume | OUTREACH_ENABLED=true ✅ done. Jane Thrift re-send pending Patrick. |
+| 462 WARM leads | No DirectoryClaimEmail rows backfilled | Do during outreach resume wave |
+| WARM enrichment | 3.5% website coverage | Supplemental data source needed |
+| GSF geocoding | 80.7% un-geocoded | GSF-specific strategy needed |
+| FB Marketplace | 0 records via CF Worker | Patrick decision: DROP or pursue |
+
+---
+
+## Next Session S918 — DEV recommended
+
+BQ is at 7 (below 8 ceiling), so DEV mode is available.
+
+Recommended work:
+1. Verify bounceSuppressService cron is running clean (check Railway logs for 06:00 UTC run)
+2. Build Resend/SES transactional email rail (S913 P2 — protects payouts/receipts from Gmail suspension)
+3. Monitor first outreach send window
