@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S921 — QA (2026-06-08). Applied #198 Reviews PCV to roadmap. DEV: #196 Buying Pools fix (BuyingPoolCard.tsx threshold > 100), #201 Favorites 3 bugs fixed (favoriteController + wishlist.tsx + new collections.tsx), SEC-001 SQL injection fix (admin.ts Prisma.sql), SEC-002 multer scoped instances (items.ts). QA: #210 Streaks Chrome-verified (Streak 6, XP 2025, Hunt Pass 2x XP). All 4 code fixes pending push. BQ: 9 (unchanged).**
+
 **S920 — QA (2026-06-08). Shopper flow QA: #198 Reviews ✅ Chrome-verified. #196 Buying Pools root cause found (shouldShow threshold 100x too high). #201 Favorites 3 P2 bugs found. #335 BQ corrected (outreach NOT suspended). DB cleanup done. BQ: 7→9.**
 
 **S919 — QA/WRAP (2026-06-08). #230 SmartBuyerWidget confirmed rendering + RESOLVED from BQ. #380 Apify deferred (roadmap updated). #335 Jane Thrift removed (fictional account). BQ: 7→5.**
@@ -182,10 +184,10 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
 
-| **[SEC-001]** Admin demand-signals SQL injection (`admin.ts` `/demand-signals?city=`) | **P1** — `$queryRawUnsafe` with manual `replace(/'/g,"''")` string interpolation. Admin-only route (requireAdmin gate) + modern PG mitigates immediate risk, but parameterization required. Fix: convert to `Prisma.sql` tagged template. | `Skill('findasale-dev')` — single-file fix in `packages/backend/src/routes/admin.ts` | S919 |
-| **[SEC-002]** Items upload multer — no MIME filter or size limit | **P1** — `multer({ storage: multer.memoryStorage() })` (items.ts:86) used by `POST /api/items` (images) + two CSV import routes. No fileFilter → arbitrary file types. No fileSize limit → memory DoS possible (5 files × unlimited). | `Skill('findasale-dev')` — add fileFilter + `limits.fileSize` to items.ts multer, separate csvUpload instance | S919 |
-| **#196 Buying Pools — shouldShow threshold 100× too high** | **P1** — `BuyingPoolCard.tsx`: `const shouldShow = itemPrice > 10000 && itemStatus === 'AVAILABLE'`. Prices stored in dollars (e.g. $285, $3500) — neither ever reaches $10,000. Comment says "$100" but threshold is `10000`. No Buying Pool card ever renders for any real item. Fix: change `> 10000` to `> 100` (1-line). | `Skill('findasale-dev')` — 1-line change in `packages/frontend/components/BuyingPoolCard.tsx` | S920 |
-| **#201 Favorites — 3 P2 bugs** | **P2** — (1) Items tab shows "Items (2)" but only 1 item-level Favorite exists (overcounting); (2) Sale-level Favorites not shown on /shopper/wishlist page; (3) /shopper/collections → 404. | `Skill('findasale-dev')` — fix wishlist page + collections route | S920 |
+| **[SEC-001]** Admin demand-signals SQL injection (`admin.ts` `/demand-signals?city=`) | **P1** — `$queryRawUnsafe` with manual `replace(/'/g,"''")` string interpolation. Admin-only route (requireAdmin gate) + modern PG mitigates immediate risk, but parameterization required. Fix: convert to `Prisma.sql` tagged template. | Fix CODED S921: all `$queryRawUnsafe` calls replaced with `Prisma.sql` tagged templates. TS 0 errors. Push admin.ts, then Chrome-verify `/admin/demand-signals`. | S919 |
+| **[SEC-002]** Items upload multer — no MIME filter or size limit | **P1** — `multer({ storage: multer.memoryStorage() })` (items.ts:86) used by `POST /api/items` (images) + two CSV import routes. No fileFilter → arbitrary file types. No fileSize limit → memory DoS possible (5 files × unlimited). | Fix CODED S921: two scoped multer instances — `uploadImages` (JPEG/PNG/WebP/GIF, 25MB) + `uploadCsv` (CSV/XLS, 10MB). TS 0 errors. Push items.ts. | S919 |
+| **#196 Buying Pools — shouldShow threshold 100× too high** | **P1** — `BuyingPoolCard.tsx`: `const shouldShow = itemPrice > 10000 && itemStatus === 'AVAILABLE'`. Prices stored in dollars (e.g. $285, $3500) — neither ever reaches $10,000. Comment says "$100" but threshold is `10000`. No Buying Pool card ever renders for any real item. Fix: change `> 10000` to `> 100` (1-line). | Fix CODED S921: `> 10000` changed to `> 100`. TS 0 errors. Push, then Chrome-verify card appears on items > $100. | S920 |
+| **#201 Favorites — 3 P2 bugs** | **P2** — (1) Items tab shows "Items (2)" but only 1 item-level Favorite exists (overcounting); (2) Sale-level Favorites not shown on /shopper/wishlist page; (3) /shopper/collections → 404. | Fix CODED S921: items tab count fixed, sale favorites added to wishlist, collections.tsx NEW 302 redirect. TS 0 errors all 3. Push, then Chrome-verify. | S920 |
 
 ---
 
@@ -193,6 +195,7 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| â | **#210 Streaks â shopper dashboard banner** | â CHROME VERIFIED S921 â Navigated /shopper/dashboard as Leo Thomas (user5). Streak banner visible below quick-action buttons: Streak 6, XP 2025, Hunt Pass 2x XP. ss_021185in1, ss_4660qufq3, ss_1965zcca0 | S921 |
 | — | **#198 Reviews — shopper submit** | ✅ Navigated https://finda.sale/sales/cmpt2oq6q00138cehpgqx3huk as user5 (Leo Thomas). Clicked 5-star button (Submit enabled, orange). Clicked Submit Review. Review appeared: "Leo Thomas — Jun 8, 2026 — ★★★★★ — Great selection of unique finds! Really enjoyed browsing the antiques." Form reset to 0/500. ss_5467x997f, ss_9288c84e3 | S920 |
 | — | CTA1 — Logged-out sale page "Remind Me by Email" absent | Pre-compression S898 Chrome verify. Navigated sale page as logged-out guest — "Remind Me by Email" absent. Screenshot ID not captured in post-compression summary. Records: verify screenshot in transcript before applying to roadmap. Evidence path: .claude/projects/.../8ebb1c20-2219-4e45-95a5-58c139e4bb8e.jsonl | S898 |
 | — | PerformanceDashboard dark mode (D-002 verify) | ✅ Chrome-verified S898 — /organizer/performance as Alice (user1) in dark mode. All metrics readable. ss_1751wzkxe — **Applied to roadmap S899 (row #168 Status)** | S898 |
@@ -302,30 +305,53 @@ _(S862
 
 ## Next Session
 
-**S921 STATUS ENTERING:**
-- ✅ #198 Reviews Chrome-verified S920 — PCV staged
-- ✅ #335 corrected — outreach@finda.sale NOT suspended; OUTREACH_ENABLED=false intentional hold (P1→P2)
-- ⚠️ BQ=9 — QA-ONLY ceiling (≥8). QA mode required S921.
-- ⚠️ #196 Buying Pools: 1-line fix `BuyingPoolCard.tsx` shouldShow `> 10000` → `> 100`
-- ⚠️ #201 Favorites: 3 P2 bugs (items tab overcounting, saved sales missing, /shopper/collections 404)
-- ⚠️ SEC-001 + SEC-002: security P1 fixes pending (findasale-dev, small targeted changes)
-- ⚠️ S918 Resend rail: confirm Patrick pushed (10 files — check git log)
+**S922 STATUS ENTERING:**
+- â #198 Reviews PCV applied to roadmap (S921)
+- â #210 Streaks Chrome-verified S921 â PCV staged, cross-session rule applies
+- â S918 Resend rail confirmed pushed (commit ccd09a83)
+- â ï¸ BQ=9 â QA-ONLY ceiling (â¥8). QA mode required S922.
+- â ï¸ S921 code: 6 files coded, pending push
 
-**S921 session type: QA (BQ=9, at ceiling)**
+**S922 session type: QA (BQ=9, at ceiling)**
 
-**S921 autonomous agenda:**
-1. Apply #198 Reviews PCV → roadmap Chrome column (cross-session rule)
-2. Dispatch findasale-dev for #196 (1-line fix) + #201 Favorites bugs
-3. Chrome QA #210 Streaks (verified pre-compaction but no screenshot IDs staged — re-verify)
-4. SEC-001 + SEC-002 security fixes via findasale-dev
+**S922 autonomous agenda:**
+1. Apply #210 Streaks PCV â roadmap Chrome column (cross-session rule)
+2. Verify Patrick pushed S921 code block (`git log --oneline -3`)
+3. Chrome QA #196 Buying Pool card (item > $100 should show the card)
+4. Chrome QA #201 Favorites (wishlist shows Saved Sales section, /shopper/collections redirects)
+5. Chrome QA SEC-001 + SEC-002 (admin demand-signals, item upload MIME filter)
 
-**Patrick actions before S921:**
-- None required — verify S918 push happened (`git log --oneline -3`)
+**Patrick actions before S922:**
+- **Push S921 code block** (see push block below â 6 files + roadmap.md)
 - **#332 Shopify:** Connect a real custom-app store for QA (code ready)
-
 ## Recent Sessions
 
 
+
+### S921 â 2026-06-08 | QA MODE
+
+**Session type:** QA â BQ=9 at ceiling; coded fixes for #196/#201/SEC-001/SEC-002 + #210 Streaks Chrome QA
+
+**Work completed:**
+- **#198 Reviews PCV â roadmap** â Row #198 Chrome QA column updated â S920 with full evidence.
+- **#196 Buying Pools fix CODED** â BuyingPoolCard.tsx line 48: `> 10000` â `> 100`. TS 0 errors.
+- **#201 Favorites 3 bugs CODED** â (1) favoriteController.ts getUserFavorites: added sale-level favorites query, returns saleFavorites + saleTotal; (2) wishlist.tsx: items tab count = savedCount only + new Saved Sales section; (3) pages/shopper/collections.tsx NEW: 302 redirect to /shopper/wishlist. TS 0 errors all 3.
+- **SEC-001 CODED** â admin.ts: all $queryRawUnsafe replaced with Prisma.sql tagged templates. TS 0 errors.
+- **SEC-002 CODED** â items.ts: two scoped multer instances â uploadImages (JPEG/PNG/WebP/GIF, 25MB) + uploadCsv (CSV/XLS, 10MB). TS 0 errors.
+- **#210 Streaks â Chrome-verified** â /shopper/dashboard as Leo Thomas (user5). Streak banner: Streak 6, XP 2025, Hunt Pass 2x XP. ss_021185in1, ss_4660qufq3, ss_1965zcca0.
+
+**Files modified:**
+- `packages/frontend/components/BuyingPoolCard.tsx` â threshold 10000â100
+- `packages/backend/src/controllers/favoriteController.ts` â sale favorites in getUserFavorites
+- `packages/frontend/pages/shopper/wishlist.tsx` â items count fix + Saved Sales section
+- `packages/frontend/pages/shopper/collections.tsx` â NEW 302 redirect
+- `packages/backend/src/routes/admin.ts` â SEC-001 Prisma.sql
+- `packages/backend/src/routes/items.ts` â SEC-002 scoped multer
+- `claude_docs/strategy/roadmap.md` â row #198 Chrome QA â S920 applied
+
+**BQ: 9 (unchanged)** â #196/#201/SEC-001/SEC-002 coded but pending push+Chrome-verify. All 4 remain in BQ.
+
+---
 
 ### S920 — 2026-06-08 | QA MODE
 

@@ -83,7 +83,32 @@ const CURATED_TAGS = [
 ] as const;
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const ALLOWED_CSV_TYPES = ['text/csv', 'application/vnd.ms-excel', 'application/csv', 'text/plain']
+
+const uploadImages = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max per image
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error(`File type ${file.mimetype} not allowed. Accepted: ${ALLOWED_IMAGE_TYPES.join(', ')}`))
+    }
+  },
+})
+
+const uploadCsv = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max for CSV
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_CSV_TYPES.includes(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error(`File type ${file.mimetype} not allowed. Accepted: ${ALLOWED_CSV_TYPES.join(', ')}`))
+    }
+  },
+})
 
 // #111: Apply item endpoint rate limiter to all GET operations
 router.use(itemEndpointLimiter);
@@ -780,7 +805,7 @@ router.get('/:id/label', authenticate, getSingleItemLabel);
 
 router.get('/:id', optionalAuthenticate, getItemById);
 router.get('/', getItemsBySaleId);
-router.post('/', authenticate, upload.array('images', 5), createItem);
+router.post('/', authenticate, uploadImages.array('images', 5), createItem);
 router.put('/:id', authenticate, updateItem);
 // Item Description Authoring Contract (2026-05-12): voice + auto append with merge
 router.post('/:id/description/append', authenticate, appendDescription);
@@ -798,12 +823,12 @@ router.patch('/:id/photos/reorder', authenticate, reorderItemPhotos);
 
 // CSV import endpoint (legacy — kept for backward compat)
 // P0-S3: Apply bulk rate limiter (10 ops/hour per user) to CSV import
-router.post('/:saleId/import-items', authenticate, bulkItemsLimiter, upload.single('csv'), importItemsFromCSV);
+router.post('/:saleId/import-items', authenticate, bulkItemsLimiter, uploadCsv.single('csv'), importItemsFromCSV);
 
 // Feature #395: Bulk Import Tool (Phase 1) — two-step preview+confirm with column mapping
 // POST /api/items/:saleId/bulk-import           → preview (first 5 rows + detected column mapping)
 // POST /api/items/:saleId/bulk-import?confirm=true → actual import (createMany, draftStatus=DRAFT, max 200)
-router.post('/:saleId/bulk-import', authenticate, bulkItemsLimiter, upload.single('file'), bulkImportCSV);
+router.post('/:saleId/bulk-import', authenticate, bulkItemsLimiter, uploadCsv.single('file'), bulkImportCSV);
 
 // CD2 Phase 3: AI Price suggestions
 router.post('/ai/price-suggest', authenticate, async (req, res) => {

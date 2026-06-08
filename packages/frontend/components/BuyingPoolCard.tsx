@@ -45,7 +45,7 @@ const BuyingPoolCard: React.FC<BuyingPoolCardProps> = ({
   const [showJoinForm, setShowJoinForm] = useState(false);
 
   // Only show for items $100+ and AVAILABLE
-  const shouldShow = itemPrice > 10000 && itemStatus === 'AVAILABLE';
+  const shouldShow = itemPrice > 100 && itemStatus === 'AVAILABLE';
 
   // Fetch pools for this item
   const { data: poolsData, isLoading } = useQuery({

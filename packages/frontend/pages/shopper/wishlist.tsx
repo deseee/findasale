@@ -37,6 +37,19 @@ interface FavoriteItem {
   };
 }
 
+interface FavoriteSale {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  city: string;
+  state: string;
+  photoUrls: string[];
+  saleType: string;
+  organizer: { id: string; businessName: string };
+}
+
 interface WishlistItem {
   id: string;
   itemId: string;
@@ -100,6 +113,14 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
+const SALE_TYPE_LABELS: Record<string, string> = {
+  ESTATE: 'Estate Sale',
+  YARD: 'Yard Sale',
+  AUCTION: 'Auction',
+  FLEA_MARKET: 'Flea Market',
+  RETAIL: 'Retail',
+};
+
 type TabType = 'items' | 'sellers';
 
 const WishlistPage = () => {
@@ -121,12 +142,18 @@ const WishlistPage = () => {
     return null;
   }
 
-  // Fetch saved items (favorites)
+  // Fetch saved items and sales (favorites)
   const { data: favoritesData, isLoading: favoritesLoading, isError: favoritesError } = useQuery({
     queryKey: ['favorites'],
     queryFn: async () => {
       const res = await api.get('/favorites');
-      return res.data as { favorites: FavoriteItem[]; categories: string[]; total: number };
+      return res.data as {
+        favorites: FavoriteItem[];
+        saleFavorites: FavoriteSale[];
+        categories: string[];
+        total: number;
+        saleTotal: number;
+      };
     },
     enabled: !!user,
   });
@@ -152,6 +179,8 @@ const WishlistPage = () => {
   });
 
   const savedItems = favoritesData?.favorites ?? [];
+  const savedSales = favoritesData?.saleFavorites ?? [];
+  // Bug #201 fix: Items tab count shows only item-level favorites (not collections or alerts)
   const savedCount = favoritesData?.total ?? 0;
   const collections = wishlistsData ?? [];
   const collectionsTotal = collections.reduce((sum, w) => sum + w.items.length, 0);
@@ -187,7 +216,7 @@ const WishlistPage = () => {
                   : 'text-warm-600 dark:text-warm-400 border-transparent hover:text-warm-900 dark:hover:text-warm-200'
               }`}
             >
-              Items {(savedCount + collectionsTotal + watching.length) > 0 && <span className="text-xs ml-1">({savedCount + collectionsTotal + watching.length})</span>}
+              Items {savedCount > 0 && <span className="text-xs ml-1">({savedCount})</span>}
             </button>
             <button
               onClick={() => setActiveTab('sellers')}
@@ -277,6 +306,55 @@ const WishlistPage = () => {
                                     : 'bg-warm-100 text-warm-600 dark:bg-gray-700 dark:text-warm-300'
                                 }`}>
                                   {item.status === 'AVAILABLE' ? 'Available' : item.status === 'SOLD' ? 'Sold' : item.status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                  <hr className="my-6 border-warm-200 dark:border-gray-700" />
+                </div>
+              )}
+
+              {/* Saved Sales Section (Bug #201 fix: sale-level favorites were not displayed) */}
+              {savedSales.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-3">Saved Sales</h2>
+                  <div className="space-y-3">
+                    {savedSales.map(sale => (
+                      <div key={sale.id} className="card overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+                        <Link href={`/sales/${sale.id}`} className="block">
+                          <div className="flex gap-3 p-3">
+                            {sale.photoUrls?.[0] ? (
+                              <img
+                                src={sale.photoUrls[0]}
+                                alt={sale.title}
+                                className="w-20 h-20 object-cover rounded-lg flex-shrink-0 bg-warm-100 dark:bg-gray-700"
+                              />
+                            ) : (
+                              <div className="w-20 h-20 rounded-lg bg-warm-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                                <span className="text-2xl">🏪</span>
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">{sale.title}</p>
+                              <p className="text-warm-500 dark:text-warm-400 text-xs mt-0.5 truncate">
+                                {sale.organizer.businessName} · {sale.city}, {sale.state}
+                              </p>
+                              <div className="flex gap-2 mt-1.5">
+                                <span className="text-xs bg-warm-100 text-warm-600 dark:bg-gray-700 dark:text-warm-300 px-2 py-0.5 rounded-full">
+                                  {SALE_TYPE_LABELS[sale.saleType] ?? sale.saleType}
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  sale.status === 'PUBLISHED'
+                                    ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                    : sale.status === 'ENDED'
+                                    ? 'bg-red-50 text-red-600 dark:bg-red-900 dark:text-red-300'
+                                    : 'bg-warm-100 text-warm-600 dark:bg-gray-700 dark:text-warm-300'
+                                }`}>
+                                  {sale.status === 'PUBLISHED' ? 'Active' : sale.status === 'ENDED' ? 'Ended' : sale.status}
                                 </span>
                               </div>
                             </div>
@@ -414,7 +492,7 @@ const WishlistPage = () => {
               )}
 
               {/* Empty state when all sections empty */}
-              {savedItems.length === 0 && collections.length === 0 && watching.length === 0 && (
+              {savedItems.length === 0 && savedSales.length === 0 && collections.length === 0 && watching.length === 0 && (
                 <EmptyState
                   icon="❤️"
                   heading="No saved items yet"
