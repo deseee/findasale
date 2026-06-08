@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S923 — RECORDS/WRAP (2026-06-08). Records pass complete. All S920/S921/S922 PCVs applied to roadmap.md: #196 Buying Pools Chr ✅ S922, #201 Favorites Chr ✅ S922, #198 Reviews Chr ✅ S920, #210 Streaks Chr ✅ S921. patrick-dashboard.md updated (BQ=5, records pass summary). Chrome QA not started — extension not connecting. BQ: 5 (unchanged).**
+
 **S922 — QA (2026-06-08). All 4 S921 fixes Chrome-verified live RESOLVED (commit 7058d99c, Vercel READY). #196 Buying Pools ✅ — "Split this purchase" card renders on $169 Zoom B3 item, correct split math, Start a Pool CTA (ss_5769b4ui3); negative test $25 item shows no card. #201 Favorites ✅ all 3 — Items(1) count matches single item favorite, Saved Sales section shows sale-favorite, /shopper/collections → 302 → /shopper/wishlist (ss_37941eelg, ss_1509jponw). SEC-001 ✅ — admin.ts demand-signals parameterized (Prisma.sql bound ${city}/${minCount}, Prisma.empty), page loads as admin with 11 real patterns no error. SEC-002 ✅ — items.ts scoped multer (uploadImages JPEG/PNG/WebP/GIF 25MB on POST /api/items; uploadCsv 10MB on imports), valid types pass; add-items page loads clean. BQ: 9→5. ⚠️ Workspace bash DOWN all session (disk full) — roadmap.md PCVs (#210 S921 + #196/#201/SEC-001/SEC-002 S922) + patrick-dashboard.md NOT updated; must be applied S923 with working bash (see Next Session).**
 
 **S921 — QA (2026-06-08). Applied #198 Reviews PCV to roadmap. DEV: #196 Buying Pools fix (BuyingPoolCard.tsx threshold > 100), #201 Favorites 3 bugs fixed (favoriteController + wishlist.tsx + new collections.tsx), SEC-001 SQL injection fix (admin.ts Prisma.sql), SEC-002 multer scoped instances (items.ts). QA: #210 Streaks Chrome-verified (Streak 6, XP 2025, Hunt Pass 2x XP). All 4 code fixes pending push. BQ: 9 (unchanged).**
@@ -117,6 +119,18 @@ _(Older PCV rows S839–S908 cleaned in prior records passes; the rows above are
 
 ## Next Session
 
+**S924 STATUS ENTERING:**
+- ✅ BQ = 5 (below QA ceiling of 8) → DEV or QA mode available
+- ✅ roadmap.md PCVs fully applied (S920/S921/S922 all cleared)
+- ✅ patrick-dashboard.md current
+
+**S924 FIRST ACTIONS:**
+1. Chrome QA — logout re-test: S922 observed logout didn't fully clear Leo's session. Clean isolated test needed (load /shopper/dashboard as Leo → menu → Sign Out → verify redirect to home + session cleared).
+2. Continue Chrome QA sweep — 65 features with Chrome ⬜ in roadmap; priority targets: #462 UTM attribution (SHIPPED S807), #463 claim-click tracking (SHIPPED S807), organizer pages not yet verified.
+
+**Patrick actions:**
+- **#332 Shopify:** Connect a real custom-app store for live QA when ready.
+
 **S923 STATUS ENTERING:**
 - ✅ S922 Chrome-verified 4 fixes live: #196, #201, SEC-001, SEC-002 — all RESOLVED, removed from BQ.
 - ✅ BQ = 5 (below QA ceiling of 8) → DEV mode available S923 with Patrick sign-off, OR continue QA.
@@ -142,6 +156,23 @@ _(Older PCV rows S839–S908 cleaned in prior records passes; the rows above are
 - **#332 Shopify:** Connect a real custom-app store for QA (code ready).
 
 ## Recent Sessions
+
+### S923 — 2026-06-08 | RECORDS/WRAP
+
+**Session type:** Records pass (cross-session PCV application) + attempted Chrome QA
+
+**Work completed:**
+- **roadmap.md PCVs applied** — #196 Buying Pools Chr column → ✅ S922 (with S922 evidence prepended to notes); #201 Favorites Chr → ✅ S922; #198 Reviews Chr → ✅ S920; #210 Streaks Chr → ✅ S921. Last Updated header updated. SEC-001/SEC-002 have no roadmap rows (BQ items only — already removed S922).
+- **patrick-dashboard.md updated** — Reflects S923 records pass, BQ=5, roadmap up to date.
+- **Chrome QA attempted** — Extension not connecting; handed back to Patrick.
+- **Bash confirmed working** — Disk at 94% (was 100% S922 causing bash outage).
+
+**Files modified:**
+- `claude_docs/strategy/roadmap.md` — Chrome column PCVs applied (#196/#201/#198/#210)
+- `claude_docs/patrick-dashboard.md` — S923 records pass summary
+- `claude_docs/STATE.md` — S923 status, Next Session updated
+
+**BQ: 5 (unchanged).**
 
 ### S922 — 2026-06-08 | QA MODE
 
