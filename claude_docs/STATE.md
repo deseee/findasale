@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S924 — QA/BUG (2026-06-08). P1 CSRF bug found and fixed: POST /api/outreach/page-view and /outreach/unsubscribe returned 403 for all unauthenticated callers — validateCsrfToken had no exemption for these public endpoints. Fix: added outreach block in csrf.ts between auth and Bearer checks. Pushed to GitHub commit 44dabb618ef1e53256450e8904ef0b191033de0d (Railway auto-deploying). #462 roadmap notes updated (CSRF bug + fix documented, Pending Chrome QA). #138 roadmap title corrected to actual enums (ESTATE/YARD/AUCTION/FLEA_MARKET/DORM_DASH — CHARITY/BUSINESS/CORPORATE never implemented). #318 affiliate: XHR confirmed firing, eligibility gate working (toast visible), UNVERIFIED (cannot fully test without paid sale). BQ: 5 (unchanged).**
+
 **S923 — RECORDS/WRAP (2026-06-08). Records pass complete. All S920/S921/S922 PCVs applied to roadmap.md: #196 Buying Pools Chr ✅ S922, #201 Favorites Chr ✅ S922, #198 Reviews Chr ✅ S920, #210 Streaks Chr ✅ S921. patrick-dashboard.md updated (BQ=5, records pass summary). Chrome QA not started — extension not connecting. BQ: 5 (unchanged).**
 
 **S922 — QA (2026-06-08). All 4 S921 fixes Chrome-verified live RESOLVED (commit 7058d99c, Vercel READY). #196 Buying Pools ✅ — "Split this purchase" card renders on $169 Zoom B3 item, correct split math, Start a Pool CTA (ss_5769b4ui3); negative test $25 item shows no card. #201 Favorites ✅ all 3 — Items(1) count matches single item favorite, Saved Sales section shows sale-favorite, /shopper/collections → 302 → /shopper/wishlist (ss_37941eelg, ss_1509jponw). SEC-001 ✅ — admin.ts demand-signals parameterized (Prisma.sql bound ${city}/${minCount}, Prisma.empty), page loads as admin with 11 real patterns no error. SEC-002 ✅ — items.ts scoped multer (uploadImages JPEG/PNG/WebP/GIF 25MB on POST /api/items; uploadCsv 10MB on imports), valid types pass; add-items page loads clean. BQ: 9→5. ⚠️ Workspace bash DOWN all session (disk full) — roadmap.md PCVs (#210 S921 + #196/#201/SEC-001/SEC-002 S922) + patrick-dashboard.md NOT updated; must be applied S923 with working bash (see Next Session).**
@@ -119,16 +121,18 @@ _(Older PCV rows S839–S908 cleaned in prior records passes; the rows above are
 
 ## Next Session
 
-**S924 STATUS ENTERING:**
+**S925 STATUS ENTERING:**
 - ✅ BQ = 5 (below QA ceiling of 8) → DEV or QA mode available
-- ✅ roadmap.md PCVs fully applied (S920/S921/S922 all cleared)
-- ✅ patrick-dashboard.md current
+- ✅ CSRF P1 fixed + deployed (csrf.ts commit 44dabb618)
+- ⚠️ pushblock below still needs Patrick to run
 
-**S924 FIRST ACTIONS:**
-1. Chrome QA — logout re-test: S922 observed logout didn't fully clear Leo's session. Clean isolated test needed (load /shopper/dashboard as Leo → menu → Sign Out → verify redirect to home + session cleared).
-2. Continue Chrome QA sweep — 65 features with Chrome ⬜ in roadmap; priority targets: #462 UTM attribution (SHIPPED S807), #463 claim-click tracking (SHIPPED S807), organizer pages not yet verified.
+**S925 FIRST ACTIONS:**
+1. **#462 CSRF re-test (P1 fix verification):** Navigate to `https://finda.sale/organizers/cmp0jq4j700mnoz89rdjmih15?ref=outreach&utm_source=outreach&utm_medium=email&utm_campaign=touch1&utm_content=SIMPLE` as unauthenticated user. Verify POST /api/outreach/page-view returns 200 (was 403 before fix). Must use Chrome MCP network intercept or JS XHR monitor — the tracker can miss XHR calls.
+2. **Logout re-test:** S922 observed logout didn't fully clear Leo's session. Load /shopper/dashboard as Leo (user5) → user menu → Sign Out → verify redirect to homepage + session cleared. (Was carried S923→S924, still unverified.)
+3. **Continue Chrome QA sweep** — 65 features with Chr ⬜ in roadmap; priority: #463 claim-click tracking (SHIPPED S807), organizer pages.
 
 **Patrick actions:**
+- **Run the pushblock below** — S923+S924 doc changes + S924 csrf.ts already on GitHub.
 - **#332 Shopify:** Connect a real custom-app store for live QA when ready.
 
 **S923 STATUS ENTERING:**
@@ -156,6 +160,26 @@ _(Older PCV rows S839–S908 cleaned in prior records passes; the rows above are
 - **#332 Shopify:** Connect a real custom-app store for QA (code ready).
 
 ## Recent Sessions
+
+### S924 — 2026-06-08 | QA/BUG
+
+**Session type:** QA sweep + P1 bug fix (CSRF exemption missing for public outreach endpoints)
+
+**Work completed:**
+- **P1 CSRF bug FIXED — csrf.ts:** POST /api/outreach/page-view and /outreach/unsubscribe returned 403 CSRF validation failed for all unauthenticated callers. Root cause: validateCsrfToken had no exemption for these public endpoints. Fix: added outreach block between auth check and Bearer token check. Pushed to GitHub commit 44dabb618ef1e53256450e8904ef0b191033de0d. Railway auto-deploying.
+- **roadmap.md #462 notes updated** — documented CSRF bug + fix, marked Pending Chrome QA.
+- **roadmap.md #138 title corrected** — ESTATE/CHARITY/BUSINESS/CORPORATE → ESTATE/YARD/AUCTION/FLEA_MARKET/DORM_DASH (CHARITY was never a top-level type; it is a toggle within ESTATE).
+- **#318 affiliate button investigated** — XHR confirmed firing to POST /api/affiliate/generate-code. Eligibility gate working (toast appears: "Must complete at least one paid sale"). UNVERIFIED — cannot fully test without paid sale. Seed accounts all have 0 sales.
+
+**Files modified (code — pushed to GitHub):**
+- `packages/backend/src/middleware/csrf.ts` — outreach CSRF exemption block added (commit 44dabb618)
+
+**Files modified (docs — need Patrick pushblock):**
+- `claude_docs/strategy/roadmap.md` — #462 notes (CSRF fix), #138 title corrected
+- `claude_docs/STATE.md` — S924 wrap
+- `claude_docs/patrick-dashboard.md` — S924 summary
+
+**BQ: 5 (unchanged).** CSRF bug found and fixed in same session — no BQ entry needed.
 
 ### S923 — 2026-06-08 | RECORDS/WRAP
 

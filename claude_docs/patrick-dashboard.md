@@ -1,29 +1,34 @@
-# Patrick's Dashboard — June 8, 2026 (Updated: S923 Records Pass)
+# Patrick's Dashboard — June 8, 2026 (Updated: S924 QA/Bug Fix)
 
-**Generated:** Monday, June 8, 2026 (S923 — records pass, roadmap PCVs applied)
+**Generated:** Monday, June 8, 2026 (S924 — CSRF P1 bug fixed, Chrome QA sweep)
 
 ---
 
-## S923 Quick Summary
+## S924 Quick Summary
 
-Records pass complete. **All pending Chrome verifications from S920/S921/S922 applied to roadmap.md.** No new code changes this session — this is housekeeping.
+**P1 bug found and fixed:** All outreach email tracking was silently broken. When email recipients clicked an outreach link and landed on an organizer page, the page-view tracking POST was returning 403 (CSRF validation failed) for every unauthenticated caller — which is everyone receiving outreach email. Fix: added CSRF exemption for the two public outreach endpoints in `csrf.ts`. Pushed to GitHub; Railway auto-deployed.
 
-Rows updated in roadmap.md:
-- **#196 Buying Pools** — Chr column updated → ✅ S922 (threshold fix confirmed live)
-- **#201 Favorites** — Chr column updated → ✅ S922 (all 3 bugs confirmed live)
-- **#198 Reviews** — Chr column updated → ✅ S920 (shopper submit confirmed live)
-- **#210 Streaks** — Chr column updated → ✅ S921 (Streak 6, XP 2025, Hunt Pass banner confirmed)
-- SEC-001 and SEC-002 were BQ items (no roadmap rows) — already removed from BQ S922.
-
-Workspace bash is working again (was down S922 due to disk issue).
+Also investigated the affiliate code generation button (#318) — the XHR fires correctly and the eligibility gate works. Can't fully verify without an account that has a completed paid sale.
 
 ---
 
 ## What You Need to Do
 
-**Nothing urgent.** All recent fixes are live and verified, roadmap is now up to date.
+1. **Run the pushblock below** — csrf.ts is already on GitHub, but doc files (roadmap, STATE.md, dashboard) need to be pushed from your local git.
+2. **#462 CSRF re-test (next session):** After Railway deploys (usually within ~5 min of push), load any outreach link as a logged-out user and verify the page-view tracking fires 200. I'll do this at the start of the next QA session automatically.
+3. **#332 Shopify:** Connect a real custom-app store for live QA when ready.
 
-- **#332 Shopify** still needs a real custom-app store connected so it can be QA'd — the code has been ready for a long time.
+---
+
+## Pushblock (S923 + S924 combined)
+
+```
+git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md
+git commit -m "S923/S924 wrap: CSRF fix deployed, roadmap #462/#138 updated, PCVs applied"
+.\push.ps1
+```
+
+Note: `packages/backend/src/middleware/csrf.ts` is already on GitHub (MCP pushed commit 44dabb618). Your local `push.ps1` will auto-merge it when it fetches.
 
 ---
 
@@ -45,6 +50,7 @@ _Cleared S922: SEC-001, SEC-002, #196, #201 — all Chrome-verified live._
 
 | Feature | Status | Session |
 |---------|--------|---------|
+| #462 UTM Attribution / page-view tracking | ✅ SHIPPED — CSRF bug FIXED S924 | S924 |
 | #196 Buying Pools | ✅ Chrome-verified live | S922 |
 | #201 Favorites (3 bugs) | ✅ Chrome-verified live | S922 |
 | SEC-001 SQL injection | ✅ Chrome-verified live | S922 |
@@ -59,5 +65,6 @@ _Cleared S922: SEC-001, SEC-002, #196, #201 — all Chrome-verified live._
 - **CRITICAL fixed (S919):** `/api/dev` production guard added ✅
 - **P1 — SEC-001:** Admin SQL injection — ✅ FIXED + verified live S922
 - **P1 — SEC-002:** Multer MIME/size filter — ✅ FIXED + verified live S922
+- **P1 — CSRF exemption missing:** POST /api/outreach/page-view 403 for anon callers — ✅ FIXED S924 (commit 44dabb618, Railway deploying)
 
 Full security audit: `claude_docs/health-reports/security-audit-2026-06-08.md`
