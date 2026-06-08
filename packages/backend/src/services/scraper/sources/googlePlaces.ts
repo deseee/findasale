@@ -470,6 +470,9 @@ export async function scrapeGooglePlacesQuery(
   queryConfig: QueryConfig,
   metro: string
 ): Promise<ScrapedItem[]> {
+  if (!process.env.GOOGLE_MAPS_ENABLED) {
+    return [];
+  }
   const fullQuery = `${queryConfig.query} in ${metro}`;
   const results: ScrapedItem[] = [];
   let pageToken: string | undefined;

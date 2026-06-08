@@ -28,8 +28,8 @@ export async function searchNearbyPlaces(params: {
   type?: string;
 }): Promise<PlaceResult[]> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) {
-    console.warn('GOOGLE_PLACES_API_KEY not set — Places search unavailable');
+  if (!apiKey || !process.env.GOOGLE_MAPS_ENABLED) {
+    console.warn('GOOGLE_PLACES_API_KEY not set or GOOGLE_MAPS_ENABLED not set — Places search disabled');
     return [];
   }
 

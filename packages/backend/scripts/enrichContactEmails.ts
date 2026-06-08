@@ -210,7 +210,7 @@ async function queryGooglePlaces(
   businessName: string,
   city: string
 ): Promise<string | null> {
-  if (!GOOGLE_PLACES_API_KEY) {
+  if (!GOOGLE_PLACES_API_KEY || !process.env.GOOGLE_MAPS_ENABLED) {
     return null;
   }
 

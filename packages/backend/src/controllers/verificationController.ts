@@ -222,7 +222,7 @@ export const searchGooglePlaces = async (req: AuthRequest, res: Response) => {
     }
 
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (!apiKey) {
+    if (!apiKey || !process.env.GOOGLE_MAPS_ENABLED) {
       return res.status(503).json({ message: 'Google Places not configured' });
     }
 
@@ -309,7 +309,7 @@ export const previewGooglePlace = async (req: AuthRequest, res: Response) => {
     }
 
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (!apiKey) {
+    if (!apiKey || !process.env.GOOGLE_MAPS_ENABLED) {
       return res.status(503).json({ message: 'Google Places not configured' });
     }
 
@@ -423,7 +423,7 @@ export const confirmGoogleVerification = async (req: AuthRequest, res: Response)
     }
 
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (!apiKey) {
+    if (!apiKey || !process.env.GOOGLE_MAPS_ENABLED) {
       return res.status(503).json({ message: 'Google Places not configured' });
     }
 
@@ -573,7 +573,7 @@ export const searchGooglePlacesNext = async (req: AuthRequest, res: Response) =>
     }
 
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (!apiKey) {
+    if (!apiKey || !process.env.GOOGLE_MAPS_ENABLED) {
       return res.status(503).json({ message: 'Google Places not configured' });
     }
 
