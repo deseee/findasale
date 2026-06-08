@@ -18,6 +18,11 @@ const CookieConsentBanner = () => {
   const handleAccept = () => {
     localStorage.setItem('cookieConsent', 'accepted');
     setIsVisible(false);
+    // Directly upgrade GA4 consent — the storage event does NOT fire in the same
+    // tab that called setItem, so ConsentBridge in GoogleAnalytics.tsx never hears it.
+    if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
+      window.gtag('consent', 'update', { analytics_storage: 'granted' });
+    }
   };
 
   const handleDecline = () => {
