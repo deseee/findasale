@@ -238,6 +238,7 @@ export async function sendPostSaleRecaps(): Promise<void> {
       recapSentAt: null,
       deletedAt: null,
       updatedAt: { gte: windowStart }, // ENDED transition stamps updatedAt
+      organizer: { isClaimed: true, isUnmanagedListing: false }, // exclude scraped organizers
     },
     select: { id: true },
     take: 200, // safety cap per run

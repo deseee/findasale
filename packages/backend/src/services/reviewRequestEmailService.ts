@@ -273,6 +273,7 @@ export async function sendOrganizerTestimonialAsks(): Promise<void> {
       deletedAt: null,
       updatedAt: { gte: windowStart, lte: windowEnd },
       items: { some: { status: 'SOLD' } }, // >=1 sold item
+      organizer: { isClaimed: true, isUnmanagedListing: false }, // exclude scraped organizers
     },
     select: { id: true },
     take: 200,

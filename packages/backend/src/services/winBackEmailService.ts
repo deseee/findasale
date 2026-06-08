@@ -213,6 +213,8 @@ export async function sendOrganizerWinBacks(): Promise<void> {
   // confirm their MOST RECENT sale (any status) ended before the cutoff.
   const candidates = await prisma.organizer.findMany({
     where: {
+      isClaimed: true, // exclude scraped organizers
+      isUnmanagedListing: false, // exclude scraped organizers
       // Has at least one sale that ended before the cutoff
       sales: {
         some: { status: 'ENDED', deletedAt: null, endDate: { lt: cutoff } },
