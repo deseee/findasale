@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S926 — ANALYTICS/WRAP (2026-06-08). Built analytics automation: `claude_docs/scripts/analytics-weekly.py` (GA4 Data API + Search Console API via service account). Registered `findasale-analytics-weekly` scheduled task — runs Mondays 9:30 AM, produces traffic overview + top pages + top queries + SEO quick wins + one recommended action. Requires `GOOGLE_SERVICE_ACCOUNT_JSON` in Railway (set by Patrick this session). PREREQUISITE: service account email must be added as Viewer in GA4 (analytics.google.com) and Full user in Search Console (search.google.com/search-console). BQ: 5 (unchanged).**
+
 **S925 — QA (2026-06-08). P1 CSRF fix re-verified: POST /api/outreach/page-view returns 200 for unauthenticated callers (JS fetch credentials:'omit') — S924 fix confirmed live. Logout flow verified: Leo Thomas (user5) desktop user dropdown at /shopper/dashboard → clicked Logout → redirected to /login (ss_49305bl2y), nav shows Login button, /shopper/dashboard → 302 → /login?redirect=/shopper/dashboard (ss_581555xvt) — session fully cleared. #463 claim-click: CTA click confirmed (organizer profile → /register?claim=cmp0jq4j700mnoz89rdjmih15, ss_6367qcmy3), Analytics SDK confirmed initialized in _app.tsx, CODE-ONLY (beacon delivery unverified). BQ: 5 (unchanged).**
 
 **S924 — QA/BUG (2026-06-08). P1 CSRF bug found and fixed: POST /api/outreach/page-view and /outreach/unsubscribe returned 403 for all unauthenticated callers — validateCsrfToken had no exemption for these public endpoints. Fix: added outreach block in csrf.ts between auth and Bearer checks. Pushed to GitHub commit 44dabb618ef1e53256450e8904ef0b191033de0d (Railway auto-deploying). #462 roadmap notes updated (CSRF bug + fix documented, Pending Chrome QA). #138 roadmap title corrected to actual enums (ESTATE/YARD/AUCTION/FLEA_MARKET/DORM_DASH — CHARITY/BUSINESS/CORPORATE never implemented). #318 affiliate: XHR confirmed firing, eligibility gate working (toast visible), UNVERIFIED (cannot fully test without paid sale). BQ: 5 (unchanged).**
@@ -119,23 +121,22 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-**S926 STATUS ENTERING:**
-- ✅ BQ = 5 (below QA ceiling of 8) → DEV or QA mode available
-- ✅ CSRF fix live (S924, commit 44dabb618) — CSRF layer verified S925
-- ⚠️ pushblock below still needs Patrick to run (doc changes S924+S925)
+### Patrick — Action Required Before Monday
+1. **Service account GA4 access:** analytics.google.com → Admin → Account Access Management → Add users → paste the `client_email` from GOOGLE_SERVICE_ACCOUNT_JSON → role: Viewer → Add
+2. **Service account Search Console access:** search.google.com/search-console → Settings → Users and permissions → Add user → same email → Full user
+3. **Run analytics task now (optional):** Cowork sidebar → Scheduled → findasale-analytics-weekly → Run Now. This pre-approves tool permissions so Monday's auto-run doesn't pause for approval prompts.
 
-**S926 FIRST ACTIONS:**
-1. **Records pass (cross-session rule):** Apply S925 PCVs to roadmap.md
-   - #462 CSRF partial — CSRF layer ✅, attribution logging UNVERIFIED — update notes column only, Chr remains ⬜
-   - Logout flow — no roadmap row; note in STATE.md only
-   - #463 CODE-ONLY — no Chr ✅ (beacon unverified) — do NOT advance Chr column
-2. **Continue Chrome QA sweep** — 65 features with Chr ⬜ in roadmap; next priority: organizer pages (/organizer/marketing, /organizer/photos, /organizer/pos), then shopper account pages.
-3. **Patrick: check Vercel Analytics Events tab** for `claim_profile_click` event to close out #463 Chr column.
+### Pending Push
+The S924/S925/S926 wrap has not been pushed yet. Patrick runs:
+```
+git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/scripts/analytics-weekly.py
+git commit -m "S924-S926: CSRF verified, logout verified, #463 CODE-ONLY, analytics automation built"
+.\push.ps1
+```
 
-**Patrick actions:**
-- **Run the pushblock below** — S924 csrf.ts + S924/S925 doc changes.
-- **Vercel Analytics Events tab:** Verify `claim_profile_click` event firing for #463.
-- **#332 Shopify:** Connect a real custom-app store for live QA when ready.
+### S927 Recommendation
+Below QA ceiling (BQ=5). DEV mode available. Suggested: dispatch `findasale-dev` on next roadmap BROKEN item. Review roadmap.md for highest-priority BROKEN feature to address.
+
 
 ## Recent Sessions
 
@@ -211,6 +212,22 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 - `claude_docs/STATE.md` — S922 status, BQ 9→5 (removed #196/#201/SEC-001/SEC-002), 4 PCV rows added, Next Session rewritten for S923.
 
 **BQ: 9→5.** Deferred to S923 (bash required): roadmap.md Chrome-column PCVs (#210 S921 + #196/#201/SEC-001/SEC-002 S922 + verify #198) and patrick-dashboard.md.
+
+### S926 — 2026-06-08 | ANALYTICS/WRAP
+
+**Session type:** Analytics automation build + session wrap
+
+**Work completed:**
+- **`claude_docs/scripts/analytics-weekly.py` NEW** — Standalone Python script calling GA4 Data API v1 + Google Search Console API via service account (`GOOGLE_SERVICE_ACCOUNT_JSON` Railway env var). Outputs: traffic overview (WoW % change), top 10 pages, traffic sources, top 25 search queries, SEO quick wins (position 5-20 queries with >50 impressions). Graceful error messages if access grants are missing.
+- **`findasale-analytics-weekly` scheduled task** — Registered in Cowork scheduler. Runs Mondays 9:30 AM (after competitor monitor at 8:00 AM). Pulls service account key from Railway via CLI, runs analytics script, synthesizes into ≤400-word report with one recommended action.
+- **Analytics prerequisite (Patrick action needed):** Service account email (from `client_email` in GOOGLE_SERVICE_ACCOUNT_JSON) must be added to: (1) analytics.google.com → Admin → Account Access Management → Viewer; (2) search.google.com/search-console → Settings → Users and permissions → Full user.
+
+**Files created:**
+- `claude_docs/scripts/analytics-weekly.py` — NEW analytics report script
+
+**BQ: 5 (unchanged).**
+
+---
 
 ### S921 — 2026-06-08 | QA MODE
 

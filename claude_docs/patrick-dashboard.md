@@ -1,34 +1,49 @@
-# Patrick's Dashboard — June 8, 2026 (Updated: S925 QA)
+# Patrick's Dashboard — June 8, 2026 (Updated: S926 ANALYTICS)
 
-**Generated:** Monday, June 8, 2026 (S925 — CSRF verified, logout verified, #463 CODE-ONLY)
-
----
-
-## S925 Quick Summary
-
-Three items from the S925 queue, all done:
-
-1. **#462 CSRF fix confirmed working** — POST /api/outreach/page-view now returns 200 for unauthenticated callers (real outreach email recipients). The S924 fix is live. The full attribution logging (logging which email → which organizer page was visited) still needs a real outreach email click to verify end-to-end — that's low priority and will happen naturally when outreach resumes.
-
-2. **Logout flow verified** — Leo Thomas (user5) fully logs out via the desktop user dropdown. Session clears cleanly, protected pages redirect to /login. The S897 fix is still holding.
-
-3. **#463 Claim-click analytics (CODE-ONLY)** — The tracking code is in place (`track('claim_profile_click',...)` fires before the redirect to /register). The actual Vercel Analytics event delivery can't be intercepted in QA. To fully close this out, check your **Vercel Analytics dashboard → Events tab** and look for `claim_profile_click` events. If you see them, the feature is fully ✅.
+**Generated:** Monday, June 8, 2026 (S926 — Analytics automation built and scheduled)
 
 ---
 
-## What You Need to Do
+## S926 Quick Summary
 
-1. **Run the pushblock below** — doc files need to be pushed from your local git.
-2. **Vercel Analytics check** — Events tab → look for `claim_profile_click` to close out #463.
-3. **#332 Shopify** — Connect a real custom-app store for live QA when ready.
+Analytics are no longer just collecting data — they're now automated weekly intelligence.
+
+**What got built:** A Python script (`claude_docs/scripts/analytics-weekly.py`) that pulls from both Google Analytics 4 and Google Search Console using the service account you set up this session. Every Monday at 9:30 AM (right after the competitor report at 8:00 AM), Cowork will automatically run this and give you:
+- Week-over-week traffic change (is the site growing?)
+- Top 10 pages by sessions
+- Top traffic sources (organic, direct, referral)
+- Top 25 search queries with click/impression/position data
+- SEO quick wins — queries in positions 5–20 with >50 impressions (these are the highest-ROI fixes: a better title tag on a page already ranking #8 compounds indefinitely)
+- One recommended action for the week
 
 ---
 
-## Pushblock (S924 + S925 combined docs)
+## What You Need to Do (Before the Task Runs Monday)
+
+**Step 1 — Add service account to GA4:**
+1. Go to analytics.google.com
+2. Admin → Account Access Management
+3. Add users → paste the `client_email` from your GOOGLE_SERVICE_ACCOUNT_JSON
+4. Role: Viewer → Add
+
+**Step 2 — Add service account to Search Console:**
+1. Go to search.google.com/search-console
+2. Settings → Users and permissions
+3. Add user → same email → Full user
+
+**Step 3 (optional but recommended) — Pre-approve tool permissions:**
+- Cowork sidebar → Scheduled → findasale-analytics-weekly → Run Now
+- This lets the task pre-approve the Railway/bash tool access so Monday's run doesn't pause for prompts.
+
+---
+
+## Pushblock (S924 + S925 + S926 combined docs)
+
+Run this from your PowerShell in the project root:
 
 ```
-git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git commit -m "S924/S925 wrap: CSRF verified, logout verified, #463 CODE-ONLY, PCVs updated"
+git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/scripts/analytics-weekly.py
+git commit -m "S924-S926: CSRF verified, logout verified, #463 CODE-ONLY, analytics automation built"
 .\push.ps1
 ```
 
@@ -42,19 +57,18 @@ Note: `packages/backend/src/middleware/csrf.ts` is already on GitHub (commit 44d
 |------|----------|--------|
 | #332 Shopify integration | P0 (age: 130+ sessions) | Patrick connects test store |
 | #335 Outreach resume | P2 | Intentional hold — domain warming |
-| 462 WARM leads enrichment | P2 | Needs dev dispatch (do during outreach resume) |
+| #462 WARM leads enrichment | P2 | Needs dev dispatch (do during outreach resume) |
 | WARM tier website enrichment | P2 | Needs supplemental data source |
 | GarageSaleFinder 80.7% un-geocoded | P3 | Needs GSF-specific geocode strategy |
 
-_Cleared S922: SEC-001, SEC-002, #196, #201 — all Chrome-verified live._
-
 ---
 
-## Feature Status (Recent QA)
+## Feature Status (Recent)
 
 | Feature | Status | Session |
 |---------|--------|---------|
-| #462 CSRF fix on outreach endpoints | ✅ CSRF layer live, attribution logging UNVERIFIED | S924/S925 |
+| Analytics automation | ✅ Script built + task scheduled (Mondays 9:30 AM) | S926 |
+| #462 CSRF fix on outreach endpoints | ✅ CSRF layer live, attribution UNVERIFIED (needs real click) | S924/S925 |
 | #463 Claim-click tracking | CODE-ONLY — check Vercel Events tab | S925 |
 | Logout flow | ✅ Chrome-verified — session fully clears | S925 |
 | #196 Buying Pools | ✅ Chrome-verified live | S922 |
