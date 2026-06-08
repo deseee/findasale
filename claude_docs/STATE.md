@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S925 — QA (2026-06-08). P1 CSRF fix re-verified: POST /api/outreach/page-view returns 200 for unauthenticated callers (JS fetch credentials:'omit') — S924 fix confirmed live. Logout flow verified: Leo Thomas (user5) desktop user dropdown at /shopper/dashboard → clicked Logout → redirected to /login (ss_49305bl2y), nav shows Login button, /shopper/dashboard → 302 → /login?redirect=/shopper/dashboard (ss_581555xvt) — session fully cleared. #463 claim-click: CTA click confirmed (organizer profile → /register?claim=cmp0jq4j700mnoz89rdjmih15, ss_6367qcmy3), Analytics SDK confirmed initialized in _app.tsx, CODE-ONLY (beacon delivery unverified). BQ: 5 (unchanged).**
+
 **S924 — QA/BUG (2026-06-08). P1 CSRF bug found and fixed: POST /api/outreach/page-view and /outreach/unsubscribe returned 403 for all unauthenticated callers — validateCsrfToken had no exemption for these public endpoints. Fix: added outreach block in csrf.ts between auth and Bearer checks. Pushed to GitHub commit 44dabb618ef1e53256450e8904ef0b191033de0d (Railway auto-deploying). #462 roadmap notes updated (CSRF bug + fix documented, Pending Chrome QA). #138 roadmap title corrected to actual enums (ESTATE/YARD/AUCTION/FLEA_MARKET/DORM_DASH — CHARITY/BUSINESS/CORPORATE never implemented). #318 affiliate: XHR confirmed firing, eligibility gate working (toast visible), UNVERIFIED (cannot fully test without paid sale). BQ: 5 (unchanged).**
 
 **S923 — RECORDS/WRAP (2026-06-08). Records pass complete. All S920/S921/S922 PCVs applied to roadmap.md: #196 Buying Pools Chr ✅ S922, #201 Favorites Chr ✅ S922, #198 Reviews Chr ✅ S920, #210 Streaks Chr ✅ S921. patrick-dashboard.md updated (BQ=5, records pass summary). Chrome QA not started — extension not connecting. BQ: 5 (unchanged).**
@@ -108,58 +110,49 @@ _S922 QA MODE: all 4 S921 fixes Chrome-verified live RESOLVED (commit 7058d99c d
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| 196 | **#196 Buying Pools — card renders for items > $100** | ✅ Chrome-verified S922 — Navigated /items/cmp1digeb000lxravcnxftuix (Zoom B3 Multi-Effects Processor, $169, AVAILABLE) as Leo Thomas (user5). "🤝 Split this purchase / Buy with others to share the cost" card rendered with split math (2:$84.50, 3:$56.33, 4:$42.25, 5:$33.80) + "Start a Pool" CTA. ss_5769b4ui3. Negative test: /items/cmq2z2ocg001810t51m6su0bb (Vintage Radio $25) → hasCard:false. Deployed BuyingPoolCard.tsx confirmed `itemPrice > 100`. | S922 |
-| 201 | **#201 Favorites — all 3 bugs fixed** | ✅ Chrome-verified S922 (Leo Thomas user5). (1) Items tab count: saved Zoom B3 → wishlist Items tab shows "Items (1)" matching the single item favorite (no overcount). (2) Saved Sales section renders "July Discovery Auction" sale-favorite, separated from item count. (3) /shopper/collections → 302 redirect → /shopper/wishlist (title "My Wishlist"). ss_37941eelg, ss_1509jponw. | S922 |
-| SEC-001 | **SEC-001 admin demand-signals — SQL injection fix** | ✅ Chrome-verified S922 — Navigated /admin/demand-signals as Alice (user1, admin). Page renders "Unmet Demand Signals" with 11 real search patterns, full table (query/count/city/date), no error/500. Deployed admin.ts confirmed parameterized: `cityFilter = city ? Prisma.sql\`AND city = ${city}\` : Prisma.empty`, `$queryRaw(Prisma.sql\`... HAVING COUNT(*) >= ${minCount} ...\`)` — no $queryRawUnsafe, no string interpolation. Security objective met. (City-filter UI is a controlled <select> not drivable via injected events; WHERE clause correct by inspection.) | S922 |
-| SEC-002 | **SEC-002 item upload MIME filter** | ✅ Chrome/code-verified S922 — Deployed items.ts confirmed: ALLOWED_IMAGE_TYPES=[jpeg,png,webp,gif], two scoped multer instances `uploadImages` (25MB, fileFilter) on `POST /api/items` and `uploadCsv` (10MB, CSV types) on import routes. Valid image/CSV types pass, arbitrary types rejected via cb(new Error). /organizer/add-items/[saleId] loads clean post-deploy ("Add Items" heading, upload UI present, no error). Main photo pipeline uses Cloudinary (separate path, ✅ S885). | S922 |
-| â | **#210 Streaks â shopper dashboard banner** | â CHROME VERIFIED S921 â Navigated /shopper/dashboard as Leo Thomas (user5). Streak banner visible below quick-action buttons: Streak 6, XP 2025, Hunt Pass 2x XP. ss_021185in1, ss_4660qufq3, ss_1965zcca0 | S921 |
-| — | **#198 Reviews — shopper submit** | ✅ Navigated https://finda.sale/sales/cmpt2oq6q00138cehpgqx3huk as user5 (Leo Thomas). Clicked 5-star button (Submit enabled, orange). Clicked Submit Review. Review appeared: "Leo Thomas — Jun 8, 2026 — ★★★★★ — Great selection of unique finds! Really enjoyed browsing the antiques." Form reset to 0/500. ss_5467x997f, ss_9288c84e3 | S920 |
+| 462 | **#462 Outreach CSRF fix — POST /api/outreach/page-view returns 200** | ✅ Chrome partial S925 — JS fetch('POST /api/outreach/page-view', credentials:'omit') → 200 for unauthenticated caller on live site. S924 csrf.ts outreach exemption confirmed working. Full E2E (ORGANIZER_PAGE_VIEWED in OutreachAuditLog) requires real outreach email click — UNVERIFIED (no test email available in QA env). CSRF layer ✅. Attribution logging pending real outreach send. | S925 |
+| — | **Logout flow — session fully clears on user dropdown logout** | ✅ Chrome-verified S925 — Leo Thomas (user5@example.com) at /shopper/dashboard. Desktop user dropdown opened, clicked Logout. Redirected to /login (ss_49305bl2y). Nav shows Login button. Navigated to /shopper/dashboard → 302 → /login?redirect=/shopper/dashboard (ss_581555xvt). Session fully cleared. | S925 |
+| 463 | **#463 Claim button click tracking (Vercel Analytics)** | CODE-ONLY S925 — track('claim_profile_click', {organizerId, source, tier}) confirmed in organizers/[id].tsx onClick. <Analytics /> SDK confirmed in _app.tsx. CTA redirect confirmed: clicked "Claim This Profile — It's Free" → /register?claim=cmp0jq4j700mnoz89rdjmih15 (ss_6367qcmy3). Beacon delivery UNVERIFIED (keepalive beacon fire-and-forget; page navigates before capture). Requires Vercel Analytics Events tab check. | S925 |
 
-_(Older PCV rows S839–S908 cleaned in prior records passes; the rows above are the active staging set for S923 to apply to roadmap.md.)_
-
+_(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared.)_
 ---
 
 ## Next Session
 
-**S925 STATUS ENTERING:**
+**S926 STATUS ENTERING:**
 - ✅ BQ = 5 (below QA ceiling of 8) → DEV or QA mode available
-- ✅ CSRF P1 fixed + deployed (csrf.ts commit 44dabb618)
-- ⚠️ pushblock below still needs Patrick to run
+- ✅ CSRF fix live (S924, commit 44dabb618) — CSRF layer verified S925
+- ⚠️ pushblock below still needs Patrick to run (doc changes S924+S925)
 
-**S925 FIRST ACTIONS:**
-1. **#462 CSRF re-test (P1 fix verification):** Navigate to `https://finda.sale/organizers/cmp0jq4j700mnoz89rdjmih15?ref=outreach&utm_source=outreach&utm_medium=email&utm_campaign=touch1&utm_content=SIMPLE` as unauthenticated user. Verify POST /api/outreach/page-view returns 200 (was 403 before fix). Must use Chrome MCP network intercept or JS XHR monitor — the tracker can miss XHR calls.
-2. **Logout re-test:** S922 observed logout didn't fully clear Leo's session. Load /shopper/dashboard as Leo (user5) → user menu → Sign Out → verify redirect to homepage + session cleared. (Was carried S923→S924, still unverified.)
-3. **Continue Chrome QA sweep** — 65 features with Chr ⬜ in roadmap; priority: #463 claim-click tracking (SHIPPED S807), organizer pages.
+**S926 FIRST ACTIONS:**
+1. **Records pass (cross-session rule):** Apply S925 PCVs to roadmap.md
+   - #462 CSRF partial — CSRF layer ✅, attribution logging UNVERIFIED — update notes column only, Chr remains ⬜
+   - Logout flow — no roadmap row; note in STATE.md only
+   - #463 CODE-ONLY — no Chr ✅ (beacon unverified) — do NOT advance Chr column
+2. **Continue Chrome QA sweep** — 65 features with Chr ⬜ in roadmap; next priority: organizer pages (/organizer/marketing, /organizer/photos, /organizer/pos), then shopper account pages.
+3. **Patrick: check Vercel Analytics Events tab** for `claim_profile_click` event to close out #463 Chr column.
 
 **Patrick actions:**
-- **Run the pushblock below** — S923+S924 doc changes + S924 csrf.ts already on GitHub.
+- **Run the pushblock below** — S924 csrf.ts + S924/S925 doc changes.
+- **Vercel Analytics Events tab:** Verify `claim_profile_click` event firing for #463.
 - **#332 Shopify:** Connect a real custom-app store for live QA when ready.
 
-**S923 STATUS ENTERING:**
-- ✅ S922 Chrome-verified 4 fixes live: #196, #201, SEC-001, SEC-002 — all RESOLVED, removed from BQ.
-- ✅ BQ = 5 (below QA ceiling of 8) → DEV mode available S923 with Patrick sign-off, OR continue QA.
-- ⚠️ **Workspace bash was DOWN all S922 (disk full).** roadmap.md PCVs and patrick-dashboard.md were NOT updated. STATE.md updated via full-content Write (Edit tool banned, bash unavailable).
-
-**S923 FIRST ACTIONS (records pass — bash required):**
-1. **Apply roadmap.md Chrome column PCVs** (cross-session rule) from the Pending Chrome Verifications table above:
-   - #210 Streaks → ✅ S921 (carried from S921, never applied)
-   - #196 Buying Pools → FIXED + Chrome ✅ S922
-   - #201 Favorites → FIXED + Chrome ✅ S922
-   - SEC-001 admin demand-signals → ✅ S922 (security)
-   - SEC-002 item upload MIME filter → ✅ S922 (security)
-   - #198 Reviews → ✅ S920 (verify whether S921 already applied it)
-2. **Update patrick-dashboard.md** — BQ 9→5, S922 QA summary (4 fixes verified live).
-3. After applying, clear the applied rows from the Pending Chrome Verifications table.
-
-**S923 QA candidates (if continuing QA):**
-- One clean isolated logout re-test: S922 observed logout from the user menu did not fully clear Leo's session until a fresh login superseded it (I interrupted the flow, so not filed as a bug — verify cleanly). Logout was marked fixed S897 (ss_8330v4z5n).
-- #332 Shopify: still needs a real custom-app store connected for live QA (code ready).
-
-**Patrick actions before S923:**
-- None required for the verified fixes (already live).
-- **#332 Shopify:** Connect a real custom-app store for QA (code ready).
-
 ## Recent Sessions
+
+### S925 — 2026-06-08 | QA
+
+**Session type:** QA — CSRF fix verification + logout re-test + #463 claim-click investigation
+
+**Work completed:**
+- **#462 CSRF fix re-verified** — POST /api/outreach/page-view returns 200 for unauthenticated callers (JS fetch credentials:'omit'). S924 csrf.ts outreach exemption confirmed working on live site. Attribution logging (ORGANIZER_PAGE_VIEWED audit) UNVERIFIED — requires real outreach email click.
+- **Logout flow verified** — Leo Thomas (user5) signed out from desktop user dropdown at /shopper/dashboard → redirected to /login (ss_49305bl2y) → /shopper/dashboard nav shows Login button → navigating back redirects to /login?redirect=/shopper/dashboard (ss_581555xvt). Session fully cleared. S897 fix still holding.
+- **#463 Claim-click tracking (CODE-ONLY)** — track('claim_profile_click',...) confirmed in organizers/[id].tsx onClick handlers. <Analytics /> SDK confirmed in _app.tsx. CTA redirect confirmed: clicked "Claim This Profile — It's Free" → /register?claim=cmp0jq4j700mnoz89rdjmih15 (ss_6367qcmy3). Vercel beacon delivery UNVERIFIED (fire-and-forget keepalive; page navigates before capture).
+
+**Files modified (docs only — need Patrick pushblock):**
+- `claude_docs/STATE.md` — S925 status, PCVs updated, Next Session updated for S926
+- `claude_docs/patrick-dashboard.md` — S925 QA summary
+
+**BQ: 5 (unchanged).**
 
 ### S924 — 2026-06-08 | QA/BUG
 
