@@ -1,5 +1,5 @@
 import { buildEmail } from './emailTemplateService';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 
 
 const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
@@ -39,7 +39,7 @@ export const sendConsignorItemSold = async (params: {
       accentColor: '#10b981',
     });
 
-    await emailService.emails.send({
+    await transactionalEmailService.emails.send({
       from: fromEmail,
       to: params.consignorEmail,
       subject: `✓ Your item sold: ${params.itemName}`,
@@ -83,7 +83,7 @@ export const sendConsignorPayout = async (params: {
       accentColor: '#3b82f6',
     });
 
-    await emailService.emails.send({
+    await transactionalEmailService.emails.send({
       from: fromEmail,
       to: params.consignorEmail,
       subject: `Payout received: $${params.payoutAmount.toFixed(2)}`,
@@ -126,7 +126,7 @@ export const sendConsignorExpiryNotice = async (params: {
       accentColor: '#f59e0b',
     });
 
-    await emailService.emails.send({
+    await transactionalEmailService.emails.send({
       from: fromEmail,
       to: params.consignorEmail,
       subject: `⏰ Item expiring: ${params.itemName}`,

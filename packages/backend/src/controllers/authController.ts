@@ -11,7 +11,7 @@ import { awardXp, XP_AWARDS } from '../services/xpService';
 import { referralTrancheService } from '../services/referralTrancheService';
 import { checkRegistrationLimit, recordRegistration } from '../lib/registrationRateLimiter';
 import { recordRegistration as recordFraudRegistration } from '../lib/fraudDetectionService';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 
 // SECURITY FIX P0: OAuth redirect URI allowlist to prevent open redirect attacks
 const ALLOWED_REDIRECT_URIS = () => {
@@ -288,7 +288,7 @@ export const register = async (req: Request, res: Response) => {
         const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
         const verifyLink = `${process.env.FRONTEND_URL || 'https://finda.sale'}/verify-email?token=${user.emailVerificationToken}`;
 
-        await emailService.emails.send({
+        await transactionalEmailService.emails.send({
           from: fromEmail,
           to: user.email,
           subject: 'Verify Your FindA.Sale Email Address',
@@ -730,7 +730,7 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
     try {
       const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
 
-      await emailService.emails.send({
+      await transactionalEmailService.emails.send({
         from: fromEmail,
         to: user.email,
         subject: 'Reset Your FindA.Sale Password',

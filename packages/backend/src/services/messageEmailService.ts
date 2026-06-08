@@ -3,7 +3,7 @@
 
 import { prisma } from '../lib/prisma';
 import { buildEmail } from './emailTemplateService';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -41,7 +41,7 @@ export async function sendNewMessageEmail(notification: NewMessageNotification):
       footerNote: 'Reply directly in the message thread',
     });
 
-    await emailService.emails.send({
+    await transactionalEmailService.emails.send({
       from: FROM_EMAIL,
       to: notification.recipientEmail,
       subject: `New message from ${notification.senderName}`,
