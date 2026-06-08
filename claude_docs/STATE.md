@@ -180,6 +180,9 @@ _S898 QA MODE: D-002 dark mode RESOLVED — PerformanceDashboard ✅ Chrome S898
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
 
+| **[SEC-001]** Admin demand-signals SQL injection (`admin.ts` `/demand-signals?city=`) | **P1** — `$queryRawUnsafe` with manual `replace(/'/g,"''")` string interpolation. Admin-only route (requireAdmin gate) + modern PG mitigates immediate risk, but parameterization required. Fix: convert to `Prisma.sql` tagged template. | `Skill('findasale-dev')` — single-file fix in `packages/backend/src/routes/admin.ts` | S919 |
+| **[SEC-002]** Items upload multer — no MIME filter or size limit | **P1** — `multer({ storage: multer.memoryStorage() })` (items.ts:86) used by `POST /api/items` (images) + two CSV import routes. No fileFilter → arbitrary file types. No fileSize limit → memory DoS possible (5 files × unlimited). | `Skill('findasale-dev')` — add fileFilter + `limits.fileSize` to items.ts multer, separate csvUpload instance | S919 |
+
 ---
 
 ## Pending Chrome Verifications
@@ -316,6 +319,34 @@ _(S862
 
 ## Recent Sessions
 
+
+
+### S919 — 2026-06-08 | AUTOMATED + SECURITY AUDIT
+
+**Session type:** Automated (findasale-workflow-retrospective) + findasale-hacker quarterly audit
+
+**Work completed:**
+- Monthly retrospective written: `claude_docs/workflow-retrospectives/monthly-retro-2026-06-08.md` — 7-area analysis, 13 recommendations
+- SH-023/024/025 appended to `self_healing_skills.md` (Edit tool truncation, Railway env var propagation, outreach cascade)
+- `audits/` soft cap (30 files) added to `file-creation-schema.md`
+- Health-reports archival: 23 files moved to `claude_docs/archive/health-reports/` (28 → 5 files)
+- Workflow-retrospectives archival: 2 oldest files moved to `claude_docs/archive/workflow-retrospectives/`
+- **Quarterly security audit (findasale-hacker):** First since S218. Full report: `claude_docs/health-reports/security-audit-2026-06-08.md`
+  - **CRITICAL fixed inline:** `/api/dev` route registered in production without NODE_ENV guard — privilege escalation (anyone registers user1@example.com → becomes ADMIN). Fixed: added `if (process.env.NODE_ENV !== 'production')` guard to `packages/backend/src/index.ts`
+  - **P1 queued:** admin.ts SQL string interpolation in `$queryRawUnsafe` (admin-only, SEC-001)
+  - **P1 queued:** items.ts multer no MIME filter/size limit (SEC-002)
+  - **Confirmed safe:** Stripe webhook signatures, JWT httpOnly cookies, auth rate limiting, IDOR checks, password reset entropy, QA bypass guard
+  - **HIGH npm vulns:** 6 HIGH in backend (path-to-regexp, semver, axios) — no critical; P2 backlog
+- Blocked Queue: 5 → 7 (SEC-001 + SEC-002 added)
+
+**Files modified:**
+- `packages/backend/src/index.ts` — NODE_ENV guard on /api/dev route (P0 fix)
+- `claude_docs/self-healing/self_healing_skills.md` — SH-023/024/025 appended
+- `claude_docs/operations/file-creation-schema.md` — audits/ soft cap row added
+- `claude_docs/health-reports/security-audit-2026-06-08.md` — NEW (quarterly security report)
+- `claude_docs/workflow-retrospectives/monthly-retro-2026-06-08.md` — NEW (monthly retro)
+- `claude_docs/STATE.md` and `claude_docs/patrick-dashboard.md` — updated at wrap
+- Archived: 25 files (23 health-reports + 2 workflow-retrospectives) to `claude_docs/archive/`
 
 
 ### S919 — QA/WRAP (2026-06-08). SmartBuyerWidget BQ closed. Apify deferred on roadmap. BQ: 7→5.

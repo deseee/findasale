@@ -1,90 +1,76 @@
-# Patrick's Dashboard — FindA.Sale
+# Patrick's Dashboard — June 8, 2026 (Updated: Security Audit)
 
-**Last Updated: S919 (2026-06-08)**
-**Session Type: DEV available (BQ=5, below 8-item ceiling)**
-
----
-
-## 🟢 CURRENT STATUS
-
-Email infrastructure is solid. Resend transactional rail is code-complete (push needed). Outreach back on. BQ dropped to 5 items — DEV mode fully available.
+**Generated:** Monday, June 8, 2026 (S919 — automated retro + security audit)
 
 ---
 
-## 🔴 PUSH REQUIRED — S918 Resend transactional rail (10 files)
+## Security Alert — Fixed This Session
 
-If you haven't pushed this yet, run from PowerShell in `C:\Users\desee\ClaudeProjects\FindaSale`:
+The quarterly security audit just ran for the first time since Session 218 (700+ sessions ago). One critical issue was **found and fixed automatically** during this session. Two P1 issues need a dev dispatch in the next session.
 
-```powershell
-git add packages/backend/src/lib/transactionalEmailService.ts
-git add packages/backend/src/controllers/authController.ts
-git add packages/backend/src/routes/auth.ts
-git add packages/backend/src/controllers/stripeController.ts
-git add packages/backend/src/controllers/posController.ts
-git add packages/backend/src/controllers/terminalController.ts
-git add packages/backend/src/controllers/workspaceController.ts
-git add packages/backend/src/services/messageEmailService.ts
-git add packages/backend/src/services/consignorEmailService.ts
-git add packages/backend/src/jobs/tierLapseJob.ts
-git commit -m "feat: dedicated Resend rail for transactional email (auth, receipts, payouts, invites)"
-.\push.ps1
-```
+**CRITICAL (FIXED):** A dev-only route (`/api/dev/fix-seed-tiers`) was registered on the production server without a safety guard. An attacker could have registered with email `user1@example.com`, called that route, and instantly become ADMIN. The fix (one line added to index.ts) is in the push block below.
 
-**Then the S919 wrap docs:**
+**P1 — needs findasale-dev dispatch next session:**
+- Admin demand-signals page uses a string-interpolation SQL query for the `city` filter instead of parameterized SQL. Admin-only route, low immediate risk, but needs to be corrected.
+- Item upload routes (create item + CSV import) accept any file type and have no size limit. An organizer could upload a very large file and crash the server. Needs MIME filter + size cap added.
 
-```powershell
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "docs: S919 wrap — BQ 7→5, #230 resolved, #380 Apify deferred"
-.\push.ps1
-```
+Full security audit report: `claude_docs/health-reports/security-audit-2026-06-08.md`
 
 ---
 
-## ✅ WHAT GOT DONE THIS SESSION (S919)
+## What Happened This Week
 
-- **#230 SmartBuyerWidget** — confirmed working. Widget renders on organizer dashboard with an active sale. Empty state ("No shoppers watching yet") is correct behavior. Removed from BQ.
-- **#380 FB Marketplace** — Apify path added to roadmap as DEFERRED. CF Worker approach confirmed dead end. Roadmap updated.
-- **#335 Jane Thrift** — confirmed fictional account, doesn't exist in DB. Reference removed from BQ entry.
+The big story was email — the Gmail account got suspended from sending too many outreach emails, and the team spent several days tracking down every job that wasn't respecting the kill switch, then rebuilt the email infrastructure so a Gmail suspension can never knock out your password resets or payment receipts again. The new safety rail (Resend for transactional email) shipped S918.
 
----
-
-## 📬 OUTREACH STATUS
-
-- 37 PENDING records in DirectoryClaimEmail
-- OUTREACH_ENABLED=true on Railway
-- bounceSuppressService: running correctly
-- Transactional email: on Resend rail (push required to go live)
+On top of that, a major QA push burned through the backlog: the blocked queue dropped from 16 items to 5, dozens of features were Chrome-verified end-to-end, and several real bugs were found and fixed — login/logout crash, dark mode problems across 24 pages, React hydration errors, and the Bounty submission flow.
 
 ---
 
-## PENDING PATRICK ACTIONS
+## Monthly Retrospective (Automated — June 8)
 
-| Item | Status | What's needed |
-|------|--------|---------------|
-| S918 Resend rail push | ⏳ Push needed | 10 files — see push block above |
-| #335 Reactivate outreach@finda.sale | ⏳ Required | admin.google.com → Directory → Users → Reactivate |
-| #332 Shopify | ⏳ Code ready | Connect a real custom-app store to QA end-to-end |
+The workflow retrospective agent ran this morning. Key findings:
 
----
-
-## BLOCKED QUEUE (5 items — DEV MODE available)
-
-| Feature | Priority | Status |
-|---------|----------|--------|
-| #332 Shopify Cross-Listing | P0 | Code fixed (S890), needs real store QA |
-| #335 Email suspension + outreach resume | P1 | Patrick: reactivate Gmail account |
-| 462 WARM leads with no outreach record | P2 | Backfill after #335 resolved |
-| WARM tier website enrichment (3.5%) | P3 | Needs supplemental source |
-| GarageSaleFinder 80.7% un-geocoded | P3 | GSF-specific geocode strategy needed |
+- **Email infrastructure is now stable** — Resend rail closes the transactional gap. Outreach account reactivation is still a Patrick action (#335).
+- **Blocked queue is healthy** — 5 items, DEV mode available. Ceiling (8+ = QA-only) is working.
+- **Docs housekeeping done** — 23 old health reports archived, 2 old retrospectives archived, 3 self-healing patterns added for recent incidents.
+- **Shopify #332** — still P0 by age (128+ sessions). Needs a decision: ship it or park it with a documented reason.
 
 ---
 
-## PROJECT HEALTH
+## Audit Results
 
-- **Backend TS:** 0 errors (verified S918)
-- **Gmail SPOF:** RESOLVED (Resend transactional rail ready to push)
-- **Bounce suppression:** Running correctly
-- **BQ:** 5 items (DEV mode — well below 8-item ceiling)
-- **Next priority:** DEV — dispatch next roadmap item
+**June 8 friction audit (this morning):** 0 BROKEN roadmap items. BQ = 5. Disk filled temporarily but recovered.
+
+**June 8 security audit:** 1 CRITICAL fixed, 2 P1 queued, 4 HIGH/MEDIUM/INFO. Full report in health-reports/.
+
+---
+
+## Blocked Queue Status
+
+7 items (was 5 — 2 security issues added today). DEV mode still available (ceiling = 8).
+
+| # | Item | Priority |
+|---|------|----------|
+| #332 | Shopify cross-listing (code-fixed, needs QA store) | P0 (128+ sessions!) |
+| #335 | Outreach@finda.sale reactivation (Patrick action) | P1 |
+| SEC-001 | Admin SQL parameterization (admin.ts) | P1 |
+| SEC-002 | Items upload MIME filter + size limit | P1 |
+| WARM | 462 email-ready leads not queued for outreach | P2 |
+| GSF | 80.7% un-geocoded GarageSaleFinder records | P3 |
+| WARM tier | Website enrichment at 3.5% coverage | P3 |
+
+---
+
+## Action Items for Patrick
+
+- [ ] **Push the security fix + Resend rail** — push block below. This includes the CRITICAL dev route fix.
+- [ ] **Reactivate outreach@finda.sale** — go to admin.google.com → Directory → Users → outreach@finda.sale → Reactivate. Keep volume low for 2+ weeks after reactivation.
+- [ ] **Shopify #332 decision** — either connect a test store to verify the code, or explicitly park it in decisions-log.md. It's been 128+ sessions.
+
+---
+
+## Next Session Recommendation
+
+DEV mode available (BQ = 7, ceiling = 8 — but the two new items are P1 fixes, recommend dispatching them first to keep the queue from tipping over the ceiling).
+
+Recommend: `Skill('findasale-dev')` → SEC-001 (admin.ts SQL parameterization) + SEC-002 (items.ts multer fix). Both are small targeted fixes, under 20 lines each, can batch in one dispatch.

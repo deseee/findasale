@@ -159,6 +159,7 @@ Soft limits to prevent directory bloat. When exceeded, Records archives oldest n
 | feature-notes/ | 10 files | Archive completed features |
 | competitor-intel/ | 10 files | Archive outdated intel |
 | workflow-retrospectives/ | 5 files | Archive all but latest 3 |
+| audits/ | 30 files | Archive oldest date-suffixed reports; keep all undated reference files |
 
 ---
 

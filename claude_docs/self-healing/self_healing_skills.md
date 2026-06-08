@@ -567,3 +567,74 @@ For truncated files: `git show <last-good-commit>:<file-path> > <file-path>` res
 **Detection:** Check Railway logs (`railway logs --service backend --tail 50`) — look for `column "X" does not exist`. This is always a missing migration, not a code bug.
 
 **Confidence:** HIGH — two confirmed instances in S668/S669 within the same week. The failure mode is structurally guaranteed whenever code and migration deployments are ordered incorrectly.
+
+---
+
+## SH-023: Cowork Edit Tool Silent Truncation (Batch or Large-File)
+
+**Trigger:** After a session that used the Cowork `Edit` tool on a file over ~250 lines (or ran multiple sequential Edit calls on the same file), the file's trailing content disappears silently. Railway build fails or TypeScript reports missing exports that were previously present. `git diff` shows large deletions at the end of the file.
+
+**Environment:** Any file in `packages/` edited via the Cowork `Edit` tool — especially controllers, services, or pages that exceed ~250 lines.
+
+**Pattern:** S900 — 13 tracked files were corrupted in a single session. The Cowork Edit tool drops trailing file content after approximately 250 lines OR when multiple Edit calls are stacked sequentially on the same file. No error is thrown; the truncation is silent. Patrick had to restore all 13 files from GitHub HEAD.
+
+**Known instances:** S900 (mass corruption, 13 files, 380 lines deleted total). Documented in CLAUDE.md §4 Edit tool BAN.
+
+**Prevention:**
+- The Cowork `Edit` tool is **BANNED** for all FindA.Sale file modifications (CLAUDE.md §4). This rule survives compression.
+- For existing files (especially >100 lines): use Python via bash.
+- For new files or intentional full rewrites: use the `Write` tool (read the existing file first).
+- If an agent returns output that used `Edit`, reject the changeset and re-dispatch with the ban explicit in the prompt.
+
+**Recovery:**
+1. `git diff --stat HEAD packages/` — identify truncated files (large negative line counts)
+2. `git checkout HEAD -- <truncated-file>` — restore from last good commit
+3. Re-dispatch the agent with the Edit tool BAN explicit in the prompt
+
+**Confidence:** HIGH — Cowork Edit tool behavior is deterministic; truncation occurs consistently on large files or stacked edits. Two independent observations (S900 mass event + prior single-file cases).
+
+---
+
+## SH-024: Railway Env Var Propagation Delay
+
+**Trigger:** Env var is confirmed set in Railway dashboard, but the running backend behaves as if it still has the old value. Log entries show the expected new behavior is not taking effect even minutes after the Railway dashboard shows the new value.
+
+**Environment:** Railway backend service — any env var change made via dashboard, CLI, or MCP.
+
+**Pattern:** The Railway `OUTREACH_ENABLED` env var was set to `true` in the dashboard, but the running Node.js process continued reading it as `false`. S889 initially concluded this was a code bug ("outreach leak") before realizing the process was holding stale in-memory values from before the env var change.
+
+**Root cause:** Railway injects env vars at process start. A running process holds the values from its launch environment. Env var changes in the Railway dashboard take effect ONLY after a service redeploy — either a manual restart (no rebuild) or an automatic redeploy triggered by a new push.
+
+**Steps:**
+1. After changing any env var in Railway: trigger a service restart (`railway restart --service backend`) OR push a trivial commit to trigger auto-redeploy.
+2. Wait for Railway to confirm the service is running the new build.
+3. Then test the env var change.
+
+**Detection:** Before concluding an env var is broken, verify the service has redeployed since the change. Check Railway deployment timestamps: `railway status` or Railway dashboard → Deployments tab.
+
+**Reference:** `memory/reference_railway_env_propagation.md` (Cowork memory file).
+
+**Confidence:** HIGH — Node.js process environment is immutable at runtime; this is a Railway infra fact, not a bug. Caused S889 false-alarm "outreach leak" incident.
+
+---
+
+## SH-025: outreach@finda.sale Suspension Cascade
+
+**Trigger:** Cold outreach emails stop delivering. Gmail API calls return 4xx errors. `emailService.ts` (Gmail rail) throws authentication or quota errors even for emails that are NOT outreach (transactional auth emails, etc.). `OUTREACH_ENABLED` is `true` but emails still fail.
+
+**Environment:** `packages/backend/src/services/emailService.ts` — Gmail API rail. Active when outreach@finda.sale Google Workspace account is suspended or OAuth tokens are expired.
+
+**Pattern:** S887–S919 (7+ consecutive OPS sessions). When Google suspends outreach@finda.sale (due to bounce rate, send frequency, or TOS violation), the Gmail OAuth token becomes invalid. Because ~40 backend files used the Gmail rail for ALL email sending (not just outreach), the suspension took down transactional email (password resets, auth tokens, Stripe receipts) as a side-effect. OUTREACH_ENABLED=false did NOT protect transactional emails — the gate only controlled outreach send logic, not the underlying Gmail auth.
+
+**Resolution (S918):** Resend transactional rail (`transactionalEmailService.ts`) was built and 22 call sites migrated. Transactional email now uses Resend and is fully isolated from outreach@finda.sale suspension events.
+
+**Post-S918 state:**
+- Gmail rail (`emailService.ts`) = outreach/bulk email only. Suspension of outreach@ only affects cold outreach.
+- Resend rail (`transactionalEmailService.ts`) = auth emails, Stripe receipts, POS confirmations, all user-facing transactional email. Not affected by Gmail/outreach@ status.
+
+**Prevention:**
+- Check `OUTREACH_ENABLED` is included in daily friction-audit health check (so suspension is caught session 1, not session 7).
+- Monitor outreach@ bounce rate and keep below Google's 0.1% spam threshold.
+- Do NOT migrate transactional emails back to the Gmail rail.
+
+**Confidence:** HIGH — 7 sessions of documented impact. Architecture fix is in place but the pattern will recur if the Gmail rail is expanded back to transactional use cases.
