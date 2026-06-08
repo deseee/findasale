@@ -46,8 +46,8 @@ export const toggleItemFavorite = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// GET /api/favorites?category=X — list all favorited items for the logged-in user
-// Optional ?category=furniture (any Item.category value). Returns items with sale info.
+// GET /api/favorites?category=X — list all favorited items AND sales for the logged-in user
+// Optional ?category=furniture (any Item.category value). Returns items + sales with relevant info.
 export const getUserFavorites = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -56,7 +56,8 @@ export const getUserFavorites = async (req: AuthRequest, res: Response) => {
 
     const { category } = req.query as { category?: string };
 
-    const favorites = await prisma.favorite.findMany({
+    // Fetch item-level favorites
+    const itemFavorites = await prisma.favorite.findMany({
       where: {
         userId: req.user.id,
         itemId: { not: null },
@@ -89,7 +90,34 @@ export const getUserFavorites = async (req: AuthRequest, res: Response) => {
       take: 200,
     });
 
-    // Pull distinct categories from all user favorites (for tab building)
+    // Fetch sale-level favorites (Bug #201: these were missing from the response)
+    const saleFavorites = await prisma.favorite.findMany({
+      where: {
+        userId: req.user.id,
+        saleId: { not: null },
+        itemId: null, // sale-only favorites (not item favorites that have a sale via item)
+      },
+      include: {
+        sale: {
+          select: {
+            id: true,
+            title: true,
+            startDate: true,
+            endDate: true,
+            status: true,
+            city: true,
+            state: true,
+            photoUrls: true,
+            saleType: true,
+            organizer: { select: { id: true, businessName: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+
+    // Pull distinct categories from all user item favorites (for tab building)
     const allFavs = await prisma.favorite.findMany({
       where: { userId: req.user.id, itemId: { not: null } },
       select: { item: { select: { category: true } } },
@@ -99,9 +127,11 @@ export const getUserFavorites = async (req: AuthRequest, res: Response) => {
     )].sort();
 
     res.json({
-      favorites: favorites.map(f => f.item).filter(Boolean),
+      favorites: itemFavorites.map(f => f.item).filter(Boolean),
+      saleFavorites: saleFavorites.map(f => f.sale).filter(Boolean),
       categories,
-      total: favorites.length,
+      total: itemFavorites.length,
+      saleTotal: saleFavorites.length,
     });
   } catch (error) {
     console.error('Get user favorites error:', error);

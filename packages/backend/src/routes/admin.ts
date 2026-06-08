@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticate } from '../middleware/auth';
 import { requireAdmin } from '../middleware/adminAuth';
 import { prisma } from '../index';
+import { Prisma } from '@prisma/client';
 import {
   getStats,
   getUsers,
@@ -241,27 +242,27 @@ router.get('/demand-signals', async (req: any, res: any) => {
     const city = (req.query.city as string) || null;
     const minCount = Math.max(1, parseInt((req.query.minCount as string) || '2', 10));
 
-    const whereCity = city ? `AND city = '${city.replace(/'/g, "''")}'` : '';
+    const cityFilter = city ? Prisma.sql`AND city = ${city}` : Prisma.empty;
 
-    const rows: any[] = await (prisma as any).$queryRawUnsafe(`
+    const rows: any[] = await prisma.$queryRaw<any[]>(Prisma.sql`
       SELECT
         query,
         city,
         COUNT(*)::int AS "searchCount",
         MAX("createdAt") AS "lastSearched"
       FROM "UnmetDemandSignal"
-      WHERE 1=1 ${whereCity}
+      WHERE 1=1 ${cityFilter}
       GROUP BY query, city
       HAVING COUNT(*) >= ${minCount}
       ORDER BY "searchCount" DESC, "lastSearched" DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    const totalRow: any[] = await (prisma as any).$queryRawUnsafe(`
+    const totalRow: any[] = await prisma.$queryRaw<any[]>(Prisma.sql`
       SELECT COUNT(*)::int AS total FROM (
         SELECT query, city
         FROM "UnmetDemandSignal"
-        WHERE 1=1 ${whereCity}
+        WHERE 1=1 ${cityFilter}
         GROUP BY query, city
         HAVING COUNT(*) >= ${minCount}
       ) sub
