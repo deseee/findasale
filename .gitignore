@@ -163,3 +163,6 @@ packages/*/claude_docs/
 "packages/frontend/C:"*
 packages/backend/C:
 packages/frontend/C:
+
+# Analytics OAuth credentials (never commit)
+claude_docs/scripts/.analytics-creds.json
