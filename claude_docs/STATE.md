@@ -8,6 +8,10 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S916 — OPS/INVESTIGATION (2026-06-07). Sentry bounce root cause identified and fixed. Gmail API confirmed working. outreachEmailsCron.ts ARCHIVED fix pending push.**
+
+**S916 findings:** Patrick ordered investigation of a Sentry ingest address appearing in email bounces. Chrome MCP audit of outreach@finda.sale Gmail confirmed: (1) NO Sentry forwarding filter exists in Gmail settings — Filters tab is completely empty; (2) Forwarding tab shows only deseee@gmail.com (the S915 forwarding we set up); (3) Gmail API sends are working — Sent folder has 8,919 messages including 2 successful sends tonight (7:31 PM). The "mailer-daemon" bounces in the outreach inbox are Gmail's AUTO-FORWARDING service failing — the inbox has 1,415 messages being forwarded to deseee@gmail.com, which saturates Gmail's daily forwarding quota. This is a noise issue, not an API delivery issue. ROOT CAUSE of the Sentry bounce: the outreach cron had a corrupted DirectoryClaimEmail record — "Kaff's Bake Shop" (id=cmp3nh7yy0041kbtjgb8aci4v) stored `u002F802d7a4fd3f743ec907da8badf47bec3@o1378064.ingest.sentry.io` as its contact emailAddress. The cron sent 3 outreach emails to this Sentry ingest address (May 27/May 30/Jun 4). Sentry received the unexpected emails and sent bounce notifications back. FIX: ARCHIVED that record in Railway DB — confirmed via psycopg2 (`status='ARCHIVED'`). NEXT: push outreachEmailsCron.ts ARCHIVED exclusion fix (coded prior session), then set OUTREACH_ENABLED=true. BQ: 7 (unchanged).
+
 **S915 — OPS (2026-06-07). Railway ✅ deployed (0b9752bc). /api/health ✅ live. bounceSuppressCron ✅ registered. S913 [P3] /health RESOLVED. Gmail OAuth ✅ RESTORED S915: old token recovered from Jun-6 backup, transactional email working. Mailbox ops COMPLETE S915: (1) GMAIL_MAILBOX_REFRESH_TOKEN obtained (https://mail.google.com/ scope, OAuth Playground via qualified-cedar-496114-v1 client) + stored in Railway; (2) outreach-mailbox-ops.js updated to prefer GMAIL_MAILBOX_REFRESH_TOKEN; (3) 77 bounce messages (from:mailer-daemon subject:"one step from going live") moved to Trash; (4) auto-forwarding outreach@finda.sale → deseee@gmail.com ENABLED (confirmed via Gmail Settings banner). BQ: 7 (unchanged). S913 Noted Finding P1 (Gmail REFRESH_TOKEN broken) → RESOLVED S915.**
 
 **S913 — OPS/EMAIL HARDENING (2026-06-07). Email-system audit + monitoring automation + task-fleet consolidation.** (1) Audited S912 kill-switch — sound + already live on `main` (the "Push pending" note was stale). Knock-on found: only 3 of ~40 Gmail-rail senders (`emailService.emails.send`) were gated. Dispatched dev → gated 8 proactive bulk jobs behind OUTREACH_ENABLED via new `utils/bulkEmailGate.ts` (weeklyEmailJob, notificationJob, presaleSneakPeekJob, curatorEmailJob, organizerWeeklyDigestJob, monthlyTrendReportJob, tierLapseJob warning-cron, abandonedCheckoutJob) — Patrick pushed, redeploying. Transactional + opt-in event mail intentionally left ungated. (2) NEW daily scheduled tasks: `findasale-email-delivery-health` (06:07, 14 checks A–N) + `findasale-ops-cost-guard` (05:10 — deploy health, Google-Maps cost guard, smoke test, backup verify). Both ran clean once (⚠️ caught 5 stale Vercel deploy failures + an UptimeRobot blip — both pre-known/recovered). (3) Task-fleet consolidation: RETIRED `context-freshness-check` (→friction-audit) + `ux-spotcheck` (→full-site-audit new Phase 5); NARROWED `health-scout` to security+code-quality; KEPT `ci-sentry-health` (owns CI+secrets+all-Sentry) + `brand-drift`. (4) ImprovMX root alias `outreach@finda.sale → deseee@gmail.com` LIVE. (5) Workspace account confirmed ACTIVE (sending ~200/day, zero suspension/OAuth/quota alerts in 20d inbox scan). **PENDING → S914 (blocked this session: no Railway CLI/MCP/creds):** run `scripts/outreach-mailbox-ops.js` to (a) trash the Jun-6 abandoned-signup bounce backlog (targeted query `from:mailer-daemon subject:"one step from going live"`) and (b) enable auto-forwarding on the outreach@finda.sale Workspace mailbox (address already verified by Patrick); then test forwarding end-to-end. BQ unchanged (7).
@@ -285,58 +289,59 @@ _(S862
 
 ## Next Session
 
-**S916 STATUS ENTERING:**
-- ✅ Railway deployment 0b9752bc confirmed SUCCESS
-- ✅ /api/health live: `{"status":"ok","timestamp":"..."}` 200
-- ✅ bounceSuppressCron registered (daily 06:00 UTC)
-- ❌ Gmail OAuth BROKEN — GMAIL_REFRESH_TOKEN returns `unauthorized_client` — transactional email down
-- ❌ Mailbox ops (trash bounce backlog + enable forwarding) blocked until Gmail OAuth fixed
+**S917 STATUS ENTERING:**
+- ✅ Gmail API sends working (Sent folder: 8,919 messages, 2 successful tonight at 7:31 PM)
+- ✅ Sentry bounce root cause found + fixed (Kaff's Bake Shop record ARCHIVED in DB)
+- ✅ No Sentry forwarding filter ever existed in Gmail
+- ⏳ outreachEmailsCron.ts ARCHIVED fix coded — needs push before OUTREACH_ENABLED=true
+- ⚠️ outreach@finda.sale inbox has 1,415 messages overwhelming the auto-forward quota
 
-**Patrick URGENT action (before S916 starts — P1):**
-
-Gmail OAuth is broken. ALL transactional email is down right now. To fix:
-
-**Option A (fastest — roll back):** Restore the old GMAIL_REFRESH_TOKEN value if you saved it. The old token had gmail.send scope which worked for transactional sending. Update it in Railway → backend → Variables → GMAIL_REFRESH_TOKEN.
-
-**Option B (re-mint correctly):** The GMAIL_CLIENT_ID in Railway starts with `955070470579-3kangpdvi0jcvj88v`. The refresh token you generate MUST be authorized by this same OAuth client. Steps:
-1. Go to Google Cloud Console → project for `955070470579` → Credentials
-2. Find the OAuth 2.0 Client with that ID — download credentials JSON
-3. Run the OAuth flow using THAT client's ID and secret, requesting `https://mail.google.com/` scope
-4. Copy the generated refresh token → update GMAIL_REFRESH_TOKEN in Railway
-
-**Option C (Workspace Admin approval):** If the OAuth app hasn't been granted access in Workspace Admin:
-1. admin.google.com → Security → API Controls → App access control
-2. Find the app (client ID `955070470579-...`) → mark as Trusted
-
-After any of the above: Railway will redeploy automatically when env var changes.
-
-**S916 Autonomous agenda (after Gmail OAuth fixed):**
-
-**Step 2 — Run mailbox ops end-to-end** (Railway CLI in VM):
-```bash
-export PATH="/tmp/railway/bin:$PATH"
-export RAILWAY_TOKEN="[from CLAUDE.md]"
-cd /sessions/adoring-upbeat-lovelace/mnt/FindaSale
-NODE_PATH=/tmp/script-modules/node_modules \
-  railway run --service backend node scripts/outreach-mailbox-ops.js trash --dry-run
-# Confirm match count > 0, then:
-NODE_PATH=/tmp/script-modules/node_modules \
-  railway run --service backend node scripts/outreach-mailbox-ops.js trash --apply
-NODE_PATH=/tmp/script-modules/node_modules \
-  railway run --service backend node scripts/outreach-mailbox-ops.js enable-forwarding
+**Patrick action before S917:**
+Push the outreachEmailsCron.ts fix (coded last session):
 ```
-Note: googleapis must be installed in /tmp/script-modules first: `mkdir -p /tmp/script-modules && cd /tmp/script-modules && npm install googleapis`
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git commit -m "fix(outreach): exclude ARCHIVED records from cron candidate query"
+.\push.ps1
+```
+Wait ~5 min for Railway deploy, then set `OUTREACH_ENABLED=true` in Railway → backend → Variables.
 
-**Step 3 — Verify forwarding end-to-end** (Gmail MCP): search deseee@gmail.com for forwarded message from outreach@finda.sale.
+**S917 Autonomous agenda — Gmail Inbox Triage:**
+1. Open Chrome MCP → outreach@finda.sale (account u/6)
+2. Delete/archive all mailer-daemon bounce messages (search: `from:mailer-daemon`, select all → delete — these are forwarding failures, not useful)
+3. Identify and clear any other automated noise (noreply, newsletter, subscription confirmations)
+4. Leave only real human replies or organizer responses in inbox
+5. Verify forwarding is working after volume drops below Gmail's daily forwarding quota
 
 **Decisions still open (Patrick):**
-- **#335 outreach resume:** keep OUTREACH_ENABLED=false until ~Jun 22 (warming). Jane Thrift payout re-send is the only urgent transactional email — but this requires Gmail OAuth to be working first.
+- **#335 outreach resume:** keep OUTREACH_ENABLED=false until ~Jun 22 (warming). Jane Thrift payout re-send can go now (Gmail API is working).
 - **FB Marketplace:** DROP recommended; Graph API OAuth (#365) = long-term path.
 - **#332 Shopify:** code fixed; needs a real custom-app store for QA.
 - **#230 Smart Buyer:** publish a sale on user1 to enable QA.
 
 ## Recent Sessions
 
+
+### S916 — OPS/INVESTIGATION (2026-06-07). Sentry bounce root cause found + fixed. Gmail confirmed working.
+
+**Completed:**
+- Chrome MCP audit of outreach@finda.sale Gmail: Filters tab EMPTY (no Sentry filter ever existed), Forwarding tab shows only deseee@gmail.com.
+- Gmail API sends confirmed WORKING: Sent folder 8,919 messages, 2 successful test sends at 7:31 PM tonight.
+- Sentry bounce root cause identified: DirectoryClaimEmail record id=cmp3nh7yy0041kbtjgb8aci4v ("Kaff's Bake Shop") had Sentry ingest address `u002F802d7a4fd3f743ec907da8badf47bec3@o1378064.ingest.sentry.io` as its emailAddress. Outreach cron sent 3 emails to it (May 27/30, Jun 4). Sentry received them and bounced.
+- DB fix: `UPDATE DirectoryClaimEmail SET status='ARCHIVED' WHERE id='cmp3nh7yy0041kbtjgb8aci4v'` — CONFIRMED via psycopg2.
+- Diagnosed the "mailer-daemon" inbox flood: 1,415 messages queued to forward to deseee@gmail.com, hitting Gmail's daily auto-forwarding quota. This is forwarding noise, NOT an API delivery problem.
+
+**Pending push (outreachEmailsCron.ts ARCHIVED fix from prior session):**
+```
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/jobs/outreachEmailsCron.ts
+git commit -m "fix(outreach): exclude ARCHIVED records from cron candidate query"
+.\push.ps1
+```
+
+**BQ: 7 (unchanged).**
+
+---
 
 ### S915 — OPS (2026-06-07). Railway verified, bounce cron confirmed, /api/health confirmed. Gmail OAuth P1.
 
