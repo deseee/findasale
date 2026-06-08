@@ -50,15 +50,9 @@ git commit -m "docs: S918 session wrap — Resend transactional rail"
 
 ---
 
-## ⚠️ REQUIRED BEFORE TRANSACTIONAL EMAILS WORK IN PRODUCTION
+## ✅ NO RESEND SETUP REQUIRED
 
-1. **Verify `RESEND_API_KEY` is set in Railway:**
-   Railway dashboard → findasale-backend → Variables tab → confirm `RESEND_API_KEY` is present.
-   (It was added for quota alerts — very likely already there. Just confirm.)
-
-2. **Verify `finda.sale` is a verified sending domain in Resend:**
-   Resend dashboard → Domains tab → `finda.sale` should show "Verified".
-   If it doesn't, add it and set the DNS records. Without this, `hello@finda.sale` sends will be rejected.
+`send.finda.sale` is already verified in Resend (it's the domain your quota alert emails use). `RESEND_API_KEY` is already in Railway. The transactional rail will work as soon as you push.
 
 ---
 
