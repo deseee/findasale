@@ -18,7 +18,7 @@ import { getStripe } from '../utils/stripe';
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 
 const stripe = () => getStripe();
 
@@ -120,7 +120,7 @@ export async function createPaymentLinkInternal(opts: {
         ctaUrl: paymentLinkUrl,
         accentColor: '#10b981',
       });
-      await emailService.emails.send({
+      await transactionalEmailService.emails.send({
         from: process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale',
         to: buyerEmail,
         subject: `Payment link: $${amount.toFixed(2)}`,
@@ -600,7 +600,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
           accentColor: '#10b981',
         });
 
-        await emailService.emails.send({
+        await transactionalEmailService.emails.send({
           from: fromEmail,
           to: reservation.user.email,
           subject: `Invoice: ${reservation.item.title}`,
@@ -681,7 +681,7 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
       accentColor: '#10b981',
     });
 
-    await emailService.emails.send({
+    await transactionalEmailService.emails.send({
       from: fromEmail,
       to: buyerEmail,
       subject: `Your checkout is ready — ${amountStr}`,
@@ -1203,7 +1203,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
             ${cautionCopy}
           `;
 
-          await emailService.emails.send({
+          await transactionalEmailService.emails.send({
             from: fromEmail,
             to: shopper.email,
             subject: `Invoice for your purchase`,

@@ -15,7 +15,7 @@ import { prisma } from '../lib/prisma';
 import { getPlatformFeeRate } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 
 const stripe = () => getStripe();
 
@@ -397,7 +397,7 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
           ctaUrl: process.env.FRONTEND_URL || 'https://finda.sale',
           accentColor: '#10b981',
         });
-        await emailService.emails.send({
+        await transactionalEmailService.emails.send({
           from: fromEmail,
           to: buyerEmail,
           subject: `Receipt: Your in-person purchase`,
@@ -642,7 +642,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
           accentColor: '#10b981',
         });
 
-        await emailService.emails.send({
+        await transactionalEmailService.emails.send({
           from: fromEmail,
           to: buyerEmail,
           subject: `Receipt: Your in-person purchase`,

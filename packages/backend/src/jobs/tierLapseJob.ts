@@ -7,7 +7,7 @@ import {
   queueTierLapseWarnings,
   markTierLapseWarning,
 } from '../services/tierLapseService';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -34,7 +34,7 @@ const sendTierLapseWarningEmail = async (
   });
 
   try {
-    await emailService.emails.send({
+    await transactionalEmailService.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: `Action needed: Your ${tierName} subscription expires in ${daysUntilLapse} days`,

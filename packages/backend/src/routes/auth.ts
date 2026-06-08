@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
-import { emailService } from '../lib/emailService';
+import { transactionalEmailService } from '../lib/transactionalEmailService';
 
 // Auth validation schemas
 const changePasswordSchema = z.object({
@@ -126,7 +126,7 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
 
     if (user.emailVerificationToken) {
       try {
-        await emailService.emails.send({
+        await transactionalEmailService.emails.send({
           from: fromEmail,
           to: email,
           subject: 'Verify your FindA.Sale email address',
@@ -214,7 +214,7 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
     const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
 
     try {
-      await emailService.emails.send({
+      await transactionalEmailService.emails.send({
         from: fromEmail,
         to: email,
         subject: 'Reset your FindA.Sale password',
