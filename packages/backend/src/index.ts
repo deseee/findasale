@@ -253,7 +253,6 @@ import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
 import { scheduleOutwardEmailAutomationsCron } from './jobs/outwardEmailAutomationsJob'; // Outward Email Automations: recap + review/testimonial asks (daily 10:00 UTC)
-import { bounceSuppressService } from './services/bounceSuppressService'; // Bounce → EmailSuppression processor (daily 06:00 UTC)
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -794,17 +793,26 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Bounce → EmailSuppression processor — daily at 06:00 UTC
   // Scans outreach@finda.sale inbox for mailer-daemon/postmaster bounces and suppresses addresses.
+  // Dynamic require prevents a missing compiled file from crashing the entire server.
+  // Root cause: Dockerfile `tsc || true` can silently skip emitting this file; a static top-level
+  // import means the server never starts if the .js is absent (Sentry FINDASALE-NODEJS-1A, 12 events
+  // since 2026-05-09, fatal onuncaughtexception — diagnosed S919 daily health run).
   (() => {
-    const cronLib = require('node-cron');
-    cronLib.schedule('0 6 * * *', async () => {
-      try {
-        const summary = await bounceSuppressService.processBounces();
-        console.log('[bounceSuppressCron] Summary:', JSON.stringify(summary));
-      } catch (err: any) {
-        console.error('[bounceSuppressCron] Uncaught error:', err.message);
-      }
-    }, { timezone: 'UTC' });
-    console.log('[bounceSuppressCron] Registered: daily 06:00 UTC');
+    try {
+      const { bounceSuppressService } = require('./services/bounceSuppressService');
+      const cronLib = require('node-cron');
+      cronLib.schedule('0 6 * * *', async () => {
+        try {
+          const summary = await bounceSuppressService.processBounces();
+          console.log('[bounceSuppressCron] Summary:', JSON.stringify(summary));
+        } catch (err: any) {
+          console.error('[bounceSuppressCron] Uncaught error:', err.message);
+        }
+      }, { timezone: 'UTC' });
+      console.log('[bounceSuppressCron] Registered: daily 06:00 UTC');
+    } catch (err: any) {
+      console.error('[bounceSuppressCron] Failed to load bounceSuppressService — cron skipped:', err.message);
+    }
   })();
 
   // Feature #75: Tier grace period finalization cron
