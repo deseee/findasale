@@ -263,7 +263,7 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
 
     // ADR-075: Base filter criteria (reused across all three leadTier passes)
     const baseWhere = {
-      status: { notIn: ['BOUNCED', 'OPTED_OUT', 'CLAIMED'] },
+      status: { notIn: ['BOUNCED', 'OPTED_OUT', 'CLAIMED', 'ARCHIVED'] },
       organizer: {
         directoryStatus: { not: 'CLOSED' },
         // Only legitimate organizer types (estate sale, auction, antique, consignment, etc.).
