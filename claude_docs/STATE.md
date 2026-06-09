@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S934 — RESEARCH/DEV (2026-06-09). Scraper coverage for 459 zero-record city×category SEO pages. Third-party auction/venue sources BLOCKED: HiBid ToS §7 prohibits scraping/aggregation (legally blocked — ADR written), US YellowPages.com ToS §2.1 prohibits data mining (NO-GO, no code), AuctionNinja dated listings are JavaScript-rendered (fetch+cheerio sees only static company-directory nav — needs headless browser, no GitHub scraper exists). PIVOT to own-pipeline fills (all legal): RECLASSIFICATION APPLIED to production — reclassify-mistyped-sales.ts flipped 651 mislabeled EstateSales/GarageSaleFinder events → AUCTION (saleType AUCTION 97→748 confirmed in DB) + 217 YARD→ESTATE (excludes places-API business listings). FB Events query WIDENED (flea market/swap meet/public+online auction/consignment added) and PLACES_QUERIES +5 flea synonyms (Foursquare/HERE pick up next monthly run) — both pending push. Flea-org backfill SHELVED on data quality (583/600 orphan FLEA organizers were individual vendor booths, 443 piled on 2 New Orleans coords). DB audit (read-only): only 97 AUCTION records existed nationwide pre-fix (NYC/Houston/Chicago/LA all had 0); GOOGLE_PLACES_METROS (300 metros, plain string[]) confirmed comprehensive — no genuinely-missing US metros. RETAIL data-quality audit done (7,692 rows, ~17% junk min, 1,478 dupes, 1,842 Canadian — recommend query/SEO-layer suppression → ~3,288 clean). BQ: 1 (unchanged).**
+
 **S932 — RECORDS (2026-06-09). Records pass: Applied S931 PCVs to roadmap.md — #462 Attribution E2E Chr ✅ S931 (only column that needed update; others already ✅). #455 Notify Me updated to full E2E S931 (migration applied note added). Hunt Pass BQ item RESOLVED — Patrick confirmed /shopper/dashboard stats bar shows "1.5x XP" on live site. BQ: 6→5.**
 
 **S930 — QA (2026-06-09). Records pass (applied S925 PCVs to roadmap.md: logout flow Chr✅, #463 claim-click CODE-ONLY note). DB migration: decoded 4 HTML-encoded category rows in Railway DB (Electronics & Technology, Lamps & Lighting, Home Décor, Jewelry & Watches). Chrome-verified HTML entity fix at /organizer/insights ✅ (no &amp; or &#233; entities visible). Autonomous QA sweep: organizer dashboard (Alice) ✅, shopper dashboard (Leo Thomas) ✅, Explorer Profile ✅, Explorer's Guild rank label #123 ✅ at /shopper/ranks, Hunt Pass active state #199 ✅ at /shopper/hunt-pass. 6 PCVs staged for S931 records pass. ⚠️ P3 new BQ item: Hunt Pass multiplier display inconsistency (dashboard "2x XP" vs /shopper/hunt-pass "1.5x XP"). Gmail DSN cleanup: 104 mailer-daemon bounce threads trashed from outreach inbox. BQ: 5→6.**
@@ -131,9 +133,9 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **S933 pushblock** — run the pushblock below (STATE.md + patrick-dashboard.md).
+1. **S934 pushblock** — run the pushblock (search-facebook-events.ts + googlePlaces.ts + reclassify-mistyped-sales.ts + 2 new feature-notes + 3 wrap docs).
 
-### S934 Recommendation
+### S935 Recommendation
 BQ=1 (ceiling=8 — DEV available).
 
 **QA Priority — items built but not Chrome-verified:**
@@ -149,34 +151,41 @@ BQ=1 (ceiling=8 — DEV available).
 - **#335 Outreach Resume** — 37 PENDING DirectoryClaimEmail queue ready; domain warming check first.
 
 
-### Scraper Coverage — Fill 459 Zero-Record GEO Pages (added S934)
+### Scraper Coverage — Outcomes + Follow-ups (S934)
 
-**Context confirmed — do not re-investigate:**
+**Done S934:** Reclassification applied (AUCTION 97→748, +217 ESTATE). FB Events query + PLACES_QUERIES flea synonyms widened (pending push). Third-party auction/venue scrapers ruled out: HiBid (ToS §7), US YellowPages (ToS §2.1), AuctionNinja (JS-walled). Flea-org backfill shelved (vendor-booth data quality).
 
-459 of the 1,000 city×category sitemap pages have zero Sale records, rendering as empty shells. Root cause of the "1,902 Discovered - not indexed" GSC warning. Breakdown: auctions 155/200 cities empty, flea-markets 158/200, consignment 122/200.
+**S935 top priorities (dispatch-ready):**
 
-**What was confirmed about each source:**
+1. **`Skill('findasale-dev')` → RETAIL suppression filter.** Root cause confirmed (retail-data-quality-audit.md): 7,692 RETAIL rows, ~17% junk minimum, 1,478 duplicate rows, 1,842 Canadian rows, ~3,288 genuinely-clean. Implement query/SEO-layer suppression (NO deletes — see memory feedback_no_database_workarounds / never-hide-issues): drop the Estate Sale Company bucket (39% junk, matched on "Estate"), the no-suffix raw-name bucket (28%), and the Consignment bucket (22%); add a business-keyword blocklist; collapse the 1,478 duplicate rows; region-gate the 1,842 Canadian rows out of US pages; normalize the DC key. Expected output: clean ~3,288-row RETAIL pool surfaced on city×category pages + push block. Keep Antique Mall/Pawn/Thrift/Resale (all <5% junk) intact.
 
-*Auctions:* AuctionNinja scraper (`packages/backend/src/services/scraper/sources/auctionNinjaScraper.ts`) is enabled but only scrapes the company directory at `/hire-an-estate-sale-company` → calls `getOrCreateScrapedOrganizer` with `businessCategory: 'AUCTION_HOUSE'`. Creates organizer records, NOT Sale records. Zero Sale records have `sourceName = 'AuctionNinja'` in DB. Architectural gap, not a bug. AuctionNinja.com has actual dated auction listings at `/auctions` that could become Sale records with `saleType = 'AUCTION'`.
+2. **Verify next monthly cron output.** After push, confirm the widened FB Events query (search-facebook-events.ts) and the PLACES_QUERIES flea synonyms (googlePlaces.ts) actually produce new AUCTION + FLEA_MARKET Sale records on the next Foursquare (3rd) / HERE (2nd) / FB-Events run. Spot-check a few previously-empty city×category pages.
 
-*Flea markets:* 477 records, Foursquare (408) + HEREPlaces (69) only. Venue records with synthetic 1-year rolling dates. 81 cities covered, 119 sitemap cities empty.
-
-*Consignment:* 7,692 records, 438 distinct cities via Foursquare/HERE. 122 of top-200 sitemap cities have no records.
-
-**Tasks for `Skill('findasale-dev')`:**
-
-1. **Auction — extend AuctionNinja scraper to pull dated listings.** Read full scraper file. Check robots.txt for listing page access. If allowed: add scrape mode for dated auction listings → ingest via `ingestScrapedListing` as Sale records with `saleType: 'AUCTION'`. Return diff only.
-
-2. **Auction fallback** — if AuctionNinja listing pages blocked, check HiBid or BidSpotter robots.txt. Report what's accessible.
-
-3. **Flea markets — identify viable new source** for 119 uncovered cities. Check `fleausa.com` and `fleamarketzone.com` robots.txt + city listing structure. Spec a new scraper source if viable; otherwise ranked alternatives.
-
-4. **Consignment — assess only.** Can Foursquare/HERE be re-run with expanded city queries to cover 122 missing cities? One-paragraph recommendation, no code.
-
-**Acceptance criteria:** AuctionNinja diff OR documented blocker + alternative; flea market source spec OR ranked list; consignment recommendation; TS check passes; no git; explicit changed-files list.
-
+3. **Future / lower priority:** check yellowPagesCaScraper.ts (Canada) ToS standing — it likely shares the US YellowPages scraping prohibition. Broader flea/RETAIL vendor-venue contamination cleanup. Keep #332 Shopify (sole BQ item, P0) in mind.
 
 ## Recent Sessions
+
+### S934 — 2026-06-09 | RESEARCH/DEV
+
+**Session type:** RESEARCH/DEV — scraper coverage for 459 zero-record city×category SEO pages
+
+**Work completed:**
+- **Third-party auction/venue sources evaluated — all BLOCKED.** AuctionNinja dated-listing extension: BLOCKED — auction events are JavaScript-rendered; the fetch+cheerio stack only sees the static company-directory nav (confirmed by reading static HTML of /auctions + a company profile). Not fixable without a headless browser; no GitHub scraper exists (only a seller-side CSV tool). HiBid evaluated as the auction source — fully server-rendered (title/city/state/zip/start+end dates/catalog URL), coverage probe of 8 metros returned 3–77 live auctions each — BUT ToS §7 explicitly prohibits scraping, automated access, aggregating/displaying their data, and building a competing service → NO-GO (legal). US YellowPages.com evaluated as an organizer/venue source — ToS §2.1 "Data Mining/Scraping and Framing Prohibited" → NO-GO, no code written. (Existing yellowPagesCaScraper.ts (Canada) likely shares similar ToS — flagged for a future check.)
+- **DB audit (Railway, read-only).** Only 97 AUCTION Sale records existed nationwide pre-fix; 155 high-activity cities had zero auctions (NYC 621 total/0, Houston 508/0, Chicago 279/0, LA 237/0, Miami 228/0, Dallas 224/0). GOOGLE_PLACES_METROS (300 metros) confirmed COMPREHENSIVE — apparent gaps are suburbs already inside a covered metro's radius, NYC boroughs, Canadian cities in CANADIAN_METROS, or data-mislabels. GOOGLE_PLACES_METROS is a plain string[] constant (no Google API call); the Google Places scraper itself is disabled (paid). Foursquare cron = 3rd of month, HERE cron = 2nd (GitHub Actions).
+- **PIVOT to own-pipeline fills (all legal).** (a) RECLASSIFICATION — APPLIED to production. reclassify-mistyped-sales.ts flipped 651 mislabeled EstateSalesNet/GarageSaleFinder event listings → AUCTION (saleType AUCTION 97→748 confirmed in DB) and 217 YARD→ESTATE. Rule excludes places-API business listings (em-dash "— Category in City" suffix + RETAIL). Dry-run audited, false-positive risk negligible. (b) FB Events query WIDENED — search-facebook-events.ts now also searches flea market/swap meet/public auction/online auction/consignment sale (its inferSaleType already categorizes auction+flea). (c) PLACES_QUERIES +5 flea synonyms — googlePlaces.ts gained antique flea market/outdoor market/vendor market/trade days/bazaar (FLEA_MARKET); Foursquare+HERE pick them up next monthly run. (d) Flea-org backfill SHELVED on data quality — the 600 orphan geocoded FLEA organizers were 583/600 individual vendor booths (443 piled on 2 New Orleans coordinates); generate-flea-sales-from-orgs.ts built but NOT applied and dropped from push.
+- **RETAIL data-quality audit** (retail-data-quality-audit.md) — 7,692 RETAIL sales, ~17% junk minimum, concentrated in Estate Sale Company (39% junk — matched on "Estate"), no-suffix raw-name bucket (28%), Consignment (22%); clean categories Antique Mall 3%/Pawn 2%/Thrift 1%/Resale 4%. Also 1,478 duplicate rows (~19%) and 1,842 Canadian rows (24%). Recommendation: query/SEO-layer suppression (no deletes) → ~3,288-row clean pool.
+
+**Files modified:**
+- `packages/backend/src/services/scraper/sources/search-facebook-events.ts` — widened search query (flea market/swap meet/public+online auction/consignment) [pending push]
+- `packages/backend/src/services/scraper/sources/googlePlaces.ts` — PLACES_QUERIES +5 flea synonyms [pending push]
+- `packages/backend/src/scripts/reclassify-mistyped-sales.ts` — APPLIED to production (AUCTION 97→748, +217 ESTATE)
+- `claude_docs/feature-notes/ADR-hibid-auction-scraper.md` — NEW (HiBid decision: legally blocked per ToS §7)
+- `claude_docs/feature-notes/retail-data-quality-audit.md` — NEW (RETAIL junk audit + suppression recommendation)
+- `claude_docs/STATE.md` — S934 wrap
+- `claude_docs/patrick-dashboard.md` — S934 summary
+- `claude_docs/strategy/roadmap.md` — scraper-coverage row updated
+
+**BQ delta:** 1 → 1 (unchanged — #332 Shopify still the sole item)
 
 ### S933 — 2026-06-09 | BUG/DEV
 

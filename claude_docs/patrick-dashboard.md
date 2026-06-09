@@ -1,6 +1,20 @@
-# Patrick's Dashboard — June 9, 2026 (Updated: S933)
+# Patrick's Dashboard — June 9, 2026 (Updated: S934)
 
-**Generated:** Monday, June 9, 2026 (S933 — BUG/DEV: BQ cleanup + competitor email domain blocking)
+**Generated:** Monday, June 9, 2026 (S934 — RESEARCH/DEV: scraper coverage for 459 empty SEO pages)
+
+---
+
+## S934 Quick Summary
+
+**Auctions jumped 97 → 748.** We had only 97 auction listings nationwide — every big city (New York, Houston, Chicago, LA) showed zero. The cause wasn't missing data, it was mislabeled data: hundreds of real auction events we'd already scraped were filed under the wrong sale type. A reclassification pass fixed 651 of them into AUCTION (plus 217 yard-sale rows corrected to estate). This is now live in the database.
+
+**Two outside sources can't be used.** I evaluated HiBid (auctions) and US YellowPages (venues) as new data sources to fill the empty city pages. Both explicitly ban scraping and aggregation in their terms of service, so they're off the table — using them would put us at legal risk. AuctionNinja's listings are JavaScript-only, which our scraper can't read. None of these are worth pursuing.
+
+**Two own-pipeline widenings (pending push).** I widened our Facebook Events search to also pull flea markets, swap meets, public/online auctions, and consignment sales, and added five flea-market search terms to our Foursquare/HERE pipeline. These pick up new listings automatically on the next monthly run — no further action needed.
+
+**Flea-market backfill shelved.** A batch of 600 "flea market" organizers turned out to be individual vendor booths (443 of them stacked on two New Orleans map points), so generating sales from them would have created junk. I built the script but didn't run it.
+
+**RETAIL pages need a junk filter next.** Audited our 7,692 retail listings — about 1 in 6 are junk, plus ~1,478 duplicates and ~1,842 Canadian rows mixed into US pages. Cleaned-up pool is roughly 3,288 solid listings. Recommendation is a display-layer filter (no deletions). Queued as the S935 priority.
 
 ---
 
@@ -23,6 +37,8 @@ BQ 5→1. Competitor email domain blocking shipped.
 | Email (transactional) | ✅ On Resend rail (payouts, auth, receipts) |
 | Email (competitor blocking) | ✅ estatesales.net/org blocked across all rails |
 | Outreach | ⏸ Paused (intentional, domain warming — 37 PENDING queue ready) |
+| Auction coverage | ✅ 97→748 listings (S934 reclassification of mislabeled data) |
+| RETAIL pages | ⚠️ Junk filter queued (S935) — ~17% junk + dupes need display-layer suppression |
 | Backend / Railway | ✅ Healthy |
 | Frontend / Vercel | ✅ Deployed |
 
@@ -31,18 +47,24 @@ BQ 5→1. Competitor email domain blocking shipped.
 ## What You Need to Do
 
 ```powershell
-git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git commit -m "S933 wrap: BQ 5→1, competitor domain blocking shipped, STATE updated"
+git add packages/backend/src/services/scraper/sources/search-facebook-events.ts packages/backend/src/services/scraper/sources/googlePlaces.ts packages/backend/src/scripts/reclassify-mistyped-sales.ts claude_docs/feature-notes/ADR-hibid-auction-scraper.md claude_docs/feature-notes/retail-data-quality-audit.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
+git commit -m "S934 wrap: auction reclassification (97->748), FB Events + flea queries widened, HiBid/YP ToS-blocked, RETAIL audit, docs updated"
 .\push.ps1
 ```
 
 ---
 
-## S934 Recommendation
+## S935 Recommendation
 
 BQ=1 (ceiling=8 — DEV available).
 
-**QA pass — these features are built but unverified in Chrome:**
+**Top priority — RETAIL junk filter (from S934 audit):**
+- Build a display-layer filter (no deletions) that drops the junk RETAIL buckets (Estate Sale Company, no-suffix raw names, Consignment), collapses ~1,478 duplicates, and keeps Canadian rows off US pages. Cleans ~7,692 listings down to ~3,288 solid ones — directly improves the city×category SEO pages.
+
+**Then verify the S934 widenings landed:**
+- Confirm the widened Facebook Events search + the new flea-market search terms actually produce new auction/flea listings on the next monthly Foursquare (3rd) / HERE (2nd) / FB-Events run.
+
+**QA pass — features built but unverified in Chrome:**
 - **#470 GA4 Conversion Events** (built S928) — open GA4 → Realtime → Events, then trigger an action (sign up or create a sale), verify events fire
 - **#463 Claim Button Click Tracking** (built S807) — visit an organizer profile, click Claim, check Vercel Analytics → Events tab
 - **#164 Tiers Backend Infrastructure** — flagged UNVERIFIED since S804; log in as organizer, verify tier display
@@ -50,7 +72,6 @@ BQ=1 (ceiling=8 — DEV available).
 **DEV candidates:**
 - **SEO3 Denver city landing page** — `/estate-sales/denver-co` targeting GSC impression cluster
 - **#471 Bounce Suppression Auto-Ingestion** — build before outreach resume; mailer-daemon parser not built
-- **#472 Email Send Automation** — POST /admin/send-test-email endpoint
 
 ---
 
