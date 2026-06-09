@@ -102,6 +102,11 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
       const message = res.data.isFavorited ? '❤️ Saved!' : '✓ Removed from saves';
       showToast(message, 'success');
 
+      // GA4 #470: shopper_favorite_added conversion event (only on add, not remove)
+      if (res.data.isFavorited && typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'shopper_favorite_added', { type: itemId ? 'item' : 'sale' });
+      }
+
       // Record SAVE ripple if favorited (only fire on add, not remove)
       if (res.data.isFavorited && saleId && itemId) {
         api.post(`/sales/${saleId}/ripples`, { type: 'SAVE' }).catch(() => { /* fire-and-forget */ });

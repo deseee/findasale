@@ -95,6 +95,7 @@ _⚠️ P0 AGING: #332 at 73+ sessions — mandatory P0 per CLAUDE.md §10a._
 _S919 WRAP: #230 RESOLVED (SmartBuyerWidget rendering confirmed). FB Marketplace RESOLVED (Patrick decision: DEFERRED — Apify path added to roadmap #380). #335 updated: Jane Thrift is fictional. BQ: 7→5._
 _S921: SEC-001, SEC-002, #196, #201 coded but pending push+Chrome-verify — all 4 remained in BQ. BQ: 9._
 _S922 QA MODE: all 4 S921 fixes Chrome-verified live RESOLVED (commit 7058d99c deployed): SEC-001 (admin.ts Prisma.sql parameterized, page returns 11 patterns no error), SEC-002 (items.ts scoped multer, valid types pass, add-items loads clean), #196 Buying Pools (card renders on $169 item ss_5769b4ui3, negative test on $25 item), #201 Favorites all 3 (Items(1) count, Saved Sales section, /shopper/collections→302→/shopper/wishlist ss_37941eelg/ss_1509jponw). All 4 rows REMOVED. BQ: 9→5. Below QA ceiling — DEV available S923._
+_S928: HTML entity P2 FIXED (textUtils.ts + insights.tsx + itemController.ts). GA4 #470 conversion events built. 22 Chr cols bulk-applied (S803–S805 backlog). BQ: 6→5._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
@@ -107,7 +108,6 @@ _S922 QA MODE: all 4 S921 fixes Chrome-verified live RESOLVED (commit 7058d99c d
 
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
-| P2: HTML entities in category names (insights) | DB stores HTML-encoded strings (`&amp;`, `&#233;`) in category fields; insights.tsx renders `{cat.category}` directly — entity text shows literally in "Items by Category" section on /organizer/insights | Data migration to HTML-decode all affected rows + fix write path to prevent re-encoding at item save time | S927 |
 
 
 ---
@@ -120,33 +120,53 @@ _S922 QA MODE: all 4 S921 fixes Chrome-verified live RESOLVED (commit 7058d99c d
 | — | **Logout flow — session fully clears on user dropdown logout** | ✅ Chrome-verified S925 — Leo Thomas (user5@example.com) at /shopper/dashboard. Desktop user dropdown opened, clicked Logout. Redirected to /login (ss_49305bl2y). Nav shows Login button. Navigated to /shopper/dashboard → 302 → /login?redirect=/shopper/dashboard (ss_581555xvt). Session fully cleared. | S925 |
 | 463 | **#463 Claim button click tracking (Vercel Analytics)** | CODE-ONLY S925 — track('claim_profile_click', {organizerId, source, tier}) confirmed in organizers/[id].tsx onClick. <Analytics /> SDK confirmed in _app.tsx. CTA redirect confirmed: clicked "Claim This Profile — It's Free" → /register?claim=cmp0jq4j700mnoz89rdjmih15 (ss_6367qcmy3). Beacon delivery UNVERIFIED (keepalive beacon fire-and-forget; page navigates before capture). Requires Vercel Analytics Events tab check. | S925 |
 
-| 316 | **#316 Referral Tranche Anti-Fraud** | ✅ Chrome S927 — Navigated to /organizer/referrals as Alice (user1). Referral link `https://finda.sale/signup?ref=REF-7CD8DCC0` visible. 1 Organizers Referred tracked. DB: fraudReviewStatus=CLEAR, ownReferralSucceeded=false, TRANCHE_A (100 XP) + TRANCHE_B (150 XP) both awarded 2026-06-05. UI "0 XP Earned" is OrganizerReferral-program XP counter (separate from tranche XP). ss_1143gl3d4. | S927 |
-| 164 | **#164 Tiers Backend Infrastructure** | ✅ Chrome S927 — Organizer dashboard as Alice. Bronze Organizer badge rendered: "1/4 sales until next tier", "Reach Silver at 5 sales". Real-Time Metrics widget shows live data. ss_01384hjx7. | S927 |
-| 79 | **#79 Earnings Counter Animation** | ✅ Chrome S927 — Navigated to /organizer/insights as Alice. TOTAL REVENUE $220.00, ITEMS SOLD 3, CONVERSION RATE 42.9% confirmed rendered. Animation not capturable (Next.js SSR loads final values before screenshot). Prior ✅ human QA S805 valid. ss_3082qg908. | S927 |
+_(S927 PCV rows #79/#164/#316 applied to roadmap.md in S928 records pass — cleared.)
 _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared.)_
 ---
 
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Push S926–S927 wrap docs** — pushblock below.
-2. **Pre-approve analytics task tools** (if not done S926): Cowork sidebar → Scheduled → **findasale-analytics-weekly** → **Run Now**.
+1. **Push S924–S928 combined** — full pushblock below (13 files).
+2. **Findasale-records pass S929** — apply S925 PCVs (logout flow + #463) to roadmap.md Chr columns.
 
-### Pending Push (S924–S927 combined)
+### Pending Push (S924–S928 combined)
 ```
-git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/scripts/analytics-weekly.py .gitignore
-git commit -m "S927: wrap — QA #79/#164/#316 ✅, HTML entity P2 bug logged (BQ=6)"
+git add packages/frontend/utils/textUtils.ts packages/frontend/pages/organizer/insights.tsx packages/backend/src/controllers/itemController.ts packages/frontend/pages/register.tsx packages/frontend/pages/organizer/create-sale.tsx packages/frontend/pages/organizer/add-items/[saleId].tsx packages/frontend/components/FavoriteButton.tsx packages/frontend/components/CheckoutModal.tsx claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/scripts/analytics-weekly.py .gitignore
+git commit -m "S928: HTML entity P2 fix, #470 GA4 conversion events, 22 Chr col bulk-apply, QA sweep ✅"
 .\push.ps1
 ```
 
-### S928 Recommendation
-BQ=6 (below ceiling=8). DEV or QA available.
-- **Records: apply S927 PCVs** (#79, #164, #316 Chrome columns in roadmap.md) — findasale-records pass
-- **DEV: P2 HTML entity bug** — `Skill('findasale-dev')`: decode `&amp;`/`&#233;` in category name fields (DB migration + fix write path in itemController.ts)
-- **DEV: #470 GA4 conversion events** — small build (~5 files), high analytical value, unblocks funnel visibility
+### S929 Recommendation
+BQ=5 (below ceiling=8). DEV or QA available.
+- **Records: apply S925 PCVs** (logout flow Chr✅ + #463 CODE-ONLY note) — findasale-records pass
+- **Chrome verify HTML entity fix** — navigate to /organizer/insights as an organizer with eBay-imported items and confirm no `&amp;` or `&#233;` in "Items by Category"
+- **DEV: DB migration** — decode existing HTML-encoded category rows (still needed — S928 fix only prevents future re-encoding and fixes render; existing encoded DB rows persist)
 
 
 ## Recent Sessions
+
+### S928 — 2026-06-08 | QA + DEV
+
+**Session type:** Autonomous QA + parallel dev dispatch (BQ=6, below ceiling=8)
+
+**Work completed:**
+- **Records Chr bulk-apply (22 rows)** — S803–S805 PCV backlog applied: #77/#8/#18/#136/#16/#57→✅S805; #33/#34/#63/#67/#6/#39/#191/#52/#70/#208/#211→✅S804; #28/#180/#181/#187→✅S803; #244→✅S791. S927 PCVs (#79/#164/#316) also applied in same pass.
+- **P2 HTML entity fix — RESOLVED** — Root cause: eBay CSV import encoded category strings (`&amp;`, `&#233;`). Fix: (1) `decodeHtmlEntities()` extended with numeric entity support in textUtils.ts; (2) insights.tsx wraps both bar chart + top items table renders; (3) itemController.ts decodes `rawCategory` at CSV bulk-import path. Future imports clean; existing DB rows still encoded (DB migration deferred → S929).
+- **#470 GA4 conversion events — BUILT** — 5 conversion events wired: `organizer_registered` (register.tsx, post-login, ORGANIZER only), `sale_created` (create-sale.tsx, post-publish, includes sale_type), `first_item_uploaded` (add-items/[saleId].tsx, guarded items.length===0), `shopper_favorite_added` (FavoriteButton.tsx, confirmed add only), `checkout_initiated` (CheckoutModal.tsx PaymentForm, includes amount). CODE-ONLY — no Stripe test terminal in QA env.
+- **Chrome QA sweep** — Confirmed 8 pages/features working: organizer dashboard (Alice, "Welcome", QA Active Sale S875 LIVE), insights (no entities in organic data ✅), affiliate page (code ORG_ABFJDV, empty state ✅), sale detail Hype Meter (green dot, 3 views, live activity ✅), category browsing (30 items Comics grid ✅), item detail (all CTAs: Save/Share/QR/Scout/Buy/Cart/Hold ✅), Verified Organizer Badge (blue checkmark on Artifact Downtown Paw Paw ✅).
+
+**Files modified (code):**
+- `packages/frontend/utils/textUtils.ts` — numeric entity decode + &apos; support
+- `packages/frontend/pages/organizer/insights.tsx` — decodeHtmlEntities on bar chart + top items
+- `packages/backend/src/controllers/itemController.ts` — decode rawCategory at CSV import
+- `packages/frontend/pages/register.tsx` — organizer_registered GA4 event
+- `packages/frontend/pages/organizer/create-sale.tsx` — sale_created GA4 event
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — first_item_uploaded GA4 event
+- `packages/frontend/components/FavoriteButton.tsx` — shopper_favorite_added GA4 event
+- `packages/frontend/components/CheckoutModal.tsx` — checkout_initiated GA4 event
+
+**BQ: 6→5 (HTML entity P2 RESOLVED).**
 
 ### S927 — 2026-06-08 | QA
 
@@ -218,79 +238,9 @@ BQ=6 (below ceiling=8). DEV or QA available.
 
 **BQ: 5 (unchanged).** CSRF bug found and fixed in same session — no BQ entry needed.
 
-### S923 — 2026-06-08 | RECORDS/WRAP
+### S923 and earlier — archived
 
-**Session type:** Records pass (cross-session PCV application) + attempted Chrome QA
-
-**Work completed:**
-- **roadmap.md PCVs applied** — #196 Buying Pools Chr column → ✅ S922 (with S922 evidence prepended to notes); #201 Favorites Chr → ✅ S922; #198 Reviews Chr → ✅ S920; #210 Streaks Chr → ✅ S921. Last Updated header updated. SEC-001/SEC-002 have no roadmap rows (BQ items only — already removed S922).
-- **patrick-dashboard.md updated** — Reflects S923 records pass, BQ=5, roadmap up to date.
-- **Chrome QA attempted** — Extension not connecting; handed back to Patrick.
-- **Bash confirmed working** — Disk at 94% (was 100% S922 causing bash outage).
-
-**Files modified:**
-- `claude_docs/strategy/roadmap.md` — Chrome column PCVs applied (#196/#201/#198/#210)
-- `claude_docs/patrick-dashboard.md` — S923 records pass summary
-- `claude_docs/STATE.md` — S923 status, Next Session updated
-
-**BQ: 5 (unchanged).**
-
-### S919 — 2026-06-08 | AUTOMATED + SECURITY AUDIT
-
-**Session type:** Automated (findasale-workflow-retrospective) + findasale-hacker quarterly audit
-
-**Work completed:**
-- Monthly retrospective written: `claude_docs/workflow-retrospectives/monthly-retro-2026-06-08.md` — 7-area analysis, 13 recommendations
-- SH-023/024/025 appended to `self_healing_skills.md` (Edit tool truncation, Railway env var propagation, outreach cascade)
-- `audits/` soft cap (30 files) added to `file-creation-schema.md`
-- Health-reports archival: 23 files moved to `claude_docs/archive/health-reports/` (28 → 5 files)
-- Workflow-retrospectives archival: 2 oldest files moved to `claude_docs/archive/workflow-retrospectives/`
-- **Quarterly security audit (findasale-hacker):** First since S218. Full report: `claude_docs/health-reports/security-audit-2026-06-08.md`
-  - **CRITICAL fixed inline:** `/api/dev` route registered in production without NODE_ENV guard — privilege escalation (anyone registers user1@example.com → becomes ADMIN). Fixed: added `if (process.env.NODE_ENV !== 'production')` guard to `packages/backend/src/index.ts`
-  - **P1 queued:** admin.ts SQL string interpolation in `$queryRawUnsafe` (admin-only, SEC-001) — FIXED S921, verified S922
-  - **P1 queued:** items.ts multer no MIME filter/size limit (SEC-002) — FIXED S921, verified S922
-  - **Confirmed safe:** Stripe webhook signatures, JWT httpOnly cookies, auth rate limiting, IDOR checks, password reset entropy, QA bypass guard
-  - **HIGH npm vulns:** 6 HIGH in backend (path-to-regexp, semver, axios) — no critical; P2 backlog
-- Blocked Queue: 5 → 7 (SEC-001 + SEC-002 added)
-
-**Files modified:**
-- `packages/backend/src/index.ts` — NODE_ENV guard on /api/dev route (P0 fix)
-- `claude_docs/self-healing/self_healing_skills.md` — SH-023/024/025 appended
-- `claude_docs/operations/file-creation-schema.md` — audits/ soft cap row added
-- `claude_docs/health-reports/security-audit-2026-06-08.md` — NEW (quarterly security report)
-- `claude_docs/workflow-retrospectives/monthly-retro-2026-06-08.md` — NEW (monthly retro)
-- `claude_docs/STATE.md` and `claude_docs/patrick-dashboard.md` — updated at wrap
-- Archived: 25 files (23 health-reports + 2 workflow-retrospectives) to `claude_docs/archive/`
-
-
-### S919 — QA/WRAP (2026-06-08). SmartBuyerWidget BQ closed. Apify deferred on roadmap. BQ: 7→5.
-
-**Completed:**
-- #230 SmartBuyerWidget: Logged in as Alice (user1@example.com, Seedy2025!). Sale S875 end date was Jun 7 (expired) — extended to Jun 15 via edit-sale page. Dashboard confirmed all 4 BASE_WIDGETS rendering: SalePulse (4/100), Who's Coming (empty state — correct for 0 watchers), High-Value Items (empty), Efficiency Coach (60% sell-through). ss_9730k70bl. The "Who's Coming" empty state card IS the SmartBuyerWidget rendering correctly — confirmed. S793 Chrome QA (Leo Thomas, SCOUT rank) remains valid. #230 RESOLVED, removed from BQ.
-- #380 FB Marketplace: Patrick confirmed Apify as DEFERRED (not DROP). Roadmap row updated via Python/bash: parked → DEFERRED with Apify (~$30-50/mo, pre-built scrapers with residential IP + session). BQ entry (CF Worker dead end) removed.
-- #335 cleanup: DB query confirmed Jane Thrift (jthrift@example.com / Jane Thrift) does not exist in Railway DB — fictional account from canary testing. Removed "Jane Thrift re-send" from #335 BQ entry. #335 remains open (intentional outreach hold — see BQ).
-
-**Files Changed:**
-- `claude_docs/strategy/roadmap.md` — row #380 updated (Apify deferred)
-- `claude_docs/STATE.md` — BQ 7→5, S919 added
-- `claude_docs/patrick-dashboard.md` — BQ updated
-
-**BQ: 7→5.** Below ceiling — DEV mode available next session.
+_(Session entries S923 and earlier are in git history / prior STATE.md revisions. Trimmed per T4/T5 rotation — full detail in session-log-archive.md.)_
 
 ---
-
-### S918 — DEV (2026-06-07). Resend transactional email rail. BQ: 7 (unchanged).
-
-**Completed:**
-- bounceSuppressService verified clean: EmailSuppression 5 rows (no BOUNCED entries — expected, inbox cleared S917, first outreach wave hasn't bounced back yet). Service correctly configured.
-- Created `packages/backend/src/lib/transactionalEmailService.ts` — Resend SDK, same `emails.send()` interface as emailService, `hello@send.finda.sale` default FROM (`send.finda.sale` already verified in Resend), soft no-op with console.error when RESEND_API_KEY missing, throws on Resend API error.
-- Migrated 9 callers to Resend rail: authController (2), auth.ts route (2), stripeController (6), posController (4), terminalController (2), workspaceController (1), messageEmailService (1), consignorEmailService (3), tierLapseJob (1). Total: 22 call sites moved.
-- 40+ remaining callers (bulk/marketing) intentionally left on Gmail/emailService.
-- Backend TypeScript check: 0 errors.
-- S913 P2 Gmail SPOF finding: RESOLVED.
-
-**BQ: 7 (unchanged).**
-
----
-
-_(Earlier session entries S917–S900 retained in git history / prior STATE.md revisions. Trimmed here per T4/T5 rotation to keep STATE.md maintainable — full detail remains in the Current Status one-liners above and in session-log-archive.md.)_
+ 

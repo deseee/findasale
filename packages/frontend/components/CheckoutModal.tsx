@@ -60,6 +60,11 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
     setIsSubmitting(true);
     setErrorMessage(null);
 
+    // GA4 #470: checkout_initiated conversion event
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'checkout_initiated', { amount: total });
+    }
+
     const { error } = await stripe.confirmPayment({
       elements,
       confirmParams: {

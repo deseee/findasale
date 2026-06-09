@@ -33,6 +33,18 @@ import { composeDescription, stripShippingPhrases, DescriptionSource } from '../
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
 
+/** Decode HTML entities from CSV/eBay data before writing to the DB. */
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+}
+
 // Feature #408: Scan & Split — in-memory tracker for simultaneous QR scans on the same item.
 // Maps itemId → array of { userId, scannedAt } entries. TTL: 60 seconds.
 // No Redis needed — single-instance, ephemeral, POS-day-of-sale usage only.
@@ -404,7 +416,7 @@ export const bulkImportCSV = async (req: AuthRequest, res: Response) => {
       const rawPrice = columnMap.price ? (record[columnMap.price] ?? '').trim() : '';
       const rawDescription = columnMap.description ? (record[columnMap.description] ?? '').trim() : '';
       const rawCondition = columnMap.condition ? (record[columnMap.condition] ?? '').trim().toUpperCase() : '';
-      const rawCategory = columnMap.category ? (record[columnMap.category] ?? '').trim() : '';
+      const rawCategory = decodeHtmlEntities(columnMap.category ? (record[columnMap.category] ?? '').trim() : '');
 
       if (!rawTitle) {
         errors.push({ row: rowNum, reason: 'title is required and cannot be empty' });

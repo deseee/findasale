@@ -2183,6 +2183,11 @@ const CreateSalePage: React.FC = () => {
       const saleId = response.data.id;
       setPublishedSaleId(saleId);
 
+      // GA4 #470: sale_created conversion event
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'sale_created', { sale_type: form.saleType.toLowerCase() });
+      }
+
       // Clear draft from storage
       try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
 

@@ -641,6 +641,12 @@ const AddItemsDetailPage = () => {
     onMutate: () => { inMutationFlight.current = true; },
     onSuccess: (response: any) => {
       showToast('Item created successfully', 'success');
+
+      // GA4 #470: first_item_uploaded conversion event (fires when items.length was 0 before this upload)
+      if (items.length === 0 && typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'first_item_uploaded', { sale_id: saleId as string });
+      }
+
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
       setFormData(emptyForm);
       setBulkPrice('');
