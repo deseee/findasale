@@ -90,7 +90,7 @@ const router = Router();
 
 router.post('/register', registerLimiter, register);
 router.post('/login', loginLimiter, login);
-router.post('/oauth', registerLimiter, oauthLogin);
+router.post('/oauth', loginLimiter, oauthLogin); // OAuth is authentication not registration; loginLimiter (skipSuccessfulRequests) is correct here
 router.post('/redeem-invite', authenticate, redeemInvite);
 router.post('/verify-email', verifyEmailLimiter, verifyEmail);
 router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res: Response) => {
