@@ -43,6 +43,125 @@ import { getSaleOgBuyerCount } from '../services/badgeService'; // Feature #404:
 
 const router = Router();
 
+// ---------------------------------------------------------------------------
+// RETAIL suppression filter — S934 data-quality audit
+// Suppresses junk scraped rows from city×category SEO pages at query time.
+// No database mutations — filter only.
+// ---------------------------------------------------------------------------
+
+// Canadian province codes to exclude from US SEO pages
+const CANADIAN_PROVINCES = new Set([
+  'AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT',
+]);
+
+// Clean RETAIL suffix categories (0–4% junk). Anything NOT in this list is suppressed.
+// Audit ref: §3 — clean categories verified via heuristic scan.
+const RETAIL_CLEAN_SUFFIXES = new Set([
+  'Antique Mall',
+  'Pawn Shop',
+  'Thrift Store',
+  'Resale Shop',
+  'Used Furniture Store',
+  'Auction House',
+  'Surplus Store',
+  'Record Store',
+  'Salvage Store',
+  'Used Electronics',
+  'Antique Dealer',
+  'Vintage Shop',
+  'Jewelry Resale',
+  'Used Bookstore',
+  'Used Sporting Goods',
+  'Coin Dealer',
+  'Estate Liquidator',
+]);
+
+// Non-resale business keywords — suppress any RETAIL title containing these terms.
+// Catches residual junk inside otherwise-clean categories (e.g. dental center in Antique Mall).
+// Audit ref: §2 — heuristic blocklist used to classify 1,312 junk rows.
+const RETAIL_JUNK_KEYWORDS = [
+  'real estate', 'realty', 'realtor', 'bienes raices',
+  'brewing', 'brewery', 'brew',
+  'barber', 'barbershop',
+  'smoke shop', 'vape', 'kratom',
+  'restaurant', 'cafe', 'coffee', 'diner',
+  'church', 'cathedral', 'chapel',
+  'university', 'college', 'school',
+  'attorney', 'law firm', 'legal',
+  'dental', 'dentist', 'orthodontic',
+  'medical', 'clinic', 'hospital',
+  'insurance',
+  'salon', 'spa', 'beauty',
+  'manufacturing', 'industries', 'industrial',
+  'dealership', 'auto sales', 'motors',
+  'theatre', 'theater',
+  'funeral', 'mortuary',
+  'pool', 'aquatic',
+  'racquet', 'tennis',
+];
+
+/**
+ * Extract the suffix category from a RETAIL title of the form:
+ *   "Shop Name — Category in City, ST"
+ * Returns null if the title has no suffix (raw scraped business name with no category).
+ */
+function extractRetailSuffix(title: string): string | null {
+  const match = title.match(/— (.+?) in /);
+  return match ? match[1] : null;
+}
+
+/**
+ * Returns true if a RETAIL sale row should be suppressed from public SEO pages.
+ * Suppression rules (in priority order):
+ *  1. Canadian region gate — exclude if state is a Canadian province code
+ *  2. No-suffix bucket — raw scraped names with no "— Category in City" pattern (28% junk)
+ *  3. Excluded suffix categories — Estate Sale Company (39% junk), Consignment Shop (22% junk)
+ *  4. Business-keyword blocklist — non-resale businesses in any suffix category
+ * Deduplification is handled separately in the calling code.
+ */
+function shouldSuppressRetailRow(sale: { title: string; state: string }): boolean {
+  const stateUpper = sale.state.toUpperCase();
+
+  // Rule 1: Canadian region gate
+  if (CANADIAN_PROVINCES.has(stateUpper)) return true;
+
+  const suffix = extractRetailSuffix(sale.title);
+
+  // Rule 2: No-suffix raw-name bucket — 3,459 rows, 28% junk, not salvageable
+  if (suffix === null) return true;
+
+  // Rule 3: Excluded suffix categories
+  if (!RETAIL_CLEAN_SUFFIXES.has(suffix)) return true;
+
+  // Rule 4: Business-keyword blocklist (case-insensitive)
+  const titleLower = sale.title.toLowerCase();
+  for (const kw of RETAIL_JUNK_KEYWORDS) {
+    if (titleLower.includes(kw)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Deduplicate an array of sales by title (case-insensitive).
+ * Keeps the first occurrence (earliest startDate, as the query is ordered by startDate asc).
+ * Removes 1,478 duplicate rows per S934 audit §4.
+ */
+function deduplicateByTitle(sales: Array<{ title: string; [key: string]: unknown }>): typeof sales {
+  const seen = new Set<string>();
+  const out: typeof sales = [];
+  for (const s of sales) {
+    const key = s.title.toLowerCase().trim();
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(s);
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+
 // Public routes
 router.get('/', listSales);
 router.get('/search', searchSales);
@@ -91,6 +210,11 @@ router.get('/by-city/:citySlug', async (req, res) => {
       whereClause.saleType = saleTypeFilter;
     }
 
+    // Fetch more rows when RETAIL is in scope so post-suppression result set is still
+    // populated after junk is removed (audit: ~55% of RETAIL rows are suppressed).
+    const isRetailQuery = saleTypeFilter === 'RETAIL' || !saleTypeFilter;
+    const fetchLimit = isRetailQuery ? 300 : 50;
+
     const sales = await prisma.sale.findMany({
       where: whereClause,
       select: {
@@ -114,8 +238,29 @@ router.get('/by-city/:citySlug', async (req, res) => {
         },
       },
       orderBy: { startDate: 'asc' },
-      take: 50,
+      take: fetchLimit,
     });
+
+    // ---------------------------------------------------------------------------
+    // RETAIL suppression — applied post-query, no DB mutations (S934)
+    // ---------------------------------------------------------------------------
+    let filteredSales = sales;
+    if (isRetailQuery) {
+      filteredSales = sales.filter((s: any) => {
+        // Only apply suppression to RETAIL rows; pass non-RETAIL through unchanged
+        if (s.saleType !== 'RETAIL') return true;
+        return !shouldSuppressRetailRow({ title: s.title, state: s.state });
+      });
+
+      // Collapse exact-title duplicates (1,478 redundant rows per audit §4)
+      const nonRetail = filteredSales.filter((s: any) => s.saleType !== 'RETAIL');
+      const retailOnly = filteredSales.filter((s: any) => s.saleType === 'RETAIL');
+      const deduped = deduplicateByTitle(retailOnly as Array<{ title: string; [key: string]: unknown }>);
+      filteredSales = [...nonRetail, ...(deduped as typeof sales)];
+    }
+
+    // Cap final output at 50 rows after suppression
+    const capped = filteredSales.slice(0, 50);
 
     // Derive available categories from all sales (ignoring category filter for sidebar)
     const allSalesForCategories = saleTypeFilter
@@ -132,7 +277,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
     const categorySet = new Set<string>(allSalesForCategories.map((s: any) => s.saleType));
     const categories = Array.from(categorySet);
 
-    const serialized = sales.map((s: any) => ({
+    const serialized = capped.map((s: any) => ({
       ...s,
       startDate: s.startDate instanceof Date ? s.startDate.toISOString() : s.startDate,
       endDate: s.endDate instanceof Date ? s.endDate.toISOString() : s.endDate,
