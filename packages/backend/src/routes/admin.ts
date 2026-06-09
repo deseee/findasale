@@ -353,4 +353,83 @@ router.get('/organizers/confidence', async (req: any, res: any) => {
   }
 });
 
+
+// Feature #472: POST /admin/send-test-email — allows automation (e.g. Claude via Chrome MCP)
+// to send test emails without manual Gmail interaction.
+// Rail defaults to 'resend' (reliable transactional rail). Gmail fallback via rail='gmail'.
+router.post('/send-test-email', async (req: any, res: any) => {
+  try {
+    const { to, subject, body, rail = 'resend' } = req.body as {
+      to: string;
+      subject: string;
+      body: string;
+      rail?: 'gmail' | 'resend';
+    };
+
+    // --- Input validation ---
+    if (!to || typeof to !== 'string') {
+      return res.status(400).json({ success: false, error: 'Missing required field: to' });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(to.trim())) {
+      return res.status(400).json({ success: false, error: 'Invalid email address: to' });
+    }
+    if (!subject || typeof subject !== 'string') {
+      return res.status(400).json({ success: false, error: 'Missing required field: subject' });
+    }
+    if (subject.length > 200) {
+      return res.status(400).json({ success: false, error: 'subject exceeds 200 character limit' });
+    }
+    if (!body || typeof body !== 'string') {
+      return res.status(400).json({ success: false, error: 'Missing required field: body' });
+    }
+    if (body.length > 10000) {
+      return res.status(400).json({ success: false, error: 'body exceeds 10000 character limit' });
+    }
+    if (rail !== 'resend' && rail !== 'gmail') {
+      return res.status(400).json({ success: false, error: "rail must be 'resend' or 'gmail'" });
+    }
+
+    const toAddress = to.trim();
+
+    if (rail === 'gmail') {
+      // Gmail rail — uses existing emailService (Gmail API via OAuth2, quota-gated)
+      const { emailService } = await import('../lib/emailService');
+      const fromAddress = process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+      const result = await emailService.emails.send({
+        from: `FindA.Sale <${fromAddress}>`,
+        to: toAddress,
+        subject,
+        html: body,
+        jobName: 'admin-send-test-email',
+      });
+      const messageId = (result as any)?.data?.id ?? undefined;
+      return res.json({ success: true, messageId, rail: 'gmail' });
+    }
+
+    // Resend rail (default) — call Resend SDK directly to capture messageId
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(503).json({ success: false, error: 'RESEND_API_KEY not configured' });
+    }
+    const { Resend } = await import('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const fromAddress = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <hello@send.finda.sale>';
+    const { data, error } = await resend.emails.send({
+      from: fromAddress,
+      to: toAddress,
+      subject,
+      html: body,
+    });
+    if (error) {
+      console.error('[admin/send-test-email] Resend error:', error);
+      return res.status(502).json({ success: false, error: error.message });
+    }
+    return res.json({ success: true, messageId: data?.id, rail: 'resend' });
+
+  } catch (err: any) {
+    console.error('[admin/send-test-email] Unexpected error:', err);
+    return res.status(500).json({ success: false, error: err?.message ?? 'Internal server error' });
+  }
+});
+
 export default router;

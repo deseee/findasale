@@ -6,11 +6,17 @@
 
 ## S935 Quick Summary
 
-**RETAIL junk filter is live (backend, pending your push).** The city×category pages that show RETAIL (antique malls, thrift stores, pawn shops, resale shops) were polluted with ~4,400 junk rows — real estate companies matched on "Estate", no-name raw business listings, consignment shops with no relation to resale. The backend query now filters these out: only 17 clean business-type suffixes pass through (Antique Mall, Thrift Store, Pawn Shop, Resale Shop, etc.). Canadian rows and duplicates are also suppressed. You should see ~3,288 clean RETAIL listings on city pages after push — down from 7,692.
+**Five things shipped this session — all pending your push.**
 
-**GA4 conversion events are firing.** Confirmed that all three conversion events (organizer registered, sale created, first item uploaded) are wired up and sending to GA4 correctly. Network request to `google-analytics.com` returned 204 (success) with consent granted. The end-to-end flows (actually registering, creating a sale, uploading) are code-confirmed but not fully click-tested yet.
+**1. RETAIL junk filter (backend).** City×category pages were showing ~4,400 junk RETAIL rows alongside the real listings — real estate companies matching on "Estate", no-name businesses, Canadian listings on US pages, duplicates. The backend query now filters these out; only 17 clean suffix types (Antique Mall, Thrift Store, Pawn Shop, Resale Shop, etc.) pass through. You'll see ~3,288 clean RETAIL listings after push, down from 7,692.
 
-**QR geofence fallback works.** The treasure hunt QR scan page gracefully handles location-denied (no crash, no 403, XP still awarded, redirects to sale page). One P3 bug found: the print kit generates QR codes with `?scan=true` in the URL, but the scan page looks for `?via=qr` — so a physically printed QR code scanned in the real world lands in preview mode with no XP award. Low priority but worth a fix before you use printed QR codes at a real sale.
+**2. QR print kit bug fixed.** The printed QR codes at your sales were broken — they used `?scan=true` in the URL but the scan page needs `?via=qr` to trigger auto-claim and award XP. Real-world printed QR codes were landing in preview mode with no XP. Fixed.
+
+**3. Denver SEO landing page.** Built `/estate-sales/denver-co` (and the whole `/estate-sales/[city]` pattern for all future cities). Google Search Console shows "denver estate sales" at positions 27-30 with 28+ impressions and no dedicated page. This captures that traffic. 15 top markets prebuild at deploy time; new cities load on demand.
+
+**4. Email send endpoint.** Added `POST /admin/send-test-email` to the backend. This lets me send test emails directly without you having to manually click Send in Gmail — unblocks delivery health checks and outreach verification.
+
+**5. Roadmap corrections.** Three items Patrick flagged as "already done" were marked stale in the roadmap — corrected: #471 bounce suppression (already running as a daily cron), #423 email verification token expiry (migration confirmed live in Railway DB since S726), #335 outreach resume (already ✅ S865).
 
 ---
 
@@ -48,7 +54,9 @@ BQ 5→1. Competitor email domain blocking shipped.
 | Email (competitor blocking) | ✅ estatesales.net/org blocked across all rails |
 | Outreach | ⏸ Paused (intentional, domain warming — 37 PENDING queue ready) |
 | Auction coverage | ✅ 97→748 listings (S934 reclassification of mislabeled data) |
-| RETAIL pages | ⚠️ Junk filter queued (S935) — ~17% junk + dupes need display-layer suppression |
+| RETAIL pages | ✅ Junk filter LIVE S935 (pending push) — ~3,288 clean rows, ~4,400 junk suppressed |
+| SEO city pages | ✅ /estate-sales/[city-slug] SHIPPED S935 (pending push) — Denver first, 15 markets prebuild |
+| Email send endpoint | ✅ POST /admin/send-test-email SHIPPED S935 (pending push) — Resend default, admin-gated |
 | Backend / Railway | ✅ Healthy |
 | Frontend / Vercel | ✅ Deployed |
 
@@ -56,32 +64,34 @@ BQ 5→1. Competitor email domain blocking shipped.
 
 ## What You Need to Do
 
+**S934 push (pending from last session):**
 ```powershell
-git add packages/backend/src/services/scraper/sources/search-facebook-events.ts packages/backend/src/services/scraper/sources/googlePlaces.ts packages/backend/src/scripts/reclassify-mistyped-sales.ts claude_docs/feature-notes/ADR-hibid-auction-scraper.md claude_docs/feature-notes/retail-data-quality-audit.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
-git commit -m "S934 wrap: auction reclassification (97->748), FB Events + flea queries widened, HiBid/YP ToS-blocked, RETAIL audit, docs updated"
+git add packages/backend/src/services/scraper/sources/search-facebook-events.ts packages/backend/src/services/scraper/sources/googlePlaces.ts packages/backend/src/scripts/reclassify-mistyped-sales.ts claude_docs/feature-notes/ADR-hibid-auction-scraper.md claude_docs/feature-notes/retail-data-quality-audit.md
+git commit -m "S934: auction reclassification (97->748), FB Events + flea queries widened, HiBid/YP ToS-blocked, RETAIL audit"
+.\push.ps1
+```
+
+**S935 push (this session):**
+```powershell
+git add packages/backend/src/routes/sales.ts packages/frontend/pages/organizer/print-kit/[saleId].tsx "packages/frontend/pages/estate-sales/[city-slug].tsx" packages/frontend/pages/server-sitemap.xml.tsx packages/backend/src/routes/admin.ts claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
+git commit -m "S935: RETAIL junk filter, P3 QR ?via=qr fix, /estate-sales/[city-slug] SEO pages, POST /admin/send-test-email, roadmap corrections (#423/#471 confirmed done)"
 .\push.ps1
 ```
 
 ---
 
-## S935 Recommendation
+## S936 Recommendation
 
 BQ=1 (ceiling=8 — DEV available).
 
-**Top priority — RETAIL junk filter (from S934 audit):**
-- Build a display-layer filter (no deletions) that drops the junk RETAIL buckets (Estate Sale Company, no-suffix raw names, Consignment), collapses ~1,478 duplicates, and keeps Canadian rows off US pages. Cleans ~7,692 listings down to ~3,288 solid ones — directly improves the city×category SEO pages.
-
-**Then verify the S934 widenings landed:**
-- Confirm the widened Facebook Events search + the new flea-market search terms actually produce new auction/flea listings on the next monthly Foursquare (3rd) / HERE (2nd) / FB-Events run.
-
-**QA pass — features built but unverified in Chrome:**
-- **#470 GA4 Conversion Events** (built S928) — open GA4 → Realtime → Events, then trigger an action (sign up or create a sale), verify events fire
-- **#463 Claim Button Click Tracking** (built S807) — visit an organizer profile, click Claim, check Vercel Analytics → Events tab
-- **#164 Tiers Backend Infrastructure** — flagged UNVERIFIED since S804; log in as organizer, verify tier display
+**QA pass — shipped this session, needs Chrome verification:**
+- `/estate-sales/denver-co` — navigate on live site, verify H1 + listings + schema.org
+- `POST /admin/send-test-email` — call endpoint as admin, verify email delivery
+- #471 bounce suppression — check EmailSuppression row count grows after a bounce event
+- #470 GA4 — actually register/create-sale, confirm event fires in GA4 Realtime
 
 **DEV candidates:**
-- **SEO3 Denver city landing page** — `/estate-sales/denver-co` targeting GSC impression cluster
-- **#471 Bounce Suppression Auto-Ingestion** — build before outreach resume; mailer-daemon parser not built
+- **#332 Shopify** — sole BQ P0 item
 
 ---
 

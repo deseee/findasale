@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S935 — DEV/QA (2026-06-09). RETAIL suppression filter SHIPPED: query/SEO-layer suppression in sales.ts /by-city route — Canadian province gate (13 codes), clean-suffix allowlist (17 suffixes), business-keyword blocklist, duplicate deduplication by title, 300-row fetch pre-suppression. ~3,288 clean rows from 7,692 (Estate Sale Company/Consignment/no-suffix junk buckets suppressed). 0 TS errors. #470 GA4 Conversion Events ✅ VERIFIED pipeline (all 3 events: register.tsx L186, create-sale.tsx L2187, add-items/[saleId].tsx L646; gtag → google-analytics.com/g/collect 204 confirmed; end-to-end submit CODE-ONLY). #317 Geofence QR ✅ VERIFIED — no 403 on location-deny, XP awarded, redirect fires. P3 new: print kit QR URLs use ?scan=true instead of ?via=qr — printed codes land in preview mode, no auto-claim (QR feature broken for primary real-world use). BQ: 1 (unchanged). PCVs staged.**
+**S935 — DEV/QA (2026-06-09). RETAIL suppression filter SHIPPED: query/SEO-layer suppression in sales.ts /by-city route — Canadian province gate (13 codes), clean-suffix allowlist (17 suffixes), business-keyword blocklist, duplicate deduplication by title, 300-row fetch pre-suppression. ~3,288 clean rows from 7,692 (Estate Sale Company/Consignment/no-suffix junk buckets suppressed). P3 QR print kit FIXED: ?scan=true → ?via=qr (2 occurrences print-kit/[saleId].tsx L720/L876 via Python bash) — printed QR codes now trigger auto-claim + XP. SEO3 SHIPPED: pages/estate-sales/[city-slug].tsx (dynamic ISR, 15 markets prebuilt, fallback:blocking) + server-sitemap.xml.tsx updated (priority 0.85); /estate-sales/denver-co live on next Vercel deploy. #472 POST /admin/send-test-email SHIPPED: 79 lines added to routes/admin.ts, Resend default rail, admin-gated, returns {success,messageId,rail}. Roadmap corrections: #471 confirmed SHIPPED pre-S926 (bounceSuppressService.ts daily cron 06:00 UTC, index.ts L802-814), #423 confirmed DEPLOYED S726 (migration applied Railway DB, psycopg2 verified), #335 already ✅ S865 (correct). BQ: 1 (unchanged). PCVs staged.**
 
 **S934 — RESEARCH/DEV (2026-06-09). Scraper coverage for 459 zero-record city×category SEO pages. Third-party auction/venue sources BLOCKED: HiBid ToS §7 prohibits scraping/aggregation (legally blocked — ADR written), US YellowPages.com ToS §2.1 prohibits data mining (NO-GO, no code), AuctionNinja dated listings are JavaScript-rendered (fetch+cheerio sees only static company-directory nav — needs headless browser, no GitHub scraper exists). PIVOT to own-pipeline fills (all legal): RECLASSIFICATION APPLIED to production — reclassify-mistyped-sales.ts flipped 651 mislabeled EstateSales/GarageSaleFinder events → AUCTION (saleType AUCTION 97→748 confirmed in DB) + 217 YARD→ESTATE (excludes places-API business listings). FB Events query WIDENED (flea market/swap meet/public+online auction/consignment added) and PLACES_QUERIES +5 flea synonyms (Foursquare/HERE pick up next monthly run) — both pending push. Flea-org backfill SHELVED on data quality (583/600 orphan FLEA organizers were individual vendor booths, 443 piled on 2 New Orleans coords). DB audit (read-only): only 97 AUCTION records existed nationwide pre-fix (NYC/Houston/Chicago/LA all had 0); GOOGLE_PLACES_METROS (300 metros, plain string[]) confirmed comprehensive — no genuinely-missing US metros. RETAIL data-quality audit done (7,692 rows, ~17% junk min, 1,478 dupes, 1,842 Canadian — recommend query/SEO-layer suppression → ~3,288 clean). BQ: 1 (unchanged).**
 
@@ -140,20 +140,24 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ### Patrick — Actions Needed
 1. **S934 pushblock** — run the pushblock (search-facebook-events.ts + googlePlaces.ts + reclassify-mistyped-sales.ts + 2 new feature-notes + 3 wrap docs).
 
-### S935 Recommendation
+### S936 Recommendation
 BQ=1 (ceiling=8 — DEV available).
 
+**Push needed (Patrick action):**
+- S935 pushblock below — must run before SEO3 and #472 go live.
+
 **QA Priority — items built but not Chrome-verified:**
-- **#470 GA4 Conversion Events** (built S928) — verify `organizer_registered`, `sale_created`, `first_item_uploaded` events fire in GA4 Real-Time after signing up / creating a sale. Navigate `Realtime → Events` in GA4 dashboard.
-- **#463 Claim Button Click Tracking** (CODE-ONLY S925) — visit any organizer profile, click Claim, check Vercel Analytics → Events tab within 60s.
-- **#164 Tiers Backend Infrastructure** — persistent UNVERIFIED S804; log in as organizer with SIMPLE tier, verify tier display and gate enforcement.
-- **#317 Geofence QR Scans** — shipped S553, never Chrome-QA'd; deny location → verify scan graceful fallback (no 403).
+- **SEO3 /estate-sales/denver-co** (SHIPPED S935) — navigate finda.sale/estate-sales/denver-co, verify H1 + sale listings + schema.org.
+- **#472 POST /admin/send-test-email** (SHIPPED S935) — call endpoint, verify delivery to deseee@yahoo.com.
+- **#471 Bounce Suppression** (confirmed running) — verify EmailSuppression row count grows after bounce trigger.
+- **#470 GA4 Conversion Events** — end-to-end submit CODE-ONLY; verify organizer_registered fires in GA4 Real-Time on actual register.
+- **#463 Claim Button Click Tracking** (CODE-ONLY S925) — visit organizer profile, click Claim, check Vercel Analytics → Events tab.
+- **#164 Tiers Backend Infrastructure** — persistent UNVERIFIED S804; log in as SIMPLE organizer, verify tier display + gate enforcement.
 
 **DEV candidates:**
-- **SEO3 Denver city landing page** — build `/estate-sales/denver-co` targeting GSC impression cluster (queued S926).
-- **#471 Bounce Suppression Auto-Ingestion** — build mailer-daemon parser before outreach resume; EmailSuppression table exists (5 rows), parser not built.
-- **#472 Email Send Automation** — POST /admin/send-test-email endpoint; unblocks outreach verification workflow.
-- **#335 Outreach Resume** — 37 PENDING DirectoryClaimEmail queue ready; domain warming check first.
+- **#332 Shopify** — sole BQ P0 item; highest priority.
+- **#335 Outreach Resume** — S933 cron active (658 sent); domain warming check before full resume.
+- Scraper cron follow-up: verify widened FB Events + PLACES_QUERIES flea synonyms produce new records on next monthly run.
 
 
 ### Scraper Coverage — Outcomes + Follow-ups (S934)
