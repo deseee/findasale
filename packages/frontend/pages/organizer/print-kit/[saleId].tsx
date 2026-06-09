@@ -717,7 +717,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                             {clues.map((clue, idx) => (
                               <button
                                 key={clue.id}
-                                onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr/${clue.id}?scan=true`, `🗺️ Clue #${idx + 1}`, `Scan at this location to unlock the clue and earn XP rewards.`, canRemoveWatermark)}
+                                onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr/${clue.id}?via=qr`, `🗺️ Clue #${idx + 1}`, `Scan at this location to unlock the clue and earn XP rewards.`, canRemoveWatermark)}
                                 className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
                               >
                                 🗺️ Clue #{idx + 1}{clue.category ? ` — ${clue.category}` : ''}
@@ -873,7 +873,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 <div key={clue.id} className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
                   <div className="flex-1 flex flex-col justify-center items-center">
                     <img
-                      src={getQRUrl(`https://finda.sale/sales/${sale.id}/treasure-hunt-qr/${clue.id}?scan=true`, 600)}
+                      src={getQRUrl(`https://finda.sale/sales/${sale.id}/treasure-hunt-qr/${clue.id}?via=qr`, 600)}
                       alt={`Clue ${idx + 1} QR`}
                       className="qr-full-page-qr"
                     />

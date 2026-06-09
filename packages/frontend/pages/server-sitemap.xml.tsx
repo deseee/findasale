@@ -134,6 +134,15 @@ export async function getServerSideProps(ctx: any) {
       priority: 0.8,
     }));
 
+    // /estate-sales/{city-slug} — dedicated estate-sales city landing pages (SEO3)
+    // Targets GSC cluster: "estate sales [city]" / "estate sale [city]"
+    const estateSalesUrls = canonicalCitySlugs.map((slug: string) => ({
+      loc: `${baseUrl}/estate-sales/${slug}`,
+      lastmod: new Date().toISOString(),
+      changefreq: 'daily',
+      priority: 0.85, // higher than generic city pages — exact-intent match
+    }));
+
     // Generate neighborhood URLs
     const neighborhoodUrls = neighborhoods.map((neighborhood: string) => ({
       loc: `${baseUrl}/neighborhoods/${neighborhood}`,
@@ -223,6 +232,7 @@ export async function getServerSideProps(ctx: any) {
       ...organizerUrls,
       ...cityCategoryUrls,
       ...thisWeekendUrls,
+      ...estateSalesUrls,
       ...neighborhoodUrls,
       ...zipUrls,
       ...tagUrls,
