@@ -17,6 +17,7 @@ import cron from 'node-cron';
 import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
+import { isEmailDomainBlocked } from '../services/suppressionService';
 
 const MAX_PER_RUN = 500;
 
@@ -155,6 +156,7 @@ export async function runAutoSeedOutreach(): Promise<void> {
       }
       if (isPlaceholderEmail(email)) continue;
       if (suppressedEmails.has(email.toLowerCase())) continue;
+      if (isEmailDomainBlocked(email)) continue; // BLOCKED_DOMAINS (e.g. estatesales.net)
 
       // Dedup by email address: skip if another organizer already has a DirectoryClaimEmail
       // row with this address, or if we already queued this email address this run.
