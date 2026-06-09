@@ -18,7 +18,7 @@ import { suppressionService } from '../services/suppressionService';
  *   RESEND_API_KEY=<from Resend dashboard → API Keys>
  */
 
-const FROM_DEFAULT = 'FindA.Sale <hello@send.finda.sale>';
+const FROM_DEFAULT = process.env.RESEND_FROM_EMAIL ?? 'FindA.Sale <noreply@finda.sale>';
 
 export const transactionalEmailService = {
   emails: {

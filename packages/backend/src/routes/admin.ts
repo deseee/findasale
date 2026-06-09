@@ -413,7 +413,10 @@ router.post('/send-test-email', async (req: any, res: any) => {
     }
     const { Resend } = await import('resend');
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const fromAddress = process.env.RESEND_FROM_EMAIL || 'FindA.Sale <hello@send.finda.sale>';
+    const fromAddress = process.env.RESEND_FROM_EMAIL;
+    if (!fromAddress) {
+      return res.status(503).json({ success: false, error: 'RESEND_FROM_EMAIL not configured' });
+    }
     const { data, error } = await resend.emails.send({
       from: fromAddress,
       to: toAddress,
