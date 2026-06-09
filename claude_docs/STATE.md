@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S931 — QA (2026-06-09). Records pass: applied 6 S930 PCVs to roadmap.md (organizer dashboard, HTML entity fix, shopper dashboard, Explorer Profile, #123 rank label, #199 Hunt Pass active state). Dev: Hunt Pass multiplier fix built — 5 components corrected (StreakWidget L78+L86, HuntPassAvatarBadge L69, HuntPassModal L63, AvatarDropdown L1199, Layout L641 — all "2x XP" → "1.5x XP"; TS 0 errors; pending push). Chrome QA autonomous sweep: #462 Attribution E2E ✅ (ORGANIZER_PAGE_VIEWED in DB id=cmq60o67l000n11qnfaa3qt13), #237 Command Center ✅ (ss_3575f2hgq ss_89830syni), /admin/outreach-opens ✅ (173 records, ss_324409tr9), SEO1 SSR ✅ (og:title/image/canonical confirmed via web_fetch), #455 Notify Me ✅ (DB id=snmq614gmmivpefw, ss_8148yby5f), #464 SEO footer ✅ (ss_8148yby5f), sale detail ✅ (ss_1097rjp4e), /trending ✅ (ss_1920zk41t), /map ✅ (57 sales Leaflet, ss_5209hylq3). 9 PCVs staged for S932 records pass. BQ=6 (Hunt Pass fix built, pending push+Chrome-re-verify).**
+**S932 — RECORDS (2026-06-09). Records pass: Applied S931 PCVs to roadmap.md — #462 Attribution E2E Chr ✅ S931 (only column that needed update; others already ✅). #455 Notify Me updated to full E2E S931 (migration applied note added). Hunt Pass BQ item RESOLVED — Patrick confirmed /shopper/dashboard stats bar shows "1.5x XP" on live site. BQ: 6→5.**
 
 **S930 — QA (2026-06-09). Records pass (applied S925 PCVs to roadmap.md: logout flow Chr✅, #463 claim-click CODE-ONLY note). DB migration: decoded 4 HTML-encoded category rows in Railway DB (Electronics & Technology, Lamps & Lighting, Home Décor, Jewelry & Watches). Chrome-verified HTML entity fix at /organizer/insights ✅ (no &amp; or &#233; entities visible). Autonomous QA sweep: organizer dashboard (Alice) ✅, shopper dashboard (Leo Thomas) ✅, Explorer Profile ✅, Explorer's Guild rank label #123 ✅ at /shopper/ranks, Hunt Pass active state #199 ✅ at /shopper/hunt-pass. 6 PCVs staged for S931 records pass. ⚠️ P3 new BQ item: Hunt Pass multiplier display inconsistency (dashboard "2x XP" vs /shopper/hunt-pass "1.5x XP"). Gmail DSN cleanup: 104 mailer-daemon bounce threads trashed from outreach inbox. BQ: 5→6.**
 
@@ -102,6 +102,7 @@ _S919 WRAP: #230 RESOLVED (SmartBuyerWidget rendering confirmed). FB Marketplace
 _S921: SEC-001, SEC-002, #196, #201 coded but pending push+Chrome-verify — all 4 remained in BQ. BQ: 9._
 _S922 QA MODE: all 4 S921 fixes Chrome-verified live RESOLVED (commit 7058d99c deployed): SEC-001 (admin.ts Prisma.sql parameterized, page returns 11 patterns no error), SEC-002 (items.ts scoped multer, valid types pass, add-items loads clean), #196 Buying Pools (card renders on $169 item ss_5769b4ui3, negative test on $25 item), #201 Favorites all 3 (Items(1) count, Saved Sales section, /shopper/collections→302→/shopper/wishlist ss_37941eelg/ss_1509jponw). All 4 rows REMOVED. BQ: 9→5. Below QA ceiling — DEV available S923._
 _S928: HTML entity P2 FIXED (textUtils.ts + insights.tsx + itemController.ts). GA4 #470 conversion events built. 22 Chr cols bulk-applied (S803–S805 backlog). BQ: 6→5._
+_S932: Hunt Pass multiplier display inconsistency RESOLVED (Patrick confirmed 1.5x XP on live site). BQ: 6→5._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
@@ -114,7 +115,6 @@ _S928: HTML entity P2 FIXED (textUtils.ts + insights.tsx + itemController.ts). G
 
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
-| Hunt Pass multiplier display inconsistency | **P3** S930 — Fix BUILT S931. 5 components corrected: StreakWidget.tsx L78+L86, HuntPassAvatarBadge.tsx L69, HuntPassModal.tsx L63, AvatarDropdown.tsx L1199, Layout.tsx L641 — all changed "2x XP" → "1.5x XP". Correct value is 1.5x (matches DB). Pending push + Chrome re-verify on live site. | Push Hunt Pass fix files, then verify /shopper/dashboard stats bar shows "1.5x XP" and remove from BQ | S930 |
 
 
 ---
@@ -123,15 +123,7 @@ _S928: HTML entity P2 FIXED (textUtils.ts + insights.tsx + itemController.ts). G
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| 462 | **#462 Outreach Funnel Attribution — full E2E** | ✅ Chrome-verified S931 — Navigated organizer profile with ?ref=outreach as Leo Thomas (user5@example.com). DB confirmed OutreachAuditLog id=cmq60o67l000n11qnfaa3qt13, event=ORGANIZER_PAGE_VIEWED, organizerId=cmomwf956000z11qwnjieosli. Full attribution E2E verified. ss_8722s1et1 | S931 |
-| — | #237 Command Center | ✅ Chrome-verified S931 — Navigated /organizer/command-center as Alice (user1@example.com). Revenue, Active Sales, KPI cards rendered with real data. ss_3575f2hgq ss_89830syni | S931 |
-| — | /admin/outreach-opens | ✅ Chrome-verified S931 — Navigated /admin/outreach-opens as admin. 173 EMAIL_OPENED records with real organizer data visible. ss_324409tr9 | S931 |
-| SEO1 | SEO1 sale detail SSR head tags | ✅ Verified S931 — web_fetch finda.sale/sale/[id] returned server-side HTML with og:title, og:image (Cloudinary URL), canonical, og:description present. ISR/SSR confirmed. | S931 |
-| 455 | #455 Notify Me Waitlist | ✅ Chrome-verified S931 — Navigated /search?q=zzznoresultsxxx as Leo Thomas. Notify Me modal opened. Email submitted. "✓ We'll let you know!" shown. DB confirmed SearchNotification id=snmq614gmmivpefw. ss_8148yby5f | S931 |
-| 464 | #464 SEO footer Discover column | ✅ Chrome-verified S931 — Footer Discover column links confirmed (Estate Sales, Yard Sales, Auctions, Flea Markets, Consignment). ss_8148yby5f | S931 |
-| — | Sale detail page Chrome render | ✅ Chrome-verified S931 — Sale detail page renders with real item data, photos, all CTAs present. ss_1097rjp4e | S931 |
-| — | /trending | ✅ Chrome-verified S931 — Trending page hot sales grid: #1/#2/#3 HOT badges, real national listings. ss_1920zk41t | S931 |
-| — | /map | ✅ Chrome-verified S931 — /map renders: 57 sales near you, Leaflet map loaded, orange/green/grey pins, all date + type filter chips present. ss_5209hylq3 | S931 |
+_(S931 PCV rows — #462 Attribution, #237 Command Center, /admin/outreach-opens, SEO1 SSR, #455 Notify Me, #464 SEO footer, sale detail, /trending, /map — applied to roadmap.md in S932 records pass — cleared.)_
 _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Explorer Profile, #123 rank label, #199 Hunt Pass — applied to roadmap.md in S931 records pass — cleared.)
 _(S925 PCV rows — logout flow Chr✅, #463 CODE-ONLY, #462 CSRF partial — applied to roadmap.md in S930 records pass — cleared.)
 _(S927 PCV rows #79/#164/#316 applied to roadmap.md in S928 records pass — cleared.)
@@ -142,18 +134,32 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **S931 pushblock** — run the pushblock below (Hunt Pass fix + roadmap + STATE + dashboard).
-2. **After Vercel deploys** — open /shopper/dashboard in Chrome and confirm stats bar shows "1.5x XP" (not "2x XP"), then confirm BQ Hunt Pass item can be closed.
+1. **S932 pushblock** — run the pushblock below (roadmap + STATE + dashboard — code was already in S931 block).
 
-### S932 Recommendation
-BQ=6 (below ceiling=8). DEV or QA available.
-- **Records: apply S931 PCVs** — findasale-records to update roadmap Chr columns for 9 S931 items: #462 Attribution E2E, #237 Command Center, /admin/outreach-opens, SEO1 SSR, #455 Notify Me, #464 SEO footer, sale detail, /trending, /map
-- **Hunt Pass re-verify** — after Patrick pushes + Vercel deploys, confirm /shopper/dashboard stats bar shows "1.5x XP"; remove from BQ
-- **Monitor ImprovMX** — confirm daily forwarding stays below 500 (S929 @system.finda.sale fix deployed)
+### S933 Recommendation
+BQ=5 (below ceiling=8). DEV available.
 - **NODEJS-1G** — scraper fallback LIKE query still periodic; add `take: 500` to scraper/index.ts candidates findMany. Low urgency.
+- **Monitor ImprovMX** — confirm daily forwarding stays below 500 (S929 @system.finda.sale fix deployed)
+- **#471 Bounce Suppression Auto-Ingestion** — needed before outreach resume; build mailer-daemon parser
+- **#335 Outreach Resume** — 37 PENDING DirectoryClaimEmail queue ready when domain warming complete
 
 
 ## Recent Sessions
+
+### S932 — 2026-06-09 | RECORDS
+
+**Session type:** Records — S931 PCV application, Hunt Pass BQ closure
+
+**Work completed:**
+- **Records pass** — Applied S931 PCVs to roadmap.md. #462 Outreach Funnel Attribution Chr column updated: ⬜|⬜ → ✅ S931|✅ S931 (only row needing a column update; #237/#SEO1/#464/#189/#139 already had Chr ✅ from prior sessions). #455 Notify Me updated: ⚠️ migration-pending note removed, S931 full E2E confirmation added.
+- **Hunt Pass BQ RESOLVED** — Patrick confirmed /shopper/dashboard stats bar shows "1.5x XP" on live Vercel deploy. BQ item removed. BQ: 6→5.
+
+**Files modified:**
+- `claude_docs/strategy/roadmap.md` — #462 Chr ✅ applied, #455 note updated
+- `claude_docs/STATE.md` — S932 wrap
+- `claude_docs/patrick-dashboard.md` — S932 summary
+
+**BQ delta:** 6 → 5 (Hunt Pass RESOLVED)
 
 ### S931 — 2026-06-09 | QA
 
