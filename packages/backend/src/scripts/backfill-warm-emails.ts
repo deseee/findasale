@@ -30,6 +30,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { isEmailDomainBlocked } from '../services/suppressionService';
 import crypto from 'crypto';
 
 const IMAGE_EXTENSION_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?|ico)(\b|$)/i;
@@ -166,6 +167,11 @@ async function main(): Promise<void> {
     if (suppressedEmails.has(email.toLowerCase())) {
       skippedSuppressed++;
       console.log(`[BackfillWarmEmails] Skipped ${org.id} (${org.businessName}) — suppressed: ${email}`);
+      continue;
+    }
+    if (isEmailDomainBlocked(email)) {
+      skippedSuppressed++;
+      console.log(`[BackfillWarmEmails] Skipped ${org.id} (${org.businessName}) — blocked domain: ${email}`);
       continue;
     }
 

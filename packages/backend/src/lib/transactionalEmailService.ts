@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { suppressionService } from '../services/suppressionService';
 
 /**
  * Transactional email service — uses Resend API (NOT Gmail).
@@ -41,11 +42,26 @@ export const transactionalEmailService = {
         return;
       }
 
+      // Suppression + domain-block check — applies before every Resend call.
+      // Covers both individual addresses in EmailSuppression table and all
+      // addresses belonging to blocked competitor domains (e.g. estatesales.net).
+      const recipients = Array.isArray(options.to) ? options.to : [options.to];
+      const suppressedMap = await suppressionService.checkMultiple(recipients);
+      const blockedRecipients = recipients.filter(r => suppressedMap.get(r.toLowerCase()));
+      if (blockedRecipients.length > 0) {
+        console.warn(
+          '[transactionalEmailService] Send blocked — suppressed/domain-blocked recipients:',
+          blockedRecipients.join(', '),
+          '| subject:', options.subject,
+        );
+        return;
+      }
+
       const resend = new Resend(process.env.RESEND_API_KEY);
 
       const { error } = await resend.emails.send({
         from: options.from ?? FROM_DEFAULT,
-        to: Array.isArray(options.to) ? options.to : [options.to],
+        to: recipients,
         subject: options.subject,
         html: options.html,
         ...(options.text ? { text: options.text } : {}),

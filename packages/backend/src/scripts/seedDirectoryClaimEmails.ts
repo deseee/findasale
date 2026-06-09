@@ -27,6 +27,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { isEmailDomainBlocked } from '../services/suppressionService';
 import crypto from 'crypto';
 
 const IMAGE_EXTENSION_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?|ico)(\b|$)/i;
@@ -177,6 +178,11 @@ async function main() {
       if (suppressedEmails.has(email.toLowerCase())) {
         suppressed++;
         console.log(`[seedDirectoryClaimEmails] Skipped ${org.id} — suppressed email: ${email}`);
+        continue;
+      }
+      if (isEmailDomainBlocked(email)) {
+        suppressed++;
+        console.log(`[seedDirectoryClaimEmails] Skipped ${org.id} — blocked domain: ${email}`);
         continue;
       }
 
