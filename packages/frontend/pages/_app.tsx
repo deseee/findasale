@@ -170,6 +170,16 @@ function OAuthBridge() {
             });
             return;
           }
+          // Rate limit or server error — redirect to login with explanation instead of silently landing unlogged
+          if (status === 429 || (!ok && !data?.token)) {
+            const msg = status === 429
+              ? 'Too many login attempts. Please try again in 15 minutes.'
+              : 'Sign-in failed. Please try again.';
+            signOut({ redirect: false }).finally(() => {
+              router.replace(`/login?message=${encodeURIComponent(msg)}`);
+            });
+            return;
+          }
           if (ok && data?.token) {
             login(data.token);
             // Feature #443: 1-click OAuth claim — attempt claim before redirect
