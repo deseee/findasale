@@ -48,6 +48,7 @@ const PLACEHOLDER_DOMAINS = new Set([
   'example.com', 'example.org', 'example.net',
   'yourdomain.com', 'yourdomain.org', 'yourdomain.net',
   'test.com', 'test.org',
+  'system.finda.sale', // scraper placeholder — never a real inbox
 ]);
 
 const PLACEHOLDER_FULL_ADDRESSES = new Set([
