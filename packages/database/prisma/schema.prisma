@@ -528,6 +528,7 @@ model Organizer {
   @@index([contactEmail]) // Sentry slow query fix 2026-05-30: emailDiscoveryJob WHERE contactEmail IS NULL AND website IS NOT NULL (1020ms)
   @@index([isClaimed, isUnmanagedListing]) // Sentry slow query fix 2026-05-30: OR predicate on isClaimed/isUnmanagedListing prevents individual index use (1460ms)
   @@index([isUnmanagedListing, isStateLicensed]) // Sentry slow query fix 2026-06-06: websiteEnrichmentJob WHERE isUnmanagedListing=true AND isStateLicensed=true AND website IS NULL (1159ms)
+  @@index([contactEmail, isUnmanagedListing]) // Sentry NODEJS-38: emailDiscoveryJob WHERE contactEmail IS NULL AND website IS NOT NULL AND isUnmanagedListing (composite replaces two single-column indexes)
 }
 
 // Feature #354: OrganizerHours — business hours per day of week
@@ -975,6 +976,7 @@ model Sale {
   @@index([organizerId, status]) // Sentry slow query fix 2026-05-30: COUNT Sale WHERE organizerId + status (1577ms) — dedicated composite for count queries
   @@index([lastScrapedAt]) // Sentry slow query fix 2026-05-30: scraper deduplication queries + UPDATE lastScrapedAt WHERE id (4225ms) — helps scraper dedup; UPDATE latency may need VACUUM ANALYZE for table bloat
   @@index([city]) // Sentry slow query fix 2026-05-30: Sale SELECT (6298ms) — ILIKE city queries; note leading-wildcard ILIKE won't use index, but prefix matches benefit
+  @@index([status, isInventoryContainer, endDate]) // Sentry NODEJS-3E: search.ts COUNT WHERE status=PUBLISHED AND isInventoryContainer=false AND endDate >= now (missing covering index)
 }
 
 // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
