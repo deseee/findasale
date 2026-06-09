@@ -490,7 +490,8 @@ export async function scrapeFacebookEventsForMetro(
   opts: FbSearchOptions = {}
 ): Promise<ScrapedItem[]> {
   const query =
-    `site:facebook.com/events ("estate sale" OR "garage sale" OR "yard sale" OR "estate auction") ` +
+    `site:facebook.com/events ("estate sale" OR "garage sale" OR "yard sale" OR "estate auction" OR ` +
+    `"flea market" OR "swap meet" OR "public auction" OR "online auction" OR "consignment sale") ` +
     `${metro.city} ${metro.state}`;
 
   let rawResults: SearchResult[] = [];

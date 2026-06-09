@@ -131,6 +131,41 @@ export const PLACES_QUERIES: QueryConfig[] = [
   },
   { query: 'online auction service', category: 'AUCTION_HOUSE', saleType: 'RETAIL', label: 'Online Auction Service' },
   { query: 'buy sell trade store', category: 'RESALE_SHOP', saleType: 'RETAIL', label: 'Buy Sell Trade Store' },
+  {
+    query: 'antique flea market',
+    category: 'FLEA_MARKET',
+    saleType: 'FLEA_MARKET',
+    googleType: 'flea_market',
+    label: 'Antique Flea Market',
+  },
+  {
+    query: 'outdoor market',
+    category: 'FLEA_MARKET',
+    saleType: 'FLEA_MARKET',
+    googleType: 'flea_market',
+    label: 'Outdoor Market',
+  },
+  {
+    query: 'vendor market',
+    category: 'FLEA_MARKET',
+    saleType: 'FLEA_MARKET',
+    googleType: 'flea_market',
+    label: 'Vendor Market',
+  },
+  {
+    query: 'trade days',
+    category: 'FLEA_MARKET',
+    saleType: 'FLEA_MARKET',
+    googleType: 'flea_market',
+    label: 'Trade Days',
+  },
+  {
+    query: 'bazaar',
+    category: 'FLEA_MARKET',
+    saleType: 'FLEA_MARKET',
+    googleType: 'flea_market',
+    label: 'Bazaar',
+  },
 ];
 
 // ---------------------------------------------------------------------------
