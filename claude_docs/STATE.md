@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S926 — ANALYTICS/WRAP (2026-06-08). Built and fully tested analytics automation: `claude_docs/scripts/analytics-weekly.py` updated to support OAuth2 Desktop App credentials (deseee@yahoo.com). Completed OAuth2 flow: GCP Desktop credential created, consent granted, refresh token obtained. Script smoke-tested — Search Console returning live queries (2 clicks, 25 impressions this week). Credentials stored at `claude_docs/scripts/.analytics-creds.json` (gitignored). `findasale-analytics-weekly` scheduled task updated — runs Mondays 8:00 AM, no Patrick setup required (creds already in place). .gitignore updated. BQ: 5 (unchanged).**
+**S926 — ANALYTICS/GA4/WRAP (2026-06-08). Root cause of zero GA4 data since launch: CSP in next.config.js blocked googletagmanager.com (script-src) and google-analytics.com (connect-src) — every browser silently dropped all analytics traffic. Fixed both CSP directives. Deployed and verified: GA4 Realtime shows 1 active user in Michigan post-fix. Secondary bug fixed: CookieConsentBanner.handleAccept() now calls window.gtag('consent', 'update', ...) directly (storage event is cross-tab only — ConsentBridge never heard same-tab accepts). Answered Patrick automation meta-question. Added 4 new roadmap entries: #465 Tier 4 LIVE, #470 GA4 conversion events, SEO3 Denver city landing pages, #471 bounce suppression auto-ingestion, #472 email send automation. BQ: 5 (unchanged).**
 
 **S925 — QA (2026-06-08). P1 CSRF fix re-verified: POST /api/outreach/page-view returns 200 for unauthenticated callers (JS fetch credentials:'omit') — S924 fix confirmed live. Logout flow verified: Leo Thomas (user5) desktop user dropdown at /shopper/dashboard → clicked Logout → redirected to /login (ss_49305bl2y), nav shows Login button, /shopper/dashboard → 302 → /login?redirect=/shopper/dashboard (ss_581555xvt) — session fully cleared. #463 claim-click: CTA click confirmed (organizer profile → /register?claim=cmp0jq4j700mnoz89rdjmih15, ss_6367qcmy3), Analytics SDK confirmed initialized in _app.tsx, CODE-ONLY (beacon delivery unverified). BQ: 5 (unchanged).**
 
@@ -126,18 +126,44 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 _(No Railway env vars or GA4/Search Console access grants needed — credentials are already in the `.analytics-creds.json` file and deseee@yahoo.com already owns GA4 + Search Console.)_
 
+### Patrick — One Action Needed
+None. All credentials and tasks are in place.
+
 ### Pending Push
 ```
 git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/scripts/analytics-weekly.py .gitignore
-git commit -m "S924-S926: CSRF verified, logout verified, #463 CODE-ONLY, analytics automation complete (OAuth2)"
+git commit -m "S926: GA4 CSP fix, analytics live, 4 new roadmap entries (#470 conversion events, SEO3, #471 bounce suppression, #472 email send)"
 .\push.ps1
 ```
 
 ### S927 Recommendation
-Below QA ceiling (BQ=5). DEV mode available. Suggested: dispatch `findasale-dev` on next roadmap BROKEN item. Review roadmap.md for highest-priority BROKEN feature to address.
+Below QA ceiling (BQ=5). DEV mode available. Two good options:
+- **#470 GA4 conversion events** — small (<20 lines across ~5 files), high analytical value, unblocks funnel visibility immediately
+- **#471 bounce suppression auto-ingestion** — prerequisite for safe outreach resume; reduces Gmail suspension risk
 
 
 ## Recent Sessions
+
+### S926 — 2026-06-08 | ANALYTICS/GA4/WRAP
+
+**Session type:** Analytics investigation + GA4 root cause fix + session wrap
+
+**Work completed:**
+- **GA4 root cause found and fixed** — CSP in `packages/frontend/next.config.js` missing `https://www.googletagmanager.com` in `script-src` and `https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com` in `connect-src`. Every browser since launch silently blocked the gtag.js script and all measurement hits. Fixed via Python/bash (Edit tool banned). Deployed to Vercel — Realtime confirmed 1 active user in Michigan post-fix.
+- **ConsentBridge secondary bug fixed** — `CookieConsentBanner.handleAccept()` now calls `window.gtag('consent', 'update', { analytics_storage: 'granted' })` directly. Root cause: Web Storage `storage` event only fires in OTHER tabs, so ConsentBridge (`window.addEventListener('storage', ...)`) never heard same-tab consent grants.
+- **Automation meta-audit** — answered Patrick's "what's automated / what's missing / what should we be getting" question. 21 scheduled tasks active.
+- **Roadmap updated** — #465 Tier 4 marked LIVE; added #470 GA4 conversion events, SEO3 Denver city landing pages, #471 bounce suppression auto-ingestion, #472 email send automation.
+
+**Files modified (code — pushed to GitHub):**
+- `packages/frontend/next.config.js` — CSP script-src + connect-src updated (GA4 unblocked)
+- `packages/frontend/components/CookieConsentBanner.tsx` — direct gtag consent call on Accept
+
+**Files modified (docs — need Patrick pushblock):**
+- `claude_docs/strategy/roadmap.md` — #465 updated (Tier 4 live), #470/SEO3/#471/#472 added
+- `claude_docs/STATE.md` — S926 wrap
+- `claude_docs/patrick-dashboard.md` — S926 summary
+
+**BQ: 5 (unchanged).**
 
 ### S925 — 2026-06-08 | QA
 
@@ -190,89 +216,6 @@ Below QA ceiling (BQ=5). DEV mode available. Suggested: dispatch `findasale-dev`
 - `claude_docs/STATE.md` — S923 status, Next Session updated
 
 **BQ: 5 (unchanged).**
-
-### S922 — 2026-06-08 | QA MODE
-
-**Session type:** QA — Chrome-verify the 4 S921 fixes on live production (commit 7058d99c, Vercel deploy confirmed READY).
-
-**Work completed:**
-- **Verified S921 push live** — GitHub commit 7058d99c (15:35Z) + Vercel deployment dpl_J2zD… state READY, aliased to finda.sale. (Frontend was still BUILDING at session start, which caused an initial false 404 on /shopper/collections — re-tested after READY.)
-- **#196 Buying Pools ✅ RESOLVED** — /items/cmp1digeb000lxravcnxftuix (Zoom B3, $169) as Leo Thomas: "Split this purchase" card renders, split math 2/3/4/5 ways correct ($84.50/$56.33/$42.25/$33.80), "Start a Pool" CTA. ss_5769b4ui3. Negative test: $25 Vintage Radio (cmq2z2ocg001810t51m6su0bb) → no card. Deployed BuyingPoolCard.tsx confirmed `itemPrice > 100`.
-- **#201 Favorites ✅ RESOLVED (all 3)** — Saved Zoom B3 as Leo → /shopper/wishlist shows "Items (1)" (count matches single item favorite), "Saved Items" lists the Zoom B3, "Saved Sales" lists July Discovery Auction (sale-favorite separated), /shopper/collections → 302 → /shopper/wishlist. ss_37941eelg, ss_1509jponw.
-- **SEC-001 ✅ RESOLVED** — /admin/demand-signals as Alice (user1, admin): "Unmet Demand Signals", 11 real patterns, full table, no error. Deployed admin.ts query parameterized (Prisma.sql bound ${city}/${minCount}, Prisma.empty fallback) — no $queryRawUnsafe.
-- **SEC-002 ✅ RESOLVED** — Deployed items.ts: scoped uploadImages (JPEG/PNG/WebP/GIF, 25MB) on POST /api/items + uploadCsv (CSV types, 10MB) on import routes; fileFilter rejects arbitrary types; valid types pass. /organizer/add-items/[saleId] loads clean post-deploy.
-- **Observation (not filed):** Logout from the user menu did not fully clear Leo's session until a fresh login superseded it — I interrupted the logout flow, so not a confirmed bug; flagged for a clean isolated re-test.
-
-**Tooling/infra issues this session:**
-- Workspace bash DOWN entire session — "useradd failed: No space left on device". No psycopg2 / Python-via-bash available → could not edit roadmap.md or patrick-dashboard.md, or run the BQ-count script. STATE.md updated via full-content Write (Edit tool banned per CLAUDE.md §4).
-- Chrome screenshot tool intermittently errored ("params.clip.scale" deserialize) — used get_page_text/JS DOM reads for evidence where needed.
-
-**Files modified:**
-- `claude_docs/STATE.md` — S922 status, BQ 9→5 (removed #196/#201/SEC-001/SEC-002), 4 PCV rows added, Next Session rewritten for S923.
-
-**BQ: 9→5.** Deferred to S923 (bash required): roadmap.md Chrome-column PCVs (#210 S921 + #196/#201/SEC-001/SEC-002 S922 + verify #198) and patrick-dashboard.md.
-
-### S926 — 2026-06-08 | ANALYTICS/WRAP
-
-**Session type:** OAuth2 credential setup + analytics automation completion + session wrap
-
-**Work completed:**
-- **OAuth2 flow completed** — Service accounts rejected by GA4 UI (human Google accounts only). Switched to OAuth2 Desktop App: created GCP credential in project `positive-fuze-465207-e5`, completed consent flow as deseee@yahoo.com, exchanged auth code for refresh token. Both APIs confirmed enabled (GA4 Data API + Search Console API).
-- **`claude_docs/scripts/analytics-weekly.py` updated** — Auth section rewritten to detect OAuth2 (`client_id`/`refresh_token` keys) vs service account JSON and use the appropriate auth path. Reads from `GOOGLE_ANALYTICS_CREDENTIALS_JSON` env var (with `GOOGLE_SERVICE_ACCOUNT_JSON` as fallback). Script smoke-tested: Search Console returning live data (2 clicks, 25 search queries incl. "estate sales finder", "estate sales near me"). GA4 empty (expected — finda.sale at very low traffic volume).
-- **`claude_docs/scripts/.analytics-creds.json` created** — OAuth2 credentials file (client_id, client_secret, refresh_token). NOT committed to git.
-- **`.gitignore` updated** — `claude_docs/scripts/.analytics-creds.json` added.
-- **`findasale-analytics-weekly` scheduled task updated** — Runs Mondays 8:00 AM. Reads creds from `.analytics-creds.json` file via dynamic session path discovery. No Railway env vars required. Pre-populate tools: Cowork sidebar → Scheduled → findasale-analytics-weekly → Run Now.
-
-**Files modified:**
-- `claude_docs/scripts/analytics-weekly.py` — OAuth2 auth support added
-- `.gitignore` — analytics creds file excluded
-
-**Files created (not tracked in git):**
-- `claude_docs/scripts/.analytics-creds.json` — OAuth2 refresh token (gitignored)
-
-**BQ: 5 (unchanged).**
-
----
-
-### S921 — 2026-06-08 | QA MODE
-
-**Session type:** QA — BQ=9 at ceiling; coded fixes for #196/#201/SEC-001/SEC-002 + #210 Streaks Chrome QA
-
-**Work completed:**
-- **#198 Reviews PCV → roadmap** — Row #198 Chrome QA column updated → S920 with full evidence.
-- **#196 Buying Pools fix CODED** — BuyingPoolCard.tsx line 48: `> 10000` → `> 100`. TS 0 errors.
-- **#201 Favorites 3 bugs CODED** — (1) favoriteController.ts getUserFavorites: added sale-level favorites query, returns saleFavorites + saleTotal; (2) wishlist.tsx: items tab count = savedCount only + new Saved Sales section; (3) pages/shopper/collections.tsx NEW: 302 redirect to /shopper/wishlist. TS 0 errors all 3.
-- **SEC-001 CODED** — admin.ts: all $queryRawUnsafe replaced with Prisma.sql tagged templates. TS 0 errors.
-- **SEC-002 CODED** — items.ts: two scoped multer instances — uploadImages (JPEG/PNG/WebP/GIF, 25MB) + uploadCsv (CSV/XLS, 10MB). TS 0 errors.
-- **#210 Streaks — Chrome-verified** — /shopper/dashboard as Leo Thomas (user5). Streak banner: Streak 6, XP 2025, Hunt Pass 2x XP. ss_021185in1, ss_4660qufq3, ss_1965zcca0.
-
-**Files modified:**
-- `packages/frontend/components/BuyingPoolCard.tsx` — threshold 10000→100
-- `packages/backend/src/controllers/favoriteController.ts` — sale favorites in getUserFavorites
-- `packages/frontend/pages/shopper/wishlist.tsx` — items count fix + Saved Sales section
-- `packages/frontend/pages/shopper/collections.tsx` — NEW 302 redirect
-- `packages/backend/src/routes/admin.ts` — SEC-001 Prisma.sql
-- `packages/backend/src/routes/items.ts` — SEC-002 scoped multer
-- `claude_docs/strategy/roadmap.md` — row #198 Chrome QA → S920 applied
-
-**BQ: 9 (unchanged)** — #196/#201/SEC-001/SEC-002 coded but pending push+Chrome-verify. All 4 remain in BQ. (Pushed S922 as commit 7058d99c; all 4 verified S922.)
-
-### S920 — 2026-06-08 | QA MODE
-
-**Session type:** QA — shopper flow (#196 Buying Pools, #198 Reviews, #201 Favorites, #210 Streaks)
-
-**Work completed:**
-- **#198 Reviews ✅ Chrome-verified** — Navigated https://finda.sale/sales/cmpt2oq6q00138cehpgqx3huk as user5 (Leo Thomas). Clicked 5-star rating. Clicked Submit Review. Review appeared with correct content. Form reset to 0/500 confirming onSuccess fired. ss_5467x997f, ss_9288c84e3.
-- **#196 Buying Pools root cause** — `BuyingPoolCard.tsx`: `shouldShow = itemPrice > 10000`. Items stored in dollars ($285/$3500) never reach $10k. Fix is 1 line: `> 100`. Added to BQ as P1.
-- **#201 Favorites 3 P2 bugs** — Favorites sub-flows navigated as user5: (1) Items tab overcounts (2 shown, 1 actual), (2) Sale-level Favorites absent from /shopper/wishlist, (3) /shopper/collections → 404. Added to BQ.
-- **#335 corrected** — Patrick confirmed outreach@finda.sale NOT suspended S920. Updated BQ entry, downgraded P1→P2, removed stale "reactivate at admin.google.com" requirement.
-- **DB cleanup** — Deleted test Review cmq5cdxx9000dxq7vmt95figg + Favorites cmq5be3d701bfv7mwny6k4zyb + cmq5bpsy301bmv7mwqi1bp8m7 via psycopg2.
-
-**Files modified:** STATE.md, patrick-dashboard.md
-
-**BQ: 7→9** (+2: #196 Buying Pools, #201 Favorites P2 bugs).
-
----
 
 ### S919 — 2026-06-08 | AUTOMATED + SECURITY AUDIT
 

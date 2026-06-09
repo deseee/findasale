@@ -1,75 +1,56 @@
-# Patrick's Dashboard — June 8, 2026 (Updated: S926 ANALYTICS COMPLETE)
+# Patrick's Dashboard — June 8, 2026 (Updated: S926 GA4 LIVE)
 
-**Generated:** Monday, June 8, 2026 (S926 — Analytics automation built, tested, and fully operational)
+**Generated:** Monday, June 8, 2026 (S926 — GA4 fixed, analytics baseline established)
 
 ---
 
 ## S926 Quick Summary
 
-Analytics are now live and automated. The script ran successfully this session — Search Console is returning real data.
+**GA4 is now working.** The site has been live for months but analytics were completely silent because of a Content Security Policy misconfiguration — every browser was silently blocking the Google Analytics script from loading. Fixed this session. GA4 Realtime confirmed 1 active user after the fix deployed.
 
-**What got built:** A Python script (`claude_docs/scripts/analytics-weekly.py`) that connects to both Google Analytics 4 and Google Search Console using your deseee@yahoo.com account. Every Monday at 8:00 AM, Cowork will automatically run this and give you:
-- Week-over-week traffic change (is the site growing?)
-- Top 10 pages by sessions
-- Top traffic sources (organic, direct, referral)
-- Top 25 search queries with click/impression/position data
-- SEO quick wins — queries in positions 5–20 with >50 impressions
-- One recommended action for the week
+**What was wrong:** `next.config.js` had a strict Content Security Policy that didn't include `googletagmanager.com` or `google-analytics.com` — so every browser blocked the entire analytics pipeline from day one. Zero historical data was lost because there was nothing to lose: the property never received a single hit.
 
-**This week's live data (just ran):**
-- 2 clicks, queries ranking for "estate sales finder" (pos 8.5), "estate sales near me" (pos 12.4)
-- 25 queries in Search Console — all unbranded so far
-- GA4 empty — expected for a low-traffic beta, will populate as traffic grows
+**What's working now:**
+- GA4 page views tracking on every page visit
+- Cookie consent → analytics grant working correctly (also fixed a secondary bug where the consent banner wasn't notifying GA4 in the same browser tab)
+- Weekly analytics report will now have real data starting from today
 
----
-
-## What You Need to Do (One Step)
-
-**Pre-approve tool permissions so Monday's run doesn't pause:**
-- Cowork sidebar → Scheduled → **findasale-analytics-weekly** → **Run Now**
-- That's it. Credentials are already set up.
-
-_(You don't need to add anything to Railway or GA4/Search Console — your Google account (deseee@yahoo.com) already owns both, and the credentials file is already in place.)_
+**What's in the roadmap queue from this session:**
+- `#470` — GA4 conversion events (organizer signup, sale creation, item upload, shopper favorite) — small build, high value
+- `SEO3` — Denver city landing page (positions 27-30, 28+ impressions already)
+- `#471` — Bounce suppression auto-ingestion (prerequisite for safe outreach resume)
+- `#472` — Email send automation backend endpoint (unblocks automated outreach)
 
 ---
 
-## Pushblock (S924 + S925 + S926 combined docs)
+## Project Status
 
-Run this from your PowerShell in the project root:
+| Area | Status |
+|------|--------|
+| BQ (Blocked Queue) | 5 items — below QA ceiling, DEV available |
+| GA4 Analytics | ✅ LIVE as of today |
+| Search Console | ✅ Connected, data flowing |
+| Email (transactional) | ✅ On Resend rail (payouts, auth, receipts) |
+| Outreach | ⏸ Paused (intentional, domain warming) |
+| Backend / Railway | ✅ Healthy |
+| Frontend / Vercel | ✅ Deployed |
 
-```
+---
+
+## What You Need to Do
+
+Nothing required. All credentials and tasks are in place.
+
+---
+
+## Pushblock (S924 + S925 + S926 combined)
+
+Run this from PowerShell in the project root:
+
+```powershell
 git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/scripts/analytics-weekly.py .gitignore
-git commit -m "S924-S926: CSRF verified, logout verified, #463 CODE-ONLY, analytics automation complete (OAuth2)"
+git commit -m "S926: GA4 CSP fix, analytics live, 4 new roadmap entries (#470 conversion events, SEO3, #471 bounce suppression, #472 email send)"
 .\push.ps1
 ```
 
-Note: `packages/backend/src/middleware/csrf.ts` is already on GitHub (commit 44dabb618). Your local `push.ps1` will auto-merge it. The `.analytics-creds.json` file is gitignored and will NOT be committed.
-
----
-
-## Blocked Queue — 5 items (✅ below QA ceiling — DEV available)
-
-| Item | Priority | Status |
-|------|----------|--------|
-| #332 Shopify integration | P0 (age: 130+ sessions) | Patrick connects test store |
-| #335 Outreach resume | P2 | Intentional hold — domain warming |
-| #462 WARM leads enrichment | P2 | Needs dev dispatch (do during outreach resume) |
-| WARM tier website enrichment | P2 | Needs supplemental data source |
-| GarageSaleFinder 80.7% un-geocoded | P3 | Needs GSF-specific geocode strategy |
-
----
-
-## Feature Status (Recent)
-
-| Feature | Status | Session |
-|---------|--------|---------|
-| Analytics automation | ✅ Live — Search Console returning real data, runs Mondays 8 AM | S926 |
-| #462 CSRF fix on outreach endpoints | ✅ CSRF layer live, attribution UNVERIFIED (needs real click) | S924/S925 |
-| #463 Claim-click tracking | CODE-ONLY — check Vercel Events tab | S925 |
-| Logout flow | ✅ Chrome-verified — session fully clears | S925 |
-| #196 Buying Pools | ✅ Chrome-verified live | S922 |
-| #201 Favorites (3 bugs) | ✅ Chrome-verified live | S922 |
-| SEC-001 SQL injection | ✅ Chrome-verified live | S922 |
-| SEC-002 Multer MIME filter | ✅ Chrome-verified live | S922 |
-| #210 Streaks | ✅ Chrome-verified | S921 |
-| #198 Reviews (shopper submit) | ✅ Chrome-verified | S920 |
+_(The code fixes — next.config.js CSP and CookieConsentBanner.tsx — were already pushed earlier this session.)_
