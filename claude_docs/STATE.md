@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S929 — BUG/OPS (2026-06-09). Sentry error triage + outreach placeholder fix. Reviewed Gmail bounce flood. VACUUM ANALYZE on Sale + Organizer tables (NODEJS-10, NODEJS-2Y table bloat). Added 2 DB indexes: Sale(status,isInventoryContainer,endDate) for NODEJS-3E + Organizer(contactEmail,isUnmanagedListing) for NODEJS-38. Created migration file. Fixed @system.finda.sale scraper placeholder domain missing from PLACEHOLDER_DOMAINS set in 3 outreach seeder files (autoSeedOutreachCron.ts, seedDirectoryClaimEmails.ts, backfill-warm-emails.ts) — was queueing outreach to our own scraper-generated addresses, causing bounce DSN flood through ImprovMX (500/day limit hit). 0 bad rows in DirectoryClaimEmail confirmed before fix. Patrick pushed + Railway redeployed + ran prisma migrate deploy. Sentry: 10 → 5 unresolved issues (NODEJS-1A/2N/32/3D cleared by VACUUM+redeploy). ImprovMX 500/day limit: caused by @system.finda.sale bounce notifications — stops now that fix is deployed. NODEJS-1G (scraper fallback LIKE address match) still periodic — needs take limit or trigram index, monitoring next session. BQ: 5 (unchanged).**
+
 **S927 — QA (2026-06-08). Autonomous QA continued: #79 Earnings Counter Animation ✅ (insights widget shows $220 revenue, 42.9% conversion, ss_3082qg908; animation not capturable via SSR). #164 Tiers ✅ (Bronze badge + "1/4 sales until next tier" on organizer dashboard, ss_01384hjx7). #316 Referral Tranche Anti-Fraud ✅ (/organizer/referrals: link visible, 1 referred org tracked, DB fraudReviewStatus=CLEAR + TRANCHE_A/B awarded Jun-5, ss_1143gl3d4). P2 bug found: HTML-encoded category names in DB render as literal entity strings in insights Items by Category. BQ: 5→6.**
 
 **S926 — ANALYTICS/GA4/WRAP (2026-06-08). Root cause of zero GA4 data since launch: CSP in next.config.js blocked googletagmanager.com (script-src) and google-analytics.com (connect-src) — every browser silently dropped all analytics traffic. Fixed both CSP directives. Deployed and verified: GA4 Realtime shows 1 active user in Michigan post-fix. Secondary bug fixed: CookieConsentBanner.handleAccept() now calls window.gtag('consent', 'update', ...) directly (storage event is cross-tab only — ConsentBridge never heard same-tab accepts). Answered Patrick automation meta-question. Added 4 new roadmap entries: #465 Tier 4 LIVE, #470 GA4 conversion events, SEO3 Denver city landing pages, #471 bounce suppression auto-ingestion, #472 email send automation. BQ: 5 (unchanged).**
@@ -127,24 +129,40 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Push S924–S928 combined** — full pushblock below (13 files).
-2. **Findasale-records pass S929** — apply S925 PCVs (logout flow + #463) to roadmap.md Chr columns.
+1. **S924–S928 pushblock still pending** — if not yet pushed, run the S928 pushblock from the prior Next Session section.
+2. **Records pass** — findasale-records to apply S925 PCVs (logout flow Chr✅ + #463 CODE-ONLY note) to roadmap.md Chr columns.
 
-### Pending Push (S924–S928 combined)
-```
-git add packages/frontend/utils/textUtils.ts packages/frontend/pages/organizer/insights.tsx packages/backend/src/controllers/itemController.ts packages/frontend/pages/register.tsx packages/frontend/pages/organizer/create-sale.tsx packages/frontend/pages/organizer/add-items/[saleId].tsx packages/frontend/components/FavoriteButton.tsx packages/frontend/components/CheckoutModal.tsx claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/scripts/analytics-weekly.py .gitignore
-git commit -m "S928: HTML entity P2 fix, #470 GA4 conversion events, 22 Chr col bulk-apply, QA sweep ✅"
-.\push.ps1
-```
-
-### S929 Recommendation
+### S930 Recommendation
 BQ=5 (below ceiling=8). DEV or QA available.
 - **Records: apply S925 PCVs** (logout flow Chr✅ + #463 CODE-ONLY note) — findasale-records pass
-- **Chrome verify HTML entity fix** — navigate to /organizer/insights as an organizer with eBay-imported items and confirm no `&amp;` or `&#233;` in "Items by Category"
-- **DEV: DB migration** — decode existing HTML-encoded category rows (still needed — S928 fix only prevents future re-encoding and fixes render; existing encoded DB rows persist)
+- **Chrome verify HTML entity fix** — navigate to /organizer/insights as an organizer with eBay-imported items, confirm no `&amp;` or `&#233;` in "Items by Category"
+- **DEV: DB migration** — decode existing HTML-encoded category rows (S928 fix prevents future encoding; existing DB rows still encoded)
+- **Monitor ImprovMX** — check tomorrow if daily forwarding stays below 500. If still hitting cap, investigate other inbound bounce sources.
+- **NODEJS-1G** — scraper fallback `address: { contains: city }` LIKE query still periodic (11 events/24 days). Fix: add `take: 500` to candidates findMany in scraper/index.ts. Low urgency — monitor for now.
 
 
 ## Recent Sessions
+
+### S929 — 2026-06-09 | BUG/OPS
+
+**Session type:** Bug/Ops — Sentry triage + outreach placeholder fix
+
+**Work completed:**
+- **Sentry 10→5 issues resolved** — VACUUM ANALYZE on Sale + Organizer tables cleared NODEJS-10/2Y/32/3D/2N (table bloat). NODEJS-1A (bounceSuppressService module) cleared by redeploy (file exists, dynamic require had try/catch). 
+- **DB indexes added (now live)** — `Sale_status_isInventoryContainer_endDate_idx` (NODEJS-3E: search.ts COUNT query) + `Organizer_contactEmail_isUnmanagedListing_idx` (NODEJS-38: emailDiscoveryJob). Migration deployed via `prisma migrate deploy`.
+- **@system.finda.sale outreach leak fixed** — `PLACEHOLDER_DOMAINS` set was missing `system.finda.sale` in all 3 seeder files. Scraper creates synthetic emails (`scraper+slug@system.finda.sale`) stored as User.email; outreach cron was treating these as real organizer contactEmails and queuing outreach to them. Fix deployed. 0 bad rows confirmed in DirectoryClaimEmail queue before fix.
+- **ImprovMX 500/day flood explained** — bounce DSNs from @system.finda.sale outreach attempts landing at finda.sale addresses ImprovMX forwards. Fix stops new bad emails; volume drops tomorrow. Outreach account confirmed NOT suspended (memory corrected).
+- **NODEJS-1G still monitoring** — scraper fallback `findMany({ where: { isUnmanagedListing: true, address: { contains: city } } })` cannot use B-tree index on LIKE '%city%'. `@@index([isUnmanagedListing])` exists but not sufficient for large table scan. Needs `take: 500` limit or pg_trgm GIN index. Low frequency (< 1/day average). Deferred to S930.
+
+**Files modified:**
+- `packages/database/prisma/schema.prisma` — 2 new @@index entries (Organizer + Sale)
+- `packages/database/prisma/migrations/20260608000001_add_missing_sale_organizer_indexes/migration.sql` — new migration
+- `packages/backend/src/jobs/autoSeedOutreachCron.ts` — added 'system.finda.sale' to PLACEHOLDER_DOMAINS
+- `packages/backend/src/scripts/seedDirectoryClaimEmails.ts` — same fix
+- `packages/backend/src/scripts/backfill-warm-emails.ts` — same fix
+
+**BQ delta:** 5 → 5 (unchanged — no feature work)
+
 
 ### S928 — 2026-06-08 | QA + DEV
 
