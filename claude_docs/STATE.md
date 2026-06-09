@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S930 — QA (2026-06-09). Records pass (applied S925 PCVs to roadmap.md: logout flow Chr✅, #463 claim-click CODE-ONLY note). DB migration: decoded 4 HTML-encoded category rows in Railway DB (Electronics & Technology, Lamps & Lighting, Home Décor, Jewelry & Watches). Chrome-verified HTML entity fix at /organizer/insights ✅ (no &amp; or &#233; entities visible). Autonomous QA sweep: organizer dashboard (Alice) ✅, shopper dashboard (Leo Thomas) ✅, Explorer Profile ✅, Explorer's Guild rank label #123 ✅ at /shopper/ranks, Hunt Pass active state #199 ✅ at /shopper/hunt-pass. 6 PCVs staged for S931 records pass. ⚠️ P3 new BQ item: Hunt Pass multiplier display inconsistency (dashboard "2x XP" vs /shopper/hunt-pass "1.5x XP"). Gmail DSN cleanup: 104 mailer-daemon bounce threads trashed from outreach inbox. BQ: 5→6.**
+
 **S929 — BUG/OPS (2026-06-09). Sentry error triage + outreach placeholder fix. Reviewed Gmail bounce flood. VACUUM ANALYZE on Sale + Organizer tables (NODEJS-10, NODEJS-2Y table bloat). Added 2 DB indexes: Sale(status,isInventoryContainer,endDate) for NODEJS-3E + Organizer(contactEmail,isUnmanagedListing) for NODEJS-38. Created migration file. Fixed @system.finda.sale scraper placeholder domain missing from PLACEHOLDER_DOMAINS set in 3 outreach seeder files (autoSeedOutreachCron.ts, seedDirectoryClaimEmails.ts, backfill-warm-emails.ts) — was queueing outreach to our own scraper-generated addresses, causing bounce DSN flood through ImprovMX (500/day limit hit). 0 bad rows in DirectoryClaimEmail confirmed before fix. Patrick pushed + Railway redeployed + ran prisma migrate deploy. Sentry: 10 → 5 unresolved issues (NODEJS-1A/2N/32/3D cleared by VACUUM+redeploy). ImprovMX 500/day limit: caused by @system.finda.sale bounce notifications — stops now that fix is deployed. NODEJS-1G (scraper fallback LIKE address match) still periodic — needs take limit or trigram index, monitoring next session. BQ: 5 (unchanged).**
 
 **S927 — QA (2026-06-08). Autonomous QA continued: #79 Earnings Counter Animation ✅ (insights widget shows $220 revenue, 42.9% conversion, ss_3082qg908; animation not capturable via SSR). #164 Tiers ✅ (Bronze badge + "1/4 sales until next tier" on organizer dashboard, ss_01384hjx7). #316 Referral Tranche Anti-Fraud ✅ (/organizer/referrals: link visible, 1 referred org tracked, DB fraudReviewStatus=CLEAR + TRANCHE_A/B awarded Jun-5, ss_1143gl3d4). P2 bug found: HTML-encoded category names in DB render as literal entity strings in insights Items by Category. BQ: 5→6.**
@@ -110,6 +112,7 @@ _S928: HTML entity P2 FIXED (textUtils.ts + insights.tsx + itemController.ts). G
 
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
+| Hunt Pass multiplier display inconsistency | **P3** S930 — Dashboard stats bar shows "Hunt Pass 2x XP" but /shopper/hunt-pass page shows "You're earning 1.5x XP on every action". Two display components show different multiplier values. Need to verify correct value in DB (HuntPass.multiplier) and fix the discrepant display. | Check Hunt Pass tier multiplier in DB; fix whichever component is wrong | S930 |
 
 
 ---
@@ -122,6 +125,12 @@ _S928: HTML entity P2 FIXED (textUtils.ts + insights.tsx + itemController.ts). G
 | — | **Logout flow — session fully clears on user dropdown logout** | ✅ Chrome-verified S925 — Leo Thomas (user5@example.com) at /shopper/dashboard. Desktop user dropdown opened, clicked Logout. Redirected to /login (ss_49305bl2y). Nav shows Login button. Navigated to /shopper/dashboard → 302 → /login?redirect=/shopper/dashboard (ss_581555xvt). Session fully cleared. | S925 |
 | 463 | **#463 Claim button click tracking (Vercel Analytics)** | CODE-ONLY S925 — track('claim_profile_click', {organizerId, source, tier}) confirmed in organizers/[id].tsx onClick. <Analytics /> SDK confirmed in _app.tsx. CTA redirect confirmed: clicked "Claim This Profile — It's Free" → /register?claim=cmp0jq4j700mnoz89rdjmih15 (ss_6367qcmy3). Beacon delivery UNVERIFIED (keepalive beacon fire-and-forget; page navigates before capture). Requires Vercel Analytics Events tab check. | S925 |
 
+| — | Organizer dashboard (Alice) | ✅ Chrome-verified S930 — Navigated /organizer/dashboard as Alice (user1@example.com). Scrolled full page: Sale Pulse, Real-Time Metrics, Efficiency Coach, Unmet Demand all loaded, no errors. ss_7173exjod ss_2188hmy0h ss_4720gvfvj ss_53776z78g | S930 |
+| — | HTML entity fix (S928) — /organizer/insights | ✅ Chrome-verified S930 — Navigated /organizer/insights as Alice. Items by Category: no `&amp;` or `&#233;` entities in bar chart or top items table. ss_7450stzxz ss_5747xy01g | S930 |
+| — | Shopper dashboard (Leo Thomas) | ✅ Chrome-verified S930 — Navigated /shopper/dashboard as Leo (user5@example.com). Welcome hero, Ranger Explorer card 2,025/5,000 XP, QR code, stats bar, Collections/Purchase History/Treasure Trails/My QR nav, Share & Earn, Wishlists. No errors. ss_11868940k ss_5978jsi83 ss_5655szz9h | S930 |
+| — | Explorer Profile (Leo Thomas) | ✅ Chrome-verified S930 — Navigated /shopper/explorer-profile as Leo. Bio, Specialties "mid-century modern", 2 Matching Items from live DB, Sale Explorer achievement unlocked 6/3/2026. ss_85143ez10 ss_7691z40vj | S930 |
+| #123 | Explorer's Guild Phase 2 — rank label fix | ✅ Chrome-verified S930 — Navigated /shopper/ranks as Leo. "Current Rank: Ranger" in XP card. Ranger tier card shows "↑ Your rank" badge. Next: Sage (2,975 XP remaining). ss_3004mafjk ss_1987854gc | S930 |
+| #199 | Hunt Pass "Active until N/A" fix | ✅ Chrome-verified S930 — Navigated /shopper/hunt-pass as Leo. "Hunt Pass Active" (green checkmark + green heading), "You're earning 1.5x XP on every action". No "Active until N/A" text anywhere. ss_56331z92j | S930 |
 _(S927 PCV rows #79/#164/#316 applied to roadmap.md in S928 records pass — cleared.)
 _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared.)_
 ---
@@ -129,19 +138,33 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **S924–S928 pushblock still pending** — if not yet pushed, run the S928 pushblock from the prior Next Session section.
-2. **Records pass** — findasale-records to apply S925 PCVs (logout flow Chr✅ + #463 CODE-ONLY note) to roadmap.md Chr columns.
+1. **S924–S928 pushblock still pending** — if not yet pushed, run it now.
 
-### S930 Recommendation
-BQ=5 (below ceiling=8). DEV or QA available.
-- **Records: apply S925 PCVs** (logout flow Chr✅ + #463 CODE-ONLY note) — findasale-records pass
-- **Chrome verify HTML entity fix** — navigate to /organizer/insights as an organizer with eBay-imported items, confirm no `&amp;` or `&#233;` in "Items by Category"
-- **DEV: DB migration** — decode existing HTML-encoded category rows (S928 fix prevents future encoding; existing DB rows still encoded)
-- **Monitor ImprovMX** — check tomorrow if daily forwarding stays below 500. If still hitting cap, investigate other inbound bounce sources.
-- **NODEJS-1G** — scraper fallback `address: { contains: city }` LIKE query still periodic (11 events/24 days). Fix: add `take: 500` to candidates findMany in scraper/index.ts. Low urgency — monitor for now.
+### S931 Recommendation
+BQ=6 (below ceiling=8). DEV or QA available.
+- **Records: apply S930 PCVs** — findasale-records to update roadmap Chr columns for 6 S930 QA items: organizer dashboard, HTML entity fix (S928), shopper dashboard, Explorer Profile, #123 rank label, #199 Hunt Pass active state
+- **DEV: Hunt Pass multiplier fix** — dashboard shows "Hunt Pass 2x XP" but /shopper/hunt-pass shows "1.5x XP". Verify DB HuntPass.multiplier; fix whichever display component is wrong.
+- **Monitor ImprovMX** — confirm daily forwarding stays below 500 now that @system.finda.sale bounce flood is fixed
+- **NODEJS-1G** — scraper fallback LIKE query still periodic. Fix: add `take: 500` to candidates findMany in scraper/index.ts. Low urgency.
 
 
 ## Recent Sessions
+
+### S930 — 2026-06-09 | QA
+
+**Session type:** QA — Records pass, DB migration, Chrome QA sweep
+
+**Work completed:**
+- **Records pass** — Applied S925 PCVs to roadmap.md: logout flow → Chr✅ S925; #463 claim-click → CODE-ONLY note (beacon fire-and-forget, unverifiable in QA env).
+- **DB migration** — Decoded 4 HTML-encoded category rows in Railway DB: "Electronics & Technology", "Lamps & Lighting", "Home Décor", "Jewelry & Watches".
+- **HTML entity fix Chrome-verified** — Navigated /organizer/insights as Alice. No `&amp;` or `&#233;` visible in Items by Category. ✅ (ss_7450stzxz ss_5747xy01g)
+- **Autonomous QA sweep** — 5 features Chrome-verified: organizer dashboard ✅, shopper dashboard (Leo Thomas) ✅, Explorer Profile ✅, #123 ranks page ✅ (Ranger card + "↑ Your rank" badge), #199 Hunt Pass active state ✅ (no "Active until N/A"). 6 PCVs staged.
+- **⚠️ P3 new BQ item** — Dashboard stats bar "Hunt Pass 2x XP" vs /shopper/hunt-pass "1.5x XP on every action" multiplier display inconsistency.
+- **Gmail DSN cleanup** — Trashed 104 mailer-daemon delivery delay/failure notifications from outreach@finda.sale inbox. S929 fix prevents new ones; backlog cleared.
+
+**Files modified:** claude_docs/STATE.md, claude_docs/patrick-dashboard.md, claude_docs/strategy/roadmap.md (S925 PCVs applied)
+
+**BQ delta:** 5 → 6 (+1 Hunt Pass multiplier P3)
 
 ### S929 — 2026-06-09 | BUG/OPS
 
