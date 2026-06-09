@@ -638,7 +638,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
             </Link>
 
-            <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
+            <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="1.5x XP, early access to sales, and exclusive badges — $4.99/mo">
               <Ticket size={16} className="text-amber-500" />
               <span>Hunt Pass</span>
             </Link>

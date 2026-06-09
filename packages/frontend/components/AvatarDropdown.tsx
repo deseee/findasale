@@ -1196,7 +1196,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 href="/shopper/hunt-pass"
                 className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
-                title="2x XP, early access to sales, and exclusive badges — $4.99/mo"
+                title="1.5x XP, early access to sales, and exclusive badges — $4.99/mo"
               >
                 <Ticket size={16} className="text-amber-500" />
                 <span>Hunt Pass</span>

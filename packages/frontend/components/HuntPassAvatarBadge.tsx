@@ -66,7 +66,7 @@ const HuntPassAvatarBadge: React.FC<HuntPassAvatarBadgeProps> = ({
         height: `${badgeSize}px`,
       }}
       aria-label="Hunt Pass Active"
-      title="Hunt Pass subscriber — 2x XP and exclusive benefits"
+      title="Hunt Pass subscriber — 1.5x XP and exclusive benefits"
     >
       {/* Golden ring background */}
       <div

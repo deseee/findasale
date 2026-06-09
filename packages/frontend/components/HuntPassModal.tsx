@@ -60,7 +60,7 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
           <ul className="space-y-2 text-sm text-warm-700">
             <li className="flex items-start gap-2">
               <span className="text-purple-600 font-bold">✓</span>
-              <span>2x XP on every action</span>
+              <span>1.5x XP on every action</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-purple-600 font-bold">✓</span>

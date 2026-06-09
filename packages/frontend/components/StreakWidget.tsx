@@ -75,7 +75,7 @@ const StreakWidget: React.FC = () => {
           <span className="text-lg">👑</span>
           <div className="flex flex-col">
             <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Hunt Pass</span>
-            <span className="text-xs font-bold text-purple-600 dark:text-purple-400">2x XP</span>
+            <span className="text-xs font-bold text-purple-600 dark:text-purple-400">1.5x XP</span>
           </div>
         </div>
       ) : (
@@ -83,7 +83,7 @@ const StreakWidget: React.FC = () => {
           <button
             onClick={() => setIsHuntPassModalOpen(true)}
             className="py-1 px-3 bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-600 text-white text-xs font-semibold rounded transition"
-            title="Get early access to flash deals, 2x XP, and exclusive badge"
+            title="Get early access to flash deals, 1.5x XP, and exclusive badge"
           >
             Upgrade
           </button>
