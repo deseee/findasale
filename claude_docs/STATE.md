@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S936 — QA/RECORDS (2026-06-09). Chrome QA sweep: SEO3 /estate-sales/denver-co ✅ (H1, 50 listings, BreadcrumbList schema.org, canonical confirmed); #472 send-test-email CODE works (Resend success:true + messageId 7caa79e3) but email arrived in Yahoo SPAM from support@finda.sale — root cause: RESEND_FROM_EMAIL set to support@finda.sale, unwarmed domain at Yahoo; BUG FIX: admin.ts hardcoded hello@send.finda.sale fallback removed + RESEND_FROM_EMAIL gate added; transactionalEmailService.ts FROM_DEFAULT changed to process.env.RESEND_FROM_EMAIL ?? noreply@finda.sale (was hardcoded hello@send.finda.sale — wrong domain for Resend DKIM); #463 UNVERIFIED (no unclaimed organizer profile URL accessible in QA env); #164 Tiers ✅ (Alice shows TEAMS $79/mo at /organizer/settings → Subscription). Records pass: S935 PCVs applied to roadmap (#317 ⚠️ S936 graceful fallback only, #470 CODE-ONLY S936). BQ: 1 (unchanged). Patrick action needed: add RESEND_FROM_EMAIL=noreply@finda.sale to Railway env OR warm support@finda.sale via Yahoo/Google Postmaster.**
+
 **S935 — DEV/QA (2026-06-09). RETAIL suppression filter SHIPPED: query/SEO-layer suppression in sales.ts /by-city route — Canadian province gate (13 codes), clean-suffix allowlist (17 suffixes), business-keyword blocklist, duplicate deduplication by title, 300-row fetch pre-suppression. ~3,288 clean rows from 7,692 (Estate Sale Company/Consignment/no-suffix junk buckets suppressed). P3 QR print kit FIXED: ?scan=true → ?via=qr (2 occurrences print-kit/[saleId].tsx L720/L876 via Python bash) — printed QR codes now trigger auto-claim + XP. SEO3 SHIPPED: pages/estate-sales/[city-slug].tsx (dynamic ISR, 15 markets prebuilt, fallback:blocking) + server-sitemap.xml.tsx updated (priority 0.85); /estate-sales/denver-co live on next Vercel deploy. #472 POST /admin/send-test-email SHIPPED: 79 lines added to routes/admin.ts, Resend default rail, admin-gated, returns {success,messageId,rail}. Roadmap corrections: #471 confirmed SHIPPED pre-S926 (bounceSuppressService.ts daily cron 06:00 UTC, index.ts L802-814), #423 confirmed DEPLOYED S726 (migration applied Railway DB, psycopg2 verified), #335 already ✅ S865 (correct). BQ: 1 (unchanged). PCVs staged.**
 
 **S934 — RESEARCH/DEV (2026-06-09). Scraper coverage for 459 zero-record city×category SEO pages. Third-party auction/venue sources BLOCKED: HiBid ToS §7 prohibits scraping/aggregation (legally blocked — ADR written), US YellowPages.com ToS §2.1 prohibits data mining (NO-GO, no code), AuctionNinja dated listings are JavaScript-rendered (fetch+cheerio sees only static company-directory nav — needs headless browser, no GitHub scraper exists). PIVOT to own-pipeline fills (all legal): RECLASSIFICATION APPLIED to production — reclassify-mistyped-sales.ts flipped 651 mislabeled EstateSales/GarageSaleFinder events → AUCTION (saleType AUCTION 97→748 confirmed in DB) + 217 YARD→ESTATE (excludes places-API business listings). FB Events query WIDENED (flea market/swap meet/public+online auction/consignment added) and PLACES_QUERIES +5 flea synonyms (Foursquare/HERE pick up next monthly run) — both pending push. Flea-org backfill SHELVED on data quality (583/600 orphan FLEA organizers were individual vendor booths, 443 piled on 2 New Orleans coords). DB audit (read-only): only 97 AUCTION records existed nationwide pre-fix (NYC/Houston/Chicago/LA all had 0); GOOGLE_PLACES_METROS (300 metros, plain string[]) confirmed comprehensive — no genuinely-missing US metros. RETAIL data-quality audit done (7,692 rows, ~17% junk min, 1,478 dupes, 1,842 Canadian — recommend query/SEO-layer suppression → ~3,288 clean). BQ: 1 (unchanged).**
@@ -124,9 +126,8 @@ _S933: #335 RESOLVED (outreach confirmed active, 658 sent). WARM leads backfill 
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| #317 | Geofence QR Graceful Fallback | Navigated https://finda.sale/sales/cmprti6ki00ht26jgv2bi2g4j/treasure-hunt-qr/cmuykry28d62k26eek2dmv9s?via=qr as user5 (Leo Thomas). Chrome env has no geolocation → error caught, console logged "Geolocation unavailable, proceeding without coordinates". No 403. XP toast: "+5 XP +15 bonus". Redirected to sale page. ss_7159vywrs. P3 secondary bug: print kit uses ?scan=true instead of ?via=qr — printed QR codes land in preview mode, no auto-claim. | S935 |
-| #470 | GA4 Conversion Events (organizer_registered, sale_created, first_item_uploaded) | Navigated https://finda.sale. Fired all 3 gtag events. Network POST google-analytics.com/g/collect → 204 (consent:granted, dataLayer confirmed). Code: register.tsx L186, create-sale.tsx L2187, add-items/[saleId].tsx L646. ss_9718fz3m9, ss_4527qdool. End-to-end submit CODE-ONLY. | S935 |
 |---|---------|----------|---------|
+_(S935 PCV rows — #317 Geofence graceful fallback ⚠️ S936, #470 GA4 conversion CODE-ONLY S936 — applied to roadmap.md in S936 records pass — cleared.)_
 _(S931 PCV rows — #462 Attribution, #237 Command Center, /admin/outreach-opens, SEO1 SSR, #455 Notify Me, #464 SEO footer, sale detail, /trending, /map — applied to roadmap.md in S932 records pass — cleared.)_
 _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Explorer Profile, #123 rank label, #199 Hunt Pass — applied to roadmap.md in S931 records pass — cleared.)
 _(S925 PCV rows — logout flow Chr✅, #463 CODE-ONLY, #462 CSRF partial — applied to roadmap.md in S930 records pass — cleared.)
@@ -140,23 +141,26 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ### Patrick — Actions Needed
 1. **S934 pushblock** — run the pushblock (search-facebook-events.ts + googlePlaces.ts + reclassify-mistyped-sales.ts + 2 new feature-notes + 3 wrap docs).
 
-### S936 Recommendation
+### S937 Recommendation
 BQ=1 (ceiling=8 — DEV available).
 
 **Push needed (Patrick action):**
-- S935 pushblock below — must run before SEO3 and #472 go live.
+- S936 pushblock below — admin.ts + transactionalEmailService.ts + roadmap.md + STATE.md + patrick-dashboard.md.
+- S934 pushblock (search-facebook-events.ts + googlePlaces.ts + feature-notes + wrap docs) — if not yet pushed.
+- **Railway env var:** Add `RESEND_FROM_EMAIL=noreply@finda.sale` to backend service (or decide to keep support@finda.sale and warm it via Yahoo/Google Postmaster).
 
-**QA Priority — items built but not Chrome-verified:**
-- **SEO3 /estate-sales/denver-co** (SHIPPED S935) — navigate finda.sale/estate-sales/denver-co, verify H1 + sale listings + schema.org.
-- **#472 POST /admin/send-test-email** (SHIPPED S935) — call endpoint, verify delivery to deseee@yahoo.com.
-- **#471 Bounce Suppression** (confirmed running) — verify EmailSuppression row count grows after bounce trigger.
+**Remaining QA items:**
+- **#471 Bounce Suppression** — verify EmailSuppression row count grows after bounce trigger (not testable without real bounce event).
 - **#470 GA4 Conversion Events** — end-to-end submit CODE-ONLY; verify organizer_registered fires in GA4 Real-Time on actual register.
-- **#463 Claim Button Click Tracking** (CODE-ONLY S925) — visit organizer profile, click Claim, check Vercel Analytics → Events tab.
-- **#164 Tiers Backend Infrastructure** — persistent UNVERIFIED S804; log in as SIMPLE organizer, verify tier display + gate enforcement.
+- **#463 Claim Button Click Tracking** (CODE-ONLY S925) — Vercel Analytics Events tab requires dashboard access; not testable in QA env.
+- **#317 Geofence QR Scans** — inside/outside-radius tests UNVERIFIED (requires real GPS); graceful fallback ✅ S935.
+- **#27b PDF watermark footer** — Chrome QA still pending.
+- **#75 Tier lapse** — plan label shows PRO despite lapse (P2, partial S578).
+- **#422 OAuth account linking** — Chrome QA pending.
+- **#36 Weekly Treasure Digest** — not testable in QA env (email cron).
 
 **DEV candidates:**
-- **#332 Shopify** — sole BQ P0 item; highest priority.
-- **#335 Outreach Resume** — S933 cron active (658 sent); domain warming check before full resume.
+- **transactionalEmailService.ts FROM_DEFAULT** — fixed S936 to use env var; verify Railway RESEND_FROM_EMAIL is set correctly.
 - Scraper cron follow-up: verify widened FB Events + PLACES_QUERIES flea synonyms produce new records on next monthly run.
 
 
@@ -173,6 +177,28 @@ BQ=1 (ceiling=8 — DEV available).
 3. **Future / lower priority:** check yellowPagesCaScraper.ts (Canada) ToS standing — it likely shares the US YellowPages scraping prohibition. Broader flea/RETAIL vendor-venue contamination cleanup. Keep #332 Shopify (sole BQ item, P0) in mind.
 
 ## Recent Sessions
+
+### S936 — 2026-06-09 | QA/RECORDS
+
+**Session type:** QA sweep + Records pass
+
+**Work completed:**
+- **Chrome QA — SEO3** ✅ — Navigated https://finda.sale/estate-sales/denver-co. H1 "Estate Sales in Denver, CO" ✅, 50 listings ✅, category tabs ✅, BreadcrumbList schema.org ✅, canonical + og:title + og:desc ✅.
+- **Chrome QA — #472 send-test-email** — Backend CODE works (Resend success:true, messageId 7caa79e3-61f5-4893-83b7-a5021d4447f1, rail:resend). Email arrived in Yahoo SPAM from support@finda.sale (unwarmed sender domain). RESEND_FROM_EMAIL env var confirmed set to support@finda.sale in Railway.
+- **Chrome QA — #463 Claim CTA tracking** — UNVERIFIED. No unclaimed organizer has a `customStorefrontSlug`, so no profile URL is accessible in QA env. Vercel Analytics Events tab requires dashboard access.
+- **Chrome QA — #164 Tiers** ✅ — Navigated /organizer/settings → Subscription tab as Alice (user1). "Your subscription tier: TEAMS ($79/mo)" displayed correctly.
+- **Bug fix — admin.ts hardcoded fallback** — Removed `hello@send.finda.sale` hardcoded fallback from POST /admin/send-test-email. Now requires RESEND_FROM_EMAIL env var; returns 503 if missing.
+- **Bug fix — transactionalEmailService.ts FROM_DEFAULT** — Changed hardcoded `hello@send.finda.sale` to `process.env.RESEND_FROM_EMAIL ?? 'FindA.Sale <noreply@finda.sale>'`. `send.finda.sale` has SES DNS, not Resend DKIM — wrong domain for Resend sends.
+- **Records pass** — S935 PCVs applied to roadmap.md: #317 Human QA ⬜→⚠️ S935 (graceful fallback ✅; inside/outside-radius UNVERIFIED); #470 Claude QA + Human QA -→CODE-ONLY S935 (gtag events fire + network 204; submit CODE-ONLY). PCV table cleared.
+
+**Files modified:**
+- `packages/backend/src/routes/admin.ts` — hardcoded hello@send.finda.sale fallback removed
+- `packages/backend/src/lib/transactionalEmailService.ts` — FROM_DEFAULT uses RESEND_FROM_EMAIL env var
+- `claude_docs/strategy/roadmap.md` — S935 PCVs applied (#317, #470)
+- `claude_docs/STATE.md` — S936 wrap
+- `claude_docs/patrick-dashboard.md` — S936 summary
+
+**BQ delta:** 1 → 1 (unchanged)
 
 ### S934 — 2026-06-09 | RESEARCH/DEV
 

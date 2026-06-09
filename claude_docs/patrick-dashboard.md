@@ -1,6 +1,6 @@
-# Patrick's Dashboard — June 9, 2026 (Updated: S935)
+# Patrick's Dashboard — June 9, 2026 (Updated: S936)
 
-**Generated:** Monday, June 9, 2026 (S935 — DEV/QA: RETAIL suppression + GA4/QR verification)
+**Generated:** Monday, June 9, 2026 (S936 — QA/RECORDS: SEO3 ✅, #472 ⚠️ spam, #164 ✅, email from-address bug fixes)
 
 ---
 
