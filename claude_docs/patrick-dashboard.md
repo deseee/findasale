@@ -1,6 +1,16 @@
-# Patrick's Dashboard — June 9, 2026 (Updated: S934)
+# Patrick's Dashboard — June 9, 2026 (Updated: S935)
 
-**Generated:** Monday, June 9, 2026 (S934 — RESEARCH/DEV: scraper coverage for 459 empty SEO pages)
+**Generated:** Monday, June 9, 2026 (S935 — DEV/QA: RETAIL suppression + GA4/QR verification)
+
+---
+
+## S935 Quick Summary
+
+**RETAIL junk filter is live (backend, pending your push).** The city×category pages that show RETAIL (antique malls, thrift stores, pawn shops, resale shops) were polluted with ~4,400 junk rows — real estate companies matched on "Estate", no-name raw business listings, consignment shops with no relation to resale. The backend query now filters these out: only 17 clean business-type suffixes pass through (Antique Mall, Thrift Store, Pawn Shop, Resale Shop, etc.). Canadian rows and duplicates are also suppressed. You should see ~3,288 clean RETAIL listings on city pages after push — down from 7,692.
+
+**GA4 conversion events are firing.** Confirmed that all three conversion events (organizer registered, sale created, first item uploaded) are wired up and sending to GA4 correctly. Network request to `google-analytics.com` returned 204 (success) with consent granted. The end-to-end flows (actually registering, creating a sale, uploading) are code-confirmed but not fully click-tested yet.
+
+**QR geofence fallback works.** The treasure hunt QR scan page gracefully handles location-denied (no crash, no 403, XP still awarded, redirects to sale page). One P3 bug found: the print kit generates QR codes with `?scan=true` in the URL, but the scan page looks for `?via=qr` — so a physically printed QR code scanned in the real world lands in preview mode with no XP award. Low priority but worth a fix before you use printed QR codes at a real sale.
 
 ---
 
