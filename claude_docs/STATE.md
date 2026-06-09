@@ -149,6 +149,33 @@ BQ=1 (ceiling=8 — DEV available).
 - **#335 Outreach Resume** — 37 PENDING DirectoryClaimEmail queue ready; domain warming check first.
 
 
+### Scraper Coverage — Fill 459 Zero-Record GEO Pages (added S934)
+
+**Context confirmed — do not re-investigate:**
+
+459 of the 1,000 city×category sitemap pages have zero Sale records, rendering as empty shells. Root cause of the "1,902 Discovered - not indexed" GSC warning. Breakdown: auctions 155/200 cities empty, flea-markets 158/200, consignment 122/200.
+
+**What was confirmed about each source:**
+
+*Auctions:* AuctionNinja scraper (`packages/backend/src/services/scraper/sources/auctionNinjaScraper.ts`) is enabled but only scrapes the company directory at `/hire-an-estate-sale-company` → calls `getOrCreateScrapedOrganizer` with `businessCategory: 'AUCTION_HOUSE'`. Creates organizer records, NOT Sale records. Zero Sale records have `sourceName = 'AuctionNinja'` in DB. Architectural gap, not a bug. AuctionNinja.com has actual dated auction listings at `/auctions` that could become Sale records with `saleType = 'AUCTION'`.
+
+*Flea markets:* 477 records, Foursquare (408) + HEREPlaces (69) only. Venue records with synthetic 1-year rolling dates. 81 cities covered, 119 sitemap cities empty.
+
+*Consignment:* 7,692 records, 438 distinct cities via Foursquare/HERE. 122 of top-200 sitemap cities have no records.
+
+**Tasks for `Skill('findasale-dev')`:**
+
+1. **Auction — extend AuctionNinja scraper to pull dated listings.** Read full scraper file. Check robots.txt for listing page access. If allowed: add scrape mode for dated auction listings → ingest via `ingestScrapedListing` as Sale records with `saleType: 'AUCTION'`. Return diff only.
+
+2. **Auction fallback** — if AuctionNinja listing pages blocked, check HiBid or BidSpotter robots.txt. Report what's accessible.
+
+3. **Flea markets — identify viable new source** for 119 uncovered cities. Check `fleausa.com` and `fleamarketzone.com` robots.txt + city listing structure. Spec a new scraper source if viable; otherwise ranked alternatives.
+
+4. **Consignment — assess only.** Can Foursquare/HERE be re-run with expanded city queries to cover 122 missing cities? One-paragraph recommendation, no code.
+
+**Acceptance criteria:** AuctionNinja diff OR documented blocker + alternative; flea market source spec OR ranked list; consignment recommendation; TS check passes; no git; explicit changed-files list.
+
+
 ## Recent Sessions
 
 ### S933 — 2026-06-09 | BUG/DEV
