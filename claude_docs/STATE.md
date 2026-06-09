@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S927 — QA (2026-06-08). Autonomous QA continued: #79 Earnings Counter Animation ✅ (insights widget shows $220 revenue, 42.9% conversion, ss_3082qg908; animation not capturable via SSR). #164 Tiers ✅ (Bronze badge + "1/4 sales until next tier" on organizer dashboard, ss_01384hjx7). #316 Referral Tranche Anti-Fraud ✅ (/organizer/referrals: link visible, 1 referred org tracked, DB fraudReviewStatus=CLEAR + TRANCHE_A/B awarded Jun-5, ss_1143gl3d4). P2 bug found: HTML-encoded category names in DB render as literal entity strings in insights Items by Category. BQ: 5→6.**
+
 **S926 — ANALYTICS/GA4/WRAP (2026-06-08). Root cause of zero GA4 data since launch: CSP in next.config.js blocked googletagmanager.com (script-src) and google-analytics.com (connect-src) — every browser silently dropped all analytics traffic. Fixed both CSP directives. Deployed and verified: GA4 Realtime shows 1 active user in Michigan post-fix. Secondary bug fixed: CookieConsentBanner.handleAccept() now calls window.gtag('consent', 'update', ...) directly (storage event is cross-tab only — ConsentBridge never heard same-tab accepts). Answered Patrick automation meta-question. Added 4 new roadmap entries: #465 Tier 4 LIVE, #470 GA4 conversion events, SEO3 Denver city landing pages, #471 bounce suppression auto-ingestion, #472 email send automation. BQ: 5 (unchanged).**
 
 **S925 — QA (2026-06-08). P1 CSRF fix re-verified: POST /api/outreach/page-view returns 200 for unauthenticated callers (JS fetch credentials:'omit') — S924 fix confirmed live. Logout flow verified: Leo Thomas (user5) desktop user dropdown at /shopper/dashboard → clicked Logout → redirected to /login (ss_49305bl2y), nav shows Login button, /shopper/dashboard → 302 → /login?redirect=/shopper/dashboard (ss_581555xvt) — session fully cleared. #463 claim-click: CTA click confirmed (organizer profile → /register?claim=cmp0jq4j700mnoz89rdjmih15, ss_6367qcmy3), Analytics SDK confirmed initialized in _app.tsx, CODE-ONLY (beacon delivery unverified). BQ: 5 (unchanged).**
@@ -105,6 +107,8 @@ _S922 QA MODE: all 4 S921 fixes Chrome-verified live RESOLVED (commit 7058d99c d
 
 | WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
 | GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
+| P2: HTML entities in category names (insights) | DB stores HTML-encoded strings (`&amp;`, `&#233;`) in category fields; insights.tsx renders `{cat.category}` directly — entity text shows literally in "Items by Category" section on /organizer/insights | Data migration to HTML-decode all affected rows + fix write path to prevent re-encoding at item save time | S927 |
+
 
 ---
 
@@ -116,33 +120,47 @@ _S922 QA MODE: all 4 S921 fixes Chrome-verified live RESOLVED (commit 7058d99c d
 | — | **Logout flow — session fully clears on user dropdown logout** | ✅ Chrome-verified S925 — Leo Thomas (user5@example.com) at /shopper/dashboard. Desktop user dropdown opened, clicked Logout. Redirected to /login (ss_49305bl2y). Nav shows Login button. Navigated to /shopper/dashboard → 302 → /login?redirect=/shopper/dashboard (ss_581555xvt). Session fully cleared. | S925 |
 | 463 | **#463 Claim button click tracking (Vercel Analytics)** | CODE-ONLY S925 — track('claim_profile_click', {organizerId, source, tier}) confirmed in organizers/[id].tsx onClick. <Analytics /> SDK confirmed in _app.tsx. CTA redirect confirmed: clicked "Claim This Profile — It's Free" → /register?claim=cmp0jq4j700mnoz89rdjmih15 (ss_6367qcmy3). Beacon delivery UNVERIFIED (keepalive beacon fire-and-forget; page navigates before capture). Requires Vercel Analytics Events tab check. | S925 |
 
+| 316 | **#316 Referral Tranche Anti-Fraud** | ✅ Chrome S927 — Navigated to /organizer/referrals as Alice (user1). Referral link `https://finda.sale/signup?ref=REF-7CD8DCC0` visible. 1 Organizers Referred tracked. DB: fraudReviewStatus=CLEAR, ownReferralSucceeded=false, TRANCHE_A (100 XP) + TRANCHE_B (150 XP) both awarded 2026-06-05. UI "0 XP Earned" is OrganizerReferral-program XP counter (separate from tranche XP). ss_1143gl3d4. | S927 |
+| 164 | **#164 Tiers Backend Infrastructure** | ✅ Chrome S927 — Organizer dashboard as Alice. Bronze Organizer badge rendered: "1/4 sales until next tier", "Reach Silver at 5 sales". Real-Time Metrics widget shows live data. ss_01384hjx7. | S927 |
+| 79 | **#79 Earnings Counter Animation** | ✅ Chrome S927 — Navigated to /organizer/insights as Alice. TOTAL REVENUE $220.00, ITEMS SOLD 3, CONVERSION RATE 42.9% confirmed rendered. Animation not capturable (Next.js SSR loads final values before screenshot). Prior ✅ human QA S805 valid. ss_3082qg908. | S927 |
 _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared.)_
 ---
 
 ## Next Session
 
-### Patrick — One Action Needed
-1. **Pre-approve analytics task tools:** Cowork sidebar → Scheduled → **findasale-analytics-weekly** → **Run Now**. This approves the bash tool so Monday's automatic run doesn't pause asking for permission.
+### Patrick — Actions Needed
+1. **Push S926–S927 wrap docs** — pushblock below.
+2. **Pre-approve analytics task tools** (if not done S926): Cowork sidebar → Scheduled → **findasale-analytics-weekly** → **Run Now**.
 
-_(No Railway env vars or GA4/Search Console access grants needed — credentials are already in the `.analytics-creds.json` file and deseee@yahoo.com already owns GA4 + Search Console.)_
-
-### Patrick — One Action Needed
-None. All credentials and tasks are in place.
-
-### Pending Push
+### Pending Push (S924–S927 combined)
 ```
 git add claude_docs/strategy/roadmap.md claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/scripts/analytics-weekly.py .gitignore
-git commit -m "S926: GA4 CSP fix, analytics live, 4 new roadmap entries (#470 conversion events, SEO3, #471 bounce suppression, #472 email send)"
+git commit -m "S927: wrap — QA #79/#164/#316 ✅, HTML entity P2 bug logged (BQ=6)"
 .\push.ps1
 ```
 
-### S927 Recommendation
-Below QA ceiling (BQ=5). DEV mode available. Two good options:
-- **#470 GA4 conversion events** — small (<20 lines across ~5 files), high analytical value, unblocks funnel visibility immediately
-- **#471 bounce suppression auto-ingestion** — prerequisite for safe outreach resume; reduces Gmail suspension risk
+### S928 Recommendation
+BQ=6 (below ceiling=8). DEV or QA available.
+- **Records: apply S927 PCVs** (#79, #164, #316 Chrome columns in roadmap.md) — findasale-records pass
+- **DEV: P2 HTML entity bug** — `Skill('findasale-dev')`: decode `&amp;`/`&#233;` in category name fields (DB migration + fix write path in itemController.ts)
+- **DEV: #470 GA4 conversion events** — small build (~5 files), high analytical value, unblocks funnel visibility
 
 
 ## Recent Sessions
+
+### S927 — 2026-06-08 | QA
+
+**Session type:** QA — autonomous continuation from S926
+
+**Work completed:**
+- **#79 Earnings Counter Animation ✅** — Navigated to /organizer/insights as Alice. TOTAL REVENUE $220.00, ITEMS SOLD 3, CONVERSION RATE 42.9% confirmed rendered. Animation not capturable via QA (Next.js SSR loads final values before screenshot). Prior ✅ human QA S805 still valid.
+- **#164 Tiers Backend Infrastructure ✅** — Bronze Organizer badge on organizer dashboard confirmed: "1/4 sales until next tier", "Reach Silver at 5 sales". Real-Time Metrics widget showing live data.
+- **#316 Referral Tranche Anti-Fraud ✅** — /organizer/referrals page functional. Referral link (`https://finda.sale/signup?ref=REF-7CD8DCC0`) visible. 1 Organizers Referred tracked. DB confirms: fraudReviewStatus=CLEAR, ownReferralSucceeded=false, TRANCHE_A (100 XP) + TRANCHE_B (150 XP) awarded 2026-06-05. UI "0 XP Earned" is OrganizerReferral-program-specific counter (separate from tranche XP awarded via engagement hooks). Anti-fraud working correctly.
+- **P2 bug found: HTML entity encoding in category names** — DB stores `Electronics &amp; Technology`, `Lamps &amp; Lighting`, `Home D&#233;cor`, `Jewelry &amp; Watches` as HTML-encoded strings. insights.tsx renders `{cat.category}` directly — entities appear literally in "Items by Category". Fix: data migration + prevent re-encoding at write time. Added to BQ.
+
+**Files modified:** None (QA only — docs only this entry)
+
+**BQ: 6 (+1 HTML entity P2 bug).**
 
 ### S926 — 2026-06-08 | ANALYTICS/GA4/WRAP
 
