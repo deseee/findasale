@@ -103,18 +103,15 @@ _S921: SEC-001, SEC-002, #196, #201 coded but pending push+Chrome-verify — all
 _S922 QA MODE: all 4 S921 fixes Chrome-verified live RESOLVED (commit 7058d99c deployed): SEC-001 (admin.ts Prisma.sql parameterized, page returns 11 patterns no error), SEC-002 (items.ts scoped multer, valid types pass, add-items loads clean), #196 Buying Pools (card renders on $169 item ss_5769b4ui3, negative test on $25 item), #201 Favorites all 3 (Items(1) count, Saved Sales section, /shopper/collections→302→/shopper/wishlist ss_37941eelg/ss_1509jponw). All 4 rows REMOVED. BQ: 9→5. Below QA ceiling — DEV available S923._
 _S928: HTML entity P2 FIXED (textUtils.ts + insights.tsx + itemController.ts). GA4 #470 conversion events built. 22 Chr cols bulk-applied (S803–S805 backlog). BQ: 6→5._
 _S932: Hunt Pass multiplier display inconsistency RESOLVED (Patrick confirmed 1.5x XP on live site). BQ: 6→5._
+_S933: #335 RESOLVED (outreach confirmed active, 658 sent). WARM leads backfill RESOLVED (0 orgs missing DCE row). WARM enrichment removed (3.5%→4.7%, not a bug, growing). GSF geocoding removed (structural/by-design, fallback confirmed). Domain blocking shipped (estatesales.net/org blocked across all 3 email rails). BQ: 5→1._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #332 Shopify Cross-Listing → CORE BUGS FIXED (pending push) | **P0** — **S890 FIXES CODED** (shopifyService.ts + connect-shopify.ts, TS 0 errors both packages): (1) sold-sync rewritten to correct 3-step REST flow — GET variant→inventory_item_id, GET locations→location_id, POST /inventory_levels/set.json (was malformed, silently failing); (2) API version 2024-01→2025-10; (3) variant payload gets `inventory_management:'shopify'`; (4) connect-shopify guide rewritten to match the real manual-token flow (removed false OAuth/auto-webhook/auto-sync promises); (5) 422/429 error handling added. **FLAGGED for Patrick (NOT built — future decisions):** proper OAuth app, inbound webhook handler (Shopify→FindA.Sale is one-way only), token encryption, optional ShopifyListing.shopifyInventoryItemId column to skip the 2 lookup calls. **Store still needed for live QA, but the code is now correct.** | Push; then connect a real custom-app store to QA the push + sold-sync end-to-end | S791 |
 
-| #335 Outreach Resume — intentional hold | **P2** — S865 blast (8,317+ emails) → GH workflow disabled + OUTREACH_ENABLED=false (both confirmed). **S920 CORRECTION: Patrick confirmed outreach@finda.sale is NOT suspended — account ACTIVE.** OUTREACH_ENABLED=false is deliberate hold pending domain warming (17+ days silence required before resume). Transactional email now on Resend rail (S918) — payouts/auth unaffected by outreach pause. S919: Jane Thrift reference removed (fictional). **37 PENDING DirectoryClaimEmail queue** when ready to resume outreach. | S865-auto / Jun 5 |
 
 
-| 462 WARM leads email-ready, no outreach record | **P2** — **S890 UNCHANGED: still exactly 462** (psycopg2). Note: backfill-organizer-contacts.yml backfills CONTACT data (email/phone), NOT DirectoryClaimEmail rows — that queue-row backfill was never built. Correctly deferred while OUTREACH_ENABLED=false (#335). Do during outreach resume. | Backfill DirectoryClaimEmail PENDING for the 462 as part of #335 resume | S887 |
 
-| WARM tier website enrichment at 3.5% coverage | **P3** — **S890 UNCHANGED: 1,382 of 39,246 = 3.5%** (psycopg2). pipeline-website-enrichment.yml exists but coverage not improving. Needs supplemental source. | Add supplemental data provider or expand query strategies | S887 |
-| GarageSaleFinder 80.7% un-geocoded (14,331 records) | **P3** — **S890 confirmed: 14,331 of 17,761 GSF = 80.7%** (psycopg2). GSF IS actively processed (it's 100% of the newest-500 batch) but GSF address format fails Nominatim structured ~80% — structural, acknowledged in geocodingAuditJob.ts suppression list. Tied to geocoding fetch-ordering row; even oldest-first won't fix GSF without a GSF-specific strategy. | GSF-specific geocode (lat/lng on source pages?) or accept the gap | S887 |
 
 
 ---
@@ -134,17 +131,44 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **S932 pushblock** — run the pushblock below (roadmap + STATE + dashboard — code was already in S931 block).
+1. **S933 pushblock** — run the pushblock below (STATE.md + patrick-dashboard.md).
 
-### S933 Recommendation
-BQ=5 (below ceiling=8). DEV available.
-- **NODEJS-1G** — scraper fallback LIKE query still periodic; add `take: 500` to scraper/index.ts candidates findMany. Low urgency.
-- **Monitor ImprovMX** — confirm daily forwarding stays below 500 (S929 @system.finda.sale fix deployed)
-- **#471 Bounce Suppression Auto-Ingestion** — needed before outreach resume; build mailer-daemon parser
-- **#335 Outreach Resume** — 37 PENDING DirectoryClaimEmail queue ready when domain warming complete
+### S934 Recommendation
+BQ=1 (ceiling=8 — DEV available).
+
+**QA Priority — items built but not Chrome-verified:**
+- **#470 GA4 Conversion Events** (built S928) — verify `organizer_registered`, `sale_created`, `first_item_uploaded` events fire in GA4 Real-Time after signing up / creating a sale. Navigate `Realtime → Events` in GA4 dashboard.
+- **#463 Claim Button Click Tracking** (CODE-ONLY S925) — visit any organizer profile, click Claim, check Vercel Analytics → Events tab within 60s.
+- **#164 Tiers Backend Infrastructure** — persistent UNVERIFIED S804; log in as organizer with SIMPLE tier, verify tier display and gate enforcement.
+- **#317 Geofence QR Scans** — shipped S553, never Chrome-QA'd; deny location → verify scan graceful fallback (no 403).
+
+**DEV candidates:**
+- **SEO3 Denver city landing page** — build `/estate-sales/denver-co` targeting GSC impression cluster (queued S926).
+- **#471 Bounce Suppression Auto-Ingestion** — build mailer-daemon parser before outreach resume; EmailSuppression table exists (5 rows), parser not built.
+- **#472 Email Send Automation** — POST /admin/send-test-email endpoint; unblocks outreach verification workflow.
+- **#335 Outreach Resume** — 37 PENDING DirectoryClaimEmail queue ready; domain warming check first.
 
 
 ## Recent Sessions
+
+### S933 — 2026-06-09 | BUG/DEV
+
+**Session type:** BUG/DEV — BQ cleanup + competitor email domain blocking
+
+**Work completed:**
+- **BQ cleanup (5→1)** — Verified each BQ item via direct DB queries (psycopg2). #335 RESOLVED: outreach IS active (658 DirectoryClaimEmail rows sent, cron running). Item 3 (462 WARM leads) RESOLVED: 0 orgs have email but no DCE row — backfill already done. Item 4 (WARM enrichment) REMOVED from BQ: coverage growing 3.5%→4.7%, not a bug. Item 5 (GSF geocoding) REMOVED from BQ: structural gap acknowledged in geocodingAuditJob.ts suppression, frontend falls back to zip/city as Patrick confirmed. #332 DEFERRED (Patrick instruction). #471 noted as low-urgency, not added to BQ.
+- **Competitor email domain blocking** — Built `BLOCKED_DOMAINS` pattern in suppressionService.ts: `estatesales.net` and `estatesales.org` now blocked at the domain level (sync, no DB call). Updated `isSuppressed()` and `checkMultiple()`. Fixed gap: `transactionalEmailService.ts` had zero suppression logic — added full check before every Resend call. Patched 3 outreach scripts (autoSeedOutreachCron.ts, seedDirectoryClaimEmails.ts, backfill-warm-emails.ts) to skip domain-blocked addresses using `isEmailDomainBlocked()`. TS 0 errors. Deploy green.
+
+**Files modified:**
+- `packages/backend/src/services/suppressionService.ts` — BLOCKED_DOMAINS + isEmailDomainBlocked() + isSuppressed() + checkMultiple() rewrite
+- `packages/backend/src/lib/transactionalEmailService.ts` — suppression check added before every Resend call
+- `packages/backend/src/jobs/autoSeedOutreachCron.ts` — isEmailDomainBlocked() check
+- `packages/backend/src/scripts/seedDirectoryClaimEmails.ts` — isEmailDomainBlocked() check
+- `packages/backend/src/scripts/backfill-warm-emails.ts` — isEmailDomainBlocked() check
+- `claude_docs/STATE.md` — S933 wrap
+- `claude_docs/patrick-dashboard.md` — S933 summary
+
+**BQ delta:** 5 → 1 (#335/item3/item4/item5 all resolved or removed; #332 deferred)
 
 ### S932 — 2026-06-09 | RECORDS
 
@@ -219,93 +243,20 @@ BQ=5 (below ceiling=8). DEV available.
 **BQ delta:** 5 → 5 (unchanged — no feature work)
 
 
-### S928 — 2026-06-08 | QA + DEV
 
-**Session type:** Autonomous QA + parallel dev dispatch (BQ=6, below ceiling=8)
-
-**Work completed:**
-- **Records Chr bulk-apply (22 rows)** — S803–S805 PCV backlog applied: #77/#8/#18/#136/#16/#57→✅S805; #33/#34/#63/#67/#6/#39/#191/#52/#70/#208/#211→✅S804; #28/#180/#181/#187→✅S803; #244→✅S791. S927 PCVs (#79/#164/#316) also applied in same pass.
-- **P2 HTML entity fix — RESOLVED** — Root cause: eBay CSV import encoded category strings (`&amp;`, `&#233;`). Fix: (1) `decodeHtmlEntities()` extended with numeric entity support in textUtils.ts; (2) insights.tsx wraps both bar chart + top items table renders; (3) itemController.ts decodes `rawCategory` at CSV bulk-import path. Future imports clean; existing DB rows still encoded (DB migration deferred → S929).
-- **#470 GA4 conversion events — BUILT** — 5 conversion events wired: `organizer_registered` (register.tsx, post-login, ORGANIZER only), `sale_created` (create-sale.tsx, post-publish, includes sale_type), `first_item_uploaded` (add-items/[saleId].tsx, guarded items.length===0), `shopper_favorite_added` (FavoriteButton.tsx, confirmed add only), `checkout_initiated` (CheckoutModal.tsx PaymentForm, includes amount). CODE-ONLY — no Stripe test terminal in QA env.
-- **Chrome QA sweep** — Confirmed 8 pages/features working: organizer dashboard (Alice, "Welcome", QA Active Sale S875 LIVE), insights (no entities in organic data ✅), affiliate page (code ORG_ABFJDV, empty state ✅), sale detail Hype Meter (green dot, 3 views, live activity ✅), category browsing (30 items Comics grid ✅), item detail (all CTAs: Save/Share/QR/Scout/Buy/Cart/Hold ✅), Verified Organizer Badge (blue checkmark on Artifact Downtown Paw Paw ✅).
-
-**Files modified (code):**
-- `packages/frontend/utils/textUtils.ts` — numeric entity decode + &apos; support
-- `packages/frontend/pages/organizer/insights.tsx` — decodeHtmlEntities on bar chart + top items
-- `packages/backend/src/controllers/itemController.ts` — decode rawCategory at CSV import
-- `packages/frontend/pages/register.tsx` — organizer_registered GA4 event
-- `packages/frontend/pages/organizer/create-sale.tsx` — sale_created GA4 event
-- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — first_item_uploaded GA4 event
-- `packages/frontend/components/FavoriteButton.tsx` — shopper_favorite_added GA4 event
-- `packages/frontend/components/CheckoutModal.tsx` — checkout_initiated GA4 event
-
-**BQ: 6→5 (HTML entity P2 RESOLVED).**
-
-### S927 — 2026-06-08 | QA
-
-**Session type:** QA — autonomous continuation from S926
-
-**Work completed:**
-- **#79 Earnings Counter Animation ✅** — Navigated to /organizer/insights as Alice. TOTAL REVENUE $220.00, ITEMS SOLD 3, CONVERSION RATE 42.9% confirmed rendered. Animation not capturable via QA (Next.js SSR loads final values before screenshot). Prior ✅ human QA S805 still valid.
-- **#164 Tiers Backend Infrastructure ✅** — Bronze Organizer badge on organizer dashboard confirmed: "1/4 sales until next tier", "Reach Silver at 5 sales". Real-Time Metrics widget showing live data.
-- **#316 Referral Tranche Anti-Fraud ✅** — /organizer/referrals page functional. Referral link (`https://finda.sale/signup?ref=REF-7CD8DCC0`) visible. 1 Organizers Referred tracked. DB confirms: fraudReviewStatus=CLEAR, ownReferralSucceeded=false, TRANCHE_A (100 XP) + TRANCHE_B (150 XP) awarded 2026-06-05. UI "0 XP Earned" is OrganizerReferral-program-specific counter (separate from tranche XP awarded via engagement hooks). Anti-fraud working correctly.
-- **P2 bug found: HTML entity encoding in category names** — DB stores `Electronics &amp; Technology`, `Lamps &amp; Lighting`, `Home D&#233;cor`, `Jewelry &amp; Watches` as HTML-encoded strings. insights.tsx renders `{cat.category}` directly — entities appear literally in "Items by Category". Fix: data migration + prevent re-encoding at write time. Added to BQ.
-
-**Files modified:** None (QA only — docs only this entry)
-
-**BQ: 6 (+1 HTML entity P2 bug).**
-
-### S926 — 2026-06-08 | ANALYTICS/GA4/WRAP
-
-**Session type:** Analytics investigation + GA4 root cause fix + session wrap
-
-**Work completed:**
-- **GA4 root cause found and fixed** — CSP in `packages/frontend/next.config.js` missing `https://www.googletagmanager.com` in `script-src` and `https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com` in `connect-src`. Every browser since launch silently blocked the gtag.js script and all measurement hits. Fixed via Python/bash (Edit tool banned). Deployed to Vercel — Realtime confirmed 1 active user in Michigan post-fix.
-- **ConsentBridge secondary bug fixed** — `CookieConsentBanner.handleAccept()` now calls `window.gtag('consent', 'update', { analytics_storage: 'granted' })` directly. Root cause: Web Storage `storage` event only fires in OTHER tabs, so ConsentBridge (`window.addEventListener('storage', ...)`) never heard same-tab consent grants.
-- **Automation meta-audit** — answered Patrick's "what's automated / what's missing / what should we be getting" question. 21 scheduled tasks active.
-- **Roadmap updated** — #465 Tier 4 marked LIVE; added #470 GA4 conversion events, SEO3 Denver city landing pages, #471 bounce suppression auto-ingestion, #472 email send automation.
-
-**Files modified (code — pushed to GitHub):**
-- `packages/frontend/next.config.js` — CSP script-src + connect-src updated (GA4 unblocked)
-- `packages/frontend/components/CookieConsentBanner.tsx` — direct gtag consent call on Accept
-
-**Files modified (docs — need Patrick pushblock):**
 - `claude_docs/strategy/roadmap.md` — #465 updated (Tier 4 live), #470/SEO3/#471/#472 added
 - `claude_docs/STATE.md` — S926 wrap
 - `claude_docs/patrick-dashboard.md` — S926 summary
 
 **BQ: 5 (unchanged).**
 
-### S925 — 2026-06-08 | QA
 
-**Session type:** QA — CSRF fix verification + logout re-test + #463 claim-click investigation
-
-**Work completed:**
-- **#462 CSRF fix re-verified** — POST /api/outreach/page-view returns 200 for unauthenticated callers (JS fetch credentials:'omit'). S924 csrf.ts outreach exemption confirmed working on live site. Attribution logging (ORGANIZER_PAGE_VIEWED audit) UNVERIFIED — requires real outreach email click.
-- **Logout flow verified** — Leo Thomas (user5) signed out from desktop user dropdown at /shopper/dashboard → redirected to /login (ss_49305bl2y) → /shopper/dashboard nav shows Login button → navigating back redirects to /login?redirect=/shopper/dashboard (ss_581555xvt). Session fully cleared. S897 fix still holding.
-- **#463 Claim-click tracking (CODE-ONLY)** — track('claim_profile_click',...) confirmed in organizers/[id].tsx onClick handlers. <Analytics /> SDK confirmed in _app.tsx. CTA redirect confirmed: clicked "Claim This Profile — It's Free" → /register?claim=cmp0jq4j700mnoz89rdjmih15 (ss_6367qcmy3). Vercel beacon delivery UNVERIFIED (fire-and-forget keepalive; page navigates before capture).
-
-**Files modified (docs only — need Patrick pushblock):**
 - `claude_docs/STATE.md` — S925 status, PCVs updated, Next Session updated for S926
 - `claude_docs/patrick-dashboard.md` — S925 QA summary
 
 **BQ: 5 (unchanged).**
 
-### S924 — 2026-06-08 | QA/BUG
 
-**Session type:** QA sweep + P1 bug fix (CSRF exemption missing for public outreach endpoints)
-
-**Work completed:**
-- **P1 CSRF bug FIXED — csrf.ts:** POST /api/outreach/page-view and /outreach/unsubscribe returned 403 CSRF validation failed for all unauthenticated callers. Root cause: validateCsrfToken had no exemption for these public endpoints. Fix: added outreach block between auth check and Bearer token check. Pushed to GitHub commit 44dabb618ef1e53256450e8904ef0b191033de0d. Railway auto-deploying.
-- **roadmap.md #462 notes updated** — documented CSRF bug + fix, marked Pending Chrome QA.
-- **roadmap.md #138 title corrected** — ESTATE/CHARITY/BUSINESS/CORPORATE → ESTATE/YARD/AUCTION/FLEA_MARKET/DORM_DASH (CHARITY was never a top-level type; it is a toggle within ESTATE).
-- **#318 affiliate button investigated** — XHR confirmed firing to POST /api/affiliate/generate-code. Eligibility gate working (toast appears: "Must complete at least one paid sale"). UNVERIFIED — cannot fully test without paid sale. Seed accounts all have 0 sales.
-
-**Files modified (code — pushed to GitHub):**
-- `packages/backend/src/middleware/csrf.ts` — outreach CSRF exemption block added (commit 44dabb618)
-
-**Files modified (docs — need Patrick pushblock):**
-- `claude_docs/strategy/roadmap.md` — #462 notes (CSRF fix), #138 title corrected
 - `claude_docs/STATE.md` — S924 wrap
 - `claude_docs/patrick-dashboard.md` — S924 summary
 
