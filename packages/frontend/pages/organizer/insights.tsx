@@ -25,6 +25,7 @@ import HoldMetricsCard from '../../components/PerformanceDashboard/HoldMetricsCa
 import RecommendationsPanel from '../../components/PerformanceDashboard/RecommendationsPanel';
 import PostPerformanceCard from '../../components/PostPerformanceCard'; // #18: Post Performance Analytics
 import TierGate from '../../components/TierGate';
+import { decodeHtmlEntities } from '../../utils/textUtils';
 
 interface Insights {
   totalSalesCount: number;
@@ -463,7 +464,7 @@ const OrganizerInsightsPage = () => {
                     <div key={cat.category}>
                       <div className="flex justify-between items-baseline mb-2">
                         <span className="text-sm font-medium text-warm-900 dark:text-warm-100 capitalize">
-                          {cat.category}
+                          {decodeHtmlEntities(cat.category)}
                         </span>
                         <span className="text-xs font-semibold text-warm-600 dark:text-warm-400">{cat.count}</span>
                       </div>
@@ -499,7 +500,7 @@ const OrganizerInsightsPage = () => {
                     {insights.topItems.map((item) => (
                       <tr key={item.id} className="border-b border-warm-100 dark:border-gray-700 hover:bg-warm-50 dark:hover:bg-gray-700">
                         <td className="py-3 px-4 text-warm-900 dark:text-warm-100 font-medium">{item.title}</td>
-                        <td className="py-3 px-4 text-warm-600 dark:text-warm-400 capitalize">{item.category}</td>
+                        <td className="py-3 px-4 text-warm-600 dark:text-warm-400 capitalize">{item.category ? decodeHtmlEntities(item.category) : ''}</td>
                         <td className="py-3 px-4 font-semibold text-warm-900 dark:text-warm-100">
                           ${item.price.toFixed(2)}
                         </td>
