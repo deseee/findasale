@@ -14,15 +14,22 @@
  * Tavily excluded: it is an AI search index that does not contain
  * facebook.com/events pages (confirmed — returns groups/marketplace only).
  *
- * Cron: weekly (Monday 03:00 UTC)
- * At 89 metros/week × ~4 sub-queries each, Searlo is the primary cost driver
+ * Cron: daily (03:00 UTC). The full canonical metro list (~301, derived from
+ * GOOGLE_PLACES_METROS) is sharded across 7 days — ~43 metros/day — so each run
+ * stays well under the Actions timeout. A module-level throttle keeps Searlo
+ * calls under its per-second (5) and per-minute caps; on a 429 we honor
+ * `retryAfter` and retry Searlo once before any fallback, so normal operation
+ * never bleeds Serper credits.
+ *
+ * At ~43 metros/day × ~4 sub-queries each, Searlo is the primary cost driver
  * (~1 credit/sub-query); Serper/Brave/ScaleSerp are fallbacks only when Searlo
- * returns empty or errors.
+ * returns empty or still errors after the retry.
  */
 
 import * as cheerio from 'cheerio';
 import { ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
+import { GOOGLE_PLACES_METROS } from './googlePlaces';
 
 // ---------------------------------------------------------------------------
 // Shared result shape (normalised before building ScrapedItem)
@@ -35,7 +42,7 @@ interface SearchResult {
 }
 
 // ---------------------------------------------------------------------------
-// Metro list — 89 major secondary-sale markets
+// Metro list — derived from GOOGLE_PLACES_METROS (single source of truth)
 // ---------------------------------------------------------------------------
 
 export interface MetroTarget {
@@ -43,110 +50,52 @@ export interface MetroTarget {
   state: string; // 2-letter abbreviation
 }
 
-export const SEARCH_METROS: MetroTarget[] = [
-  // Midwest
-  { city: 'Grand Rapids',    state: 'MI' },
-  { city: 'Detroit',         state: 'MI' },
-  { city: 'Chicago',         state: 'IL' },
-  { city: 'Indianapolis',    state: 'IN' },
-  { city: 'Columbus',        state: 'OH' },
-  { city: 'Cleveland',       state: 'OH' },
-  { city: 'Cincinnati',      state: 'OH' },
-  { city: 'Dayton',          state: 'OH' },
-  { city: 'Toledo',          state: 'OH' },
-  { city: 'Akron',           state: 'OH' },
-  { city: 'Milwaukee',       state: 'WI' },
-  { city: 'Madison',         state: 'WI' },
-  { city: 'Minneapolis',     state: 'MN' },
-  { city: 'St. Louis',       state: 'MO' },
-  { city: 'Kansas City',     state: 'MO' },
-  { city: 'Omaha',           state: 'NE' },
-  { city: 'Des Moines',      state: 'IA' },
-  { city: 'Louisville',      state: 'KY' },
-  { city: 'Lexington',       state: 'KY' },
-  { city: 'Wichita',         state: 'KS' },
-  // Northeast
-  { city: 'New York',        state: 'NY' },
-  { city: 'Buffalo',         state: 'NY' },
-  { city: 'Boston',          state: 'MA' },
-  { city: 'Hartford',        state: 'CT' },
-  { city: 'Providence',      state: 'RI' },
-  { city: 'Pittsburgh',      state: 'PA' },
-  { city: 'Philadelphia',    state: 'PA' },
-  // Mid-Atlantic
-  { city: 'Baltimore',       state: 'MD' },
-  { city: 'Washington',      state: 'DC' },
-  { city: 'Richmond',        state: 'VA' },
-  { city: 'Norfolk',         state: 'VA' },
-  // Southeast
-  { city: 'Atlanta',         state: 'GA' },
-  { city: 'Savannah',        state: 'GA' },
-  { city: 'Charlotte',       state: 'NC' },
-  { city: 'Raleigh',         state: 'NC' },
-  { city: 'Greensboro',      state: 'NC' },
-  { city: 'Greenville',      state: 'SC' },
-  { city: 'Columbia',        state: 'SC' },
-  { city: 'Charleston',      state: 'SC' },
-  { city: 'Nashville',       state: 'TN' },
-  { city: 'Memphis',         state: 'TN' },
-  { city: 'Knoxville',       state: 'TN' },
-  { city: 'Chattanooga',     state: 'TN' },
-  { city: 'Birmingham',      state: 'AL' },
-  { city: 'Mobile',          state: 'AL' },
-  { city: 'New Orleans',     state: 'LA' },
-  { city: 'Baton Rouge',     state: 'LA' },
-  { city: 'Little Rock',     state: 'AR' },
-  { city: 'Jacksonville',    state: 'FL' },
-  { city: 'Tampa',           state: 'FL' },
-  { city: 'Orlando',         state: 'FL' },
-  { city: 'Miami',           state: 'FL' },
-  { city: 'Fort Lauderdale', state: 'FL' },
-  // South / Central
-  { city: 'Dallas',          state: 'TX' },
-  { city: 'Houston',         state: 'TX' },
-  { city: 'San Antonio',     state: 'TX' },
-  { city: 'Austin',          state: 'TX' },
-  { city: 'El Paso',         state: 'TX' },
-  { city: 'Oklahoma City',   state: 'OK' },
-  { city: 'Tulsa',           state: 'OK' },
-  { city: 'Albuquerque',     state: 'NM' },
-  // Mountain / Southwest
-  { city: 'Denver',          state: 'CO' },
-  { city: 'Colorado Springs', state: 'CO' },
-  { city: 'Salt Lake City',  state: 'UT' },
-  { city: 'Phoenix',         state: 'AZ' },
-  { city: 'Tucson',          state: 'AZ' },
-  { city: 'Las Vegas',       state: 'NV' },
-  { city: 'Boise',           state: 'ID' },
-  // West Coast
-  { city: 'Los Angeles',     state: 'CA' },
-  { city: 'San Diego',       state: 'CA' },
-  { city: 'San Francisco',   state: 'CA' },
-  { city: 'Sacramento',      state: 'CA' },
-  { city: 'Fresno',          state: 'CA' },
-  { city: 'Portland',        state: 'OR' },
-  { city: 'Spokane',         state: 'WA' },
-  { city: 'Seattle',         state: 'WA' },
-  // Canada — Phase 1 (English markets: ON, BC, AB, MB, SK)
-  { city: 'Toronto',         state: 'ON' },
-  { city: 'Ottawa',          state: 'ON' },
-  { city: 'Hamilton',        state: 'ON' },
-  { city: 'London',          state: 'ON' },
-  { city: 'Kitchener',       state: 'ON' },
-  { city: 'Windsor',         state: 'ON' },
-  { city: 'St. Catharines',  state: 'ON' },
-  { city: 'Vancouver',       state: 'BC' },
-  { city: 'Victoria',        state: 'BC' },
-  { city: 'Kelowna',         state: 'BC' },
-  { city: 'Abbotsford',      state: 'BC' },
-  { city: 'Calgary',         state: 'AB' },
-  { city: 'Edmonton',        state: 'AB' },
-  { city: 'Winnipeg',        state: 'MB' },
-  { city: 'Saskatoon',       state: 'SK' },
-  { city: 'Regina',          state: 'SK' },
-  // Canada — Phase 2 (Atlantic + Quebec deferred for French localization)
-  { city: 'Halifax',         state: 'NS' },
-];
+/**
+ * SEARCH_METROS is DERIVED from GOOGLE_PLACES_METROS (the canonical scraper metro
+ * list exported by googlePlaces.ts) so the two scrapers stay in sync — adding a
+ * metro in one place propagates to both. Each canonical entry is a `"City, ST"`
+ * string; we split on the LAST comma (city names never contain a trailing comma,
+ * but may contain apostrophes/periods e.g. "Coeur d'Alene, ID" / "St. Louis, MO").
+ * Yields ~301 metros. The MetroTarget shape and the SEARCH_METROS export name are
+ * preserved so nothing downstream (the runner, shard helper) breaks.
+ */
+
+export const SEARCH_METROS: MetroTarget[] = GOOGLE_PLACES_METROS.map((entry) => {
+  const lastComma = entry.lastIndexOf(',');
+  return {
+    city:  entry.slice(0, lastComma).trim(),
+    state: entry.slice(lastComma + 1).trim(),
+  };
+});
+
+/**
+ * Number of daily shards. The full SEARCH_METROS list is split modulo this value
+ * so the entire list is covered every SHARD_COUNT days. 7 → one shard per
+ * day-of-week, ~43 metros/day at the current ~301-metro list.
+ */
+export const SHARD_COUNT = 7;
+
+/**
+ * Deterministic day index in [0, SHARD_COUNT). Uses day-of-year % SHARD_COUNT so
+ * the rotation is stable within a UTC day and advances by one each day, cycling
+ * through all shards every SHARD_COUNT days regardless of which weekday the cron
+ * lands on. `date` is injectable for testing; defaults to now (UTC).
+ */
+export function getShardIndexForDate(date: Date = new Date()): number {
+  const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date.getTime() - startOfYear) / 86_400_000);
+  return dayOfYear % SHARD_COUNT;
+}
+
+/**
+ * Return TODAY'S shard of metros: every metro whose index ≡ today's shard index
+ * (mod SHARD_COUNT). Deterministic, ~43 metros/day, all metros covered every
+ * SHARD_COUNT days. Pass an explicit `date` for testing.
+ */
+export function getMetrosForToday(date: Date = new Date()): MetroTarget[] {
+  const shard = getShardIndexForDate(date);
+  return SEARCH_METROS.filter((_, i) => i % SHARD_COUNT === shard);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -405,6 +354,67 @@ function buildScrapedItem(
 }
 
 // ---------------------------------------------------------------------------
+// Searlo rate-limit throttle (MODULE-LEVEL — shared across all sub-queries/metros)
+// ---------------------------------------------------------------------------
+//
+// Searlo enforces BOTH a per-second cap (5/sec) and a per-minute cap. Calling too
+// fast returns HTTP 429 with body:
+//   {"success":false,"code":4201,"retryAfter":60,
+//    "limits":{"perSecond":{"limit":5,...},"perMinute":{"limit":<N>,...}}}
+// and the old code fell straight through to Serper on 429 — bleeding Serper
+// credits and losing Searlo's cost advantage.
+//
+// This throttle paces Searlo calls to stay UNDER both caps with margin:
+//   • ~4 req/sec (one slot every 250ms — under the 5/sec cap)
+//   • per-minute: a rolling 60s window capped at `searloPerMinuteLimit`
+// The per-minute limit self-tunes from the 429 body's limits.perMinute.limit when
+// observed; until then it defaults to a conservative 60/min.
+//
+// State is module-level (not per-metro) so pacing holds across the whole run.
+
+const SEARLO_MIN_INTERVAL_MS = 250;   // ≈4 req/sec — under the 5/sec hard cap
+let searloPerMinuteLimit = 60;        // conservative default; self-tunes from 429 body
+let searloNextAllowedAt = 0;          // earliest timestamp (ms) the next call may fire
+const searloCallTimestamps: number[] = []; // rolling 60s window of recent call starts
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, Math.max(0, ms)));
+
+/**
+ * Block until a Searlo call is permitted under BOTH the per-second spacing and the
+ * rolling per-minute window, then record the call start. Shared module state means
+ * concurrent/serial callers all respect the same budget.
+ */
+async function searloThrottleAcquire(): Promise<void> {
+  // Loop because waiting for one constraint may push us into another.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const now = Date.now();
+
+    // Per-second spacing.
+    if (now < searloNextAllowedAt) {
+      await sleep(searloNextAllowedAt - now);
+      continue;
+    }
+
+    // Per-minute rolling window: drop timestamps older than 60s.
+    while (searloCallTimestamps.length > 0 && now - searloCallTimestamps[0] >= 60_000) {
+      searloCallTimestamps.shift();
+    }
+    if (searloCallTimestamps.length >= searloPerMinuteLimit) {
+      // Wait until the oldest call ages out of the 60s window.
+      const waitMs = 60_000 - (now - searloCallTimestamps[0]) + 5;
+      await sleep(waitMs);
+      continue;
+    }
+
+    // Slot available — reserve it.
+    searloCallTimestamps.push(now);
+    searloNextAllowedAt = now + SEARLO_MIN_INTERVAL_MS;
+    return;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Engine 1: Searlo SERP API (PRIMARY — Google SERP proxy, geo-accurate, no expiry)
 // ---------------------------------------------------------------------------
 
@@ -418,18 +428,63 @@ interface SearloResponse {
   }>;
 }
 
-async function searchSearlo(query: string, apiKey: string): Promise<SearchResult[]> {
+/** Parse the per-minute limit + retryAfter (seconds) from a Searlo 429 body. */
+function parseSearlo429(body: string): { retryAfterMs: number; perMinuteLimit?: number } {
+  let retryAfterMs = 60_000; // default if unparseable
+  let perMinuteLimit: number | undefined;
+  try {
+    const parsed = JSON.parse(body) as {
+      retryAfter?: number;
+      limits?: { perMinute?: { limit?: number } };
+    };
+    if (typeof parsed.retryAfter === 'number' && parsed.retryAfter > 0) {
+      retryAfterMs = parsed.retryAfter * 1000;
+    }
+    const pm = parsed.limits?.perMinute?.limit;
+    if (typeof pm === 'number' && pm > 0) perMinuteLimit = pm;
+  } catch {
+    /* leave defaults */
+  }
+  // Cap the wait so a bad retryAfter can't stall a run; 65s covers a full minute.
+  retryAfterMs = Math.min(retryAfterMs, 65_000);
+  return { retryAfterMs, perMinuteLimit };
+}
+
+/** Single raw Searlo request (no throttle, no retry) — used by searchSearlo. */
+async function searloFetch(query: string, apiKey: string): Promise<Response> {
   // limit caps at 10 (Searlo hard cap). Depth >10 is available via the `page`
   // param for pagination, but is intentionally omitted to keep credit cost at
   // exactly 1 credit per sub-query.
   const params = new URLSearchParams({ q: query, limit: '10', gl: 'us' });
-  const response = await fetch(`https://api.searlo.tech/api/v1/search/web?${params}`, {
+  return fetch(`https://api.searlo.tech/api/v1/search/web?${params}`, {
     headers: {
       'x-api-key': apiKey,
       'Accept':    'application/json',
     },
     signal: AbortSignal.timeout(20_000),
   });
+}
+
+async function searchSearlo(query: string, apiKey: string): Promise<SearchResult[]> {
+  // Respect the shared throttle before every call so we stay under both caps.
+  await searloThrottleAcquire();
+  let response = await searloFetch(query, apiKey);
+
+  // On 429: self-tune the per-minute budget, honor retryAfter (capped), and retry
+  // Searlo ONCE before letting the caller fall back to Serper. This keeps us on
+  // cheap Searlo instead of bleeding Serper credits on transient rate limits.
+  if (response.status === 429) {
+    const body = await response.text().catch(() => '');
+    const { retryAfterMs, perMinuteLimit } = parseSearlo429(body);
+    if (perMinuteLimit) searloPerMinuteLimit = perMinuteLimit;
+    console.warn(
+      `[FB-Events] Searlo 429 (rate limited) — waiting ${Math.round(retryAfterMs / 1000)}s ` +
+      `then retrying once${perMinuteLimit ? ` (per-minute cap learned: ${perMinuteLimit})` : ''}`
+    );
+    await sleep(retryAfterMs);
+    await searloThrottleAcquire();
+    response = await searloFetch(query, apiKey);
+  }
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
@@ -685,8 +740,11 @@ export async function scrapeFacebookEventsForMetro(
       }
     }
 
-    // Throttle between every search-API call (sub-query) to avoid rate-limiting.
-    await jitterDelay(1500, 2500);
+    // Searlo pacing is now handled by the module-level searloThrottle (per-second
+    // + per-minute caps), so we no longer need a large fixed delay here — that
+    // would double-delay. Keep a small jitter purely to de-synchronize bursts and
+    // to lightly pace the non-Searlo fallback engines.
+    await jitterDelay(200, 500);
   }
 
   const items: ScrapedItem[] = Array.from(byEventId.values());
