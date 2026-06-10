@@ -21,7 +21,7 @@
  * `retryAfter` and retry Searlo once before any fallback, so normal operation
  * never bleeds Serper credits.
  *
- * At ~43 metros/day × ~4 sub-queries each, Searlo is the primary cost driver
+ * At ~43 metros/day × 3 sub-queries each (~129 Searlo calls/shard), Searlo is the primary cost driver
  * (~1 credit/sub-query); Serper/Brave/ScaleSerp are fallbacks only when Searlo
  * returns empty or still errors after the retry.
  */
@@ -368,12 +368,26 @@ function buildScrapedItem(
 //   • ~4 req/sec (one slot every 250ms — under the 5/sec cap)
 //   • per-minute: a rolling 60s window capped at `searloPerMinuteLimit`
 // The per-minute limit self-tunes from the 429 body's limits.perMinute.limit when
-// observed; until then it defaults to a conservative 60/min.
+// observed; until then it is paced from call #1 at the SEARLO_RPM env value
+// (default 9, under the free-tier 10/min cap).
 //
 // State is module-level (not per-metro) so pacing holds across the whole run.
 
 const SEARLO_MIN_INTERVAL_MS = 250;   // ≈4 req/sec — under the 5/sec hard cap
-let searloPerMinuteLimit = 60;        // conservative default; self-tunes from 429 body
+// Per-minute cap PACED FROM CALL #1 (no learning-429 needed). Free tier = 10/min,
+// so the default 9 leaves margin to avoid boundary 429s. Read from SEARLO_RPM
+// (parsed int) so the cap is tunable without a code change: when the Searlo plan
+// is upgraded, set the SEARLO_RPM env var to the new tier's per-minute limit.
+// The 429 self-tune below still acts as a backstop: if a 429 ever reports a LOWER
+// limit, we honor it.
+const SEARLO_RPM_DEFAULT = 9;
+function parseSearloRpm(): number {
+  const raw = process.env.SEARLO_RPM;
+  if (raw === undefined || raw.trim() === '') return SEARLO_RPM_DEFAULT;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : SEARLO_RPM_DEFAULT;
+}
+let searloPerMinuteLimit = parseSearloRpm(); // paces from call #1; 429 may lower it
 let searloNextAllowedAt = 0;          // earliest timestamp (ms) the next call may fire
 const searloCallTimestamps: number[] = []; // rolling 60s window of recent call starts
 
@@ -631,13 +645,22 @@ export async function scrapeFacebookEventsForMetro(
   // not allowed for free accounts"). Raising num requires a paid Serper key.
   //
   // COST: this multiplies search-API credits per metro by the number of sub-queries
-  // (~3–4×) — relevant to the Serper credit budget. It is bounded to exactly one
+  // (3×) — relevant to the Serper credit budget. It is bounded to exactly one
   // request per sub-query per metro per run (no pagination, no loops beyond this list).
   const subQueries: Array<{ clause: string; typeHint: string }> = [
-    { clause: '("estate sale" OR "garage sale" OR "yard sale")',          typeHint: 'ESTATE'      },
+    // Q1: estate/garage/yard + consignment folded in as a 4th OR term (was its own
+    // sub-query). Consignment already classifies as ESTATE (no distinct enum), so it
+    // rides correctly under this ESTATE hint. Folding it here trims the per-metro
+    // sub-query count 4 → 3, cutting Searlo calls per daily shard from 172 → 129 and
+    // keeping the run comfortably under the 19-min target on the free tier.
+    // NOTE: this clause carries 4 OR terms — above Brave's ~3-term ceiling. That is
+    // acceptable because Searlo (primary) and Serper honor it; Brave is only a tail
+    // fallback and degrades gracefully (it would surface estate-side results at worst).
+    { clause: '("estate sale" OR "garage sale" OR "yard sale" OR "consignment sale")', typeHint: 'ESTATE'      },
+    // Q2 (flea) and Q3 (auction) stay DEDICATED — these are the high-value sub-queries
+    // we must not crowd, and each stays ≤3 OR terms (Brave-compatible).
     { clause: '("flea market" OR "swap meet")',                           typeHint: 'FLEA_MARKET' },
     { clause: '("estate auction" OR "public auction" OR "online auction")', typeHint: 'AUCTION'   },
-    { clause: '("consignment sale")',                                     typeHint: 'CONSIGNMENT' },
   ];
 
   // Dedupe accumulator: event id → ScrapedItem (first occurrence wins).
