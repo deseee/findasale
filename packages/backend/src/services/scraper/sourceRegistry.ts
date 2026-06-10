@@ -13,8 +13,11 @@ import { scrapeAuctionNinja } from './sources/auctionNinjaScraper';
 import { runYellowPagesCaScraper } from './sources/yellowPagesCaScraper';
 import { scrapeFleaMarketZone } from './sources/fleaMarketZoneScraper';
 import { scrapeStorageAuctionsNet } from './sources/storageAuctionsNetScraper';
+import { scrapeStorageAuctionsCom } from './sources/storageAuctionsComScraper';
 import { scrapeStorageTreasures } from './sources/storageTreasuresScraper';
 import { scrapePropertyRoom } from './sources/propertyRoomScraper';
+import { scrapePublicSurplus } from './sources/publicSurplusScraper';
+import { scrapeMunicibid } from './sources/municibidScraper';
 
 export type SourceType = 'directory' | 'licensing' | 'crawl-queue' | 'places-api';
 export type SourceRunMode = 'metro-loop' | 'national-once';
@@ -167,6 +170,17 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     run: scrapePropertyRoom,
   },
   {
+    id: 'StorageAuctionsCom',
+    displayName: 'StorageAuctions.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    // No cronSchedule — triggered via GitHub Actions (scrape-storageauctions-com.yml).
+    qualityTier: 'high',
+    legalNote: "ToS GRAY — page is CSR-only, no server-rendered text available. robots.txt: Allow: / (only auth paths blocked). Public API at core-service.auctions.storageauctions.com/public/auctions requires no auth. 3,100+ US storage facility auction operators. Confirmed 2026-06-10.",
+    run: scrapeStorageAuctionsCom,
+  },
+  {
     id: 'StorageTreasures',
     displayName: 'StorageTreasures.com',
     type: 'directory',
@@ -178,6 +192,29 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     qualityTier: 'medium',
     legalNote: 'ToS gray area (MySpace-era boilerplate, no explicit scraper ban). robots.txt open. robotsAllow:true confirmed in page appConfig. Parked on data access grounds, not legal.',
     run: scrapeStorageTreasures,
+  },
+  ,
+  {
+    id: 'Municibid',
+    displayName: 'Municibid',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — ToS PROHIBITED: explicit ban on automated access and scraping (Section c).
+    prohibited: true,
+    qualityTier: 'high',
+    legalNote: 'ToS PROHIBITED — Section (c) explicitly bans automated access and scraping. Unpark requires written data partnership agreement with Municibid. Verified 2026-06-10 (ToS updated 05/04/26).',
+    run: scrapeMunicibid,
+  },
+  {
+    id: 'PublicSurplus',
+    displayName: 'PublicSurplus.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    // No cronSchedule — triggered via GitHub Actions (scrape-publicsurplus.yml).
+    qualityTier: 'high',
+    legalNote: 'ToS pages return HTTP 500 (server error, not a block). Privacy Policy has zero prohibition language. robots.txt: User-agent: * disallows only /images/. Verified 2026-06-10.',
+    run: scrapePublicSurplus,
   },
 ];
 

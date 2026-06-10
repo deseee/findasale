@@ -1,0 +1,53 @@
+name: Scrape Municibid Directory
+
+on:
+  schedule:
+    - cron: '0 8 * * 4'  # Thursdays at 8:00 UTC
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: Municibid Government Auction Scraper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: packages/database
+
+      - name: Run Municibid Scraper
+        continue-on-error: true
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { scrapeMunicibid } from "./src/services/scraper/sources/municibidScraper";
+            import { RateLimiter } from "./src/services/scraper/rateLimiter";
+            (async () => { try {
+              const rateLimiter = new RateLimiter({ requestsPerSecond: 0.5 });
+              const stats = await scrapeMunicibid("national", "", rateLimiter);
+              console.log("Municibid scraper completed:", JSON.stringify(stats));
+              process.exit(0);
+            } catch (err) {
+              console.error("Municibid scraper failed:", err);
+              process.exit(1);
+            }
+            })();
+          '
