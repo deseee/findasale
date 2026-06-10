@@ -7,7 +7,7 @@ import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
+const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
 /**
  * Send a price drop alert email to a single favoriter.

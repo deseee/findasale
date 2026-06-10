@@ -208,7 +208,7 @@ export const joinPool = async (req: AuthRequest, res: Response) => {
             console.log(`[buyingPool] Skipping suppressed recipient: ${orgEmail}`);
           } else {
           await emailService.emails.send({
-            from: process.env.SES_FROM_EMAIL || 'FindA.Sale <noreply@send.finda.sale>',
+            from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'FindA.Sale <find@outreach.finda.sale>',
             to: orgEmail,
             subject: `Buying Pool Filled: ${itemTitle}`,
             html: `
@@ -335,7 +335,7 @@ export const cancelPool = async (req: AuthRequest, res: Response) => {
             continue;
           }
           await emailService.emails.send({
-            from: process.env.SES_FROM_EMAIL || 'FindA.Sale <noreply@send.finda.sale>',
+            from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'FindA.Sale <find@outreach.finda.sale>',
             to: participant.user.email,
             subject: `Buying Pool Cancelled: ${pool.item.title}`,
             html: `

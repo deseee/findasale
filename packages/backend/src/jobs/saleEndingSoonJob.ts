@@ -128,7 +128,7 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
 
             try {
               await emailService.emails.send({
-                from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
+                from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
                 to: subscriber.email,
                 subject: emailTemplate.subject,
                 html: emailTemplate.html,

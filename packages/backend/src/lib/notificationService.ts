@@ -53,7 +53,7 @@ export const createNotification = async (input: CreateNotificationInput) => {
         } else if (await suppressionService.isSuppressed(recipient)) {
           console.log(`[notificationService] Skipping suppressed recipient: ${recipient}`);
         } else {
-          const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
+          const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
           try {
             await emailService.emails.send({
               from: fromEmail,

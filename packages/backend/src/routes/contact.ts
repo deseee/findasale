@@ -31,7 +31,7 @@ router.post('/', contactLimiter, async (req: Request, res: Response) => {
     const { name, email, subject, message } = validatedData;
 
     const supportEmail = process.env.SUPPORT_EMAIL || 'support@finda.sale';
-    const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
+    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
     if (true) {
       // Forward to support inbox

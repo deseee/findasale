@@ -47,7 +47,7 @@ async function sendFirstCrawlNotification(saleId: string): Promise<void> {
     const email = sale?.organizer?.user?.email;
     if (!sale || !email) return;
 
-    const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
+    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
     const saleUrl = 'https://finda.sale/sales/' + saleId;
     const saleTitle = sale.title || 'Your sale';
     const recipientName = sale.organizer.user?.name ?? 'there';

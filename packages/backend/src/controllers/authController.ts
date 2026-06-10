@@ -285,7 +285,7 @@ export const register = async (req: Request, res: Response) => {
     // Security: Send email verification link (non-blocking)
     if (user.emailVerificationToken) {
       try {
-        const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
+        const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
         const verifyLink = `${process.env.FRONTEND_URL || 'https://finda.sale'}/verify-email?token=${user.emailVerificationToken}`;
 
         await transactionalEmailService.emails.send({
@@ -728,7 +728,7 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
     // Send password reset email (non-blocking)
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
     try {
-      const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
+      const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
       await transactionalEmailService.emails.send({
         from: fromEmail,

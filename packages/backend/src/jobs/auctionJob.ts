@@ -161,7 +161,7 @@ export const endAuctions = async () => {
           if (await suppressionService.isHardSuppressed(result.highestBid.user.email)) {
             console.log(`[auctionJob] Skipping hard-suppressed winner: ${result.highestBid.user.email}`);
           } else {
-            const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@send.finda.sale';
+            const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
             const payUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`;
             try {
               await emailService.emails.send({

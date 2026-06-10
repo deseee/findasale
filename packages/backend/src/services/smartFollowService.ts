@@ -120,7 +120,7 @@ export const checkFollowsForNewSale = async (sale: SaleInfo): Promise<void> => {
       if (follow.notifyEmail && follow.user.email && !emailSuppressed) {
         try {
           await emailService.emails.send({
-            from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
+            from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
             to: follow.user.email,
             subject: `${organizer.businessName} posted a new sale: ${sale.title}`,
             html: `

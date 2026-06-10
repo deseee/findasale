@@ -1974,7 +1974,7 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
           return;
         }
         await emailService.emails.send({
-        from: process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale',
+        from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
         to: claimantEmail,
         subject: `Verify your claim request for ${foundOrganizer.businessName}`,
         html: `

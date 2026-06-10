@@ -237,7 +237,7 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
         } else {
           try {
             await emailService.emails.send({
-              from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
+              from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
               to: alert.user.email,
               subject: `✨ Found items matching your wishlist alert: ${alert.name}`,
               html: `
