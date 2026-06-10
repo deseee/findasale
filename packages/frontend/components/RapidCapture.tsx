@@ -129,6 +129,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const zoomHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusRingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPinchDistance = useRef<number | null>(null);
+  const focusRetriggerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [showCornerGuides, setShowCornerGuides] = useState(true);
@@ -310,6 +311,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       }
       if (zoomHintTimer.current) clearTimeout(zoomHintTimer.current);
       if (focusRingTimer.current) clearTimeout(focusRingTimer.current);
+      if (focusRetriggerTimer.current) clearTimeout(focusRetriggerTimer.current);
     };
   }, [facingMode]);
 
@@ -529,6 +531,18 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     try {
       if (zoomSupported) {
         await videoTrack.applyConstraints({ advanced: [{ zoom: clamped } as any] });
+        // Re-trigger continuous autofocus after zoom settles.
+        // On Android (Pixel 6a and similar), applyConstraints({zoom}) drops the
+        // active focusMode, leaving the preview permanently blurry until refocused.
+        if (focusRetriggerTimer.current) clearTimeout(focusRetriggerTimer.current);
+        focusRetriggerTimer.current = setTimeout(async () => {
+          try {
+            const cap = videoTrack.getCapabilities?.() as any;
+            if (cap?.focusMode?.includes?.('continuous')) {
+              await videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' } as any] });
+            }
+          } catch { /* unsupported — ignore */ }
+        }, 350);
       } else {
         // CSS digital zoom fallback
         if (videoRef.current) {
@@ -869,6 +883,19 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             }
             if (e.touches.length < 2) {
               lastPinchDistance.current = null;
+              // Pinch ended — cancel the debounce and refocus immediately
+              if (focusRetriggerTimer.current) clearTimeout(focusRetriggerTimer.current);
+              if (streamRef.current) {
+                const vt = streamRef.current.getVideoTracks()[0];
+                if (vt) {
+                  try {
+                    const cap = vt.getCapabilities?.() as any;
+                    if (cap?.focusMode?.includes?.('continuous')) {
+                      vt.applyConstraints({ advanced: [{ focusMode: 'continuous' } as any] }).catch(() => {});
+                    }
+                  } catch { /* unsupported — ignore */ }
+                }
+              }
             }
           }}
         >
