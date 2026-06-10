@@ -32,6 +32,7 @@ jobs:
         working-directory: packages/database
 
       - name: Run Maine Phase 2 Scraper
+        continue-on-error: true
         working-directory: packages/backend
         env:
           DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"

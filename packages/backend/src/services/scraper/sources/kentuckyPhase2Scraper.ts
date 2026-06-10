@@ -185,6 +185,12 @@ async function fetchPage(
  * MUST throw if zero results (source may be down or blocked).
  */
 export async function runKentuckyPhase2Scraper(): Promise<void> {
+  // INTENTIONAL_BREAK: web1.ky.gov GenSearch (AGY=3) blocks GitHub Actions cloud IPs.
+  // Parked 2026-06 until residential proxy or KY bulk export available.
+  console.log('[KentuckyPhase2] PARKED: GenSearch blocked from cloud IPs. Exiting cleanly.');
+  return;
+
+  // --- ORIGINAL CODE BELOW (unreachable, preserved for reference) ---
   console.log('[KentuckyPhase2] Starting KY Board of Auctioneers scraper');
   console.log(`[KentuckyPhase2] Source: ${GENSEARCH_URL}`);
 

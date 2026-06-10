@@ -186,6 +186,13 @@ function extractField(record: Record<string, unknown>, ...keys: string[]): strin
  * Falls back to the legacy eLicensing endpoint if the primary API is unavailable.
  */
 export async function runMassachusettsPhase2Scraper(): Promise<void> {
+  // INTENTIONAL_BREAK: MA Division of Professional Licensure API
+  // (licensing.api.secure.digital.mass.gov) DNS fails from cloud runners.
+  // Parked 2026-06 until MA publishes a working public API endpoint.
+  console.log('[MA Phase2] PARKED: MA licensing API unreachable from cloud IPs. Exiting cleanly.');
+  return;
+
+  // --- ORIGINAL CODE BELOW (unreachable, preserved for reference) ---
   let totalFetched = 0;
   let totalMatched = 0;
   let totalUpserted = 0;
