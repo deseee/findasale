@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 3 * * *'  # 03:00 UTC daily (full ~301-metro list sharded across 7 days)
   workflow_dispatch:
+    inputs:
+      all_metros:
+        description: 'Run ALL ~301 metros this run (full backfill — ignores daily sharding)'
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}
@@ -43,6 +48,7 @@ jobs:
           BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           SCALESERP_API_KEY: ${{ secrets.SCALESERP_API_KEY }}
+          FB_EVENTS_ALL_METROS: ${{ inputs.all_metros }}
         run: |
           cd packages/backend
           ./node_modules/.bin/ts-node src/scripts/run-search-facebook-events.ts
