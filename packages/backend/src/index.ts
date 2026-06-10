@@ -791,30 +791,6 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // ADR-073: Geocoding success rate audit cron (daily at 6 AM UTC)
   scheduleGeocodingAuditCron();
 
-  // Bounce → EmailSuppression processor — daily at 06:00 UTC
-  // Scans outreach@finda.sale inbox for mailer-daemon/postmaster bounces and suppresses addresses.
-  // Dynamic require prevents a missing compiled file from crashing the entire server.
-  // Root cause: Dockerfile `tsc || true` can silently skip emitting this file; a static top-level
-  // import means the server never starts if the .js is absent (Sentry FINDASALE-NODEJS-1A, 12 events
-  // since 2026-05-09, fatal onuncaughtexception — diagnosed S919 daily health run).
-  (() => {
-    try {
-      const { bounceSuppressService } = require('./services/bounceSuppressService');
-      const cronLib = require('node-cron');
-      cronLib.schedule('0 6 * * *', async () => {
-        try {
-          const summary = await bounceSuppressService.processBounces();
-          console.log('[bounceSuppressCron] Summary:', JSON.stringify(summary));
-        } catch (err: any) {
-          console.error('[bounceSuppressCron] Uncaught error:', err.message);
-        }
-      }, { timezone: 'UTC' });
-      console.log('[bounceSuppressCron] Registered: daily 06:00 UTC');
-    } catch (err: any) {
-      console.error('[bounceSuppressCron] Failed to load bounceSuppressService — cron skipped:', err.message);
-    }
-  })();
-
   // Feature #75: Tier grace period finalization cron
   startTierGraceCron();
 

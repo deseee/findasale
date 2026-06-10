@@ -31,6 +31,7 @@ import { runAutoSeedOutreach } from '../jobs/autoSeedOutreachCron';
 import { runMonthlyTrendReport } from '../jobs/monthlyTrendReportJob';
 import { runGmailOAuthHealthCheck, runDailySendSummary, runSuspensionDetect } from '../jobs/gmailHealthCron';
 import { runDeliverabilityMonitor } from '../jobs/deliverabilityMonitorJob';
+import { bounceSuppressService } from '../services/bounceSuppressService';
 
 /**
  * Allowlisted job-name → job logic function.
@@ -50,6 +51,7 @@ const JOB_MAP: Record<string, () => Promise<unknown>> = {
   'daily-send-summary': runDailySendSummary,
   'suspension-detect': runSuspensionDetect,
   'deliverability-monitor': runDeliverabilityMonitor,
+  'process-bounces': () => bounceSuppressService.processBounces(),
 };
 
 /**
