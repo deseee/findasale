@@ -39,6 +39,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
+          SEARLO_API_KEY: ${{ secrets.SEARLO_API_KEY }}
           BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           SCALESERP_API_KEY: ${{ secrets.SCALESERP_API_KEY }}
