@@ -237,8 +237,21 @@ async function handleResendWebhook(payload: any, res: express.Response): Promise
     await suppressionService.addSuppression(email, bounceReason as any);
   }
 
-  if (type === 'email.complaint') {
+  // Resend sends `email.complained` for spam complaints (not `email.complaint`).
+  if (type === 'email.complained') {
     await suppressionService.processComplaint(email);
+  }
+
+  // Resend added the recipient to its suppression list — mirror it locally.
+  if (type === 'email.suppressed') {
+    console.warn(`[OutreachWebhook] email.suppressed for ${email} — adding local suppression (manual).`);
+    await suppressionService.addSuppression(email, 'manual');
+  }
+
+  // Resend permanently failed to deliver. No clean suppression reason maps to a
+  // transient/permanent failure, so log it loudly rather than silently dropping.
+  if (type === 'email.failed') {
+    console.warn(`[OutreachWebhook] email.failed for ${email} — reason: ${payload.reason || payload.failed?.reason || 'unknown'}`);
   }
 
   res.status(200).json({ ok: true });
