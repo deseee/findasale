@@ -12,7 +12,9 @@ import { prisma } from '../lib/prisma';
  * Uses the same GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN
  * env vars — no additional credentials required.
  *
- * Scheduled: daily at 06:00 UTC (registered in index.ts).
+ * Scheduled: daily at 06:00 UTC via GitHub Actions
+ * (.github/workflows/pipeline-bounce-suppress.yml → POST /api/internal/jobs/run
+ * with job 'process-bounces'). No longer an in-process node-cron job.
  */
 
 interface ProcessResult {
@@ -152,12 +154,17 @@ export const bounceSuppressService = {
       return result;
     }
 
-    // Search for bounce/failure notifications not yet processed (not in Trash)
+    // Search for bounce/failure notifications not yet processed (not in Trash).
+    // IMPORTANT: bounce DSNs for outreach land at find@outreach.finda.sale — the
+    // refresh token (GMAIL_MAILBOX_REFRESH_TOKEN) MUST authenticate that mailbox,
+    // otherwise this list returns 0 every run. The query also matches on subject
+    // so DSNs from senders that aren't literally mailer-daemon/postmaster (some
+    // providers vary the From) are still caught.
     let messageIds: string[] = [];
     try {
       const listResp = await gmail.users.messages.list({
         userId: 'me',
-        q: 'from:mailer-daemon OR from:postmaster -in:trash',
+        q: '(from:mailer-daemon OR from:postmaster OR subject:(delivery status OR undeliverable OR "mail delivery" OR "failure notice" OR "returned mail" OR "delivery has failed")) -in:trash',
         maxResults: 100,
       });
       messageIds = (listResp.data.messages ?? []).map(m => m.id!).filter(Boolean);
@@ -213,8 +220,15 @@ export const bounceSuppressService = {
           console.log(`[bounceSuppressService] Suppressed: ${bouncedAddress}`);
         }
 
-        // Move message to Trash regardless — keeps inbox clean
-        await gmail.users.messages.trash({ userId: 'me', id: msgId });
+        // Move message to Trash regardless — keeps inbox clean.
+        // Isolated try/catch: trash requires gmail.modify scope. If the token is
+        // read-only this throws, but it must NEVER block the suppression upsert
+        // above — log and continue.
+        try {
+          await gmail.users.messages.trash({ userId: 'me', id: msgId });
+        } catch (trashErr: any) {
+          console.warn(`[bounceSuppressService] Could not trash ${msgId} (likely missing gmail.modify scope) — continuing:`, trashErr.message);
+        }
 
       } catch (err: any) {
         const errMsg = `Message ${msgId}: ${err.message}`;

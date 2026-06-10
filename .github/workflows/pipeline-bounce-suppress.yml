@@ -1,0 +1,25 @@
+name: Pipeline — Bounce Suppression
+on:
+  schedule:
+    # Daily at 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger process-bounces job
+        env:
+          OUTREACH_SECRET: ${{ secrets.INTERNAL_API_TOKEN }}
+          RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
+        run: |
+          curl -X POST \
+            -H "x-internal-secret: ${OUTREACH_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d '{"job":"process-bounces"}' \
+            "${RAILWAY_BACKEND_URL}/api/internal/jobs/run" \
+            --fail-with-body --connect-timeout 10 --max-time 120
