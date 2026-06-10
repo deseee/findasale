@@ -5,9 +5,10 @@
  * Environment variables (from GitHub secrets):
  * - RAILWAY_BACKEND_URL:  https://backend-production-xxx.up.railway.app
  * - INTERNAL_SCRAPER_KEY: shared secret for /api/internal/scraper/ingest auth
- * - BRAVE_API_KEY:        primary search API (free tier with attribution)
- * - SERPER_API_KEY:       fallback search API (paid credits)
- * - SCALESERP_API_KEY:    second fallback search API (paid credits)
+ * - SEARLO_API_KEY:       PRIMARY search API (Searlo SERP, geo-accurate, $0.30/1k)
+ * - SERPER_API_KEY:       first fallback search API (paid credits)
+ * - BRAVE_API_KEY:        second fallback search API (free tier with attribution)
+ * - SCALESERP_API_KEY:    third fallback search API (paid credits)
  * - FB_EVENTS_ORGANIZER_ID: optional — backend falls back to system organizer
  *
  * Usage: npx ts-node src/scripts/run-search-facebook-events.ts
@@ -24,6 +25,7 @@ const INGEST_URL =
   (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') +
   '/api/internal/scraper/ingest';
 const SCRAPER_KEY     = process.env.INTERNAL_SCRAPER_KEY;
+const SEARLO_KEY      = process.env.SEARLO_API_KEY;
 const BRAVE_KEY       = process.env.BRAVE_API_KEY;
 const SERPER_KEY      = process.env.SERPER_API_KEY;
 const SCALESERP_KEY   = process.env.SCALESERP_API_KEY;
@@ -57,24 +59,25 @@ async function main() {
   if (!SCRAPER_KEY) {
     throw new Error('INTERNAL_SCRAPER_KEY environment variable is not set');
   }
-  // Brave key is optional but recommended — fallbacks available
-  if (!BRAVE_KEY)     console.warn('[run-fb-events] No BRAVE_API_KEY — will use Serper/ScaleSerp only');
-  if (!SERPER_KEY)    console.warn('[run-fb-events] No SERPER_API_KEY — Brave/ScaleSerp only, no Serper backup');
-  if (!SCALESERP_KEY) console.warn('[run-fb-events] No SCALESERP_API_KEY — no ScaleSerp backup');
+  // Searlo is the primary key; the rest are fallbacks — all optional individually.
+  if (!SEARLO_KEY)    console.warn('[run-fb-events] No SEARLO_API_KEY — primary engine unavailable, will use Serper/Brave/ScaleSerp fallbacks');
+  if (!SERPER_KEY)    console.warn('[run-fb-events] No SERPER_API_KEY — no Serper fallback');
+  if (!BRAVE_KEY)     console.warn('[run-fb-events] No BRAVE_API_KEY — no Brave fallback');
+  if (!SCALESERP_KEY) console.warn('[run-fb-events] No SCALESERP_API_KEY — no ScaleSerp fallback');
   if (!ORGANIZER_ID)  console.log('[run-fb-events] No FB_EVENTS_ORGANIZER_ID — will use system organizer');
 
-  // If ALL three search keys are missing, the scraper produces zero results and
-  // fails silently. Surface this loudly via console + Resend so it doesn't go stale.
-  if (!BRAVE_KEY && !SERPER_KEY && !SCALESERP_KEY) {
+  // If ALL search keys are missing, the scraper produces zero results and fails
+  // silently. Surface this loudly via console + Resend so it doesn't go stale.
+  if (!SEARLO_KEY && !BRAVE_KEY && !SERPER_KEY && !SCALESERP_KEY) {
     console.error(
-      '[run-fb-events] 🔴 ALL search API keys missing (BRAVE / SERPER / SCALESERP) — ' +
+      '[run-fb-events] 🔴 ALL search API keys missing (SEARLO / SERPER / BRAVE / SCALESERP) — ' +
       'Facebook Events import will produce ZERO results. This is a silent failure.'
     );
     await sendKeyHealthAlert(
       '🔴 FB Events import DEAD — all search API keys missing',
       `
         <p><strong>🔴 CRITICAL:</strong> The Facebook Events import has no usable search API key.</p>
-        <p>All three keys are absent: <code>BRAVE_API_KEY</code>, <code>SERPER_API_KEY</code>, and <code>SCALESERP_API_KEY</code>.</p>
+        <p>All four keys are absent: <code>SEARLO_API_KEY</code>, <code>SERPER_API_KEY</code>, <code>BRAVE_API_KEY</code>, and <code>SCALESERP_API_KEY</code>.</p>
         <p>The scraper will produce <strong>zero results</strong> until at least one key is restored — the import is effectively dead and failing silently.</p>
         <p><strong>To fix:</strong> Restore or renew at least one search API key in the GitHub Actions secrets / Railway env vars.</p>
         <p style="color:#666;font-size:12px">FindA.Sale · run-search-facebook-events.ts</p>
@@ -95,6 +98,7 @@ async function main() {
   for (const metro of SEARCH_METROS) {
     try {
       const items = await scrapeFacebookEventsForMetro(metro, {
+        searloKey:    SEARLO_KEY,
         braveKey:     BRAVE_KEY,
         serperKey:    SERPER_KEY,
         scaleSerpKey: SCALESERP_KEY,

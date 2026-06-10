@@ -3,17 +3,21 @@
  * ADR-073: Directory Scraper — search-based adapter
  *
  * Priority chain (best geo-targeting first):
- *   1. Serper.dev       — Google SERP proxy, credit-based ($50/50k pack), best location-specific results
- *   2. Brave Search API — independent index, $5/month free credit with attribution
- *   3. ScaleSerp        — Google SERP proxy, 125 free/month + paid
+ *   1. Searlo SERP API  — PRIMARY. Google SERP proxy, $0.30/1k queries, geo-accurate
+ *                          (~90–100% in-metro), no credit expiry. Honors site: and the
+ *                          full multi-term OR query; geo-targets via city/state in q.
+ *   2. Serper.dev       — Google SERP proxy, credit-based ($50/50k pack), good location-specific results
+ *   3. Brave Search API — independent index, $5/month free credit with attribution
+ *   4. ScaleSerp        — Google SERP proxy, 125 free/month + paid
  *
  * DuckDuckGo removed: Bing index does not reliably index facebook.com/events pages.
  * Tavily excluded: it is an AI search index that does not contain
  * facebook.com/events pages (confirmed — returns groups/marketplace only).
  *
  * Cron: weekly (Monday 03:00 UTC)
- * At 30 metros/week × 52 weeks = 1,560 Serper credits/year (primary use for accurate
- * location-specific results; Brave fallback is rate-limited, so real primary-usage is high).
+ * At 89 metros/week × ~4 sub-queries each, Searlo is the primary cost driver
+ * (~1 credit/sub-query); Serper/Brave/ScaleSerp are fallbacks only when Searlo
+ * returns empty or errors.
  */
 
 import * as cheerio from 'cheerio';
@@ -31,7 +35,7 @@ interface SearchResult {
 }
 
 // ---------------------------------------------------------------------------
-// Metro list — 30 major secondary-sale markets
+// Metro list — 89 major secondary-sale markets
 // ---------------------------------------------------------------------------
 
 export interface MetroTarget {
@@ -401,7 +405,47 @@ function buildScrapedItem(
 }
 
 // ---------------------------------------------------------------------------
-// Engine 2: Brave Search API (backup — independent index, free tier available)
+// Engine 1: Searlo SERP API (PRIMARY — Google SERP proxy, geo-accurate, no expiry)
+// ---------------------------------------------------------------------------
+
+interface SearloResponse {
+  organic?: Array<{
+    position?: number;
+    title: string;
+    link: string;
+    snippet?: string;
+    domain?: string;
+  }>;
+}
+
+async function searchSearlo(query: string, apiKey: string): Promise<SearchResult[]> {
+  // limit caps at 10 (Searlo hard cap). Depth >10 is available via the `page`
+  // param for pagination, but is intentionally omitted to keep credit cost at
+  // exactly 1 credit per sub-query.
+  const params = new URLSearchParams({ q: query, limit: '10', gl: 'us' });
+  const response = await fetch(`https://api.searlo.tech/api/v1/search/web?${params}`, {
+    headers: {
+      'x-api-key': apiKey,
+      'Accept':    'application/json',
+    },
+    signal: AbortSignal.timeout(20_000),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Searlo ${response.status}: ${body.slice(0, 200)}`);
+  }
+
+  const data = (await response.json()) as SearloResponse;
+  return (data.organic ?? []).map((r) => ({
+    url:     r.link,
+    title:   r.title,
+    snippet: r.snippet ?? '',
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Engine 3: Brave Search API (backup — independent index, free tier available)
 // ---------------------------------------------------------------------------
 
 interface BraveResponse {
@@ -466,7 +510,7 @@ async function searchSerper(query: string, apiKey: string): Promise<SearchResult
 }
 
 // ---------------------------------------------------------------------------
-// Engine 3: ScaleSerp (backup — Google SERP proxy, 125 free/month + paid)
+// Engine 4: ScaleSerp (backup — Google SERP proxy, 125 free/month + paid)
 // ---------------------------------------------------------------------------
 
 interface ScaleSerpResponse {
@@ -498,6 +542,7 @@ async function searchScaleSerp(query: string, apiKey: string): Promise<SearchRes
 // ---------------------------------------------------------------------------
 
 export interface FbSearchOptions {
+  searloKey?:    string;
   braveKey?:     string;
   serperKey?:    string;
   scaleSerpKey?: string;
@@ -507,9 +552,10 @@ export interface FbSearchOptions {
  * Scrape Facebook Events for a single metro via search engines.
  *
  * Priority:
- *   1. Serper.dev        (Google SERP proxy, best geo-targeting, primary)
- *   2. Brave Search API  (independent index, free fallback)
- *   3. ScaleSerp         (Google SERP proxy, second fallback)
+ *   1. Searlo SERP API   (Google SERP proxy, geo-accurate, no expiry — PRIMARY)
+ *   2. Serper.dev        (Google SERP proxy, best geo-targeting, first fallback)
+ *   3. Brave Search API  (independent index, free fallback)
+ *   4. ScaleSerp         (Google SERP proxy, second fallback)
  *
  * Returns ScrapedItem[] without ingesting.
  */
@@ -549,13 +595,29 @@ export async function scrapeFacebookEventsForMetro(
     let rawResults: SearchResult[] = [];
     let usedEngine = '';
 
-    // --- Engine 1: Serper (primary — best geo-targeting) ---
-    if (opts.serperKey) {
+    // --- Engine 1: Searlo (PRIMARY — geo-accurate Google SERP proxy, no expiry) ---
+    if (opts.searloKey) {
+      try {
+        rawResults = await searchSearlo(query, opts.searloKey);
+        usedEngine = 'searlo';
+        console.log(
+          `[FB-Events] Searlo OK for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
+        );
+      } catch (err) {
+        console.warn(
+          `[FB-Events] Searlo failed for ${metro.city}, ${metro.state} [${sub.typeHint}]:`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+
+    // --- Engine 2: Serper (first fallback — best geo-targeting) ---
+    if (rawResults.length === 0 && opts.serperKey) {
       try {
         rawResults = await searchSerper(query, opts.serperKey);
         usedEngine = 'serper';
         console.log(
-          `[FB-Events] Serper OK for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
+          `[FB-Events] Serper backup for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
         );
       } catch (err) {
         console.warn(
@@ -565,7 +627,7 @@ export async function scrapeFacebookEventsForMetro(
       }
     }
 
-    // --- Engine 2: Brave (backup — free fallback; ≤3 OR terms required) ---
+    // --- Engine 3: Brave (backup — free fallback; ≤3 OR terms required) ---
     if (rawResults.length === 0 && opts.braveKey) {
       try {
         rawResults = await searchBrave(query, opts.braveKey);
@@ -581,7 +643,7 @@ export async function scrapeFacebookEventsForMetro(
       }
     }
 
-    // --- Engine 3: ScaleSerp (second backup) ---
+    // --- Engine 4: ScaleSerp (second backup) ---
     if (rawResults.length === 0 && opts.scaleSerpKey) {
       try {
         rawResults = await searchScaleSerp(query, opts.scaleSerpKey);
