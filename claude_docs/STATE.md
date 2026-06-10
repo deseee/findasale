@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S940 — QA/DEV/OPS/MONITORING (2026-06-10). Parallel dispatch: monitoring harden + OPS verification + Chrome QA + 2 dev fixes. PUSH BLOCK PROVIDED. (1) MONITORING HARDEN ✅ — findasale-ci-sentry-health Step 1c patched: KNOWN_OK_DISABLED={'scrape-google-places','scrape-naa'}; disabled_manually workflows not in allowlist now alert HIGH. S939 silent-failure gap (pipeline-outreach-emails dark 5 days) is now closed. (2) FB EVENTS VERIFIED: first post-overhaul daily run — 20.4 min (above 19-min target), 167 Searlo OK + 45 Searlo 429 (17% fallback) + 90 Serper backups. AUCTION/FLEA events landing. No data loss (Serper catches 429s). Runtime concern: sub-query bursts hit Searlo 10/min cap in some metros — Patrick Searlo credit decision still open. (3) OUTREACH: outreach_sent_24h=0 — pipeline-outreach-emails was re-enabled S939 but GitHub cron hadn't re-registered yet (last fired June 5). Fix: trivial comment added to workflow YAML in push block to force cron scheduler re-registration. (4) MONITORING COVERAGE: 123 workflows, 2-page pagination ✅, 122 active + 1 known-OK disabled (scrape-google-places). (5) LICENSING SCRAPERS — 7 consistently-failing scrapers escalated LOW→MEDIUM: Indiana/Kentucky/Massachusetts/Maine/New Hampshire/Rhode Island/Nebraska (structurally broken — multiple consecutive failures). ~24 others succeeding. (6) PRINT KIT P1 FIXED: downloadAuthenticatedFile used localStorage.getItem('token') after httpOnly cookie migration → 401 on all PDF downloads. Fixed: credentials:'include' + Next.js /api proxy URL stripping absolute Railway origin. (7) NODE.JS CI FIX: scrape-ok-phase2.yml + scrape-wy-phase2.yml: github-script@v6→@v7. Rest of fleet already on @v4/v7. (8) CHROME QA — #27b watermark gating ✅ (PRO locked ss_340873qej, TEAMS unlocked ss_549588e2a); PDF download was P1 → fixed this session. #75 non-lapsed subscription display ✅ (TEAMS label correct ss_5075d8oqc); lapse P2 UNVERIFIED (Stripe webhook can't simulate in QA). #422 OAuth buttons on /login ✅ (ss_1808g433w) + Linked Accounts UI ✅ (ss_62243gw0x); 409 OAuthBridge UNVERIFIED. BQ: 0 (unchanged).**
+
 **S939b — DEV/OPS/MONITORING (2026-06-10). FB Events scraper complete overhaul + silent-failure monitoring buildout + outreach P0 caught & fixed. ALL CODE PUSHED + LIVE. (1) QA: SEO3 /estate-sales/denver-co Chrome ✅ (H1 "Estate Sales in Denver, CO", 50 listings, JSON-LD BreadcrumbList+ItemList, self-referencing canonical). #470 GA4 RUNTIME-VERIFIED ✅ (dataLayer captured shopper_favorite_added on a live favorite as seed shopper; full GA4 Real-Time still needs the GA4 dashboard). (2) FB EVENTS OVERHAUL — Searlo wired as PRIMARY engine (geo-accurate 90–100% in-metro, ~$0.30/1k, pay-as-you-go no-expiry) ahead of Serper→Brave→ScaleSerp. Brave TESTED + REJECTED as primary (geo-blind — identical national results for every metro). Researched DataForSEO/Searlo/others; Searlo chosen (cheapest geo-accurate; GitHub-Actions self-host ruled out — SearXNG geo-blind + Google blocks datacenter IPs). Query split into sale-type sub-queries (fixed flea/auction being crowded out of the single 9-term query's top-10), then trimmed 4→3 (consignment folded into estate) for a sub-19-min daily runtime. extractFbEventId fixed to parse the trailing 8+ digit id on slug-form FB URLs (was grabbing the street number → corrupted dedup). Flea classifier fixed (keys on snippet + sub-query typeHint, not just title). Metro list expanded 93→301, derived from GOOGLE_PLACES_METROS (single source of truth); daily sharding ~43 metros/day (full list cycled weekly); cron flipped weekly→daily. Searlo rate-limit handling added: throttle preset via SEARLO_RPM env (default 9; free-tier cap 10/min, learned live via 429), honors retryAfter + retries Searlo once before falling back to Serper. Added all_metros workflow_dispatch toggle for manual full backfill. Live-verified on real runs: Searlo geo-accurate, flea-market events now landing (were 0), runtime within budget. NOTE: current Searlo key is FREE tier (~3,000 credits/90 days ≈ ~17-day runway; 10/min cap) — buying a $3.99+ pack lifts the cap (then bump SEARLO_RPM repo Variable). (3) MONITORING BUILDOUT — audited all workflows, two shapes: 8 "inline" (print counts → log-grep-able) + ~11 "trigger" pipelines (curl→202 fire-and-forget, work runs server-side on Railway → need DB check). Built GET /api/internal/pipeline-health (per-source/per-pipeline freshness counts, gated by x-internal-secret / OUTREACH_SECRET) — DEPLOYED + live-tested. Extended the daily findasale-ci-sentry-health task: Step 1c all-workflow staleness sweep (silent-stop detector), Step 1d pipeline data-freshness (green-but-empty detector, calls the new endpoint), Step 1b FB Events deep health (runtime/429/Serper-bleed/credit-runway). Repo confirmed 123 total workflows (122 active, 1 intentionally disabled = scrape-google-places). (4) P0 CAUGHT + FIXED — `pipeline-outreach-emails` GitHub Actions workflow found MANUALLY DISABLED since June 5 → cold outreach fully DEAD ~5 days (0 sends since Jun 5 07:59 UTC, 42 leads stalled, no fallback path; its in-process cron was deliberately removed). Re-enabled the workflow (now active); confirmed OUTREACH_ENABLED=true on Railway. Resumes on the next 4-hour cron. This is the exact "green but silently stopped" failure the new monitoring now catches. Files (all pushed + live): search-facebook-events.ts, run-search-facebook-events.ts, scrape-facebook-events.yml, pipelineHealthController.ts, routes/internal.ts. BQ: 0 (outreach P0 opened AND resolved this session).**
 
 **S939 — OPS/DEV (2026-06-10). Daily Email & Deliverability Health Sweep → multi-fix deliverability hardening. ALL CODE PUSHED + LIVE.** Sweep mostly GREEN: finda.sale 200, backend root + /api/health 200, DNS SPF/DMARC/MX(improvmx + outreach→google)/DKIM(resend root, google outreach, litesrv→mlsend) all present, Sentry 0 email-send errors/24h, Gmail quota 6/1500, EmailSuppression flat (5 rows). (1) FALSE-ALARM P0 diagnosed + fixed — the "🔴 Gmail OAuth token BROKEN" alert was NOT real. Root cause: gmailHealthCron.ts (S887) probed the token with gmail.users.getProfile, which needs a READ scope; the prod token is send-only (gmail.send, correct least-privilege) → 403 "Insufficient Permission" every run = false "pipeline dead" alarm. Proven live: refresh token refreshes fine, granted scope = gmail.send, Gmail-rail smoke tests delivered same morning. Only became visible 06-10 because the Resend alert rail itself was just fixed S937. FIX (live): gmailHealthCron.ts now probes via oauth2Client.getAccessToken() (send-scope-only). Patrick does NOT need to re-auth — sending works. (2) @system.finda.sale placeholder leak fixed (bounce-flood root cause) — outreachEmailsCron.ts called gmail.users.messages.send DIRECTLY, bypassing the central emailService isEmailDomainBlocked guard, so it could send to scraper placeholder addrs (scraper+<slug>@system.finda.sale) → Google DSN flood that tripped the ImprovMX 500/day cap. FIX (live): added isEmailDomainBlocked guard before the atomic claim/quota/send (skips blocked/placeholder recipients; no SENT row, no quota burn). Complements S929/S937d (which guarded seeders + the chokepoint but not this cron's direct-send path). (3) Resend webhook (bounce/complaint/suppression ingestion) was broken FOUR ways — all fixed + LIVE e2e-verified: (a) RESEND_WEBHOOK_SECRET set in Railway; (b) handler checked email.complaint but Resend sends email.complained → fixed + added email.suppressed (hard block) + email.failed (log); (c) CSRF exemption matched /webhook but path is /resend-webhook → CSRF 403'd every POST, fixed in middleware/csrf.ts; (d) global express.json() ate the raw body before svix could verify → registered express.raw for /api/outreach/resend-webhook before the json parser in index.ts; (e) handler read payload.email/bounce_type but real Resend payloads nest under data.to[]/data.bounce.type → extraction now reads data.to (loops all recipients), data.bounce.type (Permanent→hard, Transient→soft), data.email_id, flat-shape fallback kept. LIVE E2E vs prod with real Resend-shaped payloads: valid signed → 200; tampered sig → 401; email.complained wrote a real EmailSuppression row; hard bounce set bounceHard; email.delivered reset the counter. Test rows cleaned up. (4) Soft-bounce policy upgraded to industry standard (was one-strike-blocks-marketing-forever). Added EmailSuppression.bounceSoftCount Int @default(0) (migration 20260610143000_add_bounce_soft_count, applied to Railway). Soft bounce → increment; email.delivered → resetSoftBounce (clears count + bounceSoft); BULK gate isSuppressed now blocks only at bounceSoftCount >= 5 (SOFT_BOUNCE_THRESHOLD); TRANSACTIONAL isHardSuppressed unchanged (hard-bounce + complaint only). email.suppressed now maps to a real hard block. DB: 0 soft-bounce-only suppressions exist → nothing to retry; default 0 means none affected. (5) Resend webhook endpoint created in the Resend dashboard (Patrick) subscribed to email.bounced/complained/suppressed/failed. Resolves S937 gmail-rail-audit follow-up #2 (bounce ingestion catching 0 rows — now explained + the Resend path actively ingests). Files (all live): outreachEmailsCron.ts, gmailHealthCron.ts, routes/outreach.ts, middleware/csrf.ts, index.ts, suppressionService.ts, schema.prisma, migration 20260610143000_add_bounce_soft_count. BQ: 0 (unchanged — no blockers added; optional Gmail outreach-token re-auth is non-blocking since sending works).**
@@ -140,6 +142,11 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| 27b | Watermark gating — PRO tier locked | Navigated `/organizer/settings` Appearance as Bob (user2, PRO). Saw "Teams plan required — Watermark removal is only available with the Teams plan." + locked Upgrade button. Screenshot: ss_340873qej | S940 |
+| 27b | Watermark gating — TEAMS tier unlocked | Navigated `/organizer/settings?tab=appearance` as Alice (user1, TEAMS). Scrolled to Watermark Settings. Saw live enabled checkbox "Remove FindA.Sale watermark from exports and shareable images." Screenshot: ss_549588e2a | S940 |
+| 75 | Subscription label — non-lapsed TEAMS correct | Navigated `/organizer/settings?tab=subscription` as Alice (TEAMS). Saw "TEAMS ($79/mo)" — correct label, no PRO mislabeling. Screenshot: ss_5075d8oqc | S940 |
+| 422 | OAuth buttons on /login | Navigated `https://finda.sale/login` as logged-out user. Saw Google and Facebook "Or continue with" buttons present. Screenshot: ss_1808g433w | S940 |
+| 422 | Linked Accounts UI in settings | Navigated `/organizer/settings?tab=profile` as Alice (user1, TEAMS). Scrolled to bottom. Saw "Linked Accounts" section with Google "Not connected" + "Link Google Account" button. Screenshot: ss_62243gw0x | S940 |
 | SEO3 | City landing page /estate-sales/denver-co | Navigated live finda.sale/estate-sales/denver-co — H1 "Estate Sales in Denver, CO", breadcrumb Home/Estate Sales/Denver, 50 listings render, category nav (Estate/Yard/Auctions/Flea/All), unique "About Estate Sales in Denver" block present. JS head read: canonical=https://finda.sale/estate-sales/denver-co (self-ref), unique meta desc, og:title set, JSON-LD types=[BreadcrumbList, ItemList]. NOTE: all 50 Denver listings show "Ended" (Apr–May, stale) — render is correct but data freshness gap flagged. | S939 |
 | #470 | GA4 conversion events (runtime) | Logged in as Leo Thomas (user5) on live sale cmpxl4ja2017rsot0aghr3fys. Installed dataLayer spy; probe confirmed spy positioned. Clicked favorite (ref-click via scroll_to) → window.__spy captured 'shopper_favorite_added' pushed to dataLayer (ss_83266d83n favorited state). Restored: favorite removed + RSVP back to going (toasts confirmed ss_6946du98g). RUNTIME-VERIFIED the gtag #470 event fires on real action; full GA4 Real-Time transmission still needs Patrick dashboard + consent grant. Other 3 events (sale_created/first_item_uploaded/checkout_initiated) confirmed present in code, not runtime-fired this session. | S939 |
 |---|---------|----------|---------|
@@ -155,36 +162,72 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **All S939 code is pushed and live** — both the email/deliverability hardening (gmailHealthCron false-alarm fix, outreachEmailsCron placeholder guard, Resend webhook 4 fixes, soft-bounce policy + migration applied) AND the FB Events overhaul + pipeline-health endpoint. Nothing pending.
-2. **Searlo credit runway / upgrade decision (the one real decision).** The FB Events scraper now runs on Searlo (geo-accurate). The current key is FREE tier: ~3,000 credits/90 days (~17-day runway) and a 10/min rate cap (forces the sub-19-min daily-runtime workaround). Buying a $3.99+ Searlo pack lifts the rate cap and removes the timeout pressure — then set the `SEARLO_RPM` repo Variable to the new limit. The monitor will flag rising Serper backups if the runway runs low.
+1. **Push block (S940 fixes — copy-paste into PowerShell from FindaSale root):**
+```
+git add packages/frontend/pages/organizer/print-kit/[saleId].tsx
+git add .github/workflows/scrape-ok-phase2.yml
+git add .github/workflows/scrape-wy-phase2.yml
+git add .github/workflows/pipeline-outreach-emails.yml
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: Print Kit PDF 401 (cookie auth), ci: github-script v7, ops: outreach cron re-register, docs: S940 wrap"
+.\push.ps1
+```
+   Note: `pipeline-outreach-emails.yml` has a trivial comment added (# cache-bust: 2026-06-10) to force GitHub's cron scheduler to re-register the workflow after S939's re-enable. Without a push to that file, the cron may not fire.
+
+2. **Searlo credit upgrade decision.** FB Events scraper ran 20.4 min (above 19-min target) + 45 Searlo 429 hits (17% fallback to Serper) on first post-overhaul daily run. A $3.99+ pack lifts the 10/min cap and removes timeout pressure — then set the `SEARLO_RPM` repo Variable to the new limit. The daily health monitor will flag if Serper backups keep growing.
+
 3. **#332 Shopify** — still deferred; needs you to connect a real custom-app store for live QA whenever you want to revisit.
 
-### S940 Recommendation
-BQ=0 (ceiling=8 — DEV available). The outreach P0 was opened AND resolved this session.
+### S941 Recommendation
+BQ=0 (ceiling=8 — DEV available).
+
+**Patrick push block first** — see "Actions Needed #1" above. Includes Print Kit fix, CI fix, pipeline-outreach-emails cron re-register, and wrap docs.
 
 **Dispatch-ready queue (in priority order):**
 
-1. **[HARDEN — top priority] Staleness sweep is blind to disabled workflows.** `Skill('findasale-ops')` → findasale-ci-sentry-health Step 1c does `if w['state'] != 'active': continue`, so a MANUALLY-DISABLED workflow is invisible to it — which is exactly how `pipeline-outreach-emails` silently died for 5 days (S939). Fix: update Step 1c to also report any `disabled_manually` workflow NOT in a known-OK allowlist (`scrape-google-places` = paid/intentional; `scrape-naa` = broken/intentional). Expected output: sweep surfaces unexpected disabled pipelines.
+1. **Records pass: apply S939 + S940 PCVs to roadmap.md.** `Skill('findasale-records')` → apply 2 S939 PCVs (SEO3 /estate-sales/denver-co ✅, #470 GA4 favorite RUNTIME-VERIFIED) + 5 S940 PCVs (#27b watermark gating ✅ both tiers, #75 TEAMS label ✅, #422 OAuth buttons + Linked Accounts ✅) to Chrome QA columns. Note: S940 PCVs should go into roadmap at START of next session (cross-session rule).
 
-2. **Verify FB Events first post-overhaul daily run** (~03:00 UTC daily). Confirm: runtime <19 min, Serper-backup count ~0 (Searlo carrying the load at 9/min), and FLEA_MARKET/AUCTION Sale rows actually landing by saleType. Check via /api/internal/pipeline-health (Facebook Events count) + the GH Actions run logs.
+2. **Verify outreach resumed post-push.** After Patrick pushes the pipeline-outreach-emails.yml touch, check `outreach_sent_24h > 0` via /api/internal/pipeline-health after the next cron fire (~4h cadence). Confirm 42 PENDING DirectoryClaimEmail leads begin draining.
 
-3. **Verify outreach resumed.** `pipeline-outreach-emails` re-enabled S939 — confirm `outreach_sent_24h > 0` via /api/internal/pipeline-health after the next 4-hour cron, and the 42 PENDING DirectoryClaimEmail leads drained.
+3. **7 structurally-broken licensing scrapers (escalated MEDIUM).** Indiana/Kentucky/Massachusetts/Maine/New Hampshire/Rhode Island/Nebraska — all consecutive failures, not flaky. Consider dispatching `findasale-dev` to triage root cause and fix or stub as intentional-known-broken.
 
-4. **Confirm monitoring coverage of all 123 workflows.** The staleness sweep paginates 2×100=200, so it covers all 123 — verify on the first monitor run. Triage the ~15 failing `*-licensing`/`*-phase2` scrapers (LOW, known-ongoing) — confirm the classification holds.
+4. **FB Events runtime optimization.** 20.4 min + 45 Searlo 429 per run. Options: (a) reduce burst in parallel queries (add inter-query delay), (b) Patrick buys Searlo credit pack ($3.99+ → bump SEARLO_RPM to new limit). The daily monitor will flag if Serper backups trend upward.
 
-5. **Searlo credit runway / upgrade decision** (also surfaced to Patrick above). Free tier ≈ 17-day runway + 10/min cap. The monitor flags rising Serper backups. Patrick decision: buy a $3.99+ Searlo pack → then set the `SEARLO_RPM` repo Variable to the new limit.
-
-**Remaining QA items (non-email, carry from prior sessions):**
-- **#470 GA4 Conversion Events** — favorite event RUNTIME-VERIFIED S939; other 3 events (sale_created/first_item_uploaded/checkout_initiated) CODE-ONLY, verify in GA4 Real-Time on actual action.
-- **SEO3 /estate-sales/denver-co** — live-verified S939; note: 50 Denver listings all show "Ended" — render correct, data-freshness gap flagged (the FB Events overhaul above should start refreshing this).
-- **#463 Claim Button Click Tracking** (CODE-ONLY S925) — Vercel Analytics Events tab requires dashboard access; not testable in QA env.
-- **#317 Geofence QR Scans** — inside/outside-radius tests UNVERIFIED (requires real GPS); graceful fallback ✅ S935.
-- **#27b PDF watermark footer** — Chrome QA still pending.
-- **#75 Tier lapse** — plan label shows PRO despite lapse (P2, partial S578).
-- **#422 OAuth account linking** — Chrome QA pending.
-- **#36 Weekly Treasure Digest** — not testable in QA env (email cron).
+**Remaining QA carry-forward:**
+- **#470 GA4** — other 3 events (sale_created/first_item_uploaded/checkout_initiated) CODE-ONLY; verify via GA4 Real-Time on actual actions
+- **#75 Tier lapse P2** — plan label shows PRO despite lapse; UNVERIFIED (Stripe webhook simulation needed)
+- **#422 OAuth 409 flow** — UNVERIFIED (real Google OAuth needed in test)
+- **#317 Geofence QR Scans** — real GPS needed
+- **#463 Claim Button Click Tracking** — Vercel Analytics Events tab needed
+- **#36 Weekly Treasure Digest** — email cron, can't QA in env
 
 ## Recent Sessions
+
+### S940 — 2026-06-10 | QA/DEV/OPS/MONITORING
+
+**Session type:** Parallel dispatch — monitoring harden + OPS verification + Chrome QA + 2 dev fixes. Push block provided to Patrick.
+
+**Work completed:**
+- **Monitoring harden ✅** — `findasale-ci-sentry-health` Step 1c updated via `mcp__scheduled-tasks__update_scheduled_task`. Added `KNOWN_OK_DISABLED={'scrape-google-places','scrape-naa'}`. Disabled_manually workflows not in allowlist now alert HIGH. The exact S939 failure mode (pipeline-outreach-emails dark 5 days, invisible to sweep) is now caught.
+- **FB Events post-overhaul verified** — First daily run: 20.4 min runtime (above 19-min target), 167 Searlo OK + 45 Searlo 429 hits (17% fallback) + 90 Serper backups. AUCTION and FLEA_MARKET sale types landing correctly. No data loss. Runtime concern: sub-query bursts hit Searlo 10/min cap in burst metros. Serper covering the gap.
+- **Outreach status** — outreach_sent_24h=0. Pipeline-outreach-emails was re-enabled S939 but GitHub's cron scheduler hadn't re-registered yet (last fired June 5). Fix: trivial comment added to workflow YAML in push block to force cron re-registration.
+- **Monitoring coverage confirmed** — 123 workflows, 2-page pagination sufficient, 122 active + 1 known-OK disabled (scrape-google-places).
+- **Licensing scrapers escalated** — 7 consistently-failing scrapers escalated LOW→MEDIUM (Indiana/Kentucky/Massachusetts/Maine/New Hampshire/Rhode Island/Nebraska). ~24 others succeeding consistently.
+- **Print Kit P1 fixed** — `downloadAuthenticatedFile` used `localStorage.getItem('token')` after the codebase migrated to httpOnly cookie JWT. Fixed: `credentials: 'include'` + strip absolute Railway origin for same-origin Next.js /api proxy routing. TS 0 errors.
+- **Node.js CI fix** — 2 workflow files (scrape-ok-phase2.yml + scrape-wy-phase2.yml): `actions/github-script@v6`→`@v7`. Rest of fleet already on @v4/@v7.
+- **Chrome QA — #27b** — Watermark gating ✅ (PRO locked ss_340873qej, TEAMS unlocked ss_549588e2a). PDF download was the P1 bug found → fixed this session.
+- **Chrome QA — #75** — Non-lapsed subscription display ✅ (TEAMS label correct ss_5075d8oqc). Lapse state P2 UNVERIFIED (Stripe webhook can't be simulated in QA).
+- **Chrome QA — #422** — OAuth buttons on /login ✅ (ss_1808g433w). Linked Accounts UI in settings ✅ (ss_62243gw0x). 409 OAuthBridge flow UNVERIFIED (real Google OAuth needed).
+
+**Files changed (pending Patrick push):**
+- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — Print Kit 401 fix
+- `.github/workflows/scrape-ok-phase2.yml` — github-script @v6→@v7
+- `.github/workflows/scrape-wy-phase2.yml` — github-script @v6→@v7
+- `.github/workflows/pipeline-outreach-emails.yml` — trivial comment (cron re-registration)
+- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md` — wrap docs
+
+**BQ delta:** 0 → 0 (unchanged)
 
 ### S939 — 2026-06-10 | OPS/DEV
 

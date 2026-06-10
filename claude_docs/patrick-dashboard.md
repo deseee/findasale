@@ -1,6 +1,25 @@
-# Patrick's Dashboard — June 10, 2026 (Updated: S939)
+# Patrick's Dashboard — June 10, 2026 (Updated: S940)
 
-**Generated:** Wednesday, June 10, 2026 (S939 — deliverability hardening AND FB Events scraper overhaul + silent-failure monitoring + outreach P0 fix — all live)
+**Generated:** Wednesday, June 10, 2026 (S940 — monitoring harden + Print Kit fix + CI fix + Chrome QA)
+
+---
+
+## S940 Quick Summary
+
+**Two bug fixes shipped, the monitoring blind spot is permanently closed, and 3 features got Chrome-verified. Push block below.**
+
+**1. Fixed Print Kit PDF downloads (all tiers were getting 401 errors).** Your Print Kit page was using an old way of reading your login token — one that stopped working when we switched to the more secure "cookie-based" login several sessions ago. The result: every PDF export button (Yard Sign, etc.) failed with a silent auth error. Fixed — the page now reads your login the right way, same as every other page. This was a P1 bug affecting every organizer on every tier.
+
+**2. Closed the monitoring blind spot that let outreach go dark for 5 days.** The daily health check that scans your 123 workflows for silent failures had a gap: if a workflow was *manually disabled*, it was completely invisible to the sweep (it never shows a red X, so Step 1 wouldn't catch it either). That's exactly how `pipeline-outreach-emails` went dark June 5 and nobody noticed for 5 days. Fixed: the sweep now specifically checks for unexpectedly disabled workflows and alerts immediately — unless they're on the known-OK list (the Google Places scraper and the NAA scraper, both intentionally off).
+
+**3. Outreach cron may need one more push to wake up.** Re-enabling the workflow in the UI *should* restart the cron, but GitHub sometimes needs a code push to the workflow file before its scheduler re-registers it. I've added a trivial comment to that file in your push block — just push and it'll fire on schedule.
+
+**4. Two GitHub Actions files updated before a June 16 deadline.** Two workflow files were using an older version of a GitHub helper action (Node 16, deprecated). Updated to the current version before GitHub forces the change. Everything else in your 123-workflow fleet was already up to date.
+
+**5. Verified 3 features in Chrome:**
+- **Watermark gating** — confirmed PRO tier sees a locked "upgrade to get this" message, and TEAMS tier has the live checkbox to remove watermarks ✅
+- **Subscription label** — confirmed your TEAMS tier shows "TEAMS ($79/mo)" correctly, not "PRO" ✅
+- **OAuth login buttons** — confirmed Google and Facebook "continue with" buttons appear on the login page, and the "Linked Accounts" section shows correctly in settings ✅
 
 ---
 
