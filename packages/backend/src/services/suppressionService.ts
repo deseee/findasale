@@ -1,6 +1,16 @@
 import { prisma } from '../lib/prisma';
 
 /**
+ * Consecutive soft-bounce threshold for the BULK (marketing) suppression gate.
+ * A soft bounce is transient (full mailbox, greylisting, temporary server
+ * error). Industry standard is to keep retrying until N consecutive soft
+ * bounces accumulate, then suppress. A successful delivery resets the counter.
+ * Only applies to the BULK gate — transactional (isHardSuppressed/checkMultipleHard)
+ * never blocks on soft bounces.
+ */
+const SOFT_BOUNCE_THRESHOLD = 5;
+
+/**
  * Suppression Service — manages email suppression list for outreach pipeline
  */
 
@@ -82,7 +92,7 @@ export const suppressionService = {
     if (suppression.bounceHard) return true;
     if (suppression.optedOut) return true;
     if (suppression.complaintEmail) return true;
-    if (suppression.bounceSoft) return true;
+    if (suppression.bounceSoftCount >= SOFT_BOUNCE_THRESHOLD) return true;
     return false;
   },
 
@@ -103,9 +113,15 @@ export const suppressionService = {
   ): Promise<void> {
     const emailLower = email.toLowerCase();
     const update: any = { suppressionReason: reason };
+    const create: any = {};
 
     if (reason === 'hard_bounce') update.bounceHard = true;
-    if (reason === 'soft_bounce') update.bounceSoft = new Date();
+    if (reason === 'soft_bounce') {
+      update.bounceSoft = new Date();
+      // Consecutive soft-bounce counter: increment on existing row, seed to 1 on create.
+      update.bounceSoftCount = { increment: 1 };
+      create.bounceSoftCount = 1;
+    }
     if (reason === 'complaint') update.complaintEmail = new Date();
     if (reason === 'opted_out') update.optedOut = new Date();
 
@@ -118,8 +134,21 @@ export const suppressionService = {
 
     await prisma.emailSuppression.upsert({
       where: { emailAddress: emailLower },
-      create: { emailAddress: emailLower, suppressedAt: new Date(), ...update },
+      create: { emailAddress: emailLower, suppressedAt: new Date(), ...update, ...create },
       update,
+    });
+  },
+
+  /**
+   * Reset the consecutive soft-bounce state for an address after a confirmed
+   * successful delivery. Clears bounceSoft + bounceSoftCount so the address
+   * starts fresh. No-op if no suppression row exists (updateMany never throws
+   * on zero matches).
+   */
+  async resetSoftBounce(email: string): Promise<void> {
+    await prisma.emailSuppression.updateMany({
+      where: { emailAddress: email.toLowerCase() },
+      data: { bounceSoft: null, bounceSoftCount: 0 },
     });
   },
 
@@ -162,7 +191,7 @@ export const suppressionService = {
     });
 
     for (const supp of suppressions) {
-      if (supp.bounceHard || supp.optedOut || supp.complaintEmail || supp.bounceSoft) {
+      if (supp.bounceHard || supp.optedOut || supp.complaintEmail || supp.bounceSoftCount >= SOFT_BOUNCE_THRESHOLD) {
         result.set(supp.emailAddress, true);
       }
     }

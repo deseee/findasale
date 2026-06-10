@@ -4794,10 +4794,11 @@ model EmailSuppression {
   id           String @id @default(cuid())
   emailAddress String @unique
 
-  bounceHard     Boolean   @default(false)
-  bounceSoft     DateTime?
-  complaintEmail DateTime?
-  optedOut       DateTime?
+  bounceHard      Boolean   @default(false)
+  bounceSoft      DateTime?
+  bounceSoftCount Int       @default(0)
+  complaintEmail  DateTime?
+  optedOut        DateTime?
 
   suppressionReason  String?
   suppressedAt       DateTime @default(now())
