@@ -4,7 +4,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { v4 as uuid } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
-import { suppressionService } from '../services/suppressionService';
+import { suppressionService, isEmailDomainBlocked } from '../services/suppressionService';
 import { batchSyncLeadTiersToMailerLite } from '../services/mailerliteService';
 import { checkAndIncrementQuota, getDailyEmailCount, QuotaExceededError } from '../lib/emailService';
 
@@ -591,6 +591,16 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
         // (e.g. find@outreach.finda.sale).
         const fromEmail = process.env.OUTREACH_FROM_EMAIL || 'outreach@finda.sale';
         const toEmail = process.env.OUTREACH_TEST_EMAIL || record.emailAddress;
+
+        // HARD GUARD (defense-in-depth): the central emailService choke-point is
+        // bypassed here because this cron calls gmail.users.messages.send directly.
+        // Skip placeholder/blocked recipients (e.g. scraper+<slug>@system.finda.sale)
+        // BEFORE the atomic claim and quota increment so no SENT row is written and
+        // quota is not consumed. Sending to these produced a Google DSN bounce flood.
+        if (isEmailDomainBlocked(toEmail)) {
+          console.warn('[OutreachCron] Skipped blocked/placeholder recipient:', toEmail);
+          continue;
+        }
         const listUnsubscribeHeader = `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${unsubscribeLink}>`;
 
         const rawMessage = buildRawEmail({
