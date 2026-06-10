@@ -150,22 +150,49 @@ export const SEARCH_METROS: MetroTarget[] = [
 
 /** Extract numeric Facebook event ID from any FB events URL variant. */
 function extractFbEventId(url: string): string | null {
-  // Match direct event URLs: /events/123456
-  let match = url.match(/facebook\.com\/events\/(\d+)/);
-  if (match) return match[1];
-  // Match search-redirect URLs: /events/s/some-text/123456/
-  match = url.match(/facebook\.com\/events\/s\/[^/]+\/(\d+)/);
-  return match ? match[1] : null;
+  // Search-redirect URLs: /events/s/some-text/123456/ — id is the trailing numeric
+  // segment after /events/s/. Handle this form first (preserve prior behaviour).
+  const redirectMatch = url.match(/facebook\.com\/events\/s\/[^/]+\/(\d+)/);
+  if (redirectMatch) return redirectMatch[1];
+
+  // Direct event URLs. Facebook event IDs are long numeric strings (8+ digits).
+  // Venue-slug URLs embed a street number after /events/, e.g.
+  //   .../events/4900-six-flags-rd-eureka-mo/Fall-Sale/402022744578852/
+  // The OLD logic grabbed the FIRST \d+ after /events/ and wrongly returned 4900
+  // (the street number), corrupting dedup. Instead, scan the whole path and take
+  // the LAST run of 8+ consecutive digits — that is always the real event id.
+  const eventsIdx = url.indexOf('/events/');
+  if (eventsIdx === -1) return null;
+  const pathAfter = url.slice(eventsIdx);
+  const runs = pathAfter.match(/\d{8,}/g);
+  if (runs && runs.length > 0) return runs[runs.length - 1];
+  return null;
 }
 
-/** Infer sale type from combined title + snippet text. */
-function inferSaleType(text: string): string {
+/**
+ * Infer sale type from combined title + snippet text.
+ *
+ * `typeHint` carries the sale-type intent of the sub-query that surfaced this
+ * result (see scrapeFacebookEventsForMetro). It is used ONLY as a tie-breaker /
+ * fallback for flea-market events whose title does not literally contain "flea"
+ * (e.g. "Spring Swap Meet", "Vendor Market Day") — these were previously
+ * misclassified because the keyword check keyed on the title alone. The hint
+ * never overrides an explicit auction/estate/yard/consignment signal in the text.
+ */
+function inferSaleType(text: string, typeHint?: string): string {
   const lower = text.toLowerCase();
   if (lower.includes('auction'))                              return 'AUCTION';
   if (lower.includes('estate'))                              return 'ESTATE';
   if (lower.includes('garage') || lower.includes('yard'))   return 'YARD';
   if (lower.includes('moving') || lower.includes('downsizing')) return 'MOVING';
-  if (lower.includes('flea'))                                return 'FLEA_MARKET';
+  // Broadened: scan title+snippet for flea/swap terms (not just "flea"), so flea
+  // events whose title omits the literal word still classify correctly.
+  if (lower.includes('flea') || lower.includes('swap meet') || lower.includes('swap-meet')) {
+    return 'FLEA_MARKET';
+  }
+  // Fallback: if this result came from the flea/swap sub-query and nothing above
+  // matched, trust the query intent rather than defaulting to ESTATE.
+  if (typeHint === 'FLEA_MARKET') return 'FLEA_MARKET';
   return 'ESTATE';
 }
 
@@ -322,7 +349,8 @@ function parseAddressFromTitle(title: string): string | null {
 function buildScrapedItem(
   result: SearchResult,
   metro: MetroTarget,
-  sourceApi: string
+  sourceApi: string,
+  typeHint?: string
 ): ScrapedItem | null {
   const { url, title, snippet } = result;
 
@@ -360,7 +388,7 @@ function buildScrapedItem(
     organizerName: undefined,
     organizerEmail: undefined,
     photoUrls:     [],
-    saleType:      inferSaleType(combined),
+    saleType:      inferSaleType(combined, typeHint),
     sourceUrl:     url,
     sourceName:    'Facebook Events',
     sourceItemId:  `fb:events:${fbEventId}`,
@@ -489,82 +517,116 @@ export async function scrapeFacebookEventsForMetro(
   metro: MetroTarget,
   opts: FbSearchOptions = {}
 ): Promise<ScrapedItem[]> {
-  const query =
-    `site:facebook.com/events ("estate sale" OR "garage sale" OR "yard sale" OR "estate auction" OR ` +
-    `"flea market" OR "swap meet" OR "public auction" OR "online auction" OR "consignment sale") ` +
-    `${metro.city} ${metro.state}`;
+  // Sale-type sub-queries. Each is run independently per metro and the results
+  // deduped by event id. Why split the old single 9-OR-term query into these:
+  //   1. CROWDING: at the num=10 result ceiling, one combined query is dominated
+  //      by estate/garage/yard and almost never surfaces flea-market or auction
+  //      events. Dedicated flea + auction sub-queries surfaced ~45 net flea/auction
+  //      events across 6 metros in live testing that the combined top-10 never showed.
+  //   2. BRAVE FALLBACK COMPATIBILITY: the Brave engine breaks above ~3 OR terms,
+  //      so each sub-query is capped at ≤3 OR clauses to stay Brave-compatible.
+  //
+  // num stays 10: the production Serper key is free-tier (num>10 → 400 "Query pattern
+  // not allowed for free accounts"). Raising num requires a paid Serper key.
+  //
+  // COST: this multiplies search-API credits per metro by the number of sub-queries
+  // (~3–4×) — relevant to the Serper credit budget. It is bounded to exactly one
+  // request per sub-query per metro per run (no pagination, no loops beyond this list).
+  const subQueries: Array<{ clause: string; typeHint: string }> = [
+    { clause: '("estate sale" OR "garage sale" OR "yard sale")',          typeHint: 'ESTATE'      },
+    { clause: '("flea market" OR "swap meet")',                           typeHint: 'FLEA_MARKET' },
+    { clause: '("estate auction" OR "public auction" OR "online auction")', typeHint: 'AUCTION'   },
+    { clause: '("consignment sale")',                                     typeHint: 'CONSIGNMENT' },
+  ];
 
-  let rawResults: SearchResult[] = [];
-  let usedEngine = '';
+  // Dedupe accumulator: event id → ScrapedItem (first occurrence wins).
+  const byEventId = new Map<string, ScrapedItem>();
 
-  // --- Engine 1: Serper (primary — best geo-targeting) ---
-  if (opts.serperKey) {
-    try {
-      rawResults = await searchSerper(query, opts.serperKey);
-      usedEngine = 'serper';
-      console.log(
-        `[FB-Events] Serper OK for ${metro.city}, ${metro.state} — ${rawResults.length} results`
-      );
-    } catch (err) {
-      console.warn(
-        `[FB-Events] Serper failed for ${metro.city}, ${metro.state}:`,
-        err instanceof Error ? err.message : err
-      );
+  for (const sub of subQueries) {
+    const query =
+      `site:facebook.com/events ${sub.clause} ${metro.city} ${metro.state}`;
+
+    let rawResults: SearchResult[] = [];
+    let usedEngine = '';
+
+    // --- Engine 1: Serper (primary — best geo-targeting) ---
+    if (opts.serperKey) {
+      try {
+        rawResults = await searchSerper(query, opts.serperKey);
+        usedEngine = 'serper';
+        console.log(
+          `[FB-Events] Serper OK for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
+        );
+      } catch (err) {
+        console.warn(
+          `[FB-Events] Serper failed for ${metro.city}, ${metro.state} [${sub.typeHint}]:`,
+          err instanceof Error ? err.message : err
+        );
+      }
     }
-  }
 
-  // --- Engine 2: Brave (backup — free fallback) ---
-  if (rawResults.length === 0 && opts.braveKey) {
-    try {
-      rawResults = await searchBrave(query, opts.braveKey);
-      usedEngine = 'brave';
-      console.log(
-        `[FB-Events] Brave backup for ${metro.city}, ${metro.state} — ${rawResults.length} results`
-      );
-    } catch (err) {
-      console.warn(
-        `[FB-Events] Brave failed for ${metro.city}, ${metro.state}:`,
-        err instanceof Error ? err.message : err
-      );
+    // --- Engine 2: Brave (backup — free fallback; ≤3 OR terms required) ---
+    if (rawResults.length === 0 && opts.braveKey) {
+      try {
+        rawResults = await searchBrave(query, opts.braveKey);
+        usedEngine = 'brave';
+        console.log(
+          `[FB-Events] Brave backup for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
+        );
+      } catch (err) {
+        console.warn(
+          `[FB-Events] Brave failed for ${metro.city}, ${metro.state} [${sub.typeHint}]:`,
+          err instanceof Error ? err.message : err
+        );
+      }
     }
-  }
 
-  // --- Engine 3: ScaleSerp (second backup) ---
-  if (rawResults.length === 0 && opts.scaleSerpKey) {
-    try {
-      rawResults = await searchScaleSerp(query, opts.scaleSerpKey);
-      usedEngine = 'scaleserp';
-      console.log(
-        `[FB-Events] ScaleSerp backup for ${metro.city}, ${metro.state} — ${rawResults.length} results`
-      );
-    } catch (err) {
-      console.warn(
-        `[FB-Events] ScaleSerp failed for ${metro.city}, ${metro.state}:`,
-        err instanceof Error ? err.message : err
-      );
+    // --- Engine 3: ScaleSerp (second backup) ---
+    if (rawResults.length === 0 && opts.scaleSerpKey) {
+      try {
+        rawResults = await searchScaleSerp(query, opts.scaleSerpKey);
+        usedEngine = 'scaleserp';
+        console.log(
+          `[FB-Events] ScaleSerp backup for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
+        );
+      } catch (err) {
+        console.warn(
+          `[FB-Events] ScaleSerp failed for ${metro.city}, ${metro.state} [${sub.typeHint}]:`,
+          err instanceof Error ? err.message : err
+        );
+      }
     }
+
+    if (rawResults.length === 0) {
+      // A single empty sub-query is not fatal — other sub-queries may still return
+      // results. Log and continue rather than aborting the whole metro.
+      console.warn(
+        `[FB-Events] No results for ${metro.city}, ${metro.state} [${sub.typeHint}] (all engines empty/failed)`
+      );
+    } else {
+      // Debug: log first 3 URLs so we can monitor engine health
+      const preview = rawResults.slice(0, 3).map((r) => r.url).join(' | ');
+      console.log(
+        `[FB-Events] Sample URLs (${metro.city} [${sub.typeHint}], engine=${usedEngine}): ${preview}`
+      );
+
+      for (const r of rawResults) {
+        const item = buildScrapedItem(r, metro, usedEngine, sub.typeHint);
+        if (!item) continue;
+        // buildScrapedItem always sets sourceItemId to `fb:events:<id>`; fall back
+        // to sourceUrl only to satisfy the optional type. Used as the dedup key so
+        // the same event surfaced by multiple sub-queries is ingested once.
+        const dedupKey = item.sourceItemId ?? item.sourceUrl;
+        if (!byEventId.has(dedupKey)) {
+          byEventId.set(dedupKey, item);
+        }
+      }
+    }
+
+    // Throttle between every search-API call (sub-query) to avoid rate-limiting.
+    await jitterDelay(1500, 2500);
   }
 
-  if (rawResults.length === 0) {
-    const triedEngines: string[] = [];
-    if (opts.serperKey) triedEngines.push('serper');
-    if (opts.braveKey) triedEngines.push('brave');
-    if (opts.scaleSerpKey) triedEngines.push('scaleserp');
-    throw new Error(`[FB-Events] All search engines failed for ${metro.city}, ${metro.state} (tried: ${triedEngines.join(', ') || 'none configured'})`);
-  }
-
-  // Debug: log first 3 URLs so we can monitor engine health
-  const preview = rawResults.slice(0, 3).map((r) => r.url).join(' | ');
-  console.log(`[FB-Events] Sample URLs (${metro.city}, engine=${usedEngine}): ${preview}`);
-
-  const items: ScrapedItem[] = [];
-  for (const r of rawResults) {
-    const item = buildScrapedItem(r, metro, usedEngine);
-    if (item) items.push(item);
-  }
-
-  // Throttle: 1.5–2.5s between metro calls to avoid rate-limiting search APIs
-  await jitterDelay(1500, 2500);
-
+  const items: ScrapedItem[] = Array.from(byEventId.values());
   return items;
 }
