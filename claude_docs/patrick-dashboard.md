@@ -1,6 +1,22 @@
-# Patrick's Dashboard — June 10, 2026 (Updated: S938)
+# Patrick's Dashboard — June 10, 2026 (Updated: S939)
 
-**Generated:** Wednesday, June 10, 2026 (S938 — email-rail rename + bounce-ingestion fix, both verified live)
+**Generated:** Wednesday, June 10, 2026 (S939 — daily deliverability sweep → email hardening: false-alarm cleared, placeholder-leak guard, Resend webhook fixed 4 ways, soft-bounce policy — all live)
+
+---
+
+## S939 Quick Summary
+
+**Your daily email health check turned into a deliverability cleanup. Good news first: the scary alarm was a false alarm. Everything below is shipped and live — nothing for you to do.**
+
+**1. The "Gmail is broken" alert was NOT real.** A monitoring job was testing your Gmail token the wrong way — it asked for permission to *read* your mailbox, but your token is correctly set up to only *send* (which is safer). So the test failed every time and screamed "pipeline dead," even though your email sending was working perfectly the whole time. I confirmed sends were going out fine that same morning, then fixed the health check to test the token the right way. You do **not** need to re-authorize anything.
+
+**2. Plugged the leak that was causing the bounce flood.** One of your outreach jobs was sending email through a side door that skipped your safety filter — which meant it could fire emails at your own internal "scraper" placeholder addresses, and every one of those bounced and piled up against your forwarding limit. I added the same filter to that job, so those junk addresses are now skipped before any send. This was the real source of the bounce noise.
+
+**3. Got your bounce/complaint tracking actually working — it was broken in four separate ways.** The Resend webhook (the thing that's supposed to automatically catch when someone's email bounces or they mark you as spam, and stop emailing them) had never functioned. It was missing a security key, was looking for the wrong event name, was being blocked by a security check, and was reading the data in the wrong shape. I fixed all four and then tested it end-to-end against the live system with real Resend data: a complaint correctly added the person to your do-not-email list, a hard bounce got blocked, and a successful delivery cleared the counter. It works now.
+
+**4. Made your bounce handling match how the big email providers do it.** Before, a single soft bounce (a temporary "try again later") would block someone from your marketing emails forever — far too aggressive. Now it follows the industry standard: it takes 5 consecutive soft bounces to suppress someone, and a single successful delivery resets the count to zero. Nobody in your current list is affected (you have zero soft-bounce-only suppressions). The database change is applied to Railway.
+
+**5. Created the webhook on the Resend side too** (subscribed to bounces, complaints, suppressions, and failures), so the loop is fully connected end to end.
 
 ---
 
@@ -80,7 +96,9 @@ BQ 5→1. Competitor email domain blocking shipped.
 | Email (competitor blocking) | ✅ estatesales.net/org blocked across all rails |
 | Email (suppression) | ✅ S937 — 16 senders honor suppression; finda.sale-zone block E2E-verified LIVE (quota 0→2→3, @system autoreply filtered) |
 | Email (Gmail rail) | ✅ S938 — SES_FROM_EMAIL renamed to GMAIL_FROM_EMAIL across 44 files, dead @send.finda.sale fallbacks retired; live smoke test passed (autoreply from find@outreach.finda.sale to inbox, thread 19eaf520). |
-| Email (bounce suppression #471) | ✅ S938 VERIFIED — cron moved to GitHub Actions + confirmed running; token = outreach@finda.sale full scope; 0 rows is correct (no real bounces exist yet). |
+| Email (bounce suppression #471) | ✅ S939 — Resend webhook now ingests bounces/complaints/suppressions, LIVE e2e-verified (was broken 4 ways: missing secret, wrong event name, CSRF block, raw-body, payload extraction — all fixed). Gmail-inbox cron also live (S938). |
+| Email (soft-bounce policy #474) | ✅ S939 — consecutive soft-bounce threshold (5, reset on delivery); email.suppressed hard-blocks; migration applied to Railway. Was one-strike-blocks-forever. |
+| Email (Gmail health alarm) | ✅ S939 — false-alarm "OAuth token BROKEN" fixed; cron now probes via getAccessToken (send-scope only). Token works; no re-auth needed. |
 | Outreach | ⏸ Paused (intentional, domain warming — 37 PENDING queue ready) |
 | Auction coverage | ✅ 97→748 listings (S934 reclassification of mislabeled data) |
 | RETAIL pages | ✅ Junk filter LIVE S935 (pending push) — ~3,288 clean rows, ~4,400 junk suppressed |
@@ -93,7 +111,7 @@ BQ 5→1. Competitor email domain blocking shipped.
 
 ## What You Need to Do
 
-**Nothing pending.** All S938 code is pushed and deployed; both fixes verified live. Earlier S934/S935/S937 pushes are all confirmed in git history.
+**Nothing pending.** All S939 deliverability fixes are pushed, deployed, and verified live; the Railway migration (soft-bounce count) is applied. RESEND_WEBHOOK_SECRET is set and the Resend dashboard webhook is created. Earlier S934–S938 pushes are all confirmed in git history.
 
 **Optional monitor (no action unless it recurs):** the bounce-notice flood into deseee@gmail.com (for `@system.finda.sale` scraper addresses) should stop now that the zone-block is deployed — those were all from sends before last night's deploy. If new `@system` bounce notices keep arriving after ~June 11, tell me and I'll find the leak.
 
