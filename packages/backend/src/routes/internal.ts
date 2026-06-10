@@ -19,6 +19,7 @@ import { runInternalJob } from '../controllers/internalJobRunnerController';
 import { runListingEnrichmentBatch } from '../controllers/internalListingEnrichmentController';
 import { getBatchOfUngeocodedSales, bulkUpdateGeocodedSales } from '../controllers/internalGeocodingController';
 import { runOrganizerContactBackfill } from '../controllers/internalOrganizerContactBackfillController';
+import { getPipelineHealth } from '../controllers/pipelineHealthController';
 import { runCategorySync } from '../jobs/categorySyncCron';
 import { runLeadScoringBackfill } from '../services/leadScoringService';
 import { runScrapeRun } from '../services/scraper/index';
@@ -977,6 +978,11 @@ router.post('/backfill-organizer-contacts', requireSecret, runOrganizerContactBa
 
 // POST /api/internal/jobs/run - single dispatcher for background pipeline jobs (GitHub Actions cron)
 router.post('/jobs/run', requireSecret, runInternalJob);
+
+// GET /api/internal/pipeline-health — per-pipeline data-freshness counts
+// so a daily monitor can catch green-but-empty runs (workflows that
+// succeed but wrote 0 rows). Read-only; gated by requireSecret.
+router.get('/pipeline-health', requireSecret, getPipelineHealth);
 
 // POST /api/internal/backfill-photos — #319/#325/#328: create Photo records for items missing them
 // Idempotent: skips URLs that already have a Photo record. Run once to fix existing items.
