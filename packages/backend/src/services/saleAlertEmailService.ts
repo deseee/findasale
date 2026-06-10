@@ -10,6 +10,7 @@
 
 import { buildEmail } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'alerts@send.finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -55,6 +56,10 @@ export interface HoldStatusShopperData {
  * Fire-and-forget: errors are logged but don't block
  */
 export const sendHoldPlacedAlert = async (data: HoldPlacedAlertData): Promise<void> => {
+  if (await suppressionService.isHardSuppressed(data.organizerEmail)) {
+    console.log('[saleAlert] Skipped suppressed recipient:', data.organizerEmail);
+    return;
+  }
   try {
     const saleLink = `${FRONTEND_URL}/organizer/holds`;
     const html = buildEmail({
@@ -86,6 +91,10 @@ export const sendHoldPlacedAlert = async (data: HoldPlacedAlertData): Promise<vo
  * Fire-and-forget: errors are logged but don't block
  */
 export const sendHoldPlacedToShopper = async (data: HoldPlacedShopperData): Promise<void> => {
+  if (await suppressionService.isHardSuppressed(data.shopperEmail)) {
+    console.log('[saleAlert] Skipped suppressed recipient:', data.shopperEmail);
+    return;
+  }
   try {
     const itemLink = `${FRONTEND_URL}/items/${data.itemId}`;
     const name = data.shopperName || 'there';
@@ -123,6 +132,10 @@ export const sendHoldPlacedToShopper = async (data: HoldPlacedShopperData): Prom
  * Fire-and-forget: errors are logged but don't block
  */
 export const sendItemSoldAlert = async (data: ItemSoldAlertData): Promise<void> => {
+  if (await suppressionService.isHardSuppressed(data.organizerEmail)) {
+    console.log('[saleAlert] Skipped suppressed recipient:', data.organizerEmail);
+    return;
+  }
   try {
     const saleLink = `${FRONTEND_URL}/organizer/insights`;
     const html = buildEmail({
@@ -153,6 +166,10 @@ export const sendItemSoldAlert = async (data: ItemSoldAlertData): Promise<void> 
  * Fire-and-forget: errors are logged but don't block
  */
 export const sendHoldStatusToShopper = async (data: HoldStatusShopperData): Promise<void> => {
+  if (await suppressionService.isHardSuppressed(data.shopperEmail)) {
+    console.log('[saleAlert] Skipped suppressed recipient:', data.shopperEmail);
+    return;
+  }
   try {
     const itemLink = `${FRONTEND_URL}/items/${data.itemId}`;
     const name = data.shopperName || 'there';

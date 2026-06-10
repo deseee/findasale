@@ -9,6 +9,7 @@
 import { prisma } from '../lib/prisma';
 import { sendPushNotification } from '../utils/webpush';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 
 interface SaleInfo {
@@ -113,8 +114,10 @@ export const checkFollowsForNewSale = async (sale: SaleInfo): Promise<void> => {
     });
 
     for (const follow of organizer.smartFollowers) {
+      const emailSuppressed = follow.user.email ? await suppressionService.isSuppressed(follow.user.email) : false;
+      if (emailSuppressed) console.log('[smartFollow] Skipped suppressed recipient:', follow.user.email);
       // Email notification
-      if (follow.notifyEmail && follow.user.email) {
+      if (follow.notifyEmail && follow.user.email && !emailSuppressed) {
         try {
           await emailService.emails.send({
             from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',

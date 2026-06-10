@@ -4,6 +4,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from '../services/xpService'; // Explorer's Guild XP awards
 import { emailService } from '../lib/emailService';
+import { suppressionService } from '../services/suppressionService';
 const stripe = () => getStripe();
 
 
@@ -157,7 +158,9 @@ export const endAuctions = async () => {
 
         // Email the winner with a payment link
         if (result.stripePaymentIntentId && result.highestBid.user?.email) {
-          if (true) {
+          if (await suppressionService.isHardSuppressed(result.highestBid.user.email)) {
+            console.log(`[auctionJob] Skipping hard-suppressed winner: ${result.highestBid.user.email}`);
+          } else {
             const fromEmail = process.env.SES_FROM_EMAIL || 'receipts@send.finda.sale';
             const payUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`;
             try {

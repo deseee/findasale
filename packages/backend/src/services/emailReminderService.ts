@@ -3,6 +3,7 @@ import twilio from 'twilio';
 import { sendPushNotification } from '../utils/webpush';
 import { buildSaleDayReminderEmail } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 
 // Lazy-loaded Twilio client
@@ -108,6 +109,10 @@ const getSMSTemplate = (reminder: ReminderSMS): string => {
 
 export const sendReminderEmail = async (reminder: ReminderEmail): Promise<void> => {
   try {
+    if (await suppressionService.isHardSuppressed(reminder.to)) {
+      console.log(`[emailReminder] Skipping hard-suppressed recipient: ${reminder.to}`);
+      return;
+    }
     const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
     const unsubToken = await generateUnsubscribeToken(reminder.userId, 'newSales');
     const { subject, html } = getEmailTemplate(reminder, unsubToken);

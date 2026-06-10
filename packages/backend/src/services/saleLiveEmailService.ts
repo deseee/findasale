@@ -16,6 +16,7 @@ import {
   EMAIL_TOKENS as T,
 } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'hello@send.finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -28,6 +29,10 @@ export async function sendSaleLiveEmail(
   organizer: { email: string; businessName?: string },
   sale:       { title: string; id: string }
 ): Promise<void> {
+  if (await suppressionService.isHardSuppressed(organizer.email)) {
+    console.log('[saleLive] Skipped suppressed recipient:', organizer.email);
+    return;
+  }
   const saleUrl     = `${FRONTEND_URL}/sales/${sale.id}`;
   const addItemsUrl = `${FRONTEND_URL}/organizer/sales/${sale.id}/items`;
 

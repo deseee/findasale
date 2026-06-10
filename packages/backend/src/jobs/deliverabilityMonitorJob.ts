@@ -50,7 +50,7 @@ export async function runDeliverabilityMonitor(): Promise<void> {
         try {
           const resend = new Resend(apiKey);
           await resend.emails.send({
-            from: process.env.SES_FROM_EMAIL || 'FindA.Sale Alerts <alerts@send.finda.sale>',
+            from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale Alerts <alerts@finda.sale>',
             to: process.env.QUOTA_ALERT_EMAIL || 'deseee@gmail.com',
             subject: `⚠️ High bounce rate: ${bouncePercentage}% (${recentSuppressions}/${recentSent})`,
             html: `

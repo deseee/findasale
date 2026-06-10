@@ -1,6 +1,20 @@
-# Patrick's Dashboard — June 9, 2026 (Updated: S936)
+# Patrick's Dashboard — June 9, 2026 (Updated: S937)
 
-**Generated:** Monday, June 9, 2026 (S936 — QA/RECORDS: SEO3 ✅, #472 ⚠️ spam, #164 ✅, email from-address bug fixes)
+**Generated:** Tuesday, June 9, 2026 (S937 — email/outreach/scraper system map + email suppression fix)
+
+---
+
+## S937 Quick Summary
+
+**I mapped how all your email, outreach, and scraping actually connect — and fixed a real deliverability gap. One thing needs your decision.**
+
+**The map.** There's a new reference doc (`claude_docs/feature-notes/email-outreach-scraper-system-map.md`) that lays out every email path: what sends what, when, from where, to whom. Short version — you run three email "rails": Gmail for bulk/lifecycle mail (capped at 1,500/day), Resend for critical transactional mail (receipts, password resets, payouts — survives a Gmail outage), and a separate Gmail path for cold outreach. Outreach and scraping run on GitHub's schedulers, not inside the app.
+
+**Correcting the record.** The session brief assumed "Gmail is suspended and outreach is dead." That's not true — the code and your last few sessions show Gmail is active and 658 outreach emails went out. So there was no emergency. I did not invent a crisis that wasn't there.
+
+**The fix I shipped (pending push).** 8 of your automated email types — sale alerts, price drops, wishlist matches, "your sale is live," sneak peeks, onboarding nudges, and the two new-sale follower notifications — were sending **without checking your suppression list.** That means people who bounced or unsubscribed were still getting mail, which is exactly what damages deliverability and risks getting the Google account suspended. I added the suppression check to all 8. Push-only change, no behavior change for valid recipients.
+
+**The one decision I need from you (G1).** All your *transactional* email (receipts, payouts, password resets, invoices) is sent FROM `@send.finda.sale` addresses through Resend. My records say that domain is set up for a different email service (SES), not Resend — which would make those critical emails fail authentication and land in spam. I couldn't verify this from code; it's a DNS question. **Please check the Resend dashboard: is `send.finda.sale` verified there?** If not, I'll move those addresses to your root `finda.sale` domain (which IS verified). I did NOT change this myself because it touches payments and login — those need your sign-off first.
 
 ---
 
@@ -48,10 +62,12 @@ BQ 5→1. Competitor email domain blocking shipped.
 
 | Area | Status |
 |------|--------|
-| BQ (Blocked Queue) | **1 item** — well below QA ceiling (8), DEV available |
+| BQ (Blocked Queue) | **2 items** (#332 Shopify, G1 transactional email P0) — below QA ceiling |
 | GA4 Analytics | ✅ LIVE (CSP fixed S926, conversion events added S928 — needs Chrome QA) |
-| Email (transactional) | ✅ On Resend rail (payouts, auth, receipts) |
+| Email (transactional) | 🟡 **P0 fix coded + Sentry alarm added** — Resend rail coerced to verified finda.sale; pending push + E2E verify. |
 | Email (competitor blocking) | ✅ estatesales.net/org blocked across all rails |
+| Email (suppression) | ✅ S937 — 16 email senders now honor suppression (bulk=full, transactional=hard-only); pending push |
+| Email (Gmail rail) | ✅ Audited S937 — proper + healthy (SPF/DKIM/DMARC aligned, sending, 0 errors). 4 P2 hygiene follow-ups queued. |
 | Outreach | ⏸ Paused (intentional, domain warming — 37 PENDING queue ready) |
 | Auction coverage | ✅ 97→748 listings (S934 reclassification of mislabeled data) |
 | RETAIL pages | ✅ Junk filter LIVE S935 (pending push) — ~3,288 clean rows, ~4,400 junk suppressed |
@@ -63,6 +79,17 @@ BQ 5→1. Competitor email domain blocking shipped.
 ---
 
 ## What You Need to Do
+
+**S937 push (this session — 8 suppression fixes + system map + wrap docs):**
+```powershell
+git add packages/backend/src/lib/transactionalEmailService.ts packages/backend/src/lib/emailService.ts packages/backend/src/jobs/gmailHealthCron.ts packages/backend/src/jobs/deliverabilityMonitorJob.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/suppressionService.ts packages/backend/src/services/saleAlertEmailService.ts packages/backend/src/services/priceDropService.ts packages/backend/src/services/wishlistMatchEmailService.ts packages/backend/src/services/saleLiveEmailService.ts packages/backend/src/services/presaleSneakPeekEmailService.ts packages/backend/src/services/onboardingEmailService.ts packages/backend/src/services/smartFollowService.ts packages/backend/src/services/followerNotificationService.ts packages/backend/src/services/emailReminderService.ts packages/backend/src/lib/notificationService.ts packages/backend/src/jobs/curatorEmailJob.ts packages/backend/src/jobs/monthlyTrendReportJob.ts packages/backend/src/jobs/abandonedCheckoutJob.ts packages/backend/src/jobs/auctionJob.ts packages/backend/src/controllers/buyingPoolController.ts packages/backend/src/controllers/reservationController.ts packages/backend/src/controllers/saleWaitlistController.ts packages/backend/src/controllers/waitlistController.ts packages/backend/src/routes/organizers.ts packages/backend/src/routes/contact.ts claude_docs/feature-notes/email-outreach-scraper-system-map.md claude_docs/feature-notes/email-audit-history-consolidated.md claude_docs/feature-notes/email-p0-e2e-test-plan.md claude_docs/feature-notes/gmail-rail-audit-s937.md claude_docs/feature-notes/email-p0-e2e-test-plan.md claude_docs/feature-notes/system-finda-sale-bounce-source-S937.md claude_docs/STATE.md claude_docs/patrick-dashboard.md
+git commit -m "S937: Resend P0 from-domain fix + Sentry send-rejection capture + suppression pass (16 senders) + email/gmail audits"
+.\push.ps1
+```
+
+**Then — G1 decision:** check the Resend dashboard — is `send.finda.sale` DKIM-verified? Tell me yes/no.
+
+**And — G4 (carry-over):** set `RESEND_FROM_EMAIL=noreply@finda.sale` on the Railway backend service.
 
 **S934 push (pending from last session):**
 ```powershell

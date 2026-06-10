@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { buildEmail, buildItemCard, buildSmartMatchEmail, ItemCardData } from './emailTemplateService';
 import { regionConfig } from '../config/regionConfig';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -168,6 +169,10 @@ interface WishlistMatchEmailData {
  */
 async function sendWishlistMatchEmail(data: WishlistMatchEmailData): Promise<void> {
   try {
+    if (await suppressionService.isSuppressed(data.userEmail)) {
+      console.log('[wishlistMatch] Skipped suppressed recipient:', data.userEmail);
+      return;
+    }
     const itemPrice = data.item.price ?? 0;
     const emailHtml = buildSmartMatchEmail({
       matchCategory: data.item.category || undefined,

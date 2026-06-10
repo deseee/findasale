@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from '../services/suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -85,6 +86,10 @@ export const notifySaleWaitlist = async (req: AuthRequest, res: Response) => {
     let notified = 0;
     for (const entry of waitlistEntries) {
       if (entry.user.email) {
+        if (await suppressionService.isHardSuppressed(entry.user.email)) {
+          console.log(`[saleWaitlist] Skipping hard-suppressed recipient: ${entry.user.email}`);
+          continue;
+        }
         try {
           await emailService.emails.send({
             from: FROM_EMAIL,

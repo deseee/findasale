@@ -17,6 +17,7 @@ import { prisma } from '../lib/prisma';
 import { emailService } from '../lib/emailService';
 import { buildMonthlyTrendReportEmail } from '../templates/monthlyTrendReport';
 import { bulkEmailEnabled } from '../utils/bulkEmailGate';
+import { suppressionService } from '../services/suppressionService';
 
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -224,6 +225,12 @@ export async function runMonthlyTrendReport(): Promise<void> {
       periodLabel,
       priorPeriodLabel,
     };
+
+    if (await suppressionService.isSuppressed(email)) {
+      skipCount++;
+      console.log(`[monthlyTrendReport] Skipping suppressed recipient: ${email}`);
+      continue;
+    }
 
     try {
       const { subject, html } = buildMonthlyTrendReportEmail(reportData, FRONTEND_URL);

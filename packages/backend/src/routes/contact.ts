@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from '../services/suppressionService';
 
 const router = Router();
 
@@ -52,7 +53,10 @@ router.post('/', contactLimiter, async (req: Request, res: Response) => {
         `,
       });
 
-      // Send confirmation to submitter
+      // Send confirmation to submitter (autoreply — transactional)
+      if (await suppressionService.isHardSuppressed(email)) {
+        console.log(`[contact] Skipping hard-suppressed autoreply recipient: ${email}`);
+      } else {
       await emailService.emails.send({
         from: fromEmail,
         to: email,
@@ -67,6 +71,7 @@ router.post('/', contactLimiter, async (req: Request, res: Response) => {
           </div>
         `,
       });
+      }
     } else {
       // Email not configured — log to console for dev
       console.log('[Contact Form]', { name, email, subject, message });

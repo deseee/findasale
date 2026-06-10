@@ -15,6 +15,7 @@ import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { awardOrganizerClaimedXp, getOrgReferralStats, generateReferralCode } from '../services/referralService';
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from '../services/suppressionService';
 
 const router = Router();
 
@@ -1967,7 +1968,12 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
 
     // Fire-and-forget — errors must never reach outer catch
     try {
-      emailService.emails.send({
+      (async () => {
+        if (await suppressionService.isSuppressed(claimantEmail)) {
+          console.log(`[organizers] Skipping suppressed claimant: ${claimantEmail}`);
+          return;
+        }
+        await emailService.emails.send({
         from: process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale',
         to: claimantEmail,
         subject: `Verify your claim request for ${foundOrganizer.businessName}`,
@@ -1984,6 +1990,7 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
       }).catch(emailError => {
         console.error('Failed to send claim verification email:', emailError);
       });
+      })();
     } catch (emailError) {
       console.error('Failed to send claim verification email (sync):', emailError);
     }

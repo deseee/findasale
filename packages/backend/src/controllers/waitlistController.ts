@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from '../services/suppressionService';
 
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -18,6 +19,11 @@ const sendWaitlistNotificationEmail = async (
   saleName: string
 ): Promise<void> => {
   
+
+  if (await suppressionService.isHardSuppressed(email)) {
+    console.log(`[Waitlist] Skipping hard-suppressed recipient: ${email}`);
+    return;
+  }
 
   const itemUrl = `${FRONTEND_URL}/items/${itemId}`;
   const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');

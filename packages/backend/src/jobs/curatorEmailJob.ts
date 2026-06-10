@@ -8,6 +8,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { regionConfig } from '../config/regionConfig';
 import { emailService } from '../lib/emailService';
 import { bulkEmailEnabled } from '../utils/bulkEmailGate';
+import { suppressionService } from '../services/suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL   = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -187,6 +188,11 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
       const recipientEmail = follow.user?.email;
       const recipientId = follow.userId;
       if (!recipientEmail) continue;
+
+      if (await suppressionService.isSuppressed(recipientEmail)) {
+        console.log(`[curatorEmailJob] Skipping suppressed recipient: ${recipientEmail}`);
+        continue;
+      }
 
       try {
         const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');

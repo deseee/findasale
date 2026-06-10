@@ -1,5 +1,7 @@
 import { google } from 'googleapis';
 import { Resend } from 'resend';
+import * as Sentry from '@sentry/node';
+import { isEmailDomainBlocked, suppressionService } from '../services/suppressionService';
 
 /**
  * Transactional email service — uses Gmail API (same auth as outreach).
@@ -48,7 +50,7 @@ async function sendQuotaAlert(count: number, limit: number, reason: 'warning' | 
       <p style="color:#666;font-size:12px">FindA.Sale · emailService.ts quota guard</p>
     `;
     await resend.emails.send({
-      from: process.env.SES_FROM_EMAIL || 'FindA.Sale Alerts <alerts@send.finda.sale>',
+      from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale Alerts <alerts@finda.sale>',
       to: ALERT_RECIPIENT,
       subject,
       html,
@@ -232,17 +234,51 @@ export const emailService = {
       listUnsubscribe?: string;
       jobName?: string;
     }) => {
-      const recipient = Array.isArray(options.to) ? options.to[0] : options.to;
+      // ---------------------------------------------------------------------
+      // Rail-level unsendable-domain guard (S937). Runs BEFORE quota + send so
+      // even callers that never check suppression cannot blast placeholder /
+      // blocked domains (e.g. scraper+slug@system.finda.sale → DSN bounce flood).
+      // ---------------------------------------------------------------------
+      const recipients = Array.isArray(options.to) ? options.to : [options.to];
+      const sendable = recipients.filter(r => r && !isEmailDomainBlocked(r));
+      if (sendable.length === 0) {
+        console.warn(
+          '[emailService] Skipped — all recipients unsendable (placeholder/blocked domain):',
+          recipients.join(', '),
+        );
+        return;
+      }
+      // Rail-level hard-suppression floor (S937) — drop hard-bounce/complaint
+      // recipients even when the caller never checked suppression. Opt-out and
+      // soft-bounce are NOT dropped here (marketing-only signals).
+      const hardMap = await suppressionService.checkMultipleHard(sendable);
+      const finalRecipients = sendable.filter(r => !hardMap.get(r.toLowerCase()));
+      if (finalRecipients.length === 0) {
+        console.warn('[emailService] Skipped — all recipients hard-suppressed (bounce/complaint):', sendable.join(', '));
+        return;
+      }
+      // Narrow to sendable addresses — junk dropped, real recipients still go.
+      const sendOptions = { ...options, to: finalRecipients };
+
+      const recipient = finalRecipients[0];
       // Quota check BEFORE send — throws QuotaExceededError if at hard limit
       await checkAndIncrementQuota(options.jobName ?? 'unknown', recipient);
 
       const gmail = createGmailClient();
-      const raw = buildRawMessage(options);
+      const raw = buildRawMessage(sendOptions);
 
-      return gmail.users.messages.send({
-        userId: 'me',
-        requestBody: { raw },
-      });
+      try {
+        return await gmail.users.messages.send({
+          userId: 'me',
+          requestBody: { raw },
+        });
+      } catch (err: any) {
+        Sentry.captureException(err, {
+          tags: { email_rail: 'gmail', kind: 'gmail_send_failed' },
+          extra: { from: options.from, subject: options.subject, jobName: options.jobName ?? 'unknown' },
+        });
+        throw err; // preserve existing caller behavior
+      }
     },
   },
 };

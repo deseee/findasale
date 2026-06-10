@@ -19,6 +19,7 @@ import {
   EMAIL_TOKENS as T,
 } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'hello@send.finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
@@ -31,6 +32,10 @@ export async function sendOnboardingEmail5a(organizer: {
   email: string;
   firstName?: string;
 }): Promise<void> {
+  if (await suppressionService.isSuppressed(organizer.email)) {
+    console.log('[onboarding] Skipped suppressed recipient:', organizer.email);
+    return;
+  }
   const firstName = organizer.firstName || 'there';
 
   const bullets = [
@@ -87,6 +92,10 @@ export async function sendOnboardingEmail5b(organizer: {
   email: string;
   firstName?: string;
 }): Promise<void> {
+  if (await suppressionService.isSuppressed(organizer.email)) {
+    console.log('[onboarding] Skipped suppressed recipient:', organizer.email);
+    return;
+  }
   const firstName = organizer.firstName || 'there';
 
   const steps = [
@@ -156,6 +165,10 @@ export async function sendOnboardingEmail5c(organizer: {
   email: string;
   firstName?: string;
 }): Promise<void> {
+  if (await suppressionService.isSuppressed(organizer.email)) {
+    console.log('[onboarding] Skipped suppressed recipient:', organizer.email);
+    return;
+  }
   const content = `
     ${buildStepIndicator(3)}
     ${buildHero({ title: `One last nudge &mdash; then we&rsquo;ll leave you alone.`, sub: `We know setting up something new takes time. No guilt. Whenever you&rsquo;re ready, we&rsquo;ll be here.` })}
