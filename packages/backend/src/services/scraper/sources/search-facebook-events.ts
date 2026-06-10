@@ -763,11 +763,19 @@ export async function scrapeFacebookEventsForMetro(
       }
     }
 
-    // Searlo pacing is now handled by the module-level searloThrottle (per-second
-    // + per-minute caps), so we no longer need a large fixed delay here — that
-    // would double-delay. Keep a small jitter purely to de-synchronize bursts and
-    // to lightly pace the non-Searlo fallback engines.
-    await jitterDelay(200, 500);
+    // Inter-sub-query spacing to prevent burst 429s on Searlo's sliding-window
+    // rate limiter. The module-level searloThrottleAcquire() enforces the per-minute
+    // cap, but 3 sub-queries fired in quick succession can all pass through in the
+    // same throttle "slot" and still hit Searlo's actual 10/min sliding window.
+    // At 9 RPM (cap=10) each slot is ~6.67s — spacing sub-queries by 6500ms ensures
+    // no two Searlo calls land within the same second-level bucket.
+    // Non-Searlo fallback engines only get the small jitter (they don't share the
+    // Searlo budget, so the large delay would just slow down fallback paths).
+    if (usedEngine === 'searlo') {
+      await sleep(6500);
+    } else {
+      await jitterDelay(200, 500);
+    }
   }
 
   const items: ScrapedItem[] = Array.from(byEventId.values());

@@ -31,6 +31,15 @@ function parseAddress(address: string): { city: string } {
  * Ingests records into Organizer table with RhodeIslandLicensing source attribution.
  */
 export async function runRhodeIslandLicensingScraper(): Promise<void> {
+  // INTENTIONAL_BREAK: Rhode Island repealed its general auctioneer license requirement in 2015.
+  // The DBR lookup page (dbr.ri.gov/about-dbr/lookup-license) is a Drupal CMS page —
+  // it does not contain ASP.NET ViewState and does not accept POST search submissions.
+  // Motor vehicle auctioneers may still be licensed municipally, but no statewide registry exists.
+  // Parked 2026-06 — exits cleanly with 0 records so GitHub Actions does not show failure.
+  console.log('[RhodeIslandLicensing] PARKED: RI repealed general auctioneer license (2015). DBR lookup page is not a searchable registry. Exiting cleanly.');
+  return;
+
+  // --- ORIGINAL CODE BELOW (unreachable, preserved for reference) ---
   const rateLimiter = defaultRateLimiter;
   const domain = new URL(SEARCH_URL).hostname;
   let totalRecords = 0;

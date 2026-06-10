@@ -372,6 +372,13 @@ function deduplicateRecords(
  * Throws if zero results (prevents silent failure).
  */
 export async function runMainePhase2Scraper(): Promise<void> {
+  // INTENTIONAL_BREAK: Maine PFR ALMS requires AJAX-driven cascading dropdowns
+  // that cannot be replicated without a headless browser from cloud runners.
+  // Parked 2026-06 until Puppeteer support or FOAA bulk export available.
+  console.log(`[${SOURCE_NAME}] PARKED: ALMS AJAX cascade unreachable from cloud IPs. Exiting cleanly.`);
+  return;
+
+  // --- ORIGINAL CODE BELOW (unreachable, preserved for reference) ---
   console.log(`[${SOURCE_NAME}] Starting auctioneer license scraper — Maine PFR`);
   console.log(`[${SOURCE_NAME}] Primary source: ${ALMS_SEARCH_URL}?board=${ALMS_BOARD_ID}`);
   console.log(`[${SOURCE_NAME}] Fallback sources: ${ALMS_PORTAL_URL}, ${OLMT_URL}`);
