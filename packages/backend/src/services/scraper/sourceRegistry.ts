@@ -18,6 +18,26 @@ import { scrapeStorageTreasures } from './sources/storageTreasuresScraper';
 import { scrapePropertyRoom } from './sources/propertyRoomScraper';
 import { scrapePublicSurplus } from './sources/publicSurplusScraper';
 import { scrapeMunicibid } from './sources/municibidScraper';
+import { scrapeGovPlanet } from './sources/govPlanetScraper';
+import { scrapeGovernmentLiquidation } from './sources/governmentLiquidationScraper';
+import { scrapeHandbid } from './sources/handbidScraper';
+import { scrapeAmericanFleaMarkets } from './sources/americanFleaMarketsScraper';
+import { scrapeFleaMarketDirectory } from './sources/fleaMarketDirectoryScraper';
+import { scrapeFleaMarketCom } from './sources/fleaMarketComScraper';
+import { scrapeFleaMarketsNet } from './sources/fleaMarketsNetScraper';
+import { scrapeFleaMarketRover } from './sources/fleaMarketRoverScraper';
+import { scrapeVendorsByState } from './sources/vendorsByStateScraper';
+import { scrapeNFMAMembers } from './sources/nfmaMembersScraper';
+import { scrapeBidSpotter } from './sources/bidSpotterScraper';
+import { scrapeBid13 } from './sources/bid13Scraper';
+import { scrapeIBidNow } from './sources/ibidNowScraper';
+import { scrapeLockerFox } from './sources/lockerFoxScraper';
+import { scrapeStorageUnitAuctionList } from './sources/storageUnitAuctionListScraper';
+import { scrapeStorageBattles } from './sources/storageBattlesScraper';
+import { scrapeInvaluable } from './sources/invaluableAuctionHouseScraper';
+import { runAuctionZipScraper } from './sources/auctionZipScraper';
+import { scrapeSellMyAntiques } from './sources/sellMyAntiquesScraper';
+import { scrapeProxibid } from './sources/proxibidScraper';
 
 export type SourceType = 'directory' | 'licensing' | 'crawl-queue' | 'places-api';
 export type SourceRunMode = 'metro-loop' | 'national-once';
@@ -136,7 +156,6 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
       };
     },
   },
-,
   {
     id: 'FleaMarketZone',
     displayName: 'FleaMarketZone.com',
@@ -193,7 +212,6 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     legalNote: 'ToS gray area (MySpace-era boilerplate, no explicit scraper ban). robots.txt open. robotsAllow:true confirmed in page appConfig. Parked on data access grounds, not legal.',
     run: scrapeStorageTreasures,
   },
-  ,
   {
     id: 'Municibid',
     displayName: 'Municibid',
@@ -215,6 +233,223 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     qualityTier: 'high',
     legalNote: 'ToS pages return HTTP 500 (server error, not a block). Privacy Policy has zero prohibition language. robots.txt: User-agent: * disallows only /images/. Verified 2026-06-10.',
     run: scrapePublicSurplus,
+  },
+  {
+    id: 'GovPlanet',
+    displayName: 'GovPlanet.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — ToS PROHIBITED: Section 1.3(c) of IronPlanet/GovPlanet Terms (April 17, 2026) explicitly bans automated access, scraping, and data collection tools.
+    prohibited: true,
+    qualityTier: 'high',
+    legalNote: 'ToS PROHIBITED — Section 1.3(c) bans "any robot, spider, scraper, data mining tool, data gathering or extraction tool, or any other automated means." Operated by IronPlanet, Inc. (Ritchie Bros. / RB Global). /sellers page is static HTML with ~45 named gov agencies. Unpark requires data partnership with Ritchie Bros. Verified 2026-06-10.',
+    run: scrapeGovPlanet,
+  },
+  {
+    id: 'GovernmentLiquidation',
+    displayName: 'GovernmentLiquidation.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — ToS PROHIBITED (Liquidity Services, same parent as GovDeals) + Cloudflare bot protection blocks all programmatic access.
+    prohibited: true,
+    qualityTier: 'high',
+    legalNote: 'ToS PROHIBITED — Operated by Liquidity Services, Inc. (same parent as GovDeals). Same explicit anti-scraping ToS as GovDeals. Cloudflare blocks all automated fetches. Primary US DoD surplus platform (DLA Disposition Services). Unpark requires data partnership with Liquidity Services. Verified 2026-06-10.',
+    run: scrapeGovernmentLiquidation,
+  },
+  {
+    id: 'Handbid',
+    displayName: 'Handbid.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — Wrong category: 789 orgs are nonprofits/charities/PTAs, not gov surplus or secondary sale organizers.
+    qualityTier: 'low',
+    legalNote: 'ToS CLEAR — zero anti-scraping language. robots.txt fully open (Allow: / for all agents). events.handbid.com/organizations is static HTML, 789 orgs across 33 pages. Parked on CATEGORY grounds only: orgs are nonprofits/school PTAs/charities. Unpark if FindA.Sale expands to fundraising auction events. Verified 2026-06-10.',
+    run: scrapeHandbid,
+  },
+  // ─── Flea Market Directory Sources (all PARKED — 2026-06-10 investigation) ────
+  {
+    id: 'AmericanFleaMarkets',
+    displayName: 'AmericanFleaMarkets.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — domain returns empty HTTP response, appears dead/inactive.
+    qualityTier: 'medium',
+    legalNote: 'robots.txt: empty (no response). ToS: inaccessible. Domain dead — empty HTTP response on all paths. Verified 2026-06-10.',
+    run: scrapeAmericanFleaMarkets,
+  },
+  {
+    id: 'FleaMarketDirectory',
+    displayName: 'FleaMarketDirectory.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — domain redirects to USWantads.com (unrelated general classifieds).
+    qualityTier: 'low',
+    legalNote: 'Domain permanently redirects to uswantads.com (general classifieds, not a flea market directory). No venue data at destination. Verified 2026-06-10.',
+    run: scrapeFleaMarketDirectory,
+  },
+  {
+    id: 'FleaMarketCom',
+    displayName: 'FleaMarket.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — domain returns empty HTTP response, appears dead/inactive.
+    qualityTier: 'medium',
+    legalNote: 'robots.txt: empty (no response). ToS: inaccessible. Domain dead — empty HTTP response on all paths. Verified 2026-06-10.',
+    run: scrapeFleaMarketCom,
+  },
+  {
+    id: 'FleaMarketsNet',
+    displayName: 'FleaMarkets.net',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — domain is for sale on GoDaddy Afternic, no directory content.
+    qualityTier: 'low',
+    legalNote: 'Domain is a parked/for-sale listing on GoDaddy Afternic. No flea market directory content. Verified 2026-06-10.',
+    run: scrapeFleaMarketsNet,
+  },
+  {
+    id: 'FleaMarketRover',
+    displayName: 'FleaMarketRover.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — domain returns empty HTTP response, appears dead/inactive.
+    qualityTier: 'medium',
+    legalNote: 'robots.txt: empty (no response). ToS: inaccessible. Domain dead — empty HTTP response on all paths. Verified 2026-06-10.',
+    run: scrapeFleaMarketRover,
+  },
+  {
+    id: 'VendorsByState',
+    displayName: 'VendorsByStateUSA.com / VendorsByState.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — both domain variants return empty HTTP response.
+    qualityTier: 'medium',
+    legalNote: 'Both vendorsbystateusa.com and vendorsbystate.com return empty HTTP responses. Domains appear dead or expired. Verified 2026-06-10.',
+    run: scrapeVendorsByState,
+  },
+  {
+    id: 'NFMAMembers',
+    displayName: 'National Flea Market Association (fleamarkets.org)',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — Wix.com JS-rendered member list; no static data in HTML.
+    qualityTier: 'high',
+    legalNote: 'robots.txt: OPEN (Allow: /). Privacy Policy: no anti-scraping language. Member list at /nfma-member-markets is Wix JS-rendered — static HTML returns shell with zero records. Unpark: Playwright or Wix Data API. Note: nfma.org is the wrong org (Municipal Analysts). Verified 2026-06-10.',
+    run: scrapeNFMAMembers,
+  },
+  // ─── Storage Auction Sources (2026-06-10 investigation) ───────────────────
+  {
+    id: 'BidSpotter',
+    displayName: 'BidSpotter.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    // No cronSchedule — triggered via GitHub Actions (scrape-bidspotter.yml).
+    qualityTier: 'high',
+    legalNote: 'ToS CLEAR — /en-us/about-us/legal/website-terms-and-conditions: standard copyright, no anti-scraping clause. robots.txt disallows only /Account*, /admin, /api, /Search*. Auctioneers directory at /en-us/auctioneers serves static HTML via XHR header (~35 US auction houses). Proxibid subsidiary. Verified 2026-06-10.',
+    run: scrapeBidSpotter,
+  },
+  {
+    id: 'Bid13',
+    displayName: 'Bid13.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — Drupal 7 + bid13_search AJAX + Socket.io bid13_live_update. No static listings in HTML.
+    qualityTier: 'medium',
+    legalNote: 'ToS CLEAR — no anti-scraping language. robots.txt open (disallows only CMS paths). Parked on technical grounds: all listing data loaded via Drupal AJAX + Socket.io. bid13_autoban uses evercookie bot fingerprinting. Unpark: Playwright or Drupal AJAX endpoint discovery. Verified 2026-06-10.',
+    run: scrapeBid13,
+  },
+  {
+    id: 'IBidNow',
+    displayName: 'iBidNow.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — GoDaddy Afternic parked/for-sale domain. Not a live product.
+    qualityTier: 'low',
+    legalNote: 'Not a live storage auction platform. All URLs redirect to GoDaddy Afternic domain sale page (/lander). robots.txt served from Afternic infrastructure. Verified 2026-06-10.',
+    run: scrapeIBidNow,
+  },
+  {
+    id: 'LockerFox',
+    displayName: 'LockerFox.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PROHIBITED — ToS §1.4.2 bans robots/spiders; §1.4.6 bans commercial data harvesting without written permission.
+    prohibited: true,
+    qualityTier: 'high',
+    legalNote: 'ToS PROHIBITED — §1.4.2: bans robots/spiders without express written permission. §1.4.6: bans commercial content harvesting without written permission. robots.txt also disallows /auctions/. Site has static HTML listings (technically feasible) — legal prohibition is the only blocker. Unpark requires written data partnership agreement with Lockerfox, LLC (Cornelius, NC). Verified 2026-06-10.',
+    run: scrapeLockerFox,
+  },
+  {
+    id: 'StorageUnitAuctionList',
+    displayName: 'StorageUnitAuctionList.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — paid subscriber-only database. All listings behind paywall + Cloudflare blocks VM IPs.
+    qualityTier: 'high',
+    legalNote: 'Paid subscriber paywall — 51,000+ facilities, 10,000+ auctions/month, all 50 states. Data is proprietary (staff-verified, not public scrape). Cloudflare blocks VM/server IPs. Unpark: data licensing agreement OR authenticated session scraping (requires paid subscription). Verified 2026-06-10.',
+    run: scrapeStorageUnitAuctionList,
+  },
+  {
+    id: 'StorageBattles',
+    displayName: 'StorageBattles.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — StorageTreasures white-label alias. Same Next.js SPA, same API backend.
+    qualityTier: 'low',
+    legalNote: 'Confirmed StorageTreasures alias: __NEXT_DATA__ appConfig.appUrl = storagetreasures.com, apiEndPoint = api.st-prd-1.aws.storagetreasures.com. Same constraints as StorageTreasures (parked). Redundant — any StorageTreasures unpark covers this domain. Verified 2026-06-10.',
+    run: scrapeStorageBattles,
+  },
+  // ─── Auction House / Estate Sale / Antique Dealer Directories (2026-06-10) ───
+  {
+    id: 'Invaluable',
+    displayName: 'Invaluable.com (Auction House Directory)',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    qualityTier: 'high',
+    legalNote: 'ToS GRAY — ToS page is JS-rendered (CSR-only), not accessible via static fetch. robots.txt blank (no Disallow rules). Public unauthenticated JSON REST API at /auction-houses endpoint linked from main nav. 8,158 US auction houses with name, city, state, phone, email, website. Same GRAY classification as StorageAuctions.com. Verified 2026-06-10.',
+    run: scrapeInvaluable,
+  },
+  {
+    id: 'AuctionZip',
+    displayName: 'AuctionZip.com (Auctioneer Directory)',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    qualityTier: 'high',
+    legalNote: "ToS CLEAR — ToS Section 4 states content is public information usable for personal and commercial use. robots.txt disallows only /cgi-bin/*, /search, /my-account, /login, /bidNow — /Auctioneer-Directory/ explicitly allowed. Static HTML A–Z letter pages, ~25,000 US auction houses. Verified 2026-06-10.",
+    run: async (_metro: string, _organizerId: string, _rateLimiter: RateLimiter): Promise<ScrapeStats> => {
+      await runAuctionZipScraper();
+      return {
+        itemsFound: 0,
+        itemsCreated: 0,
+        itemsUpdated: 0,
+        itemsSkipped: 0,
+        itemsFailed: 0,
+      };
+    },
+  },
+  {
+    id: 'SellMyAntiques',
+    displayName: 'SellMyAntiques.com (Antique Dealer Directory)',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false,
+    qualityTier: 'medium',
+    legalNote: 'ToS CLEAR — no anti-scraping clause. robots.txt blank. Site is fully JS-rendered (Next.js SPA); /dealers returns empty shell via static fetch. Unpark: Playwright headless or REST API discovery via DevTools. Strong Phase 2 candidate for ANTIQUE_DEALER ingestion. Verified 2026-06-10.',
+    run: scrapeSellMyAntiques,
+  },
+  {
+    id: 'Proxibid',
+    displayName: 'Proxibid.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false,
+    prohibited: true,
+    qualityTier: 'high',
+    legalNote: 'ToS PROHIBITED — Proxibid Unified User Agreement (PDF /docs/ProxibidUUA.pdf): §10(h) bans scraping/spidering/crawling; §11.1(v) explicit prohibited use; §12 IP protection. ~30,000 auction houses on platform. Parent: Auction Technology Group (ATG). Note: BidSpotter (also ATG) has separate CLEAR ToS. Unpark requires written data partnership with ATG. Verified 2026-06-10.',
+    run: scrapeProxibid,
   },
 ];
 
