@@ -62,12 +62,12 @@ BQ 5→1. Competitor email domain blocking shipped.
 
 | Area | Status |
 |------|--------|
-| BQ (Blocked Queue) | **2 items** (#332 Shopify, G1 transactional email P0) — below QA ceiling |
+| BQ (Blocked Queue) | **1 item** (#332 Shopify) — G1 transactional P0 RESOLVED + E2E-verified S937 |
 | GA4 Analytics | ✅ LIVE (CSP fixed S926, conversion events added S928 — needs Chrome QA) |
-| Email (transactional) | 🟡 **P0 fix coded + Sentry alarm added** — Resend rail coerced to verified finda.sale; pending push + E2E verify. |
+| Email (transactional) | ✅ **P0 RESOLVED + E2E-verified S937** — registration verification email delivered from noreply@finda.sale to inbox (Gmail thread 19eaf109a9b88af7). Resend rail healthy. |
 | Email (competitor blocking) | ✅ estatesales.net/org blocked across all rails |
-| Email (suppression) | ✅ S937 — 16 email senders now honor suppression (bulk=full, transactional=hard-only); pending push |
-| Email (Gmail rail) | ✅ Audited S937 — proper + healthy (SPF/DKIM/DMARC aligned, sending, 0 errors). 4 P2 hygiene follow-ups queued. |
+| Email (suppression) | ✅ S937 — 16 senders honor suppression; finda.sale-zone block E2E-verified LIVE (quota 0→2→3, @system autoreply filtered) |
+| Email (Gmail rail) | ✅ Audited + E2E-verified S937 — delivers from find@outreach.finda.sale to inbox (thread 19eaf18a); send-as alias confirmed live. 4 P2 hygiene follow-ups queued. |
 | Outreach | ⏸ Paused (intentional, domain warming — 37 PENDING queue ready) |
 | Auction coverage | ✅ 97→748 listings (S934 reclassification of mislabeled data) |
 | RETAIL pages | ✅ Junk filter LIVE S935 (pending push) — ~3,288 clean rows, ~4,400 junk suppressed |

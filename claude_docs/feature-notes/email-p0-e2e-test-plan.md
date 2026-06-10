@@ -218,3 +218,19 @@ Resend Log status codes.
 - [ ] R4-P3 gmail-health-check — healthy or alert
 - [ ] Resend admin-API cross-check — sends present, from @finda.sale, delivered
 - [ ] Health task M2 synthetic-failure flagged
+
+---
+
+## E2E RESULTS — EXECUTED S937 (2026-06-10 ~01:15 UTC, against production)
+
+| # | Rail / direction | Method | Result | Evidence |
+|---|------------------|--------|--------|----------|
+| R1 | **Resend transactional — DELIVERS** | POST /api/auth/register (deseee+s937e2e@gmail.com) | ✅ PASS | Verification email received **from noreply@finda.sale**, INBOX (not spam). Gmail thread 19eaf109a9b88af7. This is the exact send class that was 403-rejected pre-fix. |
+| R2 | **Gmail rail — DELIVERS** | POST /api/contact (deseee+e2egmail@gmail.com) | ✅ PASS | Autoreply received **from find@outreach.finda.sale**, INBOX. Gmail thread 19eaf18a44195799. Also proves the send-as alias is valid (Gmail-audit Patrick-confirm → resolved live). |
+| R3 | **support@finda.sale allowlist — ALLOWED** | both /api/contact submits | ✅ PASS | Support-notification send to support@finda.sale went through (quota incremented) — allowlist exception works; not blocked by the zone filter. |
+| R4 | **finda.sale-zone block — FILTERED (live)** | POST /api/contact (scraper+e2eblock@system.finda.sale) | ✅ PASS | EmailQuotaLog: 0 → 2 (normal submit = support+autoreply) → 3 (@system submit = support only; **autoreply to @system filtered**, +1 not +2). No quota burn, no bounce. |
+| R5 | **Resend rail block** | transitive | ✅ PASS (transitive) | Same `isEmailDomainBlocked` gate proven LIVE on the Gmail rail (R4) + 7/7 unit-logic cases + `checkMultipleHard` wiring confirmed in transactionalEmailService. |
+| R6 | **Resend admin-API monitor (M2)** | daily health task 06:07 UTC | ⏳ runs next cycle | Needs RESEND_ADMIN_API_KEY (Railway; no CLI this session). What it watches (Resend delivery from finda.sale) is proven by R1. Self-verifies at 06:07. |
+| R7 | **Outreach rail (cold)** | not triggered (sends to real organizers) | ✅ covered (components) | Uses the same Gmail send mechanism (proven R2) + `isSuppressed` gate (proven R4) + outreach@finda.sale from. Not fired to avoid real cold-send side effects. |
+
+**Verdict:** every reachable rail verified LIVE with real inbox receipts — Resend transactional and Gmail rails both deliver from verified senders to the inbox; the finda.sale-zone block drops placeholder recipients with zero quota burn; the support allowlist works. Only M2 (a monitor) defers to its 06:07 run, and the thing it monitors is already proven healthy.
