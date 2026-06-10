@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { suppressionService } from '../services/suppressionService';
+import * as Sentry from '@sentry/node';
 
 /**
  * Transactional email service — uses Resend API (NOT Gmail).
@@ -19,6 +20,24 @@ import { suppressionService } from '../services/suppressionService';
  */
 
 const FROM_DEFAULT = process.env.RESEND_FROM_EMAIL ?? 'FindA.Sale <noreply@finda.sale>';
+
+// Resend only has the root domain `finda.sale` verified. Any from-address whose
+// domain is not exactly `finda.sale` (e.g. outreach.finda.sale, send.finda.sale)
+// is 403-rejected by Resend. Coerce such addresses to the verified default.
+const VERIFIED_RESEND_DOMAIN = 'finda.sale';
+function domainOf(addr: string): string | null {
+  const m = addr.match(/@([A-Za-z0-9.-]+)/);
+  return m ? m[1].toLowerCase() : null;
+}
+function resolveFrom(from?: string): string {
+  const candidate = from ?? FROM_DEFAULT;
+  if (from && domainOf(from) && domainOf(from) !== VERIFIED_RESEND_DOMAIN) {
+    console.warn(
+      `[transactionalEmailService] Coerced unverified from '${from}' → FROM_DEFAULT`,
+    );
+  }
+  return domainOf(candidate) === VERIFIED_RESEND_DOMAIN ? candidate : FROM_DEFAULT;
+}
 
 export const transactionalEmailService = {
   emails: {
@@ -42,11 +61,12 @@ export const transactionalEmailService = {
         return;
       }
 
-      // Suppression + domain-block check — applies before every Resend call.
-      // Covers both individual addresses in EmailSuppression table and all
-      // addresses belonging to blocked competitor domains (e.g. estatesales.net).
+      // Rail-level hard-suppression + domain-block check — applies before every
+      // Resend call. Transactional rail blocks hard-bounce/complaint/blocked-domain
+      // only — opted-out users still receive receipts/resets/payouts they're
+      // entitled to (opt-out and soft-bounce are marketing-only signals).
       const recipients = Array.isArray(options.to) ? options.to : [options.to];
-      const suppressedMap = await suppressionService.checkMultiple(recipients);
+      const suppressedMap = await suppressionService.checkMultipleHard(recipients);
       const blockedRecipients = recipients.filter(r => suppressedMap.get(r.toLowerCase()));
       if (blockedRecipients.length > 0) {
         console.warn(
@@ -60,7 +80,7 @@ export const transactionalEmailService = {
       const resend = new Resend(process.env.RESEND_API_KEY);
 
       const { error } = await resend.emails.send({
-        from: options.from ?? FROM_DEFAULT,
+        from: resolveFrom(options.from),
         to: recipients,
         subject: options.subject,
         html: options.html,
@@ -69,6 +89,10 @@ export const transactionalEmailService = {
 
       if (error) {
         console.error('[transactionalEmailService] Resend error:', error);
+        Sentry.captureException(new Error(`Resend send rejected: ${error.message}`), {
+          tags: { email_rail: 'resend', kind: 'resend_send_rejected' },
+          extra: { from: options.from ?? '(default)', subject: options.subject, toCount: recipients.length },
+        });
         throw new Error(`Resend send failed: ${error.message}`);
       }
     },

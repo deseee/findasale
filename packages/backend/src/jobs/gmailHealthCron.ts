@@ -28,7 +28,7 @@ async function sendResendAlert(subject: string, html: string): Promise<void> {
   try {
     const resend = new Resend(apiKey);
     await resend.emails.send({
-      from: process.env.SES_FROM_EMAIL || 'FindA.Sale Alerts <alerts@send.finda.sale>',
+      from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale Alerts <alerts@finda.sale>',
       to: ALERT_RECIPIENT,
       subject,
       html,

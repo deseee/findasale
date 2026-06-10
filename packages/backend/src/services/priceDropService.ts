@@ -4,6 +4,7 @@
 import { prisma } from '../lib/prisma';
 import { buildEmail } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -20,6 +21,10 @@ async function sendPriceDropEmail(
   newPrice: number
 ): Promise<void> {
   try {
+    if (await suppressionService.isSuppressed(user.email)) {
+      console.log('[PriceDrop] Skipped suppressed recipient:', user.email);
+      return;
+    }
     // Check user's notification preferences
     const userPrefs = await prisma.user.findUnique({
       where: { id: user.id },

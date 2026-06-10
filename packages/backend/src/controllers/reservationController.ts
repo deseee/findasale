@@ -11,6 +11,7 @@ import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature #397: Crew Invasion flash discount
 import { emailService } from '../lib/emailService';
+import { suppressionService } from '../services/suppressionService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
 
@@ -1300,6 +1301,10 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
             ? `${bundledItemIds.length} items from ${reservation.item.sale!.title}`
             : `${allShopperHolds[0]?.item.title} from ${reservation.item.sale!.title}`;
 
+          if (await suppressionService.isHardSuppressed(reservation.user.email)) {
+            console.log(`[hold-invoice] Skipping hard-suppressed recipient: ${reservation.user.email}`);
+            return;
+          }
           await emailService.emails.send({
             from: process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale',
             to: reservation.user.email,

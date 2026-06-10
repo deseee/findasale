@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import { emailService } from './emailService';
+import { suppressionService } from '../services/suppressionService';
 
 interface CreateNotificationInput {
   userId: string;
@@ -41,7 +42,17 @@ export const createNotification = async (input: CreateNotificationInput) => {
       });
 
       if (user?.email) {
-        if (true) {
+        const recipient = user.email;
+        // Skip placeholder / scraper addresses — email only (in-app notification already created above)
+        const isPlaceholder =
+          !recipient ||
+          !recipient.includes('@') ||
+          recipient.toLowerCase().endsWith('@system.finda.sale');
+        if (isPlaceholder) {
+          console.log(`[notificationService] Skipping email to placeholder address: ${recipient}`);
+        } else if (await suppressionService.isSuppressed(recipient)) {
+          console.log(`[notificationService] Skipping suppressed recipient: ${recipient}`);
+        } else {
           const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
           try {
             await emailService.emails.send({

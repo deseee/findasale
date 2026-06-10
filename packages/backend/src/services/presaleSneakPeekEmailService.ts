@@ -1,6 +1,7 @@
 import { prisma } from '../index';
 import { buildEmail, buildItemCardModule, buildSpacer, buildCTARow, EMAIL_TOKENS as T } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
@@ -86,6 +87,10 @@ async function sendSneakPeekEmail(opts: {
   saleUrl: string;
 }): Promise<void> {
   const { to, saleName, saleDay } = opts;
+  if (await suppressionService.isSuppressed(to)) {
+    console.log('[presaleSneakPeek] Skipped suppressed recipient:', to);
+    return;
+  }
   const subject = `${saleName} starts ${saleDay} — here's a sneak peek`;
   const html = buildSneakPeekHtml(opts);
 

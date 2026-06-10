@@ -13,6 +13,7 @@ import { createNotification } from '../lib/notificationService';
 import { buildNewSaleAlertEmail } from './emailTemplateService';
 import { sendPushNotification } from '../utils/webpush';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from './suppressionService';
 
 
 interface SaleInfo {
@@ -61,8 +62,10 @@ export const notifyFollowersOfNewSale = async (sale: SaleInfo): Promise<void> =>
     });
 
     for (const follow of organizer.followers) {
+      const emailSuppressed = follow.user.email ? await suppressionService.isSuppressed(follow.user.email) : false;
+      if (emailSuppressed) console.log('[followerNotify] Skipped suppressed recipient:', follow.user.email);
       // ── Email ──────────────────────────────────────────────────────────────
-      if (follow.notifyEmail && follow.user.email) {
+      if (follow.notifyEmail && follow.user.email && !emailSuppressed) {
         try {
 await emailService.emails.send({
             from:    process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',

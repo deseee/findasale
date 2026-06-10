@@ -4,6 +4,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { buildEmail } from '../services/emailTemplateService';
 import { emailService } from '../lib/emailService';
 import { bulkEmailEnabled } from '../utils/bulkEmailGate';
+import { suppressionService } from '../services/suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
@@ -18,6 +19,11 @@ const sendAbandonedCheckoutEmail = async (
   saleName: string
 ): Promise<void> => {
   const checkoutUrl = `${FRONTEND_URL}/items/${itemId}`;
+
+  if (await suppressionService.isSuppressed(email)) {
+    console.log(`[AbandonedCheckout] Skipping suppressed recipient: ${email}`);
+    return;
+  }
 
   const html = buildEmail({
     preheader: `Complete your purchase: ${itemTitle}`,

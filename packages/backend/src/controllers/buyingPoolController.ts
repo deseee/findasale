@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
 import { emailService } from '../lib/emailService';
+import { suppressionService } from '../services/suppressionService';
 
 
 // Create a new buying pool for an item
@@ -203,6 +204,9 @@ export const joinPool = async (req: AuthRequest, res: Response) => {
           const itemTitle = pool.item.title;
           const poolAmount = (pool.targetAmount / 100).toFixed(2);
 
+          if (await suppressionService.isSuppressed(orgEmail)) {
+            console.log(`[buyingPool] Skipping suppressed recipient: ${orgEmail}`);
+          } else {
           await emailService.emails.send({
             from: process.env.SES_FROM_EMAIL || 'FindA.Sale <noreply@send.finda.sale>',
             to: orgEmail,
@@ -216,6 +220,7 @@ export const joinPool = async (req: AuthRequest, res: Response) => {
               <p>Best regards,<br>FindA.Sale Team</p>
             `,
           });
+          }
         }
       } catch (emailError) {
         console.warn('Failed to send pool filled notification email:', emailError);
@@ -325,6 +330,10 @@ export const cancelPool = async (req: AuthRequest, res: Response) => {
     try {
       for (const participant of pool.participants) {
         if (participant.user?.email) {
+          if (await suppressionService.isSuppressed(participant.user.email)) {
+            console.log(`[buyingPool] Skipping suppressed recipient: ${participant.user.email}`);
+            continue;
+          }
           await emailService.emails.send({
             from: process.env.SES_FROM_EMAIL || 'FindA.Sale <noreply@send.finda.sale>',
             to: participant.user.email,
