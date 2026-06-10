@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S938 — DEV/OPS (2026-06-10). Email-rail hardening + bounce-ingestion fix + LIVE verification. (1) SES→GMAIL rename SHIPPED + LIVE-SMOKE-TESTED: 44 backend files — every Gmail-rail `from` now `process.env.GMAIL_FROM_EMAIL || SES_FROM_EMAIL || 'find@outreach.finda.sale'` (dual-read; Patrick set GMAIL_FROM_EMAIL=find@outreach.finda.sale in Railway, kept SES_FROM_EMAIL for transition); ~52 dead `@send.finda.sale` fallbacks (legacy AWS-SES domain, no Google DKIM) retired to the verified alias; workspaceController hardcoded invites@send.finda.sale → Resend default; stale comments in emailService/transactionalEmailService fixed. Backend tsc 0 errors. Resolves S937 gmail-rail-audit follow-up #1 (the var was the P0 footgun). Smoke test ✅ E2E: live finda.sale/contact submit → 200 + form cleared → autoreply delivered from find@outreach.finda.sale to INBOX (not spam), Gmail thread 19eaf520fef6931a @ 02:17 UTC. (2) BOUNCE-INGESTION (#471) FIXED + VERIFIED: moved processBounces off the unreliable in-process node-cron onto GitHub Actions → JOB_MAP 'process-bounces' + new .github/workflows/pipeline-bounce-suppress.yml (the pattern every other email job uses); broadened DSN query + isolated messages.trash try/catch. Patrick pushed + ran workflow; Railway log confirms job now RUNS (`[InternalJobRunner] process-bounces` 433ms, clean) — the cron-never-fired root cause is fixed. Token introspected LIVE via Railway: GMAIL_MAILBOX_REFRESH_TOKEN authenticates outreach@finda.sale with full https://mail.google.com/ scope ✅ (mailbox + scope both correct — no env change needed). 0 suppressions = CORRECT: the only mailer-daemon DSNs present (201) are ALL in Trash (Patrick's manual cleanup of the @system flood that was forwarding into deseee@gmail.com — NOT an auto-filter) and every sampled one targets our own @system.finda.sale scraper addresses (zone-blocked S937d, parser-ignored). No real external bounces exist to suppress; real ones land in inbox where the query catches them → NO further fix needed. (3) #332 Shopify DEFERRED (Patrick) — removed from Blocked Queue. (4) Caught + restored a truncated working-tree sales.ts (461 lines, cut mid-statement at `console.er`, #450 recurring endpoint missing) from HEAD before it could be committed — the already-pushed rename commit never contained it. BQ: 1→0.**
+
 **S937 — RESEARCH/AUDIT→DEV (2026-06-09). Email/outreach/scraper SYSTEM MAP built (`claude_docs/feature-notes/email-outreach-scraper-system-map.md`) + P1 suppression gap fixed. THREE rails documented: (A) Gmail-API bulk via `lib/emailService` (cap 1500/day, GMAIL_DAILY_HARD_LIMIT); (B) Resend transactional via `lib/transactionalEmailService` — suppression check before EVERY send ✅, S936 `RESEND_FROM_EMAIL ?? noreply@finda.sale` default confirmed present; (C) Gmail outreach via `outreachEmailsCron` from outreach@finda.sale. CORRECTED STALE PREMISE: Gmail is NOT suspended (active per S917/S929/S933, 658 sent); outreach NOT dead — pipeline crons run via GitHub Actions → POST /api/internal/jobs/run (internalJobRunnerController JOB_MAP), in-process init*Cron is dead code. NO P0 found (brief's 'outreach dead=P0' contradicted by code+evidence). FIXED P1 (G3): 8 bulk lifecycle services sent via Gmail with NO suppression check (saleAlert/priceDrop/wishlistMatch/saleLive/presaleSneakPeek/smartFollow/followerNotification/onboarding) — added `suppressionService.isSuppressed` guard before each send; push+in-app left intact on the 2 loop services. Backend TS 0 errors. OPEN P1 (G1→BQ): all 9 Resend-rail callers override `from:` with `@send.finda.sale` (SES domain, Resend-DKIM status unverified) → transactional receipts/payouts/resets may fail DKIM; touches auth+payment (red-flag gate) → Patrick DNS decision. G4 carry: Railway RESEND_FROM_EMAIL=support@finda.sale unwarmed. BQ: 1→2.**
 
 **S936 — QA/RECORDS (2026-06-09). Chrome QA sweep: SEO3 /estate-sales/denver-co ✅ (H1, 50 listings, BreadcrumbList schema.org, canonical confirmed); #472 send-test-email CODE works (Resend success:true + messageId 7caa79e3) but email arrived in Yahoo SPAM from support@finda.sale — root cause: RESEND_FROM_EMAIL set to support@finda.sale, unwarmed domain at Yahoo; BUG FIX: admin.ts hardcoded hello@send.finda.sale fallback removed + RESEND_FROM_EMAIL gate added; transactionalEmailService.ts FROM_DEFAULT changed to process.env.RESEND_FROM_EMAIL ?? noreply@finda.sale (was hardcoded hello@send.finda.sale — wrong domain for Resend DKIM); #463 UNVERIFIED (no unclaimed organizer profile URL accessible in QA env); #164 Tiers ✅ (Alice shows TEAMS $79/mo at /organizer/settings → Subscription). Records pass: S935 PCVs applied to roadmap (#317 ⚠️ S936 graceful fallback only, #470 CODE-ONLY S936). BQ: 1 (unchanged). Patrick action needed: add RESEND_FROM_EMAIL=noreply@finda.sale to Railway env OR warm support@finda.sale via Yahoo/Google Postmaster.**
@@ -146,17 +148,17 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **S937 pushblock (below)** — 8 email-suppression service fixes + system map + 2 wrap docs.
-2. **DNS decision (G1, P1):** verify whether `send.finda.sale` is DKIM-verified in the Resend dashboard. If NOT, transactional receipts/payouts/password-resets are failing DKIM → spam. Tell me and I'll dispatch the architect-reviewed fix to move those from-addresses to the root `finda.sale` domain (already Resend-verified).
-3. **Railway env (G4, P2):** set `RESEND_FROM_EMAIL=noreply@finda.sale` on the backend service (carry-over from S936).
+1. **All S938 code is pushed** (rename commit 1adff5ea + bounce fix). Nothing pending.
+2. **Monitor (no action unless it persists):** the `@system.finda.sale` bounce DSNs forwarding into deseee@gmail.com should taper off now that the S937d zone-block is deployed — they were all from sends BEFORE the 06-10 deploy. If NEW `@system` DSNs keep arriving after ~06-11, flag it: the zone-block has a leak.
+3. **#332 Shopify** — still deferred; needs you to connect a real custom-app store for live QA whenever you want to revisit.
 
-### S938 Recommendation
-BQ=2 (ceiling=8 — DEV available).
+### S939 Recommendation
+BQ=0 (ceiling=8 — DEV available).
 
 **PRIORITY 1 — run the email P0 E2E test** (`claude_docs/feature-notes/email-p0-e2e-test-plan.md`): after the S937 push deploys + RESEND_FROM_EMAIL=noreply@finda.sale is live, send a real password reset + admin test and confirm delivery from @finda.sale via inbox AND the Resend admin API (also proves the new health-check M2). Do NOT mark G1 fixed until this passes.
 
 **Gmail-rail P2 follow-ups (from gmail-rail-audit-s937.md — root-cause + hygiene):**
-1. **Split SES_FROM_EMAIL → GMAIL_FROM_EMAIL + RESEND_FROM_EMAIL** (root-cause fix for the P0 footgun: one var currently serves both rails). Update the ~30 Gmail-rail callers to GMAIL_FROM_EMAIL (default outreach.finda.sale); Resend already decoupled S937. Architect/QA review.
+1. ~~Split SES_FROM_EMAIL → GMAIL_FROM_EMAIL~~ **DONE S938** — 44 files dual-read GMAIL_FROM_EMAIL, dead @send.finda.sale fallbacks retired, GMAIL_FROM_EMAIL set in Railway, live smoke test passed.
 2. **Bounce ingestion captured 0 BOUNCED rows despite 800+ sends** — verify GMAIL_MAILBOX_REFRESH_TOKEN has gmail.modify scope + points at the right bounce inbox; run processBounces once and confirm rows land in EmailSuppression.
 3. **send.finda.sale has no Google DKIM** — latent: if SES_FROM_EMAIL/GMAIL fallback ever resolves to @send.finda.sale, Gmail sends unsigned → spam. Change Gmail fallbacks to @outreach.finda.sale (or add DKIM).
 4. **No out-of-process Gmail health watchdog** — OAuth-token-dead alarm only runs in-process; add a GH Actions schedule POSTing {"job":"gmail-health-check"} (JOB_MAP entry already exists).
@@ -168,7 +170,7 @@ BQ=2 (ceiling=8 — DEV available).
 - **Railway env var:** Add `RESEND_FROM_EMAIL=noreply@finda.sale` to backend service (or decide to keep support@finda.sale and warm it via Yahoo/Google Postmaster).
 
 **Remaining QA items:**
-- **#471 Bounce Suppression** — verify EmailSuppression row count grows after bounce trigger (not testable without real bounce event).
+- **#471 Bounce Suppression** — DONE/VERIFIED S938: cron moved to GitHub Actions and confirmed running (Railway log); token = outreach@finda.sale full scope; 0 rows is correct (no real external bounces exist — only zone-blocked @system DSNs in Trash). Will self-verify when a real organizer bounce arrives.
 - **#470 GA4 Conversion Events** — end-to-end submit CODE-ONLY; verify organizer_registered fires in GA4 Real-Time on actual register.
 - **#463 Claim Button Click Tracking** (CODE-ONLY S925) — Vercel Analytics Events tab requires dashboard access; not testable in QA env.
 - **#317 Geofence QR Scans** — inside/outside-radius tests UNVERIFIED (requires real GPS); graceful fallback ✅ S935.
@@ -195,6 +197,23 @@ BQ=2 (ceiling=8 — DEV available).
 3. **Future / lower priority:** check yellowPagesCaScraper.ts (Canada) ToS standing — it likely shares the US YellowPages scraping prohibition. Broader flea/RETAIL vendor-venue contamination cleanup. Keep #332 Shopify (sole BQ item, P0) in mind.
 
 ## Recent Sessions
+
+### S938 — 2026-06-10 | DEV/OPS
+
+**Session type:** Email-rail hardening + bounce-ingestion fix + live verification
+
+**Work completed:**
+- **SES→GMAIL rename (44 backend files) SHIPPED + smoke-tested ✅.** All Gmail-rail `from` reads now dual-read `GMAIL_FROM_EMAIL || SES_FROM_EMAIL || 'find@outreach.finda.sale'`; ~52 dead `@send.finda.sale` fallbacks retired to the verified alias; workspaceController + stale comments fixed. Live contact-form smoke test: autoreply delivered from find@outreach.finda.sale to INBOX (thread 19eaf520fef6931a). Resolves S937 gmail-rail-audit follow-up #1.
+- **Bounce-ingestion (#471) fixed + verified.** Moved off in-process cron onto GitHub Actions (JOB_MAP 'process-bounces' + pipeline-bounce-suppress.yml); broadened query + hardened trash scope. Railway log confirms it now runs (433ms). Token introspected: outreach@finda.sale, full scope — correct. 0 rows is correct (only @system DSNs exist, all in Trash, all parser-ignored). No further fix needed.
+- **#332 Shopify DEFERRED** (Patrick) — removed from BQ.
+- **sales.ts truncation caught + restored** from HEAD (461→610 lines; #450 recurring endpoint recovered) before it could be committed.
+
+**Files modified:**
+- Rename: 44 backend files (controllers/jobs/lib/middleware/routes/services — see commit 1adff5ea)
+- Bounce: `internalJobRunnerController.ts`, `bounceSuppressService.ts`, `index.ts`, `.github/workflows/pipeline-bounce-suppress.yml`
+- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`, `claude_docs/strategy/roadmap.md`
+
+**BQ delta:** 1 → 0
 
 ### S937 — 2026-06-09 | RESEARCH/AUDIT→DEV
 

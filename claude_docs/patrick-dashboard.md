@@ -1,6 +1,18 @@
-# Patrick's Dashboard — June 9, 2026 (Updated: S937)
+# Patrick's Dashboard — June 10, 2026 (Updated: S938)
 
-**Generated:** Tuesday, June 9, 2026 (S937 — email/outreach/scraper system map + email suppression fix)
+**Generated:** Wednesday, June 10, 2026 (S938 — email-rail rename + bounce-ingestion fix, both verified live)
+
+---
+
+## S938 Quick Summary
+
+**Two email-system fixes shipped and verified live. Nothing left for you to do.**
+
+**1. Retired the old "Amazon SES" email naming for good.** Your Gmail-rail emails were sending from a variable still named `SES_FROM_EMAIL`, and ~52 spots had dead `@send.finda.sale` fallback addresses (that old Amazon domain has no Google signature, so any email using it would land in spam). I renamed everything to `GMAIL_FROM_EMAIL` and pointed every fallback at your verified `find@outreach.finda.sale` alias. You set the new variable in Railway; I kept the old one alongside it for one deploy cycle so nothing could break. **Verified live:** I submitted your real contact form and the auto-reply arrived in the inbox from `find@outreach.finda.sale` — not spam. ✅
+
+**2. Fixed the bounce-suppression job — and proved why it was showing zero.** The job that's supposed to catch bounced email addresses had never actually been running (it was on an unreliable scheduler the rest of your jobs already abandoned). I moved it onto the same GitHub scheduler everything else uses, and the Railway log now confirms it runs. I also checked the account it reads — it's correctly pointed at `outreach@finda.sale` with the right permissions. **The "zero bounces caught" is actually correct:** the only bounce notices in the mailbox are for your *own* internal scraper addresses (already blocked), and they're all in Trash from your manual cleanup. Real organizer bounces will land in the inbox where the job will catch them. Nothing to fix.
+
+**3. Caught a corrupted file before it could ship.** Your local copy of `sales.ts` had been truncated (149 lines missing, including a live endpoint) — I restored it from the clean version before it could be committed. The rename commit you pushed never contained the broken file, so production was never at risk.
 
 ---
 
@@ -62,12 +74,13 @@ BQ 5→1. Competitor email domain blocking shipped.
 
 | Area | Status |
 |------|--------|
-| BQ (Blocked Queue) | **1 item** (#332 Shopify) — G1 transactional P0 RESOLVED + E2E-verified S937 |
+| BQ (Blocked Queue) | **0 items** — #332 Shopify deferred S938 (needs a real test store) |
 | GA4 Analytics | ✅ LIVE (CSP fixed S926, conversion events added S928 — needs Chrome QA) |
 | Email (transactional) | ✅ **P0 RESOLVED + E2E-verified S937** — registration verification email delivered from noreply@finda.sale to inbox (Gmail thread 19eaf109a9b88af7). Resend rail healthy. |
 | Email (competitor blocking) | ✅ estatesales.net/org blocked across all rails |
 | Email (suppression) | ✅ S937 — 16 senders honor suppression; finda.sale-zone block E2E-verified LIVE (quota 0→2→3, @system autoreply filtered) |
-| Email (Gmail rail) | ✅ Audited + E2E-verified S937 — delivers from find@outreach.finda.sale to inbox (thread 19eaf18a); send-as alias confirmed live. 4 P2 hygiene follow-ups queued. |
+| Email (Gmail rail) | ✅ S938 — SES_FROM_EMAIL renamed to GMAIL_FROM_EMAIL across 44 files, dead @send.finda.sale fallbacks retired; live smoke test passed (autoreply from find@outreach.finda.sale to inbox, thread 19eaf520). |
+| Email (bounce suppression #471) | ✅ S938 VERIFIED — cron moved to GitHub Actions + confirmed running; token = outreach@finda.sale full scope; 0 rows is correct (no real bounces exist yet). |
 | Outreach | ⏸ Paused (intentional, domain warming — 37 PENDING queue ready) |
 | Auction coverage | ✅ 97→748 listings (S934 reclassification of mislabeled data) |
 | RETAIL pages | ✅ Junk filter LIVE S935 (pending push) — ~3,288 clean rows, ~4,400 junk suppressed |
@@ -80,30 +93,9 @@ BQ 5→1. Competitor email domain blocking shipped.
 
 ## What You Need to Do
 
-**S937 push (this session — 8 suppression fixes + system map + wrap docs):**
-```powershell
-git add packages/backend/src/lib/transactionalEmailService.ts packages/backend/src/lib/emailService.ts packages/backend/src/jobs/gmailHealthCron.ts packages/backend/src/jobs/deliverabilityMonitorJob.ts packages/backend/src/scripts/run-search-facebook-events.ts packages/backend/src/services/suppressionService.ts packages/backend/src/services/saleAlertEmailService.ts packages/backend/src/services/priceDropService.ts packages/backend/src/services/wishlistMatchEmailService.ts packages/backend/src/services/saleLiveEmailService.ts packages/backend/src/services/presaleSneakPeekEmailService.ts packages/backend/src/services/onboardingEmailService.ts packages/backend/src/services/smartFollowService.ts packages/backend/src/services/followerNotificationService.ts packages/backend/src/services/emailReminderService.ts packages/backend/src/lib/notificationService.ts packages/backend/src/jobs/curatorEmailJob.ts packages/backend/src/jobs/monthlyTrendReportJob.ts packages/backend/src/jobs/abandonedCheckoutJob.ts packages/backend/src/jobs/auctionJob.ts packages/backend/src/controllers/buyingPoolController.ts packages/backend/src/controllers/reservationController.ts packages/backend/src/controllers/saleWaitlistController.ts packages/backend/src/controllers/waitlistController.ts packages/backend/src/routes/organizers.ts packages/backend/src/routes/contact.ts claude_docs/feature-notes/email-outreach-scraper-system-map.md claude_docs/feature-notes/email-audit-history-consolidated.md claude_docs/feature-notes/email-p0-e2e-test-plan.md claude_docs/feature-notes/gmail-rail-audit-s937.md claude_docs/feature-notes/email-p0-e2e-test-plan.md claude_docs/feature-notes/system-finda-sale-bounce-source-S937.md claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git commit -m "S937: Resend P0 from-domain fix + Sentry send-rejection capture + suppression pass (16 senders) + email/gmail audits"
-.\push.ps1
-```
+**Nothing pending.** All S938 code is pushed and deployed; both fixes verified live. Earlier S934/S935/S937 pushes are all confirmed in git history.
 
-**Then — G1 decision:** check the Resend dashboard — is `send.finda.sale` DKIM-verified? Tell me yes/no.
-
-**And — G4 (carry-over):** set `RESEND_FROM_EMAIL=noreply@finda.sale` on the Railway backend service.
-
-**S934 push (pending from last session):**
-```powershell
-git add packages/backend/src/services/scraper/sources/search-facebook-events.ts packages/backend/src/services/scraper/sources/googlePlaces.ts packages/backend/src/scripts/reclassify-mistyped-sales.ts claude_docs/feature-notes/ADR-hibid-auction-scraper.md claude_docs/feature-notes/retail-data-quality-audit.md
-git commit -m "S934: auction reclassification (97->748), FB Events + flea queries widened, HiBid/YP ToS-blocked, RETAIL audit"
-.\push.ps1
-```
-
-**S935 push (this session):**
-```powershell
-git add packages/backend/src/routes/sales.ts packages/frontend/pages/organizer/print-kit/[saleId].tsx "packages/frontend/pages/estate-sales/[city-slug].tsx" packages/frontend/pages/server-sitemap.xml.tsx packages/backend/src/routes/admin.ts claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
-git commit -m "S935: RETAIL junk filter, P3 QR ?via=qr fix, /estate-sales/[city-slug] SEO pages, POST /admin/send-test-email, roadmap corrections (#423/#471 confirmed done)"
-.\push.ps1
-```
+**Optional monitor (no action unless it recurs):** the bounce-notice flood into deseee@gmail.com (for `@system.finda.sale` scraper addresses) should stop now that the zone-block is deployed — those were all from sends before last night's deploy. If new `@system` bounce notices keep arriving after ~June 11, tell me and I'll find the leak.
 
 ---
 
