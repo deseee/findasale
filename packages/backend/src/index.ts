@@ -460,6 +460,9 @@ app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/ebay/account-deletion', express.raw({ type: '*/*' }));
 app.use('/api/ebay/notifications', express.raw({ type: '*/*' }));
+// Resend webhook: svix signature verification needs the raw body, so capture it
+// before the global json parser consumes the stream (same pattern as Stripe above).
+app.use('/api/outreach/resend-webhook', express.raw({ type: 'application/json' }));
 
 // JSON parser with 1 MB body size limit to prevent payload attacks
 app.use(express.json({ limit: '1mb' }));
