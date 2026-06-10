@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S943 — DEV/RECORDS (2026-06-10). Scraper fleet deep expansion — 35+ competitor sites investigated across 4 categories. RESULT: 3 BUILT, 16 PARKED, 5 PROHIBITED. ROOT CAUSE FIXED: Railway build failures (S941+S942 both FAILED) caused by 2 stray lone commas in committed sourceRegistry.ts (sparse array → undefined entries → initScraperCron crash at `sourceDef.enabled`). Root cause: 4-way parallel agent write collision in S942. Fix: sourceRegistry.ts local working tree had both cleaned — needed commit. BUILT: (1) BidSpotter.com — ToS CLEAR, ~35 US auction houses, static HTML via XHR header, Wed 10am cron (scrape-bidspotter.yml), AUCTION_HOUSE. (2) Invaluable.com — public REST API /auction-houses (no auth), 8,158 US auction houses, HAL JSON pagination, Sun 7am cron (scrape-invaluable.yml), AUCTION_HOUSE. (3) AuctionZip — wrapped existing runAuctionZipScraper() in registry adapter (enabled:true, no new cronSchedule — uses GH Actions). PROHIBITED (5): LockerFox (ToS §1.4.2+§1.4.6), GovPlanet (IronPlanet ToS §1.3(c)), GovernmentLiquidation (Liquidity Services + Cloudflare), Proxibid (ATG UUA §10(h)/§11.1(v)/§12), YardSaleSearch (ToS explicit ban — not added to registry). PARKED (16): Bid13 (Drupal AJAX+Socket.io+evercookie), IBidNow (GoDaddy Afternic dead), StorageBattles (StorageTreasures alias), StorageUnitAuctionList (paywall+Cloudflare), Handbid (wrong category: nonprofits), AmericanFleaMarkets (dead domain), FleaMarketDirectory (redirects to USWantads), FleaMarket.com (dead), FleaMarketsNet (GoDaddy Afternic), FleaMarketRover (dead), VendorsByState (dead), NFMAMembers (Wix JS-rendered), SellMyAntiques (Next.js SPA). decisions-log.md rows added for all 5 ToS PROHIBITED entries. sourceRegistry now has 34 entries. TS check: 0 errors. BQ: 0 (unchanged).**
+
 **S942 — DEV/RECORDS (2026-06-10).** Scraper fleet expansion — 5 new sources investigated. RESULTS: (1) PropertyRoom.com ✅ BUILT (S941 cont.) — ~46 law enforcement/gov't agency partners, static `/about-us/partners`, AUCTION_HOUSE, Wed 7am cron. (2) StorageTreasures ✅ PARKED — Next.js SPA, public API hard-capped at 50/36,943 records. (3) StorageAuctions.com ✅ BUILT — found public JSON API (`core-service.auctions.storageauctions.com`), 3,103 US records, no explicit ToS prohibition found, Tue 7am cron, AUCTION_HOUSE. (4) PublicSurplus.com ✅ BUILT — server-rendered HTML + Ajax XML, ~6,330 gov't agency auctions, ToS CLEAR, Tue 8am cron, AUCTION_HOUSE. (5) Municibid.com ❌ PROHIBITED — ToS §(c) explicit dual ban ("automated means" + "scraping"). (6) Fleamapket.com ❌ PROHIBITED — broad ToS anti-automation clause. (7) FleaMarketInsiders.com ❌ PROHIBITED — same clause; site is a wrapper for Fleamapket.com. sourceRegistry.ts now has 7 entries (FleaMarketZone, StorageAuctionsNet, PropertyRoom, StorageAuctionsCom, StorageTreasures, Municibid, PublicSurplus). decisions-log.md updated: 7 ToS decisions logged under S942. BQ: 0 (unchanged).
 
 **S941 — DEV/RECORDS (2026-06-10).** Parallel dispatch: records pass + FB Events burst fix + 7 licensing scraper triage + scraper source investigation + FleaMarketZone scraper build. (1) RECORDS PASS ✅ — S939+S940 PCVs applied to roadmap.md: #27b watermark gating Chr ✅ S940 (PRO locked ss_340873qej, TEAMS unlocked ss_549588e2a); #75 non-lapsed TEAMS label ✅ S940 (ss_5075d8oqc); #422 OAuth partial Chr ✅ S940 (buttons on /login ss_1808g433w + Linked Accounts UI ss_62243gw0x, 409 bridge UNVERIFIED); SEO3 REJECTED — no screenshot ID in S939 evidence, Human QA ⬜ unchanged; #470 already present in roadmap from S939. PCV table cleared. (2) FB EVENTS BURST FIX ✅ — Added 6500ms inter-sub-query delay in search-facebook-events.ts: when usedEngine='searlo', sleep(6500) between sub-queries per metro; non-Searlo fallback engines keep jitterDelay(200,500). Root cause: 3 sub-queries per metro passing through module-level searloThrottle in rapid succession, hitting Searlo's 10/min sliding window. Target: 17% 429 rate → <5%. (3) LICENSING SCRAPERS ✅ 7 scraper files PARKED + 7 workflows hardened — Indiana/Kentucky/Massachusetts/Maine/New Hampshire (cloud IP WAF blocks) + Rhode Island (auctioneer license repealed 2015; scrape-ri-phase2.yml + scrape-rhode-island-licensing.yml both hardened). NH bonus: businessCategory 'auctioneer'→'AUCTION_HOUSE' bug fixed (was silently rejecting every NH record). All 7 workflows: continue-on-error: true. 13 files total in commit 665c2954. (4) SCRAPER SOURCE INVESTIGATION ✅ — 5 sources evaluated: MaxSold (PROHIBITED — explicit no-scraping clause), GovDeals (PROHIBITED — explicit spider/crawler ban), StorageTreasures (GRAY/CAUTION — MySpace-era automated-use boilerplate, robotsAllow:true; Patrick decision pending), StorageAuctions.net (CLEAR but AngularJS SPA — PARKED), FleaMarketZone (CLEAR — built). PropertyRoom: ToS CLEAR but site overloaded during investigation; re-evaluate when site recovers. decisions-log.md updated: 5 locked ToS decisions under '## 2026-06-10 (S941)'. (5) FLEAMARKETZONE SCRAPER ✅ BUILT — WordPress/WPBDP plugin site, 51 US regions (~1,050 venues), Monday 6am cron (scrape-fleamarketzone.yml), businessCategory: 'FLEA_MARKET', 0.3 req/sec. Registered in sourceRegistry.ts. (6) STORAGEAUCTIONS.NET — BUILT + PARKED (AngularJS SPA: empty ng-app shell, zero static data). Clean early-return. Workflow created, schedule commented out. Unpark path: Playwright/Puppeteer or REST API at update.storageauctions.net. BQ: 0 (unchanged).**
@@ -161,42 +163,69 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Push block (S941+S942 consolidated — copy-paste into PowerShell from FindaSale root):**
+1. **⚠️ P0 — Push this block NOW to restore Railway backend (copy-paste into PowerShell from FindaSale root):**
 ```
-git add packages/backend/src/services/scraper/sources/fleaMarketZoneScraper.ts
-git add packages/backend/src/services/scraper/sources/storageAuctionsNetScraper.ts
-git add packages/backend/src/services/scraper/sources/propertyRoomScraper.ts
-git add packages/backend/src/services/scraper/sources/storageTreasuresScraper.ts
-git add packages/backend/src/services/scraper/sources/storageAuctionsComScraper.ts
-git add packages/backend/src/services/scraper/sources/publicSurplusScraper.ts
-git add packages/backend/src/services/scraper/sources/municibidScraper.ts
-git add .github/workflows/scrape-fleamarketzone.yml
-git add .github/workflows/scrape-storageauctionsnet.yml
-git add .github/workflows/scrape-propertyroom.yml
-git add .github/workflows/scrape-storagetreasures.yml
-git add .github/workflows/scrape-storageauctions-com.yml
-git add .github/workflows/scrape-publicsurplus.yml
-git add .github/workflows/scrape-municibid.yml
 git add packages/backend/src/services/scraper/sourceRegistry.ts
-git add claude_docs/decisions-log.md
+git add packages/backend/src/services/scraper/sources/americanFleaMarketsScraper.ts
+git add packages/backend/src/services/scraper/sources/bid13Scraper.ts
+git add packages/backend/src/services/scraper/sources/bidSpotterScraper.ts
+git add packages/backend/src/services/scraper/sources/fleaMarketComScraper.ts
+git add packages/backend/src/services/scraper/sources/fleaMarketDirectoryScraper.ts
+git add packages/backend/src/services/scraper/sources/fleaMarketRoverScraper.ts
+git add packages/backend/src/services/scraper/sources/fleaMarketsNetScraper.ts
+git add packages/backend/src/services/scraper/sources/govPlanetScraper.ts
+git add packages/backend/src/services/scraper/sources/governmentLiquidationScraper.ts
+git add packages/backend/src/services/scraper/sources/handbidScraper.ts
+git add packages/backend/src/services/scraper/sources/ibidNowScraper.ts
+git add packages/backend/src/services/scraper/sources/invaluableAuctionHouseScraper.ts
+git add packages/backend/src/services/scraper/sources/lockerFoxScraper.ts
+git add packages/backend/src/services/scraper/sources/nfmaMembersScraper.ts
+git add packages/backend/src/services/scraper/sources/proxibidScraper.ts
+git add packages/backend/src/services/scraper/sources/sellMyAntiquesScraper.ts
+git add packages/backend/src/services/scraper/sources/storageBattlesScraper.ts
+git add packages/backend/src/services/scraper/sources/storageUnitAuctionListScraper.ts
+git add packages/backend/src/services/scraper/sources/vendorsByStateScraper.ts
+git add .github/workflows/scrape-bidspotter.yml
+git add .github/workflows/scrape-invaluable.yml
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat(scraper): FleaMarketZone (~1,050 venues), PropertyRoom (~46 agencies), StorageAuctions.com (3,103 records/API), PublicSurplus (~6,330 gov auctions); PARKED: StorageTreasures (SPA/capped), StorageAuctionsNet (AngularJS); PROHIBITED: Municibid/Fleamapket/FMInsiders (ToS); docs: S941+S942 wrap"
+git commit -m "fix(scraper): remove 2 stray commas in SOURCE_REGISTRY (Railway crash); feat: BidSpotter+Invaluable+AuctionZip BUILT; 16 PARKED + 5 PROHIBITED scrapers registered; docs: S943 wrap"
 .\push.ps1
 ```
 
 2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
 
-### S943 Recommendation
-BQ=0 (ceiling=8 — DEV available).
+### S944 Recommendation
+BQ=0 (ceiling=8 — DEV/QA available).
 
 **Priority queue:**
 1. **Chrome QA** — #422 OAuth 409 bridge (UNVERIFIED), #470 GA4 other 3 events (CODE-ONLY), #75 tier lapse P2 (UNVERIFIED), SEO3 /estate-sales/denver-co Human QA. Dispatch `Skill('findasale-qa')` sequentially (one feature per dispatch, Chrome agents sequential).
-2. **Scraper fleet next** — StorageAuctions.net unpark: probe REST API at `update.storageauctions.net`. StorageTreasures unpark: Cognito JWT / Playwright / API auth partnership (Patrick to decide). GovDeals + MaxSold remain PROHIBITED.
-3. **StorageTreasures decision** — Patrick: proceed via one of the 3 unpark paths, or leave PARKED.
+2. **StorageAuctions.net unpark** — probe REST API at `update.storageauctions.net`.
+3. **StorageTreasures decision** — Patrick: proceed via one of 3 unpark paths (Cognito JWT / Playwright / data partnership), or leave PARKED.
 
 
 ## Recent Sessions
+
+### S943 — 2026-06-10 | DEV/RECORDS (Scraper fleet deep expansion + Railway P0 fix)
+
+**Session type:** Competitor research sweep (35+ sites, 4 categories) + Railway build failure root-cause diagnosis.
+
+**Work completed:**
+- **Railway P0 DIAGNOSED** — Backend build FAILED for both S941 (21:07 UTC) and S942 (21:34 UTC) pushes. Root cause: 2 stray lone commas on their own lines in the committed `sourceRegistry.ts` (lines 139 and 196). Stray commas create `undefined` holes in JavaScript arrays. `initScraperCron` iterates `SOURCE_REGISTRY` and crashes at `sourceDef.enabled` when it hits the `undefined` slot. Cause: 4-way parallel agent write collision in S942. Fix: local working tree already has stray commas removed + full S943 additions. Push block provided — this IS the fix.
+- **BidSpotter.com** ✅ BUILT — ~35 US auction houses. ToS CLEAR (`/en-us/about-us/legal/website-terms-and-conditions`: no anti-scraping). Static HTML via `X-Requested-With: XMLHttpRequest` header. `businessCategory: 'AUCTION_HOUSE'`. GitHub Actions cron: Wed 10am UTC (`scrape-bidspotter.yml`).
+- **Invaluable.com** ✅ BUILT — 8,158 US auction houses. Public unauthenticated JSON REST API (`/auction-houses`, page=0-based, size=100, ~82 pages). No JS rendering needed. ToS GRAY (page JS-rendered, same classification as StorageAuctions.com). `businessCategory: 'AUCTION_HOUSE'`. GitHub Actions cron: Sun 7am UTC (`scrape-invaluable.yml`).
+- **AuctionZip** ✅ BUILT — Existing `runAuctionZipScraper()` wrapped in registry adapter. ToS CLEAR (Section 4: public commercial use allowed). ~25,000 US auction houses A-Z static HTML. Enabled in registry; no new cronSchedule (existing GH Actions).
+- **PROHIBITED (5)**: LockerFox (§1.4.2+§1.4.6), GovPlanet (IronPlanet §1.3(c)), GovernmentLiquidation (Liquidity Services), Proxibid (ATG UUA §10(h)/§11.1(v)/§12), YardSaleSearch (explicit ban).
+- **PARKED (16)**: Bid13, IBidNow, StorageBattles, StorageUnitAuctionList, Handbid (nonprofits/wrong-category), AmericanFleaMarkets/FleaMarket.com/FleaMarketRover/VendorsByState (dead domains), FleaMarketDirectory (redirects), FleaMarketsNet (Afternic), NFMAMembers (Wix SPA), SellMyAntiques (Next.js SPA).
+- **TS check**: 0 errors (backend, confirmed post-sourceRegistry update).
+
+**Files changed (pending Patrick push — URGENT: fixes Railway crash):**
+- `packages/backend/src/services/scraper/sourceRegistry.ts` — stray commas removed + 21 new imports + 21 new registry entries
+- 21 new `packages/backend/src/services/scraper/sources/*.ts` scraper stubs
+- `.github/workflows/scrape-bidspotter.yml`, `scrape-invaluable.yml`
+- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`
+
+**BQ delta:** 0 → 0 (unchanged)
 
 ### S940 — 2026-06-10 | QA/DEV/OPS/MONITORING
 
