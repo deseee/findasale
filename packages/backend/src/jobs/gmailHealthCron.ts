@@ -64,11 +64,17 @@ export async function runGmailOAuthHealthCheck(): Promise<void> {
   try {
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
     oauth2Client.setCredentials({ refresh_token: refreshToken });
-    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const profile = await gmail.users.getProfile({ userId: 'me' });
-    const emailAddress = profile.data.emailAddress ?? '(unknown)';
-    console.log(`[GmailHealth] OAuth token valid — ${emailAddress}`);
+    // Probe with a send-scope-only liveness check: refresh the access token.
+    // This exercises the refresh_token without calling any read API (getProfile
+    // requires a read scope the send-only token does not — and should not — have).
+    const { token } = await oauth2Client.getAccessToken();
+    if (!token) {
+      throw new Error('OAuth2 client returned an empty access token');
+    }
+
+    const sender = process.env.GMAIL_FROM_EMAIL || '(send scope OK)';
+    console.log(`[GmailHealth] OAuth token valid — send scope OK — ${sender}`);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(`[GmailHealth] OAuth token check FAILED: ${errMsg}`);
