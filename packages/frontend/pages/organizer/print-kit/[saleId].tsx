@@ -187,12 +187,16 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     setTimeout(() => { w.print(); w.close(); }, 600);
   };
 
-  // Download file with auth token
+  // Download file with auth cookie (JWT is httpOnly cookie — credentials:include sends it automatically).
+  // Always use the /api proxy (same-origin) so SameSite=Lax cookies are transmitted;
+  // calling the Railway URL directly cross-origin would suppress the cookie.
   const downloadAuthenticatedFile = async (url: string, filename: string) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token || ''}` }
+      // Strip any absolute Railway origin from the URL so the request goes through
+      // the Next.js /api proxy (same-origin), matching how lib/api.ts works.
+      const proxyUrl = url.replace(/^https?:\/\/[^/]+/, '');
+      const response = await fetch(proxyUrl, {
+        credentials: 'include',
       });
       if (!response.ok) throw new Error(`Download failed: ${response.status}`);
       const blob = await response.blob();

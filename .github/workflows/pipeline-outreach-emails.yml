@@ -1,3 +1,4 @@
+# cache-bust: 2026-06-10 (force cron scheduler re-registration after S939 re-enable)
 name: Pipeline — Outreach Emails
 on:
   schedule:
