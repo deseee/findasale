@@ -506,3 +506,30 @@ Index (newest first): S687 Scraper Source Allowlist | S626 Organizer Acquisition
 **Status:** LOCKED
 **Made by:** Patrick
 **Rationale:** Feature may already exist in some capacity on /cities. Decision: consolidate heat index concept into the /cities page as a visual activity density indicator (color-coded or emoji badges by sale count). ~30 min effort. Do not build as a separate page. Remove "Coming soon" placeholder from /city-heat-index.tsx or redirect it to /cities.
+
+---
+
+## 2026-06-10 (S941) — Scraper Source ToS Decisions (5 sources)
+
+**Status:** LOCKED
+
+**1. MaxSold — PROHIBITED**
+**Status:** LOCKED
+**Rationale:** MaxSold ToS (last updated June 20, 2025) explicitly prohibits: "use any program or script to download, copy, capture, scrape, index or otherwise obtain any portion of the Auction Platform without the express written permission of Maxsold." Same class of explicit ban as EBTH and EstateSales.org. Do not implement without written permission from Maxsold.
+
+**2. GovDeals — PROHIBITED**
+**Status:** LOCKED
+**Rationale:** GovDeals User Agreement explicitly prohibits: "use spiders, crawlers, robots or any other similar means to access our Site or substantially download..." Standard explicit anti-scraping clause. Do not implement.
+
+**3. StorageTreasures — CAUTION / GRAY AREA (Patrick to revisit)**
+**Status:** PENDING PATRICK DECISION
+**Rationale:** StorageTreasures ToS (updated 03/10/2026) includes "any automated use of the system, such as using scripts to add friends or send comments or messages" in its prohibited activities list. The clause uses MySpace-era social platform boilerplate language (same ToS also references "band profiles" and "filmmaker profiles" — template copy-paste). No explicit "scrape/crawl/spider" language. robotsAllow:true in app config. Assessment: probably social-interaction boilerplate not aimed at read-only scraping, but the phrase "any automated use" is technically broad. Patrick to decide whether to proceed or skip.
+
+**4. StorageAuctions.net — CONFIRMED CLEAR (but PARKED — JS-rendered)**
+**Status:** PARKED (technical, not legal)
+**Rationale:** ToS and robots.txt confirmed CLEAR. Site is AngularJS SPA — static HTML contains only an empty ng-app shell, no listing data accessible without JavaScript rendering. Scraper built but PARKED. Unpark path: implement Playwright/Puppeteer rendering OR discover REST API endpoint at update.storageauctions.net.
+
+**5. FleaMarketZone — CONFIRMED CLEAR (BUILT S941)**
+**Status:** BUILT
+**Rationale:** No anti-scraping ToS language. Open robots.txt. WordPress/WPBDP site with fully static HTML listings. Scraper built and registered. ~1,050 US flea market venues across all 50 states + DC.
+

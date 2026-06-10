@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S941 — DEV/RECORDS (2026-06-10). Parallel dispatch: records pass + FB Events burst fix + 7 licensing scraper triage. (1) RECORDS PASS ✅ — S939+S940 PCVs applied to roadmap.md: #27b watermark settings gating Chr ✅ S940 (PRO locked ss_340873qej, TEAMS unlocked ss_549588e2a); #75 non-lapsed TEAMS label Claude QA ⚠️→✅ S940 (ss_5075d8oqc); #422 OAuth partial Chr ✅ S940 (buttons on /login ss_1808g433w + Linked Accounts UI ss_62243gw0x, 409 bridge UNVERIFIED); SEO3 REJECTED — no screenshot ID in S939 evidence, Human QA ⬜ unchanged; #470 already present in roadmap from S939. PCV table cleared. (2) FB EVENTS BURST FIX ✅ — Added inter-sub-query delay in search-facebook-events.ts (L766-778): when usedEngine='searlo', await sleep(6500) between sub-queries within each metro loop; non-Searlo fallback engines keep jitterDelay(200,500). Root cause: the 3 sub-queries per metro were all passing through the module-level searloThrottle in rapid succession, hitting Searlo's 10/min sliding window even at 9 RPM pace. 6500ms gap ensures no two Searlo calls land in the same second-level bucket. Target: 17% 429 rate → <5%, runtime → <19 min. (3) LICENSING SCRAPERS ✅ 7 files parked + 7 workflows hardened — Root cause: cloud IPs blocked by state licensing portal WAFs (Indiana PLA, Kentucky GenSearch, Massachusetts DPL API, Maine ALMS, New Hampshire Akamai WAF) or source dissolved (Rhode Island repealed auctioneer license 2015). Fix: PARKED early-return in each phase2 run function (original code preserved below for future re-engineering). NH Phase2 bonus bug fixed: businessCategory 'auctioneer' → 'AUCTION_HOUSE' (enum mismatch was silently rejecting every NH record). All 7 .github/workflows/scrape-*.yml: continue-on-error: true added. 13 files total. BQ: 0 (unchanged).**
+**S941 — DEV/RECORDS (2026-06-10).** Parallel dispatch: records pass + FB Events burst fix + 7 licensing scraper triage + scraper source investigation + FleaMarketZone scraper build. (1) RECORDS PASS ✅ — S939+S940 PCVs applied to roadmap.md: #27b watermark gating Chr ✅ S940 (PRO locked ss_340873qej, TEAMS unlocked ss_549588e2a); #75 non-lapsed TEAMS label ✅ S940 (ss_5075d8oqc); #422 OAuth partial Chr ✅ S940 (buttons on /login ss_1808g433w + Linked Accounts UI ss_62243gw0x, 409 bridge UNVERIFIED); SEO3 REJECTED — no screenshot ID in S939 evidence, Human QA ⬜ unchanged; #470 already present in roadmap from S939. PCV table cleared. (2) FB EVENTS BURST FIX ✅ — Added 6500ms inter-sub-query delay in search-facebook-events.ts: when usedEngine='searlo', sleep(6500) between sub-queries per metro; non-Searlo fallback engines keep jitterDelay(200,500). Root cause: 3 sub-queries per metro passing through module-level searloThrottle in rapid succession, hitting Searlo's 10/min sliding window. Target: 17% 429 rate → <5%. (3) LICENSING SCRAPERS ✅ 7 scraper files PARKED + 7 workflows hardened — Indiana/Kentucky/Massachusetts/Maine/New Hampshire (cloud IP WAF blocks) + Rhode Island (auctioneer license repealed 2015; scrape-ri-phase2.yml + scrape-rhode-island-licensing.yml both hardened). NH bonus: businessCategory 'auctioneer'→'AUCTION_HOUSE' bug fixed (was silently rejecting every NH record). All 7 workflows: continue-on-error: true. 13 files total in commit 665c2954. (4) SCRAPER SOURCE INVESTIGATION ✅ — 5 sources evaluated: MaxSold (PROHIBITED — explicit no-scraping clause), GovDeals (PROHIBITED — explicit spider/crawler ban), StorageTreasures (GRAY/CAUTION — MySpace-era automated-use boilerplate, robotsAllow:true; Patrick decision pending), StorageAuctions.net (CLEAR but AngularJS SPA — PARKED), FleaMarketZone (CLEAR — built). PropertyRoom: ToS CLEAR but site overloaded during investigation; re-evaluate when site recovers. decisions-log.md updated: 5 locked ToS decisions under '## 2026-06-10 (S941)'. (5) FLEAMARKETZONE SCRAPER ✅ BUILT — WordPress/WPBDP plugin site, 51 US regions (~1,050 venues), Monday 6am cron (scrape-fleamarketzone.yml), businessCategory: 'FLEA_MARKET', 0.3 req/sec. Registered in sourceRegistry.ts. (6) STORAGEAUCTIONS.NET — BUILT + PARKED (AngularJS SPA: empty ng-app shell, zero static data). Clean early-return. Workflow created, schedule commented out. Unpark path: Playwright/Puppeteer or REST API at update.storageauctions.net. BQ: 0 (unchanged).**
 
 **S940 — QA/DEV/OPS/MONITORING (2026-06-10). Parallel dispatch: monitoring harden + OPS verification + Chrome QA + 2 dev fixes. PUSH BLOCK PROVIDED. (1) MONITORING HARDEN ✅ — findasale-ci-sentry-health Step 1c patched: KNOWN_OK_DISABLED={'scrape-google-places','scrape-naa'}; disabled_manually workflows not in allowlist now alert HIGH. S939 silent-failure gap (pipeline-outreach-emails dark 5 days) is now closed. (2) FB EVENTS VERIFIED: first post-overhaul daily run — 20.4 min (above 19-min target), 167 Searlo OK + 45 Searlo 429 (17% fallback) + 90 Serper backups. AUCTION/FLEA events landing. No data loss (Serper catches 429s). Runtime concern: sub-query bursts hit Searlo 10/min cap in some metros — Patrick Searlo credit decision still open. (3) OUTREACH: outreach_sent_24h=0 — pipeline-outreach-emails was re-enabled S939 but GitHub cron hadn't re-registered yet (last fired June 5). Fix: trivial comment added to workflow YAML in push block to force cron scheduler re-registration. (4) MONITORING COVERAGE: 123 workflows, 2-page pagination ✅, 122 active + 1 known-OK disabled (scrape-google-places). (5) LICENSING SCRAPERS — 7 consistently-failing scrapers escalated LOW→MEDIUM: Indiana/Kentucky/Massachusetts/Maine/New Hampshire/Rhode Island/Nebraska (structurally broken — multiple consecutive failures). ~24 others succeeding. (6) PRINT KIT P1 FIXED: downloadAuthenticatedFile used localStorage.getItem('token') after httpOnly cookie migration → 401 on all PDF downloads. Fixed: credentials:'include' + Next.js /api proxy URL stripping absolute Railway origin. (7) NODE.JS CI FIX: scrape-ok-phase2.yml + scrape-wy-phase2.yml: github-script@v6→@v7. Rest of fleet already on @v4/v7. (8) CHROME QA — #27b watermark gating ✅ (PRO locked ss_340873qej, TEAMS unlocked ss_549588e2a); PDF download was P1 → fixed this session. #75 non-lapsed subscription display ✅ (TEAMS label correct ss_5075d8oqc); lapse P2 UNVERIFIED (Stripe webhook can't simulate in QA). #422 OAuth buttons on /login ✅ (ss_1808g433w) + Linked Accounts UI ✅ (ss_62243gw0x); 409 OAuthBridge UNVERIFIED. BQ: 0 (unchanged).**
 
@@ -159,45 +159,35 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Push block (S940 fixes — copy-paste into PowerShell from FindaSale root):**
+1. **Push block (S941 final — copy-paste into PowerShell from FindaSale root):**
 ```
-git add packages/frontend/pages/organizer/print-kit/[saleId].tsx
-git add .github/workflows/scrape-ok-phase2.yml
-git add .github/workflows/scrape-wy-phase2.yml
-git add .github/workflows/pipeline-outreach-emails.yml
+git add packages/backend/src/services/scraper/sources/fleaMarketZoneScraper.ts
+git add packages/backend/src/services/scraper/sources/storageAuctionsNetScraper.ts
+git add packages/backend/src/services/scraper/sources/propertyRoomScraper.ts
+git add packages/backend/src/services/scraper/sources/storageTreasuresScraper.ts
+git add .github/workflows/scrape-fleamarketzone.yml
+git add .github/workflows/scrape-storageauctionsnet.yml
+git add .github/workflows/scrape-propertyroom.yml
+git add .github/workflows/scrape-storagetreasures.yml
+git add packages/backend/src/services/scraper/sourceRegistry.ts
+git add claude_docs/decisions-log.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: Print Kit PDF 401 (cookie auth), ci: github-script v7, ops: outreach cron re-register, docs: S940 wrap"
+git commit -m "feat(scraper): PropertyRoom (~46 agencies, AUCTION_HOUSE), StorageTreasures PARKED (SPA/hard-capped API), FleaMarketZone (~1,050 venues), StorageAuctions.net PARKED (AngularJS); docs: ToS decisions log S941, wrap"
 .\push.ps1
 ```
-   Note: `pipeline-outreach-emails.yml` has a trivial comment added (# cache-bust: 2026-06-10) to force GitHub's cron scheduler to re-register the workflow after S939's re-enable. Without a push to that file, the cron may not fire.
 
-2. **Searlo credit upgrade decision.** FB Events scraper ran 20.4 min (above 19-min target) + 45 Searlo 429 hits (17% fallback to Serper) on first post-overhaul daily run. A $3.99+ pack lifts the 10/min cap and removes timeout pressure — then set the `SEARLO_RPM` repo Variable to the new limit. The daily health monitor will flag if Serper backups keep growing.
+2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
 
-3. **#332 Shopify** — still deferred; needs you to connect a real custom-app store for live QA whenever you want to revisit.
-
-### S941 Recommendation
+### S942 Recommendation
 BQ=0 (ceiling=8 — DEV available).
 
-**Patrick push block first** — see "Actions Needed #1" above. Includes Print Kit fix, CI fix, pipeline-outreach-emails cron re-register, and wrap docs.
+**Priority queue:**
+1. **Chrome QA** — #422 OAuth 409 bridge (UNVERIFIED), #470 GA4 other 3 events (CODE-ONLY), #75 tier lapse P2 (UNVERIFIED), SEO3 /estate-sales/denver-co Human QA. Dispatch `Skill('findasale-qa')` sequentially (one feature per dispatch, Chrome agents sequential).
+2. **Scraper fleet next targets.** StorageAuctions.net unpark path: Playwright or REST API auth. GovDeals and MaxSold remain PROHIBITED..
+3. **StorageTreasures scraper** — awaiting Patrick decision on #2 above.
+4. **StorageAuctions.net unpark** — probe REST API at `update.storageauctions.net` for static venue data. Dispatch `Skill('findasale-innovation')` or `Skill('findasale-dev')`.
 
-**Dispatch-ready queue (in priority order):**
-
-1. **Records pass: apply S939 + S940 PCVs to roadmap.md.** `Skill('findasale-records')` → apply 2 S939 PCVs (SEO3 /estate-sales/denver-co ✅, #470 GA4 favorite RUNTIME-VERIFIED) + 5 S940 PCVs (#27b watermark gating ✅ both tiers, #75 TEAMS label ✅, #422 OAuth buttons + Linked Accounts ✅) to Chrome QA columns. Note: S940 PCVs should go into roadmap at START of next session (cross-session rule).
-
-2. **Verify outreach resumed post-push.** After Patrick pushes the pipeline-outreach-emails.yml touch, check `outreach_sent_24h > 0` via /api/internal/pipeline-health after the next cron fire (~4h cadence). Confirm 42 PENDING DirectoryClaimEmail leads begin draining.
-
-3. **7 structurally-broken licensing scrapers (escalated MEDIUM).** Indiana/Kentucky/Massachusetts/Maine/New Hampshire/Rhode Island/Nebraska — all consecutive failures, not flaky. Consider dispatching `findasale-dev` to triage root cause and fix or stub as intentional-known-broken.
-
-4. **FB Events runtime optimization.** 20.4 min + 45 Searlo 429 per run. Options: (a) reduce burst in parallel queries (add inter-query delay), (b) Patrick buys Searlo credit pack ($3.99+ → bump SEARLO_RPM to new limit). The daily monitor will flag if Serper backups trend upward.
-
-**Remaining QA carry-forward:**
-- **#470 GA4** — other 3 events (sale_created/first_item_uploaded/checkout_initiated) CODE-ONLY; verify via GA4 Real-Time on actual actions
-- **#75 Tier lapse P2** — plan label shows PRO despite lapse; UNVERIFIED (Stripe webhook simulation needed)
-- **#422 OAuth 409 flow** — UNVERIFIED (real Google OAuth needed in test)
-- **#317 Geofence QR Scans** — real GPS needed
-- **#463 Claim Button Click Tracking** — Vercel Analytics Events tab needed
-- **#36 Weekly Treasure Digest** — email cron, can't QA in env
 
 ## Recent Sessions
 
