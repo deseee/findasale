@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S942 — DEV/RECORDS (2026-06-10).** Scraper fleet expansion — 5 new sources investigated. RESULTS: (1) PropertyRoom.com ✅ BUILT (S941 cont.) — ~46 law enforcement/gov't agency partners, static `/about-us/partners`, AUCTION_HOUSE, Wed 7am cron. (2) StorageTreasures ✅ PARKED — Next.js SPA, public API hard-capped at 50/36,943 records. (3) StorageAuctions.com ✅ BUILT — found public JSON API (`core-service.auctions.storageauctions.com`), 3,103 US records, no explicit ToS prohibition found, Tue 7am cron, AUCTION_HOUSE. (4) PublicSurplus.com ✅ BUILT — server-rendered HTML + Ajax XML, ~6,330 gov't agency auctions, ToS CLEAR, Tue 8am cron, AUCTION_HOUSE. (5) Municibid.com ❌ PROHIBITED — ToS §(c) explicit dual ban ("automated means" + "scraping"). (6) Fleamapket.com ❌ PROHIBITED — broad ToS anti-automation clause. (7) FleaMarketInsiders.com ❌ PROHIBITED — same clause; site is a wrapper for Fleamapket.com. sourceRegistry.ts now has 7 entries (FleaMarketZone, StorageAuctionsNet, PropertyRoom, StorageAuctionsCom, StorageTreasures, Municibid, PublicSurplus). decisions-log.md updated: 7 ToS decisions logged under S942. BQ: 0 (unchanged).
+
 **S941 — DEV/RECORDS (2026-06-10).** Parallel dispatch: records pass + FB Events burst fix + 7 licensing scraper triage + scraper source investigation + FleaMarketZone scraper build. (1) RECORDS PASS ✅ — S939+S940 PCVs applied to roadmap.md: #27b watermark gating Chr ✅ S940 (PRO locked ss_340873qej, TEAMS unlocked ss_549588e2a); #75 non-lapsed TEAMS label ✅ S940 (ss_5075d8oqc); #422 OAuth partial Chr ✅ S940 (buttons on /login ss_1808g433w + Linked Accounts UI ss_62243gw0x, 409 bridge UNVERIFIED); SEO3 REJECTED — no screenshot ID in S939 evidence, Human QA ⬜ unchanged; #470 already present in roadmap from S939. PCV table cleared. (2) FB EVENTS BURST FIX ✅ — Added 6500ms inter-sub-query delay in search-facebook-events.ts: when usedEngine='searlo', sleep(6500) between sub-queries per metro; non-Searlo fallback engines keep jitterDelay(200,500). Root cause: 3 sub-queries per metro passing through module-level searloThrottle in rapid succession, hitting Searlo's 10/min sliding window. Target: 17% 429 rate → <5%. (3) LICENSING SCRAPERS ✅ 7 scraper files PARKED + 7 workflows hardened — Indiana/Kentucky/Massachusetts/Maine/New Hampshire (cloud IP WAF blocks) + Rhode Island (auctioneer license repealed 2015; scrape-ri-phase2.yml + scrape-rhode-island-licensing.yml both hardened). NH bonus: businessCategory 'auctioneer'→'AUCTION_HOUSE' bug fixed (was silently rejecting every NH record). All 7 workflows: continue-on-error: true. 13 files total in commit 665c2954. (4) SCRAPER SOURCE INVESTIGATION ✅ — 5 sources evaluated: MaxSold (PROHIBITED — explicit no-scraping clause), GovDeals (PROHIBITED — explicit spider/crawler ban), StorageTreasures (GRAY/CAUTION — MySpace-era automated-use boilerplate, robotsAllow:true; Patrick decision pending), StorageAuctions.net (CLEAR but AngularJS SPA — PARKED), FleaMarketZone (CLEAR — built). PropertyRoom: ToS CLEAR but site overloaded during investigation; re-evaluate when site recovers. decisions-log.md updated: 5 locked ToS decisions under '## 2026-06-10 (S941)'. (5) FLEAMARKETZONE SCRAPER ✅ BUILT — WordPress/WPBDP plugin site, 51 US regions (~1,050 venues), Monday 6am cron (scrape-fleamarketzone.yml), businessCategory: 'FLEA_MARKET', 0.3 req/sec. Registered in sourceRegistry.ts. (6) STORAGEAUCTIONS.NET — BUILT + PARKED (AngularJS SPA: empty ng-app shell, zero static data). Clean early-return. Workflow created, schedule commented out. Unpark path: Playwright/Puppeteer or REST API at update.storageauctions.net. BQ: 0 (unchanged).**
 
 **S940 — QA/DEV/OPS/MONITORING (2026-06-10). Parallel dispatch: monitoring harden + OPS verification + Chrome QA + 2 dev fixes. PUSH BLOCK PROVIDED. (1) MONITORING HARDEN ✅ — findasale-ci-sentry-health Step 1c patched: KNOWN_OK_DISABLED={'scrape-google-places','scrape-naa'}; disabled_manually workflows not in allowlist now alert HIGH. S939 silent-failure gap (pipeline-outreach-emails dark 5 days) is now closed. (2) FB EVENTS VERIFIED: first post-overhaul daily run — 20.4 min (above 19-min target), 167 Searlo OK + 45 Searlo 429 (17% fallback) + 90 Serper backups. AUCTION/FLEA events landing. No data loss (Serper catches 429s). Runtime concern: sub-query bursts hit Searlo 10/min cap in some metros — Patrick Searlo credit decision still open. (3) OUTREACH: outreach_sent_24h=0 — pipeline-outreach-emails was re-enabled S939 but GitHub cron hadn't re-registered yet (last fired June 5). Fix: trivial comment added to workflow YAML in push block to force cron scheduler re-registration. (4) MONITORING COVERAGE: 123 workflows, 2-page pagination ✅, 122 active + 1 known-OK disabled (scrape-google-places). (5) LICENSING SCRAPERS — 7 consistently-failing scrapers escalated LOW→MEDIUM: Indiana/Kentucky/Massachusetts/Maine/New Hampshire/Rhode Island/Nebraska (structurally broken — multiple consecutive failures). ~24 others succeeding. (6) PRINT KIT P1 FIXED: downloadAuthenticatedFile used localStorage.getItem('token') after httpOnly cookie migration → 401 on all PDF downloads. Fixed: credentials:'include' + Next.js /api proxy URL stripping absolute Railway origin. (7) NODE.JS CI FIX: scrape-ok-phase2.yml + scrape-wy-phase2.yml: github-script@v6→@v7. Rest of fleet already on @v4/v7. (8) CHROME QA — #27b watermark gating ✅ (PRO locked ss_340873qej, TEAMS unlocked ss_549588e2a); PDF download was P1 → fixed this session. #75 non-lapsed subscription display ✅ (TEAMS label correct ss_5075d8oqc); lapse P2 UNVERIFIED (Stripe webhook can't simulate in QA). #422 OAuth buttons on /login ✅ (ss_1808g433w) + Linked Accounts UI ✅ (ss_62243gw0x); 409 OAuthBridge UNVERIFIED. BQ: 0 (unchanged).**
@@ -159,34 +161,39 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Push block (S941 final — copy-paste into PowerShell from FindaSale root):**
+1. **Push block (S941+S942 consolidated — copy-paste into PowerShell from FindaSale root):**
 ```
 git add packages/backend/src/services/scraper/sources/fleaMarketZoneScraper.ts
 git add packages/backend/src/services/scraper/sources/storageAuctionsNetScraper.ts
 git add packages/backend/src/services/scraper/sources/propertyRoomScraper.ts
 git add packages/backend/src/services/scraper/sources/storageTreasuresScraper.ts
+git add packages/backend/src/services/scraper/sources/storageAuctionsComScraper.ts
+git add packages/backend/src/services/scraper/sources/publicSurplusScraper.ts
+git add packages/backend/src/services/scraper/sources/municibidScraper.ts
 git add .github/workflows/scrape-fleamarketzone.yml
 git add .github/workflows/scrape-storageauctionsnet.yml
 git add .github/workflows/scrape-propertyroom.yml
 git add .github/workflows/scrape-storagetreasures.yml
+git add .github/workflows/scrape-storageauctions-com.yml
+git add .github/workflows/scrape-publicsurplus.yml
+git add .github/workflows/scrape-municibid.yml
 git add packages/backend/src/services/scraper/sourceRegistry.ts
 git add claude_docs/decisions-log.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat(scraper): PropertyRoom (~46 agencies, AUCTION_HOUSE), StorageTreasures PARKED (SPA/hard-capped API), FleaMarketZone (~1,050 venues), StorageAuctions.net PARKED (AngularJS); docs: ToS decisions log S941, wrap"
+git commit -m "feat(scraper): FleaMarketZone (~1,050 venues), PropertyRoom (~46 agencies), StorageAuctions.com (3,103 records/API), PublicSurplus (~6,330 gov auctions); PARKED: StorageTreasures (SPA/capped), StorageAuctionsNet (AngularJS); PROHIBITED: Municibid/Fleamapket/FMInsiders (ToS); docs: S941+S942 wrap"
 .\push.ps1
 ```
 
 2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
 
-### S942 Recommendation
+### S943 Recommendation
 BQ=0 (ceiling=8 — DEV available).
 
 **Priority queue:**
 1. **Chrome QA** — #422 OAuth 409 bridge (UNVERIFIED), #470 GA4 other 3 events (CODE-ONLY), #75 tier lapse P2 (UNVERIFIED), SEO3 /estate-sales/denver-co Human QA. Dispatch `Skill('findasale-qa')` sequentially (one feature per dispatch, Chrome agents sequential).
-2. **Scraper fleet next targets.** StorageAuctions.net unpark path: Playwright or REST API auth. GovDeals and MaxSold remain PROHIBITED..
-3. **StorageTreasures scraper** — awaiting Patrick decision on #2 above.
-4. **StorageAuctions.net unpark** — probe REST API at `update.storageauctions.net` for static venue data. Dispatch `Skill('findasale-innovation')` or `Skill('findasale-dev')`.
+2. **Scraper fleet next** — StorageAuctions.net unpark: probe REST API at `update.storageauctions.net`. StorageTreasures unpark: Cognito JWT / Playwright / API auth partnership (Patrick to decide). GovDeals + MaxSold remain PROHIBITED.
+3. **StorageTreasures decision** — Patrick: proceed via one of the 3 unpark paths, or leave PARKED.
 
 
 ## Recent Sessions

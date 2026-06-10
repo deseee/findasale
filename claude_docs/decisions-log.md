@@ -533,3 +533,38 @@ Index (newest first): S687 Scraper Source Allowlist | S626 Organizer Acquisition
 **Status:** BUILT
 **Rationale:** No anti-scraping ToS language. Open robots.txt. WordPress/WPBDP site with fully static HTML listings. Scraper built and registered. ~1,050 US flea market venues across all 50 states + DC.
 
+
+---
+
+## 2026-06-10 (S942) — Scraper Source ToS Decisions (5 sources)
+
+**Status:** LOCKED
+
+**1. PropertyRoom.com — CONFIRMED CLEAR (BUILT S942)**
+**Status:** BUILT
+**Rationale:** robots.txt clean. No anti-scraping ToS language found. Static `/about-us/partners` page lists ~46 named law enforcement and government agency partners. Scraper targets this static page (not `/l/auctions` which blocks headless fetches). businessCategory: AUCTION_HOUSE. Workflow: Wednesday 7am UTC.
+
+**2. StorageTreasures.com — GRAY / PARKED (technical + ToS ambiguity)**
+**Status:** PARKED (technical blocker + ToS gray area)
+**Rationale:** Site is Next.js SPA — public API found (`core-service.storagetreas...`) but hard-capped at 50 records out of 36,943 facilities regardless of pagination params. ToS automated-use clause is social-platform boilerplate (mentions "band profiles") — probably not aimed at read-only scraping, but ambiguous. 50 records not worth ingesting. Three unpark paths: Cognito JWT auth, Playwright, API auth partnership. PARKED pending one of those paths.
+
+**3. StorageAuctions.com (storageauctions.com) — GRAY ToS / BUILT S942**
+**Status:** BUILT
+**Rationale:** ToS page is Next.js client-rendered — no server-side text accessible. robots.txt `Allow: /`. No prohibition language found anywhere accessible. Found public JSON API (`core-service.auctions.storageauctions.com/public/auctions`) returning full facility data — 3,103 US records at 100/page. Scraper uses API pagination with wide-radius national sweep. businessCategory: AUCTION_HOUSE. Workflow: Tuesday 7am UTC.
+**Note:** ToS GRAY due to unreadable JS-rendered page. If ToS becomes accessible and contains explicit prohibition, disable immediately (`enabled: false` in sourceRegistry.ts).
+
+**4. PublicSurplus.com — CONFIRMED CLEAR (BUILT S942)**
+**Status:** BUILT
+**Rationale:** ToS endpoint returns HTTP 500 (server error, not a block). Privacy Policy has zero scraping-prohibition language. robots.txt extremely permissive — only disallows `/images/`. Site uses server-rendered HTML with Ajax XML pagination. ~6,330 active government agency auctions across 28 categories. Government agency names + state extracted from detail pages. businessCategory: AUCTION_HOUSE. Workflow: Tuesday 8am UTC.
+
+**5. Municibid.com — PROHIBITED**
+**Status:** LOCKED — DO NOT BUILD
+**Rationale:** ToS (updated 05/04/2026) Section (c) expressly prohibits: "Accessing or attempting to access the Website through automated means" AND "Scraping, reproducing, republishing, selling, reselling, duplicating, or trading the Website or its content." Explicit dual prohibition — most explicit anti-scraping ToS found in fleet research. PARKED stub exists in codebase with `prohibited: true` flag. Unpark path: contact https://info.municibid.com/contact-us for written data partnership.
+
+**6. Fleamapket.com — PROHIBITED**
+**Status:** LOCKED — DO NOT BUILD
+**Rationale:** ToS contains verbatim: "You may not use any deep-link, page-scrape, spider, robot, crawl, index, Internet agent, or other automatic devices, programs, algorithms, or technologies which does the same things, to use, access, copy, acquire information..." Extremely broad anti-automation clause covering all automated access. robots.txt allowing `/listing-region/` is irrelevant — ToS prohibition overrides robots.txt. No scraper stub created. Unpark path: contact via `/contact-us/` for data partnership or feed license.
+
+**7. FleaMarketInsiders.com — PROHIBITED**
+**Status:** LOCKED — DO NOT BUILD
+**Rationale:** Identical broad anti-scraping ToS clause as Fleamapket.com. Additionally: actual listing data lives at Fleamapket.com (a sister site) — FleaMarketInsiders.com is a brand wrapper that redirects to the directory. No scraper stub created.
