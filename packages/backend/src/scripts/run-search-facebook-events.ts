@@ -18,6 +18,9 @@ import { Resend } from 'resend';
 import {
   scrapeFacebookEventsForMetro,
   SEARCH_METROS,
+  getMetrosForToday,
+  getShardIndexForDate,
+  SHARD_COUNT,
 } from '../services/scraper/sources/search-facebook-events';
 import { jitterDelay } from '../services/scraper/userAgents';
 
@@ -85,8 +88,20 @@ async function main() {
     );
   }
 
+  // METRO SELECTION: by default we run only TODAY'S shard (~1/SHARD_COUNT of the
+  // full canonical list) so each daily run stays small and fast. Set
+  // FB_EVENTS_ALL_METROS=true to bypass sharding and run the entire list — used
+  // for manual backfills via workflow_dispatch.
+  const runAll = process.env.FB_EVENTS_ALL_METROS === 'true';
+  const metros = runAll ? SEARCH_METROS : getMetrosForToday();
+  const shardIndex = getShardIndexForDate();
+
   console.log(
-    `[run-fb-events] Starting — ${SEARCH_METROS.length} metros, ingest URL: ${INGEST_URL}`
+    runAll
+      ? `[run-fb-events] Starting — FULL list (FB_EVENTS_ALL_METROS=true): ` +
+        `${metros.length}/${SEARCH_METROS.length} metros, ingest URL: ${INGEST_URL}`
+      : `[run-fb-events] Starting — shard ${shardIndex + 1}/${SHARD_COUNT}: ` +
+        `${metros.length}/${SEARCH_METROS.length} metros, ingest URL: ${INGEST_URL}`
   );
 
   const allItems: any[] = [];
@@ -95,7 +110,7 @@ async function main() {
   let metroFailed = 0;
 
   // Scrape each metro sequentially with jitter to stay within rate limits
-  for (const metro of SEARCH_METROS) {
+  for (const metro of metros) {
     try {
       const items = await scrapeFacebookEventsForMetro(metro, {
         searloKey:    SEARLO_KEY,
@@ -124,8 +139,10 @@ async function main() {
       );
     }
 
-    // Brief jitter between metros to avoid hammering search APIs
-    await jitterDelay(500, 1500);
+    // Inter-metro pacing for Searlo is handled by its module-level throttle
+    // (per-second + per-minute caps); keep only a tiny jitter to avoid bursting
+    // the non-Searlo fallback engines.
+    await jitterDelay(100, 300);
   }
 
   console.log(
