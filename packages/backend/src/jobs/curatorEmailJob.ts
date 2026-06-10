@@ -11,7 +11,7 @@ import { bulkEmailEnabled } from '../utils/bulkEmailGate';
 import { suppressionService } from '../services/suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-const FROM_EMAIL   = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
+const FROM_EMAIL   = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
 // ─── Email template ──────────────────────────────────────────────────────────────────────────────────────────────────
 

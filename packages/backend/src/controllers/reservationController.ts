@@ -1306,7 +1306,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
             return;
           }
           await emailService.emails.send({
-            from: process.env.SES_FROM_EMAIL || 'invoices@send.finda.sale',
+            from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
             to: reservation.user.email,
             subject: `Complete your purchase: ${itemList}`,
             html: `

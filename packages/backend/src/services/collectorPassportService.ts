@@ -287,7 +287,7 @@ const sendMatchNotificationEmail = async (
   }
 
   await emailService.emails.send({
-    from: process.env.SES_FROM_EMAIL || 'FindA.Sale <notifications@send.finda.sale>',
+    from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'FindA.Sale <find@outreach.finda.sale>',
     to: email,
     subject: `${matchedItems.length} item${matchedItems.length !== 1 ? 's' : ''} match your collection!`,
     html,

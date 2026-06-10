@@ -395,7 +395,7 @@ router.post('/send-test-email', async (req: any, res: any) => {
     if (rail === 'gmail') {
       // Gmail rail — uses existing emailService (Gmail API via OAuth2, quota-gated)
       const { emailService } = await import('../lib/emailService');
-      const fromAddress = process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+      const fromAddress = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
       const result = await emailService.emails.send({
         from: `FindA.Sale <${fromAddress}>`,
         to: toAddress,

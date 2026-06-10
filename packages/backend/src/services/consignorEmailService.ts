@@ -2,7 +2,7 @@ import { buildEmail } from './emailTemplateService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 
 
-const fromEmail = process.env.SES_FROM_EMAIL || 'notifications@send.finda.sale';
+const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 const siteUrl = process.env.FRONTEND_URL || 'https://finda.sale';
 
 /**

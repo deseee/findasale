@@ -279,7 +279,7 @@ export const sendWeeklyDigest = async () => {
     }
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const fromEmail = process.env.SES_FROM_EMAIL || 'digest@send.finda.sale';
+    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
     // Find PUBLISHED sales starting in the next 7 days
     const now = new Date();

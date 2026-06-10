@@ -31,7 +31,7 @@ import { getSaleSocialProof } from './socialProofService';
 import { suppressionService } from './suppressionService';
 import { generateReferralCode } from './referralService';
 
-const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'hello@send.finda.sale';
+const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
 interface RecapMetrics {

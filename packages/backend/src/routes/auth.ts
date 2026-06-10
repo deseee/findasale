@@ -122,7 +122,7 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
       data: { emailVerificationToken: newToken }
     });
     const verifyUrl = `${frontendUrl}/verify-email?token=${newToken}`;
-    const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
+    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
     if (user.emailVerificationToken) {
       try {
@@ -211,7 +211,7 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-    const fromEmail = process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale';
+    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
     try {
       await transactionalEmailService.emails.send({

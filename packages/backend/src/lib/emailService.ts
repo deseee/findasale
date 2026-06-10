@@ -5,7 +5,7 @@ import { isEmailDomainBlocked, suppressionService } from '../services/suppressio
 
 /**
  * Transactional email service — uses Gmail API (same auth as outreach).
- * FROM address: uses SES_FROM_EMAIL env var (defaults to find@outreach.finda.sale).
+ * FROM address: uses GMAIL_FROM_EMAIL env var (falls back to legacy SES_FROM_EMAIL; defaults to find@outreach.finda.sale).
  * Must match the same DKIM/SPF domain as outreach emails (outreach.finda.sale).
  */
 

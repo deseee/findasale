@@ -96,7 +96,7 @@ async function sendSneakPeekEmail(opts: {
 
   try {
     await emailService.emails.send({
-      from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
+      from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
       to,
       subject,
       html,

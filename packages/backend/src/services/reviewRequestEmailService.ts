@@ -28,7 +28,7 @@ import {
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
 
-const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'hello@send.finda.sale';
+const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const GBP_REVIEW_URL = process.env.GBP_REVIEW_URL || '';
 

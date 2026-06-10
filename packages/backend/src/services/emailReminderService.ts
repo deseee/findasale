@@ -120,7 +120,7 @@ export const sendReminderEmail = async (reminder: ReminderEmail): Promise<void> 
       // EM2: Retry up to 3 times with exponential backoff on transient Resend failures
       await withRetry(() =>
         emailService.emails.send({
-          from: process.env.SES_FROM_EMAIL || 'noreply@send.finda.sale',
+          from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
           to: reminder.to,
           subject,
           html,

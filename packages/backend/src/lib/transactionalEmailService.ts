@@ -12,8 +12,8 @@ import * as Sentry from '@sentry/node';
  * Gmail/emailService remains the rail for bulk and marketing emails
  * (sale alerts, newsletters, weekly digests, win-back flows, etc.).
  *
- * FROM domain: send.finda.sale (already verified — used by emailService quota alerts).
- * Default sender: hello@send.finda.sale
+ * FROM domain: finda.sale (Resend-verified root domain).
+ * Default sender: RESEND_FROM_EMAIL (defaults to noreply@finda.sale).
  *
  * Environment variable required in Railway:
  *   RESEND_API_KEY=<from Resend dashboard → API Keys>
