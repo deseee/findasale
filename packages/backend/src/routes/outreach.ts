@@ -229,29 +229,55 @@ router.post('/resend-webhook', express.raw({ type: 'application/json' }), async 
 });
 
 async function handleResendWebhook(payload: any, res: express.Response): Promise<void> {
-  const { type, email, bounce_type } = payload;
-  if (!email) return res.status(400).json({ error: 'Missing email' });
+  const type = payload?.type;
+  const data = payload?.data || {};
 
-  if (type === 'email.bounced') {
-    const bounceReason = bounce_type === 'hard' ? 'hard_bounce' : 'soft_bounce';
-    await suppressionService.addSuppression(email, bounceReason as any);
-  }
+  // Real Resend payloads put recipients under data.to (an ARRAY) and bounce
+  // hardness under data.bounce.type ('Permanent' = hard, 'Transient' = soft).
+  // There is NO top-level `email` or `bounce_type`. Keep a backward-compat
+  // fallback to a flat payload.email in case an older/test shape is sent.
+  const toList: string[] = Array.isArray(data.to)
+    ? data.to
+    : (data.to ? [data.to] : (payload?.email ? [payload.email] : []));
+  const emailId: string | undefined = data.email_id;
+  const bounceType: string | undefined = data?.bounce?.type; // 'Permanent' | 'Transient'
 
-  // Resend sends `email.complained` for spam complaints (not `email.complaint`).
-  if (type === 'email.complained') {
-    await suppressionService.processComplaint(email);
-  }
+  if (toList.length === 0) return res.status(400).json({ error: 'Missing recipient' });
 
-  // Resend added the recipient to its suppression list — mirror it locally.
-  if (type === 'email.suppressed') {
-    console.warn(`[OutreachWebhook] email.suppressed for ${email} — adding local suppression (manual).`);
-    await suppressionService.addSuppression(email, 'manual');
-  }
+  for (const addr of toList) {
+    if (type === 'email.bounced') {
+      const bounceReason = bounceType === 'Permanent' ? 'hard_bounce' : 'soft_bounce';
+      await suppressionService.addSuppression(addr, bounceReason, { resendEventId: emailId });
+    }
 
-  // Resend permanently failed to deliver. No clean suppression reason maps to a
-  // transient/permanent failure, so log it loudly rather than silently dropping.
-  if (type === 'email.failed') {
-    console.warn(`[OutreachWebhook] email.failed for ${email} — reason: ${payload.reason || payload.failed?.reason || 'unknown'}`);
+    // Resend sends `email.complained` for spam complaints (not `email.complaint`).
+    if (type === 'email.complained') {
+      await suppressionService.processComplaint(addr);
+    }
+
+    // Resend added the recipient to its suppression list — mirror it locally as a
+    // hard block so OUR send gates (bulk + transactional) actually stop sending.
+    if (type === 'email.suppressed') {
+      console.warn(`[OutreachWebhook] email.suppressed for ${addr} — adding local hard suppression.`);
+      await suppressionService.addSuppression(addr, 'hard_bounce', { resendEventId: emailId });
+    }
+
+    // Successful delivery — reset any accumulated consecutive soft-bounce state so a
+    // recovered mailbox (e.g. was temporarily full) is not eventually suppressed.
+    // Wrapped so a reset failure never prevents the 200 response.
+    if (type === 'email.delivered') {
+      try {
+        await suppressionService.resetSoftBounce(addr);
+      } catch (resetErr: any) {
+        console.error(`[OutreachWebhook] Failed to reset soft-bounce state for ${addr}:`, resetErr.message);
+      }
+    }
+
+    // Resend permanently failed to deliver. No clean suppression reason maps to a
+    // transient/permanent failure, so log it loudly rather than silently dropping.
+    if (type === 'email.failed') {
+      console.warn(`[OutreachWebhook] email.failed for ${addr} — reason: ${data?.bounce?.message || payload?.reason || 'unknown'}`);
+    }
   }
 
   res.status(200).json({ ok: true });
