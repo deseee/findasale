@@ -1,0 +1,60 @@
+name: Scrape StorageTreasures Directory
+
+on:
+  schedule:
+    - cron: '0 7 * * 4'  # Thursdays at 7:00 UTC — DISABLED (parked, see storageTreasuresScraper.ts)
+  workflow_dispatch:
+
+# PARKED: StorageTreasures is a full Next.js SPA. Public API key is capped at 50 truncated
+# records; state filters and pagination are ignored server-side. 36,943 facilities exist
+# but require an authenticated Cognito JWT or Playwright headless rendering to access.
+# This workflow is intentionally disabled in sourceRegistry (enabled: false).
+# Unpark path: Playwright/headless OR authenticated API session.
+# Verified: 2026-06-10.
+
+jobs:
+  scrape:
+    name: StorageTreasures Facility Directory Scraper (All US States)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: packages/database
+
+      - name: Run StorageTreasures Scraper
+        continue-on-error: true
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { scrapeStorageTreasures } from "./src/services/scraper/sources/storageTreasuresScraper";
+            import { RateLimiter } from "./src/services/scraper/rateLimiter";
+            (async () => { try {
+              const rateLimiter = new RateLimiter({ requestsPerSecond: 0.5 });
+              const stats = await scrapeStorageTreasures("national", "", rateLimiter);
+              console.log("StorageTreasures scraper completed:", JSON.stringify(stats));
+              process.exit(0);
+            } catch (err) {
+              console.error("StorageTreasures scraper failed:", err);
+              process.exit(1);
+            }
+            })();
+          '

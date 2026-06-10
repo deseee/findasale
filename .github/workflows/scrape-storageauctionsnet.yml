@@ -1,0 +1,59 @@
+name: Scrape StorageAuctions.net Directory
+
+# PARKED — StorageAuctions.net auction listings are AngularJS-rendered.
+# Static HTTP fetch returns a shell (<div ng-view>) with zero facility records.
+# Verified: 2026-06-10 — /allonline and /site-map/us/[state]/ both JS-rendered.
+# Unpark path: implement Playwright/Puppeteer headless rendering, or discover
+# the REST API endpoint called by the AngularJS frontend (check Network tab in
+# DevTools for JSON endpoints at update.storageauctions.net).
+# was: cron: '0 7 * * 1'
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: StorageAuctions.net Directory Scraper (PARKED)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: packages/database
+
+      - name: Run StorageAuctions.net Scraper
+        continue-on-error: true
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { scrapeStorageAuctionsNet } from "./src/services/scraper/sources/storageAuctionsNetScraper";
+            import { RateLimiter } from "./src/services/scraper/rateLimiter";
+            (async () => { try {
+              const rateLimiter = new RateLimiter({ requestsPerSecond: 0.5 });
+              const stats = await scrapeStorageAuctionsNet("national", "", rateLimiter);
+              console.log("StorageAuctions.net scraper completed:", JSON.stringify(stats));
+              process.exit(0);
+            } catch (err) {
+              console.error("StorageAuctions.net scraper failed:", err);
+              process.exit(1);
+            }
+            })();
+          '

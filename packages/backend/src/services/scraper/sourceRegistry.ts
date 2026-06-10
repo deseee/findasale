@@ -11,6 +11,10 @@ import { scrapeFacebookMarketplace } from './sources/facebook-marketplace';
 import { scrapeNAADirectory } from './sources/naaAuctioneerDirectory';
 import { scrapeAuctionNinja } from './sources/auctionNinjaScraper';
 import { runYellowPagesCaScraper } from './sources/yellowPagesCaScraper';
+import { scrapeFleaMarketZone } from './sources/fleaMarketZoneScraper';
+import { scrapeStorageAuctionsNet } from './sources/storageAuctionsNetScraper';
+import { scrapeStorageTreasures } from './sources/storageTreasuresScraper';
+import { scrapePropertyRoom } from './sources/propertyRoomScraper';
 
 export type SourceType = 'directory' | 'licensing' | 'crawl-queue' | 'places-api';
 export type SourceRunMode = 'metro-loop' | 'national-once';
@@ -128,6 +132,52 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
         itemsFailed: 0,
       };
     },
+  },
+,
+  {
+    id: 'FleaMarketZone',
+    displayName: 'FleaMarketZone.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    // No cronSchedule — triggered via GitHub Actions (scrape-fleamarketzone.yml).
+    qualityTier: 'medium',
+    legalNote: 'ToS confirmed CLEAR — no anti-scraping language. robots.txt open. Public venue directory.',
+    run: scrapeFleaMarketZone,
+  },
+  {
+    id: 'StorageAuctionsNet',
+    displayName: 'StorageAuctions.net',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — AngularJS-rendered, no static listings. See storageAuctionsNetScraper.ts.
+    qualityTier: 'low',
+    legalNote: 'ToS confirmed CLEAR — blank robots.txt Disallow. Site is JS-rendered; parked pending headless browser implementation.',
+    run: scrapeStorageAuctionsNet,
+  },
+  {
+    id: 'PropertyRoom',
+    displayName: 'PropertyRoom.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    // No cronSchedule — triggered via GitHub Actions (scrape-propertyroom.yml).
+    qualityTier: 'high',
+    legalNote: 'ToS confirmed CLEAR — no anti-scraping clause. /about-us/partners not disallowed in robots.txt. Public partner directory of named law enforcement agencies.',
+    run: scrapePropertyRoom,
+  },
+  {
+    id: 'StorageTreasures',
+    displayName: 'StorageTreasures.com',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: false, // PARKED — Full Next.js SPA; public API key capped at 50 truncated records.
+    // Unpark path: Playwright headless rendering OR authenticated Cognito JWT API session.
+    // 36,943 US storage facilities confirmed in API; inaccessible via public key.
+    // robots.txt: Open (Allow: / for all agents). ToS: GRAY area, robotsAllow:true in appConfig.
+    qualityTier: 'medium',
+    legalNote: 'ToS gray area (MySpace-era boilerplate, no explicit scraper ban). robots.txt open. robotsAllow:true confirmed in page appConfig. Parked on data access grounds, not legal.',
+    run: scrapeStorageTreasures,
   },
 ];
 
