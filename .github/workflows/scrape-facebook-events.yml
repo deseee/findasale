@@ -48,7 +48,17 @@ jobs:
           BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
           SCALESERP_API_KEY: ${{ secrets.SCALESERP_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          FB_EVENTS_ORGANIZER_ID: ${{ secrets.FB_EVENTS_ORGANIZER_ID }}
+          # Searlo per-minute rate cap (repo Variable, not a secret). Empty is fine —
+          # the scraper defaults to 9 (free tier = 10/min, 9 leaves margin). When the
+          # Searlo plan is upgraded, set the SEARLO_RPM repo Variable to the new limit;
+          # no code change is needed.
+          SEARLO_RPM: ${{ vars.SEARLO_RPM }}
+          # Manual workflow_dispatch with all_metros=true bypasses daily sharding and
+          # runs the entire ~301-metro list (full backfill). Scheduled runs leave this
+          # unset, so the scraper runs only today's ~43-metro shard.
           FB_EVENTS_ALL_METROS: ${{ inputs.all_metros }}
         run: |
           cd packages/backend
-          ./node_modules/.bin/ts-node src/scripts/run-search-facebook-events.ts
+          npx ts-node src/scripts/run-search-facebook-events.ts
