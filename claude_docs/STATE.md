@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S951 — RECORDS/AUDIT (2026-06-11). Scheduled-task fix audit — documented 3 same-day autonomous fixes that landed on `main` but were ABSENT from STATE/roadmap. All committed + pushed (HEAD=origin/main=5eb844d3), Railway/Vercel auto-deploying. (1) **ops-cost-guard (09:10)** → Google Maps billing lockdown HARD-CODED (commit 529f4ee7): `GOOGLE_MAPS_ENABLED` env var can no longer re-enable any Maps/Places call — verificationController.ts (4 gates), placesService.ts, googlePlaces.ts scraper, enrichContactEmails.ts all return early via `BILLING_LOCKED_DOWN` const. Ties to project_google_api_incident ($201, May 2026); only source edits can re-enable billing now. (2) **ci-sentry-health (06:10)** → commit ed5c020e: scraperCron.ts defensive null guard; emailDiscoveryService.ts port-25 SMTP stage removed + scrape errors now logged (not swallowed) + 0-result warning; emailDiscoveryJob.ts return type incl. `skipped`; DB-connectivity pre-flight added to 65 `.github/workflows/*.yml` — a stale `DATABASE_URL` secret now fails loudly with fix instructions instead of silently. (3) **email-delivery-health (10:08)** → commit bd6e6967: outreachEmailsCron.ts null-safe GarageSaleFinder exclusion in `baseWhere` — Prisma `NOT [{ directoryMostRecentSource:'GarageSaleFinder' }]` evaluated to NULL→falsy for null-source orgs, silently excluding EVERY null-source US organizer from all tier passes; 22 organizers stuck up to 31 days (May 11–Jun 11). friction-audit (07:38) ran CLEAN — 0 P0/P1; flagged P3: STATE §S913 Noted Findings still reads 'not yet actioned' though all items resolved S915/S918 (cleanup-at-wrap). competitor-monitor + nft runs = intel only, no code touched. Commit-history noise (cosmetic only, content correct on main): bd6e6967↔db44bbdf and c7d04bb2↔ce1d0cf7 are mislabeled/duplicate-message pairs. **OPEN PATRICK ACTION:** stale GitHub Actions `DATABASE_URL` secret still blocks HERE Places + DB scraper workflows until refreshed (see Next Session). BQ: 1 (unchanged).**
+
 **S949 — QA/RECORDS (2026-06-11). Records pass + QA re-run for 4 rejected PCVs. (1) RECORDS PASS — #472 send-test-email 3x PCVs (S948) applied to roadmap.md: Chrome QA ✅ S948 (happy path ss_6413lunko, domain block ss_6413lunko, auth gate ss_4595bvchx). roadmap.md Last Updated header updated S949. (2) QA RE-RUN — 4 rejected S945/S946 PCVs re-verified with screenshot IDs: (a) #422 OAuth 409 ✅ — POST /api/auth/oauth → 409+OAUTH_LINK_REQUIRED for user1@example.com (oauthProvider=NULL). /login?message=... shows orange info banner. ss_3450u6tgu ss_8074zis8d; (b) #75 Tier lapse UI ✅ — finda.sale/organizer/dashboard as qa-lapse@example.com (SIMPLE tier). "Your Plan: SIMPLE" + "Upgrade to PRO" at $29/mo + purple CTA. ss_83752jesk; (c) #470 item_viewed ✅ — finda.sale/items/cmo3etp4d... dataLayer.find(e=>e[1]==='item_viewed') confirmed {item_id, item_name}. ss_8841oxiro ss_7047o7yzv; (d) #470 organizer_signup UNVERIFIED — cannot trigger without creating new organizer account. Added to BQ. BQ: 0→1.**
 
 **S948 — DEV/QA (2026-06-11). Records pass + ops verification + Chrome QA. (1) RECORDS PASS — SEO3 Human QA ✅ S944 applied to roadmap.md (Human QA column ⬜→✅ S944). 4 PCVs REJECTED (missing screenshot IDs): #422 OAuth 409, #75 tier lapse, #470 item_viewed, #470 organizer_signup — all need re-QA with screenshot IDs. (2) OPS VERIFICATION — S947 commit 7d073292 confirmed deployed on GitHub main: sendTestEmailLimiter (rateLimiter.ts L198), isEmailDomainBlocked guard (admin.ts L398), @system.finda.sale NOT filter (adminBroadcastController.ts — all 5 findMany+count branches), isEmailDomainBlocked (notificationService.ts L50). Backend health check ✅ status:ok. (3) CHROME QA — #472 send-test-email: (a) happy path ✅ POST /api/admin/send-test-email → 200 {success:true, messageId:"bb5ce99a-96d4-48eb-913d-d5f663bc60fc", rail:"resend"} ss_6413lunko; (b) domain block ✅ @system.finda.sale → 400 "Recipient domain blocked" ss_6413lunko; (c) auth gate ✅ unauthenticated → 403 CSRF rejection ss_4595bvchx. SEO3 /estate-sales/denver-co ✅ re-confirmed (H1, 50 listings, meta desc, canonical, dark mode clean ss_1586vmmb9 ss_0985wsbvu). 3 new PCVs staged for next records pass (all have screenshot IDs). NOTE: #472 endpoint schema is {to, subject, body} — not {email}; doc gap for any future automation. BQ: 0 (unchanged).**
@@ -182,37 +184,52 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Push S950 wrap (docs + code together):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
+1. **DISCARD the corrupted scraper working-tree changes (do this first).** A VM filesystem fault corrupted 15 scraper source files + 2 workflow YAMLs this session (truncation + null-byte padding — NOT pushable). Restore them to clean main:
+   ```powershell
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   git checkout -- packages/backend/src/services/scraper/sources/ .github/workflows/scrape-ne-phase2.yml .github/workflows/scrape-wyoming-licensing.yml
+   ```
+   KEEP claude_docs/STATE.md + patrick-dashboard.md (good). The scraper FIXES are re-done cleanly next session (diagnosis preserved below).
+2. **Update the stale GitHub Actions `DATABASE_URL` secret** (surfaced by ci-sentry-health 2026-06-11). HERE Places + every DB-using scraper workflow fails until refreshed:
+   GitHub → repo Settings → Secrets and variables → Actions → `DATABASE_URL` → set to the Railway public-proxy URL (in global CLAUDE.md credentials). The new pre-flight (commit ed5c020e) now fails loudly with this instruction instead of failing silently. After updating, trigger HERE Places via `workflow_dispatch` to confirm a clean run.
+   _(S950 wrap commit 5eb844d3 already pushed — HEAD=origin/main. No push pending. Today's 3 scheduled-task fixes are also already on main.)_
 
-git add packages/backend/src/routes/sales.ts
-git add packages/frontend/pages/server-sitemap.xml.tsx
-git add "packages/frontend/pages/this-weekend/[city].tsx"
-git add "packages/frontend/pages/sales/[id].tsx"
-git add packages/frontend/vercel.json
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
+3. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
 
-git commit -m "fix: sitemap PUBLISHED filter + /sales/sitemap endpoint, ISR 86400, vercel.json CDN cache, this-weekend dynamic revalidate; docs: S950 records pass"
-.\push.ps1
-```
+### S952 — Scraper Fix Campaign (dispatch plan)
 
-2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
+**PRE-FLIGHT (mandatory):** This session's VM filesystem was corrupted (node_modules I/O errors, file truncation, null-byte padding). START in a fresh VM and verify the toolchain BEFORE any code: `cd packages/backend && npx tsc --noEmit --skipLibCheck` must run WITHOUT "Cannot find module '../lib/tsc.js'". If it errors, run `pnpm install` or restart again. Do NOT dispatch code work until tsc actually executes (exit 0 on clean tree).
 
-### S951 Recommendation
-BQ=1 (ceiling=8 — DEV/QA available).
+**TASK A — Dispatch the 4 real scraper fixes** (`Skill('findasale-dev')`; sources confirmed LIVE this session). Per file, GATE: real tsc exit 0 + `npx tsx -e "require('./<file>')"` parses + brace/paren balance check. Reject any "0 errors" where tsc did not actually run.
+- **Kentucky phase2** (`kentuckyPhase2Scraper.ts`): old web1.ky.gov dead → NEW `https://oop.ky.gov/lic_search.aspx`, ASP.NET 2-step (board=34 Auctioneers, status=Active), iterate last-name a–z + dedup by license #. Confirmed 155 live records.
+- **Indiana phase2** (`indianaPhase2Scraper.ts`): URL `https://secure.in.gov/apps/pla/search/` OK; rewrite parser — multi-line `<tr>`→`<td>` splitter, match-count regex `There were ([\d,]+) match`. Live POST returns 7,624 rows → ~1,560 IN active auctioneers (was parsing 1).
+- **Maine phase2** (`mainePhase2Scraper.ts`): old pfr.maine.gov host NXDOMAIN → NEW `https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/` SearchIndividual.aspx → ExportToCSV.aspx (regulator 4210 AUCTIONEERS, scOnlyActive). Confirmed CSV export = 1,118 records.
+- **Alabama phase2** (`alabamaPhase2Scraper.ts`): URL fine (`alauc-search.kalmservices.net/api/search/licenses` returns data); root cause = undici 10s CONNECT timeout. Add 25–30s connect timeout + 1 retry on UND_ERR_CONNECT_TIMEOUT. (NOTE: this file was Edit-tool-truncated this session — re-do from HEAD, do not trust working tree.)
 
-**Priority queue:**
-1. **#470 organizer_signup (BQ)** — Invite code `QA-LAPSE-25` exists unused. Create organizer account to trigger + screenshot dataLayer event. Low effort.
-2. **SEO3 verify sitemap fix** — After push: fetch https://finda.sale/server-sitemap.xml, confirm sale URLs present.
-3. **#470 purchase_completed** — CODE-ONLY. Requires real Stripe checkout or pk_test_ key in Vercel env.
-4. **StorageTreasures decision** — Patrick: Cognito JWT / Playwright / data partnership, or leave PARKED.
-5. **Continue DEV** — BQ=1, below ceiling, roadmap Building items available for dispatch.
+**TASK B — Verify coverage in the truly-DEAD areas before retiring.** For NY/NJ/MA auctioneer + NE/RI pawnbroker (no statewide license source exists — proven via NALLOA/official sites), query the Railway DB + check which OTHER live scrapers already cover those geographies (EstateSalesNet, GarageSaleFinder, FB Events, Google Places, Foursquare, HERE, Invaluable/BidSpotter/AuctionZip/PropertyRoom). If covered → formally RETIRE in decisions-log (not "park"); if a gap → flag it. Output: per-state coverage verdict.
+
+**TASK C — Evaluate alternatives for the NEEDS-INFRA group** (NH licensing+phase2 = Akamai WAF; ME licensing = ASP.NET AJAX; WI licensing = Salesforce SPA; WY pawnbroker = NMLS CAPTCHA; MA phase2 = state API key). For each: cheapest viable path — Playwright-on-Actions / residential proxy / official API-key request / alternative source — with effort + cost.
+
+**TASK D — Size the headless-browser harness across the WHOLE 120+ fleet.** Survey every scraper + prior STATE notes for JS-rendered SPA / WAF / CAPTCHA blockers (known so far: NH Akamai, WI Salesforce, ME ASP.NET-AJAX, WY/NMLS, StorageTreasures Next.js, StorageAuctions.net AngularJS, AuctionNinja JS, NAA Novi AMS JS, + scan the rest). Output: TOTAL count + named list of scrapers that ONE shared Playwright+residential-proxy harness would unblock — to size ROI of building it once vs. retiring sources.
+
+**Confirmed good this session:** DATABASE_URL secret fix verified (DB connectivity OK). ci-sentry-health urgency table reclassified (DATABASE_URL→HIGH top-line, GSF/FB Events aligned with ESN, enrichment→MEDIUM, new-regression rule for phase2/licensing). S951 scheduled-task audit documented. Open: googlePlaces.ts(~526) "response possibly null" runtime TS error from commit 529f4ee7 breaks HERE/OSM (ts-node) — verify + fix locally (project tsc was broken in VM so it wasn't caught).
 
 
 ## Recent Sessions
+
+### S951 — 2026-06-11 | RECORDS/AUDIT + SCRAPER DIAGNOSIS (env failure mid-session)
+
+**Session type:** Audit + monitoring tune + scraper diagnostic campaign
+
+**Work completed:**
+- **Scheduled-task fix audit ✅** — documented 3 same-day autonomous fixes already on main but absent from docs: Google Maps billing lockdown (529f4ee7), scraper/email-discovery harden + 65-workflow DB pre-flight (ed5c020e), outreach null-safe GarageSaleFinder fix (bd6e6967). See S951 Current Status entry.
+- **ci-sentry-health urgency reclassification ✅** (skill SKILL.md, OneDrive — intact): DATABASE_URL pre-flight failure → HIGH top-line; ESN/GSF/FB Events aligned; outreach engine HIGH, enrichment MEDIUM; new-regression rule so a newly-broken phase2/licensing escalates above chronic noise.
+- **Scraper fleet diagnosis ✅** — 16 failing workflows (of 132; 81/96 phase2+licensing actually PASS). Root causes proven via live logs + source fetches: 4 FIXABLE (KY/IN/ME-p2/AL — sources confirmed live), ~5 DEAD (NY/NJ/MA auctioneer, NE/RI pawnbroker — no statewide source), ~5 NEEDS-INFRA (NH/ME-lic/WI/WY/MA-p2 — WAF/SPA/CAPTCHA/API-key). HERE Places = secret (now fixed); blocked only by googlePlaces.ts(~526) runtime TS error from 529f4ee7.
+- **❌ Scraper CODE not shipped** — VM filesystem fault corrupted all 5 agents' file writes (truncation + null bytes) AND node_modules (tsc unrunnable, so agent TS gates were false). No scraper pushblock. Files to be restored by Patrick (see Next Session action 1); fixes re-done S952 per dispatch plan.
+
+**Files changed (good, pushable):** claude_docs/STATE.md, claude_docs/patrick-dashboard.md, + ci-sentry-health SKILL.md (OneDrive, installs separately).
+
+**BQ delta:** 1 (unchanged)
 
 ### S950 — 2026-06-11 | DEV/RECORDS (Vercel cost fixes + sitemap SEO + this-weekend ISR + records pass)
 

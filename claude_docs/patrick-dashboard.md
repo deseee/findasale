@@ -1,6 +1,35 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S950 — 2026-06-11
+**Last updated:** S951 — 2026-06-11
+
+---
+
+## Session S951 Summary — Scheduled-Task Fix Audit
+
+**Type:** RECORDS/AUDIT — audited today's automated scheduled-task runs for fixes missing from the docs
+**BQ:** 1 (unchanged)
+
+Today's automated tasks made 3 real backend fixes that were already committed + pushed to `main` but not written down. All are live (Railway/Vercel auto-deploy):
+
+| Fix | Source task | Commit | What it does |
+|-----|-------------|--------|--------------|
+| Google Maps billing lockdown hard-coded | ops-cost-guard (9:10am) | 529f4ee7 | `GOOGLE_MAPS_ENABLED` can no longer turn billing back on — 4 call sites return early. Guards the May 2026 $201 incident. |
+| Scraper + email-discovery hardening | ci-sentry-health (6:10am) | ed5c020e | null guard in scraperCron; removed dead port-25 SMTP; **DB pre-flight added to 65 workflow files** so a stale secret fails loudly. |
+| Outreach pipeline bug fix | email-delivery-health (10:08am) | bd6e6967 | Null-source organizers were being silently skipped from all outreach — **22 organizers stuck up to 31 days**. Now fixed. |
+
+Friction-audit ran clean (0 P0/P1). Competitor-monitor + NFT runs touched no code. STATE.md §S913 noted-findings cleanup flagged (P3, no urgency).
+
+### Scraper fleet — diagnosed, fixes deferred to next session
+
+You said fix the failing scrapers, not park them — so I diagnosed all 16 failures (out of 132 workflows; 81 of the 96 phase2/licensing ones actually pass). Root causes proven from live logs + source checks:
+
+- **4 genuinely fixable** (sources confirmed live this session): Kentucky, Indiana, Maine, Alabama phase2 — these restore real organizer data (1,000s of records).
+- **~5 genuinely dead** (no statewide source exists — proven, not an excuse): NY/NJ/MA auctioneer, NE/RI pawnbroker licensing.
+- **~5 need infrastructure** (headless browser + residential proxy): NH, Maine-licensing, Wisconsin, Wyoming, MA phase2 — blocked by WAF / JS SPA / CAPTCHA / API key.
+
+**The code couldn't ship:** a VM filesystem fault corrupted the agents' file writes this session (truncated files + null bytes). Nothing scraper-related is pushable. **Action 1 in Next Session restores your working tree** — please run it. The fixes get re-done cleanly next session with a working toolchain.
+
+**Next session is teed up** to: dispatch the 4 real fixes, verify the dead areas are already covered by other scrapers before retiring them, evaluate the alternatives, and size how many of the full 120+ scrapers a single shared headless-browser harness would unblock.
 
 ---
 
@@ -34,23 +63,13 @@
 
 ## Patrick Actions Needed
 
-### 1. Run the S950 push block (docs + code together)
+### 1. Update the stale GitHub Actions `DATABASE_URL` secret
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
+Surfaced by today's ci-sentry-health run. HERE Places + every DB-using scraper workflow fails until you refresh it:
 
-git add packages/backend/src/routes/sales.ts
-git add packages/frontend/pages/server-sitemap.xml.tsx
-git add "packages/frontend/pages/this-weekend/[city].tsx"
-git add "packages/frontend/pages/sales/[id].tsx"
-git add packages/frontend/vercel.json
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
+GitHub → repo **Settings → Secrets and variables → Actions → `DATABASE_URL`** → set to the Railway public-proxy connection string. After saving, run HERE Places via **workflow_dispatch** to confirm a clean run.
 
-git commit -m "fix: sitemap PUBLISHED filter + /sales/sitemap endpoint, ISR 86400, vercel.json CDN cache, this-weekend dynamic revalidate; docs: S950 records pass"
-.\push.ps1
-```
+_(The S950 push and today's 3 scheduled-task fixes are already on `main` — nothing to push.)_
 
 ### 2. Searlo credit upgrade (optional)
 FB Events running at 17% 429 fallback on free tier (10/min cap). Buy a $3.99+ pack at searlo.co → lifts cap → bump `SEARLO_RPM` GitHub repo Variable.
