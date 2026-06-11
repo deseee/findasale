@@ -190,3 +190,17 @@ export const widgetInventoryLimiter = rateLimit({
   standardHeaders: false,
   legacyHeaders: false,
 });
+
+/**
+ * Send test email limiter: 10 requests per hour per user/IP
+ * Guards /admin/send-test-email against quota exhaustion (Gmail 1,500/day cap).
+ */
+export const sendTestEmailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many test email requests. Maximum 10 per hour.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
