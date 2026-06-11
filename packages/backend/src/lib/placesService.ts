@@ -27,11 +27,9 @@ export async function searchNearbyPlaces(params: {
   radiusMeters?: number;
   type?: string;
 }): Promise<PlaceResult[]> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey || !process.env.GOOGLE_MAPS_ENABLED) {
-    console.warn('GOOGLE_PLACES_API_KEY not set or GOOGLE_MAPS_ENABLED not set — Places search disabled');
-    return [];
-  }
+  // BILLING LOCKDOWN — May 2026: $201 incident. Hard-coded off. See verificationController.ts.
+  // Do NOT re-enable by setting GOOGLE_MAPS_ENABLED — this constant is the gate.
+  return [];
 
   const { latitude, longitude, radiusMeters = 500, type } = params;
 

@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import axios from 'axios';
+// BILLING LOCKDOWN — May 2026: $201 Google Maps charge. All Maps/Places API calls are
+// permanently disabled. Do NOT remove or set to false without Patrick's explicit approval.
+// Setting GOOGLE_MAPS_ENABLED in Railway has NO effect — this constant controls the gate.
+const GOOGLE_MAPS_BILLING_LOCKED_DOWN = true as const;
+
 
 /**
  * Request verification for the authenticated organizer
@@ -222,7 +227,7 @@ export const searchGooglePlaces = async (req: AuthRequest, res: Response) => {
     }
 
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (!apiKey || !process.env.GOOGLE_MAPS_ENABLED) {
+    if (GOOGLE_MAPS_BILLING_LOCKED_DOWN) {
       return res.status(503).json({ message: 'Google Places not configured' });
     }
 
@@ -309,7 +314,7 @@ export const previewGooglePlace = async (req: AuthRequest, res: Response) => {
     }
 
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (!apiKey || !process.env.GOOGLE_MAPS_ENABLED) {
+    if (GOOGLE_MAPS_BILLING_LOCKED_DOWN) {
       return res.status(503).json({ message: 'Google Places not configured' });
     }
 
@@ -423,7 +428,7 @@ export const confirmGoogleVerification = async (req: AuthRequest, res: Response)
     }
 
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (!apiKey || !process.env.GOOGLE_MAPS_ENABLED) {
+    if (GOOGLE_MAPS_BILLING_LOCKED_DOWN) {
       return res.status(503).json({ message: 'Google Places not configured' });
     }
 
@@ -573,7 +578,7 @@ export const searchGooglePlacesNext = async (req: AuthRequest, res: Response) =>
     }
 
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (!apiKey || !process.env.GOOGLE_MAPS_ENABLED) {
+    if (GOOGLE_MAPS_BILLING_LOCKED_DOWN) {
       return res.status(503).json({ message: 'Google Places not configured' });
     }
 
