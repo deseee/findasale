@@ -1,7 +1,5 @@
 import { Prisma } from '@prisma/client';
 import * as cheerio from 'cheerio';
-import * as dns from 'dns';
-import * as net from 'net';
 import { prisma } from '../lib/prisma';
 import { randomUUID } from 'crypto';
 
@@ -22,10 +20,6 @@ interface DiscoveryResult {
   confidence?: number; // 0.0-1.0
 }
 
-interface SMTPVerifyResult {
-  valid: boolean;
-  reason?: string;
-}
 
 // Strict format validation — must match before any storage
 const EMAIL_FORMAT_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
@@ -317,7 +311,8 @@ async function scrapeWebsiteEmails(domain: string): Promise<string[]> {
       // If we found emails, stop searching other pages
       if (emails.length > 0) break;
     } catch (err) {
-      // Silently continue to next path
+      const url = `https://${domain}${path}`;
+      console.warn(`[emailDiscovery] scrape failed for ${url}: ${(err as Error).message}`);
     }
   }
 
@@ -365,84 +360,6 @@ function generateEmailPatterns(
 }
 
 /**
- * Stage 3: SMTP Verification via MX lookup + RCPT TO
- * Do NOT send any actual email. Just check if server would accept.
- */
-async function verifyEmailSMTP(
-  email: string,
-  domain: string,
-  timeoutMs: number = 3000
-): Promise<SMTPVerifyResult> {
-  try {
-    // Step 1: MX lookup
-    const mxRecords = await dns.promises.resolveMx(domain);
-    if (!mxRecords || mxRecords.length === 0) {
-      return { valid: false, reason: 'no_mx_records' };
-    }
-
-    // Step 2: Connect to first MX server
-    const mxHost = mxRecords[0].exchange;
-    const socket = net.createConnection({ host: mxHost, port: 25 });
-
-    // Set timeout
-    socket.setTimeout(timeoutMs);
-
-    return await new Promise<SMTPVerifyResult>((resolve) => {
-      let state = 'connecting';
-      let buffer = '';
-
-      socket.on('data', (chunk) => {
-        buffer += chunk.toString();
-
-        if (state === 'connecting' && buffer.includes('220')) {
-          // Got SMTP greeting
-          state = 'greeting_received';
-          socket.write(`MAIL FROM:<noreply@finda.sale>\r\n`);
-          buffer = '';
-        } else if (state === 'greeting_received' && buffer.includes('250')) {
-          // MAIL FROM accepted
-          state = 'mail_from_sent';
-          socket.write(`RCPT TO:<${email}>\r\n`);
-          buffer = '';
-        } else if (state === 'mail_from_sent') {
-          // Got RCPT response
-          const rcptCode = parseInt(buffer.split('\n')[0]);
-          socket.write('QUIT\r\n');
-          socket.end();
-
-          if (rcptCode === 250) {
-            resolve({ valid: true });
-          } else if ([550, 551, 552].includes(rcptCode)) {
-            resolve({ valid: false, reason: `smtp_${rcptCode}` });
-          } else {
-            resolve({ valid: false, reason: `smtp_unknown_${rcptCode}` });
-          }
-        }
-      });
-
-      socket.on('timeout', () => {
-        socket.destroy();
-        resolve({ valid: false, reason: 'timeout' });
-      });
-
-      socket.on('error', () => {
-        socket.destroy();
-        resolve({ valid: false, reason: 'connection_error' });
-      });
-
-      socket.on('end', () => {
-        // Connection closed unexpectedly
-        if (state !== 'mail_from_sent') {
-          resolve({ valid: false, reason: 'connection_closed' });
-        }
-      });
-    });
-  } catch (err) {
-    return { valid: false, reason: `error_${(err as Error).message}` };
-  }
-}
-
-/**
  * Main discovery function
  * Returns discovered email or null. Updates organizer.contactEmail in DB if found.
  */
@@ -481,34 +398,8 @@ export async function discoverEmail(organizerId: string): Promise<string | null>
       return bestEmail;
     }
 
-    // Stage 2 & 3: Pattern generation + SMTP verification
-    const patterns = generateEmailPatterns(organizer.businessName, domain);
-    for (const email of patterns) {
-      // Reject junk patterns before even attempting SMTP
-      if (isJunkEmail(email)) continue;
-
-      // Rate limit: 500ms between attempts
-      await new Promise((r) => setTimeout(r, 500));
-
-      const result = await verifyEmailSMTP(email, domain);
-      if (result.valid) {
-        const emailDomain = email.substring(email.indexOf('@') + 1).toLowerCase();
-        const confidence = calibrateConfidence(
-          0.75,
-          'smtp_pattern',
-          emailDomain,
-          domain,
-          organizer.address ?? null
-        );
-        if (confidence < MIN_CONFIDENCE_TO_STORE) {
-          console.debug(`[emailDiscoveryService] Discarding ${email} - confidence ${confidence.toFixed(2)} below threshold`);
-          continue;
-        }
-        await updateOrganizerEmail(organizerId, email, 'smtp_pattern', confidence);
-        return email;
-      }
-    }
-
+    // SMTP pattern probing removed — port 25 is blocked on Railway.
+    // Website scrape is the sole discovery stage on this infrastructure.
     return null;
   } catch (err) {
     console.error(
@@ -612,10 +503,11 @@ function extractDomain(url: string): string | null {
 export async function emailDiscoveryBatchJob(
   batchSize: number = 50,
   delayMs: number = 2000
-): Promise<{ processed: number; discovered: number }> {
+): Promise<{ processed: number; discovered: number; skipped: number }> {
   let cursor: string | undefined;
   let processed = 0;
   let discovered = 0;
+  let skipped = 0;
 
   while (true) {
     try {
@@ -636,7 +528,11 @@ export async function emailDiscoveryBatchJob(
 
       for (const org of organizers) {
         const email = await discoverEmail(org.id);
-        if (email) discovered++;
+        if (email) {
+          discovered++;
+        } else {
+          skipped++;
+        }
         processed++;
       }
 
@@ -652,5 +548,9 @@ export async function emailDiscoveryBatchJob(
     }
   }
 
-  return { processed, discovered };
+  if (processed > 0 && discovered === 0) {
+    console.warn(`[emailDiscovery] WARNING: processed ${processed} organizers but discovered 0 emails — check scrape stage`);
+  }
+  console.log(`[emailDiscovery] Complete: ${discovered}/${processed} discovered, ${skipped} skipped`);
+  return { processed, discovered, skipped };
 }

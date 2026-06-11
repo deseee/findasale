@@ -486,6 +486,7 @@ export function initScraperCron(): void {
   const scheduledSources: string[] = [];
 
   for (const sourceDef of SOURCE_REGISTRY) {
+    if (!sourceDef) continue; // defensive: stray commas/nulls create undefined holes
     if (!sourceDef.enabled || !sourceDef.cronSchedule || sourceDef.prohibited) continue;
 
     // EstateSalesNet gate: GitHub Actions may handle it instead
