@@ -329,6 +329,17 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
+  // GA4 #470: item_viewed conversion event — fires once per page load when item data arrives
+  useEffect(() => {
+    if (!item?.id) return;
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'item_viewed', {
+        item_id: item.id,
+        item_name: item.title,
+      });
+    }
+  }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Setup socket for live bidding
   // Dynamic import prevents socket.io-client from loading during SSR (fixes #33 500 error)
   useEffect(() => {

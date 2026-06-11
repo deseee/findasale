@@ -65,7 +65,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
       window.gtag('event', 'checkout_initiated', { amount: total });
     }
 
-    const { error } = await stripe.confirmPayment({
+    const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
         // Return URL is required but we handle success inline via webhook
@@ -78,6 +78,14 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
       setErrorMessage(error.message ?? 'Payment failed. Please try again.');
       setIsSubmitting(false);
     } else {
+      // GA4 #470: purchase_completed conversion event
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'purchase_completed', {
+          value: total,
+          currency: 'USD',
+          transaction_id: paymentIntent?.id ?? '',
+        });
+      }
       setPaymentSucceeded(true);
       // Success confirmation now persists until user clicks "Done" button
       // This ensures users see their purchase confirmation and can verify details

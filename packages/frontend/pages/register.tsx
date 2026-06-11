@@ -181,9 +181,10 @@ const RegisterPage = () => {
       // Store token in context and localStorage
       login(response.data.token);
 
-      // GA4 #470: organizer_registered conversion event
+      // GA4 #470: organizer_registered conversion event (+ organizer_signup alias)
       if (typeof window !== 'undefined' && window.gtag && payload.role === 'ORGANIZER') {
         window.gtag('event', 'organizer_registered', { role: 'organizer' });
+        window.gtag('event', 'organizer_signup', { role: 'organizer' }); // GA4 #470 alias
       }
 
       // Check for inviteToken in query params
