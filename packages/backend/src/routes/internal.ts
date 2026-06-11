@@ -666,7 +666,9 @@ router.post('/scraper/run-facebook-marketplace', requireSecret, async (req: expr
 // POST /api/internal/scraper/run-naa
 router.post('/scraper/run-naa', requireSecret, async (req: express.Request, res: express.Response) => {
   res.status(202).json({ message: 'NAA scraper started' });
-  scrapeNAADirectory().catch(err => {
+  const { RateLimiter } = await import('../services/scraper/rateLimiter');
+  const naaLimiter = new RateLimiter({ requestsPerSecond: 0.5 });
+  scrapeNAADirectory('national', '', naaLimiter).catch(err => {
     console.error('[NAA] scraper error:', err);
     Sentry.captureException(err, { tags: { scraper: '[NAA]', type: 'scraper_failure' } });
   });
