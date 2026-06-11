@@ -1,66 +1,51 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S945 — 2026-06-10
+**Last updated:** S946 — 2026-06-10
 
 ---
 
-## Session S945 Summary
+## Session S946 Summary
 
-**Type:** QA — Chrome QA for #422 OAuth 409 bridge, #75 tier lapse, #470 GA4 events
+**Type:** QA — #470 GA4 events Chrome verification (post S944+S945 push)
 **BQ at close:** 0 (ceiling=8 — DEV/QA mode available)
 
 ### What got done this session
 
-**#422 OAuth 409 bridge — ✅ verified.** When a user signs in with Google but that email is already registered as a password account, the backend correctly returns a 409 error and the frontend redirects to `/login` with a human-readable message. Tested directly against the live backend. The Google popup itself can't be automated in the QA environment (it opens a separate window outside the browser session), but the critical code path is confirmed working.
+**S944+S945 push — ✅ confirmed green.** All GA4 event code + StorageAuctions.net scraper is live on Vercel/Railway.
 
-**#75 Tier lapse UI — ✅ verified.** Created a test account (`qa-lapse@example.com`) in PRO tier, confirmed the dashboard shows PRO correctly, then downgraded the account to SIMPLE in the database. After refresh, the dashboard correctly showed SIMPLE tier and the PRO upgrade prompt. The lapse flow is working.
+**#470 GA4 item_viewed — ✅ verified.** Navigated to a live item page. Waited 3s. `window.dataLayer` contained `{event:"item_viewed", item_id:"cmo3etp4d...", item_name:"Vtg Walter Hagen..."}`. Event fires correctly on item page load.
 
-**#470 GA4 events — pending your push.** The three events (`item_viewed`, `purchase_completed`, `organizer_signup`) were implemented in S944, but the S944 code hasn't been pushed to Vercel yet. Live site still shows the old code with no events. These need your push block executed first, then one last verification step.
+**#470 GA4 organizer_signup — ✅ verified.** Navigated to `/register?invite=QA-GA4-B` (URL param auto-sets ORGANIZER role). Filled all required fields. Submitted form. After 6 seconds: redirected to `/`. Browser dataLayer sequence: `["gtm.formSubmit","organizer_registered","organizer_signup","gtm.historyChange-v2"]`. Event `{event:"organizer_signup",params:{role:"organizer"}}` confirmed in dataLayer. Test users and invite codes cleaned up from Railway DB.
+
+**#470 GA4 purchase_completed — CODE-ONLY.** Implemented in `CheckoutModal.tsx` in the Stripe success branch. Cannot verify without a real Stripe checkout. No test key in the Vercel QA environment.
 
 ---
 
 ## Patrick Actions Needed
 
-### 1. Push S944+S945 wrap
+### 1. Push S946 wrap docs
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
-git add packages/backend/src/services/scraper/sourceRegistry.ts
-git add packages/backend/src/services/scraper/sources/storageAuctionsNetScraper.ts
-git add .github/workflows/scrape-storageauctionsnet.yml
-git add packages/frontend/pages/items/[id].tsx
-git add packages/frontend/components/CheckoutModal.tsx
-git add packages/frontend/pages/register.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 
-git commit -m "feat: GA4 events + StorageAuctions.net scraper; docs: S945 QA wrap (#422 ✅ #75 ✅)"
+git commit -m "docs: S946 QA wrap (#470 item_viewed ✅ organizer_signup ✅)"
 .\push.ps1
 ```
 
-### 2. After the deploy (~2 min), verify GA4 events yourself
-
-- Navigate to any item page on finda.sale (e.g. click a sale → click an item)
-- Open browser console, type: `window.dataLayer`
-- You should see an `item_viewed` event with the item's ID and name
-
-Then to verify `organizer_signup`:
-- Open an incognito window, go to `/register`
-- Use invite code **QA-LAPSE-25** (still unused)
-- Complete registration — console should show `organizer_signup` event
-
-### 3. Searlo credit upgrade (optional)
+### 2. Searlo credit upgrade (optional)
 FB Events running at 17% 429 fallback on free tier (10/min cap). Buy a $3.99+ pack at searlo.co → lifts cap → bump `SEARLO_RPM` GitHub repo Variable.
 
 ---
 
 ## Project Status
 
-**Chrome QA backlog:** #422 ✅ (S945), #75 ✅ (S945), #470 pending S944 deploy + verify.
+**#470 GA4 events:** item_viewed ✅, organizer_signup ✅, purchase_completed CODE-ONLY (needs real Stripe checkout).
 
 **Scraper fleet:** 8 active sources. 16 parked. 5 prohibited (ToS).
 
 **BQ:** 0 items. DEV/QA mode available.
 
-**GA4:** 3 conversion events built and awaiting your push.
+**Next session:** Records pass — apply Chrome ✅ columns to roadmap.md for SEO3 (S944), #422 (S945), #75 (S945), #470 item_viewed (S946), #470 organizer_signup (S946). Then continue DEV.

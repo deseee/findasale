@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S946 — QA (2026-06-10). #470 GA4 events Chrome-verified. item_viewed ✅ — window.dataLayer confirmed {event:"item_viewed"} on live item page. organizer_signup ✅ — Navigated /register?invite=QA-GA4-B (role=ORGANIZER auto-set), filled all required fields, requestSubmit() → redirect to / in 6s, dataLayer sequence ["gtm.formSubmit","organizer_registered","organizer_signup","gtm.historyChange-v2"]. purchase_completed CODE-ONLY (real Stripe checkout required). Test users + invite codes cleaned up from Railway DB. BQ: 0 (unchanged).**
+
 **S945 — QA (2026-06-10). Chrome QA — #422 OAuth 409 bridge, #75 tier lapse, #470 GA4 events. (1) #422 OAuth 409 ✅ — Backend POST /api/auth/oauth returns 409+OAUTH_LINK_REQUIRED when account has oauthProvider=NULL (existing password account). /login?message=... redirect renders correctly. Direct API verification — Google OAuth popup is not automatable in Chrome MCP tab group. (2) #75 Tier lapse ✅ — qa-lapse@example.com dashboard showed "Your Plan: PRO". DB-downgraded to SIMPLE via psycopg2. Refreshed — "Your Plan: SIMPLE" + PRO upgrade prompt visible. (3) #470 GA4 PENDING-DEPLOY — item_viewed confirmed absent from live dataLayer (S944 push not yet executed by Patrick). All 3 GA4 events require S944 push to Vercel before browser verification. BQ: 0 (unchanged).**
 
 **S944 — DEV/QA (2026-06-10). Scraper integration audit + gap fixes + GA4 event fixes + Chrome QA. (1) SCRAPER INTEGRATION AUDIT ✅ — All 7 new scrapers confirmed correctly integrated: registry enabled:true, GH Actions cron in place, no double-firing risk, automatic monitoring via pipelineHealthController. (2) KNOWN_OK_DISABLED fix ✅ — findasale-ci-sentry-health scheduled task updated: 'scrape-storageauctionsnet' added to KNOWN_OK_DISABLED set (parked workflow was triggering false HIGH alert). (3) NAA registry fix ✅ — sourceRegistry.ts NAAFindAnAuctioneer enabled:true→false (Novi AMS JS-rendered platform, confirmed zero records). (4) STORAGEAUCTIONS.NET SCRAPER BUILT ✅ — update.storageauctions.net confirmed WebSocket push server (all REST paths 404). Real API: GET /block/auction/getallonline/{page}/esoon (unauthenticated JSON, ~32 auctions). Full implementation in storageAuctionsNetScraper.ts. Workflow cron: Thursdays 09:00 UTC. Registry entry enabled:true. (5) GA4 EVENTS FIXED ✅ — item_viewed (pages/items/[id].tsx useEffect on item data load), purchase_completed (components/CheckoutModal.tsx in Stripe confirmPayment success branch, includes value+currency+transaction_id), organizer_signup alias (pages/register.tsx fires both organizer_registered + organizer_signup). All 3 were CODE-MISSING per Chrome QA audit. TS 0 errors. (6) CHROME QA — SEO3 /estate-sales/denver-co ✅ FULL VERIFICATION: Title "Estate Sales in Denver, CO | FindA.Sale", meta desc keyword-rich+present, H1 matches, 50 listings visible, dark mode clean, breadcrumbs functional. ss_34924pp42 ss_8168bplgd. #422 OAuth 409 UNVERIFIED (requires real Google OAuth duplicate-account flow). #75 tier lapse UNVERIFIED (requires Stripe webhook). #470 GA4 CODE-ONLY post-fix (browser verification requires live checkout+signup triggers). BQ: 0 (unchanged).**
@@ -155,6 +157,8 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | SEO3 | Denver city landing page /estate-sales/denver-co | Navigated https://finda.sale/estate-sales/denver-co. Title: "Estate Sales in Denver, CO \| FindA.Sale" ✅. Meta desc present+keyword-rich ✅. H1: "Estate Sales in Denver, CO" ✅. 50 listings visible ✅. Dark mode clean ✅. ss_34924pp42 ss_8168bplgd | S944 |
 | #422 | OAuth 409 bridge | Backend POST /api/auth/oauth → 409+OAUTH_LINK_REQUIRED for deseee@gmail.com (oauthProvider=NULL account). /login?message=... renders correctly. Direct API test — Google OAuth popup outside Chrome MCP tab group. | S945 |
 | #75 | Tier lapse UI | Navigated finda.sale/organizer/dashboard as qa-lapse@example.com. PRO state: "Your Plan: PRO" ✅. DB-downgraded to SIMPLE via psycopg2. Refreshed — "Your Plan: SIMPLE" + PRO upgrade prompt ✅. | S945 |
+| #470 | GA4 item_viewed | Navigated https://finda.sale/items/[id] in Chrome. Waited 3s. window.dataLayer contained {event:"item_viewed", item_id:"cmo3etp4d...", item_name:"Vtg Walter Hagen..."}. Event fires correctly on item page load. | S946 |
+| #470 | GA4 organizer_signup | Navigated https://finda.sale/register?invite=QA-GA4-B as unauthenticated user. Filled form (role=ORGANIZER auto-set by URL param, businessName/phone/businessAddress filled). Called requestSubmit(). URL redirected to / after 6s. dataLayer: ["gtm.formSubmit","organizer_registered","organizer_signup","gtm.historyChange-v2"]. {event:"organizer_signup",params:{role:"organizer"}} confirmed. Test users + invite codes cleaned from DB. | S946 |
 _(S940 PCV rows — #27b watermark settings gating ✅ PRO/TEAMS, #75 non-lapsed TEAMS label ✅, #422 OAuth buttons+linked-accounts UI ✅ — applied to roadmap.md in S941 records pass — cleared.)_
 _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #470 RUNTIME-VERIFIED already in roadmap — cleared S941.)_
 |---|---------|----------|---------|
@@ -170,37 +174,46 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Push S944+S945 wrap:**
+1. **Push S946 wrap:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
-git add packages/backend/src/services/scraper/sourceRegistry.ts
-git add packages/backend/src/services/scraper/sources/storageAuctionsNetScraper.ts
-git add .github/workflows/scrape-storageauctionsnet.yml
-git add packages/frontend/pages/items/[id].tsx
-git add packages/frontend/components/CheckoutModal.tsx
-git add packages/frontend/pages/register.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 
-git commit -m "feat: GA4 events + StorageAuctions.net scraper; docs: S945 QA wrap (#422 ✅ #75 ✅)"
+git commit -m "docs: S946 QA wrap (#470 item_viewed ✅ organizer_signup ✅)"
 .\push.ps1
 ```
 
-2. **After pushing, run the S946 records pass** — apply #422+#75 Chrome columns to roadmap.md.
-3. **#470 GA4 verify** — After push deploys to Vercel, navigate to any item page and check browser console for `item_viewed` in `window.dataLayer`. Then register a new organizer account with invite code `QA-LAPSE-25` to verify `organizer_signup` fires.
-4. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
+2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
 
-### S946 Recommendation
+### S947 Recommendation
 BQ=0 (ceiling=8 — DEV/QA available).
 
 **Priority queue:**
-1. **Records pass** — Apply S945 PCVs to roadmap.md: SEO3 Denver Chr ✅ S944 (apply column), #422 OAuth 409 Chr ✅ S945, #75 tier lapse Chr ✅ S945.
-2. **#470 GA4 events** — After Patrick pushes S944 push block: verify item_viewed (navigate to item page, check window.dataLayer), organizer_signup (register with QA-LAPSE-25 invite code). purchase_completed requires real Stripe checkout or pk_test_ key in Vercel.
+1. **Records pass** — Apply S945+S946 PCVs to roadmap.md: SEO3 Denver Chr ✅ S944, #422 OAuth 409 Chr ✅ S945, #75 tier lapse Chr ✅ S945, #470 item_viewed Chr ✅ S946, #470 organizer_signup Chr ✅ S946.
+2. **#470 purchase_completed** — CODE-ONLY. Requires real Stripe checkout or pk_test_ key in Vercel env.
 3. **StorageTreasures decision** — Patrick: Cognito JWT / Playwright / data partnership, or leave PARKED.
+4. **Continue DEV** — BQ=0, roadmap BROKEN items available for dispatch.
 
 
 ## Recent Sessions
+
+### S946 — 2026-06-10 | QA (#470 GA4 events Chrome verification)
+
+**Session type:** QA — #470 GA4 events browser verification post S944+S945 push confirmed green
+
+**Work completed:**
+- **#470 GA4 item_viewed ✅** — Navigated to live item page in Chrome. Waited 3s. window.dataLayer contained {event:"item_viewed", item_id:"cmo3etp4d...", item_name:"Vtg Walter Hagen..."}. Event fires correctly on item page load after S944 deploy.
+- **#470 GA4 organizer_signup ✅** — Navigated https://finda.sale/register?invite=QA-GA4-B as unauthenticated user. URL param auto-sets role=ORGANIZER in React state (useEffect). Filled all required fields (name, email, DOB, password, confirmPassword, businessName, phone, businessAddress) via nativeSetter + React dispatchEvent. Called registerForm.requestSubmit(). After 6s: URL redirected to /. window.dataLayer sequence: ["gtm.formSubmit","organizer_registered","organizer_signup","gtm.historyChange-v2"]. Event object: {event:"organizer_signup",params:{role:"organizer"}} confirmed.
+- **#470 GA4 purchase_completed** — CODE-ONLY. Implemented in CheckoutModal.tsx stripe.confirmPayment() success branch. Real Stripe checkout required to browser-verify.
+- **Test data cleanup ✅** — Deleted qa-ga4-test@example.com, qa-ga4-test2@example.com, qa-ga4-test3@example.com from User table. Deleted invite codes QA-GA4-TEST and QA-GA4-B from BetaInvite table via psycopg2. qa-lapse@example.com remains (SIMPLE tier, clean).
+
+**Files changed:**
+- `claude_docs/STATE.md` — S946 wrap
+- `claude_docs/patrick-dashboard.md` — S946 summary
+
+**BQ delta:** 0 → 0 (unchanged)
 
 ### S945 — 2026-06-10 | QA (Chrome QA — #422 OAuth 409, #75 tier lapse, #470 GA4 check)
 
