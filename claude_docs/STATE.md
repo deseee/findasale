@@ -165,9 +165,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | 472 | send-test-email auth gate (unauthenticated) | New unauthenticated tab. Direct Railway backend call POST https://backend-production-153c9.up.railway.app/admin/send-test-email, no credentials/CSRF. Saw 403 {"message":"CSRF token validation failed"}. Defense-in-depth: CSRF before auth. Screenshot: ss_4595bvchx | S948 |
 |---|---------|----------|---------|
 | SEO3 | Denver city landing page /estate-sales/denver-co | Navigated https://finda.sale/estate-sales/denver-co. Title: "Estate Sales in Denver, CO \| FindA.Sale" ✅. Meta desc present+keyword-rich ✅. H1: "Estate Sales in Denver, CO" ✅. 50 listings visible ✅. Dark mode clean ✅. ss_34924pp42 ss_8168bplgd | S944 |
-| #422 | OAuth 409 bridge | Navigated https://finda.sale/login unauthenticated. fetch POST /api/auth/oauth {provider:'google', providerId:'test-oauth-id-12345', email:'user1@example.com'} → 409 {code:'OAUTH_LINK_REQUIRED', message:'This email is already registered...'}. /login?message=... shows orange info banner. ss_3450u6tgu (login page) ss_8074zis8d (orange 409 banner) | S949 |
-| #75 | Tier lapse UI (SIMPLE) | Navigated https://finda.sale/organizer/dashboard as qa-lapse@example.com (SIMPLE tier). Saw "Your Plan: SIMPLE" banner + "Unlock more features — PRO is just $29/mo" + PRO feature list + purple "Upgrade to PRO" CTA. Screenshot: ss_83752jesk | S949 |
-| #470 | GA4 item_viewed | Navigated https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m unauthenticated. window.dataLayer.find(e=>e[1]==='item_viewed') returned {item_id:'cmo3etp4d...', item_name:'Vtg Walter Hagen HAIG-Ultra Woods...'}. GTM container G-VSD9YR4D28 loaded. ss_8841oxiro ss_7047o7yzv | S949 |
+_(#422 ✅ S949 applied S950 — cleared. #75 ✅ S949 applied S950 — cleared. #470 item_viewed ✅ S949 applied S950 — cleared.)_
 _(S949: #472 applied to roadmap.md (3x PCVs all pass 5-element gate). #422/#75/#470 item_viewed re-verified with screenshot IDs — ready for next records pass. #470 organizer_signup UNVERIFIED → BQ.)_
 _(S940 PCV rows — #27b watermark settings gating ✅ PRO/TEAMS, #75 non-lapsed TEAMS label ✅, #422 OAuth buttons+linked-accounts UI ✅ — applied to roadmap.md in S941 records pass — cleared.)_
 _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #470 RUNTIME-VERIFIED already in roadmap — cleared S941.)_
@@ -184,32 +182,51 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Push S949 wrap:**
+1. **Push S950 wrap (docs + code together):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
+git add packages/backend/src/routes/sales.ts
+git add packages/frontend/pages/server-sitemap.xml.tsx
+git add "packages/frontend/pages/this-weekend/[city].tsx"
+git add "packages/frontend/pages/sales/[id].tsx"
+git add packages/frontend/vercel.json
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
 
-git commit -m "docs: S949 wrap — records pass + QA re-run (#422/#75/#470 item_viewed all ✅, organizer_signup UNVERIFIED → BQ)"
+git commit -m "fix: sitemap PUBLISHED filter + /sales/sitemap endpoint, ISR 86400, vercel.json CDN cache, this-weekend dynamic revalidate; docs: S950 records pass"
 .\push.ps1
 ```
 
 2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
 
-### S950 Recommendation
+### S951 Recommendation
 BQ=1 (ceiling=8 — DEV/QA available).
 
 **Priority queue:**
-1. **Records pass** — Apply S949 PCVs to roadmap.md: #422 Chr ✅ S949 (ss_3450u6tgu, ss_8074zis8d), #75 Chr ✅ S949 (ss_83752jesk), #470 item_viewed Chr ✅ S949 (ss_8841oxiro, ss_7047o7yzv). All 3 pass the 5-element evidence gate.
-2. **#470 organizer_signup (BQ)** — Create disposable organizer QA account (invite code + registration) to trigger and screenshot dataLayer event. Low effort.
+1. **#470 organizer_signup (BQ)** — Invite code `QA-LAPSE-25` exists unused. Create organizer account to trigger + screenshot dataLayer event. Low effort.
+2. **SEO3 verify sitemap fix** — After push: fetch https://finda.sale/server-sitemap.xml, confirm sale URLs present.
 3. **#470 purchase_completed** — CODE-ONLY. Requires real Stripe checkout or pk_test_ key in Vercel env.
 4. **StorageTreasures decision** — Patrick: Cognito JWT / Playwright / data partnership, or leave PARKED.
 5. **Continue DEV** — BQ=1, below ceiling, roadmap Building items available for dispatch.
 
 
 ## Recent Sessions
+
+### S950 — 2026-06-11 | DEV/RECORDS (Vercel cost fixes + sitemap SEO + this-weekend ISR + records pass)
+
+**Session type:** DEV/RECORDS
+
+**Work completed:**
+- **Records pass ✅** — #422 Chr ✅ S949 (ss_3450u6tgu, ss_8074zis8d), #75 Chr ✅ S949 lapse-state (ss_83752jesk), #470 item_viewed Chr ✅ S949 (ss_8841oxiro, ss_7047o7yzv) applied to roadmap.md.
+- **Sitemap PUBLISHED fix ✅** — `server-sitemap.xml.tsx`: ACTIVE/UPCOMING→PUBLISHED. New `GET /sales/sitemap` backend endpoint (top 5k PUBLISHED). changefreq: hourly→daily. Fixes silent bug causing 0 sale URLs in sitemap for unknown duration.
+- **ISR + CDN caching ✅** (pre-compaction) — `sales/[id].tsx` revalidate 3600→86400. `vercel.json` sitemap s-maxage=3600.
+- **This-weekend dynamic revalidate ✅** — `day>=4 ? 14400 : 43200` (Thu-Sat=4hr, Sun-Wed=12hr).
+
+**Files changed:** packages/backend/src/routes/sales.ts, packages/frontend/pages/server-sitemap.xml.tsx, packages/frontend/pages/this-weekend/[city].tsx, packages/frontend/pages/sales/[id].tsx, packages/frontend/vercel.json, claude_docs/strategy/roadmap.md, claude_docs/STATE.md, claude_docs/patrick-dashboard.md
+
+**BQ delta:** 1 (unchanged)
 
 ### S949 — 2026-06-11 | QA/RECORDS (Records pass + QA re-run 4 rejected PCVs)
 
