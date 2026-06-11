@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S947 — DEV/SECURITY (2026-06-11). Email pipeline security hardening — hacker adversarial review + F1–F5 fixes. Commit 7d073292 pushed to GitHub; Railway auto-deploying. (1) HACKER REVIEW ✅ — Full code audit of all send paths; confirmed no active leak path after S929/S937/S938/S939 fixes; 7 findings surfaced. (2) F1+F5 — admin.ts Resend guard + rate limiter: added `isEmailDomainBlocked(toAddress)` guard before both email rails on /admin/send-test-email; added `sendTestEmailLimiter` (10 req/hr) in rateLimiter.ts; applied to endpoint. 3 other Resend callers (deliverabilityMonitorJob, gmailHealthCron, run-search-facebook-events) send to hardcoded admin addresses only — clean, no action needed. (3) F2 — adminBroadcastController.ts: added `NOT @system.finda.sale` filter to all 10 queries (5 findMany + 5 count) + isEmailDomainBlocked filter at send level (belt-and-suspenders). Stub safe to wire up. (4) F3 — Null MX record for system.finda.sale: added RFC 7505 null MX (`0 .`) to system.finda.sale in Vercel DNS; confirmed live on both Vercel nameservers + Google 8.8.8.8; Google hard-fails immediately instead of retrying 24–48h → eliminates future DSN floods. (5) F4 — notificationService.ts: replaced hardcoded `endsWith('@system.finda.sale')` with `isEmailDomainBlocked(recipient)` — now catches entire *.finda.sale zone + all UNSENDABLE_DOMAINS. Remaining: F7 INFO (SENDABLE_INTERNAL_ALLOWLIST startup assertion — no validation that env-supplied addresses aren't in UNSENDABLE_DOMAINS; requires Railway access to exploit — no action needed). BQ: 0 (unchanged).**
+
 **S946 — QA (2026-06-10). #470 GA4 events Chrome-verified. item_viewed ✅ — window.dataLayer confirmed {event:"item_viewed"} on live item page. organizer_signup ✅ — Navigated /register?invite=QA-GA4-B (role=ORGANIZER auto-set), filled all required fields, requestSubmit() → redirect to / in 6s, dataLayer sequence ["gtm.formSubmit","organizer_registered","organizer_signup","gtm.historyChange-v2"]. purchase_completed CODE-ONLY (real Stripe checkout required). Test users + invite codes cleaned up from Railway DB. BQ: 0 (unchanged).**
 
 **S945 — QA (2026-06-10). Chrome QA — #422 OAuth 409 bridge, #75 tier lapse, #470 GA4 events. (1) #422 OAuth 409 ✅ — Backend POST /api/auth/oauth returns 409+OAUTH_LINK_REQUIRED when account has oauthProvider=NULL (existing password account). /login?message=... redirect renders correctly. Direct API verification — Google OAuth popup is not automatable in Chrome MCP tab group. (2) #75 Tier lapse ✅ — qa-lapse@example.com dashboard showed "Your Plan: PRO". DB-downgraded to SIMPLE via psycopg2. Refreshed — "Your Plan: SIMPLE" + PRO upgrade prompt visible. (3) #470 GA4 PENDING-DEPLOY — item_viewed confirmed absent from live dataLayer (S944 push not yet executed by Patrick). All 3 GA4 events require S944 push to Vercel before browser verification. BQ: 0 (unchanged).**
@@ -174,30 +176,54 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Push S946 wrap:**
+1. **Push S947 wrap:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
+git add claude_docs/.last-wrap
 
-git commit -m "docs: S946 QA wrap (#470 item_viewed ✅ organizer_signup ✅)"
+git commit -m "docs: S947 wrap — email pipeline harden complete (F1-F5)"
 .\push.ps1
 ```
 
 2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
 
-### S947 Recommendation
+### S948 Recommendation
 BQ=0 (ceiling=8 — DEV/QA available).
 
 **Priority queue:**
 1. **Records pass** — Apply S945+S946 PCVs to roadmap.md: SEO3 Denver Chr ✅ S944, #422 OAuth 409 Chr ✅ S945, #75 tier lapse Chr ✅ S945, #470 item_viewed Chr ✅ S946, #470 organizer_signup Chr ✅ S946.
-2. **#470 purchase_completed** — CODE-ONLY. Requires real Stripe checkout or pk_test_ key in Vercel env.
-3. **StorageTreasures decision** — Patrick: Cognito JWT / Playwright / data partnership, or leave PARKED.
-4. **Continue DEV** — BQ=0, roadmap BROKEN items available for dispatch.
+2. **Verify Railway deployed commit 7d073292 (email hardening)** — smoke test backend startup in Railway logs; confirm sendTestEmailLimiter + adminBroadcast @system filter live.
+3. **#470 purchase_completed** — CODE-ONLY. Requires real Stripe checkout or pk_test_ key in Vercel env.
+4. **StorageTreasures decision** — Patrick: Cognito JWT / Playwright / data partnership, or leave PARKED.
+5. **Continue DEV** — BQ=0, roadmap BROKEN items available for dispatch.
 
 
 ## Recent Sessions
+
+### S947 — 2026-06-11 | DEV/SECURITY (Email pipeline harden — F1–F5)
+
+**Session type:** Security hardening — hacker adversarial review + email pipeline fixes (all code pushed, commit 7d073292)
+
+**Work completed:**
+- **Hacker adversarial review** — Full audit of all send paths confirmed no active leak after S929/S937/S938/S939 fixes. 7 findings surfaced (F1–F7). F1–F5 fixed this session. F6 INFO (3 non-user Resend callers — clean). F7 INFO (SENDABLE_INTERNAL_ALLOWLIST startup assertion — no Railway access exploitable, deferred).
+- **F1+F5 — admin.ts Resend guard + rate limiter** — Added `isEmailDomainBlocked(toAddress)` guard before both email rails on `POST /admin/send-test-email`. Added `sendTestEmailLimiter` (10 req/hr window) in `rateLimiter.ts`, applied to endpoint.
+- **F2 — adminBroadcastController.ts** — Added `NOT @system.finda.sale` filter to all 10 queries (5 findMany + 5 count). Added `isEmailDomainBlocked` filter at send level (belt-and-suspenders). Stub now safe to wire up.
+- **F3 — Null MX record for system.finda.sale** — Added RFC 7505 null MX (`0 .`) to `system.finda.sale` in Vercel DNS. Confirmed live on both Vercel nameservers + Google 8.8.8.8. Future send attempts to *@system.finda.sale hard-fail immediately (no 24–48h retry window).
+- **F4 — notificationService.ts** — Replaced hardcoded `endsWith('@system.finda.sale')` check with `isEmailDomainBlocked(recipient)`. Now covers entire `*.finda.sale` zone + all UNSENDABLE_DOMAINS.
+- **DSN status** — No new @system sends generating post-S939 fix. Pre-fix in-flight retries (06-06–06-10) still tapering; null MX cuts any future leak's retry window to near-instant.
+
+**Files changed (commit 7d073292 — pushed to GitHub, Railway auto-deploying):**
+- `packages/backend/src/middleware/rateLimiter.ts` — sendTestEmailLimiter added
+- `packages/backend/src/routes/admin.ts` — isEmailDomainBlocked guard + rate limiter applied
+- `packages/backend/src/controllers/adminBroadcastController.ts` — @system filter on all 10 queries
+- `packages/backend/src/lib/notificationService.ts` — isEmailDomainBlocked replaces hardcoded check
+- `system.finda.sale` DNS (Vercel — null MX added; not a code file)
+- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md` — wrap docs
+
+**BQ delta:** 0 → 0 (unchanged)
 
 ### S946 — 2026-06-10 | QA (#470 GA4 events Chrome verification)
 
@@ -278,270 +304,3 @@ BQ=0 (ceiling=8 — DEV/QA available).
 
 **BQ delta:** 0 → 0 (unchanged)
 
-### S940 — 2026-06-10 | QA/DEV/OPS/MONITORING
-
-**Session type:** Parallel dispatch — monitoring harden + OPS verification + Chrome QA + 2 dev fixes. Push block provided to Patrick.
-
-**Work completed:**
-- **Monitoring harden ✅** — `findasale-ci-sentry-health` Step 1c updated via `mcp__scheduled-tasks__update_scheduled_task`. Added `KNOWN_OK_DISABLED={'scrape-google-places','scrape-naa'}`. Disabled_manually workflows not in allowlist now alert HIGH. The exact S939 failure mode (pipeline-outreach-emails dark 5 days, invisible to sweep) is now caught.
-- **FB Events post-overhaul verified** — First daily run: 20.4 min runtime (above 19-min target), 167 Searlo OK + 45 Searlo 429 hits (17% fallback) + 90 Serper backups. AUCTION and FLEA_MARKET sale types landing correctly. No data loss. Runtime concern: sub-query bursts hit Searlo 10/min cap in burst metros. Serper covering the gap.
-- **Outreach status** — outreach_sent_24h=0. Pipeline-outreach-emails was re-enabled S939 but GitHub's cron scheduler hadn't re-registered yet (last fired June 5). Fix: trivial comment added to workflow YAML in push block to force cron re-registration.
-- **Monitoring coverage confirmed** — 123 workflows, 2-page pagination sufficient, 122 active + 1 known-OK disabled (scrape-google-places).
-- **Licensing scrapers escalated** — 7 consistently-failing scrapers escalated LOW→MEDIUM (Indiana/Kentucky/Massachusetts/Maine/New Hampshire/Rhode Island/Nebraska). ~24 others succeeding consistently.
-- **Print Kit P1 fixed** — `downloadAuthenticatedFile` used `localStorage.getItem('token')` after the codebase migrated to httpOnly cookie JWT. Fixed: `credentials: 'include'` + strip absolute Railway origin for same-origin Next.js /api proxy routing. TS 0 errors.
-- **Node.js CI fix** — 2 workflow files (scrape-ok-phase2.yml + scrape-wy-phase2.yml): `actions/github-script@v6`→`@v7`. Rest of fleet already on @v4/@v7.
-- **Chrome QA — #27b** — Watermark gating ✅ (PRO locked ss_340873qej, TEAMS unlocked ss_549588e2a). PDF download was the P1 bug found → fixed this session.
-- **Chrome QA — #75** — Non-lapsed subscription display ✅ (TEAMS label correct ss_5075d8oqc). Lapse state P2 UNVERIFIED (Stripe webhook can't be simulated in QA).
-- **Chrome QA — #422** — OAuth buttons on /login ✅ (ss_1808g433w). Linked Accounts UI in settings ✅ (ss_62243gw0x). 409 OAuthBridge flow UNVERIFIED (real Google OAuth needed).
-
-**Files changed (pending Patrick push):**
-- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — Print Kit 401 fix
-- `.github/workflows/scrape-ok-phase2.yml` — github-script @v6→@v7
-- `.github/workflows/scrape-wy-phase2.yml` — github-script @v6→@v7
-- `.github/workflows/pipeline-outreach-emails.yml` — trivial comment (cron re-registration)
-- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md` — wrap docs
-
-**BQ delta:** 0 → 0 (unchanged)
-
-### S939 — 2026-06-10 | OPS/DEV
-
-**Session type:** Daily Email & Deliverability Health Sweep → deliverability hardening (multi-fix). All code pushed + live; Railway migration applied.
-
-**Health sweep — mostly green:** finda.sale 200; backend root + /api/health 200; DNS SPF/DMARC/MX(improvmx + outreach→google)/DKIM(resend root, google outreach, litesrv→mlsend) all present; Sentry 0 email-send errors/24h; Gmail quota 6/1500; EmailSuppression flat (5 rows).
-
-**Work completed:**
-- **FALSE-ALARM P0 cleared + fixed.** The "🔴 Gmail OAuth token BROKEN" alert was not real. `gmailHealthCron.ts` (S887) probed via `gmail.users.getProfile` (needs a READ scope); the prod token is send-only (`gmail.send`, correct least-privilege) → 403 every run = false "pipeline dead" alarm. Only surfaced 06-10 because the Resend alert rail was just fixed S937. Proven live: refresh token refreshes, scope = gmail.send, Gmail-rail smoke tests delivered. FIX: cron now probes via `oauth2Client.getAccessToken()`. No re-auth needed; sending unaffected.
-- **@system.finda.sale placeholder leak fixed (bounce-flood root cause).** `outreachEmailsCron.ts` called `gmail.users.messages.send` directly, bypassing the central `isEmailDomainBlocked` guard → could send to `scraper+<slug>@system.finda.sale` placeholders → Google DSN flood tripping the ImprovMX 500/day cap. FIX: added `isEmailDomainBlocked` guard before the atomic claim/quota/send (no SENT row, no quota burn). Complements S929/S937d (which guarded seeders + the emailService chokepoint but not this cron's direct-send path).
-- **Resend webhook (bounce/complaint/suppression ingestion) was broken FOUR ways — all fixed + LIVE e2e-verified.** (a) `RESEND_WEBHOOK_SECRET` set in Railway. (b) handler checked `email.complaint` but Resend sends `email.complained` → fixed + added `email.suppressed` (hard block) + `email.failed` (log) (routes/outreach.ts). (c) CSRF exemption matched `/webhook` but path is `/resend-webhook` → CSRF 403'd every POST; fixed in middleware/csrf.ts. (d) global `express.json()` consumed the raw body before svix could verify → registered `express.raw` for `/api/outreach/resend-webhook` before the json parser in index.ts. (e) extraction read `payload.email`/`bounce_type` but real Resend payloads nest under `data.to[]`/`data.bounce.type` → now reads `data.to` (all recipients), `data.bounce.type` (Permanent→hard, Transient→soft), `data.email_id`, flat-shape fallback kept (routes/outreach.ts). **LIVE E2E vs prod with real Resend-shaped payloads:** valid signed → 200; tampered sig → 401; `email.complained` wrote a real EmailSuppression row; hard bounce set bounceHard; `email.delivered` reset the counter. Test rows cleaned up.
-- **Soft-bounce policy → industry standard** (was one-strike-blocks-marketing-forever). Added `EmailSuppression.bounceSoftCount Int @default(0)` (migration 20260610143000_add_bounce_soft_count, applied to Railway). Soft bounce → increment; `email.delivered` → `resetSoftBounce`; BULK `isSuppressed` blocks only at `bounceSoftCount >= 5` (SOFT_BOUNCE_THRESHOLD); TRANSACTIONAL `isHardSuppressed` unchanged. `email.suppressed` now a real hard block. DB: 0 soft-bounce-only suppressions exist → nothing to retry; default 0 means none affected.
-- **Resend dashboard webhook created** (Patrick) — subscribed to email.bounced/complained/suppressed/failed. Resolves S937 gmail-rail-audit follow-up #2 (bounce ingestion catching 0 rows — explained + the Resend path now actively ingests).
-
-**Files modified (all already pushed + live):**
-- `packages/backend/src/jobs/outreachEmailsCron.ts`
-- `packages/backend/src/jobs/gmailHealthCron.ts`
-- `packages/backend/src/routes/outreach.ts`
-- `packages/backend/src/middleware/csrf.ts`
-- `packages/backend/src/index.ts`
-- `packages/backend/src/services/suppressionService.ts`
-- `packages/database/prisma/schema.prisma`
-- `packages/database/prisma/migrations/20260610143000_add_bounce_soft_count/migration.sql`
-- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`, `claude_docs/strategy/roadmap.md` (wrap docs — this records pass)
-
-**BQ delta:** 0 → 0 (no blockers added; optional Gmail outreach-token re-auth is non-blocking — sending works)
-
-**Same session — FB Events overhaul + monitoring + outreach P0 (DEV/OPS/MONITORING):**
-- **QA verifications:** SEO3 /estate-sales/denver-co Chrome ✅ (H1, 50 listings, JSON-LD BreadcrumbList+ItemList, self-canonical — see Pending Chrome Verifications). #470 GA4 RUNTIME-VERIFIED ✅ (dataLayer captured `shopper_favorite_added` on a live favorite as seed shopper; full GA4 Real-Time still needs the dashboard).
-- **FB Events scraper complete overhaul (pushed + live).** Searlo wired as PRIMARY engine (geo-accurate 90–100% in-metro, ~$0.30/1k, pay-as-you-go) ahead of Serper→Brave→ScaleSerp. Brave tested + REJECTED as primary (geo-blind). Query split into sale-type sub-queries then trimmed 4→3 (consignment folded into estate) for sub-19-min daily runtime. `extractFbEventId` fixed to parse the trailing 8+ digit id on slug-form FB URLs (was grabbing the street number → corrupted dedup). Flea classifier fixed (keys on snippet + sub-query typeHint). Metro list expanded 93→301 from GOOGLE_PLACES_METROS (single source of truth); daily sharding ~43/day (full list weekly); cron weekly→daily. Searlo rate-limit handling: `SEARLO_RPM` throttle (default 9; free-tier cap 10/min, learned live via 429), honors retryAfter + one retry before Serper fallback. Added `all_metros` workflow_dispatch toggle. Live-verified: Searlo geo-accurate, flea events now landing (were 0), runtime in budget. Searlo key is FREE tier (~17-day runway, 10/min cap) — a $3.99+ pack lifts the cap.
-- **Silent-failure monitoring buildout.** Audited all workflows — 8 "inline" (log-grep-able) + ~11 "trigger" pipelines (curl→202 fire-and-forget → need DB check). Built GET /api/internal/pipeline-health (per-source/per-pipeline freshness counts, gated by x-internal-secret / OUTREACH_SECRET) — DEPLOYED + live-tested. Extended the daily findasale-ci-sentry-health task: Step 1c all-workflow staleness sweep, Step 1d pipeline data-freshness (green-but-empty detector, calls the endpoint), Step 1b FB Events deep health (runtime/429/Serper-bleed/credit-runway). Repo confirmed 123 total workflows (122 active, 1 intentionally disabled = scrape-google-places).
-- **P0 caught + fixed.** `pipeline-outreach-emails` GitHub Actions workflow found MANUALLY DISABLED since June 5 → cold outreach fully DEAD ~5 days (0 sends since Jun 5 07:59 UTC, 42 leads stalled, no fallback). Re-enabled (now active); OUTREACH_ENABLED=true confirmed on Railway. Resumes on next 4-hour cron. Exact "green but silently stopped" failure the new monitoring now catches.
-
-**Additional files modified (all pushed + live):**
-- `packages/backend/src/jobs/search-facebook-events.ts`
-- `packages/backend/src/jobs/run-search-facebook-events.ts`
-- `.github/workflows/scrape-facebook-events.yml`
-- `packages/backend/src/controllers/pipelineHealthController.ts`
-- `packages/backend/src/routes/internal.ts`
-
-### S938 — 2026-06-10 | DEV/OPS
-
-**Session type:** Email-rail hardening + bounce-ingestion fix + live verification
-
-**Work completed:**
-- **SES→GMAIL rename (44 backend files) SHIPPED + smoke-tested ✅.** All Gmail-rail `from` reads now dual-read `GMAIL_FROM_EMAIL || SES_FROM_EMAIL || 'find@outreach.finda.sale'`; ~52 dead `@send.finda.sale` fallbacks retired to the verified alias; workspaceController + stale comments fixed. Live contact-form smoke test: autoreply delivered from find@outreach.finda.sale to INBOX (thread 19eaf520fef6931a). Resolves S937 gmail-rail-audit follow-up #1.
-- **Bounce-ingestion (#471) fixed + verified.** Moved off in-process cron onto GitHub Actions (JOB_MAP 'process-bounces' + pipeline-bounce-suppress.yml); broadened query + hardened trash scope. Railway log confirms it now runs (433ms). Token introspected: outreach@finda.sale, full scope — correct. 0 rows is correct (only @system DSNs exist, all in Trash, all parser-ignored). No further fix needed.
-- **#332 Shopify DEFERRED** (Patrick) — removed from BQ.
-- **sales.ts truncation caught + restored** from HEAD (461→610 lines; #450 recurring endpoint recovered) before it could be committed.
-
-**Files modified:**
-- Rename: 44 backend files (controllers/jobs/lib/middleware/routes/services — see commit 1adff5ea)
-- Bounce: `internalJobRunnerController.ts`, `bounceSuppressService.ts`, `index.ts`, `.github/workflows/pipeline-bounce-suppress.yml`
-- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`, `claude_docs/strategy/roadmap.md`
-
-**BQ delta:** 1 → 0
-
-### S937 — 2026-06-09 | RESEARCH/AUDIT→DEV
-
-**Session type:** System map (email/outreach/scraper) + P1 suppression fix
-
-**Work completed:**
-- **System map written** — `claude_docs/feature-notes/email-outreach-scraper-system-map.md`. 3 email rails, outreach pipeline (GitHub Actions → internal job runner, NOT in-process cron), scraper pipeline, full Part-4 gap table. Every claim carries a file:line citation.
-- **Corrected stale premises** — Gmail NOT suspended (active S917/S929/S933); outreach NOT dead (runs via GitHub Actions). No P0 fabricated.
-- **FIXED P1 (G3)** — 8 bulk lifecycle services were calling `emailService.emails.send` (Gmail rail) with no suppression check. Added `suppressionService.isSuppressed` guard before each send: saleAlertEmailService (4 senders), priceDropService, wishlistMatchEmailService, saleLiveEmailService, presaleSneakPeekEmailService, onboardingEmailService (3 senders), smartFollowService (loop — email-only flag, push intact), followerNotificationService (loop — email-only flag, push intact). Backend `tsc --noEmit` 0 errors.
-- **OPEN P1 (G1)** — added to Blocked Queue: 9 Resend-rail callers send transactional mail FROM `@send.finda.sale` (Resend-DKIM status unverified). Touches auth+payment → red-flag gate → Patrick DNS decision needed before fix.
-- **Confirmed present** — S936 admin send-test-email fix, transactionalEmailService suppression + noreply@finda.sale default, S934 FB Events + googlePlaces flea widenings.
-
-**Files modified:**
-- `packages/backend/src/services/saleAlertEmailService.ts`
-- `packages/backend/src/services/priceDropService.ts`
-- `packages/backend/src/services/wishlistMatchEmailService.ts`
-- `packages/backend/src/services/saleLiveEmailService.ts`
-- `packages/backend/src/services/presaleSneakPeekEmailService.ts`
-- `packages/backend/src/services/onboardingEmailService.ts`
-- `packages/backend/src/services/smartFollowService.ts`
-- `packages/backend/src/services/followerNotificationService.ts`
-- `claude_docs/feature-notes/email-outreach-scraper-system-map.md` (NEW)
-- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`
-
-**BQ delta:** 1 → 2 (+G1 P1)
-
-### S936 — 2026-06-09 | QA/RECORDS
-
-**Session type:** QA sweep + Records pass
-
-**Work completed:**
-- **Chrome QA — SEO3** ✅ — Navigated https://finda.sale/estate-sales/denver-co. H1 "Estate Sales in Denver, CO" ✅, 50 listings ✅, category tabs ✅, BreadcrumbList schema.org ✅, canonical + og:title + og:desc ✅.
-- **Chrome QA — #472 send-test-email** — Backend CODE works (Resend success:true, messageId 7caa79e3-61f5-4893-83b7-a5021d4447f1, rail:resend). Email arrived in Yahoo SPAM from support@finda.sale (unwarmed sender domain). RESEND_FROM_EMAIL env var confirmed set to support@finda.sale in Railway.
-- **Chrome QA — #463 Claim CTA tracking** — UNVERIFIED. No unclaimed organizer has a `customStorefrontSlug`, so no profile URL is accessible in QA env. Vercel Analytics Events tab requires dashboard access.
-- **Chrome QA — #164 Tiers** ✅ — Navigated /organizer/settings → Subscription tab as Alice (user1). "Your subscription tier: TEAMS ($79/mo)" displayed correctly.
-- **Bug fix — admin.ts hardcoded fallback** — Removed `hello@send.finda.sale` hardcoded fallback from POST /admin/send-test-email. Now requires RESEND_FROM_EMAIL env var; returns 503 if missing.
-- **Bug fix — transactionalEmailService.ts FROM_DEFAULT** — Changed hardcoded `hello@send.finda.sale` to `process.env.RESEND_FROM_EMAIL ?? 'FindA.Sale <noreply@finda.sale>'`. `send.finda.sale` has SES DNS, not Resend DKIM — wrong domain for Resend sends.
-- **Records pass** — S935 PCVs applied to roadmap.md: #317 Human QA ⬜→⚠️ S935 (graceful fallback ✅; inside/outside-radius UNVERIFIED); #470 Claude QA + Human QA -→CODE-ONLY S935 (gtag events fire + network 204; submit CODE-ONLY). PCV table cleared.
-
-**Files modified:**
-- `packages/backend/src/routes/admin.ts` — hardcoded hello@send.finda.sale fallback removed
-- `packages/backend/src/lib/transactionalEmailService.ts` — FROM_DEFAULT uses RESEND_FROM_EMAIL env var
-- `claude_docs/strategy/roadmap.md` — S935 PCVs applied (#317, #470)
-- `claude_docs/STATE.md` — S936 wrap
-- `claude_docs/patrick-dashboard.md` — S936 summary
-
-**BQ delta:** 1 → 1 (unchanged)
-
-### S934 — 2026-06-09 | RESEARCH/DEV
-
-**Session type:** RESEARCH/DEV — scraper coverage for 459 zero-record city×category SEO pages
-
-**Work completed:**
-- **Third-party auction/venue sources evaluated — all BLOCKED.** AuctionNinja dated-listing extension: BLOCKED — auction events are JavaScript-rendered; the fetch+cheerio stack only sees the static company-directory nav (confirmed by reading static HTML of /auctions + a company profile). Not fixable without a headless browser; no GitHub scraper exists (only a seller-side CSV tool). HiBid evaluated as the auction source — fully server-rendered (title/city/state/zip/start+end dates/catalog URL), coverage probe of 8 metros returned 3–77 live auctions each — BUT ToS §7 explicitly prohibits scraping, automated access, aggregating/displaying their data, and building a competing service → NO-GO (legal). US YellowPages.com evaluated as an organizer/venue source — ToS §2.1 "Data Mining/Scraping and Framing Prohibited" → NO-GO, no code written. (Existing yellowPagesCaScraper.ts (Canada) likely shares similar ToS — flagged for a future check.)
-- **DB audit (Railway, read-only).** Only 97 AUCTION Sale records existed nationwide pre-fix; 155 high-activity cities had zero auctions (NYC 621 total/0, Houston 508/0, Chicago 279/0, LA 237/0, Miami 228/0, Dallas 224/0). GOOGLE_PLACES_METROS (300 metros) confirmed COMPREHENSIVE — apparent gaps are suburbs already inside a covered metro's radius, NYC boroughs, Canadian cities in CANADIAN_METROS, or data-mislabels. GOOGLE_PLACES_METROS is a plain string[] constant (no Google API call); the Google Places scraper itself is disabled (paid). Foursquare cron = 3rd of month, HERE cron = 2nd (GitHub Actions).
-- **PIVOT to own-pipeline fills (all legal).** (a) RECLASSIFICATION — APPLIED to production. reclassify-mistyped-sales.ts flipped 651 mislabeled EstateSalesNet/GarageSaleFinder event listings → AUCTION (saleType AUCTION 97→748 confirmed in DB) and 217 YARD→ESTATE. Rule excludes places-API business listings (em-dash "— Category in City" suffix + RETAIL). Dry-run audited, false-positive risk negligible. (b) FB Events query WIDENED — search-facebook-events.ts now also searches flea market/swap meet/public auction/online auction/consignment sale (its inferSaleType already categorizes auction+flea). (c) PLACES_QUERIES +5 flea synonyms — googlePlaces.ts gained antique flea market/outdoor market/vendor market/trade days/bazaar (FLEA_MARKET); Foursquare+HERE pick them up next monthly run. (d) Flea-org backfill SHELVED on data quality — the 600 orphan geocoded FLEA organizers were 583/600 individual vendor booths (443 piled on 2 New Orleans coordinates); generate-flea-sales-from-orgs.ts built but NOT applied and dropped from push.
-- **RETAIL data-quality audit** (retail-data-quality-audit.md) — 7,692 RETAIL sales, ~17% junk minimum, concentrated in Estate Sale Company (39% junk — matched on "Estate"), no-suffix raw-name bucket (28%), Consignment (22%); clean categories Antique Mall 3%/Pawn 2%/Thrift 1%/Resale 4%. Also 1,478 duplicate rows (~19%) and 1,842 Canadian rows (24%). Recommendation: query/SEO-layer suppression (no deletes) → ~3,288-row clean pool.
-
-**Files modified:**
-- `packages/backend/src/services/scraper/sources/search-facebook-events.ts` — widened search query (flea market/swap meet/public+online auction/consignment) [pending push]
-- `packages/backend/src/services/scraper/sources/googlePlaces.ts` — PLACES_QUERIES +5 flea synonyms [pending push]
-- `packages/backend/src/scripts/reclassify-mistyped-sales.ts` — APPLIED to production (AUCTION 97→748, +217 ESTATE)
-- `claude_docs/feature-notes/ADR-hibid-auction-scraper.md` — NEW (HiBid decision: legally blocked per ToS §7)
-- `claude_docs/feature-notes/retail-data-quality-audit.md` — NEW (RETAIL junk audit + suppression recommendation)
-- `claude_docs/STATE.md` — S934 wrap
-- `claude_docs/patrick-dashboard.md` — S934 summary
-- `claude_docs/strategy/roadmap.md` — scraper-coverage row updated
-
-**BQ delta:** 1 → 1 (unchanged — #332 Shopify still the sole item)
-
-### S933 — 2026-06-09 | BUG/DEV
-
-**Session type:** BUG/DEV — BQ cleanup + competitor email domain blocking
-
-**Work completed:**
-- **BQ cleanup (5→1)** — Verified each BQ item via direct DB queries (psycopg2). #335 RESOLVED: outreach IS active (658 DirectoryClaimEmail rows sent, cron running). Item 3 (462 WARM leads) RESOLVED: 0 orgs have email but no DCE row — backfill already done. Item 4 (WARM enrichment) REMOVED from BQ: coverage growing 3.5%→4.7%, not a bug. Item 5 (GSF geocoding) REMOVED from BQ: structural gap acknowledged in geocodingAuditJob.ts suppression, frontend falls back to zip/city as Patrick confirmed. #332 DEFERRED (Patrick instruction). #471 noted as low-urgency, not added to BQ.
-- **Competitor email domain blocking** — Built `BLOCKED_DOMAINS` pattern in suppressionService.ts: `estatesales.net` and `estatesales.org` now blocked at the domain level (sync, no DB call). Updated `isSuppressed()` and `checkMultiple()`. Fixed gap: `transactionalEmailService.ts` had zero suppression logic — added full check before every Resend call. Patched 3 outreach scripts (autoSeedOutreachCron.ts, seedDirectoryClaimEmails.ts, backfill-warm-emails.ts) to skip domain-blocked addresses using `isEmailDomainBlocked()`. TS 0 errors. Deploy green.
-
-**Files modified:**
-- `packages/backend/src/services/suppressionService.ts` — BLOCKED_DOMAINS + isEmailDomainBlocked() + isSuppressed() + checkMultiple() rewrite
-- `packages/backend/src/lib/transactionalEmailService.ts` — suppression check added before every Resend call
-- `packages/backend/src/jobs/autoSeedOutreachCron.ts` — isEmailDomainBlocked() check
-- `packages/backend/src/scripts/seedDirectoryClaimEmails.ts` — isEmailDomainBlocked() check
-- `packages/backend/src/scripts/backfill-warm-emails.ts` — isEmailDomainBlocked() check
-- `claude_docs/STATE.md` — S933 wrap
-- `claude_docs/patrick-dashboard.md` — S933 summary
-
-**BQ delta:** 5 → 1 (#335/item3/item4/item5 all resolved or removed; #332 deferred)
-
-### S932 — 2026-06-09 | RECORDS
-
-**Session type:** Records — S931 PCV application, Hunt Pass BQ closure
-
-**Work completed:**
-- **Records pass** — Applied S931 PCVs to roadmap.md. #462 Outreach Funnel Attribution Chr column updated: ⬜|⬜ → ✅ S931|✅ S931 (only row needing a column update; #237/#SEO1/#464/#189/#139 already had Chr ✅ from prior sessions). #455 Notify Me updated: ⚠️ migration-pending note removed, S931 full E2E confirmation added.
-- **Hunt Pass BQ RESOLVED** — Patrick confirmed /shopper/dashboard stats bar shows "1.5x XP" on live Vercel deploy. BQ item removed. BQ: 6→5.
-
-**Files modified:**
-- `claude_docs/strategy/roadmap.md` — #462 Chr ✅ applied, #455 note updated
-- `claude_docs/STATE.md` — S932 wrap
-- `claude_docs/patrick-dashboard.md` — S932 summary
-
-**BQ delta:** 6 → 5 (Hunt Pass RESOLVED)
-
-### S931 — 2026-06-09 | QA
-
-**Session type:** QA — Records pass, Hunt Pass fix, Chrome QA sweep (continuing from S930)
-
-**Work completed:**
-- **Records pass (Task #1)** — Applied 6 S930 PCVs to roadmap.md Chr columns: organizer dashboard ✅, HTML entity fix (insights) ✅, shopper dashboard ✅, Explorer Profile ✅, #123 rank label ✅, #199 Hunt Pass active state ✅.
-- **Hunt Pass multiplier fix (Task #2)** — 5 components corrected: StreakWidget.tsx (L78 label + L86 tooltip), HuntPassAvatarBadge.tsx (L69 title), HuntPassModal.tsx (L63 description), AvatarDropdown.tsx (L1199 title), Layout.tsx (L641 title). All changed "2x XP" → "1.5x XP". TS 0 errors. Pending push.
-- **Chrome QA sweep (Task #3)** — 9 features verified: #462 Attribution E2E ✅ (ORGANIZER_PAGE_VIEWED DB id=cmq60o67l000n11qnfaa3qt13, ss_8722s1et1), #237 Command Center ✅ (ss_3575f2hgq ss_89830syni), /admin/outreach-opens ✅ (173 EMAIL_OPENED records, ss_324409tr9), SEO1 SSR ✅ (og:title/image/canonical confirmed web_fetch), #455 Notify Me ✅ (DB id=snmq614gmmivpefw, ss_8148yby5f), #464 SEO footer ✅ (Discover column links, ss_8148yby5f), sale detail page ✅ (ss_1097rjp4e), /trending ✅ (hot sales grid, ss_1920zk41t), /map ✅ (57 sales, Leaflet, ss_5209hylq3). 9 PCVs staged.
-
-**Files modified:**
-- `claude_docs/strategy/roadmap.md` — 6 S930 PCV Chr columns applied
-- `packages/frontend/components/StreakWidget.tsx` — "2x XP" → "1.5x XP" (L78 + L86)
-- `packages/frontend/components/HuntPassAvatarBadge.tsx` — "2x XP" → "1.5x XP" (L69)
-- `packages/frontend/components/HuntPassModal.tsx` — "2x XP" → "1.5x XP" (L63)
-- `packages/frontend/components/AvatarDropdown.tsx` — "2x XP" → "1.5x XP" (L1199)
-- `packages/frontend/components/Layout.tsx` — "2x XP" → "1.5x XP" (L641)
-- `claude_docs/STATE.md` — S931 wrap
-- `claude_docs/patrick-dashboard.md` — S931 summary
-
-**BQ delta:** 6 → 6 (Hunt Pass entry updated: "fix built S931, pending push+re-verify")
-
-### S930 — 2026-06-09 | QA
-
-**Session type:** QA — Records pass, DB migration, Chrome QA sweep
-
-**Work completed:**
-- **Records pass** — Applied S925 PCVs to roadmap.md: logout flow → Chr✅ S925; #463 claim-click → CODE-ONLY note (beacon fire-and-forget, unverifiable in QA env).
-- **DB migration** — Decoded 4 HTML-encoded category rows in Railway DB: "Electronics & Technology", "Lamps & Lighting", "Home Décor", "Jewelry & Watches".
-- **HTML entity fix Chrome-verified** — Navigated /organizer/insights as Alice. No `&amp;` or `&#233;` visible in Items by Category. ✅ (ss_7450stzxz ss_5747xy01g)
-- **Autonomous QA sweep** — 5 features Chrome-verified: organizer dashboard ✅, shopper dashboard (Leo Thomas) ✅, Explorer Profile ✅, #123 ranks page ✅ (Ranger card + "↑ Your rank" badge), #199 Hunt Pass active state ✅ (no "Active until N/A"). 6 PCVs staged.
-- **⚠️ P3 new BQ item** — Dashboard stats bar "Hunt Pass 2x XP" vs /shopper/hunt-pass "1.5x XP on every action" multiplier display inconsistency.
-- **Gmail DSN cleanup** — Trashed 104 mailer-daemon delivery delay/failure notifications from outreach@finda.sale inbox. S929 fix prevents new ones; backlog cleared.
-
-**Files modified:** claude_docs/STATE.md, claude_docs/patrick-dashboard.md, claude_docs/strategy/roadmap.md (S925 PCVs applied)
-
-**BQ delta:** 5 → 6 (+1 Hunt Pass multiplier P3)
-
-### S929 — 2026-06-09 | BUG/OPS
-
-**Session type:** Bug/Ops — Sentry triage + outreach placeholder fix
-
-**Work completed:**
-- **Sentry 10→5 issues resolved** — VACUUM ANALYZE on Sale + Organizer tables cleared NODEJS-10/2Y/32/3D/2N (table bloat). NODEJS-1A (bounceSuppressService module) cleared by redeploy (file exists, dynamic require had try/catch). 
-- **DB indexes added (now live)** — `Sale_status_isInventoryContainer_endDate_idx` (NODEJS-3E: search.ts COUNT query) + `Organizer_contactEmail_isUnmanagedListing_idx` (NODEJS-38: emailDiscoveryJob). Migration deployed via `prisma migrate deploy`.
-- **@system.finda.sale outreach leak fixed** — `PLACEHOLDER_DOMAINS` set was missing `system.finda.sale` in all 3 seeder files. Scraper creates synthetic emails (`scraper+slug@system.finda.sale`) stored as User.email; outreach cron was treating these as real organizer contactEmails and queuing outreach to them. Fix deployed. 0 bad rows confirmed in DirectoryClaimEmail queue before fix.
-- **ImprovMX 500/day flood explained** — bounce DSNs from @system.finda.sale outreach attempts landing at finda.sale addresses ImprovMX forwards. Fix stops new bad emails; volume drops tomorrow. Outreach account confirmed NOT suspended (memory corrected).
-- **NODEJS-1G still monitoring** — scraper fallback `findMany({ where: { isUnmanagedListing: true, address: { contains: city } } })` cannot use B-tree index on LIKE '%city%'. `@@index([isUnmanagedListing])` exists but not sufficient for large table scan. Needs `take: 500` limit or pg_trgm GIN index. Low frequency (< 1/day average). Deferred to S930.
-
-**Files modified:**
-- `packages/database/prisma/schema.prisma` — 2 new @@index entries (Organizer + Sale)
-- `packages/database/prisma/migrations/20260608000001_add_missing_sale_organizer_indexes/migration.sql` — new migration
-- `packages/backend/src/jobs/autoSeedOutreachCron.ts` — added 'system.finda.sale' to PLACEHOLDER_DOMAINS
-- `packages/backend/src/scripts/seedDirectoryClaimEmails.ts` — same fix
-- `packages/backend/src/scripts/backfill-warm-emails.ts` — same fix
-
-**BQ delta:** 5 → 5 (unchanged — no feature work)
-
-
-
-- `claude_docs/strategy/roadmap.md` — #465 updated (Tier 4 live), #470/SEO3/#471/#472 added
-- `claude_docs/STATE.md` — S926 wrap
-- `claude_docs/patrick-dashboard.md` — S926 summary
-
-**BQ: 5 (unchanged).**
-
-
-- `claude_docs/STATE.md` — S925 status, PCVs updated, Next Session updated for S926
-- `claude_docs/patrick-dashboard.md` — S925 QA summary
-
-**BQ: 5 (unchanged).**
-
-
-- `claude_docs/STATE.md` — S924 wrap
-- `claude_docs/patrick-dashboard.md` — S924 summary
-
-**BQ: 5 (unchanged).** CSRF bug found and fixed in same session — no BQ entry needed.
-
-### S923 and earlier — archived
-
-_(Session entries S923 and earlier are in git history / prior STATE.md revisions. Trimmed per T4/T5 rotation — full detail in session-log-archive.md.)_
-
----
- 
