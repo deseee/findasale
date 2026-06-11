@@ -30,6 +30,28 @@ jobs:
         run: npx prisma generate
         working-directory: packages/database
 
+      - name: Verify database connectivity
+        run: |
+          python3 -c "
+          import urllib.parse, socket, sys
+          url = '${{ secrets.DATABASE_URL }}'
+          if not url:
+              print('ERROR: DATABASE_URL secret is not set')
+              sys.exit(1)
+          parsed = urllib.parse.urlparse(url)
+          host = parsed.hostname
+          port = parsed.port or 5432
+          try:
+              sock = socket.create_connection((host, port), timeout=10)
+              sock.close()
+              print(f'DB connectivity OK: {host}:{port}')
+          except Exception as e:
+              print(f'ERROR: Cannot reach DB at {host}:{port} — {e}')
+              print('ACTION REQUIRED: The DATABASE_URL GitHub Actions secret may be stale.')
+              print('Fix: GitHub repo -> Settings -> Secrets and variables -> Actions -> DATABASE_URL -> Update')
+              sys.exit(1)
+          "
+
       - name: Run BidSpotter Scraper
         continue-on-error: true
         working-directory: packages/backend

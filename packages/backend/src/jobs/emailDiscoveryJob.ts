@@ -21,6 +21,7 @@ import { cronGuard } from '../utils/cronGuard';
 export async function emailDiscoveryJob(): Promise<{
   processed: number;
   discovered: number;
+  skipped: number;
 }> {
   console.log('[emailDiscoveryJob] Starting batch discovery...');
   const startTime = Date.now();
