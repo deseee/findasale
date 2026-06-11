@@ -1,6 +1,24 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S954 — 2026-06-11
+**Last updated:** S955 — 2026-06-11
+
+---
+
+## Session S955 Summary — Workflows Triggered + DATABASE_URL Done
+
+**Type:** OPS — workflow_dispatch for 4 fixed scrapers; credential housekeeping
+**BQ:** 1 (unchanged)
+
+S954 push landed. DATABASE_URL GitHub Actions secret updated by Patrick (S955). All 4 fixed workflows triggered manually:
+
+| Workflow | Status |
+|----------|--------|
+| scrape-kentucky-licensing | ✅ Queued (#6) |
+| scrape-indiana-licensing | ✅ Dispatched |
+| scrape-maine-licensing | ✅ Dispatched |
+| scrape-alabama-licensing | ✅ Dispatched |
+
+Kentucky especially: if it returns 0 records with no error, ASP.NET control IDs need adjusting. Check page source at oop.ky.gov/lic_search.aspx for the real ctl00$ContentPlaceHolder1$ddl* field names.
 
 ---
 
@@ -76,7 +94,6 @@ git commit -m "fix: KY/IN/ME/AL phase2 scrapers restored from dead URLs/broken p
 | Action | Priority | Notes |
 |--------|----------|-------|
 | Push the 4 scraper fixes (block above) | HIGH | |
-| Update GitHub Actions `DATABASE_URL` secret | HIGH | Settings → Secrets → Actions → DATABASE_URL → Railway public proxy URL. HERE Places + DB scrapers fail until done. |
 | AlternativeTo listing | HIGH | https://alternativeto.net/about/add-software/ — 10 min, free, immediate. MaxSold already indexed there. |
 | Searlo credit upgrade | Optional | $3.99+ lifts the 10/min cap; bump `SEARLO_RPM` variable after |
 | Product Hunt launch prep | Medium | 2–3 week runway needed; Claude can draft all assets |

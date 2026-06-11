@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S955 — OPS (2026-06-11). DATABASE_URL secret updated by Patrick + 4 fixed scraper workflows triggered. (1) DATABASE_URL GitHub Actions secret refreshed to Railway public proxy URL — unblocks HERE Places + all DB-using scraper workflows. (2) Triggered `workflow_dispatch` on all 4 S954 fixes: scrape-kentucky-licensing (#6 Queued), scrape-indiana-licensing (dispatched), scrape-maine-licensing (dispatched), scrape-alabama-licensing (dispatched). Results pending — Kentucky control ID verification is the key unknown (0 records with no error = control IDs wrong, check oop.ky.gov page source). BQ: 1 (unchanged).**
+
 **S954 — DEV (2026-06-11). S952 Scraper Fix Campaign COMPLETE — 4 scraper files fixed + coverage/infra research done. (1) KENTUCKY phase2 (`kentuckyPhase2Scraper.ts`) — REWRITTEN: old `web1.ky.gov` dead → new `https://oop.ky.gov/lic_search.aspx`. ASP.NET ViewState 2-step flow: GET page → extract `__VIEWSTATE`/`__EVENTVALIDATION`/cookies → POST A–Z last-name iteration (board=34 Auctioneers, status=Active) → parse HTML table, dedup by license #, 1.5s polite delay. 0 TS errors. NOTE: control IDs (`ctl00$ContentPlaceHolder1$ddl*`) need live verification — if first run returns 0 with no errors, check actual page source and update field names. (2) INDIANA phase2 (`indianaPhase2Scraper.ts`) — PARSER FIXED: removed `INTENTIONAL_BREAK` early-return stub + fixed count regex `([\d,]+)` (was `(\d+)` — missed comma-formatted numbers like 1,560) + rewrote multi-line `<tr>` parser with `[\s\S]*?` to cross newlines. Expected: ~1,560 IN active auctioneers (was returning 1). 0 TS errors. (3) MAINE phase2 (`mainePhase2Scraper.ts`) — REWRITTEN: old `pfr.maine.gov` NXDOMAIN → new `https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/`. Flow: GET `SearchIndividual.aspx` → extract ViewState tokens → POST `ExportToCSV.aspx` (regulator=4210, scOnlyActive=true). RFC 4180 CSV parser, fuzzy header detection, status filter (active only). Exported function name unchanged. 0 TS errors. (4) ALABAMA phase2 (`alabamaPhase2Scraper.ts`) — TIMEOUT FIX: added `isTimeoutError()` helper (detects `UND_ERR_CONNECT_TIMEOUT`/`TimeoutError`/`AbortError`), extracted `fetchOnce()`, retry-once logic with 5s wait on timeout. 30s AbortSignal.timeout already existed. 0 TS errors. (5) RESEARCH B/C/D COMPLETE — Coverage verdict: NY (31,733 orgs from NewYorkPhase2+ESN+AZ = RETIRE), NJ (703 = RETIRE), MA (267 = RETIRE Phase1; Phase2 DNS unblock needed), NE Phase1 (RETIRE), RI (64 = RETIRE); NE Phase2 NDBF pawnbroker flagged as gap (no pawn records in DB, form may be accessible). Infra alternatives: ME Licensing → Playwright on Actions (no WAF, 4–6 hrs, $0); WY Phase2 → Playwright on Actions (Google Sites, 3–4 hrs, $0); MA Phase2 → request MA DPL API key first ($0); NH → email OPLC for CSV first, residential proxy fallback; WI → WI open records request first. Headless harness ROI: 26 scrapers unblocked (18 Playwright-only + 8 WAF cases needing proxy); build cost ~20–30 hrs dev; NAA alone (5,000+ national records) justifies it. BQ: 1 (unchanged).**
 
 **S953 — INFRA/OPS (2026-06-11). Email infrastructure audit + ImprovMX forwarding fix + Resend suppression cleanup. (1) FORWARDING GAP FIXED — audited every @finda.sale address across Gmail/MailerLite/Resend/code/live-DNS. Only support/patrick/outreach were aliased in ImprovMX; legal@/privacy@/info@/contact@/receipts@ were silently dropping (legal+privacy are on the DMCA/GDPR pages = real risk). Patrick added the 5 missing aliases + a catch-all (*) in ImprovMX → all verified forwarding to deseee@gmail.com (test emails landed in Gmail). (2) RESEND SUPPRESSION CLEARED — forwarding-test bounces sent BEFORE the aliases existed had Resend-suppressed legal@/privacy@/info@ and written 4 EmailSuppression DB rows. Removed all 3 from Resend’s account-level suppression list (dashboard: Emails → open email → EMAIL EVENTS → Remove from suppression list) + deleted the 4 DB rows (psycopg2); re-sent → all 3 delivered + forwarded to Gmail. receipts@ was soft-bounce only (never suppressed). (3) GOTCHA documented: never test internal @finda.sale forwarding via Resend or the app rails (zone-blocked in code AND a bounce poisons the address) — use ImprovMX’s per-alias TEST button. (4) DOC — new `feature-notes/email-infrastructure-map.md` (addresses, ImprovMX forwarding, DNS, providers, Resend-suppression how-to) as the inbound companion to `email-outreach-scraper-system-map.md` (sending rails); cross-linked both. Gmail filter auto-files support mail under the FindASale/Support label (unread) — that’s why inbound support mail looked missing. BQ: 1 (unchanged).**
@@ -190,27 +192,19 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Restore NE + WY corrupted working-tree files (S951 corruption — NOT the 4 new scraper fixes).** The 4 fixed scrapers (KY/IN/ME/AL) are already written correctly to your working tree. But NE + WY files were corrupted in S951 and were NOT fixed this session. Run:
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git checkout -- packages/backend/src/services/scraper/sources/nebraskaPhase2Scraper.ts packages/backend/src/services/scraper/sources/wyomingLicensingScraper.ts .github/workflows/scrape-ne-phase2.yml .github/workflows/scrape-wyoming-licensing.yml
-   ```
-   Do NOT run `git checkout -- packages/backend/src/services/scraper/sources/` (all sources) — that would overwrite the 4 new fixes.
+~~1. Restore NE+WY files~~ ✅ done
+~~2. Commit + push scraper fixes~~ ✅ done (S954)
+~~4. Update DATABASE_URL GitHub Actions secret~~ ✅ done (S955)
 
-2. **Commit + push the 4 scraper fixes + wrap docs.** See push block below.
+1. **Verify Kentucky scraper control IDs.** The KY scraper uses ASP.NET control names (`ctl00$ContentPlaceHolder1$ddlBoard` etc.). If the first run returns 0 records with no errors, the field names are wrong — check `https://oop.ky.gov/lic_search.aspx` page source and update the POST field names in `searchByLastNameLetter`. The logic is correct; only the control ID strings need adjusting if wrong.
 
-3. **Verify Kentucky scraper control IDs after deploy.** The KY scraper uses ASP.NET control names (`ctl00$ContentPlaceHolder1$ddlBoard` etc.). If the first run returns 0 records with no errors, the field names are wrong — check `https://oop.ky.gov/lic_search.aspx` page source and update the POST field names in `searchByLastNameLetter`. The logic is correct; only the control ID strings need adjusting if wrong.
+2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier. A $3.99+ pack lifts the cap — bump `SEARLO_RPM` repo Variable after.
 
-4. **Update the stale GitHub Actions `DATABASE_URL` secret** (surfaced S951 — still open). HERE Places + every DB-using scraper workflow fails until refreshed:
-   GitHub → repo Settings → Secrets and variables → Actions → `DATABASE_URL` → set to Railway public-proxy URL (in global CLAUDE.md credentials). After updating, trigger HERE Places via `workflow_dispatch` to confirm.
-
-5. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier. A $3.99+ pack lifts the cap — bump `SEARLO_RPM` repo Variable after.
-
-6. **AlternativeTo listing (HIGH URGENCY — free, 10 min).** https://alternativeto.net/about/add-software/ — MaxSold + EstateSales.NET already indexed there; FindA.Sale is not.
+3. **AlternativeTo listing (HIGH URGENCY — free, 10 min).** https://alternativeto.net/about/add-software/ — MaxSold + EstateSales.NET already indexed there; FindA.Sale is not.
 
 ### S955 — Suggested Work
 
-**Option A — QA the 4 scraper fixes in production.** After push: trigger the 4 workflows via `workflow_dispatch`, check Railway logs + DB record counts. KY verification especially important (control ID uncertainty). If KY returns 0 records, fix the field names (S955 inline edit, <20 lines).
+**Option A — QA the 4 scraper fixes in production.** ✅ All 4 workflows triggered this session (KY #6, IN, ME, AL). Check GitHub Actions results + Railway DB record counts. KY verification key — if returns 0 records with no error, fix control IDs in `kentuckyPhase2Scraper.ts` (<20 lines).
 
 **Option B — Build the Playwright harness (headless scraper unblock).** 26 scrapers are currently blocked by JS rendering + WAF. One shared Playwright + residential-proxy runner unblocks them all. ROI confirmed: NAA alone (5,000+ national auction house records) justifies the 20–30 hr build cost. Start with Playwright-only (18 scrapers, $0/month) — ME Licensing, OH, TN, MO, WI, WY, NAA, NFMA, StorageTreasures, etc.
 
