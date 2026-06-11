@@ -25,7 +25,7 @@ jobs:
         run: |
           curl -X POST \
             -H "x-internal-secret: ${OUTREACH_SECRET}" \
-            "${RAILWAY_BACKEND_URL}/api/internal/scraper/run-indiana-licensing" \
+            "${RAILWAY_BACKEND_URL}/api/internal/scraper/run-indiana-phase2" \
             --fail-with-body \
             --connect-timeout 10 \
             --max-time 3600
