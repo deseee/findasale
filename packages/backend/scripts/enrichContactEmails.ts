@@ -210,9 +210,9 @@ async function queryGooglePlaces(
   businessName: string,
   city: string
 ): Promise<string | null> {
-  if (!GOOGLE_PLACES_API_KEY || !process.env.GOOGLE_MAPS_ENABLED) {
-    return null;
-  }
+  // BILLING LOCKDOWN — May 2026: $201 incident. Hard-coded off.
+  // Do NOT remove this block or gate on GOOGLE_MAPS_ENABLED — that env var is no longer the control.
+  return null;
 
   const query = `${businessName} ${city}`.trim();
   

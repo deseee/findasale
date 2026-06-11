@@ -505,9 +505,9 @@ export async function scrapeGooglePlacesQuery(
   queryConfig: QueryConfig,
   metro: string
 ): Promise<ScrapedItem[]> {
-  if (!process.env.GOOGLE_MAPS_ENABLED) {
-    return [];
-  }
+  // BILLING LOCKDOWN — May 2026: $201 incident. Hard-coded off.
+  // GOOGLE_MAPS_ENABLED env var has NO effect — remove this comment only with Patrick approval.
+  return [];
   const fullQuery = `${queryConfig.query} in ${metro}`;
   const results: ScrapedItem[] = [];
   let pageToken: string | undefined;
