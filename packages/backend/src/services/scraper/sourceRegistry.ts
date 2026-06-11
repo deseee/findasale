@@ -118,7 +118,7 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     displayName: 'NAA Find an Auctioneer',
     type: 'directory',
     runMode: 'national-once',
-    enabled: false, // PARKED — Novi AMS JS-rendered platform returns zero records via static fetch. Workflow disabled (scrape-naa.yml). Unpark: Playwright or Novi AMS API. Verified broken 2026-05-23.
+    enabled: true, // UNPARKED 2026-06-11 — Novi AMS JSON API endpoint discovered in page source. POST /members/directory-customer-list returns 2,384 structured member records. No Playwright needed.
     qualityTier: 'high',
     legalNote: 'Public member directory — no ToS prohibition found',
     run: scrapeNAADirectory,

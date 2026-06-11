@@ -1,190 +1,151 @@
 /**
  * NAA Find an Auctioneer directory scraper
  * Source: https://www.auctioneers.org/find-an-auctioneer
- * Public member directory — no ToS prohibition found.
+ * Public member directory -- no ToS prohibition found.
  * Run mode: national-once (crawls all member profiles, metro param is unused).
  * ADR-073: Directory Scraper Phase 1
  *
- * STRATEGY: sitemap-driven static crawl.
- * The NAA directory SEARCH page (?state=XX) is JS-rendered (Novi AMS) and returns
- * only a placeholder to a plain fetch — so it is NOT used. Instead we read
- * https://www.auctioneers.org/sitemap.xml (advertised in robots.txt), extract every
- * individual member profile URL (/find-an-auctioneer/<slug>), and fetch each profile
- * page directly. Those profile pages ARE fully static plain HTML: name, company,
- * city/state, website, and phone are all present in the raw response with no JS and
- * no auth required. Each profile is parsed with cheerio and upserted via the same
- * getOrCreateScrapedOrganizer path with source attribution 'NAAFindAnAuctioneer'.
- * Verified working against live HTML: 2026-06-05.
+ * STRATEGY: Novi AMS JSON API (no Playwright required).
+ *
+ * Investigation (2026-06-11):
+ *   The /find-an-auctioneer landing page is JS-rendered via Knockout.js + Novi AMS
+ *   platform. However the page source exposes a plain HTTP POST endpoint at
+ *   /members/directory-customer-list that the frontend calls to populate member cards.
+ *   This endpoint returns unauthenticated JSON with full structured member data:
+ *   name, city, state, phone, email, website, lat/lng.
+ *
+ *   API parameters (from directory.js + page HTML):
+ *     directoryID=7345  (NAA's Find an Auctioneer directory ID on Novi AMS)
+ *     pageNumber=N      (1-based, 12 records per page)
+ *     searchText=       (empty = all members)
+ *     Total pages: ceil(2384 / 12) = 199
+ *
+ *   Prior approach (sitemap-driven profile fetch) was replaced because the Novi AMS
+ *   platform redirects /find-an-auctioneer/<slug> back to the search landing page
+ *   for non-member visitors -- individual profiles are no longer publicly accessible.
+ *
+ * ShippingCountry inconsistency: values include "United States", "USA", "United State"
+ *   (typo in Novi AMS data), and "CAN". Filter by state code presence instead.
+ * ShippingState inconsistency: occasionally a full state name ("Pennsylvania") instead
+ *   of 2-letter code. Normalised via US_STATE_MAP.
  */
 
-import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
-import { getRandomUserAgent } from '../userAgents';
 import { ScrapeStats } from '../sourceRegistry';
 
 const NAA_BASE_URL = 'https://www.auctioneers.org';
-const NAA_SITEMAP_URL = `${NAA_BASE_URL}/sitemap.xml`;
-const NAA_DOMAIN = new URL(NAA_BASE_URL).hostname;
+const DIRECTORY_ENDPOINT = `${NAA_BASE_URL}/members/directory-customer-list`;
+const DIRECTORY_ID = '7345';
+const PAGE_SIZE = 12; // Novi AMS returns 12 members per page
+const SOURCE_NAME = 'NAAFindAnAuctioneer';
+const NAA_DOMAIN = 'www.auctioneers.org';
 
-// Street-suffix tokens used to locate the boundary between street address and city.
-// NAA addresses render as a single run: "<street> <City>, <ST> <ZIP> <country>".
-// There is no delimiter between street and city, so we anchor on the last street
-// suffix and treat everything after it (up to the comma) as the city.
-const STREET_SUFFIX =
-  /(?:Rd|Road|Dr|Drive|St|Street|Ave|Avenue|Ln|Lane|Blvd|Boulevard|Ct|Court|Way|Hwy|Highway|Pkwy|Cir|Circle|Pl|Place|Ste|Suite|Box|Sq|Square|Ter|Terrace|Trl|Trail|Pike|Loop|Run|Pass|Row|Walk|Bend|Crossing|Xing)\b\.?/gi;
+/** US state name -> 2-letter code map for normalisation */
+const US_STATE_MAP: Record<string, string> = {
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
+  colorado: 'CO', connecticut: 'CT', delaware: 'DE', florida: 'FL', georgia: 'GA',
+  hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA',
+  kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME', maryland: 'MD',
+  massachusetts: 'MA', michigan: 'MI', minnesota: 'MN', mississippi: 'MS',
+  missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH', oklahoma: 'OK',
+  oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
+  virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI',
+  wyoming: 'WY', 'district of columbia': 'DC',
+};
 
-interface NAAMember {
-  name: string;
-  company?: string;
-  city: string;
-  state: string;
-  website?: string;
-  phone?: string;
+/** Set of valid 2-letter US state codes */
+const US_STATE_CODES = new Set(Object.values(US_STATE_MAP));
+
+interface NoviMember {
+  ID: number;
+  Name: string;
+  ShippingCity: string | null;
+  ShippingState: string | null;
+  ShippingCountry: string | null;
+  ShippingLatitude: number | null;
+  ShippingLongitude: number | null;
+  Phone: string | null;
+  Email: string | null;
+  Website: string | null;
+  HideContactInformation: boolean;
+  HideAddress: boolean;
+  HideOnWebsite: boolean;
+}
+
+interface NoviDirectoryResponse {
+  Status: string;
+  Members: NoviMember[];
+  TotalCount: number;
 }
 
 /**
- * Fetch the sitemap and extract every individual member profile URL.
- * Member profiles are static slugs of the form /find-an-auctioneer/<slug>.
- * The bare /find-an-auctioneer landing page is excluded (it is the JS-rendered
- * search page, not a member profile).
+ * Normalise a ShippingState value to a 2-letter US code.
+ * Returns null if the value cannot be resolved (e.g. Canadian province).
  */
-async function fetchMemberUrls(rateLimiter: RateLimiter): Promise<string[]> {
+function normaliseState(raw: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 2) {
+    const upper = trimmed.toUpperCase();
+    return US_STATE_CODES.has(upper) ? upper : null;
+  }
+  return US_STATE_MAP[trimmed.toLowerCase()] ?? null;
+}
+
+/**
+ * Fetch one page of the NAA directory via the Novi AMS JSON endpoint.
+ */
+async function fetchDirectoryPage(
+  pageNumber: number,
+  rateLimiter: RateLimiter
+): Promise<NoviDirectoryResponse> {
   await rateLimiter.waitBeforeRequest(NAA_DOMAIN);
 
-  const response = await fetch(NAA_SITEMAP_URL, {
-    headers: {
-      'User-Agent': getRandomUserAgent(),
-      'Accept': 'application/xml,text/xml',
-    },
-    signal: AbortSignal.timeout(20000),
+  const body = new URLSearchParams({
+    directoryID: DIRECTORY_ID,
+    pageNumber: String(pageNumber),
+    searchText: '',
+    memberTypeIDs: '',
+    specialOffer: '',
+    city: '',
+    state: '',
   });
 
-  if (!response.ok) {
-    throw new Error(`[NAADirectory] HTTP ${response.status} fetching sitemap`);
-  }
-
-  const xml = await response.text();
-
-  // Extract <loc> values that point at individual member profiles.
-  // Match the slug segment so we ignore the bare /find-an-auctioneer landing page.
-  const urls = new Set<string>();
-  const locRegex = /<loc>\s*([^<]+?)\s*<\/loc>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = locRegex.exec(xml)) !== null) {
-    const url = match[1].trim();
-    // Member profile: /find-an-auctioneer/<non-empty-slug> with no further path segment.
-    const m = url.match(/\/find-an-auctioneer\/([^/?#]+)\/?$/i);
-    if (m && m[1]) {
-      urls.add(url.replace(/\/$/, ''));
-    }
-  }
-
-  return Array.from(urls);
-}
-
-/**
- * Fetch and parse a single static member profile page.
- * Returns the parsed member, or null if the page had no usable name.
- */
-async function fetchMemberProfile(
-  url: string,
-  rateLimiter: RateLimiter
-): Promise<NAAMember | null> {
-  await rateLimiter.waitBeforeRequest(NAA_DOMAIN);
-
-  const response = await fetch(url, {
+  const response = await fetch(DIRECTORY_ENDPOINT, {
+    method: 'POST',
     headers: {
-      'User-Agent': getRandomUserAgent(),
-      'Accept': 'text/html,application/xhtml+xml',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Referer': `${NAA_BASE_URL}/find-an-auctioneer`,
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
       'Accept-Language': 'en-US,en;q=0.9',
     },
+    body: body.toString(),
     signal: AbortSignal.timeout(20000),
   });
 
   if (!response.ok) {
-    throw new Error(`[NAADirectory] HTTP ${response.status} for ${url}`);
+    throw new Error(`[NAADirectory] HTTP ${response.status} on page ${pageNumber}`);
   }
 
-  const html = await response.text();
-  const $ = cheerio.load(html);
+  const data = (await response.json()) as NoviDirectoryResponse;
 
-  const name = $('h1.o-details-block__title').first().text().trim();
-  if (!name) {
-    return null;
+  if (data.Status !== 'OK') {
+    throw new Error(`[NAADirectory] API status "${data.Status}" on page ${pageNumber}`);
   }
 
-  const company =
-    $('p.o-details-block__details-copy.company').first().text().trim() || undefined;
-
-  // Address: the details-copy <p> that follows the map-marker icon span.
-  // Format: "<street> <City>, <ST> <ZIP> <country>".
-  const addressText = $('span.novicon-map-marker')
-    .closest('.o-details-block__details-info')
-    .find('p.o-details-block__details-copy')
-    .first()
-    .text()
-    .trim();
-
-  const { city, state } = parseCityState(addressText);
-
-  // Website: the external website link in the social-icon row.
-  // Skip tel:, mailto:, and the internal secure-contact email link.
-  let website: string | undefined;
-  $('a.o-details-block__details-social-icon').each((_i, el) => {
-    if (website) return;
-    const href = $(el).attr('href');
-    if (href && /^https?:\/\//i.test(href) && !/auctioneers\.org/i.test(href)) {
-      website = href.trim();
-    }
-  });
-
-  // Phone: the tel: link.
-  const telHref = $('a[href^="tel:"]').first().attr('href');
-  const phone = telHref
-    ? telHref.replace(/^tel:/i, '').trim() || undefined
-    : undefined;
-
-  return { name, company, city, state, website, phone };
-}
-
-/**
- * Parse city + state from a single-run NAA address string.
- * State is reliable (2-letter code before the ZIP). City is the text after the
- * last street-suffix token up to the comma. If no street suffix is found, the
- * whole pre-comma segment is used. Returns empty strings for fields that cannot
- * be confirmed rather than guessing.
- */
-function parseCityState(address: string): { city: string; state: string } {
-  if (!address) return { city: '', state: '' };
-
-  const stateMatch = address.match(/,\s*([A-Z]{2})\b\s+\d{5}/);
-  const state = stateMatch?.[1] ?? '';
-
-  const before = stateMatch
-    ? address.slice(0, stateMatch.index).trim()
-    : address.trim();
-
-  let city = before;
-  STREET_SUFFIX.lastIndex = 0;
-  let last: RegExpExecArray | null;
-  let lastEnd = -1;
-  while ((last = STREET_SUFFIX.exec(before)) !== null) {
-    lastEnd = last.index + last[0].length;
-  }
-  if (lastEnd >= 0) {
-    city = before.slice(lastEnd).trim();
-    // Strip any leftover suite/number remnant immediately before the city.
-    city = city.replace(/^(?:Ste\.?|Suite|Unit|Apt\.?|#|No\.?)\s*\S+\s*/i, '').trim();
-    city = city.replace(/^\d+\s*/, '').trim();
-  }
-
-  return { city, state };
+  return data;
 }
 
 /**
  * Main entry point for NAA directory scrape.
- * metro param is unused — this is a national-once source.
+ * metro param is unused -- this is a national-once source.
  */
 export async function scrapeNAADirectory(
   _metro: string,
@@ -199,80 +160,130 @@ export async function scrapeNAADirectory(
     itemsFailed: 0,
   };
 
-  console.log('[NAADirectory] Starting sitemap-driven auctioneer directory scrape');
+  console.log('[NAADirectory] Starting Novi AMS JSON API scrape');
 
-  await rateLimiter.loadRobotsTxt(NAA_BASE_URL);
-
-  let memberUrls: string[];
+  // Fetch page 1 to determine total count
+  let firstPage: NoviDirectoryResponse;
   try {
-    memberUrls = await fetchMemberUrls(rateLimiter);
+    firstPage = await fetchDirectoryPage(1, rateLimiter);
   } catch (err) {
-    console.error('[NAADirectory] Failed to fetch/parse sitemap:', err);
+    console.error('[NAADirectory] Failed to fetch page 1:', err);
     throw err;
   }
 
-  console.log(`[NAADirectory] Found ${memberUrls.length} member profile URLs in sitemap`);
+  const totalCount = firstPage.TotalCount;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  console.log(`[NAADirectory] ${totalCount} members across ${totalPages} pages`);
 
-  for (const url of memberUrls) {
-    let member: NAAMember | null;
+  if (totalCount === 0) {
+    throw new Error('[NAADirectory] Zero members returned -- API endpoint or directoryID may have changed');
+  }
+
+  // Process page 1 members
+  await processMembers(firstPage.Members, stats);
+
+  // Fetch remaining pages
+  for (let page = 2; page <= totalPages; page++) {
+    let pageData: NoviDirectoryResponse;
     try {
-      member = await fetchMemberProfile(url, rateLimiter);
+      pageData = await fetchDirectoryPage(page, rateLimiter);
     } catch (err) {
-      console.error(`[NAADirectory] Failed to fetch profile ${url}:`, err);
+      console.error(`[NAADirectory] Failed to fetch page ${page}:`, err);
       stats.itemsFailed++;
       continue;
     }
 
-    if (!member) {
-      console.log(`[NAADirectory] No usable member data at ${url} — skipping`);
+    await processMembers(pageData.Members, stats);
+
+    // Polite delay between pages (on top of RateLimiter's 1 req/sec floor)
+    await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 400));
+
+    if (page % 25 === 0) {
+      console.log(
+        `[NAADirectory] Progress: page ${page}/${totalPages} — ` +
+        `created ${stats.itemsCreated}, skipped ${stats.itemsSkipped}`
+      );
+    }
+  }
+
+  console.log(
+    `[NAADirectory] Complete — found ${stats.itemsFound}, created ${stats.itemsCreated}, ` +
+    `skipped ${stats.itemsSkipped}, failed ${stats.itemsFailed}`
+  );
+
+  return stats;
+}
+
+/**
+ * Ingest a batch of Novi AMS member records into the organizer table.
+ */
+async function processMembers(
+  members: NoviMember[],
+  stats: ScrapeStats
+): Promise<void> {
+  for (const member of members) {
+    // Skip members who have opted out of public directory listing
+    if (member.HideOnWebsite || member.HideContactInformation) {
       stats.itemsSkipped++;
       continue;
     }
+
+    const name = (member.Name || '').trim();
+    if (!name) {
+      stats.itemsSkipped++;
+      continue;
+    }
+
+    const city = (member.ShippingCity || '').trim() || null;
+    const state = normaliseState(member.ShippingState);
+
+    // Skip if we can't confirm US state (likely Canadian or invalid data)
+    if (!state) {
+      stats.itemsSkipped++;
+      continue;
+    }
+
+    // Skip records with no city (insufficient for dedup)
+    if (!city) {
+      stats.itemsSkipped++;
+      continue;
+    }
+
+    const phone = member.HideAddress ? undefined : (member.Phone?.trim() || undefined);
+    const website = member.Website?.trim() || undefined;
+    const email = member.HideContactInformation ? undefined : (member.Email?.trim() || undefined);
+    const lat = member.ShippingLatitude ?? undefined;
+    const lng = member.ShippingLongitude ?? undefined;
 
     stats.itemsFound++;
 
     try {
       const orgId = await getOrCreateScrapedOrganizer(
-        member.name,
-        'NAAFindAnAuctioneer',
-        member.city,
-        member.state,
+        name,
+        SOURCE_NAME,
+        city,
+        state,
         undefined, // esnOrgId
         undefined, // googlePlaceId
         undefined, // foursquareVenueId
         undefined, // hereBusinessId
         'AUCTION_HOUSE',
-        undefined, // contactEmail
-        member.phone,
-        member.website,
-        undefined, // lat
-        undefined  // lng
+        email,
+        phone,
+        website,
+        lat,
+        lng
       );
 
       if (orgId === null) {
         stats.itemsSkipped++;
+        stats.itemsFound--; // already existed
       } else {
         stats.itemsCreated++;
       }
     } catch (err) {
-      console.error(
-        `[NAADirectory] Failed to ingest ${member.name} (${member.city}, ${member.state}):`,
-        err
-      );
+      console.error(`[NAADirectory] Failed to ingest "${name}" (${city}, ${state}):`, err);
       stats.itemsFailed++;
     }
-
-    // Respectful crawl rate: short jitter on top of the RateLimiter's 1 req/sec floor.
-    await new Promise((resolve) => setTimeout(resolve, 250 + Math.random() * 500));
   }
-
-  console.log(
-    `[NAADirectory] Complete — found ${stats.itemsFound}, created ${stats.itemsCreated}, skipped ${stats.itemsSkipped}, failed ${stats.itemsFailed}`
-  );
-
-  if (stats.itemsFound === 0) {
-    throw new Error('[NAA] Zero members found — sitemap structure or profile markup may have changed');
-  }
-
-  return stats;
 }

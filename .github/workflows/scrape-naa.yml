@@ -1,18 +1,13 @@
 name: Scrape NAA Find an Auctioneer Directory
 
 on:
-  # schedule DISABLED — BROKEN — NAA directory is JavaScript-rendered (Novi AMS platform).
-  # Static HTTP fetch returns a "Loading..." placeholder with no member data.
-  # The site also requires a logged-in member session for full results.
-  # To fix: implement Playwright/Puppeteer headless rendering with auth session cookies,
-  # or use the Novi AMS API if NAA exposes one. Plain fetch cannot retrieve member cards.
-  # Verified broken: 2026-05-23 — web_fetch returned zero member cards in HTML.
-  # was: cron: '0 15 1 * *'
+  schedule:
+    - cron: '0 8 * * 0'  # Sundays at 08:00 UTC (weekly — licensing directory refreshes slowly)
   workflow_dispatch:
 
 jobs:
   scrape:
-    name: NAA Find an Auctioneer Directory Scraper
+    name: NAA Find an Auctioneer Directory Scraper (National)
     runs-on: ubuntu-latest
 
     steps:
@@ -51,7 +46,7 @@ jobs:
               sock.close()
               print(f'DB connectivity OK: {host}:{port}')
           except Exception as e:
-              print(f'ERROR: Cannot reach DB at {host}:{port} — {e}')
+              print(f'ERROR: Cannot reach DB at {host}:{port} -- {e}')
               print('ACTION REQUIRED: The DATABASE_URL GitHub Actions secret may be stale.')
               print('Fix: GitHub repo -> Settings -> Secrets and variables -> Actions -> DATABASE_URL -> Update')
               sys.exit(1)
