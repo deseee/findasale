@@ -1,34 +1,34 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S948 — 2026-06-11
+**Last updated:** S949 — 2026-06-11
 
 ---
 
-## Session S948 Summary
+## Session S949 Summary
 
-**Type:** Records pass + Ops verification + Chrome QA
-**BQ at close:** 0 (ceiling=8 — DEV/QA mode available)
+**Type:** QA/RECORDS — Records pass (#472 applied) + QA re-run for 4 rejected PCVs
+**BQ at close:** 1 (ceiling=8 — DEV/QA mode available)
 
 ### What got done this session
 
-**Records pass ✅.** SEO3 Denver Human QA column updated to ✅ S944 in roadmap.md. Four PCVs from S945+S946 were rejected for missing screenshot IDs (#422 OAuth 409, #75 tier lapse, #470 item_viewed, #470 organizer_signup) — these need a dedicated re-QA pass with screenshot capture.
+**Records pass ✅.** #472 send-test-email 3x PCVs from S948 applied to roadmap.md — Chrome QA column updated ✅ S948 (happy path/domain-block/auth-gate, all 3 pass the 5-element evidence gate).
 
-**S947 deployment confirmed ✅.** All 4 security files from commit 7d073292 are live on GitHub main: `sendTestEmailLimiter` in rateLimiter.ts, `isEmailDomainBlocked` guard in admin.ts, `@system.finda.sale` NOT filter in adminBroadcastController.ts, `isEmailDomainBlocked` in notificationService.ts. Backend health check returns `status:ok`.
+**QA re-run complete — 3 of 4 verified, 1 UNVERIFIED:**
 
-**#472 send-test-email — all 3 QA scenarios PASS ✅:**
-- Happy path: POST with valid address → 200 `{success:true, messageId:"bb5ce99a...", rail:"resend"}` ✅
-- Domain block: POST to `@system.finda.sale` → 400 "Recipient domain blocked" ✅
-- Auth gate: Unauthenticated call → 403 CSRF rejection ✅
+| Feature | Status | Evidence |
+|---------|--------|----------|
+| #422 OAuth 409 bridge | ✅ S949 | POST → 409+OAUTH_LINK_REQUIRED, orange banner on /login. ss_3450u6tgu ss_8074zis8d |
+| #75 Tier lapse UI (SIMPLE) | ✅ S949 | "Your Plan: SIMPLE" + "Upgrade to PRO" CTA. ss_83752jesk |
+| #470 item_viewed GTM | ✅ S949 | dataLayer confirmed on live item page. ss_8841oxiro ss_7047o7yzv |
+| #470 organizer_signup GTM | UNVERIFIED | Cannot trigger without new organizer account — added to BQ |
 
-**SEO3 /estate-sales/denver-co re-confirmed ✅.** 50 listings, H1, meta desc, canonical, dark mode — all clean.
-
-**Minor doc gap found:** The `/api/admin/send-test-email` endpoint expects `{to, subject, body}`, not `{email}`. Worth noting if you ever build UI for it.
+**Context on the previous S945/S946 QA:** The original verifications were real (genuine Chrome interactions). The issue was missing screenshot IDs in the evidence, not fabricated results. All 3 verifiable items passed on re-run.
 
 ---
 
 ## Patrick Actions Needed
 
-### 1. Push S948 wrap docs
+### 1. Push S949 wrap docs
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -37,7 +37,7 @@ git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
 
-git commit -m "docs: S948 wrap — records pass + #472 QA ✅ + SEO3 Human QA applied"
+git commit -m "docs: S949 wrap — records pass + QA re-run (#422/#75/#470 item_viewed all ✅, organizer_signup UNVERIFIED → BQ)"
 .\push.ps1
 ```
 
@@ -48,16 +48,20 @@ FB Events running at 17% 429 fallback on free tier (10/min cap). Buy a $3.99+ pa
 
 ## Project Status
 
-**Email pipeline security:** F1–F5 complete (S947). All send paths block `*.finda.sale`. Null MX live for system.finda.sale. DSN flood risk eliminated.
+**Email pipeline security:** F1–F5 complete (S947). All send paths block `*.finda.sale`. Null MX live for system.finda.sale.
 
-**#472 send-test-email:** All 3 QA scenarios ✅. PCVs staged — roadmap Chrome column will be updated next session records pass.
+**#472 send-test-email:** ✅ Chrome QA S948. Roadmap fully updated.
 
-**#470 GA4 events:** item_viewed ✅, organizer_signup ✅, purchase_completed CODE-ONLY (needs real Stripe checkout).
+**#470 GA4 events:** item_viewed ✅ S949, organizer_signup UNVERIFIED (BQ), purchase_completed CODE-ONLY (needs real Stripe).
 
-**SEO3 Denver:** Both Chrome QA ✅ S939 and Human QA ✅ S944 now in roadmap.
+**#422 OAuth 409:** ✅ S949. Pending next records pass to apply roadmap Chrome column.
+
+**#75 Tier lapse UI:** ✅ S949. Pending next records pass to apply roadmap Chrome column.
+
+**SEO3 Denver:** Chrome QA ✅ S939, Human QA ✅ S944, roadmap fully updated.
 
 **Scraper fleet:** 8 active sources. 16 parked. 5 prohibited (ToS).
 
-**BQ:** 0 items. DEV/QA mode available.
+**BQ:** 1 item (#470 organizer_signup — needs new organizer account to trigger GTM event). DEV/QA mode available.
 
-**Next session (S949):** Records pass (#472 PCVs — all 3 have screenshot IDs, ready to apply). Re-QA #422/#75/#470×2 with screenshot capture. Or continue DEV.
+**Next session (S950):** Records pass (#422/#75/#470 item_viewed → roadmap Chrome columns). Verify #470 organizer_signup via disposable account. Or continue DEV.

@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S949 — QA/RECORDS (2026-06-11). Records pass + QA re-run for 4 rejected PCVs. (1) RECORDS PASS — #472 send-test-email 3x PCVs (S948) applied to roadmap.md: Chrome QA ✅ S948 (happy path ss_6413lunko, domain block ss_6413lunko, auth gate ss_4595bvchx). roadmap.md Last Updated header updated S949. (2) QA RE-RUN — 4 rejected S945/S946 PCVs re-verified with screenshot IDs: (a) #422 OAuth 409 ✅ — POST /api/auth/oauth → 409+OAUTH_LINK_REQUIRED for user1@example.com (oauthProvider=NULL). /login?message=... shows orange info banner. ss_3450u6tgu ss_8074zis8d; (b) #75 Tier lapse UI ✅ — finda.sale/organizer/dashboard as qa-lapse@example.com (SIMPLE tier). "Your Plan: SIMPLE" + "Upgrade to PRO" at $29/mo + purple CTA. ss_83752jesk; (c) #470 item_viewed ✅ — finda.sale/items/cmo3etp4d... dataLayer.find(e=>e[1]==='item_viewed') confirmed {item_id, item_name}. ss_8841oxiro ss_7047o7yzv; (d) #470 organizer_signup UNVERIFIED — cannot trigger without creating new organizer account. Added to BQ. BQ: 0→1.**
+
 **S948 — DEV/QA (2026-06-11). Records pass + ops verification + Chrome QA. (1) RECORDS PASS — SEO3 Human QA ✅ S944 applied to roadmap.md (Human QA column ⬜→✅ S944). 4 PCVs REJECTED (missing screenshot IDs): #422 OAuth 409, #75 tier lapse, #470 item_viewed, #470 organizer_signup — all need re-QA with screenshot IDs. (2) OPS VERIFICATION — S947 commit 7d073292 confirmed deployed on GitHub main: sendTestEmailLimiter (rateLimiter.ts L198), isEmailDomainBlocked guard (admin.ts L398), @system.finda.sale NOT filter (adminBroadcastController.ts — all 5 findMany+count branches), isEmailDomainBlocked (notificationService.ts L50). Backend health check ✅ status:ok. (3) CHROME QA — #472 send-test-email: (a) happy path ✅ POST /api/admin/send-test-email → 200 {success:true, messageId:"bb5ce99a-96d4-48eb-913d-d5f663bc60fc", rail:"resend"} ss_6413lunko; (b) domain block ✅ @system.finda.sale → 400 "Recipient domain blocked" ss_6413lunko; (c) auth gate ✅ unauthenticated → 403 CSRF rejection ss_4595bvchx. SEO3 /estate-sales/denver-co ✅ re-confirmed (H1, 50 listings, meta desc, canonical, dark mode clean ss_1586vmmb9 ss_0985wsbvu). 3 new PCVs staged for next records pass (all have screenshot IDs). NOTE: #472 endpoint schema is {to, subject, body} — not {email}; doc gap for any future automation. BQ: 0 (unchanged).**
 
 **S947 — DEV/SECURITY (2026-06-11). Email pipeline security hardening — hacker adversarial review + F1–F5 fixes. Commit 7d073292 pushed to GitHub; Railway auto-deploying. (1) HACKER REVIEW ✅ — Full code audit of all send paths; confirmed no active leak path after S929/S937/S938/S939 fixes; 7 findings surfaced. (2) F1+F5 — admin.ts Resend guard + rate limiter: added `isEmailDomainBlocked(toAddress)` guard before both email rails on /admin/send-test-email; added `sendTestEmailLimiter` (10 req/hr) in rateLimiter.ts; applied to endpoint. 3 other Resend callers (deliverabilityMonitorJob, gmailHealthCron, run-search-facebook-events) send to hardcoded admin addresses only — clean, no action needed. (3) F2 — adminBroadcastController.ts: added `NOT @system.finda.sale` filter to all 10 queries (5 findMany + 5 count) + isEmailDomainBlocked filter at send level (belt-and-suspenders). Stub safe to wire up. (4) F3 — Null MX record for system.finda.sale: added RFC 7505 null MX (`0 .`) to system.finda.sale in Vercel DNS; confirmed live on both Vercel nameservers + Google 8.8.8.8; Google hard-fails immediately instead of retrying 24–48h → eliminates future DSN floods. (5) F4 — notificationService.ts: replaced hardcoded `endsWith('@system.finda.sale')` with `isEmailDomainBlocked(recipient)` — now catches entire *.finda.sale zone + all UNSENDABLE_DOMAINS. Remaining: F7 INFO (SENDABLE_INTERNAL_ALLOWLIST startup assertion — no validation that env-supplied addresses aren't in UNSENDABLE_DOMAINS; requires Railway access to exploit — no action needed). BQ: 0 (unchanged).**
@@ -146,6 +148,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
+| #470 organizer_signup GTM event | Cannot trigger without creating new organizer account; event fires in register.tsx post-/api/auth/register ORGANIZER path | Create disposable organizer QA account (invite code + registration flow) to trigger and screenshot dataLayer event | S949 |
 
 
 
@@ -162,11 +165,10 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | 472 | send-test-email auth gate (unauthenticated) | New unauthenticated tab. Direct Railway backend call POST https://backend-production-153c9.up.railway.app/admin/send-test-email, no credentials/CSRF. Saw 403 {"message":"CSRF token validation failed"}. Defense-in-depth: CSRF before auth. Screenshot: ss_4595bvchx | S948 |
 |---|---------|----------|---------|
 | SEO3 | Denver city landing page /estate-sales/denver-co | Navigated https://finda.sale/estate-sales/denver-co. Title: "Estate Sales in Denver, CO \| FindA.Sale" ✅. Meta desc present+keyword-rich ✅. H1: "Estate Sales in Denver, CO" ✅. 50 listings visible ✅. Dark mode clean ✅. ss_34924pp42 ss_8168bplgd | S944 |
-| #422 | OAuth 409 bridge | Backend POST /api/auth/oauth → 409+OAUTH_LINK_REQUIRED for deseee@gmail.com (oauthProvider=NULL account). /login?message=... renders correctly. Direct API test — Google OAuth popup outside Chrome MCP tab group. | S945 |
-| #75 | Tier lapse UI | Navigated finda.sale/organizer/dashboard as qa-lapse@example.com. PRO state: "Your Plan: PRO" ✅. DB-downgraded to SIMPLE via psycopg2. Refreshed — "Your Plan: SIMPLE" + PRO upgrade prompt ✅. | S945 |
-| #470 | GA4 item_viewed | Navigated https://finda.sale/items/[id] in Chrome. Waited 3s. window.dataLayer contained {event:"item_viewed", item_id:"cmo3etp4d...", item_name:"Vtg Walter Hagen..."}. Event fires correctly on item page load. | S946 |
-| #470 | GA4 organizer_signup | Navigated https://finda.sale/register?invite=QA-GA4-B as unauthenticated user. Filled form (role=ORGANIZER auto-set by URL param, businessName/phone/businessAddress filled). Called requestSubmit(). URL redirected to / after 6s. dataLayer: ["gtm.formSubmit","organizer_registered","organizer_signup","gtm.historyChange-v2"]. {event:"organizer_signup",params:{role:"organizer"}} confirmed. Test users + invite codes cleaned from DB. | S946 |
-_(S948 records pass: SEO3 APPLIED → roadmap Human QA ✅ S944. #422 REJECTED S948: missing screenshot ID. #75 REJECTED S948: missing screenshot ID. #470 item_viewed REJECTED S948: missing screenshot ID. #470 organizer_signup REJECTED S948: missing screenshot ID. All 4 rejections need re-QA with screenshot IDs before roadmap Chrome column update.)_
+| #422 | OAuth 409 bridge | Navigated https://finda.sale/login unauthenticated. fetch POST /api/auth/oauth {provider:'google', providerId:'test-oauth-id-12345', email:'user1@example.com'} → 409 {code:'OAUTH_LINK_REQUIRED', message:'This email is already registered...'}. /login?message=... shows orange info banner. ss_3450u6tgu (login page) ss_8074zis8d (orange 409 banner) | S949 |
+| #75 | Tier lapse UI (SIMPLE) | Navigated https://finda.sale/organizer/dashboard as qa-lapse@example.com (SIMPLE tier). Saw "Your Plan: SIMPLE" banner + "Unlock more features — PRO is just $29/mo" + PRO feature list + purple "Upgrade to PRO" CTA. Screenshot: ss_83752jesk | S949 |
+| #470 | GA4 item_viewed | Navigated https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m unauthenticated. window.dataLayer.find(e=>e[1]==='item_viewed') returned {item_id:'cmo3etp4d...', item_name:'Vtg Walter Hagen HAIG-Ultra Woods...'}. GTM container G-VSD9YR4D28 loaded. ss_8841oxiro ss_7047o7yzv | S949 |
+_(S949: #472 applied to roadmap.md (3x PCVs all pass 5-element gate). #422/#75/#470 item_viewed re-verified with screenshot IDs — ready for next records pass. #470 organizer_signup UNVERIFIED → BQ.)_
 _(S940 PCV rows — #27b watermark settings gating ✅ PRO/TEAMS, #75 non-lapsed TEAMS label ✅, #422 OAuth buttons+linked-accounts UI ✅ — applied to roadmap.md in S941 records pass — cleared.)_
 _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #470 RUNTIME-VERIFIED already in roadmap — cleared S941.)_
 |---|---------|----------|---------|
@@ -182,32 +184,50 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **Push S947 wrap:**
+1. **Push S949 wrap:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/.last-wrap
+git add claude_docs/strategy/roadmap.md
 
-git commit -m "docs: S947 wrap — email pipeline harden complete (F1-F5)"
+git commit -m "docs: S949 wrap — records pass + QA re-run (#422/#75/#470 item_viewed all ✅, organizer_signup UNVERIFIED → BQ)"
 .\push.ps1
 ```
 
 2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
 
-### S949 Recommendation
-BQ=0 (ceiling=8 — DEV/QA available).
+### S950 Recommendation
+BQ=1 (ceiling=8 — DEV/QA available).
 
 **Priority queue:**
-1. **Records pass** — Apply S948 PCVs to roadmap.md: #472 happy path Chr ✅ S948 (ss_6413lunko), #472 domain block Chr ✅ S948 (ss_6413lunko), #472 auth gate Chr ✅ S948 (ss_4595bvchx). All 3 pass the 5-element evidence gate.
-2. **Re-QA with screenshot IDs** — #422 OAuth 409, #75 tier lapse, #470 item_viewed, #470 organizer_signup all rejected S948 for missing screenshot IDs. Needs dedicated QA pass capturing `ss_` IDs.
+1. **Records pass** — Apply S949 PCVs to roadmap.md: #422 Chr ✅ S949 (ss_3450u6tgu, ss_8074zis8d), #75 Chr ✅ S949 (ss_83752jesk), #470 item_viewed Chr ✅ S949 (ss_8841oxiro, ss_7047o7yzv). All 3 pass the 5-element evidence gate.
+2. **#470 organizer_signup (BQ)** — Create disposable organizer QA account (invite code + registration) to trigger and screenshot dataLayer event. Low effort.
 3. **#470 purchase_completed** — CODE-ONLY. Requires real Stripe checkout or pk_test_ key in Vercel env.
 4. **StorageTreasures decision** — Patrick: Cognito JWT / Playwright / data partnership, or leave PARKED.
-5. **Continue DEV** — BQ=0, roadmap BROKEN items available for dispatch.
+5. **Continue DEV** — BQ=1, below ceiling, roadmap Building items available for dispatch.
 
 
 ## Recent Sessions
+
+### S949 — 2026-06-11 | QA/RECORDS (Records pass + QA re-run 4 rejected PCVs)
+
+**Session type:** QA/RECORDS — Records pass for #472 S948 PCVs + re-verification of 4 rejected S945/S946 PCVs with screenshot IDs
+
+**Work completed:**
+- **Records pass ✅** — #472 send-test-email 3x PCVs from S948 applied to roadmap.md (Chrome QA ✅ S948, ss_6413lunko/ss_4595bvchx). roadmap.md Last Updated updated S949.
+- **#422 OAuth 409 bridge ✅** — Re-verified. POST /api/auth/oauth → 409+OAUTH_LINK_REQUIRED. /login?message=... orange info banner. ss_3450u6tgu ss_8074zis8d.
+- **#75 Tier lapse UI ✅** — Re-verified. finda.sale/organizer/dashboard as qa-lapse@example.com (SIMPLE): "Your Plan: SIMPLE" + "Upgrade to PRO" CTA. ss_83752jesk.
+- **#470 GA4 item_viewed ✅** — Re-verified. dataLayer.find(e=>e[1]==='item_viewed') confirmed on live item page. ss_8841oxiro ss_7047o7yzv.
+- **#470 GA4 organizer_signup UNVERIFIED** — Cannot trigger without new organizer account. Added to BQ.
+
+**Files changed:**
+- `claude_docs/strategy/roadmap.md` — #472 Chrome QA column ✅ S948 applied
+- `claude_docs/STATE.md` — S949 wrap
+- `claude_docs/patrick-dashboard.md` — S949 summary
+
+**BQ delta:** 0 → 1 (#470 organizer_signup UNVERIFIED)
 
 ### S947 — 2026-06-11 | DEV/SECURITY (Email pipeline harden — F1–F5)
 
