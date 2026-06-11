@@ -330,6 +330,30 @@ router.get('/city-slugs', async (req, res) => {
   }
 });
 
+// SEO: GET /sales/sitemap — returns all PUBLISHED sale IDs + updatedAt for sitemaps
+// Returns at most 5000 most recently updated sales to stay within sitemap limits.
+// No auth, no endDate filter (expired sales still have indexable pages).
+router.get('/sitemap', async (req, res) => {
+  try {
+    const sales = await prisma.sale.findMany({
+      where: {
+        status: 'PUBLISHED',
+        isInventoryContainer: false,
+      },
+      select: {
+        id: true,
+        updatedAt: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 5000,
+    });
+    return res.json({ sales });
+  } catch (err) {
+    console.error('[sales/sitemap] error:', err);
+    return res.status(500).json({ error: 'Failed to fetch sitemap sales' });
+  }
+});
+
 // /mine must be registered before /:id so Express doesn't treat "mine" as an ID
 router.get('/mine', authenticate, getMySales);
 
