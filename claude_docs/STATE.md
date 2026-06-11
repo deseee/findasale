@@ -8,6 +8,10 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S945 — QA (2026-06-10). Chrome QA — #422 OAuth 409 bridge, #75 tier lapse, #470 GA4 events. (1) #422 OAuth 409 ✅ — Backend POST /api/auth/oauth returns 409+OAUTH_LINK_REQUIRED when account has oauthProvider=NULL (existing password account). /login?message=... redirect renders correctly. Direct API verification — Google OAuth popup is not automatable in Chrome MCP tab group. (2) #75 Tier lapse ✅ — qa-lapse@example.com dashboard showed "Your Plan: PRO". DB-downgraded to SIMPLE via psycopg2. Refreshed — "Your Plan: SIMPLE" + PRO upgrade prompt visible. (3) #470 GA4 PENDING-DEPLOY — item_viewed confirmed absent from live dataLayer (S944 push not yet executed by Patrick). All 3 GA4 events require S944 push to Vercel before browser verification. BQ: 0 (unchanged).**
+
+**S944 — DEV/QA (2026-06-10). Scraper integration audit + gap fixes + GA4 event fixes + Chrome QA. (1) SCRAPER INTEGRATION AUDIT ✅ — All 7 new scrapers confirmed correctly integrated: registry enabled:true, GH Actions cron in place, no double-firing risk, automatic monitoring via pipelineHealthController. (2) KNOWN_OK_DISABLED fix ✅ — findasale-ci-sentry-health scheduled task updated: 'scrape-storageauctionsnet' added to KNOWN_OK_DISABLED set (parked workflow was triggering false HIGH alert). (3) NAA registry fix ✅ — sourceRegistry.ts NAAFindAnAuctioneer enabled:true→false (Novi AMS JS-rendered platform, confirmed zero records). (4) STORAGEAUCTIONS.NET SCRAPER BUILT ✅ — update.storageauctions.net confirmed WebSocket push server (all REST paths 404). Real API: GET /block/auction/getallonline/{page}/esoon (unauthenticated JSON, ~32 auctions). Full implementation in storageAuctionsNetScraper.ts. Workflow cron: Thursdays 09:00 UTC. Registry entry enabled:true. (5) GA4 EVENTS FIXED ✅ — item_viewed (pages/items/[id].tsx useEffect on item data load), purchase_completed (components/CheckoutModal.tsx in Stripe confirmPayment success branch, includes value+currency+transaction_id), organizer_signup alias (pages/register.tsx fires both organizer_registered + organizer_signup). All 3 were CODE-MISSING per Chrome QA audit. TS 0 errors. (6) CHROME QA — SEO3 /estate-sales/denver-co ✅ FULL VERIFICATION: Title "Estate Sales in Denver, CO | FindA.Sale", meta desc keyword-rich+present, H1 matches, 50 listings visible, dark mode clean, breadcrumbs functional. ss_34924pp42 ss_8168bplgd. #422 OAuth 409 UNVERIFIED (requires real Google OAuth duplicate-account flow). #75 tier lapse UNVERIFIED (requires Stripe webhook). #470 GA4 CODE-ONLY post-fix (browser verification requires live checkout+signup triggers). BQ: 0 (unchanged).**
+
 **S943 — DEV/RECORDS (2026-06-10). Scraper fleet deep expansion — 35+ competitor sites investigated across 4 categories. RESULT: 3 BUILT, 16 PARKED, 5 PROHIBITED. ROOT CAUSE FIXED: Railway build failures (S941+S942 both FAILED) caused by 2 stray lone commas in committed sourceRegistry.ts (sparse array → undefined entries → initScraperCron crash at `sourceDef.enabled`). Root cause: 4-way parallel agent write collision in S942. Fix: sourceRegistry.ts local working tree had both cleaned — needed commit. BUILT: (1) BidSpotter.com — ToS CLEAR, ~35 US auction houses, static HTML via XHR header, Wed 10am cron (scrape-bidspotter.yml), AUCTION_HOUSE. (2) Invaluable.com — public REST API /auction-houses (no auth), 8,158 US auction houses, HAL JSON pagination, Sun 7am cron (scrape-invaluable.yml), AUCTION_HOUSE. (3) AuctionZip — wrapped existing runAuctionZipScraper() in registry adapter (enabled:true, no new cronSchedule — uses GH Actions). PROHIBITED (5): LockerFox (ToS §1.4.2+§1.4.6), GovPlanet (IronPlanet ToS §1.3(c)), GovernmentLiquidation (Liquidity Services + Cloudflare), Proxibid (ATG UUA §10(h)/§11.1(v)/§12), YardSaleSearch (ToS explicit ban — not added to registry). PARKED (16): Bid13 (Drupal AJAX+Socket.io+evercookie), IBidNow (GoDaddy Afternic dead), StorageBattles (StorageTreasures alias), StorageUnitAuctionList (paywall+Cloudflare), Handbid (wrong category: nonprofits), AmericanFleaMarkets (dead domain), FleaMarketDirectory (redirects to USWantads), FleaMarket.com (dead), FleaMarketsNet (GoDaddy Afternic), FleaMarketRover (dead), VendorsByState (dead), NFMAMembers (Wix JS-rendered), SellMyAntiques (Next.js SPA). decisions-log.md rows added for all 5 ToS PROHIBITED entries. sourceRegistry now has 34 entries. TS check: 0 errors. BQ: 0 (unchanged).**
 
 **S942 — DEV/RECORDS (2026-06-10).** Scraper fleet expansion — 5 new sources investigated. RESULTS: (1) PropertyRoom.com ✅ BUILT (S941 cont.) — ~46 law enforcement/gov't agency partners, static `/about-us/partners`, AUCTION_HOUSE, Wed 7am cron. (2) StorageTreasures ✅ PARKED — Next.js SPA, public API hard-capped at 50/36,943 records. (3) StorageAuctions.com ✅ BUILT — found public JSON API (`core-service.auctions.storageauctions.com`), 3,103 US records, no explicit ToS prohibition found, Tue 7am cron, AUCTION_HOUSE. (4) PublicSurplus.com ✅ BUILT — server-rendered HTML + Ajax XML, ~6,330 gov't agency auctions, ToS CLEAR, Tue 8am cron, AUCTION_HOUSE. (5) Municibid.com ❌ PROHIBITED — ToS §(c) explicit dual ban ("automated means" + "scraping"). (6) Fleamapket.com ❌ PROHIBITED — broad ToS anti-automation clause. (7) FleaMarketInsiders.com ❌ PROHIBITED — same clause; site is a wrapper for Fleamapket.com. sourceRegistry.ts now has 7 entries (FleaMarketZone, StorageAuctionsNet, PropertyRoom, StorageAuctionsCom, StorageTreasures, Municibid, PublicSurplus). decisions-log.md updated: 7 ToS decisions logged under S942. BQ: 0 (unchanged).
@@ -148,6 +152,9 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
+| SEO3 | Denver city landing page /estate-sales/denver-co | Navigated https://finda.sale/estate-sales/denver-co. Title: "Estate Sales in Denver, CO \| FindA.Sale" ✅. Meta desc present+keyword-rich ✅. H1: "Estate Sales in Denver, CO" ✅. 50 listings visible ✅. Dark mode clean ✅. ss_34924pp42 ss_8168bplgd | S944 |
+| #422 | OAuth 409 bridge | Backend POST /api/auth/oauth → 409+OAUTH_LINK_REQUIRED for deseee@gmail.com (oauthProvider=NULL account). /login?message=... renders correctly. Direct API test — Google OAuth popup outside Chrome MCP tab group. | S945 |
+| #75 | Tier lapse UI | Navigated finda.sale/organizer/dashboard as qa-lapse@example.com. PRO state: "Your Plan: PRO" ✅. DB-downgraded to SIMPLE via psycopg2. Refreshed — "Your Plan: SIMPLE" + PRO upgrade prompt ✅. | S945 |
 _(S940 PCV rows — #27b watermark settings gating ✅ PRO/TEAMS, #75 non-lapsed TEAMS label ✅, #422 OAuth buttons+linked-accounts UI ✅ — applied to roadmap.md in S941 records pass — cleared.)_
 _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #470 RUNTIME-VERIFIED already in roadmap — cleared S941.)_
 |---|---------|----------|---------|
@@ -163,48 +170,79 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **⚠️ P0 — Push this block NOW to restore Railway backend (copy-paste into PowerShell from FindaSale root):**
-```
+1. **Push S944+S945 wrap:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+
 git add packages/backend/src/services/scraper/sourceRegistry.ts
-git add packages/backend/src/services/scraper/sources/americanFleaMarketsScraper.ts
-git add packages/backend/src/services/scraper/sources/bid13Scraper.ts
-git add packages/backend/src/services/scraper/sources/bidSpotterScraper.ts
-git add packages/backend/src/services/scraper/sources/fleaMarketComScraper.ts
-git add packages/backend/src/services/scraper/sources/fleaMarketDirectoryScraper.ts
-git add packages/backend/src/services/scraper/sources/fleaMarketRoverScraper.ts
-git add packages/backend/src/services/scraper/sources/fleaMarketsNetScraper.ts
-git add packages/backend/src/services/scraper/sources/govPlanetScraper.ts
-git add packages/backend/src/services/scraper/sources/governmentLiquidationScraper.ts
-git add packages/backend/src/services/scraper/sources/handbidScraper.ts
-git add packages/backend/src/services/scraper/sources/ibidNowScraper.ts
-git add packages/backend/src/services/scraper/sources/invaluableAuctionHouseScraper.ts
-git add packages/backend/src/services/scraper/sources/lockerFoxScraper.ts
-git add packages/backend/src/services/scraper/sources/nfmaMembersScraper.ts
-git add packages/backend/src/services/scraper/sources/proxibidScraper.ts
-git add packages/backend/src/services/scraper/sources/sellMyAntiquesScraper.ts
-git add packages/backend/src/services/scraper/sources/storageBattlesScraper.ts
-git add packages/backend/src/services/scraper/sources/storageUnitAuctionListScraper.ts
-git add packages/backend/src/services/scraper/sources/vendorsByStateScraper.ts
-git add .github/workflows/scrape-bidspotter.yml
-git add .github/workflows/scrape-invaluable.yml
+git add packages/backend/src/services/scraper/sources/storageAuctionsNetScraper.ts
+git add .github/workflows/scrape-storageauctionsnet.yml
+git add packages/frontend/pages/items/[id].tsx
+git add packages/frontend/components/CheckoutModal.tsx
+git add packages/frontend/pages/register.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix(scraper): remove 2 stray commas in SOURCE_REGISTRY (Railway crash); feat: BidSpotter+Invaluable+AuctionZip BUILT; 16 PARKED + 5 PROHIBITED scrapers registered; docs: S943 wrap"
+
+git commit -m "feat: GA4 events + StorageAuctions.net scraper; docs: S945 QA wrap (#422 ✅ #75 ✅)"
 .\push.ps1
 ```
 
-2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
+2. **After pushing, run the S946 records pass** — apply #422+#75 Chrome columns to roadmap.md.
+3. **#470 GA4 verify** — After push deploys to Vercel, navigate to any item page and check browser console for `item_viewed` in `window.dataLayer`. Then register a new organizer account with invite code `QA-LAPSE-25` to verify `organizer_signup` fires.
+4. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
 
-### S944 Recommendation
+### S946 Recommendation
 BQ=0 (ceiling=8 — DEV/QA available).
 
 **Priority queue:**
-1. **Chrome QA** — #422 OAuth 409 bridge (UNVERIFIED), #470 GA4 other 3 events (CODE-ONLY), #75 tier lapse P2 (UNVERIFIED), SEO3 /estate-sales/denver-co Human QA. Dispatch `Skill('findasale-qa')` sequentially (one feature per dispatch, Chrome agents sequential).
-2. **StorageAuctions.net unpark** — probe REST API at `update.storageauctions.net`.
-3. **StorageTreasures decision** — Patrick: proceed via one of 3 unpark paths (Cognito JWT / Playwright / data partnership), or leave PARKED.
+1. **Records pass** — Apply S945 PCVs to roadmap.md: SEO3 Denver Chr ✅ S944 (apply column), #422 OAuth 409 Chr ✅ S945, #75 tier lapse Chr ✅ S945.
+2. **#470 GA4 events** — After Patrick pushes S944 push block: verify item_viewed (navigate to item page, check window.dataLayer), organizer_signup (register with QA-LAPSE-25 invite code). purchase_completed requires real Stripe checkout or pk_test_ key in Vercel.
+3. **StorageTreasures decision** — Patrick: Cognito JWT / Playwright / data partnership, or leave PARKED.
 
 
 ## Recent Sessions
+
+### S945 — 2026-06-10 | QA (Chrome QA — #422 OAuth 409, #75 tier lapse, #470 GA4 check)
+
+**Session type:** QA — continuation of S944 QA items
+
+**Work completed:**
+- **#422 OAuth 409 bridge ✅** — Verified backend behavior via direct POST to `/api/auth/oauth` with `{provider: 'google', providerId: '111939536989157503486', email: 'deseee@gmail.com'}`. Account has `oauthProvider=NULL` (existing password account). Response: 409 + `{code: 'OAUTH_LINK_REQUIRED', message: '...'}`. Separately confirmed `/login?message=...` renders the message correctly in Chrome. Google OAuth popup not automatable (popup window opens outside Chrome MCP tab group). PCV staged — apply to roadmap next session.
+- **#75 Tier lapse UI ✅** — Created `qa-lapse@example.com` (PRO tier) via Railway DB. Navigated `finda.sale/organizer/dashboard` — dashboard showed "Your Plan: PRO" correctly. Used psycopg2 to downgrade account to SIMPLE tier. Refreshed dashboard — showed "Your Plan: SIMPLE" + PRO upgrade prompt. Full lapse UI behavior confirmed. PCV staged — apply to roadmap next session.
+- **#470 GA4 events PENDING-DEPLOY** — Confirmed `item_viewed` event absent from `window.dataLayer` on live item page (S944 push not yet executed). All 3 events (`item_viewed`, `purchase_completed`, `organizer_signup`) are implemented in code but require S944 deploy to Vercel before browser verification.
+- **qa-lapse@example.com** — Test account left in SIMPLE tier in production DB. Invite code `QA-LAPSE-25` exists unused (for organizer_signup GA4 test after S944 deploys).
+
+**Files changed:**
+- `claude_docs/STATE.md` — S945 wrap
+- `claude_docs/patrick-dashboard.md` — S945 summary
+
+**BQ delta:** 0 → 0 (unchanged)
+
+### S944 — 2026-06-10 | DEV/QA (Scraper integration audit + gap fixes + GA4 events + Chrome QA)
+
+**Session type:** DEV/QA — scraper integration audit, gap fixes, GA4 event implementation, Chrome QA
+
+**Work completed:**
+- **Scraper integration confirmed** — All 7 S941–S943 scrapers verified: registry enabled:true, GH Actions cron, no double-firing risk (no cronSchedule → not registered in-process), automatic monitoring via `sales_by_source_24h` and `sales_by_source_7d` in pipelineHealthController. No code changes needed for monitoring integration.
+- **findasale-ci-sentry-health updated** — Added `'scrape-storageauctionsnet'` to `KNOWN_OK_DISABLED` via `mcp__scheduled-tasks__update_scheduled_task`. Parked workflow no longer triggers false HIGH alert.
+- **NAA registry fixed** — `NAAFindAnAuctioneer` entry: `enabled: true` → `enabled: false`. Workflow is intentionally disabled (Novi AMS JS-rendered platform, zero records confirmed).
+- **StorageAuctions.net scraper built** — `update.storageauctions.net` confirmed NOT a REST API (all paths 404 — it is a WebSocket/push server). Real unauthenticated API: `GET https://www.storageauctions.net/block/auction/getallonline/{page}/esoon`. Full implementation paginates until empty, 2s delay between pages, maps `facility_name`/`city`/`state_code`/`lat`/`lon` to Organizer upsert. Cron: Thursdays 09:00 UTC. Registry entry: `enabled: true`. TS 0 errors.
+- **GA4 events fixed (3 missing)** — Chrome QA found `item_viewed`, `purchase_completed` completely absent from codebase; `organizer_signup` fires as wrong name (`organizer_registered`). Fixes: (a) `pages/items/[id].tsx` — `useEffect` on item data load fires `item_viewed` with `item_id`+`item_name`; (b) `components/CheckoutModal.tsx` — `purchase_completed` fires in `stripe.confirmPayment()` success branch with `value`+`currency`+`transaction_id`; (c) `pages/register.tsx` — both `organizer_registered` (existing) + `organizer_signup` (new alias) fire back-to-back. TS 0 errors.
+- **Chrome QA — SEO3** ✅ FULLY VERIFIED. Navigated https://finda.sale/estate-sales/denver-co. Title "Estate Sales in Denver, CO | FindA.Sale" ✅. Meta desc present+keyword-rich+includes "50 estate sales" ✅. H1 "Estate Sales in Denver, CO" ✅. 50 sale listings visible ✅. Dark mode clean ✅. Breadcrumbs functional ✅. ss_34924pp42 ss_8168bplgd.
+- **Chrome QA — #422 OAuth 409** UNVERIFIED — requires a real Google OAuth sign-in flow that triggers the duplicate-account bridge. Cannot simulate in QA.
+- **Chrome QA — #75 tier lapse** UNVERIFIED — requires Stripe webhook simulation. Cannot trigger in QA.
+- **Chrome QA — #470 GA4** CODE-ONLY — `item_viewed`/`purchase_completed`/`organizer_signup` now implemented; browser verification requires real checkout+signup triggers (post-deploy).
+
+**Files changed (pending Patrick push):**
+- `packages/backend/src/services/scraper/sourceRegistry.ts` — NAA enabled:false + StorageAuctions.net enabled:true + updated comment
+- `packages/backend/src/services/scraper/sources/storageAuctionsNetScraper.ts` — full replacement of parked stub
+- `.github/workflows/scrape-storageauctionsnet.yml` — added cron `0 9 * * 4`, updated run step
+- `packages/frontend/pages/items/[id].tsx` — `item_viewed` GA4 event on item data load
+- `packages/frontend/components/CheckoutModal.tsx` — `purchase_completed` GA4 event on Stripe success
+- `packages/frontend/pages/register.tsx` — `organizer_signup` alias alongside `organizer_registered`
+- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md` — wrap docs
+
+**BQ delta:** 0 → 0 (unchanged)
 
 ### S943 — 2026-06-10 | DEV/RECORDS (Scraper fleet deep expansion + Railway P0 fix)
 
