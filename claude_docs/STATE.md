@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S956 — RESEARCH/CREATIVE (2026-06-11). Directory & app listing submission push — S952 pipeline actioned. (1) SAASHUB ✅ SUBMITTED — saashub.com/finda-sale. Contact: info@finda.sale. Patrick should create account to claim the listing. (2) UNEED ✅ SUBMITTED — uneed.best/tool/finda-sale. Waiting line. Account: deseee-d1f4. Category: Business. Tags: E-Commerce/Business/Events. Tagline: "Inventory & shopper discovery for secondary sale organizers". Organizer-focused description. (3) ALTERNATIVETO ⏳ BLOCKED — account "FindASale" created June 11; 7-day anti-spam age gate. Eligible June 18, 2026 ~9:49 PM Stockholm time. Patrick returns then to submit manually. (4) PRODUCT HUNT ASSETS ✅ — `claude_docs/brand/product-hunt-assets-2026-06-11.md` created. Tagline (59 chars), 240-char description, 6 feature bullets, maker comment, 3 Q&As, topic tags. Launch day: Tue or Wed 12:01 AM PT. (5) ROUNDUP OUTREACH EMAILS ✅ — `claude_docs/brand/roundup-outreach-emails-2026-06-11.md` created. 3 emails: Gitnux (Aisha Okonkwo), WifiTalents (Gregory Pearson), DIYAuctions (team). Send order: Gitnux → WifiTalents → DIYAuctions. (6) CRUNCHBASE + BETALIST ⏳ PENDING — Patrick creates accounts, then Claude can fill forms. BQ: 1 (unchanged).**
+**S956 — RESEARCH/CREATIVE (2026-06-11). Directory & app listing submission push — S952 pipeline actioned. WRAP STATUS: (1) SAASHUB ✅ SUBMITTED — saashub.com/finda-sale. Patrick should create account to claim listing. (2) UNEED ✅ SUBMITTED — uneed.best/tool/finda-sale. Waiting line. Account: deseee-d1f4. (3) ALTERNATIVETO ⏳ BLOCKED — account "FindASale" created June 11; eligible June 18, 2026 ~9:49 PM Stockholm. (4) PRODUCT HUNT ASSETS ✅ — `claude_docs/brand/product-hunt-assets-2026-06-11.md`. (5) CRUNCHBASE ✅ SUBMITTED — Form filled at crunchbase.com/edit/new/organization.companies/1cf65e18-944e-4036-bb05-a9361c213032. Name/description/1-10 employees/For Profit/finda.sale/info@finda.sale. "Edit successfully made!" (6) BETALIST ⏳ PENDING PATRICK — Submission 170511 filled (name/pitch/website/description). Blocked: (a) Patrick uploads logo icon at betalist.com/submissions/170511/wizard/general — file: claude_docs/brand/logo-icon-512.png; (b) Patrick clicks verification link in patrick@finda.sale inbox. Then: Details → Media → Makers → Finish → Submit. (7) ROUNDUP GMAIL DRAFTS ✅ — Gitnux draft r-4990707302036889022 (info@gitnux.org), WifiTalents draft r-8399856770625698902 (info@wifitalents.com) — Patrick SENDS both. DIYAuctions draft r1579106969886718270 — Patrick DELETES (competitor). BQ: 1 (unchanged).**
 
 **S955 — OPS (2026-06-11). DATABASE_URL secret updated by Patrick + 4 fixed scraper workflows triggered. (1) DATABASE_URL GitHub Actions secret refreshed to Railway public proxy URL — unblocks HERE Places + all DB-using scraper workflows. (2) Triggered `workflow_dispatch` on all 4 S954 fixes: scrape-kentucky-licensing (#6 Queued), scrape-indiana-licensing (dispatched), scrape-maine-licensing (dispatched), scrape-alabama-licensing (dispatched). Results pending — Kentucky control ID verification is the key unknown (0 records with no error = control IDs wrong, check oop.ky.gov page source). BQ: 1 (unchanged).**
 
@@ -193,32 +193,27 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### Patrick — Actions Needed
-~~1. Restore NE+WY files~~ ✅ done
-~~2. Commit + push scraper fixes~~ ✅ done (S954)
-~~4. Update DATABASE_URL GitHub Actions secret~~ ✅ done (S955)
+### Patrick — Actions Needed (post S956)
 
-1. **Verify Kentucky scraper control IDs.** The KY scraper uses ASP.NET control names (`ctl00$ContentPlaceHolder1$ddlBoard` etc.). If the first run returns 0 records with no errors, the field names are wrong — check `https://oop.ky.gov/lic_search.aspx` page source and update the POST field names in `searchByLastNameLetter`. The logic is correct; only the control ID strings need adjusting if wrong.
+1. **BetaList (#487) — two steps to unblock.** Submission 170511 is filled and waiting. (a) Go to betalist.com/submissions/170511/wizard/general → click the camera icon under "Icon" → upload `C:\Users\desee\ClaudeProjects\FindaSale\claude_docs\brand\logo-icon-512.png`. (b) Check patrick@finda.sale inbox → click BetaList verification link. Then come back to Claude to finish: Details → Media → Makers → Finish → Submit.
 
-2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier. A $3.99+ pack lifts the cap — bump `SEARLO_RPM` repo Variable after.
+2. **Roundup Gmail drafts — SEND + DELETE.** Open Gmail Drafts: (a) Send draft r-4990707302036889022 → info@gitnux.org; (b) Send draft r-8399856770625698902 → info@wifitalents.com; (c) DELETE draft r1579106969886718270 → business@diyauctions.com (DIYAuctions is a competitor, do not send).
 
-3. **AlternativeTo (#477) — June 18, 2026 ~9:49 PM Stockholm time.** Account "FindASale" created June 11; 7-day age gate expires June 18. Go to alternativeto.net, log in as FindASale, submit FindA.Sale. Competitors MaxSold + EstateSales.NET already indexed — this is a free, fast win.
+3. **SaaSHub (#480)** — Create account at saashub.com and claim saashub.com/finda-sale (logo, pricing, notifications).
 
-4. **Crunchbase (#481)** — Create account at crunchbase.com/add-new, then Claude can fill the form.
+4. **AlternativeTo (#477) — June 18, 2026 ~9:49 PM Stockholm.** Log in as "FindASale" → alternativeto.net → Add Software. Competitors MaxSold + EstateSales.NET already indexed.
 
-5. **BetaList (#487)** — Create account at betalist.com, then Claude can fill the submission form.
+5. **Kentucky scraper verify (optional).** If first run returns 0 records with no error, check oop.ky.gov page source and update ASP.NET control IDs in `searchByLastNameLetter`.
 
-6. **SaaSHub (#480)** — Create account at saashub.com and claim listing at saashub.com/finda-sale (to upload logo, set pricing, receive approval notifications).
+6. **Searlo credit upgrade (optional).** FB Events at 17% 429 fallback on free tier. $3.99+ pack lifts cap; bump `SEARLO_RPM` repo Variable after.
 
-7. **Roundup outreach** — Send 3 emails from `claude_docs/brand/roundup-outreach-emails-2026-06-11.md`. Send order: Gitnux → WifiTalents → DIYAuctions.
+### S957 — Suggested Work
 
-### S956 — Suggested Work
+**Option A — BetaList completion + AlternativeTo (June 18).** Patrick uploads icon + verifies email, then Claude finishes BetaList wizard. AlternativeTo eligible June 18 ~9:49 PM Stockholm.
 
-**Option A — AlternativeTo + Crunchbase + BetaList.** Patrick creates accounts for Crunchbase and BetaList, then Claude fills forms. AlternativeTo unblocks June 18.
+**Option B — QA the 4 scraper fixes in production.** Check GitHub Actions results + Railway DB record counts for KY/IN/ME/AL.
 
-**Option B — QA the 4 scraper fixes in production.** Check GitHub Actions results + Railway DB record counts for KY/IN/ME/AL. KY verification key — 0 records with no error = fix control IDs in `kentuckyPhase2Scraper.ts`.
-
-**Option C — Build the Playwright harness (headless scraper unblock).** 26 scrapers blocked by JS rendering + WAF. One shared Playwright + residential-proxy runner unblocks all. ROI: NAA alone (5,000+ national auction house records) justifies 20–30 hr build cost.
+**Option C — Build the Playwright harness (headless scraper unblock).** 26 scrapers blocked. NAA alone (5,000+ records) justifies the 20–30 hr build cost.
 
 
 ## Recent Sessions
@@ -229,18 +224,19 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 **Work completed:**
 - **SaaSHub ✅ SUBMITTED** — saashub.com/finda-sale live (contact: info@finda.sale). Patrick should create account to claim.
-- **Uneed ✅ SUBMITTED** — uneed.best/tool/finda-sale in waiting line. Account: deseee-d1f4. Category: Business. Tags: E-Commerce/Business/Events. Tagline: "Inventory & shopper discovery for secondary sale organizers". Organizer-focused description. Product saved ✅ (ss_1979jujgs "Product updated").
-- **AlternativeTo ⏳ BLOCKED** — account "FindASale" created June 11; 7-day age gate. Eligible June 18 ~9:49 PM Stockholm. Patrick must return then to submit.
+- **Uneed ✅ SUBMITTED** — uneed.best/tool/finda-sale in waiting line. Account: deseee-d1f4. Category: Business. Tags: E-Commerce/Business/Events. Tagline: "Inventory & shopper discovery for secondary sale organizers".
+- **AlternativeTo ⏳ BLOCKED** — account "FindASale" created June 11; 7-day age gate. Eligible June 18 ~9:49 PM Stockholm.
 - **Product Hunt assets ✅** — `claude_docs/brand/product-hunt-assets-2026-06-11.md`. Tagline, 240-char description, maker comment, Q&As, topic tags, screenshot order, hunter guidance.
-- **Roundup outreach emails ✅** — `claude_docs/brand/roundup-outreach-emails-2026-06-11.md`. 3 emails for Gitnux, WifiTalents, DIYAuctions. Send order: Gitnux first.
-- **Crunchbase + BetaList ⏳ PENDING** — Patrick needs to create accounts; Claude ready to fill forms.
+- **Crunchbase ✅ SUBMITTED** — Form filled: Name/description/1-10 employees/For Profit/finda.sale/info@finda.sale. Edit URL: crunchbase.com/edit/new/organization.companies/1cf65e18-944e-4036-bb05-a9361c213032. "Edit successfully made!"
+- **BetaList ⏳ PENDING PATRICK** — Submission 170511 filled (name/pitch/website/description). Two actions needed: (a) Patrick uploads logo-icon-512.png via camera icon at betalist.com/submissions/170511/wizard/general; (b) Patrick clicks verification link at patrick@finda.sale. Claude continues wizard after.
+- **Roundup Gmail drafts ✅** — Gitnux r-4990707302036889022 → info@gitnux.org (SEND). WifiTalents r-8399856770625698902 → info@wifitalents.com (SEND). DIYAuctions r1579106969886718270 → DELETE (competitor).
 
-**Files created:**
-- `claude_docs/brand/product-hunt-assets-2026-06-11.md`
-- `claude_docs/brand/roundup-outreach-emails-2026-06-11.md`
+**Files created/updated:**
+- `claude_docs/brand/product-hunt-assets-2026-06-11.md` (new)
+- `claude_docs/brand/roundup-outreach-emails-2026-06-11.md` (new; updated with Gmail draft IDs at wrap)
 - `claude_docs/STATE.md` — this wrap
 - `claude_docs/patrick-dashboard.md` — updated
-- `claude_docs/strategy/roadmap.md` — #477/#478/#480/#484/#487/#488 updated
+- `claude_docs/strategy/roadmap.md` — #477/#478/#480/#481/#484/#487/#488 updated
 
 **BQ delta:** 1 (unchanged — #470 organizer_signup UNVERIFIED)
 

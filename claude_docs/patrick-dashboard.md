@@ -1,23 +1,39 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S956 — 2026-06-11
+**Last updated:** S956 — 2026-06-11 (wrap)
 
 ---
 
-## Session S956 Summary — Directory & App Listing Push
+## Session S956 Summary — Directory & App Listing Push (COMPLETE)
 
 **Type:** RESEARCH/CREATIVE — directory and app listing submissions
 **BQ:** 1 (unchanged — #470 organizer_signup)
 
-| Platform | Status | URL |
-|----------|--------|-----|
-| SaaSHub | ✅ Submitted | saashub.com/finda-sale |
-| Uneed | ✅ Submitted (waiting line) | uneed.best/tool/finda-sale |
-| AlternativeTo | ⏳ Blocked until June 18 | Account age gate — account "FindASale" eligible June 18 ~9:49 PM Stockholm |
+| Platform | Status | Notes |
+|----------|--------|-------|
+| SaaSHub | ✅ Submitted | saashub.com/finda-sale — create account to claim |
+| Uneed | ✅ Submitted (waiting line) | uneed.best/tool/finda-sale — account: deseee-d1f4 |
+| AlternativeTo | ⏳ Blocked until June 18 | Log in as "FindASale" ~9:49 PM Stockholm |
 | Product Hunt | ✅ Assets built | `claude_docs/brand/product-hunt-assets-2026-06-11.md` |
-| Roundup outreach | ✅ Emails drafted | `claude_docs/brand/roundup-outreach-emails-2026-06-11.md` |
-| Crunchbase | ⏳ Pending your account | crunchbase.com/add-new |
-| BetaList | ⏳ Pending your account | betalist.com |
+| Crunchbase | ✅ Submitted | 1-10 employees, For Profit, finda.sale, info@finda.sale — under review |
+| BetaList | ⏳ Pending Patrick | Upload icon + verify email (see below) |
+| Roundup outreach | ✅ Gmail drafts ready | Send Gitnux + WifiTalents; DELETE DIYAuctions draft |
+
+---
+
+## Open Patrick Actions
+
+| Action | Priority | Instructions |
+|--------|----------|-------------|
+| BetaList icon | HIGH | betalist.com/submissions/170511/wizard/general → click camera icon → upload `claude_docsrand\logo-icon-512.png` |
+| BetaList email verify | HIGH | Check patrick@finda.sale inbox → click BetaList verification link |
+| Send Gitnux email | HIGH | Gmail Drafts → find draft to info@gitnux.org (ID r-4990707302036889022) → Send |
+| Send WifiTalents email | HIGH | Gmail Drafts → find draft to info@wifitalents.com (ID r-8399856770625698902) → Send |
+| DELETE DIYAuctions draft | HIGH | Gmail Drafts → find draft to business@diyauctions.com (ID r1579106969886718270) → Delete (competitor!) |
+| SaaSHub account | MEDIUM | Create account at saashub.com → claim saashub.com/finda-sale (logo, pricing, notifications) |
+| AlternativeTo | MEDIUM | June 18, 2026 ~9:49 PM Stockholm — log in as "FindASale" → alternativeto.net → Add Software |
+| Searlo credit upgrade | Optional | $3.99+ lifts 10/min cap; bump `SEARLO_RPM` Railway Variable after |
+| Kentucky scraper verify | Optional | If workflow returns 0 records with no error — check oop.ky.gov page source for correct ASP.NET control IDs |
 
 ---
 
@@ -29,25 +45,10 @@ cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git add claude_docs/brand/product-hunt-assets-2026-06-11.md
 git add claude_docs/brand/roundup-outreach-emails-2026-06-11.md
-git commit -m "docs: S956 directory submission push — SaaSHub+Uneed submitted, AlternativeTo blocked Jun18, PH assets+roundup emails built"
+git commit -m "docs: S956 wrap — Crunchbase submitted, BetaList pending icon+verify, Gmail drafts created, roadmap #481/#484/#487 updated"
 .\push.ps1
 ```
-
----
-
-## Open Patrick Actions
-
-| Action | Priority | Notes |
-|--------|----------|-------|
-| AlternativeTo submit | HIGH | June 18, 2026 ~9:49 PM Stockholm. Log in as "FindASale" → alternativeto.net → Add Software |
-| Send roundup emails | HIGH | `claude_docs/brand/roundup-outreach-emails-2026-06-11.md`. Order: Gitnux → WifiTalents → DIYAuctions |
-| SaaSHub account | MEDIUM | Create account at saashub.com and claim saashub.com/finda-sale listing (logo, pricing, notifications) |
-| Crunchbase | MEDIUM | Create account at crunchbase.com/add-new — Claude fills form |
-| BetaList | MEDIUM | Create account at betalist.com — Claude fills form |
-| Searlo credit upgrade | Optional | $3.99+ lifts the 10/min cap; bump SEARLO_RPM variable after |
-| Kentucky scraper verify | Optional | If workflow returns 0 records with no error, ASP.NET control IDs need adjusting |
 
 ---
 
@@ -56,7 +57,7 @@ git commit -m "docs: S956 directory submission push — SaaSHub+Uneed submitted,
 **Type:** OPS — workflow_dispatch for 4 fixed scrapers; credential housekeeping
 **BQ:** 1 (unchanged)
 
-S954 push landed. DATABASE_URL GitHub Actions secret updated by Patrick (S955). All 4 fixed workflows triggered manually: KY ✅ queued, IN ✅ dispatched, ME ✅ dispatched, AL ✅ dispatched.
+S954 push landed. DATABASE_URL GitHub Actions secret updated by Patrick (S955). All 4 fixed workflows triggered: KY ✅ queued, IN ✅ dispatched, ME ✅ dispatched, AL ✅ dispatched.
 
 ---
 
@@ -71,5 +72,3 @@ S954 push landed. DATABASE_URL GitHub Actions secret updated by Patrick (S955). 
 | Indiana phase2 | Removed early-return stub; fixed comma-number regex; multi-line parser |
 | Maine phase2 | Rewritten to ALMSOnline ExportToCSV.aspx, CSV parser |
 | Alabama phase2 | Added timeout retry logic |
-
-Headless browser harness ROI confirmed: 26 scrapers unblockable, NAA alone (5,000+ records) justifies 20–30 hr build.

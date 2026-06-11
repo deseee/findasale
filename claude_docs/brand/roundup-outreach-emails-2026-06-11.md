@@ -1,5 +1,5 @@
 # Roundup Article Outreach Emails — 2026-06-11
-**Status:** Draft — ready to send via contact forms below
+**Status:** Gmail drafts created S956 — Patrick sends Gitnux + WifiTalents; DELETE DIYAuctions draft
 **Rule:** No founder name. Signed "The FindA.Sale Team." No "AI." No "estate sale" as sole sale type.
 
 ---
@@ -73,12 +73,12 @@
 
 ---
 
-## Sending Instructions
+## Sending Instructions (updated S956)
 
-All three are contact-form submissions (no direct email found). Use the URLs above.
+Gmail drafts created via MCP — Patrick sends from Gmail Drafts directly:
 
-For **Subject line**, copy exactly as written above — these are short enough to fit any contact form subject field.
+1. **Gitnux** — Draft ID: r-4990707302036889022 → to: info@gitnux.org — SEND
+2. **WifiTalents** — Draft ID: r-8399856770625698902 → to: info@wifitalents.com — SEND
+3. **DIYAuctions** — Draft ID: r1579106969886718270 → to: business@diyauctions.com — **DELETE (DIYAuctions is a competitor platform)**
 
-For **Message body**, copy the text between the `>` quote markers, starting from "Hi [name]" through the closing signature.
-
-Suggested send order: Gitnux → WifiTalents → DIYAuctions (in that order, Gitnux has the most active/recent article and the named author contact makes follow-up cleaner).
+Send order: Gitnux → WifiTalents. Skip DIYAuctions entirely after deleting draft.
