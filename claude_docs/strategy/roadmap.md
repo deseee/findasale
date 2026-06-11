@@ -656,7 +656,7 @@ Visibility pipeline for getting FindA.Sale listed across software directories, c
 | 476 | G2 Digital Markets (G2 + Capterra + GetApp + Software Advice) | ✅ SUBMITTED S952 | Request ID: 45e97946-6161-4a9e-b84d-463e66267636. Submitted via info@finda.sale. Covers all 4 platforms simultaneously. Review pending. |
 | 477 | AlternativeTo | ⬜ TODO — HIGH URGENCY | Free, ~10 min. Competitors MaxSold and EstateSales.NET already indexed. Go to alternativeto.net → "Add Software". No approval queue — goes live immediately. Single fastest discoverability win. |
 | 478 | Product Hunt | ⬜ TODO — needs 2–3 weeks prep | Not yet listed. Needs: screenshots/GIF, tagline, hunter contact, community warm-up. Claude can draft all assets. Patrick queues launch date when ready. |
-| 479 | G2 Profile Page (own page post-review) | ⬜ PENDING G2 review | After G2 reviews the submission (#476), claim and optimize the profile page (respond to reviews, add badges, update screenshots). |
+| 479 | G2 Profile Page (own page post-review) | ⬜ PENDING G2 review | After G2 reviews the submission (#476), claim and optimize the profile page (respond to reviews, add badges, update screenshots). **Add named integrations on the Integrations tab: eBay, Google Maps, Google Places, Stripe, Cloudinary.** These were not available in the submission form — only "Third-Party Integrations" checkbox was selectable. Profile Integrations tab appears post-approval. |
 | 480 | SaaSHub | ⬜ TODO | Free software discovery site. Add at saashub.com/add. Good for SEO backlinks + comparison traffic. |
 | 481 | Crunchbase | ⬜ TODO | Free company profile. Good for credibility, investor discovery, and press backlinks. Add at crunchbase.com/add-a-company. |
 
