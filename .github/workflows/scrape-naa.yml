@@ -2,7 +2,7 @@ name: Scrape NAA Find an Auctioneer Directory
 
 on:
   schedule:
-    - cron: '0 8 * * 0'  # Sundays at 08:00 UTC (weekly — licensing directory refreshes slowly)
+    - cron: '0 8 1 * *'  # 1st of each month at 08:00 UTC (membership directory — monthly refresh)
   workflow_dispatch:
 
 jobs:
