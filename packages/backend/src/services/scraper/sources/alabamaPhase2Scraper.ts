@@ -110,12 +110,27 @@ interface SearchResponse {
 }
 
 /**
- * Fetch licensees for a given lastName prefix from the Alabama auctioneer API.
+ * Return true if an error looks like a connect-timeout from undici or the
+ * Fetch AbortSignal.timeout() path (TimeoutError / AbortError / UND_ERR_CONNECT_TIMEOUT).
  */
-async function fetchLicenseesByLastName(letter: string): Promise<AlabamaLicensee[]> {
-  await defaultRateLimiter.waitBeforeRequest(API_DOMAIN);
+function isTimeoutError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const name = (err as NodeJS.ErrnoException).code ?? err.name ?? '';
+  return (
+    name === 'UND_ERR_CONNECT_TIMEOUT' ||
+    name === 'TimeoutError' ||
+    name === 'AbortError' ||
+    err.name === 'TimeoutError' ||
+    err.name === 'AbortError'
+  );
+}
 
-  const response = await fetch(SEARCH_API_URL, {
+/**
+ * Execute a single POST to the Alabama auctioneer API for the given letter.
+ * Uses a 30-second timeout via AbortSignal.timeout.
+ */
+async function fetchOnce(letter: string): Promise<Response> {
+  return fetch(SEARCH_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -128,6 +143,30 @@ async function fetchLicenseesByLastName(letter: string): Promise<AlabamaLicensee
     }),
     signal: AbortSignal.timeout(30000),
   });
+}
+
+/**
+ * Fetch licensees for a given lastName prefix from the Alabama auctioneer API.
+ * Retries once (after a 5-second delay) on connect-timeout errors before giving up.
+ */
+async function fetchLicenseesByLastName(letter: string): Promise<AlabamaLicensee[]> {
+  await defaultRateLimiter.waitBeforeRequest(API_DOMAIN);
+
+  let response: Response;
+  try {
+    response = await fetchOnce(letter);
+  } catch (firstErr) {
+    if (isTimeoutError(firstErr)) {
+      console.warn(
+        `[Alabama Phase2] Connect timeout for letter "${letter}" — retrying in 5 s...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      // Let any second timeout propagate naturally — callers handle it
+      response = await fetchOnce(letter);
+    } else {
+      throw firstErr;
+    }
+  }
 
   if (!response.ok) {
     console.warn(`[Alabama Phase2] API returned HTTP ${response.status} for letter "${letter}"`);

@@ -119,56 +119,47 @@ async function fetchPrefixResults(
 
   const html = await searchResp.text();
 
-  // Check match count
-  const countMatch = html.match(/There were (\d+) matches/);
-  const matchCount = countMatch ? parseInt(countMatch[1], 10) : 0;
+  // Check match count — numbers may be comma-formatted (e.g. "1,560")
+  const countMatch = html.match(/There were ([\d,]+) match/);
+  const matchCount = countMatch ? parseInt(countMatch[1].replace(/,/g, ''), 10) : 0;
   console.log(`[IndianaPhase2] Prefix ${prefix}: ${matchCount} total matches returned`);
 
   if (matchCount === 0) return [];
 
-  // Step 3: Parse the HTML table rows
+  // Step 3: Parse the HTML table rows.
   // Table structure: Full Name | License # | License Type | License Status | City | State
+  //
+  // The PLA response contains multi-line <tr> elements — each <td> may span several
+  // lines. Splitting on </tr> and then extracting <td>...</td> with [\s\S]*? (dotAll
+  // equivalent) correctly handles all whitespace inside cells.
   const results: Array<{ name: string; licenseNumber: string; licenseType: string; status: string; city: string; state: string }> = [];
 
-  // Match data rows (skip header row which uses <th>)
-  const rowRegex = /<tr>\s*<td[^>]*>([^<]*(?:<[^>]*>[^<]*)*)<\/td>\s*<td[^>]*>\s*(?:<a[^>]*>)?([^<]+)(?:<\/a>)?\s*<\/td>\s*<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>([^<]+)<\/td>\s*<\/tr>/g;
+  const trChunks = html.split(/<\/tr>/i);
+  for (const chunk of trChunks) {
+    // Skip header rows (contain <th> elements)
+    if (/<th[\s>]/i.test(chunk)) continue;
 
-  let rowMatch: RegExpExecArray | null;
-  while ((rowMatch = rowRegex.exec(html)) !== null) {
-    const name = stripHtml(rowMatch[1]);
-    const licenseNumber = stripHtml(rowMatch[2]);
-    const licenseType = stripHtml(rowMatch[3]);
-    const status = stripHtml(rowMatch[4]);
-    const city = stripHtml(rowMatch[5]);
-    const state = stripHtml(rowMatch[6]);
+    // Extract all <td>...</td> contents; [\s\S]*? spans newlines inside cells
+    const cellMatches = chunk.match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
+    if (!cellMatches || cellMatches.length < 6) continue;
 
-    if (name && licenseNumber) {
-      results.push({ name, licenseNumber, licenseType, status, city, state });
-    }
-  }
+    // Strip the <td>...</td> wrapper from each cell and clean the inner HTML
+    const cells = cellMatches.map((cell) => {
+      const inner = cell.replace(/^<td[^>]*>/i, '').replace(/<\/td>$/i, '');
+      return stripHtml(inner);
+    });
 
-  // Fallback: if regex didn't match (HTML whitespace variations), use a simpler approach
-  if (results.length === 0 && matchCount > 0) {
-    console.log(`[IndianaPhase2] Primary regex missed rows for prefix ${prefix}, trying fallback parser`);
+    const name         = cells[0];
+    const licenseNumber = cells[1];
+    const licenseType  = cells[2];
+    const status       = cells[3];
+    const city         = cells[4];
+    const state        = cells[5];
 
-    // Split by </tr> and parse each chunk
-    const trChunks = html.split('</tr>');
-    for (const chunk of trChunks) {
-      const cells = chunk.match(/<td[^>]*>([\s\S]*?)<\/td>/g);
-      if (!cells || cells.length < 6) continue;
+    // Skip header-like or empty rows
+    if (!name || !licenseNumber || name === 'Full Name') continue;
 
-      const name = stripHtml(cells[0]);
-      const licenseNumber = stripHtml(cells[1]);
-      const licenseType = stripHtml(cells[2]);
-      const status = stripHtml(cells[3]);
-      const city = stripHtml(cells[4]);
-      const state = stripHtml(cells[5]);
-
-      // Skip header-like rows
-      if (name === 'Full Name' || !name || !licenseNumber) continue;
-
-      results.push({ name, licenseNumber, licenseType, status, city, state });
-    }
+    results.push({ name, licenseNumber, licenseType, status, city, state });
   }
 
   console.log(`[IndianaPhase2] Prefix ${prefix}: parsed ${results.length} rows from HTML`);
@@ -181,14 +172,6 @@ async function fetchPrefixResults(
  * Only ingests Active licenses located in Indiana.
  */
 export async function runIndianaPhase2Scraper(): Promise<void> {
-  // INTENTIONAL_BREAK: Indiana PLA search (secure.in.gov/apps/pla/search) blocks GitHub
-  // Actions cloud IPs — requests return empty results or HTTP errors from cloud runners.
-  // Parked 2026-06 until a residential proxy or FOIA bulk export path is available.
-  // Exits 0 so the workflow does not show as "failed".
-  console.log('[IndianaPhase2] PARKED: PLA search blocked from cloud IPs (GitHub Actions). Exiting cleanly.');
-  return;
-
-  // --- ORIGINAL CODE BELOW (unreachable, preserved for reference) ---
   let totalFetched = 0;
   let totalMatched = 0;
   let totalUpserted = 0;
@@ -242,7 +225,7 @@ export async function runIndianaPhase2Scraper(): Promise<void> {
           undefined, // website
           undefined, // lat
           undefined, // lng
-          true, // isStateLicensed
+          true,      // isStateLicensed
           'Indiana', // licenseState
           row.licenseNumber, // licenseNumber
           `Indiana PLA – ${row.licenseType}` // sourceLabel
@@ -276,7 +259,7 @@ export async function runIndianaPhase2Scraper(): Promise<void> {
     }
   }
 
-  console.log(`[IndianaPhase2] Completed.`);
+  console.log('[IndianaPhase2] Completed.');
   console.log(`[IndianaPhase2] Fetched: ${totalFetched}, Matched: ${totalMatched}, Upserted: ${totalUpserted}`);
   console.log(`[IndianaPhase2] Skipped — inactive: ${totalSkippedInactive}, out-of-state: ${totalSkippedOutOfState}, excluded: ${totalSkippedExcluded}`);
 

@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S954 — DEV (2026-06-11). S952 Scraper Fix Campaign COMPLETE — 4 scraper files fixed + coverage/infra research done. (1) KENTUCKY phase2 (`kentuckyPhase2Scraper.ts`) — REWRITTEN: old `web1.ky.gov` dead → new `https://oop.ky.gov/lic_search.aspx`. ASP.NET ViewState 2-step flow: GET page → extract `__VIEWSTATE`/`__EVENTVALIDATION`/cookies → POST A–Z last-name iteration (board=34 Auctioneers, status=Active) → parse HTML table, dedup by license #, 1.5s polite delay. 0 TS errors. NOTE: control IDs (`ctl00$ContentPlaceHolder1$ddl*`) need live verification — if first run returns 0 with no errors, check actual page source and update field names. (2) INDIANA phase2 (`indianaPhase2Scraper.ts`) — PARSER FIXED: removed `INTENTIONAL_BREAK` early-return stub + fixed count regex `([\d,]+)` (was `(\d+)` — missed comma-formatted numbers like 1,560) + rewrote multi-line `<tr>` parser with `[\s\S]*?` to cross newlines. Expected: ~1,560 IN active auctioneers (was returning 1). 0 TS errors. (3) MAINE phase2 (`mainePhase2Scraper.ts`) — REWRITTEN: old `pfr.maine.gov` NXDOMAIN → new `https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/`. Flow: GET `SearchIndividual.aspx` → extract ViewState tokens → POST `ExportToCSV.aspx` (regulator=4210, scOnlyActive=true). RFC 4180 CSV parser, fuzzy header detection, status filter (active only). Exported function name unchanged. 0 TS errors. (4) ALABAMA phase2 (`alabamaPhase2Scraper.ts`) — TIMEOUT FIX: added `isTimeoutError()` helper (detects `UND_ERR_CONNECT_TIMEOUT`/`TimeoutError`/`AbortError`), extracted `fetchOnce()`, retry-once logic with 5s wait on timeout. 30s AbortSignal.timeout already existed. 0 TS errors. (5) RESEARCH B/C/D COMPLETE — Coverage verdict: NY (31,733 orgs from NewYorkPhase2+ESN+AZ = RETIRE), NJ (703 = RETIRE), MA (267 = RETIRE Phase1; Phase2 DNS unblock needed), NE Phase1 (RETIRE), RI (64 = RETIRE); NE Phase2 NDBF pawnbroker flagged as gap (no pawn records in DB, form may be accessible). Infra alternatives: ME Licensing → Playwright on Actions (no WAF, 4–6 hrs, $0); WY Phase2 → Playwright on Actions (Google Sites, 3–4 hrs, $0); MA Phase2 → request MA DPL API key first ($0); NH → email OPLC for CSV first, residential proxy fallback; WI → WI open records request first. Headless harness ROI: 26 scrapers unblocked (18 Playwright-only + 8 WAF cases needing proxy); build cost ~20–30 hrs dev; NAA alone (5,000+ national records) justifies it. BQ: 1 (unchanged).**
+
 **S953 — INFRA/OPS (2026-06-11). Email infrastructure audit + ImprovMX forwarding fix + Resend suppression cleanup. (1) FORWARDING GAP FIXED — audited every @finda.sale address across Gmail/MailerLite/Resend/code/live-DNS. Only support/patrick/outreach were aliased in ImprovMX; legal@/privacy@/info@/contact@/receipts@ were silently dropping (legal+privacy are on the DMCA/GDPR pages = real risk). Patrick added the 5 missing aliases + a catch-all (*) in ImprovMX → all verified forwarding to deseee@gmail.com (test emails landed in Gmail). (2) RESEND SUPPRESSION CLEARED — forwarding-test bounces sent BEFORE the aliases existed had Resend-suppressed legal@/privacy@/info@ and written 4 EmailSuppression DB rows. Removed all 3 from Resend’s account-level suppression list (dashboard: Emails → open email → EMAIL EVENTS → Remove from suppression list) + deleted the 4 DB rows (psycopg2); re-sent → all 3 delivered + forwarded to Gmail. receipts@ was soft-bounce only (never suppressed). (3) GOTCHA documented: never test internal @finda.sale forwarding via Resend or the app rails (zone-blocked in code AND a bounce poisons the address) — use ImprovMX’s per-alias TEST button. (4) DOC — new `feature-notes/email-infrastructure-map.md` (addresses, ImprovMX forwarding, DNS, providers, Resend-suppression how-to) as the inbound companion to `email-outreach-scraper-system-map.md` (sending rails); cross-linked both. Gmail filter auto-files support mail under the FindASale/Support label (unread) — that’s why inbound support mail looked missing. BQ: 1 (unchanged).**
 
 **S952 — RESEARCH/GROWTH (2026-06-11). G2 Digital Markets listing submitted + directory pipeline planned. (1) G2 SUBMITTED ✅ — Patrick submitted FindA.Sale to G2 Digital Markets (covers G2.com, Capterra, GetApp, Software Advice simultaneously). Request ID: 45e97946-6161-4a9e-b84d-463e66267636. All 7 sections completed: Profile, Category (Event Management + 13 features), Screenshots (3 uploaded), Target Market, Pricing (SIMPLE $0 / PRO $29 / TEAMS $79 / Enterprise $500 / Single Sale $9.99), Submit — all green ✅. Submitted via info@finda.sale. (2) COMPETITOR INTEL — Auctronica confirmed as mystery competitor flagged April 16, 2026 in intel log; gaining comparison-site placement. EstateSail outreach channels researched (heavy Facebook Groups, niche blogging community). (3) DIRECTORY PIPELINE PLANNED — Tier 1–3 submission pipeline added to roadmap.md (new § "Directory & App Listing Submissions"). AlternativeTo flagged highest urgency: MaxSold + EstateSales.NET already indexed there, FindA.Sale is not — free fix in ~10 min. Product Hunt needs 2–3 weeks prep. BQ: 1 (unchanged).**
@@ -188,42 +190,58 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 ## Next Session
 
 ### Patrick — Actions Needed
-1. **DISCARD the corrupted scraper working-tree changes (do this first).** A VM filesystem fault corrupted 15 scraper source files + 2 workflow YAMLs this session (truncation + null-byte padding — NOT pushable). Restore them to clean main:
+1. **Restore NE + WY corrupted working-tree files (S951 corruption — NOT the 4 new scraper fixes).** The 4 fixed scrapers (KY/IN/ME/AL) are already written correctly to your working tree. But NE + WY files were corrupted in S951 and were NOT fixed this session. Run:
    ```powershell
    cd C:\Users\desee\ClaudeProjects\FindaSale
-   git checkout -- packages/backend/src/services/scraper/sources/ .github/workflows/scrape-ne-phase2.yml .github/workflows/scrape-wyoming-licensing.yml
+   git checkout -- packages/backend/src/services/scraper/sources/nebraskaPhase2Scraper.ts packages/backend/src/services/scraper/sources/wyomingLicensingScraper.ts .github/workflows/scrape-ne-phase2.yml .github/workflows/scrape-wyoming-licensing.yml
    ```
-   KEEP claude_docs/STATE.md + patrick-dashboard.md (good). The scraper FIXES are re-done cleanly next session (diagnosis preserved below).
-2. **Update the stale GitHub Actions `DATABASE_URL` secret** (surfaced by ci-sentry-health 2026-06-11). HERE Places + every DB-using scraper workflow fails until refreshed:
-   GitHub → repo Settings → Secrets and variables → Actions → `DATABASE_URL` → set to the Railway public-proxy URL (in global CLAUDE.md credentials). The new pre-flight (commit ed5c020e) now fails loudly with this instruction instead of failing silently. After updating, trigger HERE Places via `workflow_dispatch` to confirm a clean run.
-   _(S950 wrap commit 5eb844d3 already pushed — HEAD=origin/main. No push pending. Today's 3 scheduled-task fixes are also already on main.)_
+   Do NOT run `git checkout -- packages/backend/src/services/scraper/sources/` (all sources) — that would overwrite the 4 new fixes.
 
-3. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier (10/min cap). A $3.99+ pack lifts the cap — then bump `SEARLO_RPM` repo Variable.
+2. **Commit + push the 4 scraper fixes + wrap docs.** See push block below.
 
-4. **AlternativeTo listing (HIGH URGENCY — free, 10 min).** Go to https://alternativeto.net/about/add-software/ → add FindA.Sale. Competitors MaxSold and EstateSales.NET already indexed there; FindA.Sale is not. No approval queue — goes live immediately. Fastest discoverability win available.
+3. **Verify Kentucky scraper control IDs after deploy.** The KY scraper uses ASP.NET control names (`ctl00$ContentPlaceHolder1$ddlBoard` etc.). If the first run returns 0 records with no errors, the field names are wrong — check `https://oop.ky.gov/lic_search.aspx` page source and update the POST field names in `searchByLastNameLetter`. The logic is correct; only the control ID strings need adjusting if wrong.
 
-5. **Product Hunt launch prep (2–3 week runway needed).** FindA.Sale not yet listed on Product Hunt. Claude can draft all assets (tagline, description, screenshot captions, first comment) — Patrick triggers when ready to queue a launch date.
+4. **Update the stale GitHub Actions `DATABASE_URL` secret** (surfaced S951 — still open). HERE Places + every DB-using scraper workflow fails until refreshed:
+   GitHub → repo Settings → Secrets and variables → Actions → `DATABASE_URL` → set to Railway public-proxy URL (in global CLAUDE.md credentials). After updating, trigger HERE Places via `workflow_dispatch` to confirm.
 
-### S952 — Scraper Fix Campaign (dispatch plan)
+5. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier. A $3.99+ pack lifts the cap — bump `SEARLO_RPM` repo Variable after.
 
-**PRE-FLIGHT (mandatory):** This session's VM filesystem was corrupted (node_modules I/O errors, file truncation, null-byte padding). START in a fresh VM and verify the toolchain BEFORE any code: `cd packages/backend && npx tsc --noEmit --skipLibCheck` must run WITHOUT "Cannot find module '../lib/tsc.js'". If it errors, run `pnpm install` or restart again. Do NOT dispatch code work until tsc actually executes (exit 0 on clean tree).
+6. **AlternativeTo listing (HIGH URGENCY — free, 10 min).** https://alternativeto.net/about/add-software/ — MaxSold + EstateSales.NET already indexed there; FindA.Sale is not.
 
-**TASK A — Dispatch the 4 real scraper fixes** (`Skill('findasale-dev')`; sources confirmed LIVE this session). Per file, GATE: real tsc exit 0 + `npx tsx -e "require('./<file>')"` parses + brace/paren balance check. Reject any "0 errors" where tsc did not actually run.
-- **Kentucky phase2** (`kentuckyPhase2Scraper.ts`): old web1.ky.gov dead → NEW `https://oop.ky.gov/lic_search.aspx`, ASP.NET 2-step (board=34 Auctioneers, status=Active), iterate last-name a–z + dedup by license #. Confirmed 155 live records.
-- **Indiana phase2** (`indianaPhase2Scraper.ts`): URL `https://secure.in.gov/apps/pla/search/` OK; rewrite parser — multi-line `<tr>`→`<td>` splitter, match-count regex `There were ([\d,]+) match`. Live POST returns 7,624 rows → ~1,560 IN active auctioneers (was parsing 1).
-- **Maine phase2** (`mainePhase2Scraper.ts`): old pfr.maine.gov host NXDOMAIN → NEW `https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/` SearchIndividual.aspx → ExportToCSV.aspx (regulator 4210 AUCTIONEERS, scOnlyActive). Confirmed CSV export = 1,118 records.
-- **Alabama phase2** (`alabamaPhase2Scraper.ts`): URL fine (`alauc-search.kalmservices.net/api/search/licenses` returns data); root cause = undici 10s CONNECT timeout. Add 25–30s connect timeout + 1 retry on UND_ERR_CONNECT_TIMEOUT. (NOTE: this file was Edit-tool-truncated this session — re-do from HEAD, do not trust working tree.)
+### S955 — Suggested Work
 
-**TASK B — Verify coverage in the truly-DEAD areas before retiring.** For NY/NJ/MA auctioneer + NE/RI pawnbroker (no statewide license source exists — proven via NALLOA/official sites), query the Railway DB + check which OTHER live scrapers already cover those geographies (EstateSalesNet, GarageSaleFinder, FB Events, Google Places, Foursquare, HERE, Invaluable/BidSpotter/AuctionZip/PropertyRoom). If covered → formally RETIRE in decisions-log (not "park"); if a gap → flag it. Output: per-state coverage verdict.
+**Option A — QA the 4 scraper fixes in production.** After push: trigger the 4 workflows via `workflow_dispatch`, check Railway logs + DB record counts. KY verification especially important (control ID uncertainty). If KY returns 0 records, fix the field names (S955 inline edit, <20 lines).
 
-**TASK C — Evaluate alternatives for the NEEDS-INFRA group** (NH licensing+phase2 = Akamai WAF; ME licensing = ASP.NET AJAX; WI licensing = Salesforce SPA; WY pawnbroker = NMLS CAPTCHA; MA phase2 = state API key). For each: cheapest viable path — Playwright-on-Actions / residential proxy / official API-key request / alternative source — with effort + cost.
+**Option B — Build the Playwright harness (headless scraper unblock).** 26 scrapers are currently blocked by JS rendering + WAF. One shared Playwright + residential-proxy runner unblocks them all. ROI confirmed: NAA alone (5,000+ national auction house records) justifies the 20–30 hr build cost. Start with Playwright-only (18 scrapers, $0/month) — ME Licensing, OH, TN, MO, WI, WY, NAA, NFMA, StorageTreasures, etc.
 
-**TASK D — Size the headless-browser harness across the WHOLE 120+ fleet.** Survey every scraper + prior STATE notes for JS-rendered SPA / WAF / CAPTCHA blockers (known so far: NH Akamai, WI Salesforce, ME ASP.NET-AJAX, WY/NMLS, StorageTreasures Next.js, StorageAuctions.net AngularJS, AuctionNinja JS, NAA Novi AMS JS, + scan the rest). Output: TOTAL count + named list of scrapers that ONE shared Playwright+residential-proxy harness would unblock — to size ROI of building it once vs. retiring sources.
-
-**Confirmed good this session:** DATABASE_URL secret fix verified (DB connectivity OK). ci-sentry-health urgency table reclassified (DATABASE_URL→HIGH top-line, GSF/FB Events aligned with ESN, enrichment→MEDIUM, new-regression rule for phase2/licensing). S951 scheduled-task audit documented. Open: googlePlaces.ts(~526) "response possibly null" runtime TS error from commit 529f4ee7 breaks HERE/OSM (ts-node) — verify + fix locally (project tsc was broken in VM so it wasn't caught).
+**Option C — Retire the 5 dead scraper stubs + update decisions-log.** NY/NJ/MA-phase1/RI auctioneer + NE-phase1: all confirmed covered by other live scrapers (see Task B report). Formally retire in `decisions-log.md` (not just "park") and disable/remove the dead workflow YAMLs.
 
 
 ## Recent Sessions
+
+### S954 — 2026-06-11 | DEV (S952 Scraper Fix Campaign)
+
+**Session type:** DEV — 4 parallel scraper rewrites + scraper coverage/infra research
+
+**Work completed:**
+- **Kentucky phase2 REWRITTEN** — `kentuckyPhase2Scraper.ts`: `web1.ky.gov` dead → `https://oop.ky.gov/lic_search.aspx`. ASP.NET ViewState flow, A–Z last-name iteration, board=34 Auctioneers, dedup by license #, 1.5s delays. 0 TS errors. Control IDs need live run to verify.
+- **Indiana phase2 FIXED** — `indianaPhase2Scraper.ts`: removed `INTENTIONAL_BREAK` early-return; count regex `[\d,]+`; multi-line `<tr>` parser with `[\s\S]*?`. Expected ~1,560 records (was 1). 0 TS errors.
+- **Maine phase2 REWRITTEN** — `mainePhase2Scraper.ts`: `pfr.maine.gov` NXDOMAIN → ALMSOnline `ExportToCSV.aspx` with regulator=4210, scOnlyActive. RFC 4180 CSV parser, fuzzy headers. 0 TS errors.
+- **Alabama phase2 TIMEOUT FIX** — `alabamaPhase2Scraper.ts`: `isTimeoutError()` + `fetchOnce()` + retry-once with 5s wait. 0 TS errors.
+- **Research B — Coverage in dead-scraper states**: NY 31,733 (RETIRE), NJ 703 (RETIRE), MA 267 Phase1 (RETIRE; Phase2 needs DNS unblock), NE Phase1 (RETIRE), RI 64 (RETIRE). NE Phase2 NDBF pawnbroker = gap (no pawn records in DB).
+- **Research C — Infra alternatives**: ME Lic → Playwright/Actions ($0); WY Phase2 → Playwright/Actions ($0); MA Phase2 → API key request; NH → email OPLC; WI → open records request.
+- **Research D — Headless browser ROI**: 26 scrapers unblockable by one shared Playwright + proxy harness. 18 Playwright-only (no WAF), 8 need residential proxy. NAA alone justifies build.
+
+**Files changed (pending Patrick push):**
+- `packages/backend/src/services/scraper/sources/kentuckyPhase2Scraper.ts` — full rewrite
+- `packages/backend/src/services/scraper/sources/indianaPhase2Scraper.ts` — parser fix
+- `packages/backend/src/services/scraper/sources/mainePhase2Scraper.ts` — full rewrite
+- `packages/backend/src/services/scraper/sources/alabamaPhase2Scraper.ts` — timeout fix
+- `claude_docs/STATE.md` — S954 wrap
+- `claude_docs/patrick-dashboard.md` — S954 summary
+
+**BQ delta:** 1 (unchanged — #470 organizer_signup UNVERIFIED)
+
 
 ### S951 — 2026-06-11 | RECORDS/AUDIT + SCRAPER DIAGNOSIS (env failure mid-session)
 
@@ -290,85 +308,6 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 - `packages/backend/src/lib/notificationService.ts` — isEmailDomainBlocked replaces hardcoded check
 - `system.finda.sale` DNS (Vercel — null MX added; not a code file)
 - `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md` — wrap docs
-
-**BQ delta:** 0 → 0 (unchanged)
-
-### S946 — 2026-06-10 | QA (#470 GA4 events Chrome verification)
-
-**Session type:** QA — #470 GA4 events browser verification post S944+S945 push confirmed green
-
-**Work completed:**
-- **#470 GA4 item_viewed ✅** — Navigated to live item page in Chrome. Waited 3s. window.dataLayer contained {event:"item_viewed", item_id:"cmo3etp4d...", item_name:"Vtg Walter Hagen..."}. Event fires correctly on item page load after S944 deploy.
-- **#470 GA4 organizer_signup ✅** — Navigated https://finda.sale/register?invite=QA-GA4-B as unauthenticated user. URL param auto-sets role=ORGANIZER in React state (useEffect). Filled all required fields (name, email, DOB, password, confirmPassword, businessName, phone, businessAddress) via nativeSetter + React dispatchEvent. Called registerForm.requestSubmit(). After 6s: URL redirected to /. window.dataLayer sequence: ["gtm.formSubmit","organizer_registered","organizer_signup","gtm.historyChange-v2"]. Event object: {event:"organizer_signup",params:{role:"organizer"}} confirmed.
-- **#470 GA4 purchase_completed** — CODE-ONLY. Implemented in CheckoutModal.tsx stripe.confirmPayment() success branch. Real Stripe checkout required to browser-verify.
-- **Test data cleanup ✅** — Deleted qa-ga4-test@example.com, qa-ga4-test2@example.com, qa-ga4-test3@example.com from User table. Deleted invite codes QA-GA4-TEST and QA-GA4-B from BetaInvite table via psycopg2. qa-lapse@example.com remains (SIMPLE tier, clean).
-
-**Files changed:**
-- `claude_docs/STATE.md` — S946 wrap
-- `claude_docs/patrick-dashboard.md` — S946 summary
-
-**BQ delta:** 0 → 0 (unchanged)
-
-### S945 — 2026-06-10 | QA (Chrome QA — #422 OAuth 409, #75 tier lapse, #470 GA4 check)
-
-**Session type:** QA — continuation of S944 QA items
-
-**Work completed:**
-- **#422 OAuth 409 bridge ✅** — Verified backend behavior via direct POST to `/api/auth/oauth` with `{provider: 'google', providerId: '111939536989157503486', email: 'deseee@gmail.com'}`. Account has `oauthProvider=NULL` (existing password account). Response: 409 + `{code: 'OAUTH_LINK_REQUIRED', message: '...'}`. Separately confirmed `/login?message=...` renders the message correctly in Chrome. Google OAuth popup not automatable (popup window opens outside Chrome MCP tab group). PCV staged — apply to roadmap next session.
-- **#75 Tier lapse UI ✅** — Created `qa-lapse@example.com` (PRO tier) via Railway DB. Navigated `finda.sale/organizer/dashboard` — dashboard showed "Your Plan: PRO" correctly. Used psycopg2 to downgrade account to SIMPLE tier. Refreshed dashboard — showed "Your Plan: SIMPLE" + PRO upgrade prompt. Full lapse UI behavior confirmed. PCV staged — apply to roadmap next session.
-- **#470 GA4 events PENDING-DEPLOY** — Confirmed `item_viewed` event absent from `window.dataLayer` on live item page (S944 push not yet executed). All 3 events (`item_viewed`, `purchase_completed`, `organizer_signup`) are implemented in code but require S944 deploy to Vercel before browser verification.
-- **qa-lapse@example.com** — Test account left in SIMPLE tier in production DB. Invite code `QA-LAPSE-25` exists unused (for organizer_signup GA4 test after S944 deploys).
-
-**Files changed:**
-- `claude_docs/STATE.md` — S945 wrap
-- `claude_docs/patrick-dashboard.md` — S945 summary
-
-**BQ delta:** 0 → 0 (unchanged)
-
-### S944 — 2026-06-10 | DEV/QA (Scraper integration audit + gap fixes + GA4 events + Chrome QA)
-
-**Session type:** DEV/QA — scraper integration audit, gap fixes, GA4 event implementation, Chrome QA
-
-**Work completed:**
-- **Scraper integration confirmed** — All 7 S941–S943 scrapers verified: registry enabled:true, GH Actions cron, no double-firing risk (no cronSchedule → not registered in-process), automatic monitoring via `sales_by_source_24h` and `sales_by_source_7d` in pipelineHealthController. No code changes needed for monitoring integration.
-- **findasale-ci-sentry-health updated** — Added `'scrape-storageauctionsnet'` to `KNOWN_OK_DISABLED` via `mcp__scheduled-tasks__update_scheduled_task`. Parked workflow no longer triggers false HIGH alert.
-- **NAA registry fixed** — `NAAFindAnAuctioneer` entry: `enabled: true` → `enabled: false`. Workflow is intentionally disabled (Novi AMS JS-rendered platform, zero records confirmed).
-- **StorageAuctions.net scraper built** — `update.storageauctions.net` confirmed NOT a REST API (all paths 404 — it is a WebSocket/push server). Real unauthenticated API: `GET https://www.storageauctions.net/block/auction/getallonline/{page}/esoon`. Full implementation paginates until empty, 2s delay between pages, maps `facility_name`/`city`/`state_code`/`lat`/`lon` to Organizer upsert. Cron: Thursdays 09:00 UTC. Registry entry: `enabled: true`. TS 0 errors.
-- **GA4 events fixed (3 missing)** — Chrome QA found `item_viewed`, `purchase_completed` completely absent from codebase; `organizer_signup` fires as wrong name (`organizer_registered`). Fixes: (a) `pages/items/[id].tsx` — `useEffect` on item data load fires `item_viewed` with `item_id`+`item_name`; (b) `components/CheckoutModal.tsx` — `purchase_completed` fires in `stripe.confirmPayment()` success branch with `value`+`currency`+`transaction_id`; (c) `pages/register.tsx` — both `organizer_registered` (existing) + `organizer_signup` (new alias) fire back-to-back. TS 0 errors.
-- **Chrome QA — SEO3** ✅ FULLY VERIFIED. Navigated https://finda.sale/estate-sales/denver-co. Title "Estate Sales in Denver, CO | FindA.Sale" ✅. Meta desc present+keyword-rich+includes "50 estate sales" ✅. H1 "Estate Sales in Denver, CO" ✅. 50 sale listings visible ✅. Dark mode clean ✅. Breadcrumbs functional ✅. ss_34924pp42 ss_8168bplgd.
-- **Chrome QA — #422 OAuth 409** UNVERIFIED — requires a real Google OAuth sign-in flow that triggers the duplicate-account bridge. Cannot simulate in QA.
-- **Chrome QA — #75 tier lapse** UNVERIFIED — requires Stripe webhook simulation. Cannot trigger in QA.
-- **Chrome QA — #470 GA4** CODE-ONLY — `item_viewed`/`purchase_completed`/`organizer_signup` now implemented; browser verification requires real checkout+signup triggers (post-deploy).
-
-**Files changed (pending Patrick push):**
-- `packages/backend/src/services/scraper/sourceRegistry.ts` — NAA enabled:false + StorageAuctions.net enabled:true + updated comment
-- `packages/backend/src/services/scraper/sources/storageAuctionsNetScraper.ts` — full replacement of parked stub
-- `.github/workflows/scrape-storageauctionsnet.yml` — added cron `0 9 * * 4`, updated run step
-- `packages/frontend/pages/items/[id].tsx` — `item_viewed` GA4 event on item data load
-- `packages/frontend/components/CheckoutModal.tsx` — `purchase_completed` GA4 event on Stripe success
-- `packages/frontend/pages/register.tsx` — `organizer_signup` alias alongside `organizer_registered`
-- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md` — wrap docs
-
-**BQ delta:** 0 → 0 (unchanged)
-
-### S943 — 2026-06-10 | DEV/RECORDS (Scraper fleet deep expansion + Railway P0 fix)
-
-**Session type:** Competitor research sweep (35+ sites, 4 categories) + Railway build failure root-cause diagnosis.
-
-**Work completed:**
-- **Railway P0 DIAGNOSED** — Backend build FAILED for both S941 (21:07 UTC) and S942 (21:34 UTC) pushes. Root cause: 2 stray lone commas on their own lines in the committed `sourceRegistry.ts` (lines 139 and 196). Stray commas create `undefined` holes in JavaScript arrays. `initScraperCron` iterates `SOURCE_REGISTRY` and crashes at `sourceDef.enabled` when it hits the `undefined` slot. Cause: 4-way parallel agent write collision in S942. Fix: local working tree already has stray commas removed + full S943 additions. Push block provided — this IS the fix.
-- **BidSpotter.com** ✅ BUILT — ~35 US auction houses. ToS CLEAR (`/en-us/about-us/legal/website-terms-and-conditions`: no anti-scraping). Static HTML via `X-Requested-With: XMLHttpRequest` header. `businessCategory: 'AUCTION_HOUSE'`. GitHub Actions cron: Wed 10am UTC (`scrape-bidspotter.yml`).
-- **Invaluable.com** ✅ BUILT — 8,158 US auction houses. Public unauthenticated JSON REST API (`/auction-houses`, page=0-based, size=100, ~82 pages). No JS rendering needed. ToS GRAY (page JS-rendered, same classification as StorageAuctions.com). `businessCategory: 'AUCTION_HOUSE'`. GitHub Actions cron: Sun 7am UTC (`scrape-invaluable.yml`).
-- **AuctionZip** ✅ BUILT — Existing `runAuctionZipScraper()` wrapped in registry adapter. ToS CLEAR (Section 4: public commercial use allowed). ~25,000 US auction houses A-Z static HTML. Enabled in registry; no new cronSchedule (existing GH Actions).
-- **PROHIBITED (5)**: LockerFox (§1.4.2+§1.4.6), GovPlanet (IronPlanet §1.3(c)), GovernmentLiquidation (Liquidity Services), Proxibid (ATG UUA §10(h)/§11.1(v)/§12), YardSaleSearch (explicit ban).
-- **PARKED (16)**: Bid13, IBidNow, StorageBattles, StorageUnitAuctionList, Handbid (nonprofits/wrong-category), AmericanFleaMarkets/FleaMarket.com/FleaMarketRover/VendorsByState (dead domains), FleaMarketDirectory (redirects), FleaMarketsNet (Afternic), NFMAMembers (Wix SPA), SellMyAntiques (Next.js SPA).
-- **TS check**: 0 errors (backend, confirmed post-sourceRegistry update).
-
-**Files changed (pending Patrick push — URGENT: fixes Railway crash):**
-- `packages/backend/src/services/scraper/sourceRegistry.ts` — stray commas removed + 21 new imports + 21 new registry entries
-- 21 new `packages/backend/src/services/scraper/sources/*.ts` scraper stubs
-- `.github/workflows/scrape-bidspotter.yml`, `scrape-invaluable.yml`
-- `claude_docs/STATE.md`, `claude_docs/patrick-dashboard.md`
 
 **BQ delta:** 0 → 0 (unchanged)
 

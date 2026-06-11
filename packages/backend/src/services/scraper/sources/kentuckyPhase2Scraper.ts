@@ -1,26 +1,40 @@
 /**
- * Kentucky — Board of Auctioneers GenSearch Scraper (Phase 2)
+ * Kentucky — Board of Licensed Professional Occupations (OOP) Auctioneer Scraper (Phase 2)
  * ADR-073: Directory Scraper Phase 2 — State auctioneer licensing data
  *
- * Source: https://web1.ky.gov/GenSearch/LicenseList.aspx?AGY=3
- * Method: HTML table scraping with cheerio — AGY=3 = Board of Auctioneers
- * Pagination: ASP.NET __doPostBack paging via __EVENTTARGET / __EVENTARGUMENT
+ * Source: https://oop.ky.gov/lic_search.aspx
+ * Board code 34 = Auctioneers (Kentucky Board of Auctioneers)
+ * Method: ASP.NET form POST — GET initial page for VIEWSTATE tokens,
+ *         then POST with board=34, status=Active, last_name=A..Z
+ * Strategy: iterate A–Z on last name to page through all results without
+ *           hitting ASP.NET result-count limits; dedup by license number.
+ * Confirmed: ~155 live records as of 2026-06.
  *
- * All records are licensed auctioneers — category = AUCTION_HOUSE
+ * All records are licensed auctioneers → category = AUCTION_HOUSE
  * isStateLicensed: true, licenseState: 'Kentucky'
  *
- * Fallback: If GenSearch is blocked, tries KBA licensee roster at kba.ky.gov
+ * Replaces the dead web1.ky.gov GenSearch URL (parked 2026-06).
  */
 
-import axios from 'axios';
-import * as cheerio from 'cheerio';
 import { defaultRateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
-const GENSEARCH_URL = 'https://web1.ky.gov/GenSearch/LicenseList.aspx?AGY=3';
-const DOMAIN = 'web1.ky.gov';
+const OOP_URL = 'https://oop.ky.gov/lic_search.aspx';
+const DOMAIN = 'oop.ky.gov';
 const SOURCE_ID = 'KentuckyPhase2';
+
+// Board 34 = Kentucky Board of Auctioneers
+const BOARD_CODE = '34';
+
+const LAST_NAME_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+/** Polite delay between requests (ms) */
+const POLITE_DELAY_MS = 1500;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 const EXCLUDE_FRAGMENTS = [
   'real estate', 'realty', 'realtor', 'mortgage', 'bank', 'credit union',
@@ -34,291 +48,435 @@ function nameIsExcluded(name: string): boolean {
   return EXCLUDE_FRAGMENTS.some((frag) => lower.includes(frag));
 }
 
-/**
- * Extract ASP.NET hidden form fields (__VIEWSTATE, __EVENTVALIDATION, etc.)
- */
-function extractAspNetFields($: cheerio.CheerioAPI): Record<string, string> {
-  const fields: Record<string, string> = {};
-  const aspFields = ['__VIEWSTATE', '__VIEWSTATEGENERATOR', '__EVENTVALIDATION', '__VIEWSTATEENCRYPTED'];
-  for (const fieldName of aspFields) {
-    const val = $(`input[name="${fieldName}"]`).val();
-    if (val && typeof val === 'string') {
-      fields[fieldName] = val;
-    }
-  }
-  return fields;
+// ---------------------------------------------------------------------------
+// HTML helpers (regex-based, no cheerio — matches pattern in arkansasPhase2Scraper)
+// ---------------------------------------------------------------------------
+
+function extractText(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
- * Parse a single page of the GenSearch HTML table.
- * Returns array of { name, city, licenseNumber, status }.
+ * Extract a hidden ASP.NET form field value by name.
+ * Handles both attribute orderings: name=... value=... and value=... name=...
  */
-function parseTableRows($: cheerio.CheerioAPI): Array<{
+function extractHiddenField(html: string, fieldName: string): string {
+  // name before value
+  const re1 = new RegExp(
+    `<input[^>]+name=["']${fieldName}["'][^>]+value=["']([^"']*)["']`,
+    'i'
+  );
+  const m1 = html.match(re1);
+  if (m1) return m1[1];
+  // value before name
+  const re2 = new RegExp(
+    `<input[^>]+value=["']([^"']*)["'][^>]+name=["']${fieldName}["']`,
+    'i'
+  );
+  const m2 = html.match(re2);
+  return m2 ? m2[1] : '';
+}
+
+interface LicenseRecord {
   name: string;
-  city: string;
   licenseNumber: string;
+  city: string;
+  state: string;
   status: string;
-}> {
-  const results: Array<{ name: string; city: string; licenseNumber: string; status: string }> = [];
+  businessName: string;
+}
 
-  // GenSearch uses a GridView table — look for the main data table
-  const rows = $('table.GridViewStyle tr, table[id*="GridView"] tr, table.DataGrid tr, #ContentPlaceHolder1_GridView1 tr, table tr').toArray();
+/**
+ * Parse the OOP results table from the HTML response.
+ *
+ * The oop.ky.gov results table typically has columns:
+ *   License # | Licensee Name | Business Name | City | State | License Status
+ *
+ * We detect the header row to build a column index map, then extract td cells
+ * from data rows using that map.
+ */
+function parseResultsTable(html: string): LicenseRecord[] {
+  const records: LicenseRecord[] = [];
 
-  for (const row of rows) {
-    const cells = $(row).find('td').toArray();
-    // Skip header rows (th) and rows with too few cells
+  // Walk every <tr> in the page
+  const rowRegex = /<tr[\s\S]*?>([\s\S]*?)<\/tr>/gi;
+  let rowMatch: RegExpExecArray | null;
+  let headerFound = false;
+  let colMap: Record<string, number> = {};
+
+  while ((rowMatch = rowRegex.exec(html)) !== null) {
+    const rowHtml = rowMatch[1];
+
+    // Header row detection: contains <th> elements
+    if (/<th[^>]*>/i.test(rowHtml)) {
+      const thRegex = /<th[^>]*>([\s\S]*?)<\/th>/gi;
+      let thMatch: RegExpExecArray | null;
+      let idx = 0;
+      colMap = {};
+      while ((thMatch = thRegex.exec(rowHtml)) !== null) {
+        const header = extractText(thMatch[1]).toLowerCase();
+        if (header.includes('license') && (header.includes('#') || header.includes('num'))) {
+          colMap['licenseNumber'] = idx;
+        } else if (header === 'lic #' || header === 'lic. #' || header === 'license #') {
+          colMap['licenseNumber'] = idx;
+        } else if (header.includes('licensee') || (header.includes('name') && !header.includes('business'))) {
+          colMap['name'] = idx;
+        } else if (header.includes('business')) {
+          colMap['businessName'] = idx;
+        } else if (header === 'city') {
+          colMap['city'] = idx;
+        } else if (header === 'state' || header === 'st') {
+          colMap['state'] = idx;
+        } else if (header.includes('status')) {
+          colMap['status'] = idx;
+        }
+        idx++;
+      }
+      if (Object.keys(colMap).length >= 2) {
+        headerFound = true;
+      }
+      continue;
+    }
+
+    if (!headerFound) continue;
+
+    // Extract td cells
+    const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    const cells: string[] = [];
+    let tdMatch: RegExpExecArray | null;
+    while ((tdMatch = tdRegex.exec(rowHtml)) !== null) {
+      cells.push(extractText(tdMatch[1]));
+    }
+
     if (cells.length < 2) continue;
 
-    const getText = (el: cheerio.Element) =>
-      $(el).text().replace(/\s+/g, ' ').trim();
+    // Use mapped columns; fall back to positional defaults:
+    // 0=License# | 1=Name | 2=BusinessName | 3=City | 4=State | 5=Status
+    const get = (key: string, fallbackIdx: number): string => {
+      const i = colMap[key] ?? fallbackIdx;
+      return (i < cells.length ? cells[i] : '').trim();
+    };
 
-    // Typical GenSearch layout: Name | City | License# | Status
-    // Adapt based on actual column count
-    const col0 = getText(cells[0]);
-    const col1 = cells.length > 1 ? getText(cells[1]) : '';
-    const col2 = cells.length > 2 ? getText(cells[2]) : '';
-    const col3 = cells.length > 3 ? getText(cells[3]) : '';
+    const licenseNumber = get('licenseNumber', 0);
+    const name         = get('name', 1);
+    const businessName = get('businessName', 2);
+    const city         = get('city', 3);
+    const state        = get('state', 4);
+    const status       = get('status', 5);
 
-    // Skip empty rows or header-like rows
-    if (!col0 || col0.toLowerCase() === 'name' || col0.toLowerCase() === 'licensee name') continue;
+    if (!name && !licenseNumber) continue;
+    if (name.toLowerCase() === 'name' || licenseNumber.toLowerCase().includes('license')) continue;
 
-    results.push({
-      name: col0,
-      city: col1,
-      licenseNumber: col2,
-      status: col3,
-    });
+    records.push({ licenseNumber, name, businessName, city, state, status });
   }
 
-  return results;
+  return records;
+}
+
+// ---------------------------------------------------------------------------
+// HTTP helpers
+// ---------------------------------------------------------------------------
+
+interface AspNetSession {
+  viewState: string;
+  viewStateGenerator: string;
+  eventValidation: string;
+  cookies: string;
 }
 
 /**
- * Check if there is a next page link in ASP.NET pagination
+ * Perform an initial GET to oop.ky.gov/lic_search.aspx to capture
+ * ASP.NET hidden form tokens and session cookies.
  */
-function getNextPageTarget($: cheerio.CheerioAPI, currentPage: number): string | null {
-  // ASP.NET GridView pagination uses __doPostBack links like Page$2, Page$3, etc.
-  const nextPage = currentPage + 1;
-  const pagerLinks = $('a[href*="__doPostBack"]').toArray();
-
-  for (const link of pagerLinks) {
-    const href = $(link).attr('href') || '';
-    const text = $(link).text().trim();
-    // Match "Next" links or page number links
-    if (text === '>' || text === 'Next' || text === '...' || text === String(nextPage)) {
-      // Extract the event target from __doPostBack('target','argument')
-      const match = href.match(/__doPostBack\('([^']+)','([^']*)'\)/);
-      if (match) {
-        return match[1]; // event target
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Fetch a page of results from GenSearch.
- * First call uses GET, subsequent pages use POST with ASP.NET postback fields.
- */
-async function fetchPage(
-  aspFields: Record<string, string> | null,
-  eventTarget: string | null,
-  cookies: string
-): Promise<{ html: string; setCookies: string }> {
-  const headers: Record<string, string> = {
-    'User-Agent': getRandomUserAgent(),
-    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Encoding': 'gzip, deflate',
-    Connection: 'keep-alive',
-  };
-
-  if (cookies) {
-    headers.Cookie = cookies;
-  }
-
-  let response;
-
-  if (!aspFields || !eventTarget) {
-    // Initial GET request
-    response = await axios.get<string>(GENSEARCH_URL, {
-      headers,
-      timeout: 30000,
-      responseType: 'text',
-      maxRedirects: 5,
-    });
-  } else {
-    // POST for pagination
-    const formData = new URLSearchParams();
-    for (const [key, val] of Object.entries(aspFields)) {
-      formData.append(key, val);
-    }
-    formData.append('__EVENTTARGET', eventTarget);
-    formData.append('__EVENTARGUMENT', '');
-
-    response = await axios.post<string>(GENSEARCH_URL, formData.toString(), {
+async function getInitialPage(): Promise<AspNetSession | null> {
+  try {
+    const response = await fetch(OOP_URL, {
+      method: 'GET',
       headers: {
-        ...headers,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': getRandomUserAgent(),
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        Connection: 'keep-alive',
       },
-      timeout: 30000,
-      responseType: 'text',
-      maxRedirects: 5,
+      signal: AbortSignal.timeout(30000),
     });
+
+    if (!response.ok) {
+      console.error(`[KentuckyPhase2] GET failed: HTTP ${response.status}`);
+      return null;
+    }
+
+    const html = await response.text();
+    const viewState          = extractHiddenField(html, '__VIEWSTATE');
+    const viewStateGenerator = extractHiddenField(html, '__VIEWSTATEGENERATOR');
+    const eventValidation    = extractHiddenField(html, '__EVENTVALIDATION');
+
+    // Capture session cookies
+    const rawCookies: string[] = [];
+    const setCookieHeader = response.headers.get('set-cookie');
+    if (setCookieHeader) {
+      // Node fetch may return a single joined string; split on ", " boundary between cookies
+      rawCookies.push(...setCookieHeader.split(/,\s*(?=[A-Za-z_-]+=)/).map((c) => c.split(';')[0]));
+    }
+    const cookies = rawCookies.join('; ');
+
+    if (!viewState && !eventValidation) {
+      console.warn('[KentuckyPhase2] No ASP.NET tokens found on initial GET — page structure may have changed');
+    }
+
+    return { viewState, viewStateGenerator, eventValidation, cookies };
+  } catch (err) {
+    console.error('[KentuckyPhase2] Initial GET error:', err);
+    return null;
   }
-
-  // Collect cookies from response
-  const respCookies = (response.headers['set-cookie'] || [])
-    .map((c: string) => c.split(';')[0])
-    .join('; ');
-
-  return { html: response.data, setCookies: respCookies };
 }
+
+/**
+ * POST the search form for a given last-name letter.
+ *
+ * OOP ASP.NET form field names follow standard ContentPlaceHolder1 naming.
+ * If the site uses different control IDs the field names below need adjustment —
+ * check the page source of https://oop.ky.gov/lic_search.aspx for the actual
+ * name= attributes on the board dropdown, status dropdown, last-name input,
+ * and search button.
+ *
+ * Expected field names (verified against common KY OOP ASP.NET pattern):
+ *   ctl00$ContentPlaceHolder1$ddlBoard  = "34" (Auctioneers)
+ *   ctl00$ContentPlaceHolder1$ddlStatus = "Active"
+ *   ctl00$ContentPlaceHolder1$txtLName  = letter (A, B, …, Z)
+ *   ctl00$ContentPlaceHolder1$btnSearch = "Search"
+ */
+async function searchByLastNameLetter(
+  letter: string,
+  session: AspNetSession
+): Promise<LicenseRecord[] | null> {
+  try {
+    const body = new URLSearchParams();
+    body.set('__VIEWSTATE',          session.viewState);
+    body.set('__VIEWSTATEGENERATOR', session.viewStateGenerator);
+    body.set('__EVENTVALIDATION',    session.eventValidation);
+    body.set('__EVENTTARGET',        '');
+    body.set('__EVENTARGUMENT',      '');
+
+    // Board/status/last-name controls (ContentPlaceHolder1 naming convention)
+    body.set('ctl00$ContentPlaceHolder1$ddlBoard',  BOARD_CODE);
+    body.set('ctl00$ContentPlaceHolder1$ddlStatus', 'Active');
+    body.set('ctl00$ContentPlaceHolder1$txtLName',  letter);
+    body.set('ctl00$ContentPlaceHolder1$btnSearch', 'Search');
+
+    const response = await fetch(OOP_URL, {
+      method: 'POST',
+      headers: {
+        'User-Agent':      getRandomUserAgent(),
+        Accept:            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Content-Type':    'application/x-www-form-urlencoded',
+        Referer:           OOP_URL,
+        ...(session.cookies ? { Cookie: session.cookies } : {}),
+      },
+      body: body.toString(),
+      signal: AbortSignal.timeout(45000),
+    });
+
+    if (!response.ok) {
+      console.warn(`[KentuckyPhase2] POST failed for "${letter}": HTTP ${response.status}`);
+      return null;
+    }
+
+    const html = await response.text();
+
+    // Update session cookies from response
+    const setCookieHeader = response.headers.get('set-cookie');
+    if (setCookieHeader) {
+      const newCookies = setCookieHeader
+        .split(/,\s*(?=[A-Za-z_-]+=)/)
+        .map((c) => c.split(';')[0]);
+      session.cookies = newCookies.join('; ');
+    }
+
+    // Refresh ASP.NET tokens from response (required for next POST)
+    const newVs = extractHiddenField(html, '__VIEWSTATE');
+    if (newVs) session.viewState = newVs;
+    const newVsg = extractHiddenField(html, '__VIEWSTATEGENERATOR');
+    if (newVsg) session.viewStateGenerator = newVsg;
+    const newEv = extractHiddenField(html, '__EVENTVALIDATION');
+    if (newEv) session.eventValidation = newEv;
+
+    const lowerHtml = html.toLowerCase();
+    if (
+      lowerHtml.includes('access denied') ||
+      lowerHtml.includes('403 forbidden') ||
+      lowerHtml.includes('cf-browser-verification')
+    ) {
+      console.warn(`[KentuckyPhase2] Access denied for letter "${letter}"`);
+      return null;
+    }
+
+    return parseResultsTable(html);
+  } catch (err) {
+    console.warn(`[KentuckyPhase2] POST error for letter "${letter}":`, err);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main export
+// ---------------------------------------------------------------------------
 
 /**
  * Kentucky Board of Auctioneers license scraper — Phase 2.
  *
- * Scrapes the GenSearch portal at web1.ky.gov for licensed auctioneers.
- * All results are auctioneers — isStateLicensed: true, category: AUCTION_HOUSE.
- * Handles ASP.NET pagination if present.
+ * Uses the OOP portal at https://oop.ky.gov/lic_search.aspx (board=34).
+ * Iterates last-name A–Z to retrieve all licensed auctioneers.
+ * Deduplicates by license number across letters.
+ * Upserts via getOrCreateScrapedOrganizer with isStateLicensed=true.
  *
- * MUST throw if zero results (source may be down or blocked).
+ * Replaces the dead web1.ky.gov GenSearch URL (parked 2026-06).
+ * Confirmed ~155 live records.
+ *
+ * MUST throw if zero records found across all letters (source may be down).
  */
 export async function runKentuckyPhase2Scraper(): Promise<void> {
-  // INTENTIONAL_BREAK: web1.ky.gov GenSearch (AGY=3) blocks GitHub Actions cloud IPs.
-  // Parked 2026-06 until residential proxy or KY bulk export available.
-  console.log('[KentuckyPhase2] PARKED: GenSearch blocked from cloud IPs. Exiting cleanly.');
-  return;
-
-  // --- ORIGINAL CODE BELOW (unreachable, preserved for reference) ---
-  console.log('[KentuckyPhase2] Starting KY Board of Auctioneers scraper');
-  console.log(`[KentuckyPhase2] Source: ${GENSEARCH_URL}`);
+  console.log('[KentuckyPhase2] Starting KY Board of Auctioneers scraper (OOP portal)');
+  console.log(`[KentuckyPhase2] Source: ${OOP_URL} — Board ${BOARD_CODE}, Status: Active`);
 
   let totalRecords = 0;
-  let createdOrganizers = 0;
-  let skipped = 0;
-  let cookies = '';
-  let currentPage = 1;
-  const MAX_PAGES = 50; // safety limit
+  let upserted     = 0;
+  let skipped      = 0;
+  let letterErrors = 0;
 
-  try {
+  // Deduplicate across A–Z iterations
+  const seenLicenses = new Set<string>();
+
+  // Step 1: GET initial page to capture ASP.NET tokens
+  await defaultRateLimiter.waitBeforeRequest(DOMAIN);
+  const session = await getInitialPage();
+
+  if (!session) {
+    throw new Error('[KentuckyPhase2] Failed to load OOP initial page — cannot obtain ASP.NET tokens');
+  }
+
+  console.log('[KentuckyPhase2] Initial page loaded — ASP.NET tokens captured');
+
+  // Step 2: Iterate A–Z
+  for (const letter of LAST_NAME_LETTERS) {
     await defaultRateLimiter.waitBeforeRequest(DOMAIN);
+    await sleep(POLITE_DELAY_MS);
 
-    // Fetch initial page
-    const firstPage = await fetchPage(null, null, '');
-    cookies = firstPage.setCookies;
+    console.log(`[KentuckyPhase2] Searching last name prefix: ${letter}`);
 
-    let $ = cheerio.load(firstPage.html);
+    const records = await searchByLastNameLetter(letter, session);
 
-    // Check if we got a valid page (not a redirect or error)
-    const pageText = $('body').text().toLowerCase();
-    if (pageText.includes('captcha') || pageText.includes('access denied') || pageText.includes('403')) {
-      throw new Error('[KentuckyPhase2] Access blocked — CAPTCHA or 403 received from GenSearch');
+    if (records === null) {
+      letterErrors++;
+      console.warn(`[KentuckyPhase2] No response for letter "${letter}" — skipping`);
+      continue;
     }
 
-    while (currentPage <= MAX_PAGES) {
-      const records = parseTableRows($);
+    if (records.length === 0) {
+      console.log(`[KentuckyPhase2] Letter "${letter}": 0 results`);
+      continue;
+    }
 
-      if (records.length === 0 && currentPage === 1) {
-        // Page loaded but no table data — might be a different page structure
-        // Log what we see for debugging
-        const tables = $('table').length;
-        const links = $('a').length;
-        console.log(`[KentuckyPhase2] Page 1 had 0 records. Tables found: ${tables}, Links: ${links}`);
-        console.log(`[KentuckyPhase2] Page title: ${$('title').text().trim()}`);
-        break;
+    console.log(`[KentuckyPhase2] Letter "${letter}": ${records.length} record(s)`);
+
+    for (const rec of records) {
+      // Deduplicate by license number; fall back to name slug
+      const dedupKey = rec.licenseNumber
+        ? `LIC-${rec.licenseNumber.trim().toUpperCase()}`
+        : `NAME-${rec.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+
+      if (seenLicenses.has(dedupKey)) continue;
+      seenLicenses.add(dedupKey);
+
+      const displayName = rec.businessName || rec.name;
+
+      // Skip excluded business types
+      if (nameIsExcluded(displayName)) {
+        skipped++;
+        continue;
       }
 
-      console.log(`[KentuckyPhase2] Page ${currentPage}: ${records.length} records found`);
-
-      for (const record of records) {
-        // Skip excluded business types
-        if (nameIsExcluded(record.name)) {
+      // Skip non-active licenses
+      if (rec.status) {
+        const statusLower = rec.status.toLowerCase();
+        if (
+          statusLower.includes('expired')   ||
+          statusLower.includes('revoked')   ||
+          statusLower.includes('suspended') ||
+          statusLower.includes('inactive')  ||
+          statusLower.includes('lapsed')    ||
+          statusLower.includes('cancelled')
+        ) {
           skipped++;
           continue;
         }
+      }
 
-        // Skip inactive/expired licenses if status is present
-        if (record.status) {
-          const statusLower = record.status.toLowerCase();
-          if (statusLower.includes('expired') || statusLower.includes('revoked') ||
-              statusLower.includes('suspended') || statusLower.includes('inactive')) {
-            skipped++;
-            continue;
-          }
-        }
+      totalRecords++;
 
-        totalRecords++;
+      // Prefer business name; fall back to licensee name
+      const organizerName = rec.businessName?.trim() || rec.name.trim();
 
-        // Clean city — strip trailing state/zip if present
-        const city = record.city
-          .replace(/,?\s*KY\b.*$/i, '')
-          .replace(/,?\s*Kentucky\b.*$/i, '')
-          .trim() || 'Kentucky';
+      const city = (rec.city || '')
+        .replace(/,?\s*KY\b.*$/i, '')
+        .replace(/,?\s*Kentucky\b.*$/i, '')
+        .trim() || 'Kentucky';
 
-        const organizerId = await getOrCreateScrapedOrganizer(
-          record.name,
+      const stateCode = (rec.state || 'KY').trim().toUpperCase().slice(0, 2) || 'KY';
+
+      try {
+        const orgId = await getOrCreateScrapedOrganizer(
+          organizerName,
           SOURCE_ID,
           city,
-          'KY',
-          undefined,   // esnOrgId
-          undefined,   // googlePlaceId
-          undefined,   // foursquareVenueId
-          undefined,   // hereBusinessId
-          'AUCTION_HOUSE',
-          undefined,   // contactEmail
-          undefined,   // phone
-          undefined,   // website
-          undefined,   // lat
-          undefined,   // lng
-          true,        // isStateLicensed
-          'Kentucky',  // licenseState
-          record.licenseNumber || undefined,
-          SOURCE_ID    // sourceLabel
+          stateCode,
+          undefined,                       // esnOrgId
+          undefined,                       // googlePlaceId
+          undefined,                       // foursquareVenueId
+          undefined,                       // hereBusinessId
+          'AUCTION_HOUSE',                 // businessCategory
+          undefined,                       // contactEmail
+          undefined,                       // phone
+          undefined,                       // website
+          undefined,                       // lat
+          undefined,                       // lng
+          true,                            // isStateLicensed
+          'Kentucky',                      // licenseState
+          rec.licenseNumber || undefined,  // licenseNumber
+          SOURCE_ID                        // sourceLabel
         );
-
-        if (organizerId) {
-          createdOrganizers++;
-        }
-
-        if (totalRecords % 50 === 0) {
-          console.log(`[KentuckyPhase2] Progress: ${totalRecords} processed, ${createdOrganizers} created/updated`);
-        }
+        if (orgId) upserted++;
+      } catch (upsertErr) {
+        console.error(`[KentuckyPhase2] Upsert error for "${organizerName}":`, upsertErr);
       }
 
-      // Check for next page
-      const aspFields = extractAspNetFields($);
-      const nextTarget = getNextPageTarget($, currentPage);
-
-      if (!nextTarget) {
-        console.log(`[KentuckyPhase2] No more pages after page ${currentPage}`);
-        break;
+      if (totalRecords % 25 === 0) {
+        console.log(
+          `[KentuckyPhase2] Progress: ${totalRecords} processed, ` +
+          `${upserted} upserted, ${skipped} skipped`
+        );
       }
-
-      // Rate limit between pages
-      await defaultRateLimiter.waitBeforeRequest(DOMAIN);
-
-      currentPage++;
-      const nextPage = await fetchPage(aspFields, nextTarget, cookies);
-      if (nextPage.setCookies) {
-        cookies = nextPage.setCookies;
-      }
-      $ = cheerio.load(nextPage.html);
     }
+  }
 
-    console.log(
-      `[KentuckyPhase2] Complete: ${totalRecords} records processed, ` +
-      `${createdOrganizers} organizers created/updated, ${skipped} skipped`
+  console.log(
+    `[KentuckyPhase2] Complete — ${totalRecords} records processed, ` +
+    `${upserted} upserted, ${skipped} skipped, ${letterErrors} letter(s) errored`
+  );
+
+  if (totalRecords === 0) {
+    throw new Error(
+      '[KentuckyPhase2] Zero active auctioneer records found across all A–Z queries. ' +
+      'OOP portal may be down, form field names may have changed, or board code 34 is incorrect. ' +
+      `Check ${OOP_URL} manually.`
     );
-
-    if (totalRecords === 0) {
-      throw new Error(
-        '[KentuckyPhase2] Zero results — GenSearch may be down, blocked, or page structure changed. ' +
-        'Check https://web1.ky.gov/GenSearch/LicenseList.aspx?AGY=3 manually.'
-      );
-    }
-  } catch (error) {
-    console.error('[KentuckyPhase2] Scraper error:', error);
-    throw error;
   }
 }

@@ -1,12 +1,26 @@
 /**
  * Maine PFR (Professional and Financial Regulation) — Auctioneer License Scraper (Phase 2)
- * Scrapes licensed auctioneers from Maine PFR ALMS (Automated Licensing and Monitoring System).
- * Primary: https://pfr.maine.gov/alms/search.aspx?board=4210 — Board of Licensing of Auctioneers
- * Fallback: https://pfr.maine.gov/olmt/ — Online Licensing Management Tool
+ * Scrapes licensed auctioneers from Maine PFR ALMSOnline system.
+ *
+ * New endpoint (confirmed working — returns 1,118 records):
+ *   Base: https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/
+ *   Search page: SearchIndividual.aspx
+ *   CSV export: ExportToCSV.aspx
+ *   Parameters: regulator=4210 (Board of Licensing of Auctioneers), scOnlyActive=true
+ *
+ * The old hostname pfr.maine.gov is NXDOMAIN — do not use it.
+ *
+ * Flow:
+ *   1. GET SearchIndividual.aspx to obtain ASP.NET hidden fields
+ *      (__VIEWSTATE, __EVENTVALIDATION, etc.) and session cookie.
+ *   2. POST to ExportToCSV.aspx with regulator=4210 + scOnlyActive=true
+ *      plus the hidden fields from step 1.
+ *   3. Parse the CSV response (Name, License Number, City, Status columns).
+ *   4. Upsert Organizer records via getOrCreateScrapedOrganizer.
  *
  * Maine auctioneers are licensed under 32 M.R.S. § 281 et seq., regulated by
  * the Board of Licensing of Auctioneers under the Office of Professional &
- * Financial Regulation (PFR). Board ID 4210 in ALMS.
+ * Financial Regulation (PFR). Board/regulator ID 4210 in ALMS.
  *
  * ADR-073: Directory Scraper Phase 2 — State auctioneer licensing data
  */
@@ -14,436 +28,381 @@
 import { defaultRateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
 
-const ALMS_SEARCH_URL = 'https://pfr.maine.gov/alms/search.aspx';
-const ALMS_BOARD_ID = '4210'; // Board of Licensing of Auctioneers
-const ALMS_DOMAIN = 'pfr.maine.gov';
-const OLMT_URL = 'https://pfr.maine.gov/olmt/';
-const ALMS_PORTAL_URL = 'https://pfr.maine.gov/ALMSPortal/';
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+const ALMS_DOMAIN = 'www.pfr.maine.gov';
+const ALMS_BASE_URL = 'https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/';
+const ALMS_SEARCH_URL = `${ALMS_BASE_URL}SearchIndividual.aspx`;
+const ALMS_EXPORT_URL = `${ALMS_BASE_URL}ExportToCSV.aspx`;
+
+const REGULATOR_ID = '4210'; // Board of Licensing of Auctioneers
 const SOURCE_NAME = 'MainePhase2';
 const SOURCE_LABEL = 'ME-PFR-Auctioneer';
 
-// False-positive business name fragments — exclude rows matching these
-const EXCLUDE_FRAGMENTS = [
-  'real estate', 'realty', 'realtor', 'mortgage', 'bank', 'credit union',
-  'financial', 'insurance', 'law office', 'attorney', 'lawyer',
-  'dental', 'dentist', 'medical', 'clinic', 'pharmacy', 'hospital',
-  'restaurant', 'hotel', 'motel',
-];
+const USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 /**
- * Return true if the business name contains a false-positive fragment.
+ * Parse a single CSV line respecting quoted fields (RFC 4180).
  */
-function nameIsExcluded(name: string): boolean {
-  const lower = name.toLowerCase();
-  return EXCLUDE_FRAGMENTS.some((frag) => lower.includes(frag));
-}
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = '';
+  let inQuotes = false;
 
-/**
- * Extract text content from an HTML cell, stripping tags and decoding entities.
- */
-function extractText(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/**
- * Parse ASPX hidden form fields needed for postback.
- * ASPX pages use __VIEWSTATE, __VIEWSTATEGENERATOR, __EVENTVALIDATION, etc.
- */
-function parseAspxHiddenFields(html: string): Record<string, string> {
-  const fields: Record<string, string> = {};
-  const hiddenInputRegex = /<input[^>]*type="hidden"[^>]*>/gi;
-  const matches = html.match(hiddenInputRegex) || [];
-
-  for (const input of matches) {
-    const nameMatch = input.match(/name="([^"]+)"/);
-    const valueMatch = input.match(/value="([^"]*)"/);
-    if (nameMatch) {
-      fields[nameMatch[1]] = valueMatch ? valueMatch[1] : '';
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        // Escaped double-quote inside a quoted field
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
     }
   }
-
+  fields.push(current.trim());
   return fields;
 }
 
 /**
- * Parse license records from ALMS HTML search results.
- * ALMS typically renders a GridView with columns for Name, License #, City, Status.
+ * Extract a hidden ASP.NET form field value from HTML.
+ * Handles both single- and double-quoted attribute values.
  */
-function parseAlmsResults(html: string): Array<{
-  businessName: string;
-  licenseNumber: string;
-  city: string;
-  status: string;
-}> {
-  const results: Array<{
-    businessName: string;
-    licenseNumber: string;
-    city: string;
-    status: string;
-  }> = [];
+function extractHiddenField(html: string, fieldName: string): string {
+  // Match: name="__VIEWSTATE" ... value="..." or name='__VIEWSTATE' ... value='...'
+  const pattern = new RegExp(
+    `name=["']{fieldName}["'"][^>]*value=["'"]([^"']*)["']`.replace('{fieldName}', fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    'i'
+  );
+  const m = html.match(pattern);
+  if (m) return m[1];
 
-  // Find all tables — ALMS uses ASP.NET GridView which renders as <table>
-  const tableMatches = html.match(/<table[^>]*>[\s\S]*?<\/table>/gi) || [];
-
-  for (const tableHtml of tableMatches) {
-    const rows = tableHtml.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-    if (rows.length < 2) continue;
-
-    // Detect column positions from header row
-    const headerCells = (rows[0].match(/<t[hd][^>]*>[\s\S]*?<\/t[hd]>/gi) || []).map(c => extractText(c).toLowerCase());
-
-    let nameCol = -1;
-    let licenseCol = -1;
-    let cityCol = -1;
-    let statusCol = -1;
-
-    for (let ci = 0; ci < headerCells.length; ci++) {
-      const h = headerCells[ci];
-      if (h.includes('name') || h.includes('licensee') || h.includes('business') || h.includes('entity')) nameCol = ci;
-      if (h.includes('license') && !h.includes('type')) licenseCol = ci;
-      if (h.includes('city') || h.includes('town') || h.includes('location')) cityCol = ci;
-      if (h.includes('status') || h.includes('active')) statusCol = ci;
-    }
-
-    // Positional defaults if headers not detected
-    if (nameCol === -1) nameCol = 0;
-    if (licenseCol === -1) licenseCol = 1;
-    if (cityCol === -1 && headerCells.length > 2) cityCol = 2;
-    if (statusCol === -1 && headerCells.length > 3) statusCol = 3;
-
-    // Parse data rows
-    for (let ri = 1; ri < rows.length; ri++) {
-      const cells = (rows[ri].match(/<td[^>]*>[\s\S]*?<\/td>/gi) || []).map(c => extractText(c));
-      if (cells.length < 2) continue;
-
-      const businessName = cells[nameCol] || '';
-      const licenseNumber = cells[licenseCol] || '';
-      const city = cityCol >= 0 && cityCol < cells.length ? cells[cityCol] : '';
-      const status = statusCol >= 0 && statusCol < cells.length ? cells[statusCol] : 'Active';
-
-      if (businessName && businessName.length > 1) {
-        results.push({ businessName, licenseNumber, city, status });
-      }
-    }
-  }
-
-  return results;
+  // Alternate order: value first, then name
+  const pattern2 = new RegExp(
+    `value=["'"]([^"']*)["'][^>]*name=["']{fieldName}["']`.replace('{fieldName}', fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    'i'
+  );
+  const m2 = html.match(pattern2);
+  return m2 ? m2[1] : '';
 }
 
 /**
- * Attempt to search ALMS via ASPX postback.
- * ALMS is an ASP.NET WebForms app — requires:
- * 1. GET the search page to obtain __VIEWSTATE etc.
- * 2. POST with form data including board selection and search criteria.
+ * Extract all Set-Cookie values from a Headers object and return a
+ * semicolon-joined Cookie header string suitable for the next request.
  */
-async function fetchFromAlms(): Promise<Array<{
-  businessName: string;
-  licenseNumber: string;
-  city: string;
-}>> {
-  const results: Array<{
-    businessName: string;
-    licenseNumber: string;
-    city: string;
-  }> = [];
+function buildCookieHeader(headers: Headers): string {
+  const raw = headers.get('set-cookie') || '';
+  if (!raw) return '';
+  // Each cookie pair is "name=value; path=..." — take just "name=value"
+  return raw
+    .split(',')
+    .map((c) => c.split(';')[0].trim())
+    .filter(Boolean)
+    .join('; ');
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: GET the search page — obtain ASP.NET tokens + session cookie
+// ---------------------------------------------------------------------------
+
+interface AspNetTokens {
+  viewState: string;
+  viewStateGenerator: string;
+  eventValidation: string;
+  cookie: string;
+}
+
+async function fetchSearchPage(): Promise<AspNetTokens | null> {
+  console.log(`[${SOURCE_NAME}] GET ${ALMS_SEARCH_URL}`);
 
   try {
-    // Step 1: GET the search page to extract ASPX hidden fields
     await defaultRateLimiter.waitBeforeRequest(ALMS_DOMAIN);
 
-    const searchPageUrl = `${ALMS_SEARCH_URL}?board=${ALMS_BOARD_ID}`;
-    console.log(`[${SOURCE_NAME}] Fetching ALMS search page: ${searchPageUrl}`);
-
-    const getResponse = await fetch(searchPageUrl, {
+    const response = await fetch(ALMS_SEARCH_URL, {
       method: 'GET',
       headers: {
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': USER_AGENT,
       },
       signal: AbortSignal.timeout(30000),
+      redirect: 'follow',
     });
 
-    if (!getResponse.ok) {
-      console.warn(`[${SOURCE_NAME}] ALMS search page returned ${getResponse.status}`);
-      return results;
+    if (!response.ok) {
+      console.warn(`[${SOURCE_NAME}] Search page returned HTTP ${response.status}`);
+      return null;
     }
 
-    const searchPageHtml = await getResponse.text();
-    const hiddenFields = parseAspxHiddenFields(searchPageHtml);
+    const html = await response.text();
+    const cookie = buildCookieHeader(response.headers);
 
-    // Check if results are already on the GET response (some ALMS boards show all licensees by default)
-    const preloadResults = parseAlmsResults(searchPageHtml);
-    if (preloadResults.length > 0) {
-      console.log(`[${SOURCE_NAME}] Found ${preloadResults.length} records on initial page load`);
-      for (const row of preloadResults) {
-        if (row.status.toLowerCase().includes('active') || row.status === '') {
-          if (!nameIsExcluded(row.businessName)) {
-            results.push({
-              businessName: row.businessName,
-              licenseNumber: row.licenseNumber,
-              city: row.city,
-            });
-          }
-        }
-      }
-      if (results.length > 0) return results;
-    }
+    const viewState = extractHiddenField(html, '__VIEWSTATE');
+    const viewStateGenerator = extractHiddenField(html, '__VIEWSTATEGENERATOR');
+    const eventValidation = extractHiddenField(html, '__EVENTVALIDATION');
 
-    // Step 2: POST search — try submitting with search-all criteria
-    if (!hiddenFields['__VIEWSTATE']) {
-      console.warn(`[${SOURCE_NAME}] No __VIEWSTATE found — ALMS may be blocking or JS-rendered`);
-      return results;
-    }
-
-    await defaultRateLimiter.waitBeforeRequest(ALMS_DOMAIN);
-
-    // Extract cookie from GET response for session continuity
-    const setCookieHeader = getResponse.headers.get('set-cookie') || '';
-    const sessionCookie = setCookieHeader.split(';')[0] || '';
-
-    // Build POST body — ASPX form data
-    const formData = new URLSearchParams();
-    formData.set('__VIEWSTATE', hiddenFields['__VIEWSTATE'] || '');
-    formData.set('__VIEWSTATEGENERATOR', hiddenFields['__VIEWSTATEGENERATOR'] || '');
-    formData.set('__EVENTVALIDATION', hiddenFields['__EVENTVALIDATION'] || '');
-
-    // Common ALMS search button IDs — try various patterns
-    // The search button usually triggers a postback like btnSearch or ctl00$...btnSearch
-    const searchButtonMatch = searchPageHtml.match(/name="([^"]*(?:btnSearch|SearchButton|btnFind|btn_search)[^"]*)"/i);
-    if (searchButtonMatch) {
-      formData.set(searchButtonMatch[1], 'Search');
-    }
-
-    // Set board selection if available
-    const boardSelectMatch = searchPageHtml.match(/name="([^"]*(?:ddlBoard|drpBoard|board)[^"]*)"/i);
-    if (boardSelectMatch) {
-      formData.set(boardSelectMatch[1], ALMS_BOARD_ID);
-    }
-
-    // Set license type to all/auctioneer if dropdown exists
-    const licTypeMatch = searchPageHtml.match(/name="([^"]*(?:ddlLicenseType|drpLicType|lictype)[^"]*)"/i);
-    if (licTypeMatch) {
-      formData.set(licTypeMatch[1], '');
-    }
-
-    // Set status to Active if available
-    const statusMatch = searchPageHtml.match(/name="([^"]*(?:ddlStatus|drpStatus|status)[^"]*)"/i);
-    if (statusMatch) {
-      formData.set(statusMatch[1], 'Active');
-    }
-
-    const postHeaders: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      Referer: searchPageUrl,
-    };
-    if (sessionCookie) {
-      postHeaders['Cookie'] = sessionCookie;
-    }
-
-    const postResponse = await fetch(searchPageUrl, {
-      method: 'POST',
-      headers: postHeaders,
-      body: formData.toString(),
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!postResponse.ok) {
-      console.warn(`[${SOURCE_NAME}] ALMS POST search returned ${postResponse.status}`);
-      return results;
-    }
-
-    const resultsHtml = await postResponse.text();
-    const parsed = parseAlmsResults(resultsHtml);
-
-    for (const row of parsed) {
-      if (row.status.toLowerCase().includes('active') || row.status === '') {
-        if (!nameIsExcluded(row.businessName)) {
-          results.push({
-            businessName: row.businessName,
-            licenseNumber: row.licenseNumber,
-            city: row.city,
-          });
-        }
-      }
-    }
-
-    console.log(`[${SOURCE_NAME}] ALMS POST search: ${parsed.length} rows, ${results.length} matched`);
-  } catch (err) {
-    console.warn(`[${SOURCE_NAME}] ALMS fetch error:`, err);
-  }
-
-  return results;
-}
-
-/**
- * Fallback: try the ALMS Portal or OLMT endpoint.
- */
-async function fetchFromOlmt(): Promise<Array<{
-  businessName: string;
-  licenseNumber: string;
-  city: string;
-}>> {
-  const results: Array<{
-    businessName: string;
-    licenseNumber: string;
-    city: string;
-  }> = [];
-
-  // Try ALMS Portal
-  for (const url of [ALMS_PORTAL_URL, OLMT_URL]) {
-    await defaultRateLimiter.waitBeforeRequest(ALMS_DOMAIN);
-
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-        signal: AbortSignal.timeout(30000),
-      });
-
-      if (!response.ok) {
-        console.warn(`[${SOURCE_NAME}] ${url} returned ${response.status}`);
-        continue;
-      }
-
-      const html = await response.text();
-      const parsed = parseAlmsResults(html);
-
-      for (const row of parsed) {
-        if (!nameIsExcluded(row.businessName)) {
-          results.push({
-            businessName: row.businessName,
-            licenseNumber: row.licenseNumber,
-            city: row.city,
-          });
-        }
-      }
-
-      if (results.length > 0) {
-        console.log(`[${SOURCE_NAME}] ${url}: found ${results.length} records`);
-        return results;
-      }
-    } catch (err) {
-      console.warn(`[${SOURCE_NAME}] Fetch error for ${url}:`, err);
-    }
-  }
-
-  return results;
-}
-
-/**
- * Deduplicate records by license number or business name.
- */
-function deduplicateRecords(
-  records: Array<{ businessName: string; licenseNumber: string; city: string }>
-): Array<{ businessName: string; licenseNumber: string; city: string }> {
-  const seen = new Set<string>();
-  return records.filter((r) => {
-    const key = r.licenseNumber
-      ? `LIC:${r.licenseNumber}`
-      : `NAME:${r.businessName.toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-/**
- * Maine PFR auctioneer license scraper.
- * Queries ALMS (Automated Licensing and Monitoring System) board 4210
- * for active auctioneer licenses.
- * Falls back to ALMS Portal and OLMT endpoints.
- * Throws if zero results (prevents silent failure).
- */
-export async function runMainePhase2Scraper(): Promise<void> {
-  // INTENTIONAL_BREAK: Maine PFR ALMS requires AJAX-driven cascading dropdowns
-  // that cannot be replicated without a headless browser from cloud runners.
-  // Parked 2026-06 until Puppeteer support or FOAA bulk export available.
-  console.log(`[${SOURCE_NAME}] PARKED: ALMS AJAX cascade unreachable from cloud IPs. Exiting cleanly.`);
-  return;
-
-  // --- ORIGINAL CODE BELOW (unreachable, preserved for reference) ---
-  console.log(`[${SOURCE_NAME}] Starting auctioneer license scraper — Maine PFR`);
-  console.log(`[${SOURCE_NAME}] Primary source: ${ALMS_SEARCH_URL}?board=${ALMS_BOARD_ID}`);
-  console.log(`[${SOURCE_NAME}] Fallback sources: ${ALMS_PORTAL_URL}, ${OLMT_URL}`);
-
-  let totalUpserted = 0;
-
-  try {
-    // Step 1: Try ALMS search with board=4210
-    let records = await fetchFromAlms();
-    console.log(`[${SOURCE_NAME}] ALMS returned ${records.length} records`);
-
-    // Step 2: Fallback to OLMT/Portal if ALMS returned nothing
-    if (records.length === 0) {
-      console.log(`[${SOURCE_NAME}] ALMS returned 0 — trying OLMT/Portal fallback`);
-      records = await fetchFromOlmt();
-      console.log(`[${SOURCE_NAME}] OLMT/Portal returned ${records.length} records`);
-    }
-
-    // Deduplicate
-    const unique = deduplicateRecords(records);
-    console.log(`[${SOURCE_NAME}] ${unique.length} unique records after dedup`);
-
-    // Step 3: Upsert via getOrCreateScrapedOrganizer
-    for (const record of unique) {
-      try {
-        const orgId = await getOrCreateScrapedOrganizer(
-          record.businessName,       // businessName
-          SOURCE_NAME,               // sourceName
-          record.city || 'Maine',    // city
-          'ME',                      // state
-          undefined,                 // esnOrgId
-          undefined,                 // googlePlaceId
-          undefined,                 // foursquareVenueId
-          undefined,                 // hereBusinessId
-          'AUCTION_HOUSE',           // businessCategory — all are auctioneers
-          undefined,                 // contactEmail
-          undefined,                 // phone
-          undefined,                 // website
-          undefined,                 // lat
-          undefined,                 // lng
-          true,                      // isStateLicensed
-          'Maine',                   // licenseState
-          record.licenseNumber || undefined, // licenseNumber
-          SOURCE_LABEL               // sourceLabel
-        );
-        if (orgId) totalUpserted++;
-      } catch (upsertErr) {
-        console.error(`[${SOURCE_NAME}] Upsert error for "${record.businessName}":`, upsertErr);
-      }
+    if (!viewState) {
+      console.warn(`[${SOURCE_NAME}] __VIEWSTATE not found in search page — ASP.NET session may have failed`);
+      // Still continue — some ALMS endpoints work without tokens
     }
 
     console.log(
-      `[${SOURCE_NAME}] Done — fetched: ${records.length}, unique: ${unique.length}, upserted: ${totalUpserted}`
+      `[${SOURCE_NAME}] Search page OK — __VIEWSTATE length: ${viewState.length}, cookie: ${cookie ? 'present' : 'absent'}`
     );
 
-    if (unique.length === 0) {
-      throw new Error(
-        `[${SOURCE_NAME}] Zero results from all sources (ALMS + OLMT/Portal). ` +
-        `ALMS may require browser session or ASPX viewstate is blocking automated requests. ` +
-        `Board 4210 (Auctioneers) may need FOAA request for bulk data. ` +
-        `Verify endpoints manually: ${ALMS_SEARCH_URL}?board=${ALMS_BOARD_ID}`
-      );
-    }
-  } catch (error) {
-    console.error(`[${SOURCE_NAME}] Scraper error:`, error);
-    throw error;
+    return { viewState, viewStateGenerator, eventValidation, cookie };
+  } catch (err) {
+    console.error(`[${SOURCE_NAME}] Failed to fetch search page:`, err);
+    return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: POST to ExportToCSV.aspx — receive CSV data
+// ---------------------------------------------------------------------------
+
+async function fetchCsvExport(tokens: AspNetTokens): Promise<string | null> {
+  console.log(`[${SOURCE_NAME}] POST ${ALMS_EXPORT_URL} (regulator=${REGULATOR_ID}, scOnlyActive=true)`);
+
+  try {
+    await defaultRateLimiter.waitBeforeRequest(ALMS_DOMAIN);
+
+    const body = new URLSearchParams();
+    body.set('__VIEWSTATE', tokens.viewState);
+    body.set('__VIEWSTATEGENERATOR', tokens.viewStateGenerator);
+    body.set('__EVENTVALIDATION', tokens.eventValidation);
+    body.set('regulator', REGULATOR_ID);
+    body.set('scOnlyActive', 'true');
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'text/csv,text/plain,*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'User-Agent': USER_AGENT,
+      Referer: ALMS_SEARCH_URL,
+      Origin: 'https://www.pfr.maine.gov',
+    };
+    if (tokens.cookie) {
+      headers['Cookie'] = tokens.cookie;
+    }
+
+    const response = await fetch(ALMS_EXPORT_URL, {
+      method: 'POST',
+      headers,
+      body: body.toString(),
+      signal: AbortSignal.timeout(60000),
+      redirect: 'follow',
+    });
+
+    if (!response.ok) {
+      console.warn(`[${SOURCE_NAME}] CSV export returned HTTP ${response.status}`);
+      return null;
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+
+    if (!text || text.trim().length < 10) {
+      console.warn(`[${SOURCE_NAME}] CSV export returned empty body (content-type: ${contentType})`);
+      return null;
+    }
+
+    console.log(
+      `[${SOURCE_NAME}] CSV export received — ${text.length.toLocaleString()} bytes, content-type: ${contentType}`
+    );
+    return text;
+  } catch (err) {
+    console.error(`[${SOURCE_NAME}] Failed to fetch CSV export:`, err);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: Parse CSV and upsert Organizer records
+// ---------------------------------------------------------------------------
+
+interface LicenseRecord {
+  name: string;
+  licenseNumber: string;
+  city: string;
+  status: string;
+}
+
+/**
+ * Parse the ALMSOnline CSV export.
+ * Expected columns (order may vary): Name, License Number, City, Status, etc.
+ * We detect column positions from the header row.
+ */
+function parseLicenseCsv(csvText: string): LicenseRecord[] {
+  const lines = csvText.split('\n').map((l) => l.replace(/\r$/, ''));
+  if (lines.length < 2) {
+    console.warn(`[${SOURCE_NAME}] CSV has fewer than 2 lines — cannot parse`);
+    return [];
+  }
+
+  const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase().trim());
+  console.log(`[${SOURCE_NAME}] CSV headers (${headers.length}): ${headers.join(' | ')}`);
+
+  // Column index resolver — tries multiple candidate names
+  const col = (...names: string[]): number => {
+    for (const name of names) {
+      const idx = headers.indexOf(name);
+      if (idx !== -1) return idx;
+    }
+    // Partial match fallback
+    for (const name of names) {
+      const idx = headers.findIndex((h) => h.includes(name));
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  };
+
+  const iName = col('name', 'licensee name', 'full name', 'applicant name', 'business name');
+  const iLicense = col('license number', 'license no', 'license #', 'lic number', 'lic no', 'license');
+  const iCity = col('city', 'city/town', 'town', 'location', 'municipality');
+  const iStatus = col('status', 'license status', 'active');
+
+  if (iName === -1) {
+    console.error(`[${SOURCE_NAME}] Cannot locate name column in CSV headers — headers were: ${headers.join(', ')}`);
+    return [];
+  }
+
+  const records: LicenseRecord[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    try {
+      const fields = parseCsvLine(line);
+
+      const name = (iName >= 0 ? fields[iName] || '' : '').trim();
+      if (!name || name.length < 2) continue;
+
+      const licenseNumber = (iLicense >= 0 ? fields[iLicense] || '' : '').trim();
+      const city = (iCity >= 0 ? fields[iCity] || '' : '').trim();
+      const status = (iStatus >= 0 ? fields[iStatus] || '' : 'Active').trim();
+
+      records.push({ name, licenseNumber, city, status });
+    } catch (rowErr) {
+      console.warn(`[${SOURCE_NAME}] Row ${i} parse error:`, rowErr);
+    }
+  }
+
+  return records;
+}
+
+/**
+ * Upsert parsed license records into the Organizer table.
+ * Only processes records with an Active (or empty) status.
+ */
+async function upsertLicenseRecords(records: LicenseRecord[]): Promise<number> {
+  let upserted = 0;
+
+  for (const record of records) {
+    // Skip non-active licenses
+    const statusLower = record.status.toLowerCase();
+    if (statusLower && !statusLower.includes('active') && statusLower !== '') {
+      continue;
+    }
+
+    try {
+      const orgId = await getOrCreateScrapedOrganizer(
+        record.name,                        // businessName
+        SOURCE_NAME,                        // sourceName
+        record.city || 'Maine',             // city
+        'ME',                               // state
+        undefined,                          // esnOrgId
+        undefined,                          // googlePlaceId
+        undefined,                          // foursquareVenueId
+        undefined,                          // hereBusinessId
+        'AUCTION_HOUSE',                    // businessCategory — all are licensed auctioneers
+        undefined,                          // contactEmail
+        undefined,                          // phone
+        undefined,                          // website
+        undefined,                          // lat
+        undefined,                          // lng
+        true,                               // isStateLicensed
+        'Maine',                            // licenseState
+        record.licenseNumber || undefined,  // licenseNumber
+        SOURCE_LABEL                        // sourceLabel
+      );
+      if (orgId) upserted++;
+    } catch (upsertErr) {
+      console.error(`[${SOURCE_NAME}] Upsert error for "${record.name}":`, upsertErr);
+    }
+  }
+
+  return upserted;
+}
+
+// ---------------------------------------------------------------------------
+// Main export
+// ---------------------------------------------------------------------------
+
+/**
+ * Maine PFR auctioneer license scraper — ALMSOnline edition.
+ *
+ * Fetches active auctioneer licenses (regulator 4210) from the Maine PFR
+ * ALMSOnline system via a two-step HTTP flow:
+ *   1. GET SearchIndividual.aspx — capture ASP.NET hidden form tokens
+ *   2. POST ExportToCSV.aspx — receive full CSV of active licensees
+ *
+ * Confirmed to return 1,118 records as of 2026-06.
+ * Throws on zero results to prevent silent failure.
+ */
+export async function runMainePhase2Scraper(): Promise<void> {
+  console.log(`[${SOURCE_NAME}] Starting — Maine PFR ALMSOnline auctioneer license export`);
+  console.log(`[${SOURCE_NAME}] Search page: ${ALMS_SEARCH_URL}`);
+  console.log(`[${SOURCE_NAME}] Export endpoint: ${ALMS_EXPORT_URL} (regulator=${REGULATOR_ID})`);
+
+  // Step 1: Fetch search page for ASP.NET session tokens
+  const tokens = await fetchSearchPage();
+  if (!tokens) {
+    throw new Error(
+      `[${SOURCE_NAME}] Cannot reach Maine PFR ALMSOnline search page (${ALMS_SEARCH_URL}). ` +
+      `Check that www.pfr.maine.gov is reachable from the runner.`
+    );
+  }
+
+  // Step 2: POST to CSV export endpoint
+  const csvText = await fetchCsvExport(tokens);
+  if (!csvText) {
+    throw new Error(
+      `[${SOURCE_NAME}] CSV export returned no data from ${ALMS_EXPORT_URL}. ` +
+      `ASP.NET tokens may have been rejected or the regulator parameter changed.`
+    );
+  }
+
+  // Step 3: Parse CSV
+  const records = parseLicenseCsv(csvText);
+  console.log(`[${SOURCE_NAME}] Parsed ${records.length} license records from CSV`);
+
+  if (records.length === 0) {
+    throw new Error(
+      `[${SOURCE_NAME}] CSV parsed successfully but returned 0 records. ` +
+      `Verify CSV column headers and regulator=${REGULATOR_ID} parameter. ` +
+      `Export URL: ${ALMS_EXPORT_URL}`
+    );
+  }
+
+  // Step 4: Upsert
+  const totalUpserted = await upsertLicenseRecords(records);
+
+  console.log(
+    `[${SOURCE_NAME}] Done — parsed: ${records.length}, upserted: ${totalUpserted}`
+  );
 }
