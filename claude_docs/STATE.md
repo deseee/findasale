@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S956 — RESEARCH/CREATIVE (2026-06-11). Directory & app listing submission push — S952 pipeline actioned. (1) SAASHUB ✅ SUBMITTED — saashub.com/finda-sale. Contact: info@finda.sale. Patrick should create account to claim the listing. (2) UNEED ✅ SUBMITTED — uneed.best/tool/finda-sale. Waiting line. Account: deseee-d1f4. Category: Business. Tags: E-Commerce/Business/Events. Tagline: "Inventory & shopper discovery for secondary sale organizers". Organizer-focused description. (3) ALTERNATIVETO ⏳ BLOCKED — account "FindASale" created June 11; 7-day anti-spam age gate. Eligible June 18, 2026 ~9:49 PM Stockholm time. Patrick returns then to submit manually. (4) PRODUCT HUNT ASSETS ✅ — `claude_docs/brand/product-hunt-assets-2026-06-11.md` created. Tagline (59 chars), 240-char description, 6 feature bullets, maker comment, 3 Q&As, topic tags. Launch day: Tue or Wed 12:01 AM PT. (5) ROUNDUP OUTREACH EMAILS ✅ — `claude_docs/brand/roundup-outreach-emails-2026-06-11.md` created. 3 emails: Gitnux (Aisha Okonkwo), WifiTalents (Gregory Pearson), DIYAuctions (team). Send order: Gitnux → WifiTalents → DIYAuctions. (6) CRUNCHBASE + BETALIST ⏳ PENDING — Patrick creates accounts, then Claude can fill forms. BQ: 1 (unchanged).**
+
 **S955 — OPS (2026-06-11). DATABASE_URL secret updated by Patrick + 4 fixed scraper workflows triggered. (1) DATABASE_URL GitHub Actions secret refreshed to Railway public proxy URL — unblocks HERE Places + all DB-using scraper workflows. (2) Triggered `workflow_dispatch` on all 4 S954 fixes: scrape-kentucky-licensing (#6 Queued), scrape-indiana-licensing (dispatched), scrape-maine-licensing (dispatched), scrape-alabama-licensing (dispatched). Results pending — Kentucky control ID verification is the key unknown (0 records with no error = control IDs wrong, check oop.ky.gov page source). BQ: 1 (unchanged).**
 
 **S954 — DEV (2026-06-11). S952 Scraper Fix Campaign COMPLETE — 4 scraper files fixed + coverage/infra research done. (1) KENTUCKY phase2 (`kentuckyPhase2Scraper.ts`) — REWRITTEN: old `web1.ky.gov` dead → new `https://oop.ky.gov/lic_search.aspx`. ASP.NET ViewState 2-step flow: GET page → extract `__VIEWSTATE`/`__EVENTVALIDATION`/cookies → POST A–Z last-name iteration (board=34 Auctioneers, status=Active) → parse HTML table, dedup by license #, 1.5s polite delay. 0 TS errors. NOTE: control IDs (`ctl00$ContentPlaceHolder1$ddl*`) need live verification — if first run returns 0 with no errors, check actual page source and update field names. (2) INDIANA phase2 (`indianaPhase2Scraper.ts`) — PARSER FIXED: removed `INTENTIONAL_BREAK` early-return stub + fixed count regex `([\d,]+)` (was `(\d+)` — missed comma-formatted numbers like 1,560) + rewrote multi-line `<tr>` parser with `[\s\S]*?` to cross newlines. Expected: ~1,560 IN active auctioneers (was returning 1). 0 TS errors. (3) MAINE phase2 (`mainePhase2Scraper.ts`) — REWRITTEN: old `pfr.maine.gov` NXDOMAIN → new `https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/`. Flow: GET `SearchIndividual.aspx` → extract ViewState tokens → POST `ExportToCSV.aspx` (regulator=4210, scOnlyActive=true). RFC 4180 CSV parser, fuzzy header detection, status filter (active only). Exported function name unchanged. 0 TS errors. (4) ALABAMA phase2 (`alabamaPhase2Scraper.ts`) — TIMEOUT FIX: added `isTimeoutError()` helper (detects `UND_ERR_CONNECT_TIMEOUT`/`TimeoutError`/`AbortError`), extracted `fetchOnce()`, retry-once logic with 5s wait on timeout. 30s AbortSignal.timeout already existed. 0 TS errors. (5) RESEARCH B/C/D COMPLETE — Coverage verdict: NY (31,733 orgs from NewYorkPhase2+ESN+AZ = RETIRE), NJ (703 = RETIRE), MA (267 = RETIRE Phase1; Phase2 DNS unblock needed), NE Phase1 (RETIRE), RI (64 = RETIRE); NE Phase2 NDBF pawnbroker flagged as gap (no pawn records in DB, form may be accessible). Infra alternatives: ME Licensing → Playwright on Actions (no WAF, 4–6 hrs, $0); WY Phase2 → Playwright on Actions (Google Sites, 3–4 hrs, $0); MA Phase2 → request MA DPL API key first ($0); NH → email OPLC for CSV first, residential proxy fallback; WI → WI open records request first. Headless harness ROI: 26 scrapers unblocked (18 Playwright-only + 8 WAF cases needing proxy); build cost ~20–30 hrs dev; NAA alone (5,000+ national records) justifies it. BQ: 1 (unchanged).**
@@ -200,18 +202,47 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 2. **Searlo credit upgrade (optional).** FB Events running at 17% 429 fallback on free tier. A $3.99+ pack lifts the cap — bump `SEARLO_RPM` repo Variable after.
 
-3. **AlternativeTo listing (HIGH URGENCY — free, 10 min).** https://alternativeto.net/about/add-software/ — MaxSold + EstateSales.NET already indexed there; FindA.Sale is not.
+3. **AlternativeTo (#477) — June 18, 2026 ~9:49 PM Stockholm time.** Account "FindASale" created June 11; 7-day age gate expires June 18. Go to alternativeto.net, log in as FindASale, submit FindA.Sale. Competitors MaxSold + EstateSales.NET already indexed — this is a free, fast win.
 
-### S955 — Suggested Work
+4. **Crunchbase (#481)** — Create account at crunchbase.com/add-new, then Claude can fill the form.
 
-**Option A — QA the 4 scraper fixes in production.** ✅ All 4 workflows triggered this session (KY #6, IN, ME, AL). Check GitHub Actions results + Railway DB record counts. KY verification key — if returns 0 records with no error, fix control IDs in `kentuckyPhase2Scraper.ts` (<20 lines).
+5. **BetaList (#487)** — Create account at betalist.com, then Claude can fill the submission form.
 
-**Option B — Build the Playwright harness (headless scraper unblock).** 26 scrapers are currently blocked by JS rendering + WAF. One shared Playwright + residential-proxy runner unblocks them all. ROI confirmed: NAA alone (5,000+ national auction house records) justifies the 20–30 hr build cost. Start with Playwright-only (18 scrapers, $0/month) — ME Licensing, OH, TN, MO, WI, WY, NAA, NFMA, StorageTreasures, etc.
+6. **SaaSHub (#480)** — Create account at saashub.com and claim listing at saashub.com/finda-sale (to upload logo, set pricing, receive approval notifications).
 
-**Option C — Retire the 5 dead scraper stubs + update decisions-log.** NY/NJ/MA-phase1/RI auctioneer + NE-phase1: all confirmed covered by other live scrapers (see Task B report). Formally retire in `decisions-log.md` (not just "park") and disable/remove the dead workflow YAMLs.
+7. **Roundup outreach** — Send 3 emails from `claude_docs/brand/roundup-outreach-emails-2026-06-11.md`. Send order: Gitnux → WifiTalents → DIYAuctions.
+
+### S956 — Suggested Work
+
+**Option A — AlternativeTo + Crunchbase + BetaList.** Patrick creates accounts for Crunchbase and BetaList, then Claude fills forms. AlternativeTo unblocks June 18.
+
+**Option B — QA the 4 scraper fixes in production.** Check GitHub Actions results + Railway DB record counts for KY/IN/ME/AL. KY verification key — 0 records with no error = fix control IDs in `kentuckyPhase2Scraper.ts`.
+
+**Option C — Build the Playwright harness (headless scraper unblock).** 26 scrapers blocked by JS rendering + WAF. One shared Playwright + residential-proxy runner unblocks all. ROI: NAA alone (5,000+ national auction house records) justifies 20–30 hr build cost.
 
 
 ## Recent Sessions
+
+### S956 — 2026-06-11 | RESEARCH/CREATIVE (Directory & App Listing Submissions)
+
+**Session type:** RESEARCH/CREATIVE — directory and app listing submission push
+
+**Work completed:**
+- **SaaSHub ✅ SUBMITTED** — saashub.com/finda-sale live (contact: info@finda.sale). Patrick should create account to claim.
+- **Uneed ✅ SUBMITTED** — uneed.best/tool/finda-sale in waiting line. Account: deseee-d1f4. Category: Business. Tags: E-Commerce/Business/Events. Tagline: "Inventory & shopper discovery for secondary sale organizers". Organizer-focused description. Product saved ✅ (ss_1979jujgs "Product updated").
+- **AlternativeTo ⏳ BLOCKED** — account "FindASale" created June 11; 7-day age gate. Eligible June 18 ~9:49 PM Stockholm. Patrick must return then to submit.
+- **Product Hunt assets ✅** — `claude_docs/brand/product-hunt-assets-2026-06-11.md`. Tagline, 240-char description, maker comment, Q&As, topic tags, screenshot order, hunter guidance.
+- **Roundup outreach emails ✅** — `claude_docs/brand/roundup-outreach-emails-2026-06-11.md`. 3 emails for Gitnux, WifiTalents, DIYAuctions. Send order: Gitnux first.
+- **Crunchbase + BetaList ⏳ PENDING** — Patrick needs to create accounts; Claude ready to fill forms.
+
+**Files created:**
+- `claude_docs/brand/product-hunt-assets-2026-06-11.md`
+- `claude_docs/brand/roundup-outreach-emails-2026-06-11.md`
+- `claude_docs/STATE.md` — this wrap
+- `claude_docs/patrick-dashboard.md` — updated
+- `claude_docs/strategy/roadmap.md` — #477/#478/#480/#484/#487/#488 updated
+
+**BQ delta:** 1 (unchanged — #470 organizer_signup UNVERIFIED)
 
 ### S954 — 2026-06-11 | DEV (S952 Scraper Fix Campaign)
 
