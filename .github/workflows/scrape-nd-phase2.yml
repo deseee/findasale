@@ -1,37 +1,36 @@
-name: Scrape Connecticut Pawnbroker Licenses (Phase 2)
+name: Scrape North Dakota Secondary Sale Licenses (Phase 2)
 
 on:
   schedule:
-    # Monday 10:15 UTC
-    - cron: '15 10 * * 1'
+    - cron: '20 3 * * 1'
   workflow_dispatch:
 
 jobs:
   scrape:
-    name: Connecticut Phase 2 Pawnbroker Scraper
+    name: North Dakota Phase 2 Secondary Sale Scraper
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
+        run: corepack enable
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-
-      - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
-        run: corepack enable
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-
       - name: Generate Prisma client
         run: npx prisma generate
         working-directory: packages/database
+
       - name: Verify database connectivity
         run: |
           python3 -c "
@@ -54,20 +53,20 @@ jobs:
               sys.exit(1)
           "
 
-      - name: Run Connecticut Phase 2 Scraper
+      - name: Run North Dakota Phase 2 Scraper
         working-directory: packages/backend
         env:
           DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
           npx tsx -e '
-            import { runConnecticutPhase2Scraper } from "./src/services/scraper/sources/connecticutPhase2Scraper";
+            import { runNorthDakotaPhase2Scraper } from "./src/services/scraper/sources/northDakotaPhase2Scraper";
             (async () => { try {
-              await runConnecticutPhase2Scraper();
-              console.log("Connecticut Phase 2 scraper completed successfully");
+              await runNorthDakotaPhase2Scraper();
+              console.log("North Dakota Phase 2 scraper completed successfully");
               process.exit(0);
             } catch (err) {
-              console.error("Connecticut Phase 2 scraper failed:", err);
+              console.error("North Dakota Phase 2 scraper failed:", err);
               process.exit(1);
             }
             })();
