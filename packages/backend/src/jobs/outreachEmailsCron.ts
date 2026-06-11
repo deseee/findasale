@@ -266,36 +266,55 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
       status: { notIn: ['BOUNCED', 'OPTED_OUT', 'CLAIMED', 'ARCHIVED'] },
       organizer: {
         directoryStatus: { not: 'CLOSED' },
-        // Only legitimate organizer types (estate sale, auction, antique, consignment, etc.).
-        // NULL businessCategory is ALSO eligible: those organizers were already filtered at
-        // seed time by autoSeedOutreachCron — the existence of a DirectoryClaimEmail row IS
-        // the eligibility signal. Excluding NULL silently hid ~1,661 legitimate leads forever.
-        OR: [
+        // BUG FIX (S948): Null-safe GarageSaleFinder exclusion.
+        // The original `NOT: [{ directoryMostRecentSource: 'GarageSaleFinder' }]` generated
+        // SQL: `NOT (directoryMostRecentSource = 'GarageSaleFinder')` which evaluates to
+        // `NOT NULL = NULL` (falsy) for records where directoryMostRecentSource IS NULL,
+        // silently excluding every null-source US organizer from all tier passes.
+        // 22 organizers were stuck for up to 31 days (May 11–June 11 2026).
+        // Fix: nest in AND + null-safe OR so null-source records pass the check correctly.
+        AND: [
           {
-            businessCategory: {
-              in: [
-                'ESTATE_SALE_CO',
-                'AUCTION_HOUSE',
-                'ANTIQUE_MALL',
-                'ANTIQUE_DEALER',
-                'CONSIGNMENT',
-                'THRIFT_STORE',
-                'FLEA_MARKET',
-                'VINTAGE',
-                'LIQUIDATION',
-                'USED_FURNITURE',
-                'PAWN_SHOP',
-                'USED_BOOKSTORE',
-                'RECORD_STORE',
-                'USED_ELECTRONICS',
-                'COIN_DEALER',
-                'RESALE_SHOP',
-                'USED_SPORTING_GOODS',
-                'JEWELRY_RESALE',
-              ],
-            },
+            // Exclude GarageSaleFinder (consumer homeowner posts, not organizer businesses).
+            // NULL source must pass — those are legitimate leads with no source attribution.
+            OR: [
+              { directoryMostRecentSource: null },
+              { directoryMostRecentSource: { not: 'GarageSaleFinder' } },
+            ],
           },
-          { businessCategory: null },
+          {
+            // Only legitimate organizer types. NULL businessCategory is ALSO eligible:
+            // seeded organizers without a category still qualify — their existence in
+            // DirectoryClaimEmail IS the eligibility signal. Excluding NULL silently
+            // hid ~1,661 legitimate leads forever (prior fix).
+            OR: [
+              {
+                businessCategory: {
+                  in: [
+                    'ESTATE_SALE_CO',
+                    'AUCTION_HOUSE',
+                    'ANTIQUE_MALL',
+                    'ANTIQUE_DEALER',
+                    'CONSIGNMENT',
+                    'THRIFT_STORE',
+                    'FLEA_MARKET',
+                    'VINTAGE',
+                    'LIQUIDATION',
+                    'USED_FURNITURE',
+                    'PAWN_SHOP',
+                    'USED_BOOKSTORE',
+                    'RECORD_STORE',
+                    'USED_ELECTRONICS',
+                    'COIN_DEALER',
+                    'RESALE_SHOP',
+                    'USED_SPORTING_GOODS',
+                    'JEWELRY_RESALE',
+                  ],
+                },
+              },
+              { businessCategory: null },
+            ],
+          },
         ],
         // Respect suppressOutreach flag
         suppressOutreach: false,
@@ -303,10 +322,7 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
         // Canadian orgs are identified by province abbreviation or full name in the address field
         // (no country column on Organizer — detection is address-string based).
         // To enable Canada outreach: set OUTREACH_CANADA_ENABLED=true in Railway env vars.
-        // Exclude consumer posts from GarageSaleFinder — homeowner yard sale listings,
-        // not organizer businesses. Retained for shopper-side discovery; never outreach targets.
         NOT: [
-          { directoryMostRecentSource: 'GarageSaleFinder' },
           ...(process.env.OUTREACH_CANADA_ENABLED === 'true' ? [] : [
             { address: { contains: ', ON', mode: 'insensitive' } },
             { address: { contains: ', BC', mode: 'insensitive' } },
