@@ -6,27 +6,19 @@ export async function getServerSideProps(ctx: any) {
     const baseUrl = process.env.SITE_URL || 'https://finda.sale';
 
     // Fetch all sales and tags to generate URLs
-    const salesResponse = await api.get('/sales');
+    const salesResponse = await api.get('/sales/sitemap');
     const sales = salesResponse.data.sales || salesResponse.data;
 
     const tagsResponse = await api.get('/tags/popular');
     const tags = tagsResponse.data.tags || [];
 
-    // Extract unique cities and zips for landing pages
-    const cities = Array.from(new Set<string>(sales.map((sale: any) =>
-      sale.city.toLowerCase().replace(/\s+/g, '-')
-    )));
-    const zips = Array.from(new Set<string>(
-      sales.map((sale: any) => sale.zip).filter(Boolean)
-    ));
-
-    // Extract unique neighborhoods from sales
-    const neighborhoods = Array.from(new Set<string>(
-      sales
-        .map((sale: any) => sale.neighborhood)
-        .filter(Boolean)
-        .map((n: string) => n.toLowerCase().replace(/\s+/g, '-'))
-    ));
+    // Note: /sales/sitemap returns only id+updatedAt for performance.
+    // City slugs come from the dedicated /sales/city-slugs endpoint below.
+    // Zip and neighborhood URLs derived from sales are intentionally empty here
+    // (those were never the canonical source anyway).
+    const cities: string[] = [];
+    const zips: string[] = [];
+    const neighborhoods: string[] = [];
 
     // Generate priority discovery pages
     const discoveryPages = [
@@ -55,10 +47,10 @@ export async function getServerSideProps(ctx: any) {
       priority: page.priority,
     }));
 
-    // Generate sale URLs (only active/upcoming sales for SEO)
+    // Generate sale URLs (only published sales for SEO)
     const saleUrls = Array.isArray(sales)
       ? sales
-          .filter((sale: any) => sale.status === 'ACTIVE' || sale.status === 'UPCOMING')
+          .filter((sale: any) => sale.status === 'PUBLISHED')
           .map((sale: any) => ({
             loc: `${baseUrl}/sales/${sale.id}`,
             lastmod: sale.updatedAt
@@ -66,8 +58,8 @@ export async function getServerSideProps(ctx: any) {
               : sale.createdAt
               ? new Date(sale.createdAt).toISOString()
               : new Date().toISOString(),
-            changefreq: 'hourly',
-            priority: 0.9,
+            changefreq: 'daily',
+            priority: 0.8,
           }))
       : [];
 

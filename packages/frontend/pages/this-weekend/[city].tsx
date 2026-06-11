@@ -395,6 +395,7 @@ export const getStaticProps: GetStaticProps<ThisWeekendPageProps> = async ({ par
       weekendStart: friday.toISOString(),
       weekendEnd: sunday.toISOString(),
     },
-    revalidate: 14400, // ISR: 4 hours
+    // ISR: 4 hours Thu–Sat (peak browsing days), twice/day Sun–Wed (off-peak)
+    revalidate: new Date().getDay() >= 4 ? 14400 : 43200,
   };
 };
