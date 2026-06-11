@@ -2543,7 +2543,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     if (!res.ok) {
       if (res.status === 404) {
         // Unknown/deleted sale — return 404 but allow ISR to recheck periodically
-        return { notFound: true, revalidate: 3600 };
+        return { notFound: true, revalidate: 86400 };
       }
       return {
         props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false },
@@ -2554,7 +2554,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
 
     if (!sale?.id || !sale?.title) {
       // Sale body empty or malformed — treat as deleted/missing → proper HTTP 404
-      return { notFound: true, revalidate: 3600 };
+      return { notFound: true, revalidate: 86400 };
     }
 
     const ogData: OGSaleData = {
@@ -2634,7 +2634,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
 
     return {
       props: { ogData, initialData, eventSeriesData, noindex },
-      revalidate: 3600,
+      revalidate: 86400,
     };
   } catch (err) {
     // Network/timeout/parse failure — render the shell, let the client fetch and ISR retry
