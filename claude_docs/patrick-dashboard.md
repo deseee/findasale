@@ -1,6 +1,28 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S951 — 2026-06-11
+**Last updated:** S953 — 2026-06-11
+
+---
+
+## Session S953 Summary — Email Infrastructure Audit + Forwarding Fix
+
+**Type:** INFRA/OPS — full email-address audit, ImprovMX forwarding fix, Resend suppression cleanup
+**BQ:** 1 (unchanged)
+
+Audited every `@finda.sale` address across Gmail, MailerLite, Resend, the codebase, and live DNS. Two real problems found and fixed:
+
+| Problem | Fix | Status |
+|---------|-----|--------|
+| Only `support`/`patrick`/`outreach` were aliased in ImprovMX — mail to **legal@, privacy@, info@, contact@, receipts@ was silently dropping** (legal@ + privacy@ are on your DMCA/GDPR pages = real risk) | You added the 5 missing aliases + a **catch-all (`*`)** | ✅ all verified forwarding to your Gmail |
+| Earlier forwarding tests (sent before the aliases existed) had **Resend-suppressed** legal@/privacy@/info@ + written 4 junk DB rows | Removed all 3 from Resend's suppression list (dashboard) + deleted the 4 DB rows; re-sent | ✅ all delivered + forwarded |
+
+**Good to know:**
+- Your `support@` mail auto-files under the Gmail **FindASale/Support** label (unread) — that's why inbound support mail looked missing. Worth checking that label.
+- Rule recorded: never test internal `@finda.sale` forwarding via Resend/the app (it's zone-blocked AND a bounce poisons the address) — use ImprovMX's per-alias **TEST** button instead.
+
+**Doc:** new `feature-notes/email-infrastructure-map.md` (addresses, forwarding, DNS, providers, Resend-suppression how-to) — the inbound companion to the existing sending-rails map.
+
+> Note: the S952 (G2/growth) session updated STATE.md but did not add a dashboard summary — that gap is pre-existing, not from this session.
 
 ---
 

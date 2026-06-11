@@ -164,4 +164,4 @@ GitHub Actions workflow (scheduled)
 
 ## Related — Inbound / Infrastructure side
 
-This doc maps the **sending** rails. For the **receiving** side — every `@finda.sale` address, ImprovMX forwarding aliases, the catch-all, DNS records, provider accounts, and how to clear a Resend suppression — see the companion: **`feature-notes/email-infrastructure-map.md`** (S952).
+This doc maps the **sending** rails. For the **receiving** side — every `@finda.sale` address, ImprovMX forwarding aliases, the catch-all, DNS records, provider accounts, and how to clear a Resend suppression — see the companion: **`feature-notes/email-infrastructure-map.md`** (S953).

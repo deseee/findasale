@@ -2,7 +2,7 @@
 
 > **Purpose:** The durable reference for the **receiving / addressing / DNS / provider-account** side of FindA.Sale email — every `@finda.sale` address, what it's for, where it surfaces, and where inbound mail goes.
 > **Companion doc (sending side):** `feature-notes/email-outreach-scraper-system-map.md` — the code-verified map of the 3 *send* rails. This file is the *inbound + infrastructure* map; that file is the *outbound code* map.
-> **Last verified:** S952 (2026-06-11) — DNS re-checked live via `dig`; ImprovMX aliases + Resend suppression list confirmed in their dashboards; address inventory from `grep` over `packages/`.
+> **Last verified:** S953 (2026-06-11) — DNS re-checked live via `dig`; ImprovMX aliases + Resend suppression list confirmed in their dashboards; address inventory from `grep` over `packages/`.
 > No date suffix — this is a living reference. Update it in place when addresses, aliases, DNS, or providers change.
 
 ---
@@ -22,7 +22,7 @@
 
 ---
 
-## 2. DNS Records (live, verified S952 via `dig`)
+## 2. DNS Records (live, verified S953 via `dig`)
 
 **Root `finda.sale`**
 - **MX:** `10 mx1.improvmx.com`, `20 mx2.improvmx.com` → inbound forwarding via ImprovMX
@@ -45,17 +45,17 @@ Root `finda.sale` MX points at ImprovMX. **Every alias below forwards to `deseee
 
 | Alias | Forwards to | Notes |
 |---|---|---|
-| `*` (catch-all) | deseee@gmail.com | Added S952 — guarantees nothing is silently dropped |
+| `*` (catch-all) | deseee@gmail.com | Added S953 — guarantees nothing is silently dropped |
 | `support@` | deseee@gmail.com | Public contact address (see §4) |
-| `contact@` | deseee@gmail.com | Added S952 |
-| `info@` | deseee@gmail.com | Added S952 |
-| `legal@` | deseee@gmail.com | Added S952 — DMCA / legal pages |
-| `privacy@` | deseee@gmail.com | Added S952 — GDPR / privacy page |
-| `receipts@` | deseee@gmail.com | Added S952 |
+| `contact@` | deseee@gmail.com | Added S953 |
+| `info@` | deseee@gmail.com | Added S953 |
+| `legal@` | deseee@gmail.com | Added S953 — DMCA / legal pages |
+| `privacy@` | deseee@gmail.com | Added S953 — GDPR / privacy page |
+| `receipts@` | deseee@gmail.com | Added S953 |
 | `patrick@` | deseee@gmail.com | Pre-existing |
 | `outreach@` | deseee@gmail.com | Pre-existing — also catches outreach bounce DSNs |
 
-**History (S952):** before this session only `support`, `patrick`, `outreach` were aliased. Mail to `legal@`, `privacy@`, `info@`, `contact@`, `receipts@` was being silently rejected by ImprovMX (no alias → bounce to sender, which itself had no alias → vanished). Patrick added the five missing aliases + a catch-all; all verified forwarding to Gmail.
+**History (S953):** before this session only `support`, `patrick`, `outreach` were aliased. Mail to `legal@`, `privacy@`, `info@`, `contact@`, `receipts@` was being silently rejected by ImprovMX (no alias → bounce to sender, which itself had no alias → vanished). Patrick added the five missing aliases + a catch-all; all verified forwarding to Gmail.
 
 **Gmail routing gotcha:** a Gmail filter auto-files everything to `support@` (and contact-form notifications) under the **`FindASale/Support`** label, where it lands **unread** and skips the primary inbox. This is why inbound support mail "looked missing." Check that label, or loosen the filter.
 
@@ -88,7 +88,7 @@ Three outbound paths. See `email-outreach-scraper-system-map.md` for code-level 
 
 ---
 
-## 6. Resend Suppression — mechanism & how to clear (S952 learnings)
+## 6. Resend Suppression — mechanism & how to clear (S953 learnings)
 
 **How it works:** when a send hard-bounces, Resend adds the recipient to its **account-level suppression list**. Future sends to that address are **not delivered** — Resend self-generates a bounce and marks the email **"Suppressed"** in the Emails log (this does NOT count toward the bounce-rate metric). A webhook (`routes/outreach.ts`) mirrors these bounces into the local **`EmailSuppression`** DB table (`addSuppression`).
 
@@ -100,7 +100,7 @@ Three outbound paths. See `email-outreach-scraper-system-map.md` for code-level 
 
 **GOTCHA — never test internal `@finda.sale` forwarding by sending through Resend (or any app rail).** The zone is code-blocked anyway, and a bounce poisons that address in Resend's list. To test inbound forwarding, use **ImprovMX's per-alias `TEST` button** — it routes straight through ImprovMX, bypasses Resend, and creates no bounces.
 
-**S952 incident (self-inflicted, resolved):** testing forwarding for `legal@`/`privacy@`/`info@` via Resend *before* their ImprovMX aliases existed hard-bounced them → Resend-suppressed + 4 `EmailSuppression` DB rows. Fix: removed all three from the Resend suppression list (dashboard), deleted the 4 DB rows, re-sent — all delivered and forwarded to Gmail. `receipts@` was only a soft bounce (never suppressed).
+**S953 incident (self-inflicted, resolved):** testing forwarding for `legal@`/`privacy@`/`info@` via Resend *before* their ImprovMX aliases existed hard-bounced them → Resend-suppressed + 4 `EmailSuppression` DB rows. Fix: removed all three from the Resend suppression list (dashboard), deleted the 4 DB rows, re-sent — all delivered and forwarded to Gmail. `receipts@` was only a soft bounce (never suppressed).
 
 ---
 
