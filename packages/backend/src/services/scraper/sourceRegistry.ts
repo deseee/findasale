@@ -118,7 +118,7 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     displayName: 'NAA Find an Auctioneer',
     type: 'directory',
     runMode: 'national-once',
-    enabled: true,
+    enabled: false, // PARKED — Novi AMS JS-rendered platform returns zero records via static fetch. Workflow disabled (scrape-naa.yml). Unpark: Playwright or Novi AMS API. Verified broken 2026-05-23.
     qualityTier: 'high',
     legalNote: 'Public member directory — no ToS prohibition found',
     run: scrapeNAADirectory,
@@ -172,9 +172,10 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     displayName: 'StorageAuctions.net',
     type: 'directory',
     runMode: 'national-once',
-    enabled: false, // PARKED — AngularJS-rendered, no static listings. See storageAuctionsNetScraper.ts.
+    enabled: true,
+    // No cronSchedule — triggered via GitHub Actions (scrape-storageauctionsnet.yml, Thursdays 09:00 UTC).
     qualityTier: 'low',
-    legalNote: 'ToS confirmed CLEAR — blank robots.txt Disallow. Site is JS-rendered; parked pending headless browser implementation.',
+    legalNote: 'ToS confirmed CLEAR — blank robots.txt Disallow. Real API endpoint: GET /block/auction/getallonline/{page}/esoon (unauthenticated JSON). ~32 active auctions / ~2 pages at any time. update.storageauctions.net is a WebSocket/push server (all REST paths 404) — not the data API. Confirmed reachable 2026-06-10.',
     run: scrapeStorageAuctionsNet,
   },
   {
