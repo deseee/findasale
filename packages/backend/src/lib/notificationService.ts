@@ -1,6 +1,6 @@
 import { prisma } from './prisma';
 import { emailService } from './emailService';
-import { suppressionService } from '../services/suppressionService';
+import { suppressionService, isEmailDomainBlocked } from '../services/suppressionService';
 
 interface CreateNotificationInput {
   userId: string;
@@ -47,9 +47,9 @@ export const createNotification = async (input: CreateNotificationInput) => {
         const isPlaceholder =
           !recipient ||
           !recipient.includes('@') ||
-          recipient.toLowerCase().endsWith('@system.finda.sale');
+          isEmailDomainBlocked(recipient);
         if (isPlaceholder) {
-          console.log(`[notificationService] Skipping email to placeholder address: ${recipient}`);
+          console.log(`[NotificationService] Skipping blocked/placeholder recipient: ${recipient}`);
         } else if (await suppressionService.isSuppressed(recipient)) {
           console.log(`[notificationService] Skipping suppressed recipient: ${recipient}`);
         } else {

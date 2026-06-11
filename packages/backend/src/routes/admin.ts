@@ -62,6 +62,8 @@ import {
   getScrapedSales,
   emergencyTakedown,
 } from '../controllers/scraperController';
+import { isEmailDomainBlocked } from '../services/suppressionService';
+import { sendTestEmailLimiter } from '../middleware/rateLimiter';
 const router = express.Router();
 
 // All admin routes require authentication and admin role
@@ -357,7 +359,7 @@ router.get('/organizers/confidence', async (req: any, res: any) => {
 // Feature #472: POST /admin/send-test-email — allows automation (e.g. Claude via Chrome MCP)
 // to send test emails without manual Gmail interaction.
 // Rail defaults to 'resend' (reliable transactional rail). Gmail fallback via rail='gmail'.
-router.post('/send-test-email', async (req: any, res: any) => {
+router.post('/send-test-email', sendTestEmailLimiter, async (req: any, res: any) => {
   try {
     const { to, subject, body, rail = 'resend' } = req.body as {
       to: string;
@@ -391,6 +393,11 @@ router.post('/send-test-email', async (req: any, res: any) => {
     }
 
     const toAddress = to.trim();
+
+    // Domain block guard — applies to both rails (belt-and-suspenders)
+    if (isEmailDomainBlocked(toAddress)) {
+      return res.status(400).json({ success: false, error: 'Recipient domain blocked — cannot send to this address' });
+    }
 
     if (rail === 'gmail') {
       // Gmail rail — uses existing emailService (Gmail API via OAuth2, quota-gated)
