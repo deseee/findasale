@@ -159,3 +159,9 @@ GitHub Actions workflow (scheduled)
 **`SENDABLE_FINDA_SALE_ADDRESSES` (env, optional):** comma-separated extra internal @finda.sale inboxes the app is allowed to send to (e.g. `info@finda.sale,patrick@finda.sale`). Read in `suppressionService.ts` (`SENDABLE_INTERNAL_ALLOWLIST`). Default empty. **If Patrick ever creates a new internal finda.sale mailbox that the app must email, add it to this env var (Railway + .env) — otherwise the zone filter will silently drop it.** No code change needed.
 
 **Rail suppression floor (S937):** both rails block unsendable-domain + hard-bounce + complaint. Opt-out and soft-bounce do NOT block at the rail (so transactional mail still reaches unsubscribed users); bulk/marketing senders layer full `isSuppressed()` (incl. opt-out + soft-bounce) on top.
+
+---
+
+## Related — Inbound / Infrastructure side
+
+This doc maps the **sending** rails. For the **receiving** side — every `@finda.sale` address, ImprovMX forwarding aliases, the catch-all, DNS records, provider accounts, and how to clear a Resend suppression — see the companion: **`feature-notes/email-infrastructure-map.md`** (S952).
