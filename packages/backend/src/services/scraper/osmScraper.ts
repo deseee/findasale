@@ -11,8 +11,11 @@
  * - craft=auctioneer
  *
  * Rate limiting: 2s delay between metro queries (Overpass policy)
- * Timeout: 60s per query
- * Coverage: 124 metros across all 50 states
+ * Timeout: 120s per query (server-side [timeout:120] + client AbortSignal 150s)
+ * Coverage: 137 metros across all 50 states
+ *
+ * Batching: Pass batchIndex + batchCount to run a subset of metros in parallel
+ * (used by GitHub Actions matrix strategy — 6 batches of ~23 metros each)
  */
 
 import { getOrCreateScrapedOrganizer } from './index';
@@ -32,7 +35,7 @@ interface OverpassResponse {
 
 /**
  * Metro bounding boxes: [south, west, north, east]
- * 124 metros covering all 50 states
+ * 137 metros covering all 50 states
  */
 const METRO_BOUNDING_BOXES: Record<string, [number, number, number, number]> = {
   // ── Northeast ──────────────────────────────────────────────────────────────
@@ -188,12 +191,13 @@ const METRO_BOUNDING_BOXES: Record<string, [number, number, number, number]> = {
 /**
  * Build Overpass QL query for a bounding box.
  * Queries: antiques, secondhand, used_goods, auction_house, auctioneer
+ * server-side [timeout:120] allows up to 120s for dense metro areas
  */
 function buildOverpassQuery(bbox: [number, number, number, number]): string {
   const [south, west, north, east] = bbox;
   const bboxStr = `${south},${west},${north},${east}`;
 
-  return `[out:json][timeout:60];
+  return `[out:json][timeout:120];
 (
   node["shop"="antiques"](${bboxStr});
   node["shop"="secondhand"](${bboxStr});
@@ -208,13 +212,14 @@ out center;`;
 }
 
 /**
- * Query Overpass API for a single metro bounding box
+ * Query Overpass API for a single metro bounding box.
+ * Uses overpass-api.de (canonical server) with 150s client timeout.
  */
 async function queryOverpassApi(metro: string, bbox: [number, number, number, number]): Promise<OSMNode[]> {
   const query = buildOverpassQuery(bbox);
 
   try {
-    const response = await fetch('https://overpass.kumi.systems/api/interpreter', {
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
       body: `data=${encodeURIComponent(query)}`,
       headers: {
@@ -222,7 +227,7 @@ async function queryOverpassApi(metro: string, bbox: [number, number, number, nu
         'Accept': '*/*',
         'User-Agent': 'Mozilla/5.0 (compatible; FindASale/1.0)',
       },
-      signal: AbortSignal.timeout(65000),
+      signal: AbortSignal.timeout(150000),
     });
 
     if (!response.ok) {
@@ -273,11 +278,23 @@ function mapOsmToOrganizer(
 }
 
 /**
- * Main OSM scraper — queries all metros, deduplicates, ingests to database
+ * Main OSM scraper — queries a batch of metros, deduplicates, ingests to database.
+ *
+ * @param batchIndex - 0-based index of this batch (default: 0 = run all)
+ * @param batchCount - total number of batches (default: 1 = run all)
  */
-export async function runOsmScraper(): Promise<void> {
-  const metroList = Object.entries(METRO_BOUNDING_BOXES);
-  console.log(`[osmScraper] Starting Overpass API scraper — ${metroList.length} metros...`);
+export async function runOsmScraper(batchIndex = 0, batchCount = 1): Promise<void> {
+  const allMetros = Object.entries(METRO_BOUNDING_BOXES);
+
+  // Slice metros for this batch
+  const metroList = batchCount <= 1
+    ? allMetros
+    : allMetros.filter((_, i) => i % batchCount === batchIndex);
+
+  console.log(
+    `[osmScraper] Starting Overpass API scraper — batch ${batchIndex + 1}/${batchCount}, ` +
+    `${metroList.length} metros (of ${allMetros.length} total)...`
+  );
 
   const allItems: Array<{
     name: string;
@@ -349,6 +366,6 @@ export async function runOsmScraper(): Promise<void> {
   }
 
   console.log(
-    `[osmScraper] Complete — ${created} created/updated, ${failed} failed`
+    `[osmScraper] Batch ${batchIndex + 1}/${batchCount} complete — ${created} created/updated, ${failed} failed`
   );
 }

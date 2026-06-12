@@ -1,30 +1,26 @@
 /**
  * ADR-078: OpenStreetMap Overpass API Scraper — GitHub Actions runner
- * Queries Overpass API across 20 US metros for antique/secondhand/auction businesses.
- * POSTs results to Railway backend for ingestion.
+ * Queries Overpass API across US metros for antique/secondhand/auction businesses.
+ * Writes results directly to the Railway PostgreSQL database via Prisma.
  *
  * Environment variables (from GitHub secrets):
- * - RAILWAY_BACKEND_URL: https://backend-production-xxx.up.railway.app
- * - INTERNAL_SCRAPER_KEY: shared secret for /api/internal/scraper/ingest
+ * - DATABASE_URL: Railway PostgreSQL connection string
+ * - SCRAPER_BATCH_INDEX: 0-based batch index (default: 0)
+ * - SCRAPER_BATCH_COUNT: total batches (default: 1 = run all metros)
  *
- * Usage: npx ts-node src/scripts/run-osm.ts
+ * Usage: npx tsx src/scripts/run-osm.ts
  * Cost: Free (Overpass is public)
  */
 
 import { runOsmScraper } from '../services/scraper/osmScraper';
-import { ScrapedItem } from '../services/scraper/index';
 
-const INGEST_URL =
-  (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') + '/api/internal/scraper/ingest';
-const SCRAPER_KEY = process.env.INTERNAL_SCRAPER_KEY;
+const batchIndex = parseInt(process.env.SCRAPER_BATCH_INDEX ?? '0', 10);
+const batchCount = parseInt(process.env.SCRAPER_BATCH_COUNT ?? '1', 10);
 
 async function main() {
-  if (!SCRAPER_KEY) throw new Error('INTERNAL_SCRAPER_KEY is not set');
+  console.log(`[run-osm] Batch ${batchIndex + 1}/${batchCount}`);
 
-  console.log(`[run-osm] Backend: ${INGEST_URL}`);
-
-  // Run the scraper — it logs progress internally
-  await runOsmScraper();
+  await runOsmScraper(batchIndex, batchCount);
 
   console.log('[run-osm] Scraping complete');
 }
