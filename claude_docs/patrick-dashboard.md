@@ -1,6 +1,21 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S962 — 2026-06-12 (wrap)
+**Last updated:** S963 — 2026-06-12 (wrap + #27c verified + SaaSHub claimed + KY/ME done)
+
+---
+
+## Session S963 Summary — #27c eBay CSV Fix ✅ + SellMyAntiques Dead + Records Pass (COMPLETE)
+
+**Type:** DEV/RECORDS/WRAP — bug fix, scraper investigation, records pass, session wrap
+**BQ:** 1→0 (#27c FIXED; pending Chrome verify)
+
+| Item | Status | Details |
+|------|--------|---------|
+| #27c eBay CSV Export | ✅ FIXED + VERIFIED | Railway root cause: `ERR_INVALID_CHAR` in Content-Disposition. Fix: `safeTitle` strips special chars. Chrome verified S963: em-dash + ampersand title → CSV downloads with success toast. ss_6584f6gkh ss_1265m9qvy |
+| SellMyAntiques scraper | ⛔ PARKED | Domain is GoDaddy lander as of 2026-06-12 — all paths redirect to /lander. Prior status (2026-06-10): JS-rendered SPA. Domain defunct. Docs updated. |
+| S962 PCVs → roadmap.md | ✅ DONE | Records pass: #127 POS Tiers, #55 Seasonal Challenges, #218 Shopper Trades, #219 Achievements, #81 Empty States → all ✅ S962 in Chrome QA column. |
+| SaaSHub (#480) | ✅ CLAIMED | Patrick logged in + claimed listing. Edit page live at saashub.com/manage/finda-sale/edit. "FindA.Sale was verified." banner confirmed. |
+| KY/ME workflows | ✅ TRIGGERED | Patrick triggered scrape-kentucky-phase2 + scrape-maine-phase2 workflow_dispatch. S959 scraper fixes verified. |
 
 ---
 
@@ -25,25 +40,18 @@
 
 | Action | Priority | Instructions |
 |--------|----------|-------------|
-| Push S960 scraper changes | HIGH | See pushblock in S960 STATE.md entry — Bid13 scraper activation |
-| Trigger Bid13 workflow | HIGH | After push: GitHub Actions → `scrape-bid13` → Run workflow |
-| Send Gitnux email | HIGH | Gmail Drafts → draft to info@gitnux.org (ID r-4990707302036889022) → Send |
-| Send WifiTalents email | HIGH | Gmail Drafts → draft to info@wifitalents.com (ID r-8399856770625698902) → Send |
-| DELETE DIYAuctions draft | HIGH | Gmail Drafts → draft to business@diyauctions.com (ID r1579106969886718270) → Delete (competitor!) |
-| SaaSHub account | MEDIUM | Create account at saashub.com → claim saashub.com/finda-sale |
-| AlternativeTo | MEDIUM | June 18, 2026 ~9:49 PM Stockholm — log in as "FindASale" → alternativeto.net → Add Software |
-| Trigger KY/ME workflows | MEDIUM | GitHub Actions → `scrape-kentucky-phase2` + `scrape-maine-phase2` → Run workflow |
+| **Push S963 wrap docs** | HIGH | See push block below |
+| AlternativeTo | HIGH — June 18, 2026 | Log in as "FindASale" → alternativeto.net → Add Software |
 
 ---
 
-## Push Block (S962)
+## Push Block (S963 wrap)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "qa(s962): Chrome QA #219/#218/#55/#81/#127 ✅ + #27c eBay export bug found + S961 records pass applied"
+git commit -m "S963 wrap: update STATE.md + patrick-dashboard.md"
 .\push.ps1
 ```
 

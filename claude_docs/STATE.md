@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S963 — DEV/RECORDS (2026-06-12). Records pass: S962 PCVs (#219/#218/#55/#81/#127) applied to roadmap.md Chrome QA columns. #27c eBay CSV Export fixed: safeTitle sanitization in ebayController.ts L710 (TypeError Invalid char in Content-Disposition). BQ: 1→0.**
+**S963 — DEV/RECORDS/WRAP (2026-06-12). Records pass: S962 PCVs applied. #27c FIXED + CHROME VERIFIED ✅ (em-dash/ampersand title → CSV downloads clean, no 500). SellMyAntiques domain parked. SaaSHub #480 CLAIMED by Patrick. KY/ME workflow triggers DONE. BQ: 1→0.**
 
 **S962 — QA (2026-06-12). Records pass: #74 + #463 S961 PCVs applied to roadmap.md. Chrome QA: #219 ✅, #218 ✅, #55 ✅, #81 ✅ spot-check, #127 ✅. Bug found: #27c eBay CSV export → HTTP 500. BQ: 0→1.**
 
@@ -94,40 +94,54 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### Patrick — Actions Needed (post S960)
+### Patrick — Actions Needed (post S963)
 
-1. **Push S960 scraper changes:**
+1. **Push S963 changes:**
    ```
    cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/backend/src/services/scraper/sources/bid13Scraper.ts
+   git add packages/backend/src/controllers/ebayController.ts
+   git add packages/backend/src/services/scraper/sources/sellMyAntiquesScraper.ts
    git add packages/backend/src/services/scraper/sourceRegistry.ts
-   git add .github/workflows/scrape-bid13.yml
-   git add packages/backend/src/services/scraper/sources/nfmaMembersScraper.ts
-   git add .github/workflows/scrape-nfma-members.yml
-   git commit -m "feat(scrapers): activate Bid13 API scraper + park NFMA (login-gated)"
+   git add claude_docs/strategy/roadmap.md
+   git add claude_docs/STATE.md
+   git add claude_docs/patrick-dashboard.md
+   git commit -m "S963: fix eBay CSV export HTTP 500 (Content-Disposition); update SellMyAntiques status to domain-parked; records pass S962 PCVs to roadmap"
    .\push.ps1
    ```
 
-2. **Trigger Bid13 workflow** — After push, go to GitHub Actions → `scrape-bid13` → Run workflow. Verify it completes without errors and DB upserts appear.
+2. **SaaSHub (#480)** — Claim saashub.com/finda-sale (page open in Chrome). Create account, add logo/pricing/description.
 
-3. **Roundup Gmail drafts — SEND + DELETE.** (carried from S958) Open Gmail Drafts: (a) Send draft r-4990707302036889022 → info@gitnux.org; (b) Send draft r-8399856770625698902 → info@wifitalents.com; (c) DELETE draft r1579106969886718270 → business@diyauctions.com (competitor, do not send).
+3. **AlternativeTo (#477) — June 18, 2026 ~9:49 PM Stockholm.** Log in as "FindASale" → alternativeto.net → Add Software.
 
-4. **SaaSHub (#480)** — Create account at saashub.com and claim saashub.com/finda-sale.
+4. **KY/ME scraper triggers** — Trigger `workflow_dispatch` on scrape-kentucky-phase2 and scrape-maine-phase2 to verify S959 fixes write records to DB.
 
-5. **AlternativeTo (#477) — June 18, 2026 ~9:49 PM Stockholm.** Log in as "FindASale" → alternativeto.net → Add Software.
+### S963 — Suggested Work
 
-6. **KY/ME scraper triggers** — Trigger `workflow_dispatch` on scrape-kentucky-phase2 and scrape-maine-phase2 to verify S959 fixes write records to DB.
+**Option A — AlternativeTo submission (June 18, 2026 deadline).** Patrick logs into alternativeto.net as "FindASale" and submits. Highest-urgency remaining directory listing.
 
-### S960 — Suggested Work
-
-**Option A — SellMyAntiques Playwright scraper (highest priority).** Next.js SPA, ToS clear, ANTIQUE_DEALER category, Playwright harness already built. Wire into registry + build `sellMyAntiquesScraper.ts`. Dispatch `Skill('findasale-dev')`.
-
-**Option B — AlternativeTo listing (June 18 deadline).** Highest-urgency directory listing — MaxSold + EstateSales.NET already indexed there.
-
-**Option C — NFMA unpark investigation.** If NFMA ever opens their directory, the stub is ready. Low priority.
+**Option B — Next roadmap BROKEN item.** Check roadmap.md for next BROKEN or unverified item. BQ is now at 0.
 
 
 ## Recent Sessions
+
+### S963 — 2026-06-12 | DEV/RECORDS/WRAP (Records Pass S962 PCVs + #27c Fix + SellMyAntiques Investigation)
+
+**Session type:** DEV/RECORDS — records pass, bug fix, scraper investigation, session wrap
+
+**Work completed:**
+- **Records pass:** Applied S962 PCVs (#127 POS Value Unlock, #55 Seasonal Challenges, #218 Shopper Trades, #219 Shopper Achievements, #81 Empty State Audit) to roadmap.md Claude QA columns (⬜ → ✅ S962). All 5 had full 5-element evidence.
+- **#27c eBay CSV Export FIXED** — Railway logs confirmed: `TypeError [ERR_INVALID_CHAR]: Invalid character in header content ["Content-Disposition"]` at ebayController.js:597. Root cause: `sale.title` with special characters (quotes, colons, non-ASCII) passed directly into the filename. Fix: `safeTitle` sanitization strips non-word chars, collapses hyphens, falls back to 'sale' if empty. TypeScript: 0 errors. Staged for Chrome verify.
+- **SellMyAntiques investigation CLOSED** — Domain investigated for Playwright scraper implementation. Found: all paths return GoDaddy parking lander (wsimg.com infrastructure, sitemap contains only /lander). Domain was active Next.js SPA on 2026-06-10; parked by 2026-06-12. Scraper stub and sourceRegistry docs updated. Task closed — no Playwright scraper buildable against a parked domain.
+
+**Files changed:**
+- `packages/backend/src/controllers/ebayController.ts` — safeTitle sanitization at L710–711
+- `packages/backend/src/services/scraper/sources/sellMyAntiquesScraper.ts` — PARKED reason updated to "domain is GoDaddy parking page"
+- `packages/backend/src/services/scraper/sourceRegistry.ts` — SellMyAntiques legalNote updated
+- `claude_docs/strategy/roadmap.md` — S962 PCVs applied (5 rows)
+- `claude_docs/STATE.md` — this wrap
+- `claude_docs/patrick-dashboard.md` — updated
+
+**BQ delta:** 1→0 (#27c FIXED, pending Chrome verify)
 
 ### S962 — 2026-06-12 | QA (Records Pass + Chrome QA: #219/#218/#55/#81/#127 + #27c Bug)
 
@@ -199,27 +213,6 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 - `claude_docs/STATE.md` — this wrap
 
 **BQ delta:** 1→0
-
-### S957 — 2026-06-11 | CI/INFRA (Scraper Workflow Fleet Cleanup)
-
-**Session type:** CI/INFRA — workflow audit, fleet cleanup, Node 22 migration
-
-**Work completed:**
-- **Root cause diagnosed** — All 50 `scrape-*-licensing.yml` workflows called `/run-X-licensing` Railway routes → old scrapers with dead source URLs → 1–16 second completions with 0 records. S954 built phase2 scrapers + routes but never updated the YAML endpoints.
-- **4 endpoint fixes** — scrape-indiana/kentucky/maine/alabama-licensing.yml updated to call `/run-X-phase2` routes.
-- **Node 22 bump** — All 46 existing phase2 YAMLs: `node-version: '20'` → `'22'`. Deadline: GitHub Actions Node 20 deprecation June 16, 2026.
-- **5 new phase2 YAMLs created** — ND/SD/TN/VT/WV had licensing YAMLs but no phase2 YAMLs; would have lost scraper coverage if old files deleted. Created scrape-nd/sd/tn/vt/wv-phase2.yml (cron 3–4 AM Mondays, npx tsx direct execution). 51 total phase2 YAMLs.
-- **50 old licensing YAMLs deleted** — Confirmed 0 licensing files on GitHub (Grep: 0 matches). Fleet is phase2-only.
-
-**Files changed:**
-- `.github/workflows/scrape-*-phase2.yml` (46 files) — node-version 20→22
-- `.github/workflows/scrape-nd/sd/tn/vt/wv-phase2.yml` (5 new files)
-- `.github/workflows/scrape-indiana/kentucky/maine/alabama-licensing.yml` (4 endpoint fixes, then deleted)
-- `.github/workflows/scrape-*-licensing.yml` (50 files deleted)
-- `claude_docs/STATE.md` — this wrap
-- `claude_docs/patrick-dashboard.md` — updated
-
-**BQ delta:** 1 (unchanged — #470 organizer_signup UNVERIFIED)
 
 ### S956 — 2026-06-11 | RESEARCH/CREATIVE (Directory & App Listing Submissions)
 
