@@ -1,0 +1,35 @@
+name: Lighthouse Audit
+
+# Reliable, repeatable performance audits — replaces noisy one-off Lighthouse runs.
+# Runs Lighthouse 3x per URL in GitHub's consistent runner and reports the MEDIAN,
+# which removes the run-to-run variance you get from ad-hoc local/sandbox runs.
+# Audits the live Vercel production site (no build step needed).
+#
+# Triggers:
+#   - Weekly on Monday 06:00 UTC (trend tracking)
+#   - Manually via the "Run workflow" button (Actions tab -> Lighthouse Audit -> Run workflow)
+#
+# Output: each run prints a temporary public report URL in the logs and uploads the
+# raw Lighthouse JSON/HTML as a downloadable artifact. Assertions are "warn" only —
+# the job never fails red; it surfaces regressions without blocking. Flip key
+# assertions to "error" in lighthouserc.json later if you want it to gate.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  lighthouse:
+    name: Lighthouse CI (mobile, median of 3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: ./lighthouserc.json
+          uploadArtifacts: true
