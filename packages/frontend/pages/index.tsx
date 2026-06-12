@@ -3,15 +3,16 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { GetStaticProps } from 'next';
+import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { getItemImageUrl } from '../lib/imageUtils';
 import SaleMap, { SalePin } from '../components/SaleMap';
 import SaleCard from '../components/SaleCard';
 import Skeleton from '../components/Skeleton';
-import TreasureHuntBanner from '../components/TreasureHuntBanner';
-import CityHeatBanner from '../components/CityHeatBanner';
-import SaleOfTheDayCard from '../components/SaleOfTheDayCard'; // Feature #401
+const TreasureHuntBanner = dynamic(() => import('../components/TreasureHuntBanner'), { ssr: false });
+const CityHeatBanner = dynamic(() => import('../components/CityHeatBanner'), { ssr: false });
+const SaleOfTheDayCard = dynamic(() => import('../components/SaleOfTheDayCard'), { ssr: false }); // Feature #401
 import EmptyState from '../components/EmptyState';
 import { useToast } from '../components/ToastContext';
 import { useAuth } from '../components/AuthContext';
@@ -530,6 +531,8 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                                       key={getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0]}
                                       src={getItemImageUrl(item.photoUrls[0]) || item.photoUrls[0]}
                                       alt={item.title}
+                                      loading="lazy"
+                                      decoding="async"
                                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                     />
                                   ) : (
