@@ -88,6 +88,22 @@ Codebase verification S965: most of this is already shipped. Do NOT dispatch dev
 
 ---
 
+## 7. West Michigan / Kalamazoo–Paw Paw deep-dig (S965 — additional local avenues)
+
+Beyond the GR-org list in §6. Roadmap rows #509–#521.
+
+**Shop-local & directories:** Local First of West Michigan (localfirst.org — ~600 members, the definitive buy-local directory; tiered dues) HIGH; Discover Kalamazoo free partner listing (discoverkalamazoo.com/partners) MED-HIGH; Van Buren / Visit SW Michigan partner listings LOW-MED.
+
+**Regional press (free earned media):** Crain's Grand Rapids Business (crainsgrandrapids.com — absorbed GR Business Journal + MiBiz in 2023; pitch the small-biz reporter) HIGH; Rapid Growth Media (Editor@RapidGrowthMedia.com — open inbox) HIGH; SW Michigan's Second Wave (feedback@secondwavemedia.com — covers Paw Paw/Kalamazoo, solutions framing) HIGH; WOOD TV8 (photo→listing demo is telegenic), WWMT (desk@wwmt.com), Grand Rapids Magazine (social@grmag.com, consumer angle), Catalyst Radio/GRCMC, Crain's Detroit (statewide — save for a milestone) MEDIUM.
+
+**Pitch events / accelerators:** Start Garden 5×5 Night (5x5night.com — $5K, no eligibility gate, perfect founder fit) HIGH; Conquer Accelerator (MSU, GR cohort — selective/VC-track) MEDIUM; Michigan Founders Fund (membership network, reopens 2026) MONITOR.
+
+**Owned backlink:** The Rapidian (therapidian.org — self-publish a local-impact story after mentor review; controllable GR-domain backlink) HIGH.
+
+**Startup directories:** Crunchbase "Michigan startups" hub (auto once the #481 profile is live), Seedtable + Failory Michigan lists (editorial — request inclusion), BuiltIn Michigan MED-LOW.
+
+**Skip (eligibility/fit):** Desai Accelerator (U-M Ann Arbor alum founder required), Match on Main (brick-and-mortar storefront required), "Made in Michigan" registries (physical product only). **Dead brands — don't pitch separately:** GR Business Journal + MiBiz → Crain's GR Business; Kalamazoo Regional Chamber → SW Michigan First Chamber.
+
 ## How these break down for execution
 
 - **Dev tasks (dispatch findasale-dev):** Microsoft Store package, Google Play TWA + assetlinks.json, Lighthouse PWA audit. (AI-discovery items — schema.org, IndexNow, robots.txt — verified ALREADY DONE S965; no dispatch needed.)

@@ -718,6 +718,29 @@ From `claude_docs/strategy/GREENFIELD-GROWTH-AVENUES-2026.md`. App-store paths, 
 **Skip (flagged S965):** Apple App Store (Guideline 4.2 repackaged-website rejection trap, $99/yr), Meta Quest (no audience), Next.js/Vercel/Cloudinary/etc. vendor showcases (curated, no open submission), SRES/Caring Transitions (gated/competitor), UK PR platforms, IFundWomen/GROW/Spring GR (eligibility mismatch — verify first), llms.txt as a citation strategy (unproven 2026).
 
 
+**Tier 1D — West Michigan / Kalamazoo–Paw Paw local ecosystem (S965 deep-dig — net-new)**
+
+Local credibility, backlinks, press, and no-gate pitch events near the Paw Paw home address. Detail + skips in `GREENFIELD-GROWTH-AVENUES-2026.md` §7.
+
+| # | Avenue | Status | Notes |
+|---|---------|--------|-------|
+| 509 | Paw Paw Area Chamber of Commerce | ⬜ TODO — Patrick | Home-city chamber (129 S Kalamazoo St, Paw Paw). Member directory + hyperlocal credibility. Low small-town dues. pawpawmi.com. |
+| 510 | Start Garden 5×5 Night | ⬜ TODO — Patrick | Recurring pitch event (5 slides/5 min/5 judges), $5,000 grant, NO eligibility gate — ideal solo-bootstrapper fit. Free to enter. 5x5night.com. |
+| 511 | The Rapidian (self-publish) | ⬜ TODO | GR citizen-journalism platform — register → reporter status → publish a local-impact story. Owned, controllable GR-domain backlink. Free. therapidian.org. |
+| 512 | Local First of West Michigan | ⬜ EVALUATE — Patrick | Definitive WMI buy-local directory (~600 members). Member listing + backlink + on-brand. Tiered dues (verify). localfirst.org. |
+| 513 | Crain's Grand Rapids Business (pitch) | ⬜ TODO — Patrick | The authoritative WMI business outlet (absorbed GR Business Journal + MiBiz, 2023). Pitch the small-biz/startups reporter. Free earned media. crainsgrandrapids.com. |
+| 514 | Rapid Growth Media (pitch) | ⬜ TODO — Patrick | GR entrepreneurship outlet, open submission inbox Editor@RapidGrowthMedia.com. Strong backlink. Free. |
+| 515 | SW Michigan's Second Wave (pitch) | ⬜ TODO — Patrick | Solutions-journalism weekly covering Kalamazoo/Paw Paw home turf — "reduce manual work" framing fits. feedback@secondwavemedia.com. Free. |
+| 516 | Discover Kalamazoo partner listing | ⬜ TODO | FREE self-edit partner profile (tourism-adjacent). Backlink + Kalamazoo proximity. discoverkalamazoo.com/partners. |
+| 517 | Southwest Michigan First Chamber | ⬜ EVALUATE — Patrick | Regional SW-MI EDO + chamber (formerly Kalamazoo Regional Chamber). Directory + network. Membership dues. southwestmichiganfirst.com. |
+| 518 | West MI local TV/press pitches | ⬜ TODO — Patrick | WOOD TV8 (telegenic photo→listing demo), WWMT desk@wwmt.com, Grand Rapids Magazine social@grmag.com (consumer angle), Catalyst Radio/GRCMC, Crain's Detroit (statewide, save for a milestone). Free earned media. |
+| 519 | Michigan startup directories | ⬜ TODO | Crunchbase "Michigan startups" hub (auto once #481 profile lives), Seedtable "Best Startups in Michigan", Failory "Michigan Startups to Watch" (editorial — request inclusion), BuiltIn Michigan. Mostly free. |
+| 520 | Conquer Accelerator (MSU, GR cohort) | ⬜ EVALUATE — Patrick | 10-wk selective accelerator w/ GR cohort; Red Cedar Ventures investment. Apply only if pursuing accelerator/VC path (sector cohorts don't fit). msufoundation.org/conquer-accelerator. |
+| 521 | Michigan Founders Fund (monitor) | ⬜ MONITOR | Founder membership network; apps closed, reopen expected 2026. Statewide credibility, not money. michiganfoundersfund.org. |
+
+**Skip (flagged S965 deep-dig):** Desai Accelerator (requires U-M Ann Arbor alum founder), Match on Main (requires brick-and-mortar storefront), "Made in Michigan" product registries (physical-product only). Dead brands — do not pitch separately: GR Business Journal + MiBiz (now Crain's GR Business); Kalamazoo Regional Chamber (now SW Michigan First Chamber).
+
+
 ## Table Stakes — Business Operations (S814)
 
 Missing fundamentals identified and addressed in S814 audit. All shipped unless marked PENDING.
