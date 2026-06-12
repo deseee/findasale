@@ -1,23 +1,21 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S957 — 2026-06-11 (wrap)
+**Last updated:** S958 — 2026-06-12 (wrap)
 
 ---
 
-## Session S957 Summary — CI/INFRA: Scraper Workflow Fleet Cleanup (COMPLETE)
+## Session S958 Summary — OSM 504 Retry + Scraper Verification (COMPLETE)
 
-**Type:** CI/INFRA — workflow audit, fleet cleanup, Node 22 migration
-**BQ:** 1 (unchanged — #470 organizer_signup)
+**Type:** CI/RESEARCH — OSM scraper fix, DB check, housekeeping
+**BQ:** 0 (was 1 — #470 organizer_signup closed; S946 had full verification evidence)
 
 | Item | Status | Details |
 |------|--------|---------|
-| 50 old licensing YAMLs | ✅ DELETED | Confirmed 0 licensing files on GitHub |
-| 46 existing phase2 YAMLs | ✅ Node 22 | node-version 20→22 (deadline: June 16, 2026) |
-| 5 new phase2 YAMLs | ✅ CREATED | ND/SD/TN/VT/WV — had licensing YAMLs but no phase2 coverage |
-| 4 endpoint fixes | ✅ PUSHED | KY/IN/ME/AL licensing YAMLs → phase2 routes (then deleted) |
-| Fleet status | ✅ CLEAN | 51 total phase2 YAMLs, phase2-only, Node 22 |
-
-**Root cause fixed:** All 50 `-licensing` YAMLs called `/run-X-licensing` Railway routes → old scrapers with dead source URLs → 1-second completions, 0 records. S954 built phase2 scrapers but never updated the YAML endpoints.
+| OSM 504 retry | ✅ SHIPPED | `fetchOverpass()` helper + 8s retry on 504; kumi.systems endpoint confirmed working |
+| KY/IN/ME/AL DB check | ❌ 0 RECORDS | All 4 phase2 scrapers: 0 records in DB after today's runs. Needs investigation. |
+| Playwright harness | ✅ ALREADY BUILT | `playwrightBrowser.ts` fully implemented — STATE.md Option C was stale |
+| #470 BQ item | ✅ CLOSED | S946 verified it; S949 re-added in error |
+| BetaList | 🗑️ DROPPED | Removed from all docs per Patrick direction |
 
 ---
 
@@ -25,14 +23,12 @@
 
 | Action | Priority | Instructions |
 |--------|----------|-------------|
-| BetaList icon | HIGH | betalist.com/submissions/170511/wizard/general → click camera icon → upload `claude_docs\brand\logo-icon-512.png` |
-| BetaList email verify | HIGH | Check patrick@finda.sale inbox → click BetaList verification link |
 | Send Gitnux email | HIGH | Gmail Drafts → find draft to info@gitnux.org (ID r-4990707302036889022) → Send |
 | Send WifiTalents email | HIGH | Gmail Drafts → find draft to info@wifitalents.com (ID r-8399856770625698902) → Send |
 | DELETE DIYAuctions draft | HIGH | Gmail Drafts → find draft to business@diyauctions.com (ID r1579106969886718270) → Delete (competitor!) |
 | SaaSHub account | MEDIUM | Create account at saashub.com → claim saashub.com/finda-sale (logo, pricing, notifications) |
 | AlternativeTo | MEDIUM | June 18, 2026 ~9:49 PM Stockholm — log in as "FindASale" → alternativeto.net → Add Software |
-| Kentucky scraper verify | Optional | If workflow returns 0 records with no error — check oop.ky.gov page source for correct ASP.NET control IDs |
+| KY/IN/ME/AL scrapers | MEDIUM | 0 records in DB — Claude will investigate Railway logs + KY control IDs next session |
 | Searlo credit upgrade | Optional | $3.99+ lifts 10/min cap; bump `SEARLO_RPM` Railway Variable after |
 
 ---
@@ -44,7 +40,7 @@ cd C:\Users\desee\ClaudeProjects\FindaSale
 
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "chore: S957 wrap — scraper fleet cleanup (50 licensing deleted, Node 22, 5 new phase2)"
+git commit -m "chore: S958 wrap — OSM 504 retry, scraper DB check, BQ housekeeping"
 .\push.ps1
 ```
 

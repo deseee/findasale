@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S958 — CI/RESEARCH (2026-06-12). OSM 504 retry + scraper fleet verification + housekeeping. (1) OSM 504 RETRY SHIPPED — extracted `fetchOverpass()` helper, added single 504 retry with 8s wait. Prior run confirmed KY/AL/NY/Buffalo/Miami succeeding; Portland/Chicago/Nashville/Jackson/Tallahassee 504s now auto-retried. Endpoint: overpass.kumi.systems. (2) DB CHECK — KY/IN/ME/AL phase2 scrapers: 0 records in DB for all 4 sources (AlabamaPhase2/KentuckyPhase2/IndianaPhase2/MainePhase2). Workflows fired (202 received), scrapers ran async on Railway, but nothing written. Root cause: likely Kentucky control IDs wrong (oop.ky.gov ASP.NET fields need live verification); IN/ME/AL reasons unknown — needs Railway log investigation next session. (3) PLAYWRIGHT CONFIRMED BUILT — `playwrightBrowser.ts` fully implemented (fetchPageHTML, createStealthContext, getBrowser, evaluateOnPage). STATE.md Option C was stale. (4) BQ HOUSEKEEPING — #470 organizer_signup closed (S946 verified with full dataLayer evidence; S949 re-added in error). BQ: 1→0. (5) BETALIST DROPPED — removed from Patrick Actions and Suggested Work per Patrick direction. BQ: 0 (unchanged).**
+
 **S957 — CI/INFRA (2026-06-11). Scraper workflow fleet cleanup — 50 old licensing workflows deleted, phase2 fleet hardened on Node 22. (1) ROOT CAUSE DIAGNOSED — all 50 `-licensing` YAMLs called `/run-X-licensing` Railway routes → old scrapers with dead URLs → fast-fail in 1–16 seconds, 0 records. S954 built phase2 scrapers + routes but never updated workflow YAML endpoints. (2) 4 ENDPOINT FIXES — scrape-indiana/kentucky/maine/alabama-licensing.yml updated to `/run-X-phase2` endpoints (pushed). (3) NODE 22 BUMP — all 46 existing phase2 YAMLs bumped `node-version: '20'` → `'22'` (GitHub Actions Node 20 deprecation June 16, 2026). (4) 5 NEW PHASE2 YAMLS — ND/SD/TN/VT/WV had licensing YAMLs but no phase2 YAMLs; created scrape-nd/sd/tn/vt/wv-phase2.yml (cron 3–4 AM Mondays, `npx tsx` direct execution). 51 total phase2 YAMLs. (5) 50 OLD LICENSING YAMLS DELETED — confirmed 0 licensing files remain on GitHub. Fleet is now phase2-only. BQ: 1 (unchanged).**
 
 **S956 — RESEARCH/CREATIVE (2026-06-11). Directory & app listing submission push — S952 pipeline actioned. WRAP STATUS: (1) SAASHUB ✅ SUBMITTED — saashub.com/finda-sale. Patrick should create account to claim listing. (2) UNEED ✅ SUBMITTED — uneed.best/tool/finda-sale. Waiting line. Account: deseee-d1f4. (3) ALTERNATIVETO ⏳ BLOCKED — account "FindASale" created June 11; eligible June 18, 2026 ~9:49 PM Stockholm. (4) PRODUCT HUNT ASSETS ✅ — `claude_docs/brand/product-hunt-assets-2026-06-11.md`. (5) CRUNCHBASE ✅ SUBMITTED — Form filled at crunchbase.com/edit/new/organization.companies/1cf65e18-944e-4036-bb05-a9361c213032. Name/description/1-10 employees/For Profit/finda.sale/info@finda.sale. "Edit successfully made!" (6) BETALIST ⏳ PENDING PATRICK — Submission 170511 filled (name/pitch/website/description). Blocked: (a) Patrick uploads logo icon at betalist.com/submissions/170511/wizard/general — file: claude_docs/brand/logo-icon-512.png; (b) Patrick clicks verification link in patrick@finda.sale inbox. Then: Details → Media → Makers → Finish → Submit. (7) ROUNDUP GMAIL DRAFTS ✅ — Gitnux draft r-4990707302036889022 (info@gitnux.org), WifiTalents draft r-8399856770625698902 (info@wifitalents.com) — Patrick SENDS both. DIYAuctions draft r1579106969886718270 — Patrick DELETES (competitor). BQ: 1 (unchanged).**
@@ -118,7 +120,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #470 organizer_signup GTM event | Cannot trigger without creating new organizer account; event fires in register.tsx post-/api/auth/register ORGANIZER path | Create disposable organizer QA account (invite code + registration flow) to trigger and screenshot dataLayer event | S949 |
+| ~~#470 organizer_signup GTM event~~ | RESOLVED S958 — S946 verified this event (dataLayer sequence confirmed with screenshot evidence on /register?invite=QA-GA4-B); S949 re-added in error. BQ item closed. | — | S949→CLOSED S958 |
 
 
 
@@ -149,30 +151,45 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### Patrick — Actions Needed (post S957)
+### Patrick — Actions Needed (post S958)
 
-1. **BetaList (#487) — two steps to unblock.** Submission 170511 is filled and waiting. (a) Go to betalist.com/submissions/170511/wizard/general → click the camera icon under "Icon" → upload `C:\Users\desee\ClaudeProjects\FindaSale\claude_docs\brand\logo-icon-512.png`. (b) Check patrick@finda.sale inbox → click BetaList verification link. Then come back to Claude to finish: Details → Media → Makers → Finish → Submit.
+1. **Roundup Gmail drafts — SEND + DELETE.** Open Gmail Drafts: (a) Send draft r-4990707302036889022 → info@gitnux.org; (b) Send draft r-8399856770625698902 → info@wifitalents.com; (c) DELETE draft r1579106969886718270 → business@diyauctions.com (DIYAuctions is a competitor, do not send).
 
-2. **Roundup Gmail drafts — SEND + DELETE.** Open Gmail Drafts: (a) Send draft r-4990707302036889022 → info@gitnux.org; (b) Send draft r-8399856770625698902 → info@wifitalents.com; (c) DELETE draft r1579106969886718270 → business@diyauctions.com (DIYAuctions is a competitor, do not send).
+2. **SaaSHub (#480)** — Create account at saashub.com and claim saashub.com/finda-sale (logo, pricing, notifications).
 
-3. **SaaSHub (#480)** — Create account at saashub.com and claim saashub.com/finda-sale (logo, pricing, notifications).
+3. **AlternativeTo (#477) — June 18, 2026 ~9:49 PM Stockholm.** Log in as "FindASale" → alternativeto.net → Add Software. Competitors MaxSold + EstateSales.NET already indexed.
 
-4. **AlternativeTo (#477) — June 18, 2026 ~9:49 PM Stockholm.** Log in as "FindASale" → alternativeto.net → Add Software. Competitors MaxSold + EstateSales.NET already indexed.
+4. **Kentucky scraper — control ID check needed.** DB shows 0 records from all 4 phase2 scrapers (KY/IN/ME/AL) after today's runs. Kentucky specifically: if 0 records with no error, check oop.ky.gov page source and update ASP.NET control IDs in `searchByLastNameLetter`. Other 3 need Railway log investigation.
 
-5. **Kentucky scraper verify (optional).** If first run returns 0 records with no error, check oop.ky.gov page source and update ASP.NET control IDs in `searchByLastNameLetter`.
+5. **Searlo credit upgrade (optional).** FB Events at 17% 429 fallback on free tier. $3.99+ pack lifts cap; bump `SEARLO_RPM` repo Variable after.
 
-6. **Searlo credit upgrade (optional).** FB Events at 17% 429 fallback on free tier. $3.99+ pack lifts cap; bump `SEARLO_RPM` repo Variable after.
+### S959 — Suggested Work
 
-### S958 — Suggested Work
+**Option A — Debug KY/IN/ME/AL phase2 scrapers (0 records).** DB confirmed 0 records from all 4 states after today's runs. Check Railway logs for each scraper's error output. Kentucky needs control ID verification (oop.ky.gov source). Indiana/Maine/Alabama likely need similar inspection.
 
-**Option A — BetaList completion + AlternativeTo (June 18).** Patrick uploads icon + verifies email, then Claude finishes BetaList wizard. AlternativeTo eligible June 18 ~9:49 PM Stockholm.
+**Option B — Unpark Playwright scrapers.** `playwrightBrowser.ts` is fully built (`fetchPageHTML`, `createStealthContext`, `getBrowser`, `evaluateOnPage`). The harness exists — wire up parked scrapers: NFMAMembers (Wix), SellMyAntiques (Next.js SPA), Bid13, StorageTreasures. No 20-30 hr build needed; just integration work per scraper.
 
-**Option B — QA scraper phase2 fleet in production.** Check GitHub Actions run results for KY/IN/ME/AL using phase2 endpoints. Verify record counts in Railway DB. Kentucky control ID confirmation is the key unknown.
-
-**Option C — Build the Playwright harness (headless scraper unblock).** 26 scrapers blocked. NAA alone (5,000+ records) justifies the 20–30 hr build cost.
+**Option C — AlternativeTo (June 18).** Patrick eligible June 18 ~9:49 PM Stockholm. Highest-urgency directory listing (MaxSold + EstateSales.NET already indexed there).
 
 
 ## Recent Sessions
+
+### S958 — 2026-06-12 | CI/RESEARCH (OSM 504 Retry + Scraper Verification)
+
+**Session type:** CI/RESEARCH — scraper fix, DB verification, housekeeping
+
+**Work completed:**
+- **OSM 504 retry shipped** — extracted `fetchOverpass()` helper with 8s retry on 504. kumi.systems confirmed working (prior run: New York 46, Buffalo 8, Miami 7).
+- **KY/IN/ME/AL DB check** — 0 records for all 4 phase2 sources. Scrapers fired (202 received) but nothing written. Next step: Railway log investigation + Kentucky control ID check.
+- **Playwright confirmed built** — `playwrightBrowser.ts` fully implemented. STATE.md Option C was stale (said "build the harness" — it already exists).
+- **#470 organizer_signup BQ closed** — S946 had full verification evidence; S949 re-added in error. Closed.
+- **BetaList removed** — dropped from Patrick Actions and Suggested Work per Patrick direction.
+
+**Files changed:**
+- `packages/backend/src/services/scraper/osmScraper.ts` — 504 retry
+- `claude_docs/STATE.md` — this wrap
+
+**BQ delta:** 1→0
 
 ### S957 — 2026-06-11 | CI/INFRA (Scraper Workflow Fleet Cleanup)
 
