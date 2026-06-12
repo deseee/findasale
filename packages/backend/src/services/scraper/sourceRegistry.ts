@@ -38,6 +38,7 @@ import { scrapeInvaluable } from './sources/invaluableAuctionHouseScraper';
 import { runAuctionZipScraper } from './sources/auctionZipScraper';
 import { scrapeSellMyAntiques } from './sources/sellMyAntiquesScraper';
 import { scrapeProxibid } from './sources/proxibidScraper';
+import { scrapeFleamapket } from './sources/fleamapketScraper';
 
 export type SourceType = 'directory' | 'licensing' | 'crawl-queue' | 'places-api';
 export type SourceRunMode = 'metro-loop' | 'national-once';
@@ -454,6 +455,17 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     qualityTier: 'high',
     legalNote: 'ToS PROHIBITED — Proxibid Unified User Agreement (PDF /docs/ProxibidUUA.pdf): §10(h) bans scraping/spidering/crawling; §11.1(v) explicit prohibited use; §12 IP protection. ~30,000 auction houses on platform. Parent: Auction Technology Group (ATG). Note: BidSpotter (also ATG) has separate CLEAR ToS. Unpark requires written data partnership with ATG. Verified 2026-06-10.',
     run: scrapeProxibid,
+  },
+  {
+    id: 'Fleamapket',
+    displayName: 'Fleamapket.com (Flea Market & Antique Directory)',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    // No cronSchedule — triggered via GitHub Actions (scrape-fleamapket.yml).
+    qualityTier: 'high',
+    legalNote: 'robots.txt explicitly ALLOWS /listing/, /listing-category/, /listing-region/. ToS: no anti-scraping language found. Static WordPress HTML. ~400 US flea markets, antique malls, and auction houses with structured JSON-LD data (name, address, phone, website, lat/lng). Verified 2026-06-12.',
+    run: scrapeFleamapket,
   },
 ];
 
