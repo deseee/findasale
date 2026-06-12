@@ -707,7 +707,8 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
 
     // Set response headers for file download
     const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `ebay-export-${sale.title.replace(/\s+/g, '-')}-${timestamp}.csv`;
+    const safeTitle = sale.title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim() || 'sale';
+    const filename = `ebay-export-${safeTitle}-${timestamp}.csv`;
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

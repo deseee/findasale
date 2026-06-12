@@ -1,34 +1,37 @@
 /**
  * SellMyAntiques.com scraper adapter
  * Source: https://www.sellmyantiques.com
- * ToS: Confirmed CLEAR — /terms-of-service page fetched successfully 2026-06-10.
- *   ToS covers user accounts, listings, and payment terms. No anti-scraping clause,
- *   no prohibition on automated access. robots.txt blank (no Disallow rules).
  *
- * PARKED — Fully JS-rendered (Next.js SPA). No static scrape path available.
+ * PARKED — Domain is now a GoDaddy parking page (as of 2026-06-12).
+ *   All paths redirect to /lander (wsimg.com parking infrastructure).
+ *   Sitemap contains only /lander. Site is dead / domain lapsed.
  *
- * Investigation (2026-06-10):
- *   /dealers → Next.js app shell returned by static fetch. Zero dealer records in HTML.
+ * Prior investigation (2026-06-10):
+ *   ToS: CLEAR — no anti-scraping clause, no prohibition on automated access.
+ *   robots.txt blank (no Disallow rules).
+ *   /dealers → Next.js app shell, zero dealer records in HTML (CSR-only).
  *   /dealers/antique-dealers/united-states → same empty shell.
- *   __NEXT_DATA__ present in page source but empty payload (CSR-only rendering).
+ *   __NEXT_DATA__ present but empty payload (CSR-only rendering).
  *   No public REST API endpoint identified in HTML source.
+ *   Would have been strong ANTIQUE_DEALER Phase 2 candidate.
  *
- * To unpark: inspect Network tab in DevTools on /dealers to identify the REST API
- *   endpoint (likely /api/dealers or similar GraphQL endpoint). Alternatively,
- *   implement Playwright/Puppeteer headless rendering.
+ * Status update (2026-06-12):
+ *   Domain parked — www.sellmyantiques.com → GoDaddy /lander on all paths.
+ *   Only sitemap entry is /lander (GoDaddy parking infrastructure).
+ *   Site is defunct. No scrape possible.
  *
- * ToS CLEAR + rich dealer data (antique dealers, auction houses) = strong Phase 2
- * candidate for ANTIQUE_DEALER businessCategory ingestion.
+ * To revisit: check if domain is re-registered / site relaunched in future.
+ *   If restored: Playwright headless against /dealers/antique-dealers/united-states.
  *
- * ADR-073: Directory Scraper — Phase 2 candidate (JS-rendered, ToS CLEAR)
+ * ADR-073: Directory Scraper — DEAD (domain parked 2026-06-12)
  */
 
 import { RateLimiter } from '../rateLimiter';
 import { ScrapeStats } from '../sourceRegistry';
 
 /**
- * SellMyAntiques.com scraper — parked (fully JS-rendered, no static content).
- * Returns zero stats cleanly. See file header for unpark path.
+ * SellMyAntiques.com scraper — domain parked as of 2026-06-12 (GoDaddy lander).
+ * Returns zero stats cleanly. See file header for status history.
  */
 export async function scrapeSellMyAntiques(
   _metro: string,
@@ -41,7 +44,7 @@ export async function scrapeSellMyAntiques(
   // ToS CLEAR — strong Phase 2 candidate for ANTIQUE_DEALER ingestion.
   // Verified: 2026-06-10 — /dealers returned Next.js app shell, zero records.
   console.log(
-    '[SellMyAntiques] PARKED: site is fully JS-rendered — no static dealer listings available. Exiting cleanly.'
+    '[SellMyAntiques] PARKED: domain is a GoDaddy parking page as of 2026-06-12 — all paths redirect to /lander. Exiting cleanly.'
   );
 
   return {

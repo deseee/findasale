@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S963 — DEV/RECORDS (2026-06-12). Records pass: S962 PCVs (#219/#218/#55/#81/#127) applied to roadmap.md Chrome QA columns. #27c eBay CSV Export fixed: safeTitle sanitization in ebayController.ts L710 (TypeError Invalid char in Content-Disposition). BQ: 1→0.**
+
 **S962 — QA (2026-06-12). Records pass: #74 + #463 S961 PCVs applied to roadmap.md. Chrome QA: #219 ✅, #218 ✅, #55 ✅, #81 ✅ spot-check, #127 ✅. Bug found: #27c eBay CSV export → HTTP 500. BQ: 0→1.**
 
 **S961 — QA (2026-06-12). Chrome QA pass: #463 Claim Button Tracking ✅, #74 Role-Aware Reg ✅. Records pass: SEO3 S944 applied to roadmap.md. #472 PCVs (S948) cleared from PCV table. BQ: 0.**
@@ -51,7 +53,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | ~~#470 organizer_signup GTM event~~ | RESOLVED S958 — S946 verified this event (dataLayer sequence confirmed with screenshot evidence on /register?invite=QA-GA4-B); S949 re-added in error. BQ item closed. | — | S949→CLOSED S958 |
-| #27c eBay CSV Export (Listing Factory) | `GET /api/sales/:saleId/ebay-export?photoMode=watermarked → HTTP 500`. generateEbayCsv reviewed — all schema fields exist. Runtime error requires Railway logs. | Pull Railway logs for exportSaleToEbay 500; fix root cause; re-verify in Chrome | S962 |
+| ~~#27c eBay CSV Export~~ | FIXED S963 — Root cause: sale.title special chars broke Content-Disposition header. Fixed: safeTitle sanitization added to ebayController.ts L710. Pending Chrome verify. | — | S962→FIXED S963 |
 
 
 
@@ -66,6 +68,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | 472 | send-test-email happy path | Navigated https://finda.sale/admin as user1@example.com (ADMIN). Ran fetch POST /api/admin/send-test-email with {to:"test-delivery@mailinator.com",subject:"Test",body:"Test body"}. Saw 200 {success:true, messageId:"bb5ce99a-96d4-48eb-913d-d5f663bc60fc", rail:"resend"}. Screenshot: ss_6413lunko | S948 |
 | 472 | send-test-email domain block (@system.finda.sale) | Same authenticated session. Sent to {to:"anything@system.finda.sale"}. Saw 400 {"success":false,"error":"Recipient domain blocked — cannot send to this address"}. isEmailDomainBlocked guard fires. Screenshot: ss_6413lunko | S948 |
 | 472 | send-test-email auth gate (unauthenticated) | New unauthenticated tab. Direct Railway backend call POST https://backend-production-153c9.up.railway.app/admin/send-test-email, no credentials/CSRF. Saw 403 {"message":"CSRF token validation failed"}. Defense-in-depth: CSRF before auth. Screenshot: ss_4595bvchx | S948 |
+| #27c | eBay CSV Export — Chrome verify | Navigate to /organizer/add-items/[saleId] as organizer. Select items → Export to eBay → set photoMode → Download CSV. Confirm file downloads (no 500 error). Check filename is safe (no special chars). | S963 |
 | 219 | Shopper Achievements | Navigated https://finda.sale/shopper/achievements as Alice Johnson (user1). Achievements tab rendered with XP breakdown, badges grid, rank progress bar. Dark mode clean. ss_5810hhnqu ss_4488tmnlg | S962 |
 | 218 | Shopper Trades | Navigated https://finda.sale/shopper/trades as Alice Johnson (user1). Trades page rendered with active trade listings. ss_9998kdjb8 | S962 |
 | 55 | Seasonal Discovery Challenges | Navigated https://finda.sale/challenges as Alice Johnson (user1). Seasonal challenges page displayed with active challenges list. ss_5780an0ik | S962 |
@@ -75,6 +78,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | SEO3 | Denver city landing page /estate-sales/denver-co | Navigated https://finda.sale/estate-sales/denver-co. Title: "Estate Sales in Denver, CO \| FindA.Sale" ✅. Meta desc present+keyword-rich ✅. H1: "Estate Sales in Denver, CO" ✅. 50 listings visible ✅. Dark mode clean ✅. ss_34924pp42 ss_8168bplgd | S944 |
 _(#422 ✅ S949 applied S950 — cleared. #75 ✅ S949 applied S950 — cleared. #470 item_viewed ✅ S949 applied S950 — cleared.)_
 _(SEO3 ✅ S944 applied S961 — UI col ✅ S944 in roadmap.md — cleared. #472 ✅ S948 applied S949 — cleared from PCV table S961.)_
+_(S963 records pass: S962 PCVs #219/#218/#55/#81/#127 all ✅ — 5-element evidence confirmed — applied to roadmap.md Claude QA columns. #27c PCV staged for Chrome verify.)_
 _(S949: #472 applied to roadmap.md (3x PCVs all pass 5-element gate). #422/#75/#470 item_viewed re-verified with screenshot IDs — ready for next records pass. #470 organizer_signup UNVERIFIED → BQ.)_
 _(S940 PCV rows — #27b watermark settings gating ✅ PRO/TEAMS, #75 non-lapsed TEAMS label ✅, #422 OAuth buttons+linked-accounts UI ✅ — applied to roadmap.md in S941 records pass — cleared.)_
 _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #470 RUNTIME-VERIFIED already in roadmap — cleared S941.)_
