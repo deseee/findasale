@@ -37,61 +37,52 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: packages/backend
 
-      - name: Run fetchPageHTML smoke test + structure dump
+      - name: Write test script
+        working-directory: packages/backend
+        run: |
+          cat > /tmp/nfma-test.ts << 'TSEOF'
+          import { evaluateOnPage } from "./src/services/scraper/utils/playwrightBrowser";
+
+          (async () => {
+            const url = process.env.TEST_URL ?? "https://www.fleamarkets.org/nfma-member-markets";
+            console.log("Testing evaluateOnPage against:", url);
+
+            const result = await evaluateOnPage(url, () => {
+              const richText: string[] = [];
+              document.querySelectorAll("[data-testid=\"richTextElement\"] p, [class*=\"richText\"] p").forEach((el) => {
+                const t = el.textContent?.trim() ?? "";
+                if (t.length > 2 && t.length < 200) richText.push(t);
+              });
+
+              const pTags: string[] = [];
+              document.querySelectorAll("p").forEach((el) => {
+                const t = el.textContent?.trim() ?? "";
+                const words = t.split(/\s+/).filter((w: string) => w.length > 0);
+                if (words.length >= 2 && words.length <= 15 && t.length < 150) pTags.push(t);
+              });
+
+              const html = document.documentElement.outerHTML;
+              const mid = Math.floor(html.length / 2);
+
+              return {
+                totalHtmlLength: html.length,
+                richTextSample: richText.slice(0, 20),
+                pTagSample: pTags.slice(0, 40),
+                midSnippet: html.substring(mid - 500, mid + 2500),
+                lastChunk: html.substring(html.length - 3000),
+              };
+            }, { waitForNetworkIdle: false });
+
+            console.log("HTML length:", result.totalHtmlLength);
+            console.log("Rich text sample:", JSON.stringify(result.richTextSample, null, 2));
+            console.log("P-tag sample:", JSON.stringify(result.pTagSample, null, 2));
+            console.log("Mid-page HTML:", result.midSnippet);
+            console.log("Last 3k HTML:", result.lastChunk);
+          })().catch(e => { console.error(e); process.exit(1); });
+          TSEOF
+
+      - name: Run structure dump
         working-directory: packages/backend
         env:
           TEST_URL: ${{ github.event.inputs.url || 'https://www.fleamarkets.org/nfma-member-markets' }}
-          TEST_SELECTOR: ${{ github.event.inputs.selector || '' }}
-        run: |
-          npx tsx -e '
-            import { evaluateOnPage } from "./src/services/scraper/utils/playwrightBrowser";
-            (async () => {
-              const url = process.env.TEST_URL ?? "https://www.fleamarkets.org/nfma-member-markets";
-              console.log("Testing evaluateOnPage against:", url);
-              const result = await evaluateOnPage(url, () => {
-                // Extract all text nodes from potential member containers
-                // Wix repeater items typically have data-mesh-id or similar
-                const allText: string[] = [];
-
-                // Strategy 1: look for rich text elements
-                document.querySelectorAll('[data-testid="richTextElement"] p, [class*="richText"] p').forEach((el) => {
-                  const t = el.textContent?.trim();
-                  if (t && t.length > 2 && t.length < 200) allText.push(t);
-                });
-
-                // Strategy 2: look for repeater items (Wix pattern)
-                document.querySelectorAll('[id*="repeater"] li, [class*="repeater"] li, [class*="gridCell"], [class*="item-container"]').forEach((el) => {
-                  const t = el.textContent?.replace(/\s+/g, " ").trim();
-                  if (t && t.length > 5 && t.length < 500) allText.push("REPEATER:" + t.substring(0, 100));
-                });
-
-                // Strategy 3: all <p> tags with 3+ words (likely member names/addresses)
-                const pTags: string[] = [];
-                document.querySelectorAll("p").forEach((el) => {
-                  const t = el.textContent?.trim() ?? "";
-                  const words = t.split(/\s+/).filter(w => w.length > 0);
-                  if (words.length >= 2 && words.length <= 15 && t.length < 150) pTags.push(t);
-                });
-
-                // Strategy 4: page source snippet (50k chars from mid-page)
-                const html = document.documentElement.outerHTML;
-                const mid = Math.floor(html.length / 2);
-                const snippet = html.substring(mid - 1000, mid + 2000);
-
-                return {
-                  totalHtmlLength: html.length,
-                  richTextCount: allText.length,
-                  richTextSample: allText.slice(0, 20),
-                  repeaterCount: document.querySelectorAll('[id*="repeater"] li, [class*="repeater"] li').length,
-                  pTagSample: pTags.slice(0, 30),
-                  midSnippet: snippet,
-                };
-              }, { waitForNetworkIdle: false });
-              console.log("HTML length:", result.totalHtmlLength);
-              console.log("Rich text elements found:", result.richTextCount);
-              console.log("Rich text sample:", JSON.stringify(result.richTextSample, null, 2));
-              console.log("Repeater items:", result.repeaterCount);
-              console.log("P-tag sample (first 30):", JSON.stringify(result.pTagSample, null, 2));
-              console.log("Mid-page HTML snippet:", result.midSnippet.substring(0, 3000));
-            })().catch(e => { console.error(e); process.exit(1); });
-          '
+        run: npx tsx /tmp/nfma-test.ts
