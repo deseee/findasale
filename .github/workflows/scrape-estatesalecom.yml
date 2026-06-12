@@ -1,0 +1,52 @@
+name: Scrape EstateSale.com
+
+on:
+  schedule:
+    # Quarterly — first Sunday of March, June, September, December at 6:00 AM UTC
+    - cron: '0 6 1-7 3,6,9,12 0'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300  # 5-hour cap — phase 1 (51 state pages) + phase 2 (profile visits at 10s each)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '8.15.5'
+
+      - name: Install dependencies
+        working-directory: packages/backend
+        run: pnpm install --frozen-lockfile
+
+      - name: Run EstateSale.com Scraper
+        continue-on-error: true
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { scrapeEstateSaleCom } from "./src/services/scraper/sources/estateSaleComScraper";
+            import { RateLimiter } from "./src/services/scraper/rateLimiter";
+            (async () => {
+              try {
+                const rateLimiter = new RateLimiter({ requestsPerSecond: 0.09 });
+                const stats = await scrapeEstateSaleCom("national", "", rateLimiter);
+                console.log("EstateSaleCom scraper completed:", JSON.stringify(stats));
+                process.exit(0);
+              } catch (err) {
+                console.error("EstateSaleCom scraper failed:", err);
+                process.exit(1);
+              }
+            })();
+          '
