@@ -69,7 +69,6 @@ async function fetchHEREPage(
   try {
     const url = new URL(HERE_API_BASE);
     url.searchParams.set('q', query);
-    url.searchParams.set('in', 'countryCode:USA,CAN');
     url.searchParams.set('at', `${lat},${lng}`);
     url.searchParams.set('limit', '100');
     url.searchParams.set('offset', String(offset));
@@ -80,10 +79,11 @@ async function fetchHEREPage(
       headers: { 'User-Agent': getRandomUserAgent() },
     });
     if (!response.ok) {
+      const errorBody = await response.text().catch(() => '(could not read body)');
       if (response.status === 401) {
-        throw new Error(`[HEREPlaces] Auth failure HTTP 401 for query="${query}" at ${lat},${lng}`);
+        throw new Error(`[HEREPlaces] Auth failure HTTP 401 for query="${query}" at ${lat},${lng} — ${errorBody}`);
       }
-      throw new Error(`[HEREPlaces] HTTP ${response.status} for query="${query}" at ${lat},${lng}`);
+      throw new Error(`[HEREPlaces] HTTP ${response.status} for query="${query}" at ${lat},${lng} — ${errorBody}`);
     }
     return (await response.json()) as HEREDiscoverResponse;
   } catch (err) {
