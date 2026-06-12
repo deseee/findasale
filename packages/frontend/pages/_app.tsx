@@ -30,21 +30,21 @@ import { AuthProvider, useAuth } from '../components/AuthContext';
 import { ToastProvider, useToast } from '../components/ToastContext';
 import { CartProvider } from '../context/CartContext';
 import { FeedbackProvider } from '../context/FeedbackContext';
-import InstallPrompt from '../components/InstallPrompt';
-import FeedbackSurvey from '../components/FeedbackSurvey';
+const InstallPrompt = dynamic(() => import('../components/InstallPrompt'), { ssr: false });
+const FeedbackSurvey = dynamic(() => import('../components/FeedbackSurvey'), { ssr: false });
 import { usePushSubscription } from '../hooks/usePushSubscription';
 import { useTheme } from '../hooks/useTheme'; // #63: Dark Mode
 import { useSentryUserContext } from '../hooks/useSentryUserContext'; // Feature #21: User Impact Scoring
 import OnboardingModal from '../components/OnboardingModal'; // Phase 27
-import PosPaymentRequestAlert from '../components/PosPaymentRequestAlert';
+const PosPaymentRequestAlert = dynamic(() => import('../components/PosPaymentRequestAlert'), { ssr: false });
 import ErrorBoundary from '../components/ErrorBoundary';
-import NudgeBar from '../components/NudgeBar';
-import RankUpManager from '../components/RankUpManager';
+const NudgeBar = dynamic(() => import('../components/NudgeBar'), { ssr: false });
+const RankUpManager = dynamic(() => import('../components/RankUpManager'), { ssr: false });
 import { DegradationProvider } from '../contexts/DegradationContext'; // Feature #20: Proactive Degradation Mode
-import DegradationBanner from '../components/DegradationBanner'; // Feature #20: Proactive Degradation Mode
+const DegradationBanner = dynamic(() => import('../components/DegradationBanner'), { ssr: false }); // Feature #20: Proactive Degradation Mode
 import { useDegradationMode } from '../hooks/useDegradationMode'; // Feature #20: Proactive Degradation Mode
 import { LowBandwidthProvider } from '../contexts/LowBandwidthContext'; // Feature #22: Low-Bandwidth Mode
-import LowBandwidthBanner from '../components/LowBandwidthBanner'; // Feature #22: Low-Bandwidth Mode
+const LowBandwidthBanner = dynamic(() => import('../components/LowBandwidthBanner'), { ssr: false }); // Feature #22: Low-Bandwidth Mode
 import { useLowBandwidthInitializer } from '../hooks/useLowBandwidthInitializer'; // Feature #22: Low-Bandwidth Mode
 import { useOfflineSync } from '../hooks/useOfflineSync'; // Feature #69: Local-First Offline Mode
 import CookieConsentBanner from '../components/CookieConsentBanner';
