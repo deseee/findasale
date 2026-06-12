@@ -216,20 +216,31 @@ out center;`;
  * Uses overpass.kumi.systems mirror with 150s client timeout.
  * Note: overpass-api.de blocks GitHub Actions IPs (returns 406). Use kumi mirror.
  */
+async function fetchOverpass(query: string): Promise<Response> {
+  return fetch('https://overpass.kumi.systems/api/interpreter', {
+    method: 'POST',
+    body: `data=${encodeURIComponent(query)}`,
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': '*/*',
+      'User-Agent': 'Mozilla/5.0 (compatible; FindASale/1.0)',
+    },
+    signal: AbortSignal.timeout(150000),
+  });
+}
+
 async function queryOverpassApi(metro: string, bbox: [number, number, number, number]): Promise<OSMNode[]> {
   const query = buildOverpassQuery(bbox);
 
   try {
-    const response = await fetch('https://overpass.kumi.systems/api/interpreter', {
-      method: 'POST',
-      body: `data=${encodeURIComponent(query)}`,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': '*/*',
-        'User-Agent': 'Mozilla/5.0 (compatible; FindASale/1.0)',
-      },
-      signal: AbortSignal.timeout(150000),
-    });
+    let response = await fetchOverpass(query);
+
+    // Retry once on 504 (transient mirror timeout)
+    if (response.status === 504) {
+      console.warn(`[osmScraper] ${metro}: 504 — retrying in 8s...`);
+      await new Promise((r) => setTimeout(r, 8000));
+      response = await fetchOverpass(query);
+    }
 
     if (!response.ok) {
       throw new Error(`Overpass API returned ${response.status}: ${response.statusText}`);
