@@ -678,7 +678,7 @@ Visibility pipeline for getting FindA.Sale listed across software directories, c
 | 488 | Uneed | ✅ SUBMITTED S956 — waiting line | Listing at uneed.best/tool/finda-sale. Account: deseee-d1f4. Category: Business. Tags: E-Commerce/Business/Events. Tagline: "Inventory & shopper discovery for secondary sale organizers". Organizer-focused description. Edit URL: uneed.best/edit/waiting-line/36672. |
 
 
-**Tier 1B — Local SEO citations + PWA directories (S965 research — net-new, all free)**
+**Tier 1B — Local SEO citations + PWA directories (S967 research — net-new, all free)**
 
 Identified S965 cross-check: Google Business Profile (S814) was done but the rest of the citation set was skipped. These directly serve "estate sales near me" shopper discovery. Use Paw Paw NAP (219 E Michigan Ave, Suite F, Paw Paw, MI 49079), identical everywhere.
 
@@ -694,7 +694,7 @@ Identified S965 cross-check: Google Business Profile (S814) was done but the res
 Full research + net-new opportunity list (Tier 2/3, niche resale, trade associations, press): `claude_docs/strategy/APP-SUBMISSION-DIRECTORY-RESEARCH-2026.md`.
 
 
-**Tier 1C — Greenfield growth avenues (S965 second-pass research — net-new)**
+**Tier 1C — Greenfield growth avenues (S967 second-pass research — net-new)**
 
 From `claude_docs/strategy/GREENFIELD-GROWTH-AVENUES-2026.md`. App-store paths, vendor revenue programs, PR, and local MI. AI-discovery items (robots.txt AI allowlist, schema.org Event/LocalBusiness, IndexNow) are tracked as a dev dispatch, not here.
 
@@ -711,14 +711,16 @@ From `claude_docs/strategy/GREENFIELD-GROWTH-AVENUES-2026.md`. App-store paths, 
 | 503 | Wikidata entity | ⬜ TODO | Free; brand-owner editing allowed with citable sources. Feeds the AI knowledge graph. Needs a couple third-party mentions first (ties to PR). |
 | 504 | NASMM Industry Partner | ⬜ EVALUATE — Patrick | ~$2,200/yr (conference-bundled) — best audience fit (senior move managers run estate sales). Ask NASMM about a listing-only/lower tier before committing. |
 | 505 | NAPO Business Partner | ⬜ EVALUATE — Patrick | $50 + $25 fees; annual dues TBD (contact their BD). Professional-organizer directory. |
+| 522 | ASEL (American Society of Estate Liquidators) | ⬜ TODO — Patrick | aselonline.com — leading estate-sale association since 2001 (courses/webinars/publications). Angle: pitch a resource/tool feature + sponsored content; member base = our exact organizer audience. HIGH. |
+| 523 | NESA (National Estate Sales Association) | ⬜ TODO — Patrick | nesa-usa.com + facebook.com/NESAUSA — member forums + member directory (also an organizer outreach list). Angle: forum intro / resource feature. HIGH. |
 | 506 | Start Garden "The 100" | ⏰ TIME-SENSITIVE — Patrick | Non-dilutive GR grant competition; applications open (June 1). 100-sec video + milestone app. startgarden.com. |
 | 507 | SCORE West Michigan + Michigan SBDC + The Right Place | ⬜ TODO — Patrick | Free MI small-biz support/credibility/network. score.org/westmichigan, michigansbdc.org, rightplace.org. |
 | 508 | SBAM membership | ⬜ EVALUATE — Patrick | ~$195/yr — statewide MI small-biz directory + events. sbam.org. |
 
-**Skip (flagged S965):** Apple App Store (Guideline 4.2 repackaged-website rejection trap, $99/yr), Meta Quest (no audience), Next.js/Vercel/Cloudinary/etc. vendor showcases (curated, no open submission), SRES/Caring Transitions (gated/competitor), UK PR platforms, IFundWomen/GROW/Spring GR (eligibility mismatch — verify first), llms.txt as a citation strategy (unproven 2026).
+**Skip (flagged S967):** Apple App Store (Guideline 4.2 repackaged-website rejection trap, $99/yr), Meta Quest (no audience), Next.js/Vercel/Cloudinary/etc. vendor showcases (curated, no open submission), SRES/Caring Transitions (gated/competitor), UK PR platforms, IFundWomen/GROW/Spring GR (eligibility mismatch — verify first), llms.txt as a citation strategy (unproven 2026).
 
 
-**Tier 1D — West Michigan / Kalamazoo–Paw Paw local ecosystem (S965 deep-dig — net-new)**
+**Tier 1D — West Michigan / Kalamazoo–Paw Paw local ecosystem (S967 deep-dig — net-new)**
 
 Local credibility, backlinks, press, and no-gate pitch events near the Paw Paw home address. Detail + skips in `GREENFIELD-GROWTH-AVENUES-2026.md` §7.
 
@@ -738,7 +740,46 @@ Local credibility, backlinks, press, and no-gate pitch events near the Paw Paw h
 | 520 | Conquer Accelerator (MSU, GR cohort) | ⬜ EVALUATE — Patrick | 10-wk selective accelerator w/ GR cohort; Red Cedar Ventures investment. Apply only if pursuing accelerator/VC path (sector cohorts don't fit). msufoundation.org/conquer-accelerator. |
 | 521 | Michigan Founders Fund (monitor) | ⬜ MONITOR | Founder membership network; apps closed, reopen expected 2026. Statewide credibility, not money. michiganfoundersfund.org. |
 
-**Skip (flagged S965 deep-dig):** Desai Accelerator (requires U-M Ann Arbor alum founder), Match on Main (requires brick-and-mortar storefront), "Made in Michigan" product registries (physical-product only). Dead brands — do not pitch separately: GR Business Journal + MiBiz (now Crain's GR Business); Kalamazoo Regional Chamber (now SW Michigan First Chamber).
+**Skip (flagged S967 deep-dig):** Desai Accelerator (requires U-M Ann Arbor alum founder), Match on Main (requires brick-and-mortar storefront), "Made in Michigan" product registries (physical-product only). Dead brands — do not pitch separately: GR Business Journal + MiBiz (now Crain's GR Business); Kalamazoo Regional Chamber (now SW Michigan First Chamber).
+
+
+**Tier 1E — Niche resale / sale-event distribution (S967 — high-intent traffic, from research §B5)**
+
+| # | Avenue | Status | Notes |
+|---|---------|--------|-------|
+| 524 | GarageSaleFinder.com | ⬜ TODO | Free sale posting, 2M+ monthly shoppers + app. HIGH reach. (We scrape it for data; posting our own sales is separate.) |
+| 525 | YardSaleSearch.com + YardSales.net | ⬜ TODO | Free posting; "source nodes" that downstream garage-sale apps auto-pull → wide syndication. HIGH. |
+| 526 | EstateSales.org self-listing | ⬜ EVALUATE — Patrick | ~$50/sale, source node. Scrape-prohibited but self-listing allowed; it's a competitor — deliberate call. |
+| 527 | AuctionZip + LiveAuctioneers directories | ⬜ TODO | Auctioneer directory self-listing (auction slice). MEDIUM. |
+| 528 | Flea Market Zone + Flea Market Insiders | ⬜ TODO | Flea-market directory listings. MEDIUM. |
+| 529 | TheThriftShopper.com + MyLocalThriftStore.com | ⬜ TODO | Free claimable thrift/consignment directory listings. MEDIUM. |
+| 530 | Antique Trader business directory + event calendar | ⬜ TODO | Free business listing + free event-calendar submissions (print reach). MEDIUM. |
+| 531 | Classifieds cross-post (ongoing) | ⬜ TODO | Cross-post sales to Nextdoor, Craigslist garage-sales, Facebook Marketplace, OfferUp, VarageSale. HIGH reach; recurring, not one-time. |
+| 532 | Event calendars | ⬜ TODO | Free sale/event listings — Eventbrite, Patch, AmericanTowns. Shopper discovery + SEO. MEDIUM. |
+| 533 | Citywide garage-sale registries (white-label pitch) | ⬜ EVALUATE — Patrick | Pitch FindA.Sale as the registration+mapping tool for municipal citywide sales (Westland/Taylor MI etc.). B2G/partnership, high strategic value. MEDIUM. |
+
+**Tier 1F — Launch / SaaS / citation long-tail (S967 — mostly free batches, from §B1/B3/B4)**
+
+| # | Avenue | Status | Notes |
+|---|---------|--------|-------|
+| 534 | Indie launch directories (batch) | ⬜ TODO | Free: Fazier, MicroLaunch, TinyLaunch, Peerlist, Smol Launch, BetaPage, Startup Stash, Launching Next, Wellfound, F6S, StartupRanking, TinyStartups. Batch from github.com/mahseema/awesome-saas-directories. |
+| 535 | Hacker News "Show HN" + Indie Hackers | ⬜ TODO | Story/launch posts (PWA + local-marketplace angle). Coordinate with Product Hunt (#478) launch week. MEDIUM. |
+| 536 | Secondary SaaS directories (batch) | ⬜ TODO | Free: Tekpon, Crozdesk, SaaSworthy, SoftwareSuggest. (Skip TrustRadius/Clutch/GoodFirms — review-gated.) |
+| 537 | Secondary local citations (batch) | ⬜ TODO | Free: BBB, Yellow Pages, Manta, EZlocal, Hotfrog, Brownbook, Cylex. Optional later: a citation tool (BrightLocal/Whitespark) pushes the data aggregators (Data Axle/Localeze/Acxiom) → 300+ dirs. |
+| 538 | Secondary PWA directories | ⬜ TODO | WebCatalog (webcatalog.io) + progressivewebapp.store. Free. LOW-MED. |
+
+**Tier 1G — Press, communities & remaining associations (S967 — from §B6/B7 + greenfield §4/5/6)**
+
+| # | Avenue | Status | Notes |
+|---|---------|--------|-------|
+| 539 | NAOEL + National Auctioneers Association | ⬜ TODO | Remaining estate/auction trade-assoc directories/channels. MEDIUM. |
+| 540 | Antique Trader news tip | ⬜ TODO | ATNews@aimmedia.com (6 weeks ahead) + free event listings. National resale/antiques press. HIGH for the niche. |
+| 541 | National frugal/resale press & creators | ⬜ TODO | The Penny Hoarder (money-saving angle), frugal-living blog guest posts, reseller podcast tool-review pitches. MEDIUM. |
+| 542 | Community seeding (manual, karma-first) | ⬜ MANUAL | Reddit r/estatesales, r/garagesales, r/flipping, r/SideProject; reseller Discords; garage-sale FB groups. Self-promo banned in most — value-first only. Not automatable. |
+| 543 | National + GR consumer media | ⬜ TODO | MLive/Grand Rapids Press + WZZM 13 (local product/launch story). HIGH local. (West-MI business/TV already #513–518.) |
+| 544 | Additional PR source platforms | ⬜ TODO | Beyond SOS/Featured (#501/#502): Help a B2B Writer→MentionMatch (free), Qwoted (free tier), SourceBottle (free tier). MEDIUM, free first. |
+| 545 | Hello Alice + GR Chamber + Seniors Blue Book | ⬜ EVALUATE — Patrick | Hello Alice (free grant-matching), GR Chamber (paid membership/directory), Seniors Blue Book (regional downsizing/estate ads — only if a MI edition exists). MEDIUM. |
+| 546 | Founder-interview sites | ⬜ DEFER | Failory + Starter Story — want revenue traction; revisit at a traction milestone. |
 
 
 ## Table Stakes — Business Operations (S814)

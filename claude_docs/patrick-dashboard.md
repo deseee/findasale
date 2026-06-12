@@ -1,6 +1,24 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S966 — 2026-06-12 (Software Finder #483 submitted ✅ | Trustpilot #485 blocked)
+**Last updated:** S967 — 2026-06-12 (Submission + greenfield growth research | eBay email catch-up | West MI outreach drafted)
+
+---
+
+## Session S967 Summary — Submission Research + eBay Catch-up + Local Outreach (COMPLETE)
+
+**Type:** RESEARCH / OUTREACH — where-else-to-submit research, eBay email catch-up, West Michigan outreach prep
+**BQ:** 0 (unchanged)
+
+| Item | Status | Details |
+|------|--------|---------|
+| App-submission research | ✅ DONE | Reconciled vs existing pipeline → `APP-SUBMISSION-DIRECTORY-RESEARCH-2026.md`. Part A = already done/queued/rejected; Part B = net-new. |
+| Greenfield growth research | ✅ DONE | `GREENFIELD-GROWTH-AVENUES-2026.md` — app-store paths, vendor programs, AI discovery, PR platforms, MI ecosystem + West-MI deep-dig. |
+| Roadmap rows #489–546 | ✅ ADDED | Tier 1B (local citations + PWA), 1C (greenfield), 1D (West Michigan local). Skip-lists flagged. |
+| AI discovery | ✅ VERIFIED ALREADY SHIPPED | schema.org JSON-LD on 26 page types (Event on sales/[id].tsx), indexNowService.ts, robots.txt allows AI crawlers. Only Wikidata entity left — no dev needed. |
+| eBay Developer ticket #260428-000018 | ✍️ REPLY DRAFTED | Browse API Growth Check was waiting on us; draft links it to the completed EPN questionnaire to stop auto-close. Pending Patrick send. |
+| eBay EPN affiliate #00448478 | ✅ UP TO DATE | We replied 6/5 (fixes live); awaiting eBay. |
+| eBay Marketplace Insights #00447997 | ℹ️ CLOSED BY EBAY | Access requests currently closed — dead end, no action. |
+| West Michigan outreach | ✅ DRAFTED | `marketing/west-michigan-local-outreach-2026-06.md` — Paw Paw Chamber + Local First listing copy + 3 press pitches. 3 Gmail drafts created (Rapid Growth, Second Wave, Crain's/Anna Fifelski). |
 
 ---
 

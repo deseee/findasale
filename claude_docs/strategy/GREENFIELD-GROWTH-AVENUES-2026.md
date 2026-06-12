@@ -8,7 +8,7 @@ Second-pass research after reconciling against everything already done/queued (s
 
 1. **Microsoft Store via PWABuilder** — FREE (all dev fees removed 2026), real app-store presence, no native code. Mostly automatable. ⭐
 2. **eBay Partner Network** — free, near-instant approval, turns our existing eBay integration into commission revenue. Needs Patrick (eBay account). ⭐
-3. **Wikidata entity** — the only remaining AI-discovery gap (schema.org, IndexNow, robots.txt all verified already shipped S965). Off-site, needs a citable mention or two first. ⭐
+3. **Wikidata entity** — the only remaining AI-discovery gap (schema.org, IndexNow, robots.txt all verified already shipped S967). Off-site, needs a citable mention or two first. ⭐
 4. **Alignable** — free local small-biz network; doubles as lead-gen since estate/consignment businesses ARE our customer. ⭐
 5. **Source of Sources (SOS)** — free, the real HARO successor; earned media via consumer-lifestyle reporters. ⭐
 
@@ -24,11 +24,11 @@ Second-pass research after reconciling against everything already done/queued (s
 | Apple App Store | $99/yr | High | ❌ **TRAP** — Guideline 4.2 rejects "repackaged websites"; PWA wrappers routinely rejected. iOS users get the PWA via Safari Add-to-Home-Screen for free. **Skip.** | SKIP |
 | Meta Horizon/Quest | $0 | Low | VR-headset audience, ~zero overlap. **Skip.** | SKIP |
 
-## 2. AI answer-engine discoverability — ⚠️ MOSTLY ALREADY DONE (verified S965, codebase check)
+## 2. AI answer-engine discoverability — ⚠️ MOSTLY ALREADY DONE (verified S967, codebase check)
 
-Codebase verification S965: most of this is already shipped. Do NOT dispatch dev work — only the off-site Wikidata entity remains.
+Codebase verification S967: most of this is already shipped. Do NOT dispatch dev work — only the off-site Wikidata entity remains.
 
-| Item | Status (verified S965) |
+| Item | Status (verified S967) |
 |---|---|
 | Schema.org JSON-LD | ✅ **DONE** — `sales/[id].tsx` emits Event + Place + PostalAddress + Organization + AggregateOffer + Product + Offer + BreadcrumbList + EventSeries + SpeakableSpecification; JSON-LD present across 26 page types. More complete than recommended. |
 | IndexNow | ✅ **DONE** — `packages/backend/src/services/indexNowService.ts` built. |
@@ -88,7 +88,7 @@ Codebase verification S965: most of this is already shipped. Do NOT dispatch dev
 
 ---
 
-## 7. West Michigan / Kalamazoo–Paw Paw deep-dig (S965 — additional local avenues)
+## 7. West Michigan / Kalamazoo–Paw Paw deep-dig (S967 — additional local avenues)
 
 Beyond the GR-org list in §6. Roadmap rows #509–#521.
 
@@ -106,7 +106,7 @@ Beyond the GR-org list in §6. Roadmap rows #509–#521.
 
 ## How these break down for execution
 
-- **Dev tasks (dispatch findasale-dev):** Microsoft Store package, Google Play TWA + assetlinks.json, Lighthouse PWA audit. (AI-discovery items — schema.org, IndexNow, robots.txt — verified ALREADY DONE S965; no dispatch needed.)
+- **Dev tasks (dispatch findasale-dev):** Microsoft Store package, Google Play TWA + assetlinks.json, Lighthouse PWA audit. (AI-discovery items — schema.org, IndexNow, robots.txt — verified ALREADY DONE S967; no dispatch needed.)
 - **Free submissions/profiles (mostly automatable):** Samsung Store email, Alignable, Source of Sources, Featured.com, Stripe Partner, Wikidata entity, Hello Alice.
 - **Needs Patrick (account/business/paid decision):** eBay Partner Network, Microsoft/Google Play accounts, NASMM ($2,200 — confirm listing-only tier), NAPO dues, SBAM ($195), Start Garden application (time-sensitive), SCORE/SBDC/Right Place intros.
 - **Skip (flagged traps/mismatch):** Apple App Store, Meta Quest, vendor showcases, SRES, Caring Transitions, UK PR platforms, IFundWomen/GROW/Spring GR (eligibility), llms.txt-as-citation-strategy.

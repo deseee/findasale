@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S967 — RESEARCH/OUTREACH (2026-06-12). App-submission + greenfield growth research, reconciled against existing pipeline. Added roadmap rows #489–546: Tier 1B (local citations Bing/Apple/Yelp/Foursquare + PWA dirs Appsco.pe/findPWA), Tier 1C (Microsoft Store/Google Play/Samsung PWA paths, eBay Partner Network, Stripe Partner, SOS/Featured PR, NASMM/NAPO, Start Garden, Alignable, SBAM, Wikidata), Tier 1D (West MI local: Paw Paw Chamber, 5×5 Night, The Rapidian, Local First, Crain's GR/Rapid Growth/Second Wave press, Discover Kalamazoo). Verified AI-discovery ALREADY SHIPPED — schema.org JSON-LD on 26 page types incl. Event on sales/[id].tsx, indexNowService.ts built, robots.txt allows AI crawlers; only Wikidata entity remains, no dev needed. eBay email catch-up: Developer API Growth Check #260428-000018 reply DRAFTED (links to completed EPN questionnaire, stops auto-close); EPN affiliate #00448478 — we replied 6/5, awaiting eBay; Marketplace Insights #00447997 closed by eBay (access closed). Marketing: west-michigan-local-outreach doc (Paw Paw Chamber + Local First listing copy, 3 press pitches). 4 Gmail drafts created (eBay dev ticket + Rapid Growth + Second Wave + Crain's/Anna Fifelski) — pending Patrick send. Docs: APP-SUBMISSION-DIRECTORY-RESEARCH-2026.md + GREENFIELD-GROWTH-AVENUES-2026.md. BQ: 0 (unchanged).**
+
 **S966 — RESEARCH (2026-06-12). Directory listing sprint: Software Finder (#483) profile fully built — description, 5 features, 3 FAQs all rewritten with real product content. Trustpilot (#485) blocked (account creation fails regardless of email used). BQ: 0 (unchanged).**
 
 **S964 — DEV (2026-06-12). Scraper expansion: EstateSale.com directory scraper built (51-state two-phase, 500–1,500 featured companies with phone/email/website, Crawl-Delay:10 respected). Playwright CI harness continue-on-error fixed. sourceRegistry.ts + quarterly workflow created. BQ: 0 (unchanged).**
@@ -97,6 +99,28 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 
 ## Next Session
+
+### Patrick — Actions Needed (post S967)
+
+1. **Send the 4 Gmail drafts (review first — Gmail MCP can only draft, not send):**
+   - eBay Developer ticket #260428-000018 reply (closes the auto-close loop; send from artifactmi@gmail.com if possible).
+   - Press pitch → Rapid Growth Media (Editor@RapidGrowthMedia.com).
+   - Press pitch → SW Michigan's Second Wave (feedback@secondwavemedia.com).
+   - Press pitch → Crain's GR Business (anna.fifelski@crain.com — confirm byline if desired).
+
+2. **Push S967 research + outreach docs:**
+   ```
+   cd C:\Users\desee\ClaudeProjects\FindaSale
+   git add claude_docs/strategy/roadmap.md claude_docs/strategy/APP-SUBMISSION-DIRECTORY-RESEARCH-2026.md claude_docs/strategy/GREENFIELD-GROWTH-AVENUES-2026.md claude_docs/marketing/west-michigan-local-outreach-2026-06.md claude_docs/STATE.md claude_docs/patrick-dashboard.md
+   git commit -m "S967: app-submission + greenfield growth research, roadmap #489–546, West MI outreach copy"
+   .\push.ps1
+   ```
+
+3. **Time-sensitive grants (applications open now):** Start Garden "The 100" (#506) + Start Garden 5×5 Night (#510). Both free, no eligibility gate.
+
+4. **Free quick-win listings (~1-2 hrs, all $0):** Bing Places #489, Apple Business Connect #490, Yelp #491, Foursquare #492, Appsco.pe #493, findPWA #494; eBay Partner Network #498; Alignable #500; Paw Paw Area Chamber #509.
+
+5. **EPN affiliate (#00448478) nudge** — if eBay stays quiet past ~1 week from 6/5, send a short follow-up to epn-tigs@ebay.com (offer available on request).
 
 ### Patrick — Actions Needed (post S964)
 
