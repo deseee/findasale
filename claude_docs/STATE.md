@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S962 — QA (2026-06-12). Records pass: #74 + #463 S961 PCVs applied to roadmap.md. Chrome QA: #219 ✅, #218 ✅, #55 ✅, #81 ✅ spot-check, #127 ✅. Bug found: #27c eBay CSV export → HTTP 500. BQ: 0→1.**
+
 **S961 — QA (2026-06-12). Chrome QA pass: #463 Claim Button Tracking ✅, #74 Role-Aware Reg ✅. Records pass: SEO3 S944 applied to roadmap.md. #472 PCVs (S948) cleared from PCV table. BQ: 0.**
 
 **S960 — DEV (2026-06-12). Bid13 scraper activated + NFMA parked + dead flea market directory research.**
@@ -49,6 +51,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | ~~#470 organizer_signup GTM event~~ | RESOLVED S958 — S946 verified this event (dataLayer sequence confirmed with screenshot evidence on /register?invite=QA-GA4-B); S949 re-added in error. BQ item closed. | — | S949→CLOSED S958 |
+| #27c eBay CSV Export (Listing Factory) | `GET /api/sales/:saleId/ebay-export?photoMode=watermarked → HTTP 500`. generateEbayCsv reviewed — all schema fields exist. Runtime error requires Railway logs. | Pull Railway logs for exportSaleToEbay 500; fix root cause; re-verify in Chrome | S962 |
 
 
 
@@ -63,6 +66,11 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | 472 | send-test-email happy path | Navigated https://finda.sale/admin as user1@example.com (ADMIN). Ran fetch POST /api/admin/send-test-email with {to:"test-delivery@mailinator.com",subject:"Test",body:"Test body"}. Saw 200 {success:true, messageId:"bb5ce99a-96d4-48eb-913d-d5f663bc60fc", rail:"resend"}. Screenshot: ss_6413lunko | S948 |
 | 472 | send-test-email domain block (@system.finda.sale) | Same authenticated session. Sent to {to:"anything@system.finda.sale"}. Saw 400 {"success":false,"error":"Recipient domain blocked — cannot send to this address"}. isEmailDomainBlocked guard fires. Screenshot: ss_6413lunko | S948 |
 | 472 | send-test-email auth gate (unauthenticated) | New unauthenticated tab. Direct Railway backend call POST https://backend-production-153c9.up.railway.app/admin/send-test-email, no credentials/CSRF. Saw 403 {"message":"CSRF token validation failed"}. Defense-in-depth: CSRF before auth. Screenshot: ss_4595bvchx | S948 |
+| 219 | Shopper Achievements | Navigated https://finda.sale/shopper/achievements as Alice Johnson (user1). Achievements tab rendered with XP breakdown, badges grid, rank progress bar. Dark mode clean. ss_5810hhnqu ss_4488tmnlg | S962 |
+| 218 | Shopper Trades | Navigated https://finda.sale/shopper/trades as Alice Johnson (user1). Trades page rendered with active trade listings. ss_9998kdjb8 | S962 |
+| 55 | Seasonal Discovery Challenges | Navigated https://finda.sale/challenges as Alice Johnson (user1). Seasonal challenges page displayed with active challenges list. ss_5780an0ik | S962 |
+| 81 | Empty State Audit | Spot-checked empty state content across key pages as Alice Johnson. States render with messaging and CTAs (not raw empty). ss_2877anw5k | S962 |
+| 127 | POS Value Unlock Tiers | Navigated https://finda.sale/organizer/pos?saleId=59c49908-72f2-4e92-ade9-02bfcfdd9230 as Alice Johnson (user1). Clicked "POS Value Unlock Tiers" button. Widget expanded: Tier 1 "Item Performance Snapshot" unlocked (5 tx + $50 revenue ✓ checkmark), Tier 2 "Category Deep Dive + Repeat Buyer Map" locked (20 tx + $300 revenue, progress bar "15 more sales"), Tier 3 "Regional Pricing Benchmarks + Predictive Demand" locked (50 tx + $1,000 revenue, PRO badge). Header: "1/3 unlocked · 5 sales · $325.00". ss_9169k1up3 ss_0868mkvi8 | S962 |
 |---|---------|----------|---------|
 | SEO3 | Denver city landing page /estate-sales/denver-co | Navigated https://finda.sale/estate-sales/denver-co. Title: "Estate Sales in Denver, CO \| FindA.Sale" ✅. Meta desc present+keyword-rich ✅. H1: "Estate Sales in Denver, CO" ✅. 50 listings visible ✅. Dark mode clean ✅. ss_34924pp42 ss_8168bplgd | S944 |
 _(#422 ✅ S949 applied S950 — cleared. #75 ✅ S949 applied S950 — cleared. #470 item_viewed ✅ S949 applied S950 — cleared.)_
@@ -116,6 +124,25 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 
 ## Recent Sessions
+
+### S962 — 2026-06-12 | QA (Records Pass + Chrome QA: #219/#218/#55/#81/#127 + #27c Bug)
+
+**Session type:** QA — autonomous roadmap QA continuation from S961
+
+**Work completed:**
+- **Records pass:** Applied S961 PCVs (#74 Role-Aware Registration Consent + #463 Claim Button Tracking) to roadmap.md Claude QA column (⬜ → ✅ S961). Both had full 5-element evidence.
+- **#219 Shopper Achievements — VERIFIED ✅** — Navigated /shopper/achievements as Alice Johnson. Achievements tab rendered with XP breakdown, badges grid, rank progress. ss_5810hhnqu ss_4488tmnlg. PCV staged.
+- **#218 Shopper Trades — VERIFIED ✅** — Navigated /shopper/trades as Alice Johnson. Trades page rendered with active trade listings. ss_9998kdjb8. PCV staged.
+- **#55 Seasonal Discovery Challenges — VERIFIED ✅** — Navigated /challenges as Alice Johnson. Seasonal challenges page displayed. ss_5780an0ik. PCV staged.
+- **#81 Empty State Audit — VERIFIED ✅ (spot-check)** — Key pages confirmed with empty-state messaging and CTAs. ss_2877anw5k. PCV staged.
+- **#127 POS Value Unlock Tiers — VERIFIED ✅** — Navigated /organizer/pos with Alice's active sale. Widget expanded showing 3-tier dual-gate structure: Tier 1 unlocked (5 tx + $50 revenue), Tier 2 locked (progress bar), Tier 3 locked (PRO gate). Real data: "1/3 unlocked · 5 sales · $325.00". ss_9169k1up3 ss_0868mkvi8. PCV staged.
+- **#27c eBay CSV Export — BUG ❌** — Clicked "Export to eBay" on /organizer/add-items/[saleId]. Modal opened correctly. Clicked "Download CSV". `GET /api/sales/:saleId/ebay-export?photoMode=watermarked → HTTP 500`. generateEbayCsv function reviewed — all schema fields (estimatedValue, aiSuggestedPrice, ebayCategoryId, conditionGrade) exist in schema.prisma. Runtime root cause requires Railway logs. Added to Blocked Queue.
+
+**Files changed:**
+- `claude_docs/strategy/roadmap.md` — #74 + #463 Claude QA columns updated (⬜ → ✅ S961)
+- `claude_docs/STATE.md` — this wrap
+
+**BQ delta:** 0→1 (#27c eBay CSV Export 500)
 
 ### S961 — 2026-06-12 | QA (Chrome QA Pass: #463 + #74 + Records Pass)
 

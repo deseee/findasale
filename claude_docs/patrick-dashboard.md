@@ -1,6 +1,51 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S959 — 2026-06-12 (wrap)
+**Last updated:** S962 — 2026-06-12 (wrap)
+
+---
+
+## Session S962 Summary — QA Pass: #219/#218/#55/#81/#127 ✅ + #27c Bug ❌ (COMPLETE)
+
+**Type:** QA — autonomous roadmap Chrome QA continuation
+**BQ:** 0→1 (#27c eBay CSV Export 500)
+
+| Item | Status | Details |
+|------|--------|---------|
+| Records pass (#74 + #463) | ✅ DONE | Applied S961 PCVs to roadmap.md Claude QA column. Both had full 5-element evidence. |
+| #219 Shopper Achievements | ✅ VERIFIED | /shopper/achievements as Alice — XP breakdown, badges, rank progress. ss_5810hhnqu ss_4488tmnlg |
+| #218 Shopper Trades | ✅ VERIFIED | /shopper/trades as Alice — trades page renders with active listings. ss_9998kdjb8 |
+| #55 Seasonal Challenges | ✅ VERIFIED | /challenges as Alice — challenge list renders. ss_5780an0ik |
+| #81 Empty State Audit | ✅ VERIFIED (spot-check) | Key pages confirmed with empty-state messaging + CTAs. ss_2877anw5k |
+| #127 POS Value Unlock Tiers | ✅ VERIFIED | /organizer/pos with active sale — widget expanded, 3 tiers visible, Tier 1 unlocked (real data: 1/3 unlocked · 5 sales · $325). ss_9169k1up3 ss_0868mkvi8 |
+| #27c eBay CSV Export | ❌ BUG | Click "Export to eBay" → modal opens → "Download CSV" → HTTP 500. All schema fields exist. Needs Railway logs to pinpoint. Added to BQ. |
+
+---
+
+## Open Patrick Actions
+
+| Action | Priority | Instructions |
+|--------|----------|-------------|
+| Push S960 scraper changes | HIGH | See pushblock in S960 STATE.md entry — Bid13 scraper activation |
+| Trigger Bid13 workflow | HIGH | After push: GitHub Actions → `scrape-bid13` → Run workflow |
+| Send Gitnux email | HIGH | Gmail Drafts → draft to info@gitnux.org (ID r-4990707302036889022) → Send |
+| Send WifiTalents email | HIGH | Gmail Drafts → draft to info@wifitalents.com (ID r-8399856770625698902) → Send |
+| DELETE DIYAuctions draft | HIGH | Gmail Drafts → draft to business@diyauctions.com (ID r1579106969886718270) → Delete (competitor!) |
+| SaaSHub account | MEDIUM | Create account at saashub.com → claim saashub.com/finda-sale |
+| AlternativeTo | MEDIUM | June 18, 2026 ~9:49 PM Stockholm — log in as "FindASale" → alternativeto.net → Add Software |
+| Trigger KY/ME workflows | MEDIUM | GitHub Actions → `scrape-kentucky-phase2` + `scrape-maine-phase2` → Run workflow |
+
+---
+
+## Push Block (S962)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "qa(s962): Chrome QA #219/#218/#55/#81/#127 ✅ + #27c eBay export bug found + S961 records pass applied"
+.\push.ps1
+```
 
 ---
 
