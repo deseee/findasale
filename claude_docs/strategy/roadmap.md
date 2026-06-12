@@ -678,6 +678,22 @@ Visibility pipeline for getting FindA.Sale listed across software directories, c
 | 488 | Uneed | ✅ SUBMITTED S956 — waiting line | Listing at uneed.best/tool/finda-sale. Account: deseee-d1f4. Category: Business. Tags: E-Commerce/Business/Events. Tagline: "Inventory & shopper discovery for secondary sale organizers". Organizer-focused description. Edit URL: uneed.best/edit/waiting-line/36672. |
 
 
+**Tier 1B — Local SEO citations + PWA directories (S965 research — net-new, all free)**
+
+Identified S965 cross-check: Google Business Profile (S814) was done but the rest of the citation set was skipped. These directly serve "estate sales near me" shopper discovery. Use Paw Paw NAP (219 E Michigan Ave, Suite F, Paw Paw, MI 49079), identical everywhere.
+
+| # | Platform | Status | Notes |
+|---|---------|--------|-------|
+| 489 | Bing Places | ⬜ TODO | bingplaces.com — free, high-DA local citation. Can import from Google Business Profile. |
+| 490 | Apple Business Connect | ⬜ TODO | businessconnect.apple.com — free; powers Apple Maps. Verify with Paw Paw address. |
+| 491 | Yelp for Business | ⬜ TODO | biz.yelp.com — free claim. Category: e-commerce/local service. NAP must match GBP. |
+| 492 | Foursquare | ⬜ TODO | foursquare.com claim venue — free; also feeds downstream data aggregators (Data Axle/Localeze/Acxiom). |
+| 493 | Appsco.pe (PWA directory) | ⬜ TODO | appsco.pe — submit PWA manifest URL. Exact-fit, low competition; PWA status is an advantage here. |
+| 494 | findPWA (PWA directory) | ⬜ TODO | findpwa.com — submit PWA; aim for the Verified badge. |
+
+Full research + net-new opportunity list (Tier 2/3, niche resale, trade associations, press): `claude_docs/strategy/APP-SUBMISSION-DIRECTORY-RESEARCH-2026.md`.
+
+
 ## Table Stakes — Business Operations (S814)
 
 Missing fundamentals identified and addressed in S814 audit. All shipped unless marked PENDING.
