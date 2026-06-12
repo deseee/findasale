@@ -1,0 +1,76 @@
+# NASMM robots.txt requires Crawl-Delay: 10 — scraper enforces this internally
+name: Scrape NASMM Senior Move Manager Directory
+
+on:
+  schedule:
+    - cron: '0 10 1 */3 *'  # Quarterly: 1st of Jan/Apr/Jul/Oct at 10:00 UTC
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    name: NASMM.org Senior Move Manager Scraper (~900 US members)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: packages/database
+
+      - name: Verify database connectivity
+        run: |
+          python3 -c "
+          import urllib.parse, socket, sys
+          url = '${{ secrets.DATABASE_URL }}'
+          if not url:
+              print('ERROR: DATABASE_URL secret is not set')
+              sys.exit(1)
+          parsed = urllib.parse.urlparse(url)
+          host = parsed.hostname
+          port = parsed.port or 5432
+          try:
+              sock = socket.create_connection((host, port), timeout=10)
+              sock.close()
+              print(f'DB connectivity OK: {host}:{port}')
+          except Exception as e:
+              print(f'ERROR: Cannot reach DB at {host}:{port} — {e}')
+              print('ACTION REQUIRED: The DATABASE_URL GitHub Actions secret may be stale.')
+              print('Fix: GitHub repo -> Settings -> Secrets and variables -> Actions -> DATABASE_URL -> Update')
+              sys.exit(1)
+          "
+
+      - name: Run NASMM Scraper
+        continue-on-error: true
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          npx tsx -e '
+            import { scrapeNASMM } from "./src/services/scraper/sources/nasmmScraper";
+            import { RateLimiter } from "./src/services/scraper/rateLimiter";
+            (async () => { try {
+              const rateLimiter = new RateLimiter({ requestsPerSecond: 0.1 });
+              const stats = await scrapeNASMM("national", "", rateLimiter);
+              console.log("NASMM scraper completed:", JSON.stringify(stats));
+              process.exit(0);
+            } catch (err) {
+              console.error("NASMM scraper failed:", err);
+              process.exit(1);
+            }
+            })();
+          '
