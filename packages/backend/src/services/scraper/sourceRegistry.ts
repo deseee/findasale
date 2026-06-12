@@ -27,7 +27,7 @@ import { scrapeFleaMarketCom } from './sources/fleaMarketComScraper';
 import { scrapeFleaMarketsNet } from './sources/fleaMarketsNetScraper';
 import { scrapeFleaMarketRover } from './sources/fleaMarketRoverScraper';
 import { scrapeVendorsByState } from './sources/vendorsByStateScraper';
-import { scrapeNFMAMembers } from './sources/nfmaMembersScraper';
+import { runNFMAMembersScraper } from './sources/nfmaMembersScraper';
 import { scrapeBidSpotter } from './sources/bidSpotterScraper';
 import { scrapeBid13 } from './sources/bid13Scraper';
 import { scrapeIBidNow } from './sources/ibidNowScraper';
@@ -336,7 +336,10 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     enabled: false, // PARKED — Wix.com JS-rendered member list; no static data in HTML.
     qualityTier: 'high',
     legalNote: 'robots.txt: OPEN (Allow: /). Privacy Policy: no anti-scraping language. Member list at /nfma-member-markets is Wix JS-rendered — static HTML returns shell with zero records. Unpark: Playwright or Wix Data API. Note: nfma.org is the wrong org (Municipal Analysts). Verified 2026-06-10.',
-    run: scrapeNFMAMembers,
+    run: async (_metro: string, _organizerId: string, _rateLimiter: RateLimiter): Promise<ScrapeStats> => {
+      await runNFMAMembersScraper();
+      return { itemsFound: 0, itemsCreated: 0, itemsUpdated: 0, itemsSkipped: 0, itemsFailed: 0 };
+    },
   },
   // ─── Storage Auction Sources (2026-06-10 investigation) ───────────────────
   {
@@ -355,9 +358,9 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     displayName: 'Bid13.com',
     type: 'directory',
     runMode: 'national-once',
-    enabled: false, // PARKED — Drupal 7 + bid13_search AJAX + Socket.io bid13_live_update. No static listings in HTML.
+    enabled: true, // ACTIVE — /api/v1/search.php JSON endpoint confirmed 2026-06-12.
     qualityTier: 'medium',
-    legalNote: 'ToS CLEAR — no anti-scraping language. robots.txt open (disallows only CMS paths). Parked on technical grounds: all listing data loaded via Drupal AJAX + Socket.io. bid13_autoban uses evercookie bot fingerprinting. Unpark: Playwright or Drupal AJAX endpoint discovery. Verified 2026-06-10.',
+    legalNote: 'ToS CLEAR — no anti-scraping language (terms-of-service page reviewed 2026-06-12). robots.txt: /api/v1/ path not blocked, crawl-delay: 5 s (respected). API endpoint /api/v1/search.php discovered via bid13_search.js custom module. Confirmed returning live JSON facility data.',
     run: scrapeBid13,
   },
   {
