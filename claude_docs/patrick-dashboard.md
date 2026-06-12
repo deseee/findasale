@@ -11,7 +11,7 @@
 
 | Item | Status | Details |
 |------|--------|---------|
-| Kentucky phase2 scraper | ✅ FIXED | Wrong control IDs confirmed via live page fetch. Updated: `ContentPlaceHolder2`, checkbox fields, correct button/name/status names. |
+| Kentucky phase2 scraper | ✅ FIXED (2 rounds) | Round 1: ContentPlaceHolder2 field names. Round 2: AutoPostBack board-select step required (3-step flow); replaced `<th>`-based parser with positional `<td>` parser. 33 records confirmed for letter A. |
 | Maine phase2 scraper | ✅ FIXED (full rewrite) | 3 root causes fixed: cookie redirect loop, chunked VIEWSTATE (11 parts), wrong POST target. CSV export confirmed working. |
 | Alabama phase2 | ✅ NOT BROKEN | Live API test: 522 records/letter-A. Transient timeout. No code change. |
 | Indiana phase2 | ✅ NOT BROKEN | S954 fixes confirmed correct. Transient failure only. No code change. |
@@ -42,7 +42,7 @@ git add packages/backend/src/services/scraper/sources/kentuckyPhase2Scraper.ts
 git add packages/backend/src/services/scraper/sources/mainePhase2Scraper.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: KY phase2 scraper ContentPlaceHolder2 field names + ME phase2 scraper full rewrite (cookie/VIEWSTATE/POST-flow)"
+git commit -m "fix: KY phase2 scraper AutoPostBack board-select + positional parser + ME phase2 full rewrite (cookie/VIEWSTATE/POST-flow)"
 .\push.ps1
 ```
 
