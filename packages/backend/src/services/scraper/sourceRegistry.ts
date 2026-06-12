@@ -445,7 +445,7 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     runMode: 'national-once',
     enabled: false,
     qualityTier: 'medium',
-    legalNote: 'ToS CLEAR — no anti-scraping clause. robots.txt blank. Site is fully JS-rendered (Next.js SPA); /dealers returns empty shell via static fetch. Unpark: Playwright headless or REST API discovery via DevTools. Strong Phase 2 candidate for ANTIQUE_DEALER ingestion. Verified 2026-06-10.',
+    legalNote: 'Domain PARKED (GoDaddy lander) as of 2026-06-12 — all paths redirect to /lander, sitemap contains only /lander. Prior investigation (2026-06-10): ToS CLEAR, robots.txt open, JS-rendered Next.js SPA. Site defunct. Re-check if domain is re-registered.',
     run: scrapeSellMyAntiques,
   },
   {
