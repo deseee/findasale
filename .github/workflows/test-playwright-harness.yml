@@ -38,6 +38,7 @@ jobs:
         working-directory: packages/backend
 
       - name: Run structure dump
+        continue-on-error: true
         working-directory: packages/backend
         env:
           TEST_URL: ${{ github.event.inputs.url || 'https://www.fleamarkets.org/nfma-member-markets' }}

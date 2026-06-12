@@ -42,6 +42,7 @@ import { scrapeFleamapket } from './sources/fleamapketScraper';
 import { scrapeEstateSalesOrg } from './sources/estatesalesOrgScraper';
 import { scrapeSwapmeetDirectory } from './sources/swapmeetDirectoryScraper';
 import { scrapeNASMM } from './sources/nasmmScraper';
+import { scrapeEstateSaleCom } from './sources/estateSaleComScraper';
 
 export type SourceType = 'directory' | 'licensing' | 'crawl-queue' | 'places-api';
 export type SourceRunMode = 'metro-loop' | 'national-once';
@@ -500,14 +501,14 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     legalNote: 'Public member directory. robots.txt Crawl-Delay: 10 enforced internally with 10–12s inter-state delay. /find-a-move-manager/ path not disallowed. ~900 US senior move manager companies — frequently run or refer estate sales. Verified 2026-06-12.',
     run: scrapeNASMM,
   },
+  {
+    id: 'EstateSaleCom',
+    displayName: 'EstateSale.com (Estate Sale Company Directory)',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    qualityTier: 'high',
+    legalNote: 'robots.txt: Crawl-Delay: 10; all Disallow rules commented out — effectively open for *. State listing pages and company profiles are server-rendered static HTML (no JS required). Fetches 51 state listing pages then visits each company profile for phone, email, website. ~500–1,500 US featured estate sale companies (paid listings = highest quality leads). 15,631 total in their database. Verified 2026-06-12.',
+    run: scrapeEstateSaleCom,
+  },
 ];
-
-export function getSourceById(id: string): ScraperSourceDef | undefined {
-  return SOURCE_REGISTRY.find((s) => s.id === id);
-}
-
-export function getEnabledSources(): ScraperSourceDef[] {
-  return SOURCE_REGISTRY.filter((s) => s.enabled && !s.prohibited);
-}
-
-export const VALID_SOURCE_IDS: string[] = SOURCE_REGISTRY.map((s) => s.id);
