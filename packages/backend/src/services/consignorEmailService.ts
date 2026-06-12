@@ -1,5 +1,6 @@
 import { buildEmail } from './emailTemplateService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { suppressionService } from './suppressionService';
 
 
 const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
@@ -18,6 +19,11 @@ export const sendConsignorItemSold = async (params: {
   saleId: string;
 }): Promise<void> => {
   
+
+  if (await suppressionService.isHardSuppressed(params.consignorEmail)) {
+    console.log(`[consignor-email] Skipping suppressed address: ${params.consignorEmail}`);
+    return;
+  }
 
   try {
     const html = buildEmail({
@@ -65,6 +71,11 @@ export const sendConsignorPayout = async (params: {
 }): Promise<void> => {
   
 
+  if (await suppressionService.isHardSuppressed(params.consignorEmail)) {
+    console.log(`[consignor-email] Skipping suppressed address: ${params.consignorEmail}`);
+    return;
+  }
+
   try {
     const methodDisplay = params.method ? ` via ${params.method}` : '';
     const html = buildEmail({
@@ -108,6 +119,11 @@ export const sendConsignorExpiryNotice = async (params: {
   saleId: string;
 }): Promise<void> => {
   
+
+  if (await suppressionService.isHardSuppressed(params.consignorEmail)) {
+    console.log(`[consignor-email] Skipping suppressed address: ${params.consignorEmail}`);
+    return;
+  }
 
   try {
     const html = buildEmail({

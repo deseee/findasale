@@ -9,6 +9,7 @@ import {
 } from '../services/tierLapseService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { bulkEmailEnabled } from '../utils/bulkEmailGate';
+import { suppressionService } from '../services/suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
@@ -34,6 +35,10 @@ const sendTierLapseWarningEmail = async (
   });
 
   try {
+    if (await suppressionService.isHardSuppressed(email)) {
+      console.log(`[TierLapse] Skipping suppressed address: ${email}`);
+      return;
+    }
     await transactionalEmailService.emails.send({
       from: FROM_EMAIL,
       to: email,

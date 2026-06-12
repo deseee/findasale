@@ -4,6 +4,7 @@
 import { prisma } from '../lib/prisma';
 import { buildEmail } from './emailTemplateService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { suppressionService } from './suppressionService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
@@ -41,6 +42,10 @@ export async function sendNewMessageEmail(notification: NewMessageNotification):
       footerNote: 'Reply directly in the message thread',
     });
 
+    if (await suppressionService.isHardSuppressed(notification.recipientEmail)) {
+      console.log(`[messageEmail] Skipping suppressed address: ${notification.recipientEmail}`);
+      return;
+    }
     await transactionalEmailService.emails.send({
       from: FROM_EMAIL,
       to: notification.recipientEmail,
