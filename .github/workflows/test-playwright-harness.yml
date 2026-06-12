@@ -49,7 +49,7 @@ jobs:
               const url = process.env.TEST_URL ?? "https://www.fleamarkets.org/nfma-member-markets";
               const selector = process.env.TEST_SELECTOR || undefined;
               console.log("Testing fetchPageHTML against:", url);
-              const html = await fetchPageHTML(url, { waitForSelector: selector || undefined });
+              const html = await fetchPageHTML(url, { waitForSelector: selector || undefined, waitForNetworkIdle: false });
               console.log("HTML returned — length:", html.length);
               const title = html.match(/<title[^>]*>([^<]+)<\/title>/)?.[1] ?? "(no title)";
               console.log("Title:", title);
