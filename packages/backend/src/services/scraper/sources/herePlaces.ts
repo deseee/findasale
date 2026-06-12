@@ -1,7 +1,9 @@
 /**
  * ADR-077: HERE Discover API Business Directory Scraper
  * Ingests secondhand/resale businesses as unmanaged organizer directory entries.
- * Uses HERE Discover API (offset-based pagination, max 2 pages = 200 results per query).
+ * Uses HERE Discover API (single page, 100 results per query).
+ * NOTE: HERE Discover API offset range is [0,99], so MAX_PAGES=1 with limit=100
+ * is the correct pagination strategy (offset=0 only).
  *
  * Businesses sourced here get:
  * - Organizer record with isUnmanagedListing=true, businessCategory
@@ -15,7 +17,7 @@ import { PLACES_QUERIES, GOOGLE_PLACES_METROS, BUSINESS_NAME_BLOCKLIST } from '.
 import { getRandomUserAgent } from '../userAgents';
 
 const HERE_API_BASE = 'https://discover.search.hereapi.com/v1/discover';
-const MAX_PAGES = 2;
+const MAX_PAGES = 1;
 const PAGE_DELAY_MS = 200;
 
 // Canadian metros (excluding Montreal/Quebec City per suppressOutreach policy at DB level)
@@ -57,7 +59,8 @@ interface HEREDiscoverResponse {
 }
 
 /**
- * Fetch one page of HERE Discover results
+ * Fetch one page of HERE Discover results.
+ * HERE Discover API offset range is [0,99] — do not pass offset >= 100.
  */
 async function fetchHEREPage(
   apiKey: string,
@@ -267,7 +270,8 @@ function getMetroCoordinates(metro: string): { lat: number; lng: number } | null
 
 /**
  * Scrape HERE Discover for a single query + metro combination.
- * Returns up to 200 results (2 pages × 100).
+ * Returns up to 100 results (1 page × 100, offset=0 only).
+ * HERE Discover API offset range is [0,99] — second page would require offset=100 which is rejected.
  */
 export async function scrapeHEREQuery(
   apiKey: string,
