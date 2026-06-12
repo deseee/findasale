@@ -63,4 +63,4 @@ jobs:
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
         run: |
           cd packages/backend
-          ./node_modules/.bin/ts-node src/scripts/run-osm.ts
+          npx tsx src/scripts/run-osm.ts
