@@ -694,6 +694,30 @@ Identified S965 cross-check: Google Business Profile (S814) was done but the res
 Full research + net-new opportunity list (Tier 2/3, niche resale, trade associations, press): `claude_docs/strategy/APP-SUBMISSION-DIRECTORY-RESEARCH-2026.md`.
 
 
+**Tier 1C — Greenfield growth avenues (S965 second-pass research — net-new)**
+
+From `claude_docs/strategy/GREENFIELD-GROWTH-AVENUES-2026.md`. App-store paths, vendor revenue programs, PR, and local MI. AI-discovery items (robots.txt AI allowlist, schema.org Event/LocalBusiness, IndexNow) are tracked as a dev dispatch, not here.
+
+| # | Platform / Program | Status | Notes |
+|---|---------|--------|-------|
+| 495 | Microsoft Store via PWABuilder | ⬜ TODO | $0 — all reg fees removed 2026. Reserve name in Partner Center → PWABuilder "Package for Stores" → submit. No native code. Needs MS account + PWABuilder quality check pass. |
+| 496 | Google Play via TWA (Bubblewrap/PWABuilder) | ⬜ TODO | $25 one-time. Needs Lighthouse PWA ≥80 (audit first) + assetlinks.json in /.well-known/. Patrick pays + holds signing keys. |
+| 497 | Samsung Galaxy Store (Web Apps) | ⬜ TODO | Free. Email PWA URL to pwasupport@samsung.com. Small reach, trivial effort. |
+| 498 | eBay Partner Network (EPN) | ⬜ TODO — Patrick | Free, near-instant approval, no traffic minimum. Affiliate REVENUE on existing eBay integration. partnernetwork.ebay.com. See also: eBay API/EPN email thread (check Gmail — prior inbound). |
+| 499 | Stripe Partner Directory | ⬜ TODO — Patrick | Free "Verified Partner" badge + listing. stripe.com/partners/become-a-partner. Credibility, not traffic. |
+| 500 | Alignable | ⬜ TODO | Free local small-biz profile + referral network. Doubles as lead-gen (estate/consignment businesses are the customer). alignable.com. |
+| 501 | Source of Sources (SOS) | ⬜ TODO | Free. Real HARO successor (Shankman). Reply to relevant decluttering/downsizing/resale/side-hustle queries. sourceofsources.com. |
+| 502 | Featured.com (ex-Terkel) | ⬜ TODO | Free tier. Build expert profile; answered questions carry backlinks. featured.com. |
+| 503 | Wikidata entity | ⬜ TODO | Free; brand-owner editing allowed with citable sources. Feeds the AI knowledge graph. Needs a couple third-party mentions first (ties to PR). |
+| 504 | NASMM Industry Partner | ⬜ EVALUATE — Patrick | ~$2,200/yr (conference-bundled) — best audience fit (senior move managers run estate sales). Ask NASMM about a listing-only/lower tier before committing. |
+| 505 | NAPO Business Partner | ⬜ EVALUATE — Patrick | $50 + $25 fees; annual dues TBD (contact their BD). Professional-organizer directory. |
+| 506 | Start Garden "The 100" | ⏰ TIME-SENSITIVE — Patrick | Non-dilutive GR grant competition; applications open (June 1). 100-sec video + milestone app. startgarden.com. |
+| 507 | SCORE West Michigan + Michigan SBDC + The Right Place | ⬜ TODO — Patrick | Free MI small-biz support/credibility/network. score.org/westmichigan, michigansbdc.org, rightplace.org. |
+| 508 | SBAM membership | ⬜ EVALUATE — Patrick | ~$195/yr — statewide MI small-biz directory + events. sbam.org. |
+
+**Skip (flagged S965):** Apple App Store (Guideline 4.2 repackaged-website rejection trap, $99/yr), Meta Quest (no audience), Next.js/Vercel/Cloudinary/etc. vendor showcases (curated, no open submission), SRES/Caring Transitions (gated/competitor), UK PR platforms, IFundWomen/GROW/Spring GR (eligibility mismatch — verify first), llms.txt as a citation strategy (unproven 2026).
+
+
 ## Table Stakes — Business Operations (S814)
 
 Missing fundamentals identified and addressed in S814 audit. All shipped unless marked PENDING.
