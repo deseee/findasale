@@ -1,0 +1,58 @@
+name: Playwright Harness Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL to test (default: fleamarkets.org NFMA members)'
+        required: false
+        default: 'https://www.fleamarkets.org/nfma-member-markets'
+      selector:
+        description: 'CSS selector to wait for (optional)'
+        required: false
+        default: ''
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium + system deps
+        run: npx playwright install --with-deps chromium
+        working-directory: packages/backend
+
+      - name: Run fetchPageHTML smoke test
+        working-directory: packages/backend
+        env:
+          TEST_URL: ${{ github.event.inputs.url || 'https://www.fleamarkets.org/nfma-member-markets' }}
+          TEST_SELECTOR: ${{ github.event.inputs.selector || '' }}
+        run: |
+          npx tsx -e '
+            import { fetchPageHTML } from "./src/services/scraper/utils/playwrightBrowser";
+            const url = process.env.TEST_URL!;
+            const selector = process.env.TEST_SELECTOR || undefined;
+            console.log("Testing fetchPageHTML against:", url);
+            const html = await fetchPageHTML(url, { waitForSelector: selector || undefined });
+            console.log("✅ HTML returned — length:", html.length);
+            const title = html.match(/<title[^>]*>([^<]+)<\/title>/)?.[1] ?? "(no title)";
+            console.log("Title:", title);
+            const bodyText = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+            console.log("Body text sample (500 chars):", bodyText.substring(0, 500));
+            console.log("JS-rendered content present:", bodyText.length > 2000 ? "YES ✅" : "NO ❌ — may be empty shell");
+          '
