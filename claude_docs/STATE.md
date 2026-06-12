@@ -70,7 +70,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | 472 | send-test-email happy path | Navigated https://finda.sale/admin as user1@example.com (ADMIN). Ran fetch POST /api/admin/send-test-email with {to:"test-delivery@mailinator.com",subject:"Test",body:"Test body"}. Saw 200 {success:true, messageId:"bb5ce99a-96d4-48eb-913d-d5f663bc60fc", rail:"resend"}. Screenshot: ss_6413lunko | S948 |
 | 472 | send-test-email domain block (@system.finda.sale) | Same authenticated session. Sent to {to:"anything@system.finda.sale"}. Saw 400 {"success":false,"error":"Recipient domain blocked — cannot send to this address"}. isEmailDomainBlocked guard fires. Screenshot: ss_6413lunko | S948 |
 | 472 | send-test-email auth gate (unauthenticated) | New unauthenticated tab. Direct Railway backend call POST https://backend-production-153c9.up.railway.app/admin/send-test-email, no credentials/CSRF. Saw 403 {"message":"CSRF token validation failed"}. Defense-in-depth: CSRF before auth. Screenshot: ss_4595bvchx | S948 |
-| #27c | eBay CSV Export — Chrome verify | Navigate to /organizer/add-items/[saleId] as organizer. Select items → Export to eBay → set photoMode → Download CSV. Confirm file downloads (no 500 error). Check filename is safe (no special chars). | S963 |
+| #27c | eBay CSV Export — safeTitle fix (S963) | Navigated https://finda.sale/organizer/add-items/59c49908-72f2-4e92-ade9-02bfcfdd9230 as Alice Johnson (user1, organizer). Clicked Export to eBay. Modal: "Export 1 available items as eBay CSV". Clicked Download CSV. Network GET /api/sales/59c49908-72f2-4e92-ade9-02bfcfdd9230/ebay-export?photoMode=watermarked → HTTP 200 (no 500). Toast: "CSV ready. Upload to → Bulk Listings." Sale title contains em dash — exact char that caused HTTP 500 pre-S963. ss_3764vxdwk ss_8508ma6s6 ss_0576eihvm | S965 |
 | 219 | Shopper Achievements | Navigated https://finda.sale/shopper/achievements as Alice Johnson (user1). Achievements tab rendered with XP breakdown, badges grid, rank progress bar. Dark mode clean. ss_5810hhnqu ss_4488tmnlg | S962 |
 | 218 | Shopper Trades | Navigated https://finda.sale/shopper/trades as Alice Johnson (user1). Trades page rendered with active trade listings. ss_9998kdjb8 | S962 |
 | 55 | Seasonal Discovery Challenges | Navigated https://finda.sale/challenges as Alice Johnson (user1). Seasonal challenges page displayed with active challenges list. ss_5780an0ik | S962 |
@@ -125,18 +125,34 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 5. **KY/ME scraper triggers** — Trigger `workflow_dispatch` on scrape-kentucky-phase2 and scrape-maine-phase2 to verify S959 fixes write records to DB.
 
-### S964 — Suggested Work
+### S965 — Suggested Work
 
 **Option A — AlternativeTo submission (June 18, 2026 deadline).** Patrick logs into alternativeto.net as "FindASale" and submits. Highest-urgency remaining directory listing.
 
-**Option A — #27c eBay CSV Export Chrome verify.** Navigate /organizer/add-items/[saleId] as organizer → select items → Export to eBay → Download CSV → confirm no 500 error and file downloads cleanly.
+**Option B — AuctionTime scraper (if Cloudflare block is resolvable).** AuctionTime.com was found Cloudflare-blocked via direct fetch in S965. Try with realistic UA rotation (same approach as AuctionZip S890 fix) — may be unblockable. If blocked, skip.
 
-**Option B — AuctionTime auctioneers directory scraper.** Next viable static-HTML target identified: auctiontime.com/auctioneers/list. Pre-research done; robots.txt allows crawl.
+**Option C — MaxSold.com scraper research.** MaxSold is a major online estate/downsizing auction platform not in current source registry. Likely static HTML catalog pages. Research: robots.txt, ToS, URL structure, data availability.
 
-**Option C — Next roadmap BROKEN item.** BQ is 0 — dev is fully unblocked.
+**Option D — Next roadmap BROKEN item.** BQ is 0 — dev is fully unblocked.
 
 
 ## Recent Sessions
+
+### S965 — 2026-06-12 | DEV (Chrome QA #27c + GSalr Research)
+
+**Session type:** DEV — Chrome QA, scraper research
+
+**Work completed:**
+- **#27c eBay CSV Export — VERIFIED ✅** — Navigated https://finda.sale/organizer/add-items/59c49908-72f2-4e92-ade9-02bfcfdd9230 as Alice Johnson (user1). Export to eBay modal → clicked Download CSV → Network GET ebay-export → HTTP 200 (no 500). Toast confirmed. Em dash in sale title (exact pre-S963 failure condition) passed without error. ss_3764vxdwk ss_8508ma6s6 ss_0576eihvm. PCV #27c staged earlier in session — now Chrome-verified.
+- **GSalr.com (#381) — researched and ruled out PROHIBITED.** Technically excellent: static HTML city pages at /garage-sales-{city}-{state}.html, full schema.org data (title/street/city/state/zip/lat/lon/startDate/endDate/saleType), 97%+ address availability, 41+ listings/viewport, 51-state sitemap, 726 Michigan cities. No AJAX — all data in HTML DOM. BUT: ToS §2.3+§3.1 explicitly prohibit scraping with $10k/day liquidated damages for "competing service" use. robots.txt allows city pages — block is contractual not technical. Roadmap #381 updated to PROHIBITED. #379 stale reference to #381 as "legal alternative" corrected.
+- **AuctionTime.com — Cloudflare-blocked.** Direct fetch returns Cloudflare challenge page. May be resolvable with UA rotation (see AuctionZip precedent) — not attempted this session.
+
+**Files changed:**
+- `claude_docs/strategy/roadmap.md` — #381 updated PROHIBITED S965; #379 stale reference corrected
+- `claude_docs/STATE.md` — this wrap
+- `claude_docs/patrick-dashboard.md` — updated
+
+**BQ delta:** 0 (unchanged — #27c Chrome-verified, BQ stays empty)
 
 ### S964 — 2026-06-12 | DEV (EstateSale.com Scraper + Playwright CI Fix)
 

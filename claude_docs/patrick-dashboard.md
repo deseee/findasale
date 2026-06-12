@@ -1,6 +1,19 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S964 — 2026-06-12 (EstateSale.com scraper + playwright CI fix)
+**Last updated:** S965 — 2026-06-12 (Chrome QA #27c ✅ + GSalr research PROHIBITED)
+
+---
+
+## Session S965 Summary — #27c Verified ✅ + GSalr Ruled Out (COMPLETE)
+
+**Type:** DEV — Chrome QA, scraper research
+**BQ:** 0 (unchanged)
+
+| Item | Status | Details |
+|------|--------|---------|
+| #27c eBay CSV Export | ✅ VERIFIED | Chrome QA confirmed: HTTP 200 (no 500). Em dash in sale title passed cleanly. S963 fix confirmed working. ss_3764vxdwk ss_8508ma6s6 ss_0576eihvm |
+| GSalr.com (#381) | ⛔ PROHIBITED | Technically excellent (static HTML, full schema.org data, 51-state coverage) but ToS §2.3+§3.1 ban scraping with $10k/day liquidated damages for competing service use. Roadmap updated. |
+| AuctionTime.com | ⚠️ BLOCKED | Cloudflare challenge on direct fetch. UA rotation may help — not attempted this session. |
 
 ---
 
@@ -22,14 +35,14 @@
 
 | Action | Priority | Instructions |
 |--------|----------|-------------|
-| **Push S964 changes** | HIGH | See push block below |
+| **Push S964+S965 changes** | HIGH | See push block below |
 | **Push S963 changes (if not pushed)** | HIGH | See push block below |
 | AlternativeTo | HIGH — June 18, 2026 | Log in as "FindASale" → alternativeto.net → Add Software |
 | KY/ME workflow triggers | MEDIUM | GitHub Actions → `scrape-kentucky-phase2` + `scrape-maine-phase2` → Run workflow |
 
 ---
 
-## Push Block (S964)
+## Push Block (S964 + S965)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -37,9 +50,10 @@ git add packages/backend/src/services/scraper/sources/estateSaleComScraper.ts
 git add packages/backend/src/services/scraper/sourceRegistry.ts
 git add .github/workflows/scrape-estatesalecom.yml
 git add .github/workflows/test-playwright-harness.yml
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S964: add EstateSale.com directory scraper (51-state, phone/email/website); fix playwright CI continue-on-error"
+git commit -m "S964/S965: EstateSale.com scraper; playwright CI fix; #27c Chrome-verified; GSalr PROHIBITED"
 .\push.ps1
 ```
 
