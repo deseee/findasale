@@ -96,58 +96,28 @@ interface LicenseRecord {
 /**
  * Parse the OOP results table from the HTML response.
  *
- * The oop.ky.gov results table typically has columns:
- *   License # | Licensee Name | Business Name | City | State | License Status
+ * oop.ky.gov uses <td> for ALL rows — no <th> elements exist anywhere.
+ * Confirmed column layout (positional, verified 2026-06-12 via live fetch):
+ *   0: Licensee Name
+ *   1: Board Name  (e.g. "Kentucky Board of Auctioneers")
+ *   2: License Type (e.g. "Principal Auctioneer" / "Apprentice Auctioneer")
+ *   3: License Number (primary — always present)
+ *   4: Secondary number OR status-flag string — variable
+ *   …: Additional columns (dates, flags) — ignored
  *
- * We detect the header row to build a column index map, then extract td cells
- * from data rows using that map.
+ * We filter for rows where col[1] contains "auctioneer" to exclude stray
+ * cross-board results and skip the header row by checking for non-numeric
+ * content in col[3].
  */
 function parseResultsTable(html: string): LicenseRecord[] {
   const records: LicenseRecord[] = [];
 
-  // Walk every <tr> in the page
   const rowRegex = /<tr[\s\S]*?>([\s\S]*?)<\/tr>/gi;
   let rowMatch: RegExpExecArray | null;
-  let headerFound = false;
-  let colMap: Record<string, number> = {};
 
   while ((rowMatch = rowRegex.exec(html)) !== null) {
     const rowHtml = rowMatch[1];
 
-    // Header row detection: contains <th> elements
-    if (/<th[^>]*>/i.test(rowHtml)) {
-      const thRegex = /<th[^>]*>([\s\S]*?)<\/th>/gi;
-      let thMatch: RegExpExecArray | null;
-      let idx = 0;
-      colMap = {};
-      while ((thMatch = thRegex.exec(rowHtml)) !== null) {
-        const header = extractText(thMatch[1]).toLowerCase();
-        if (header.includes('license') && (header.includes('#') || header.includes('num'))) {
-          colMap['licenseNumber'] = idx;
-        } else if (header === 'lic #' || header === 'lic. #' || header === 'license #') {
-          colMap['licenseNumber'] = idx;
-        } else if (header.includes('licensee') || (header.includes('name') && !header.includes('business'))) {
-          colMap['name'] = idx;
-        } else if (header.includes('business')) {
-          colMap['businessName'] = idx;
-        } else if (header === 'city') {
-          colMap['city'] = idx;
-        } else if (header === 'state' || header === 'st') {
-          colMap['state'] = idx;
-        } else if (header.includes('status')) {
-          colMap['status'] = idx;
-        }
-        idx++;
-      }
-      if (Object.keys(colMap).length >= 2) {
-        headerFound = true;
-      }
-      continue;
-    }
-
-    if (!headerFound) continue;
-
-    // Extract td cells
     const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
     const cells: string[] = [];
     let tdMatch: RegExpExecArray | null;
@@ -155,26 +125,31 @@ function parseResultsTable(html: string): LicenseRecord[] {
       cells.push(extractText(tdMatch[1]));
     }
 
-    if (cells.length < 2) continue;
+    // Need at least name + board + type + license#
+    if (cells.length < 4) continue;
 
-    // Use mapped columns; fall back to positional defaults:
-    // 0=License# | 1=Name | 2=BusinessName | 3=City | 4=State | 5=Status
-    const get = (key: string, fallbackIdx: number): string => {
-      const i = colMap[key] ?? fallbackIdx;
-      return (i < cells.length ? cells[i] : '').trim();
-    };
+    const name        = cells[0].trim();
+    const boardName   = cells[1].trim();
+    const licenseType = cells[2].trim();
+    const licenseNum  = cells[3].trim();
 
-    const licenseNumber = get('licenseNumber', 0);
-    const name         = get('name', 1);
-    const businessName = get('businessName', 2);
-    const city         = get('city', 3);
-    const state        = get('state', 4);
-    const status       = get('status', 5);
+    // Skip header row (col[0] will be "Name" or similar text label)
+    if (!name || name.toLowerCase() === 'name' || name.toLowerCase() === 'licensee name') continue;
 
-    if (!name && !licenseNumber) continue;
-    if (name.toLowerCase() === 'name' || licenseNumber.toLowerCase().includes('license')) continue;
+    // Only keep auctioneer board records (safety filter for cross-board leakage)
+    if (!boardName.toLowerCase().includes('auctioneer')) continue;
 
-    records.push({ licenseNumber, name, businessName, city, state, status });
+    // Skip if licenseNum looks like a non-numeric header label
+    if (!licenseNum || !/^[0-9]/.test(licenseNum)) continue;
+
+    records.push({
+      licenseNumber: licenseNum,
+      name,
+      businessName:  '',          // OOP does not expose business name in this view
+      city:          'Kentucky',  // OOP does not expose city in this view
+      state:         'KY',
+      status:        'Active',    // we POST with DStatus=Active so all results are active
+    });
   }
 
   return records;
@@ -327,6 +302,82 @@ async function searchByLastNameLetter(
 }
 
 // ---------------------------------------------------------------------------
+// Board selection autopostback
+// ---------------------------------------------------------------------------
+
+/**
+ * POST the board-selection autopostback to activate board 34 (Auctioneers)
+ * in the server-side session before running letter searches.
+ *
+ * oop.ky.gov uses ASP.NET AutoPostBack on the board checkboxes: clicking a
+ * checkbox triggers an immediate form POST with __EVENTTARGET set to the
+ * checkbox control ID. The server updates its ViewState and returns a new
+ * page. Subsequent Search POSTs must use this updated ViewState — otherwise
+ * the board filter is ignored and all boards are returned.
+ *
+ * Verified flow (2026-06-12):
+ *   1. GET lic_search.aspx → capture VIEWSTATE + session cookie
+ *   2. POST with __EVENTTARGET=ctl00$ContentPlaceHolder2$chkBoards$2 → updated VIEWSTATE
+ *   3. POST per letter with BSrch=Search + updated VIEWSTATE → board-filtered results
+ */
+async function selectBoardInSession(session: AspNetSession): Promise<boolean> {
+  try {
+    const body = new URLSearchParams();
+    body.set('__VIEWSTATE',          session.viewState);
+    body.set('__VIEWSTATEGENERATOR', session.viewStateGenerator);
+    body.set('__EVENTVALIDATION',    session.eventValidation);
+    body.set('__EVENTTARGET',        'ctl00$ContentPlaceHolder2$chkBoards$2');
+    body.set('__EVENTARGUMENT',      '');
+    body.set('ctl00$ContentPlaceHolder2$chkBoards$2', BOARD_CODE);
+    body.set('ctl00$ContentPlaceHolder2$rdLictype',   '1');
+    body.set('ctl00$ContentPlaceHolder2$DStatus',     'Active');
+
+    const response = await fetch(OOP_URL, {
+      method: 'POST',
+      headers: {
+        'User-Agent':      getRandomUserAgent(),
+        Accept:            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Content-Type':    'application/x-www-form-urlencoded',
+        Referer:           OOP_URL,
+        ...(session.cookies ? { Cookie: session.cookies } : {}),
+      },
+      body: body.toString(),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!response.ok) {
+      console.warn(`[KentuckyPhase2] Board-select POST failed: HTTP ${response.status}`);
+      return false;
+    }
+
+    const html = await response.text();
+
+    // Update cookies
+    const setCookieHeader = response.headers.get('set-cookie');
+    if (setCookieHeader) {
+      const newCookies = setCookieHeader
+        .split(/,\s*(?=[A-Za-z_-]+=)/)
+        .map((c) => c.split(';')[0]);
+      session.cookies = newCookies.join('; ');
+    }
+
+    // Update VIEWSTATE — required for subsequent Search POSTs
+    const newVs = extractHiddenField(html, '__VIEWSTATE');
+    if (newVs) session.viewState = newVs;
+    const newVsg = extractHiddenField(html, '__VIEWSTATEGENERATOR');
+    if (newVsg) session.viewStateGenerator = newVsg;
+    const newEv = extractHiddenField(html, '__EVENTVALIDATION');
+    if (newEv) session.eventValidation = newEv;
+
+    return true;
+  } catch (err) {
+    console.error('[KentuckyPhase2] Board-select POST error:', err);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
 
@@ -365,7 +416,16 @@ export async function runKentuckyPhase2Scraper(): Promise<void> {
 
   console.log('[KentuckyPhase2] Initial page loaded — ASP.NET tokens captured');
 
-  // Step 2: Iterate A–Z
+  // Step 2: Board-selection autopostback (required — activates board 34 filter in VIEWSTATE)
+  await defaultRateLimiter.waitBeforeRequest(DOMAIN);
+  const boardSelected = await selectBoardInSession(session);
+  if (!boardSelected) {
+    console.warn('[KentuckyPhase2] Board-select POST failed — results may include all boards');
+  } else {
+    console.log('[KentuckyPhase2] Board 34 (Auctioneers) selected — VIEWSTATE updated');
+  }
+
+  // Step 3: Iterate A–Z
   for (const letter of LAST_NAME_LETTERS) {
     await defaultRateLimiter.waitBeforeRequest(DOMAIN);
     await sleep(POLITE_DELAY_MS);
