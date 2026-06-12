@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S966 — RESEARCH (2026-06-12). Directory listing sprint: Software Finder (#483) profile fully built — description, 5 features, 3 FAQs all rewritten with real product content. Trustpilot (#485) blocked (account creation fails regardless of email used). BQ: 0 (unchanged).**
+
 **S964 — DEV (2026-06-12). Scraper expansion: EstateSale.com directory scraper built (51-state two-phase, 500–1,500 featured companies with phone/email/website, Crawl-Delay:10 respected). Playwright CI harness continue-on-error fixed. sourceRegistry.ts + quarterly workflow created. BQ: 0 (unchanged).**
 
 **S963 — DEV/RECORDS/WRAP (2026-06-12). Records pass: S962 PCVs applied. #27c FIXED + CHROME VERIFIED ✅ (em-dash/ampersand title → CSV downloads clean, no 500). SellMyAntiques domain parked. SaaSHub #480 CLAIMED by Patrick. KY/ME workflow triggers DONE. BQ: 1→0.**
@@ -125,7 +127,17 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 5. **KY/ME scraper triggers** — Trigger `workflow_dispatch` on scrape-kentucky-phase2 and scrape-maine-phase2 to verify S959 fixes write records to DB.
 
-### S965 — Suggested Work
+### S966 — Suggested Work (carry forward)
+
+**Option A — AlternativeTo submission (June 18, 2026 deadline).** Patrick logs into alternativeto.net as "FindASale" and submits. Highest-urgency remaining directory listing.
+
+**Option B — Trustpilot (#485) retry.** Try account creation with support@finda.sale. If still blocked, park indefinitely.
+
+**Option C — AuctionTime scraper (if Cloudflare block is resolvable).** See S965 notes.
+
+**Option D — Next roadmap BROKEN item.** BQ is 0 — dev fully unblocked.
+
+### S965 — Suggested Work (archived)
 
 **Option A — AlternativeTo submission (June 18, 2026 deadline).** Patrick logs into alternativeto.net as "FindASale" and submits. Highest-urgency remaining directory listing.
 

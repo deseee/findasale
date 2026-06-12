@@ -1,6 +1,19 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S965 — 2026-06-12 (Chrome QA #27c ✅ + GSalr research PROHIBITED)
+**Last updated:** S966 — 2026-06-12 (Software Finder #483 submitted ✅ | Trustpilot #485 blocked)
+
+---
+
+## Session S966 Summary — Directory Listings Sprint (COMPLETE)
+
+**Type:** RESEARCH — external directory listing setup
+**BQ:** 0 (unchanged)
+
+| Item | Status | Details |
+|------|--------|---------|
+| Software Finder (#483) | ✅ SUBMITTED | Full profile built: accurate description, 5 real features, 3 real FAQs. Patrick clicked Submit Profile. |
+| Trustpilot (#485) | ⛔ BLOCKED | Account creation fails with Yahoo + Gmail. Try support@finda.sale or defer. |
+| SourceForge (#482) | ✅ DONE | Completed prior session. |
 
 ---
 
@@ -35,6 +48,11 @@
 
 | Action | Priority | Instructions |
 |--------|----------|-------------|
+| **Push S966 wrap docs** | HIGH | `git add claude_docs/STATE.md claude_docs/patrick-dashboard.md` → commit → push.ps1 |
+| **Push S964+S965 changes (if not pushed)** | HIGH | See archived push block below |
+| AlternativeTo | HIGH — June 18 deadline | Log in as "FindASale" → alternativeto.net → Add Software |
+| Trustpilot (#485) retry | MEDIUM | Try with support@finda.sale |
+| KY/ME workflow triggers | MEDIUM | GitHub Actions → scrape-kentucky-phase2 + scrape-maine-phase2 → Run workflow |
 | **Push S964+S965 changes** | HIGH | See push block below |
 | **Push S963 changes (if not pushed)** | HIGH | See push block below |
 | AlternativeTo | HIGH — June 18, 2026 | Log in as "FindASale" → alternativeto.net → Add Software |
