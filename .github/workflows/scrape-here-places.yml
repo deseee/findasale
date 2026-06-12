@@ -73,4 +73,4 @@ jobs:
         run: |
           sleep $(( ${{ matrix.batch_index }} * 90 ))
           cd packages/backend
-          ./node_modules/.bin/ts-node src/scripts/run-here-places.ts
+          npx tsx src/scripts/run-here-places.ts
