@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S961 — QA (2026-06-12). Chrome QA pass: #463 Claim Button Tracking ✅, #74 Role-Aware Reg ✅. Records pass: SEO3 S944 applied to roadmap.md. #472 PCVs (S948) cleared from PCV table. BQ: 0.**
+
 **S960 — DEV (2026-06-12). Bid13 scraper activated + NFMA parked + dead flea market directory research.**
 - **Bid13 ACTIVATED** — full rewrite from parked stub. `POST /api/v1/search.php` JSON API confirmed. 9 national coverage zips at 500-mile radius, paginated, deduplicated by `facility_nid`. Category: `AUCTION_HOUSE`. Respects crawl-delay (5s). `enabled: true` in sourceRegistry. Monthly GH Actions workflow created. TypeScript: 0 errors. Push block delivered — pending Patrick push.
 - **NFMA PARKED** — member directory behind NFMA login wall. Parked stub created with investigation date. Workflow created but effectively no-ops.
@@ -56,6 +58,8 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
+| 74 | Role-Aware Registration Consent | Navigated https://finda.sale/register as unauthenticated visitor. Clicked role dropdown → "Shopper": saw 1 consent checkbox + ToS, no Business Info. Switched to "Sale Organizer": saw Business Information (Name/Phone/Address) + 1 consent checkbox + ToS. Switched back — Business Info disappeared. Dark mode clean. ss_58428wnau ss_98779g0dj ss_12933c02s | S961 |
+| 463 | Claim Button Click Tracking — CTA #1 hero button | Navigated https://finda.sale/organizers/cmpnk019i02am4kxzospcmvoa as unauthenticated visitor. Clicked "Claim This Profile — It's Free". Saw redirect to /register?claim=cmpnk019i02am4kxzospcmvoa + window.va claim_profile_click event fired + POST /_vercel/insights/event beacon confirmed. ss_6546zegk2 ss_5106am9br ss_203394jm6 | S961 |
 | 472 | send-test-email happy path | Navigated https://finda.sale/admin as user1@example.com (ADMIN). Ran fetch POST /api/admin/send-test-email with {to:"test-delivery@mailinator.com",subject:"Test",body:"Test body"}. Saw 200 {success:true, messageId:"bb5ce99a-96d4-48eb-913d-d5f663bc60fc", rail:"resend"}. Screenshot: ss_6413lunko | S948 |
 | 472 | send-test-email domain block (@system.finda.sale) | Same authenticated session. Sent to {to:"anything@system.finda.sale"}. Saw 400 {"success":false,"error":"Recipient domain blocked — cannot send to this address"}. isEmailDomainBlocked guard fires. Screenshot: ss_6413lunko | S948 |
 | 472 | send-test-email auth gate (unauthenticated) | New unauthenticated tab. Direct Railway backend call POST https://backend-production-153c9.up.railway.app/admin/send-test-email, no credentials/CSRF. Saw 403 {"message":"CSRF token validation failed"}. Defense-in-depth: CSRF before auth. Screenshot: ss_4595bvchx | S948 |
@@ -112,6 +116,22 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 
 ## Recent Sessions
+
+### S961 — 2026-06-12 | QA (Chrome QA Pass: #463 + #74 + Records Pass)
+
+**Session type:** QA — autonomous QA pass searching roadmap for ⬜ Chrome items
+
+**Work completed:**
+- **Records pass:** SEO3 S944 PCV had full evidence (URL + outcome + 2 screenshot IDs) — applied ✅ S944 to roadmap.md UI column. #472 S948 PCVs (3 rows) already applied to roadmap in S949 but were stale in PCV table — cleared with note.
+- **#463 Claim Button Click Tracking — VERIFIED ✅** — Navigated to organizer profile as unauthenticated visitor, clicked "Claim This Profile — It's Free". Confirmed redirect to /register?claim=, `window.va("event", {name:"claim_profile_click",...})` fired, POST /_vercel/insights/event beacon confirmed in DevTools. ss_6546zegk2 ss_5106am9br ss_203394jm6. PCV staged → roadmap Chrome column update deferred to S962 records pass.
+- **#74 Role-Aware Registration Consent — VERIFIED ✅** — Navigated /register as unauthenticated visitor. Shopper role: 1 consent checkbox + ToS, no Business Info. Sale Organizer role: Business Info (Name/Phone/Address) appeared + 1 consent checkbox + ToS. Switched back → Business Info disappeared. Dark mode clean. ss_58428wnau ss_98779g0dj ss_12933c02s. PCV staged → roadmap Chrome column update deferred to S962 records pass.
+- **Remaining ⬜ items blocked:** #254/#268/#278/#281/#313/#314 (require real Stripe/GPS/concurrent users), #315/#317/#340/#332 (GPS/camera/Shopify — environment-blocked). No additional testable items found.
+
+**Files changed:**
+- `claude_docs/strategy/roadmap.md` — SEO3 UI column updated (⬜ → ✅ S944)
+- `claude_docs/STATE.md` — PCV table updated (#74 + #463 staged, #472 stale rows noted cleared, SEO3 cleared)
+
+**BQ delta:** 0 (unchanged)
 
 ### S960 — 2026-06-12 | DEV (Bid13 Scraper + NFMA Park + Dead Directory Research)
 
