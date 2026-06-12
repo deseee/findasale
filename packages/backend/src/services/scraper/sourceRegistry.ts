@@ -39,6 +39,9 @@ import { runAuctionZipScraper } from './sources/auctionZipScraper';
 import { scrapeSellMyAntiques } from './sources/sellMyAntiquesScraper';
 import { scrapeProxibid } from './sources/proxibidScraper';
 import { scrapeFleamapket } from './sources/fleamapketScraper';
+import { scrapeEstateSalesOrg } from './sources/estatesalesOrgScraper';
+import { scrapeSwapmeetDirectory } from './sources/swapmeetDirectoryScraper';
+import { scrapeNASMM } from './sources/nasmmScraper';
 
 export type SourceType = 'directory' | 'licensing' | 'crawl-queue' | 'places-api';
 export type SourceRunMode = 'metro-loop' | 'national-once';
@@ -466,6 +469,36 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     qualityTier: 'high',
     legalNote: 'robots.txt explicitly ALLOWS /listing/, /listing-category/, /listing-region/. ToS: no anti-scraping language found. Static WordPress HTML. ~400 US flea markets, antique malls, and auction houses with structured JSON-LD data (name, address, phone, website, lat/lng). Verified 2026-06-12.',
     run: scrapeFleamapket,
+  },
+  {
+    id: 'EstateSalesOrg',
+    displayName: 'EstateSales.org (Estate Sale Company Directory)',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    qualityTier: 'high',
+    legalNote: 'robots.txt: Permissive for *; ClaudeBot blocked from /photos ONLY — company directory is not blocked. ToS: No anti-scraping prohibition found. Server-rendered HTML confirmed. ~4,000 US estate sale companies with name, city, state, phone (optional), website (optional). Verified 2026-06-12.',
+    run: scrapeEstateSalesOrg,
+  },
+  {
+    id: 'SwapmeetDirectory',
+    displayName: 'SwapmeetDirectory.com (Flea Market & Swap Meet Directory)',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    qualityTier: 'medium',
+    legalNote: 'robots.txt fully open (only blocks /wp-admin and WooCommerce paths). No ToS scraping prohibition found. ~890 US flea market and swap meet listings with name, city, state, phone, website, lat/lng. Verified 2026-06-12.',
+    run: scrapeSwapmeetDirectory,
+  },
+  {
+    id: 'NASMM',
+    displayName: 'NASMM.org (Senior Move Manager Directory)',
+    type: 'directory',
+    runMode: 'national-once',
+    enabled: true,
+    qualityTier: 'medium',
+    legalNote: 'Public member directory. robots.txt Crawl-Delay: 10 enforced internally with 10–12s inter-state delay. /find-a-move-manager/ path not disallowed. ~900 US senior move manager companies — frequently run or refer estate sales. Verified 2026-06-12.',
+    run: scrapeNASMM,
   },
 ];
 
