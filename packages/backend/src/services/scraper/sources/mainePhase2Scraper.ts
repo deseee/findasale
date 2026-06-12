@@ -2,21 +2,37 @@
  * Maine PFR (Professional and Financial Regulation) — Auctioneer License Scraper (Phase 2)
  * Scrapes licensed auctioneers from Maine PFR ALMSOnline system.
  *
- * New endpoint (confirmed working — returns 1,118 records):
- *   Base: https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/
- *   Search page: SearchIndividual.aspx
- *   CSV export: ExportToCSV.aspx
- *   Parameters: regulator=4210 (Board of Licensing of Auctioneers), scOnlyActive=true
+ * Endpoint base: https://www.pfr.maine.gov/ALMSOnline/ALMSQuery/
+ *   Search page:  SearchIndividual.aspx?Board=4210
+ *   CSV export:   ExportToCSV.aspx
+ *   Regulator:    4210 (Board of Licensing of Auctioneers)
  *
- * The old hostname pfr.maine.gov is NXDOMAIN — do not use it.
+ * Confirmed 3-step flow (root causes fixed 2026-06-11):
  *
- * Flow:
- *   1. GET SearchIndividual.aspx to obtain ASP.NET hidden fields
- *      (__VIEWSTATE, __EVENTVALIDATION, etc.) and session cookie.
- *   2. POST to ExportToCSV.aspx with regulator=4210 + scOnlyActive=true
- *      plus the hidden fields from step 1.
- *   3. Parse the CSV response (Name, License Number, City, Status columns).
- *   4. Upsert Organizer records via getOrCreateScrapedOrganizer.
+ *   Step 1 — GET SearchIndividual.aspx?Board=4210
+ *     Header: Cookie: AspxAutoDetectCookieSupport=1
+ *     Returns HTTP 200 (the cookie header bypasses the server's redirect loop).
+ *     Response sets ASP.NET_SessionId cookie.
+ *     Page contains __VIEWSTATEFIELDCOUNT=11 and fields __VIEWSTATE through __VIEWSTATE10.
+ *
+ *   Step 2 — POST SearchIndividual.aspx?Board=4210
+ *     Cookie header: AspxAutoDetectCookieSupport=1; ASP.NET_SessionId=<id>
+ *     Body: all 11 VIEWSTATE parts + __VIEWSTATEGENERATOR + __EVENTVALIDATION
+ *           + all required form fields including btnSearch (establishes server-side search state).
+ *     Response redirects to SearchResults.aspx — session state established.
+ *
+ *   Step 3 — GET ExportToCSV.aspx
+ *     Cookie header: AspxAutoDetectCookieSupport=1; ASP.NET_SessionId=<id>
+ *     No body required — session state already established in step 2.
+ *     Returns application/octet-stream CSV with all records.
+ *
+ * Bug history (all fixed in this rewrite):
+ *   BUG 1 — Cookie detection redirect: server issued 302 to ?AspxAutoDetectCookieSupport=1;
+ *            Node fetch() without the initial cookie header looped indefinitely.
+ *   BUG 2 — Chunked VIEWSTATE not extracted: page uses __VIEWSTATEFIELDCOUNT=11 (11 parts);
+ *            original code only extracted __VIEWSTATE (1 of 11).
+ *   BUG 3 — Wrong POST target: original code POSTed directly to ExportToCSV.aspx;
+ *            correct flow requires POSTing to SearchIndividual.aspx first.
  *
  * Maine auctioneers are licensed under 32 M.R.S. § 281 et seq., regulated by
  * the Board of Licensing of Auctioneers under the Office of Professional &
@@ -82,9 +98,10 @@ function parseCsvLine(line: string): string[] {
  * Handles both single- and double-quoted attribute values.
  */
 function extractHiddenField(html: string, fieldName: string): string {
+  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Match: name="__VIEWSTATE" ... value="..." or name='__VIEWSTATE' ... value='...'
   const pattern = new RegExp(
-    `name=["']{fieldName}["'"][^>]*value=["'"]([^"']*)["']`.replace('{fieldName}', fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    `name=["']` + escaped + `["'][^>]*value=["']([^"']*)["']`,
     'i'
   );
   const m = html.match(pattern);
@@ -92,26 +109,11 @@ function extractHiddenField(html: string, fieldName: string): string {
 
   // Alternate order: value first, then name
   const pattern2 = new RegExp(
-    `value=["'"]([^"']*)["'][^>]*name=["']{fieldName}["']`.replace('{fieldName}', fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    `value=["']([^"']*)["'][^>]*name=["']` + escaped + `["']`,
     'i'
   );
   const m2 = html.match(pattern2);
   return m2 ? m2[1] : '';
-}
-
-/**
- * Extract all Set-Cookie values from a Headers object and return a
- * semicolon-joined Cookie header string suitable for the next request.
- */
-function buildCookieHeader(headers: Headers): string {
-  const raw = headers.get('set-cookie') || '';
-  if (!raw) return '';
-  // Each cookie pair is "name=value; path=..." — take just "name=value"
-  return raw
-    .split(',')
-    .map((c) => c.split(';')[0].trim())
-    .filter(Boolean)
-    .join('; ');
 }
 
 // ---------------------------------------------------------------------------
@@ -119,24 +121,30 @@ function buildCookieHeader(headers: Headers): string {
 // ---------------------------------------------------------------------------
 
 interface AspNetTokens {
-  viewState: string;
+  viewState: string;                       // __VIEWSTATE (part 0)
+  viewStateParts: Record<string, string>;  // keyed by field name e.g. '__VIEWSTATE1'
+  viewStateFieldCount: number;             // 11 on the live page
   viewStateGenerator: string;
   eventValidation: string;
-  cookie: string;
+  cookie: string;  // 'AspxAutoDetectCookieSupport=1; ASP.NET_SessionId=<id>'
 }
 
 async function fetchSearchPage(): Promise<AspNetTokens | null> {
-  console.log(`[${SOURCE_NAME}] GET ${ALMS_SEARCH_URL}`);
+  const url = `${ALMS_SEARCH_URL}?Board=${REGULATOR_ID}`;
+  console.log(`[${SOURCE_NAME}] GET ${url}`);
 
   try {
     await defaultRateLimiter.waitBeforeRequest(ALMS_DOMAIN);
 
-    const response = await fetch(ALMS_SEARCH_URL, {
+    // BUG 1 FIX: Send the cookie support flag in the initial request so the
+    // server does not issue a redirect loop trying to detect cookie support.
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
         'User-Agent': USER_AGENT,
+        Cookie: 'AspxAutoDetectCookieSupport=1',
       },
       signal: AbortSignal.timeout(30000),
       redirect: 'follow',
@@ -148,22 +156,37 @@ async function fetchSearchPage(): Promise<AspNetTokens | null> {
     }
 
     const html = await response.text();
-    const cookie = buildCookieHeader(response.headers);
 
+    // Extract ASP.NET_SessionId from Set-Cookie header
+    const setCookieHeader = response.headers.get('set-cookie') || '';
+    const sessionMatch = setCookieHeader.match(/ASP\.NET_SessionId=([^;]+)/i);
+    const sessionId = sessionMatch ? sessionMatch[1] : '';
+    if (!sessionId) {
+      console.warn(`[${SOURCE_NAME}] ASP.NET_SessionId not found in Set-Cookie — session may be broken`);
+    }
+    const cookie = `AspxAutoDetectCookieSupport=1${sessionId ? `; ASP.NET_SessionId=${sessionId}` : ''}`;
+
+    // BUG 2 FIX: Extract all VIEWSTATE parts.
+    // The page uses __VIEWSTATEFIELDCOUNT=11, meaning fields __VIEWSTATE through __VIEWSTATE10.
     const viewState = extractHiddenField(html, '__VIEWSTATE');
     const viewStateGenerator = extractHiddenField(html, '__VIEWSTATEGENERATOR');
     const eventValidation = extractHiddenField(html, '__EVENTVALIDATION');
 
-    if (!viewState) {
-      console.warn(`[${SOURCE_NAME}] __VIEWSTATE not found in search page — ASP.NET session may have failed`);
-      // Still continue — some ALMS endpoints work without tokens
+    const fieldCountRaw = extractHiddenField(html, '__VIEWSTATEFIELDCOUNT');
+    const viewStateFieldCount = fieldCountRaw ? parseInt(fieldCountRaw, 10) : 1;
+
+    const viewStateParts: Record<string, string> = {};
+    for (let i = 1; i < viewStateFieldCount; i++) {
+      const key = `__VIEWSTATE${i}`;
+      viewStateParts[key] = extractHiddenField(html, key);
     }
 
     console.log(
-      `[${SOURCE_NAME}] Search page OK — __VIEWSTATE length: ${viewState.length}, cookie: ${cookie ? 'present' : 'absent'}`
+      `[${SOURCE_NAME}] Search page OK — __VIEWSTATEFIELDCOUNT: ${viewStateFieldCount}, ` +
+      `__VIEWSTATE length: ${viewState.length}, sessionId: ${sessionId ? 'present' : 'absent'}`
     );
 
-    return { viewState, viewStateGenerator, eventValidation, cookie };
+    return { viewState, viewStateParts, viewStateFieldCount, viewStateGenerator, eventValidation, cookie };
   } catch (err) {
     console.error(`[${SOURCE_NAME}] Failed to fetch search page:`, err);
     return null;
@@ -171,38 +194,105 @@ async function fetchSearchPage(): Promise<AspNetTokens | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Step 2: POST to ExportToCSV.aspx — receive CSV data
+// Step 2: POST to SearchIndividual.aspx — establish server-side search state
 // ---------------------------------------------------------------------------
 
-async function fetchCsvExport(tokens: AspNetTokens): Promise<string | null> {
-  console.log(`[${SOURCE_NAME}] POST ${ALMS_EXPORT_URL} (regulator=${REGULATOR_ID}, scOnlyActive=true)`);
+/**
+ * Submit the search form to SearchIndividual.aspx with regulator=4210 and
+ * empty name fields (returns all records). This establishes the server-side
+ * session state that ExportToCSV.aspx will use in step 3.
+ *
+ * BUG 3 FIX: The original code POSTed directly to ExportToCSV.aspx, which
+ * does not work. The correct flow requires posting to SearchIndividual.aspx
+ * first so the server builds its result set in the session.
+ */
+async function fetchSearchResults(tokens: AspNetTokens): Promise<boolean> {
+  const url = `${ALMS_SEARCH_URL}?Board=${REGULATOR_ID}`;
+  console.log(`[${SOURCE_NAME}] POST ${url} (establishing search state for regulator=${REGULATOR_ID})`);
 
   try {
     await defaultRateLimiter.waitBeforeRequest(ALMS_DOMAIN);
 
     const body = new URLSearchParams();
+
+    // Include __VIEWSTATE (part 0) and all additional parts
     body.set('__VIEWSTATE', tokens.viewState);
+    for (const [key, value] of Object.entries(tokens.viewStateParts)) {
+      body.set(key, value);
+    }
+    body.set('__VIEWSTATEFIELDCOUNT', String(tokens.viewStateFieldCount));
     body.set('__VIEWSTATEGENERATOR', tokens.viewStateGenerator);
     body.set('__EVENTVALIDATION', tokens.eventValidation);
-    body.set('regulator', REGULATOR_ID);
-    body.set('scOnlyActive', 'true');
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept: 'text/csv,text/plain,*/*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'User-Agent': USER_AGENT,
-      Referer: ALMS_SEARCH_URL,
-      Origin: 'https://www.pfr.maine.gov',
-    };
-    if (tokens.cookie) {
-      headers['Cookie'] = tokens.cookie;
+    // Standard ASP.NET event fields
+    body.set('__EVENTTARGET', '');
+    body.set('__EVENTARGUMENT', '');
+    body.set('__LASTFOCUS', '');
+
+    // Form fields — exact names verified from live page HTML
+    body.set('ctl00$ctl00$mainContent$mainContent$scDepartment', '');
+    body.set('ctl00$ctl00$mainContent$mainContent$scAgency', '');
+    body.set('ctl00$ctl00$mainContent$mainContent$scRegulator', REGULATOR_ID);
+    body.set('ctl00$ctl00$mainContent$mainContent$scLastName', '');   // empty = all records
+    body.set('ctl00$ctl00$mainContent$mainContent$scFirstName', '');
+    body.set('ctl00$ctl00$mainContent$mainContent$scLicenseNo', '');
+    body.set('ctl00$ctl00$mainContent$mainContent$iShowAdditionalOptions', 'False');
+    body.set('ctl00$ctl00$mainContent$mainContent$iAdditionalOptionsSaved', 'False');
+    body.set('ctl00$ctl00$mainContent$mainContent$btnSearch', 'Search');
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': USER_AGENT,
+        Referer: url,
+        Origin: 'https://www.pfr.maine.gov',
+        Cookie: tokens.cookie,
+      },
+      body: body.toString(),
+      signal: AbortSignal.timeout(60000),
+      redirect: 'follow',
+    });
+
+    console.log(`[${SOURCE_NAME}] Search POST response: HTTP ${response.status}, final URL: ${response.url}`);
+
+    if (!response.ok) {
+      console.warn(`[${SOURCE_NAME}] Search POST returned HTTP ${response.status}`);
+      return false;
     }
 
+    return true;
+  } catch (err) {
+    console.error(`[${SOURCE_NAME}] Failed to POST search form:`, err);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: GET ExportToCSV.aspx — receive CSV data using established session
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the CSV export using the session cookie established in steps 1 and 2.
+ * No body or VIEWSTATE required — the server already has the search state.
+ */
+async function fetchCsvExport(tokens: AspNetTokens): Promise<string | null> {
+  console.log(`[${SOURCE_NAME}] GET ${ALMS_EXPORT_URL} (session-based CSV export)`);
+
+  try {
+    await defaultRateLimiter.waitBeforeRequest(ALMS_DOMAIN);
+
     const response = await fetch(ALMS_EXPORT_URL, {
-      method: 'POST',
-      headers,
-      body: body.toString(),
+      method: 'GET',
+      headers: {
+        Accept: 'text/csv,text/plain,application/octet-stream,*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': USER_AGENT,
+        Referer: `${ALMS_SEARCH_URL}?Board=${REGULATOR_ID}`,
+        Cookie: tokens.cookie,
+      },
       signal: AbortSignal.timeout(60000),
       redirect: 'follow',
     });
@@ -231,7 +321,7 @@ async function fetchCsvExport(tokens: AspNetTokens): Promise<string | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Step 3: Parse CSV and upsert Organizer records
+// Step 4: Parse CSV and upsert Organizer records
 // ---------------------------------------------------------------------------
 
 interface LicenseRecord {
@@ -357,19 +447,20 @@ async function upsertLicenseRecords(records: LicenseRecord[]): Promise<number> {
  * Maine PFR auctioneer license scraper — ALMSOnline edition.
  *
  * Fetches active auctioneer licenses (regulator 4210) from the Maine PFR
- * ALMSOnline system via a two-step HTTP flow:
- *   1. GET SearchIndividual.aspx — capture ASP.NET hidden form tokens
- *   2. POST ExportToCSV.aspx — receive full CSV of active licensees
+ * ALMSOnline system via a confirmed 3-step HTTP flow:
+ *   1. GET SearchIndividual.aspx?Board=4210 with cookie support header
+ *   2. POST SearchIndividual.aspx?Board=4210 with all VIEWSTATE parts + form fields
+ *   3. GET ExportToCSV.aspx using the established session cookie
  *
- * Confirmed to return 1,118 records as of 2026-06.
+ * Confirmed to return ~1,118 records as of 2026-06.
  * Throws on zero results to prevent silent failure.
  */
 export async function runMainePhase2Scraper(): Promise<void> {
   console.log(`[${SOURCE_NAME}] Starting — Maine PFR ALMSOnline auctioneer license export`);
-  console.log(`[${SOURCE_NAME}] Search page: ${ALMS_SEARCH_URL}`);
-  console.log(`[${SOURCE_NAME}] Export endpoint: ${ALMS_EXPORT_URL} (regulator=${REGULATOR_ID})`);
+  console.log(`[${SOURCE_NAME}] Search page: ${ALMS_SEARCH_URL}?Board=${REGULATOR_ID}`);
+  console.log(`[${SOURCE_NAME}] Export endpoint: ${ALMS_EXPORT_URL}`);
 
-  // Step 1: Fetch search page for ASP.NET session tokens
+  // Step 1: GET search page — obtain ASP.NET tokens and session cookie
   const tokens = await fetchSearchPage();
   if (!tokens) {
     throw new Error(
@@ -378,16 +469,25 @@ export async function runMainePhase2Scraper(): Promise<void> {
     );
   }
 
-  // Step 2: POST to CSV export endpoint
+  // Step 2: POST search form — establish server-side result set in session
+  const searchOk = await fetchSearchResults(tokens);
+  if (!searchOk) {
+    throw new Error(
+      `[${SOURCE_NAME}] Search POST to ${ALMS_SEARCH_URL} failed. ` +
+      `ASP.NET tokens may have been rejected or the form field names changed.`
+    );
+  }
+
+  // Step 3: GET CSV export — session state already established
   const csvText = await fetchCsvExport(tokens);
   if (!csvText) {
     throw new Error(
       `[${SOURCE_NAME}] CSV export returned no data from ${ALMS_EXPORT_URL}. ` +
-      `ASP.NET tokens may have been rejected or the regulator parameter changed.`
+      `Session may have expired between search POST and export GET.`
     );
   }
 
-  // Step 3: Parse CSV
+  // Step 4: Parse CSV
   const records = parseLicenseCsv(csvText);
   console.log(`[${SOURCE_NAME}] Parsed ${records.length} license records from CSV`);
 
@@ -399,7 +499,7 @@ export async function runMainePhase2Scraper(): Promise<void> {
     );
   }
 
-  // Step 4: Upsert
+  // Step 5: Upsert
   const totalUpserted = await upsertLicenseRecords(records);
 
   console.log(

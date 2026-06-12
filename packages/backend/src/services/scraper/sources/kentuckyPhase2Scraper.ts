@@ -241,17 +241,16 @@ async function getInitialPage(): Promise<AspNetSession | null> {
 /**
  * POST the search form for a given last-name letter.
  *
- * OOP ASP.NET form field names follow standard ContentPlaceHolder1 naming.
- * If the site uses different control IDs the field names below need adjustment —
- * check the page source of https://oop.ky.gov/lic_search.aspx for the actual
- * name= attributes on the board dropdown, status dropdown, last-name input,
- * and search button.
+ * OOP ASP.NET form field names — verified against live https://oop.ky.gov/lic_search.aspx
+ * (ContentPlaceHolder2, confirmed 2026-06-11).
+ * Board is a checkbox (chkBoards$2), not a dropdown. Individual/active/last-name filters.
  *
- * Expected field names (verified against common KY OOP ASP.NET pattern):
- *   ctl00$ContentPlaceHolder1$ddlBoard  = "34" (Auctioneers)
- *   ctl00$ContentPlaceHolder1$ddlStatus = "Active"
- *   ctl00$ContentPlaceHolder1$txtLName  = letter (A, B, …, Z)
- *   ctl00$ContentPlaceHolder1$btnSearch = "Search"
+ * Field names (verified against live page 2026-06-11):
+ *   ctl00$ContentPlaceHolder2$chkBoards$2 = "34" (checkbox: KY Board of Auctioneers)
+ *   ctl00$ContentPlaceHolder2$rdLictype   = "1" (Individual search)
+ *   ctl00$ContentPlaceHolder2$DStatus     = "Active"
+ *   ctl00$ContentPlaceHolder2$TLname      = letter (A, B, …, Z)
+ *   ctl00$ContentPlaceHolder2$BSrch       = "Search"
  */
 async function searchByLastNameLetter(
   letter: string,
@@ -265,11 +264,12 @@ async function searchByLastNameLetter(
     body.set('__EVENTTARGET',        '');
     body.set('__EVENTARGUMENT',      '');
 
-    // Board/status/last-name controls (ContentPlaceHolder1 naming convention)
-    body.set('ctl00$ContentPlaceHolder1$ddlBoard',  BOARD_CODE);
-    body.set('ctl00$ContentPlaceHolder1$ddlStatus', 'Active');
-    body.set('ctl00$ContentPlaceHolder1$txtLName',  letter);
-    body.set('ctl00$ContentPlaceHolder1$btnSearch', 'Search');
+    // Board/status/last-name controls (ContentPlaceHolder2 — verified 2026-06-11 against live page)
+    body.set('ctl00$ContentPlaceHolder2$chkBoards$2', BOARD_CODE);   // checkbox: KY Board of Auctioneers (board ID 34)
+    body.set('ctl00$ContentPlaceHolder2$rdLictype',   '1');              // Individual search
+    body.set('ctl00$ContentPlaceHolder2$DStatus',     'Active');
+    body.set('ctl00$ContentPlaceHolder2$TLname',      letter);
+    body.set('ctl00$ContentPlaceHolder2$BSrch',       'Search');
 
     const response = await fetch(OOP_URL, {
       method: 'POST',
