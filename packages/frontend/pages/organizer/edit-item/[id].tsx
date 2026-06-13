@@ -33,6 +33,7 @@ import EbayCompTiles from '../../../components/EbayCompTiles';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import VoiceDescriptionInput from '../../../components/VoiceDescriptionInput';
 import BarcodeScanner from '../../../components/BarcodeScanner';
+import { ShippingNetPreview } from '../../../components/ShippingNetPreview';
 import { Mic } from 'lucide-react';
 
 const EditItemPage = () => {
@@ -1449,6 +1450,26 @@ const EditItemPage = () => {
                       />
                     </div>
                   </div>
+
+                  {/* Shipping net preview — buyer cost + organizer net estimate */}
+                  {formData.packageWeightOz && (
+                    <div className="mt-3">
+                      <ShippingNetPreview
+                        itemId={id as string}
+                        itemPrice={formData.price ? parseFloat(formData.price) : undefined}
+                        weightOz={formData.packageWeightOz ? parseInt(formData.packageWeightOz, 10) : undefined}
+                        dims={{
+                          length: formData.packageLengthIn ? parseFloat(formData.packageLengthIn) : undefined,
+                          width: formData.packageWidthIn ? parseFloat(formData.packageWidthIn) : undefined,
+                          height: formData.packageHeightIn ? parseFloat(formData.packageHeightIn) : undefined,
+                        }}
+                        ebayCategoryId={formData.ebayCategoryId || null}
+                        onApplySuggestedPrice={(price) =>
+                          setFormData((prev) => ({ ...prev, price: price.toFixed(2) }))
+                        }
+                      />
+                    </div>
+                  )}
 
                   {/* Local Pickup checkbox */}
                   <div className="mt-3">

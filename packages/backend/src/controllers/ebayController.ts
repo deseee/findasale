@@ -2128,8 +2128,14 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
                   height: Number(item.packageHeightIn),
                 },
               } : {}),
-              // eBay packageType is a strict enum — drop the field if value isn't on the allowlist (avoids err 2004)
+              // eBay packageType is a strict enum — drop the field if value isn't on the allowlist (avoids err 2004).
+              // Also suppress packageType when routing via LSAS calculated shipping (routingReason='calculated-default'):
+              // LSAS computes rates from weight+dims alone and rejects incompatible packageType values (err 216314).
               ...((): { packageType?: string } => {
+                if (routing.routingReason === 'calculated-default') {
+                  // LSAS calculated shipping — strip packageType entirely; weight/dims are sufficient
+                  return {};
+                }
                 const valid = new Set([
                   'LETTER','BULKY_GOODS','CARAVAN','CARS','EUROPALLET','EXPANDABLE_TOUGH_BAGS',
                   'EXTRA_LARGE_PACK','FURNITURE','INDUSTRY_VEHICLES','LARGE_CANADA_POSTBOX',
