@@ -27,7 +27,6 @@ import { scrapeFleaMarketCom } from './sources/fleaMarketComScraper';
 import { scrapeFleaMarketsNet } from './sources/fleaMarketsNetScraper';
 import { scrapeFleaMarketRover } from './sources/fleaMarketRoverScraper';
 import { scrapeVendorsByState } from './sources/vendorsByStateScraper';
-import { runNFMAMembersScraper } from './sources/nfmaMembersScraper';
 import { scrapeBidSpotter } from './sources/bidSpotterScraper';
 import { scrapeBid13 } from './sources/bid13Scraper';
 import { scrapeIBidNow } from './sources/ibidNowScraper';
@@ -333,18 +332,6 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     legalNote: 'Both vendorsbystateusa.com and vendorsbystate.com return empty HTTP responses. Domains appear dead or expired. Verified 2026-06-10.',
     run: scrapeVendorsByState,
   },
-  {
-    id: 'NFMAMembers',
-    displayName: 'National Flea Market Association (fleamarkets.org)',
-    type: 'directory',
-    runMode: 'national-once',
-    enabled: false, // PARKED — Wix.com JS-rendered member list; no static data in HTML.
-    qualityTier: 'high',
-    legalNote: 'robots.txt: OPEN (Allow: /). Privacy Policy: no anti-scraping language. Member list at /nfma-member-markets is Wix JS-rendered — static HTML returns shell with zero records. Unpark: Playwright or Wix Data API. Note: nfma.org is the wrong org (Municipal Analysts). Verified 2026-06-10.',
-    run: async (_metro: string, _organizerId: string, _rateLimiter: RateLimiter): Promise<ScrapeStats> => {
-      await runNFMAMembersScraper();
-      return { itemsFound: 0, itemsCreated: 0, itemsUpdated: 0, itemsSkipped: 0, itemsFailed: 0 };
-    },
   },
   // ─── Storage Auction Sources (2026-06-10 investigation) ───────────────────
   {
