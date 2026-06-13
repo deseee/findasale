@@ -39,18 +39,30 @@ FindA.Sale helps secondary-sale organizers (estate sales, yard sales, auctions, 
 
 FindA.Sale is the all-in-one platform for organizers who run secondary sales — estate sales, yard sales, garage sales, auctions, flea markets, and consignment shops. Snap a photo and the app auto-fills the title, description, tags, and an estimated value; print QR code labels for every item; and publish a browsable storefront so shoppers can find, favorite, and reserve items before the doors open. Organizers manage listings, payments, and paperwork in one place, with a built-in point-of-sale, one-click exports to eBay, Facebook Marketplace, Craigslist, and EstateSales.net, and optional syndication of inventory to Google's free product listings. It's free to start — pay only when items sell — with paid plans for organizers running multiple or higher-volume sales.
 
+## Extended description (full — for big-text fields: Yelp, Alignable, BBB, G2/SaaS directories, app stores)
+
+FindA.Sale is the all-in-one platform for anyone running a secondary sale — estate sales, yard sales, garage sales, auctions, flea markets, and consignment or resale shops. It replaces the hours of manual work these sales usually take: snap a photo of an item and FindA.Sale fills in the title, description, tags, and an estimated value automatically, so a whole room of inventory can be cataloged in a fraction of the usual time. Print QR code price tags, yard signs, and directional signs for every item and sale; shoppers scan them to pull up the listing and price from their own phone.
+
+Getting found is built in. Every listing publishes to a browsable storefront where shoppers near you can search, favorite, place holds, and reserve items before the doors open — and organizers reach buyers everywhere else with one click: export or cross-list to eBay (including direct eBay inventory sync on paid plans), Facebook Marketplace, Craigslist, and EstateSales.net, syndicate eligible inventory to Google's free Shopping listings, and generate ready-to-post social media posts complete with sale photos — then track the clicks, saves, and shares each one earns with Ripples.
+
+Running the sale is just as covered. A built-in point-of-sale takes card payments on the spot through Stripe with no extra hardware required (and works with a Stripe Terminal reader if you want one), plus offline mode, holds and reservations, a virtual queue for early birds, message templates, email and SMS reminders, batch item operations, and an earnings dashboard with automatic payouts. Paid plans add Smart Pricing market-value estimates, a post-sale Flip Report, advanced analytics, a Brand Kit for a custom-branded storefront, and accounting/mailing data exports. Teams get a Command Center to manage every sale at once, Retail Mode for always-live resale and antique storefronts, multi-user workspaces with roles and permissions, webhooks, and multi-vendor Market Hubs. It's free to start with no monthly cost — just a flat 10% when items sell (versus the 20–30% common elsewhere), dropping to 8% on PRO ($29/mo) and TEAMS ($79/mo). Works on any phone or computer, no app store download required.
+
 ---
 
 ## Feature bullets (pick 5–6 per listing)
 
 - **Photo to listing in seconds** — snap a photo; the app fills in title, description, tags, and estimated value
-- **QR code labels** — print and stick to physical items; shoppers scan to see listing and price from their phone
-- **Shopper discovery marketplace** — buyers browse, favorite, and reserve inventory before sale day
-- **One-click marketplace exports** — eBay, Facebook Marketplace, Craigslist, EstateSales.net, and more
+- **QR code labels & signs** — price tags, yard signs, and directional signs; shoppers scan to see listing and price from their phone
+- **Shopper discovery marketplace** — buyers browse, favorite, place holds, and reserve inventory before sale day
+- **One-click marketplace exports** — eBay (plus direct eBay inventory sync on paid plans), Facebook Marketplace, Craigslist, EstateSales.net, and more
 - **Google product listings** — eligible inventory can syndicate to Google's free Shopping listings
-- **Built-in point-of-sale** — take card payments on the spot, no extra hardware required
+- **Social posts, ready to share** — auto-generated posts with your sale photos; track clicks, saves, and shares with Ripples
+- **Built-in point-of-sale** — take card payments on the spot via Stripe, no extra hardware required (Stripe Terminal compatible)
+- **Smart Pricing & Flip Report** — market-value estimates while you list; a post-sale breakdown of what sold and what you earned
+- **Virtual Queue & holds** — manage early birds and let shoppers reserve items before sale day
+- **Team & multi-sale tools** — Command Center, Retail Mode, roles/permissions, webhooks, and Market Hubs for multi-vendor events
 - **Every sale type** — estate sales, yard sales, auctions, flea markets, consignment — one platform
-- **Multi-sale dashboard** — manage listings, photos, and inventory across all upcoming sales
+- **Free to start** — no monthly cost; flat 10% when items sell (vs. 20–30% elsewhere), 8% on paid plans
 
 ---
 
