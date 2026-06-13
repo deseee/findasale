@@ -906,9 +906,22 @@ async function suggestEbayCategoryForTitle(title: string): Promise<string | null
     console.warn(`[eBay Taxonomy] No suggestions for "${title.slice(0, 60)}"`);
     return null;
   }
-  const best = candidates[0];
+  // Prefer a specific leaf over eBay's generic catch-all buckets. eBay's
+  // get_category_suggestions frequently ranks an "Other …" / "Misc" category
+  // high for generic titles; shipping those hurts discoverability (the Danner
+  // aquarium pump landed in 179986 "Other Fish & Aquarium Supplies" instead of
+  // a real Aquarium Pumps leaf — 2026-06-13). candidates are sorted deepest-first,
+  // so the first non-catch-all is the deepest specific category available.
+  const isCatchAll = (name: string) => /\b(other|misc|miscellaneous|everything\s+else)\b/i.test(name);
+  const specific = candidates.find((c) => !isCatchAll(c.categoryName));
+  const best = specific ?? candidates[0];
+  if (!specific) {
+    console.warn(
+      `[eBay Taxonomy] "${title.slice(0, 40)}" → only catch-all categories returned; using ${best.categoryId} (${best.categoryName})`
+    );
+  }
   console.log(
-    `[eBay Taxonomy] "${title.slice(0, 40)}" → ${best.categoryId} (${best.categoryName}) level=${best.level}`
+    `[eBay Taxonomy] "${title.slice(0, 40)}" → ${best.categoryId} (${best.categoryName}) level=${best.level}${specific && specific !== candidates[0] ? ` [skipped catch-all ${candidates[0].categoryName}]` : ''}`
   );
   return best.categoryId;
 }
