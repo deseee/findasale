@@ -1,6 +1,25 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S971 — 2026-06-13 (DEV: eBay listing-push fixed + calculated-shipping/net-engine build shipped | MIGRATION APPLIED TO RAILWAY ✅ | browser QA pending | BQ 1)
+**Last updated:** S972 — 2026-06-13 (QA: Brand/MPN/UPC edit-item ✅, shipping-mode toggle ✅, deploy GREEN ✅ | Danner pump re-push UNVERIFIED — needs your real eBay account | BQ 2)
+
+---
+
+## Session S972 Summary — Partial Chrome QA of S971 febe1f46 Build
+
+**Type:** QA — Chrome MCP, sequential
+**BQ:** 2 (unchanged)
+
+| Item | Status | Details |
+|------|--------|---------|
+| febe1f46 deploy | ✅ VERIFIED GREEN | Railway health OK; `/api/ebay/shipping-preview` responds (CSRF 403 not 404 = endpoint live). Vercel READY (dpl_EGnCoYtcosPKTEVt2naetMT5btLL). |
+| Brand/MPN/UPC on edit-item page | ✅ VERIFIED | Navigated `/organizer/edit-item/cmq2z2ocg001810t51m6su0bb` as user1. Brand field with "e.g. Danner, Sony, Pyrex — leave blank if unbranded" + "Required by eBay" note. MPN "Manufacturer part #". UPC "Barcode number". All present. ss_6085zmmkb |
+| Shipping mode toggle (settings) | ✅ VERIFIED | `/organizer/settings/ebay` — "Calculated" (Recommended) card selected (green border), "Flat-rate tiers" (Advanced) card present. Smart-pick default "Smart-pick (weight tier → calculated → flat-rate → free)" showing. ss_3600f1du9 |
+| ShippingNetPreview component | UNVERIFIED | user1 + user2 have no eBay policies configured — component can't render without a real eBay connection. |
+| Weight-tier gap-overshoot block | UNVERIFIED | CSRF blocks API test without an eBay-connected session. Needs your real account + flat-rate tiers configured. |
+| Danner pump re-push | UNVERIFIED | Requires your real eBay account (artifactmi@gmail.com) to be present. |
+| Brand/MPN/UPC on review page | UNVERIFIED | Review queue is empty on test accounts — user1's items are all Live, user2 has no sales. Needs an unreviewed item. |
+
+**What's next:** Next session re-push the Danner pump through the new CALCULATED path using your real account (artifactmi@gmail.com). That single test will verify the pump, ShippingNetPreview, Suggest-price, and the calculated shipping rate all at once.
 
 ---
 
@@ -9,42 +28,18 @@
 **Type:** DEV — eBay listing-push debugging + a big shipping/pricing build
 **BQ:** 1 → 2
 
-**Why this started:** You couldn't push the Danner aquarium pump to eBay — it kept saying "Brand is missing."
-
-**What we found (by talking to eBay's API directly, not guessing):** The real problem wasn't a missing brand. eBay actually needed a Brand **and** Model-number pair, our category map was sending eBay invalid "root" categories, the pump was landing in a generic "Other" category, and an 11-lb item was being billed **$75** to ship because of a gap in the weight-price ladder.
-
 | Item | Status | Details |
 |------|--------|---------|
-| eBay push fixes | ✅ SHIPPED (code) | Brand/Model now sent correctly; bad category map disabled; resolver skips "Other/Misc"; the $75 overcharge case now **blocks with a clear message** instead of overcharging. Brand/Model/UPC fields added to the edit-item and review pages. "Publish to eBay now" saves your form first. |
-| 🚢 Calculated shipping + net-proceeds engine | ✅ SHIPPED (code) — ⚠️ NOT yet tested in browser | Big build (13 files): eBay now defaults to **calculated shipping** (buyer pays actual cost), with a preview that shows your **net proceeds after fees** and a **"Suggest price"** button. Free shipping becomes an opt-in. Existing organizers on flat-rate tiers are preserved. |
-| The Danner pump | ↩️ Reset & ready | It was published live, then withdrawn at your request, and is now reset so it can be cleanly re-pushed through the new shipping path. |
-| **Database migration** | ✅ **DONE** | Applied + verified on Railway 2026-06-13 (60 package profiles, 5 fee rows, new columns present). The backfill correctly kept existing organizers on flat-rate tiers. Remaining: a browser QA pass. |
-
-**Bottom line:** The code is in and type-clean, but the database migration is **applied and verified on Railway**. It still needs a real browser (QA) test before relying on it end-to-end.
+| eBay push fixes | ✅ SHIPPED + ✅ UI VERIFIED | Brand/Model now sent correctly; bad category map disabled; resolver skips "Other/Misc"; $75 overcharge case blocks with clear message. Brand/Model/UPC fields confirmed on edit-item page (S972 Chrome ✅). |
+| 🚢 Calculated shipping + net-proceeds engine | ✅ SHIPPED — partially browser-verified | Shipping-mode toggle confirmed on settings page (S972 Chrome ✅). ShippingNetPreview + Danner pump re-push still need your real eBay account. |
+| The Danner pump | ↩️ Reset & ready | Reset so it can be cleanly re-pushed through the new shipping path. |
+| Database migration | ✅ DONE | Applied + verified on Railway 2026-06-13. |
 
 ---
 
 ## ✅ DONE — eBay Shipping Migration Applied to Railway (S971, 2026-06-13)
 
-The S971 eBay calculated-shipping build added new database tables (`PackageProfile`, `EbayCategoryFee`) and columns. The first deploy used a placeholder database URL and failed, so **these were never created on Railway.** Until this runs, eBay push / shipping-preview / the eBay panel will error in production.
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-# Get DATABASE_URL from Railway dashboard -> findasale-db service -> Variables tab (use the PUBLIC proxy URL)
-$env:DATABASE_URL="[Railway DATABASE_URL - copy from Railway dashboard]"
-npx prisma migrate deploy   # applies migration 20260613190000_ebay_calculated_shipping_net_engine
-npx prisma generate         # regenerates the TypeScript client with the new fields
-npx prisma db seed          # seeds EbayCategoryFee from published rates
-```
-
-Then delete the stray file so it never gets committed:
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-Remove-Item -LiteralPath packages\database\prisma\_schema_gen.prisma
-```
-
-After the migration runs and deploys are green, next session does the Chrome QA + re-pushes the Danner pump through the new calculated path.
+Tables, columns, and backfill all verified on Railway. Nothing more needed here.
 
 ---
 
@@ -160,16 +155,12 @@ After the migration runs and deploys are green, next session does the Chrome QA 
 
 | Action | Priority | Instructions |
 |--------|----------|-------------|
-| **eBay shipping migration on Railway** | ✅ **DONE (2026-06-13)** | Applied + verified (60 package profiles, 5 fee rows, columns + FLAT_TIERS backfill confirmed). Stray `_schema_gen.prisma` should be deleted locally if still present. |
-| **Push S966 wrap docs** | HIGH | `git add claude_docs/STATE.md claude_docs/patrick-dashboard.md` → commit → push.ps1 |
-| **Push S964+S965 changes (if not pushed)** | HIGH | See archived push block below |
+| **Push S972 wrap docs** | HIGH | See push block below — STATE.md + patrick-dashboard.md |
+| **Danner pump re-push (next session)** | HIGH | Be present with artifactmi@gmail.com account — next session re-pushes the Danner pump through the new CALCULATED path to verify ShippingNetPreview, Suggest-price, and eBay calculated rate |
+| eBay shipping migration | ✅ DONE (2026-06-13) | Applied + verified on Railway. |
 | AlternativeTo | HIGH — June 18 deadline | Log in as "FindASale" → alternativeto.net → Add Software |
 | Trustpilot (#485) retry | MEDIUM | Try with support@finda.sale |
 | KY/ME workflow triggers | MEDIUM | GitHub Actions → scrape-kentucky-phase2 + scrape-maine-phase2 → Run workflow |
-| **Push S964+S965 changes** | HIGH | See push block below |
-| **Push S963 changes (if not pushed)** | HIGH | See push block below |
-| AlternativeTo | HIGH — June 18, 2026 | Log in as "FindASale" → alternativeto.net → Add Software |
-| KY/ME workflow triggers | MEDIUM | GitHub Actions → `scrape-kentucky-phase2` + `scrape-maine-phase2` → Run workflow |
 
 ---
 

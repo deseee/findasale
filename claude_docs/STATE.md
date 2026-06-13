@@ -8,6 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S972 — QA (2026-06-13). Partial Chrome QA of S971 febe1f46 build.**
+- **Deploy verification ✅:** febe1f46 GREEN on Railway (health OK, /api/ebay/shipping-preview endpoint responds) and Vercel (READY, dpl_EGnCoYtcosPKTEVt2naetMT5btLL).
+- **Brand/MPN/UPC on edit-item ✅:** Navigated /organizer/edit-item/cmq2z2ocg001810t51m6su0bb as user1. Brand "e.g. Danner, Sony, Pyrex — leave blank if unbranded" + eBay required note present. MPN "Manufacturer part #" and UPC "Barcode number" visible. ss_6085zmmkb
+- **Shipping mode toggle ✅:** /organizer/settings/ebay shows "Calculated" (Recommended) card selected + "Flat-rate tiers" (Advanced) card. Smart-pick default policy "Smart-pick (weight tier → calculated → flat-rate → free)" set. ss_3600f1du9
+- **UNVERIFIED (needs Patrick's real eBay account — artifactmi@gmail.com):** Danner pump re-push through CALCULATED path; ShippingNetPreview component + net/buyer-shipping preview rendering; Suggest-price button; weight-tier gap-overshoot block message. Also: Brand/MPN/UPC on review page (review queue empty on user1/user2 test accounts).
+- BQ: 2 (unchanged — febe1f46 partial QA done, remaining items gated on Patrick's real account).
+
 **S971 — DEV/RECORDS (2026-06-13). eBay listing-push fix + calculated-shipping/net-engine build (commit febe1f46).**
 - **Trigger:** organizer couldn't push the Danner AP-40 aquarium pump (itemId cmqbb252i000i60qq7eilco9z) to eBay — friendly "Brand is missing" error.
 - **Root causes (found by hitting the eBay API directly — evidence-first, not guessed):** (1) eBay needs the Brand+MPN PAIR for many categories — real error was errorId 25002 `<BrandMPN>`, the friendly message was misleading; (2) secondaryCategoryId="1" from SECONDARY_CATEGORY_MAP (vintage/rare/collectible→'1', antique→'20081', handmade→'14339' are all NON-LEAF ROOT categories) → errorId 25005; (3) publishItemOffer used the wrong SKU (bare FAS-{id}); real SKU includes skuAppend segments → broke repair paths; (4) category resolver took eBay's "Other/Misc" catch-all blindly (pump landed in 179986 "Other Fish & Aquarium Supplies"); (5) shipping — 11 lb pump billed $75 because the organizer's weight-tier ladder has a gap (≤111oz/$19.99 then nothing until ≤720oz/$75 FedEx).
@@ -97,7 +104,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
-| eBay calculated-shipping / net-engine / estimation build (febe1f46) | CODE-ONLY — TS-clean but NOT browser-verified. Schema migration 20260613190000 APPLIED + verified on Railway 2026-06-13 (tables + columns + FLAT_TIERS backfill confirmed). | (1) confirm backend+frontend deploys green; (2) Chrome QA the shipping system E2E + re-push the Danner pump through the CALCULATED path | S971 |
+| eBay calculated-shipping / net-engine / estimation build (febe1f46) | PARTIAL Chrome QA S972: deploy GREEN ✅, Brand/MPN/UPC edit-item UI ✅, shipping-mode toggle ✅. UNVERIFIED: Danner pump re-push (CALCULATED path), ShippingNetPreview + net/suggest-price rendering, weight-tier gap-overshoot block message, Brand/MPN/UPC review page. All unverified items require artifactmi@gmail.com (Patrick's real eBay account). | Patrick present with artifactmi@gmail.com → re-push Danner pump (itemId cmqbb252i000i60qq7eilco9z, offer 186196728011) through CALCULATED path. Verify ShippingNetPreview renders estimate→confirm card with weight/box pre-fill, net proceeds, Suggest-price button. Confirm gap-overshoot block message. | S971 |
 
 
 
@@ -128,13 +135,25 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S971 — Carry-forward (eBay shipping — GATED on migration)
+### S972 — Carry-forward (eBay shipping — GATED on Patrick's real eBay account)
 
-**STEP 1 — GATING, DO FIRST:** Migration 20260613190000 is APPLIED + verified on Railway (done 2026-06-13). Confirm backend (Railway) + frontend (Vercel) deploys for febe1f46 are GREEN before QA. Delete the stray `packages/database/prisma/_schema_gen.prisma` if still present locally (never commit it).
+**Deploy + Brand/MPN/UPC UI + shipping-mode toggle all VERIFIED S972.** Remaining items require Patrick to be present with artifactmi@gmail.com (account cmnxueoas0005tfv8brnc0kky).
 
-**STEP 2 — `Skill('findasale-qa')`** — Chrome QA the eBay shipping system end-to-end as the organizer (account cmnxueoas0005tfv8brnc0kky). Re-push the Danner pump (itemId cmqbb252i000i60qq7eilco9z, offer 186196728011) through the new CALCULATED path. Confirm: the estimate→confirm card pre-fills weight/box; the net + buyer-shipping preview render; the Suggest-price button works; and the pump publishes with Brand=Danner + MPN=AP-40, a specific (non-"Other") category, and a sensible calculated shipping rate (NOT $75). Evidence required per QA Honesty Gate — URL, user, element, outcome, screenshot IDs.
+**`Skill('findasale-qa')`** — Chrome QA as artifactmi@gmail.com organizer. Re-push the Danner pump (itemId cmqbb252i000i60qq7eilco9z, offer 186196728011) through the new CALCULATED path. Verify:
+1. Estimate→confirm card pre-fills weight/box from PackageProfile
+2. Net proceeds + buyer-shipping preview render in ShippingNetPreview component
+3. Suggest-price button works and returns a value
+4. Pump publishes with Brand=Danner + MPN=AP-40, specific (non-"Other") category, sensible calculated rate (NOT $75)
+5. Weight-tier gap-overshoot block message appears for overshoot scenario (can test with a heavy item on a flat-tier account)
+6. Brand/MPN/UPC visible on review page (organizer has items needing review)
 
-**STEP 3 — Smoke-test the other shipped eBay fixes:** Brand/MPN/UPC inputs on the edit-item + review pages; weight-tier gap-overshoot block message (confirm it blocks with an actionable message instead of overcharging $75).
+Evidence required per QA Honesty Gate — URL, user, element, outcome, screenshot IDs.
+
+### S971 — Carry-forward (eBay shipping — GATED on migration — COMPLETED)
+
+**STEP 1 — DONE ✅:** Deploy GREEN (febe1f46 Railway + Vercel). Migration applied + verified.
+
+**STEP 2 + STEP 3 — PARTIALLY DONE S972:** Brand/MPN/UPC edit-item ✅, shipping-mode toggle ✅. Full pump re-push UNVERIFIED → see S972 carry-forward above.
 
 ### S970 — Carry-forward (QA/DEV)
 
@@ -217,6 +236,28 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S972 — 2026-06-13 | QA (Partial Chrome QA of S971 febe1f46 build)
+
+**Session type:** QA — Chrome MCP, main session, sequential.
+
+**Context:** Continuing from context compaction. Previous session had logged in as user5 (Leo Thomas, shopper) and was switching to user1 for eBay QA.
+
+**Verified ✅ (with evidence):**
+- **Deploy GREEN:** febe1f46 on Railway (health `{"status":"ok"}`; /api/ebay/shipping-preview returns CSRF 403, not 404 → endpoint live). Vercel READY (dpl_EGnCoYtcosPKTEVt2naetMT5btLL). Wrap commit 3dfe5c58 still BUILDING (docs only, no impact).
+- **Brand/MPN/UPC on edit-item:** Navigated /organizer/edit-item/cmq2z2ocg001810t51m6su0bb as user1 (Alice). Brand field with placeholder "e.g. Danner, Sony, Pyrex — leave blank if unbranded" + "Required by eBay for many categories. Your value is always used exactly as entered." MPN (optional) "Manufacturer part #". UPC (optional) "Barcode number". ss_6085zmmkb
+- **Shipping mode toggle (settings/ebay):** "Calculated" (Recommended) card selected, "Flat-rate tiers" (Advanced) card present. Smart-pick default policy dropdown "Smart-pick (weight tier → calculated → flat-rate → free)" showing. Push Defaults section + Special Shipping Rules + Category Overrides sections all render. ss_3600f1du9
+
+**UNVERIFIED (requires Patrick's real account — artifactmi@gmail.com):**
+- Danner pump re-push through CALCULATED path (requires real eBay connection)
+- ShippingNetPreview component (net + buyer-shipping preview rendering)
+- Suggest-price button
+- Weight-tier gap-overshoot block message (CSRF blocks API test; needs eBay-connected account with flat-rate tiers)
+- Brand/MPN/UPC on review page (user1 review queue empty — all items live; user2 has no sales yet)
+
+**No DB mutations made.** No cleanup required.
+
+**BQ delta:** 2 (unchanged)
 
 ### S971 — 2026-06-13 | DEV/RECORDS (eBay listing-push fix + calculated-shipping/net-engine build)
 
