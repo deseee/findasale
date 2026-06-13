@@ -1990,13 +1990,33 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // REQUIRED aspects the category demands (prevents errorId 25002
         // "The item specific X is missing").
         const userAspects = buildAspects(item.tags);
-        const aspects = await fillRequiredAspects(userAspects, categoryId ?? '99', {
+        let aspects = await fillRequiredAspects(userAspects, categoryId ?? '99', {
           title: item.title,
           tags: item.tags,
           description: item.description,
           brand: item.brand,
           mpn: item.mpn,
         });
+        // Guarantee organizer-set product identifiers reach eBay's item-specifics
+        // (aspects) regardless of whether fillRequiredAspects ran. The Taxonomy API
+        // (getRequiredAspectsForCategory) can return null on timeout/failure, in which
+        // case fillRequiredAspects bails and the top-level product.brand field alone is
+        // NOT treated by eBay as the "Brand" item-specific — causing errorId 25002
+        // "The item specific Brand is missing." Inject Brand/MPN into aspects when the
+        // organizer set them and fillRequiredAspects did not already choose a value
+        // (case-insensitive key check — never overwrite a keyword/Unbranded value it set).
+        if ((item.brand && item.brand.trim()) || (item.mpn && item.mpn.trim())) {
+          const aspectsObj: Record<string, string[]> = aspects ?? {};
+          const hasKey = (key: string): boolean =>
+            Object.keys(aspectsObj).some((k) => k.toLowerCase() === key.toLowerCase());
+          if (item.brand && item.brand.trim() && !hasKey('Brand')) {
+            aspectsObj['Brand'] = [item.brand.trim()];
+          }
+          if (item.mpn && item.mpn.trim() && !hasKey('MPN')) {
+            aspectsObj['MPN'] = [item.mpn.trim()];
+          }
+          aspects = aspectsObj;
+        }
         const sanitizedDescription = sanitizeDescriptionForEbay(item.description);
         // Bug #424: replace ALL occurrences of {{DESCRIPTION}} in the organizer's template.
         // String.replace() with a string arg only replaces the first match; split/join is
@@ -2651,6 +2671,8 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         ebayListingId: true,
         ebayCategoryId: true,
         title: true,
+        brand: true,
+        mpn: true,
         sale: { select: { organizerId: true } },
       },
     });
@@ -2777,6 +2799,60 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
               const publishData = (await publishResponse.json()) as any;
               ebayListingId = publishData.listingId;
               break;
+            }
+          }
+        }
+      }
+
+      // 25002 self-heal path: a stale offer can have a missing required item-specific
+      // (most commonly Brand). The bulk-push aspect builder may have skipped it if the
+      // Taxonomy API failed at push time, and the publish path only re-publishes the
+      // existing offer — it never rebuilds aspects. So when publish fails with 25002,
+      // GET the inventory item, inject Brand (and MPN) from the organizer's current
+      // values into product.aspects, PUT it back, then re-publish once. Fall back to
+      // "Unbranded" (eBay's accepted no-brand value) when the organizer set no brand.
+      if (!ebayListingId && publishError.includes('25002')) {
+        const sku = `FAS-${item.id}`;
+        const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
+        const inventoryUrl = ebayProxyUrl(inventoryPath);
+        const invGet = await fetch(inventoryUrl, { headers: ebayUserHeaders(accessToken) });
+        if (invGet.ok) {
+          const invBody = (await invGet.json()) as any;
+          if (!invBody.product || typeof invBody.product !== 'object') invBody.product = {};
+          const aspectsObj: Record<string, string[]> =
+            invBody.product.aspects && typeof invBody.product.aspects === 'object'
+              ? invBody.product.aspects
+              : {};
+          const hasKey = (key: string): boolean =>
+            Object.keys(aspectsObj).some((k) => k.toLowerCase() === key.toLowerCase());
+          if (!hasKey('Brand')) {
+            aspectsObj['Brand'] = item.brand && item.brand.trim() ? [item.brand.trim()] : ['Unbranded'];
+          }
+          if (item.mpn && item.mpn.trim() && !hasKey('MPN')) {
+            aspectsObj['MPN'] = [item.mpn.trim()];
+          }
+          invBody.product.aspects = aspectsObj;
+          console.log(`[eBay PublishNow Retry25002] ${sku}: injecting Brand=${aspectsObj['Brand']?.[0]} and re-publishing`);
+          const retryInvRes = await fetch(inventoryUrl, {
+            method: 'PUT',
+            headers: {
+              ...ebayUserHeaders(accessToken),
+              ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+            },
+            body: JSON.stringify(invBody),
+          });
+          if (retryInvRes.ok || retryInvRes.status === 204) {
+            publishResponse = await fetch(publishUrl, {
+              method: 'POST',
+              headers: {
+                ...ebayUserHeaders(accessToken),
+                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+              },
+            });
+            if (publishResponse.ok) {
+              trackEbayCall();
+              const publishData = (await publishResponse.json()) as any;
+              ebayListingId = publishData.listingId;
             }
           }
         }
