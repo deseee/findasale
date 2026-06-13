@@ -6,7 +6,7 @@ name: Lighthouse Audit
 # Audits the live Vercel production site (no build step needed).
 #
 # Triggers:
-#   - Weekly on Monday 06:00 UTC (trend tracking)
+#   - Monthly on the 1st at 06:00 UTC (trend tracking)
 #   - Manually via the "Run workflow" button (Actions tab -> Lighthouse Audit -> Run workflow)
 #
 # Output: each run prints a temporary public report URL in the logs and uploads the
@@ -16,7 +16,7 @@ name: Lighthouse Audit
 
 on:
   schedule:
-    - cron: '0 6 * * 1'
+    - cron: '0 6 1 * *'
   workflow_dispatch:
 
 jobs:

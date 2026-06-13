@@ -688,8 +688,8 @@ Identified S965 cross-check: Google Business Profile (S814) was done but the res
 | 490 | Apple Business Connect | ⬜ TODO | businessconnect.apple.com — free; powers Apple Maps. Verify with Paw Paw address. |
 | 491 | Yelp for Business | ⬜ TODO | biz.yelp.com — free claim. Category: e-commerce/local service. NAP must match GBP. |
 | 492 | Foursquare | ⬜ TODO | foursquare.com claim venue — free; also feeds downstream data aggregators (Data Axle/Localeze/Acxiom). |
-| 493 | Appsco.pe (PWA directory) | ⬜ TODO | appsco.pe — submit PWA manifest URL. Exact-fit, low competition; PWA status is an advantage here. |
-| 494 | findPWA (PWA directory) | ⬜ TODO | findpwa.com — submit PWA; aim for the Verified badge. |
+| 493 | Appsco.pe (PWA directory) | ⛔ DEFUNCT S968 | appsco.pe is a dead Heroku app — homepage + /developer/submit both return "Application error". Site abandoned; do not attempt. |
+| 494 | findPWA (PWA directory) | ⚠️ BLOCKED S968 (their server) | findpwa.com/submit form fully filled (Shopping, FindA.Sale publisher, 3× 1439×2881 screenshots) but their handler submit_action.php (lima-city host) returned HTTP 500. Our data is correct — retry when their backend recovers. |
 
 Full research + net-new opportunity list (Tier 2/3, niche resale, trade associations, press): `claude_docs/strategy/APP-SUBMISSION-DIRECTORY-RESEARCH-2026.md`.
 

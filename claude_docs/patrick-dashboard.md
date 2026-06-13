@@ -1,8 +1,23 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S967 — 2026-06-12 (Submission + greenfield growth research | eBay email catch-up | West MI outreach drafted)
+**Last updated:** S968 — 2026-06-12 (Mobile perf code-split | Lighthouse CI built (monthly) | homepage CLS fixed + verified | monthly perf scheduled task)
 
 ---
+
+## Session S968 Summary — Mobile Perf + Lighthouse Audit Infrastructure + CLS Fix (COMPLETE)
+
+**Type:** DEV / PERF — homepage performance, repeatable audit setup, Core Web Vitals fix
+**BQ:** 0 (unchanged)
+
+| Item | Status | Details |
+|------|--------|---------|
+| Mobile homepage perf | ✅ SHIPPED | Code-split 10 overlay/banner components to `next/dynamic` ssr:false (7 app-wide in _app.tsx + 3 on homepage) + lazy-loaded below-fold item images. Trims initial JS / TBT. |
+| Lighthouse CI | ✅ BUILT + RUNNING | New GitHub Action (median-of-3, mobile, 4 key URLs, warn-only). Runs **monthly** (1st) + on-demand. Plus `scripts/psi-audit.mjs` for instant checks (PSI API is 100% free — grab a free key to skip the rate limit). |
+| Homepage CLS | ✅ FIXED + VERIFIED | First attempt regressed (0.204→0.284) and was reverted. Diagnosed the real culprit (promo banners shoving the map down), then moved the banners below the map. CI median CLS now **< 0.1** (warning cleared); sandbox 0.135→0.019. |
+| Vercel Speed Insights | ✅ CONFIRMED LIVE | Real users are healthy: mobile Real Experience Score **91 "Great"**, LCP 1.68s. Already collecting — view in Vercel → Speed Insights. |
+| findPWA listing (#494) | ⛔ THEIR SERVER DOWN | Submission attempted; findPWA's backend returned HTTP 500. NOT submitted — retry when their site recovers. Form data + screenshots are ready. |
+| Appsco.pe (#493) | ⛔ DEAD SITE | Entire site is a broken Heroku app → mark defunct on roadmap. |
+| Monthly perf scheduled task | ✅ CREATED | Cowork task `findasale-monthly-perf-audit` (2nd of month) reviews the audit + field data and reports CWV status. |
 
 ## Session S967 Summary — Submission Research + eBay Catch-up + Local Outreach (COMPLETE)
 
