@@ -419,25 +419,12 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
         </section>
 
         <div className="flex-1 container mx-auto px-4 py-8">
-          {/* Phase 5: #49 City Heat Index Banner — conditionally render only when data available */}
-          <CityHeatBanner />
-
-          {/* CD2 Phase 2: Treasure Hunt Banner — conditionally render only when data available */}
-          <TreasureHuntBanner />
-
-          {/* Feature #401: Sale of the Day — renders nothing when no qualifying sale */}
-          <SaleOfTheDayCard />
-
           {/* Sales Near You Card */}
           <section className="mb-12">
             <div>
               <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col">
                 {/* Map Section — only render when at least one sale has coords */}
-                {isLoading ? (
-                  <div className="w-full" style={{ height: '220px' }}>
-                    <Skeleton className="w-full h-full rounded-none" />
-                  </div>
-                ) : hasMapPins ? (
+                {!isLoading && hasMapPins && (
                   <div className="w-full" style={{ height: '220px' }}>
                     <SaleMap
                       pins={mapPins}
@@ -446,7 +433,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                       height="220px"
                     />
                   </div>
-                ) : null}
+                )}
 
                 {/* Footer Line */}
                 <div className="px-4 py-3 border-t border-warm-200 dark:border-gray-700 flex items-center justify-between">
@@ -466,6 +453,12 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
               </div>
             </div>
           </section>
+
+          {/* Discovery banners — moved below the map (CLS S968): they load async, so
+              keeping them above the map/sales shifted primary content on mount */}
+          <CityHeatBanner />
+          <TreasureHuntBanner />
+          <SaleOfTheDayCard />
 
           {/* Filter Bar: When + Sale Type */}
           <section className="mb-6">
