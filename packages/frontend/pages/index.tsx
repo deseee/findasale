@@ -433,7 +433,11 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
             <div>
               <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col">
                 {/* Map Section — only render when at least one sale has coords */}
-                {!isLoading && hasMapPins && (
+                {isLoading ? (
+                  <div className="w-full" style={{ height: '220px' }}>
+                    <Skeleton className="w-full h-full rounded-none" />
+                  </div>
+                ) : hasMapPins ? (
                   <div className="w-full" style={{ height: '220px' }}>
                     <SaleMap
                       pins={mapPins}
@@ -442,7 +446,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                       height="220px"
                     />
                   </div>
-                )}
+                ) : null}
 
                 {/* Footer Line */}
                 <div className="px-4 py-3 border-t border-warm-200 dark:border-gray-700 flex items-center justify-between">

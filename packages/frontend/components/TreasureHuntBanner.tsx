@@ -44,8 +44,21 @@ const TreasureHuntBanner: React.FC = () => {
     retry: 1,
   });
 
+  // Dismissed: render nothing
+  if (isDismissed) return null;
+  // Reserve space during load to prevent layout shift (CLS S968); collapse only if no hunt
+  if (isLoading) {
+    return (
+      <div className="mb-8" aria-hidden="true">
+        <div
+          className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-l-4 border-amber-600 dark:border-amber-500 rounded-lg p-6 shadow-sm dark:shadow-lg"
+          style={{ minHeight: '132px' }}
+        />
+      </div>
+    );
+  }
   // Graceful degradation: if load fails or no hunt data, render nothing
-  if (isError || !hunt || isDismissed) return null;
+  if (isError || !hunt) return null;
 
   return (
     <div className="mb-8">
