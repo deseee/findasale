@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
 import { useMyAchievements } from '../../hooks/useAchievements';
+import useXpProfile from '../../hooks/useXpProfile';
 import { useUserBadges } from '../../hooks/useUserBadges';
 import { AchievementBadge } from '../../components/AchievementBadge';
 import { LocalLegendBadgeList } from '../../components/LocalLegendBadge';
@@ -21,6 +22,7 @@ export default function AchievementsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { data, isLoading, error } = useMyAchievements();
+  const { data: xpProfile } = useXpProfile(!!user?.id);
   const { data: badgesData } = useUserBadges();
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export default function AchievementsPage() {
   }
 
   const achievements = data?.achievements ?? [];
-  const userGuildXp = user?.guildXp ?? 0;
+  const userGuildXp = xpProfile?.guildXp ?? user?.guildXp ?? 0;
 
   // Calculate current rank
   let currentRank = RANKS[0];
@@ -46,9 +48,11 @@ export default function AchievementsPage() {
     }
   }
 
-  const xpToNextRank = Math.max(0, nextRank.xp - userGuildXp);
-  const xpProgress = userGuildXp - currentRank.xp;
-  const xpProgressPercent = Math.min(100, (xpProgress / (nextRank.xp - currentRank.xp)) * 100);
+  // S969 fix #219: display absolute progress from the authoritative /xp/profile rankProgress
+  // (same source + framing the shopper dashboard uses) so the two pages never disagree.
+  const nextRankXpAbs = xpProfile?.rankProgress?.nextRankXp ?? nextRank.xp;
+  const xpToNextRank = Math.max(0, nextRankXpAbs - userGuildXp);
+  const xpProgressPercent = Math.min(100, (userGuildXp / nextRankXpAbs) * 100);
 
   const shoppingAchievements = achievements.filter((a) => a.category === 'SHOPPER');
   const organizerAchievements = achievements.filter((a) => a.category === 'ORGANIZER');
@@ -100,7 +104,7 @@ export default function AchievementsPage() {
               <div className="mb-6">
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-gray-600 dark:text-gray-300">
-                    {xpProgress} / {nextRank.xp - currentRank.xp} XP to {nextRank.name}
+                    {userGuildXp.toLocaleString()} / {nextRankXpAbs.toLocaleString()} XP to {nextRank.name}
                   </span>
                   <span className="text-gray-600 dark:text-gray-300">{xpToNextRank} XP remaining</span>
                 </div>
