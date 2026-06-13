@@ -3364,6 +3364,35 @@ async function resolvePoliciesForItem(
     const weightOz = item.packageWeightOz;
     const tier = matchWeightTier(weightOz, tiers);
     if (tier) {
+      // Gap-overshoot guard (S-stopgap): organizer weight-tier maps can have gaps
+      // (e.g. a "6+ lb / ≤111oz" tier, then nothing until "45 lb / ≤720oz").
+      // matchWeightTier picks the smallest tier whose maxOz >= weight, so an item
+      // that overshoots the granular tiers falls into a much-larger catch-all tier
+      // and gets charged that flat rate (an 11 lb item billed at the 45 lb $75 rate).
+      // If the item has a real weight and the matched tier covers items at least ~2x
+      // heavier than this one, it fell through a gap — block the push with an
+      // actionable message instead of silently overcharging.
+      // Both thresholds (16 oz floor, 2x multiplier) are tunable: the 16 oz floor and
+      // 2x ratio prevent false positives on small items that match their correct
+      // granular low-weight tiers (those match tightly, ratio near 1).
+      if (
+        item.packageWeightOz != null &&
+        item.packageWeightOz > 16 &&
+        tier.maxOz > item.packageWeightOz * 2
+      ) {
+        console.warn(
+          `[eBay ShippingPick] item=${item.id} tier-gap overshoot: weight=${item.packageWeightOz}oz matched tier maxOz=${tier.maxOz} — blocked to avoid overcharge`
+        );
+        await prisma.item.update({
+          where: { id: item.id },
+          data: { ebayNeedsReview: true },
+        });
+        return {
+          error: 'SHIPPING_TIER_GAP',
+          code: 'SHIPPING_TIER_GAP',
+          message: `This item weighs ~${(item.packageWeightOz / 16).toFixed(1)} lb but your nearest shipping tier covers up to ${(tier.maxOz / 16).toFixed(0)} lb — it would be overcharged. Add a shipping tier near ${(item.packageWeightOz / 16).toFixed(0)} lb, or switch to calculated shipping so the buyer is charged the real rate.`,
+        };
+      }
       fulfillmentPolicyId = tier.policyId;
       routingReason = `weight-tier:${tier.maxOz}oz`;
       cascadeStep = 'weight-tier';
