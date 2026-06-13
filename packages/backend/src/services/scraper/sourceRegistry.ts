@@ -512,3 +512,10 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     run: scrapeEstateSaleCom,
   },
 ];
+/**
+ * Look up a scraper source definition by its registry id.
+ * Returns undefined for unknown IDs — callers should handle gracefully.
+ */
+export function getSourceById(id: string): ScraperSourceDef | undefined {
+  return SOURCE_REGISTRY.find((s) => s.id === id);
+}
