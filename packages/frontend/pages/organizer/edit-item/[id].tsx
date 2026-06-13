@@ -834,6 +834,22 @@ const EditItemPage = () => {
               </select>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                Brand
+              </label>
+              <input
+                type="text"
+                value={formData.brand}
+                onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                placeholder="e.g. Danner, Sony, Pyrex — leave blank if unbranded"
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+              />
+              <div className="text-xs text-gray-400 mt-0.5">
+                Required by eBay for many categories. Your value is always used exactly as entered.
+              </div>
+            </div>
+
             {/* #64: Condition Grade Picker */}
             <div>
               <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">

@@ -3644,6 +3644,17 @@ async function fillRequiredAspects(
           }
         }
       }
+      // Final fallback: never leave the Brand aspect unset. eBay rejects with
+      // errorId 25002 "The item specific Brand is missing" when a required Brand
+      // aspect has no value. This fires when the organizer set no brand AND the
+      // category's Brand aspect is free-text (no enumValues) or its enum lacks an
+      // "Unbranded" option — previously picked stayed null and Brand was dropped.
+      // "Unbranded" is a universally accepted Brand value (valid enum member in
+      // virtually all Brand picklists and acceptable as free text).
+      if (!picked) {
+        picked = 'Unbranded';
+        source = 'brand-unbranded-fallback';
+      }
     }
     // Special handling for MPN/Model/Manufacturer identifiers: check item.mpn first
     else if (/^(mpn|model|manufacturer)$/i.test(aspect.name)) {
