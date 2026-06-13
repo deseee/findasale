@@ -93,9 +93,15 @@ export async function ensureCalculatedFulfillmentPolicy(organizerId: string): Pr
         costType: 'CALCULATED',
         shippingServices: [
           {
-            shippingServiceCode: 'USPSGroundAdvantage',
+            shippingServiceCode: 'USPSParcel',
             shippingCarrierCode: 'USPS',
             sortOrder: 1,
+            freeShipping: false,
+          },
+          {
+            shippingServiceCode: 'USPSPriority',
+            shippingCarrierCode: 'USPS',
+            sortOrder: 2,
             freeShipping: false,
           },
         ],
