@@ -20,6 +20,10 @@ import {
 } from '../utils/ebayPolicyParser';
 import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
+import { ensureCalculatedFulfillmentPolicy } from '../services/ebayCalculatedPolicyService';
+import { estimateBuyerShippingRate } from '../services/ebayRateEstimateService';
+import { computeNetProceeds, suggestPriceForMargin } from '../services/ebayNetProceedsService';
+import { estimatePackageProfile } from '../services/ebayPackageEstimateService';
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -1153,6 +1157,7 @@ export async function getEbaySetupData(req: AuthRequest, res: Response): Promise
       merchantLocations: locations,
       currentMapping: organizer.ebayPolicyMapping,
       suggestedWeightTiers,
+      handlingTimeDays: organizer.ebayConnection.handlingTimeDays ?? 3,
     });
   } catch (err: any) {
     console.error('[eBay] getEbaySetupData error:', err);
@@ -1184,6 +1189,8 @@ export async function saveEbayPolicyMapping(req: AuthRequest, res: Response): Pr
       unknownPolicyId: body.unknownPolicyId ?? null,
       pushAsDraft: body.pushAsDraft ?? false,
       merchantLocationSource: body.merchantLocationSource || 'SALE_ADDRESS',
+      shippingMode: body.shippingMode === 'FLAT_TIERS' ? 'FLAT_TIERS' : 'CALCULATED',
+      freeShippingOptIn: body.freeShippingOptIn === true,
     };
 
     const mapping = await prisma.ebayPolicyMapping.upsert({
@@ -1191,6 +1198,22 @@ export async function saveEbayPolicyMapping(req: AuthRequest, res: Response): Pr
       create: { organizerId: organizer.id, ...data },
       update: data,
     });
+
+    // Persist handling time on the connection (feeds the calculated fulfillment policy).
+    if (typeof body.handlingTimeDays === 'number' && body.handlingTimeDays >= 0) {
+      await prisma.ebayConnection.updateMany({
+        where: { organizerId: organizer.id },
+        data: { handlingTimeDays: Math.min(30, Math.round(body.handlingTimeDays)) },
+      });
+    }
+
+    // When CALCULATED mode is selected, provision the calculated fulfillment policy
+    // so it's ready at push time. Best-effort: failure is non-fatal (push will retry).
+    if (data.shippingMode === 'CALCULATED') {
+      ensureCalculatedFulfillmentPolicy(organizer.id).catch((err) =>
+        console.warn('[eBay] calculated policy provisioning on save failed', err)
+      );
+    }
 
     return res.json({ success: true, mapping });
   } catch (err: any) {
@@ -1929,6 +1952,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           {
             id: item.id,
             packageWeightOz: item.packageWeightOz,
+            packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+            packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+            packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
             packageType: item.packageType,
             ebayShippingClassification: item.ebayShippingClassification,
             ebayCategoryId: item.ebayCategoryId,
@@ -3238,6 +3264,9 @@ async function resolvePoliciesForItem(
   item: {
     id: string;
     packageWeightOz?: number | null;
+    packageLengthIn?: number | null;
+    packageWidthIn?: number | null;
+    packageHeightIn?: number | null;
     packageType?: string | null;
     ebayShippingClassification?: string | null;
     ebayCategoryId?: string | null;
@@ -3310,6 +3339,86 @@ async function resolvePoliciesForItem(
       merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
       routingReason: 'organizer-default-shipping-policy',
     };
+  }
+
+  // ── Shipping-mode routing (calculated vs flat-tiers) ───────────────────────
+  // Default mode = CALCULATED: the buyer pays the real rate eBay computes at
+  // checkout from their ZIP. Requires the item to have a weight AND all 3 dims so
+  // eBay does not reject the publish. New organizers default here; existing
+  // organizers with configured weight tiers are migrated to FLAT_TIERS (backfill).
+  const shippingMode = mapping?.shippingMode || 'CALCULATED';
+
+  if (shippingMode === 'CALCULATED') {
+    const hasWeight = item.packageWeightOz != null && item.packageWeightOz > 0;
+    const hasAllDims =
+      item.packageLengthIn != null &&
+      item.packageWidthIn != null &&
+      item.packageHeightIn != null &&
+      Number(item.packageLengthIn) > 0 &&
+      Number(item.packageWidthIn) > 0 &&
+      Number(item.packageHeightIn) > 0;
+
+    const returnPolicyId = mapping?.defaultReturnPolicyId || conn.returnPolicyId;
+    const paymentPolicyId = mapping?.defaultPaymentPolicyId || conn.paymentPolicyId;
+
+    if (hasWeight && hasAllDims) {
+      if (!returnPolicyId || !paymentPolicyId) {
+        return {
+          error: 'POLICIES_NOT_CONFIGURED',
+          code: 'POLICIES_NOT_CONFIGURED',
+          message: 'Please set default return and payment policies in eBay Settings.',
+        };
+      }
+      // Provision the calculated fulfillment policy if not yet created.
+      let calcPolicyId = conn.calculatedFulfillmentPolicyId;
+      if (!calcPolicyId) {
+        calcPolicyId = await ensureCalculatedFulfillmentPolicy(organizerId);
+      }
+      if (calcPolicyId) {
+        console.log(`[eBay ShippingPick] item=${item.id} calculated-default policy=${calcPolicyId}`);
+        return {
+          fulfillmentPolicyId: calcPolicyId,
+          returnPolicyId,
+          paymentPolicyId,
+          descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
+          pushAsDraft: mapping?.pushAsDraft ?? false,
+          merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+          routingReason: 'calculated-default',
+        };
+      }
+      console.warn(`[eBay ShippingPick] item=${item.id} calculated policy provisioning returned null — falling through`);
+    } else if (mapping?.freeShippingOptIn) {
+      // Organizer opted into free shipping — fall back to a free/flat policy via smart-pick.
+      const smartPicked = await pickFulfillmentPolicySmart(
+        smartPickContext?.fetchFulfillmentPolicies,
+        false
+      );
+      const chosen = smartPicked?.policyId || conn.fulfillmentPolicyId;
+      if (chosen && returnPolicyId && paymentPolicyId) {
+        console.log(`[eBay ShippingPick] item=${item.id} free-shipping-opt-in policy=${chosen}`);
+        return {
+          fulfillmentPolicyId: chosen,
+          returnPolicyId,
+          paymentPolicyId,
+          descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
+          pushAsDraft: mapping?.pushAsDraft ?? false,
+          merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+          routingReason: 'free-shipping-opt-in',
+        };
+      }
+    } else {
+      // No package details and no free-shipping opt-in — soft-block and flag for review.
+      await prisma.item.update({
+        where: { id: item.id },
+        data: { ebayNeedsReview: true },
+      }).catch(() => undefined);
+      return {
+        error: 'NEEDS_PACKAGE_DETAILS',
+        code: 'NEEDS_PACKAGE_DETAILS',
+        message: 'Add the package weight and box dimensions so eBay can calculate the buyer\'s shipping rate — or turn on free shipping in eBay Settings.',
+      };
+    }
+    // Fall through to the flat-tier / smart-pick cascade below as a safety net.
   }
 
   // If mapping doesn't exist, fall back to EbayConnection default policies (or smart-pick)
@@ -4823,6 +4932,27 @@ export const getUnsoldItems = async (req: AuthRequest, res: Response) => {
             ebayListingId: true,
             ebayShippingClassification: true,
             ebayShippingOverride: true,
+            ebayCategoryId: true,
+            // Phase B parity fields surfaced by the panel
+            brand: true,
+            mpn: true,
+            upc: true,
+            isbn: true,
+            ean: true,
+            ebaySubtitle: true,
+            conditionNotes: true,
+            allowBestOffer: true,
+            bestOfferAutoAcceptAmt: true,
+            bestOfferMinimumAmt: true,
+            // Calculated-shipping package fields + estimate provenance
+            packageWeightOz: true,
+            packageLengthIn: true,
+            packageWidthIn: true,
+            packageHeightIn: true,
+            packageType: true,
+            packageEstimateSource: true,
+            packageEstimateConfidence: true,
+            packageConfirmedByOrganizer: true,
           },
         },
       },
@@ -4841,14 +4971,67 @@ export const getUnsoldItems = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not authorized to access this sale' });
     }
 
-    // Compute effective shipping for each item
-    const items = sale.items.map((item: any) => {
-      const effectiveShipping = item.ebayShippingOverride || classifyEbayShipping(item.category, item.tags);
-      return {
-        ...item,
-        effectiveShipping,
-      };
-    });
+    // Compute effective shipping + pre-fill package estimates for each item.
+    // Organizer-confirmed values are never overwritten (estimatePackageProfile guards this).
+    const items = await Promise.all(
+      sale.items.map(async (item: any) => {
+        const effectiveShipping = item.ebayShippingOverride || classifyEbayShipping(item.category, item.tags);
+
+        // Pre-fill from PackageProfile / AI estimate only when the organizer has
+        // not confirmed and the item is missing weight or dimensions.
+        const missingPackage =
+          !item.packageConfirmedByOrganizer &&
+          (item.packageWeightOz == null ||
+            item.packageLengthIn == null ||
+            item.packageWidthIn == null ||
+            item.packageHeightIn == null);
+
+        let packageEstimate: any = null;
+        if (missingPackage) {
+          try {
+            const est = await estimatePackageProfile({
+              id: item.id,
+              title: item.title,
+              category: item.category,
+              ebayCategoryId: item.ebayCategoryId,
+              packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
+              packageWeightOz: item.packageWeightOz,
+              packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+              packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+              packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+              packageType: item.packageType,
+            });
+            packageEstimate = {
+              weightOz: est.weightOz,
+              lengthIn: est.dims.length,
+              widthIn: est.dims.width,
+              heightIn: est.dims.height,
+              packageType: est.packageType,
+              confidence: est.confidence,
+              source: est.source,
+            };
+          } catch {
+            packageEstimate = null;
+          }
+        }
+
+        return {
+          ...item,
+          packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+          packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+          packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+          packageEstimateConfidence:
+            item.packageEstimateConfidence != null ? Number(item.packageEstimateConfidence) : null,
+          bestOfferAutoAcceptAmt:
+            item.bestOfferAutoAcceptAmt != null ? Number(item.bestOfferAutoAcceptAmt) : null,
+          bestOfferMinimumAmt:
+            item.bestOfferMinimumAmt != null ? Number(item.bestOfferMinimumAmt) : null,
+          price: item.price != null ? Number(item.price) : null,
+          effectiveShipping,
+          packageEstimate,
+        };
+      })
+    );
 
     res.json({ items });
   } catch (err: any) {
@@ -5142,3 +5325,228 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
 
   return result;
 }
+/**
+ * POST /api/ebay/shipping-preview
+ * Returns an estimated buyer-shipping rate + net proceeds for a prospective listing.
+ * Body accepts either { itemId } (loads the item) OR explicit
+ * { weightOz, dims:{length,width,height}, itemPrice, ebayCategoryId, fromZip }.
+ * Requires authenticate + requireOrganizer.
+ */
+export const getShippingNetPreview = async (req: AuthRequest, res: Response): Promise<Response> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+      include: { ebayPolicyMapping: true },
+    });
+    if (!organizer) {
+      return res.status(403).json({ message: 'Organizer profile required' });
+    }
+
+    const body = (req.body || {}) as {
+      itemId?: string;
+      weightOz?: number;
+      dims?: { length?: number; width?: number; height?: number };
+      itemPrice?: number;
+      ebayCategoryId?: string | null;
+      fromZip?: string | null;
+      toZip?: string | null;
+      labelCost?: number;
+      promotedPercent?: number;
+      tax?: number;
+    };
+
+    let weightOz = body.weightOz;
+    let dims = body.dims;
+    let itemPrice = body.itemPrice;
+    let ebayCategoryId: string | null = body.ebayCategoryId ?? null;
+
+    // If an itemId was passed, load real values (organizer-scoped).
+    if (body.itemId) {
+      const item = await prisma.item.findFirst({
+        where: { id: body.itemId, organizerId: organizer.id },
+        select: {
+          price: true,
+          packageWeightOz: true,
+          packageLengthIn: true,
+          packageWidthIn: true,
+          packageHeightIn: true,
+          ebayCategoryId: true,
+        },
+      });
+      if (!item) {
+        return res.status(404).json({ message: 'Item not found' });
+      }
+      if (weightOz == null && item.packageWeightOz != null) weightOz = item.packageWeightOz;
+      if (!dims) {
+        dims = {
+          length: item.packageLengthIn != null ? Number(item.packageLengthIn) : undefined,
+          width: item.packageWidthIn != null ? Number(item.packageWidthIn) : undefined,
+          height: item.packageHeightIn != null ? Number(item.packageHeightIn) : undefined,
+        };
+      }
+      if (itemPrice == null && item.price != null) itemPrice = Number(item.price);
+      if (ebayCategoryId == null) ebayCategoryId = item.ebayCategoryId ?? null;
+    }
+
+    if (weightOz == null || weightOz <= 0) {
+      return res.status(400).json({
+        code: 'NEEDS_PACKAGE_DETAILS',
+        message: 'A package weight is required to estimate shipping.',
+      });
+    }
+
+    const freeShippingOptIn = organizer.ebayPolicyMapping?.freeShippingOptIn ?? false;
+
+    const rate = estimateBuyerShippingRate({
+      weightOz,
+      dims: dims ? { length: dims.length, width: dims.width, height: dims.height } : null,
+      fromZip: body.fromZip ?? null,
+      toZip: body.toZip ?? null,
+    });
+
+    // When the organizer opts into free shipping, the BUYER pays $0 and the
+    // organizer absorbs the label cost. Otherwise the buyer pays the estimate.
+    const buyerShipping = freeShippingOptIn ? 0 : rate.estimatedRate;
+    // Default label cost to the estimated rate (what the organizer will actually pay).
+    const labelCost = body.labelCost != null ? body.labelCost : rate.estimatedRate;
+
+    const proceeds = await computeNetProceeds({
+      itemPrice: itemPrice ?? 0,
+      buyerShipping,
+      tax: body.tax,
+      ebayCategoryId,
+      promotedPercent: body.promotedPercent,
+      labelCost,
+    });
+
+    return res.json({
+      buyerShipping,
+      net: proceeds.net,
+      breakdown: proceeds.breakdown,
+      shippingEstimate: {
+        rate: rate.estimatedRate,
+        basis: rate.basis,
+        service: rate.service,
+        isEstimate: true,
+        freeShippingOptIn,
+      },
+    });
+  } catch (error: any) {
+    console.error('[eBay ShippingPreview ERROR]', error);
+    return res.status(500).json({ message: 'Failed to compute shipping preview' });
+  }
+};
+
+/**
+ * POST /api/ebay/shipping-preview/suggest-price
+ * Back-solves the item price needed to hit a target net margin after eBay fees +
+ * the organizer's label cost. NEVER auto-applies — returns a suggestion only.
+ * Body: { itemId? | weightOz, dims, ebayCategoryId, fromZip, targetMarginPct, labelCost?, promotedPercent? }
+ */
+export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response): Promise<Response> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+      include: { ebayPolicyMapping: true },
+    });
+    if (!organizer) {
+      return res.status(403).json({ message: 'Organizer profile required' });
+    }
+
+    const body = (req.body || {}) as {
+      itemId?: string;
+      weightOz?: number;
+      dims?: { length?: number; width?: number; height?: number };
+      ebayCategoryId?: string | null;
+      fromZip?: string | null;
+      toZip?: string | null;
+      targetMarginPct?: number;
+      labelCost?: number;
+      promotedPercent?: number;
+      tax?: number;
+    };
+
+    const targetMarginPct = typeof body.targetMarginPct === 'number' ? body.targetMarginPct : 0.3;
+    let weightOz = body.weightOz;
+    let dims = body.dims;
+    let ebayCategoryId: string | null = body.ebayCategoryId ?? null;
+
+    if (body.itemId) {
+      const item = await prisma.item.findFirst({
+        where: { id: body.itemId, organizerId: organizer.id },
+        select: {
+          packageWeightOz: true,
+          packageLengthIn: true,
+          packageWidthIn: true,
+          packageHeightIn: true,
+          ebayCategoryId: true,
+        },
+      });
+      if (!item) {
+        return res.status(404).json({ message: 'Item not found' });
+      }
+      if (weightOz == null && item.packageWeightOz != null) weightOz = item.packageWeightOz;
+      if (!dims) {
+        dims = {
+          length: item.packageLengthIn != null ? Number(item.packageLengthIn) : undefined,
+          width: item.packageWidthIn != null ? Number(item.packageWidthIn) : undefined,
+          height: item.packageHeightIn != null ? Number(item.packageHeightIn) : undefined,
+        };
+      }
+      if (ebayCategoryId == null) ebayCategoryId = item.ebayCategoryId ?? null;
+    }
+
+    if (weightOz == null || weightOz <= 0) {
+      return res.status(400).json({
+        code: 'NEEDS_PACKAGE_DETAILS',
+        message: 'A package weight is required to suggest a price.',
+      });
+    }
+
+    const freeShippingOptIn = organizer.ebayPolicyMapping?.freeShippingOptIn ?? false;
+    const rate = estimateBuyerShippingRate({
+      weightOz,
+      dims: dims ? { length: dims.length, width: dims.width, height: dims.height } : null,
+      fromZip: body.fromZip ?? null,
+      toZip: body.toZip ?? null,
+    });
+    const buyerShipping = freeShippingOptIn ? 0 : rate.estimatedRate;
+    const labelCost = body.labelCost != null ? body.labelCost : rate.estimatedRate;
+
+    const result = await suggestPriceForMargin({
+      targetMarginPct,
+      buyerShipping,
+      tax: body.tax,
+      ebayCategoryId,
+      promotedPercent: body.promotedPercent,
+      labelCost,
+    });
+
+    return res.json({
+      suggestedItemPrice: result.suggestedItemPrice,
+      projectedNet: result.projectedNet,
+      targetMarginPct: result.targetMarginPct,
+      breakdown: result.breakdown,
+      shippingEstimate: {
+        rate: rate.estimatedRate,
+        basis: rate.basis,
+        service: rate.service,
+        isEstimate: true,
+        freeShippingOptIn,
+      },
+    });
+  } catch (error: any) {
+    console.error('[eBay SuggestPrice ERROR]', error);
+    return res.status(500).json({ message: 'Failed to suggest price' });
+  }
+};

@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, requireOrganizer, AuthRequest } from '../middleware/auth';
 import {
   connectEbayAccount,
   ebayOAuthCallback,
@@ -20,6 +20,8 @@ import {
   fetchAndStoreEbayPolicies,
   getEbaySetupData,
   saveEbayPolicyMapping,
+  getShippingNetPreview,
+  getSuggestedPriceForMargin,
 } from '../controllers/ebayController';
 import { syncSoldItemsForOrganizer } from '../jobs/ebaySoldSyncCron';
 
@@ -37,6 +39,10 @@ router.delete('/connection', authenticate, disconnectEbay);
 // Feature #244 Phase 2c: eBay Policy Routing — per-organizer policy configuration
 router.get('/setup-data', authenticate, getEbaySetupData);
 router.post('/policy-mapping', authenticate, saveEbayPolicyMapping);
+
+// Calculated-shipping: estimated buyer rate + net proceeds preview
+router.post('/shipping-preview', authenticate, requireOrganizer, getShippingNetPreview);
+router.post('/shipping-preview/suggest-price', authenticate, requireOrganizer, getSuggestedPriceForMargin);
 
 router.post('/sync-policies', authenticate, async (req: AuthRequest, res: Response) => {
   try {

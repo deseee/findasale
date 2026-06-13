@@ -1,0 +1,311 @@
+/**
+ * ShippingNetPreview — live two-column strip showing estimated buyer shipping and
+ * the organizer's estimated net proceeds for an eBay listing. Includes an
+ * expandable fee breakdown and a "Suggest price" (target-margin) helper that
+ * back-solves the item price needed to hit a chosen net margin.
+ *
+ * The price suggestion is never auto-applied — the organizer accepts it.
+ * Calls POST /api/ebay/shipping-preview (debounced).
+ */
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import api from '../lib/api';
+
+interface Breakdown {
+  itemPrice: number;
+  buyerShipping: number;
+  tax: number;
+  fvfPercentApplied: number;
+  fvfBase: number;
+  fvfAmount: number;
+  perOrderFee: number;
+  promotedFee: number;
+  labelCost: number;
+  net: number;
+}
+
+interface PreviewResponse {
+  buyerShipping: number;
+  net: number;
+  breakdown: Breakdown;
+  shippingEstimate: {
+    rate: number;
+    basis: 'actual' | 'dimensional';
+    service: string;
+    isEstimate: boolean;
+    freeShippingOptIn: boolean;
+  };
+}
+
+interface ShippingNetPreviewProps {
+  itemId?: string;
+  itemPrice?: number;
+  weightOz?: number;
+  dims?: { length?: number; width?: number; height?: number };
+  ebayCategoryId?: string | null;
+  fromZip?: string | null;
+  /** Called when the organizer accepts a suggested price. */
+  onApplySuggestedPrice?: (price: number) => void;
+}
+
+const fmt = (n: number): string =>
+  `$${(Math.round(n * 100) / 100).toFixed(2)}`;
+
+const MARGIN_PRESETS = [0.2, 0.3, 0.4];
+
+export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
+  itemId,
+  itemPrice,
+  weightOz,
+  dims,
+  ebayCategoryId,
+  fromZip,
+  onApplySuggestedPrice,
+}) => {
+  const [data, setData] = useState<PreviewResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  const [targetMargin, setTargetMargin] = useState<number>(0.3);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<{ price: number; net: number } | null>(null);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hasInputs = !!weightOz && weightOz > 0;
+
+  const fetchPreview = useCallback(async () => {
+    if (!hasInputs) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.post('/ebay/shipping-preview', {
+        itemId,
+        weightOz,
+        dims,
+        itemPrice,
+        ebayCategoryId,
+        fromZip,
+      });
+      setData(res.data as PreviewResponse);
+    } catch (err: any) {
+      const code = err.response?.data?.code;
+      if (code === 'NEEDS_PACKAGE_DETAILS') {
+        setError('Add a package weight to see shipping and net.');
+      } else {
+        setError('Could not estimate shipping right now.');
+      }
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [itemId, weightOz, dims, itemPrice, ebayCategoryId, fromZip, hasInputs]);
+
+  // Debounced refetch when inputs change.
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!hasInputs) {
+      setData(null);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      fetchPreview();
+    }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weightOz, dims?.length, dims?.width, dims?.height, itemPrice, ebayCategoryId, fromZip]);
+
+  const handleSuggest = async () => {
+    if (!hasInputs) return;
+    setSuggesting(true);
+    setSuggestion(null);
+    try {
+      const res = await api.post('/ebay/shipping-preview/suggest-price', {
+        itemId,
+        weightOz,
+        dims,
+        ebayCategoryId,
+        fromZip,
+        targetMarginPct: targetMargin,
+      });
+      setSuggestion({ price: res.data.suggestedItemPrice, net: res.data.projectedNet });
+    } catch {
+      setSuggestion(null);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  // Empty state — no weight yet.
+  if (!hasInputs) {
+    return (
+      <div className="rounded-lg border border-dashed border-warm-300 dark:border-gray-600 bg-warm-50 dark:bg-gray-800 p-3 text-sm text-warm-600 dark:text-warm-400">
+        Add a package weight above to preview buyer shipping and your estimated net.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-warm-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 space-y-3">
+      {/* Two-column strip */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Buyer shipping */}
+        <div className="rounded-md bg-warm-50 dark:bg-gray-700 p-3">
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-warm-600 dark:text-warm-400">Buyer pays for shipping</span>
+            <span
+              className="text-warm-400 dark:text-warm-500 cursor-help text-xs"
+              title="eBay calculates the exact rate at checkout from the buyer's ZIP code. This is an estimate."
+            >
+              ⓘ
+            </span>
+          </div>
+          {loading ? (
+            <div className="mt-1 h-6 w-20 rounded bg-warm-200 dark:bg-gray-600 animate-pulse" />
+          ) : data && !data.shippingEstimate.freeShippingOptIn ? (
+            <>
+              <div className="mt-0.5 text-lg font-bold text-warm-900 dark:text-warm-100">
+                ~{fmt(data.buyerShipping)}
+              </div>
+              <div className="text-[11px] text-warm-500 dark:text-warm-400">
+                USPS Ground Advantage, est.
+              </div>
+            </>
+          ) : data && data.shippingEstimate.freeShippingOptIn ? (
+            <>
+              <div className="mt-0.5 text-lg font-bold text-green-700 dark:text-green-300">Free</div>
+              <div className="text-[11px] text-warm-500 dark:text-warm-400">You cover ~{fmt(data.shippingEstimate.rate)}</div>
+            </>
+          ) : (
+            <div className="mt-1 text-sm text-warm-500 dark:text-warm-400">—</div>
+          )}
+        </div>
+
+        {/* Net proceeds */}
+        <div className="rounded-md bg-green-50 dark:bg-green-900/30 p-3">
+          <span className="text-xs font-medium text-green-700 dark:text-green-300">Your estimated net</span>
+          {loading ? (
+            <div className="mt-1 h-6 w-20 rounded bg-green-200 dark:bg-green-800 animate-pulse" />
+          ) : data ? (
+            <>
+              <div className="mt-0.5 text-lg font-bold text-green-800 dark:text-green-200">{fmt(data.net)}</div>
+              <button
+                type="button"
+                onClick={() => setExpanded((e) => !e)}
+                className="text-[11px] text-green-700 dark:text-green-300 underline hover:no-underline"
+              >
+                {expanded ? 'Hide breakdown' : 'See breakdown'}
+              </button>
+            </>
+          ) : (
+            <div className="mt-1 text-sm text-warm-500 dark:text-warm-400">—</div>
+          )}
+        </div>
+      </div>
+
+      {/* Error state */}
+      {error && (
+        <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 rounded px-2 py-1.5">
+          {error}
+        </div>
+      )}
+
+      {/* Expandable breakdown */}
+      {expanded && data && (
+        <div className="rounded-md bg-warm-50 dark:bg-gray-700 p-3 text-xs space-y-1 text-warm-700 dark:text-warm-300">
+          <Row label="Item price" value={fmt(data.breakdown.itemPrice)} />
+          <Row label="+ Buyer shipping" value={fmt(data.breakdown.buyerShipping)} />
+          <Row
+            label={`− eBay fee (${(data.breakdown.fvfPercentApplied * 100).toFixed(1)}%)`}
+            value={`−${fmt(data.breakdown.fvfAmount)}`}
+            negative
+          />
+          <Row label="− Per-order fee" value={`−${fmt(data.breakdown.perOrderFee)}`} negative />
+          {data.breakdown.promotedFee > 0 && (
+            <Row label="− Promoted listing" value={`−${fmt(data.breakdown.promotedFee)}`} negative />
+          )}
+          <Row label="− Your label cost" value={`−${fmt(data.breakdown.labelCost)}`} negative />
+          <div className="border-t border-warm-200 dark:border-gray-600 mt-1 pt-1">
+            <Row label="= Your net" value={fmt(data.breakdown.net)} bold />
+          </div>
+          <p className="text-[11px] text-warm-500 dark:text-warm-400 pt-1">
+            Fees include a small safety buffer, so your real net is usually a little higher.
+          </p>
+        </div>
+      )}
+
+      {/* Suggest price for target margin */}
+      <div className="rounded-md border border-warm-200 dark:border-gray-600 p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-warm-700 dark:text-warm-300">Suggest price for a target margin</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1">
+            {MARGIN_PRESETS.map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setTargetMargin(m)}
+                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                  targetMargin === m
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 hover:bg-warm-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {Math.round(m * 100)}%
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleSuggest}
+            disabled={suggesting}
+            className="px-3 py-1 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white transition-colors"
+          >
+            {suggesting ? 'Calculating…' : 'Suggest price'}
+          </button>
+        </div>
+        {suggestion && (
+          <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/30 rounded px-2 py-2">
+            <div className="text-xs text-warm-800 dark:text-warm-200">
+              List at <span className="font-bold">{fmt(suggestion.price)}</span> for a{' '}
+              {Math.round(targetMargin * 100)}% net ({fmt(suggestion.net)})
+            </div>
+            {onApplySuggestedPrice && (
+              <button
+                type="button"
+                onClick={() => onApplySuggestedPrice(suggestion.price)}
+                className="ml-2 px-2 py-1 rounded text-xs font-medium bg-green-600 hover:bg-green-700 text-white transition-colors"
+              >
+                Use this price
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const Row: React.FC<{ label: string; value: string; negative?: boolean; bold?: boolean }> = ({
+  label,
+  value,
+  negative,
+  bold,
+}) => (
+  <div className="flex items-center justify-between">
+    <span className={bold ? 'font-semibold' : ''}>{label}</span>
+    <span
+      className={`${bold ? 'font-bold' : ''} ${
+        negative ? 'text-red-600 dark:text-red-400' : 'text-warm-900 dark:text-warm-100'
+      }`}
+    >
+      {value}
+    </span>
+  </div>
+);
+
+export default ShippingNetPreview;
