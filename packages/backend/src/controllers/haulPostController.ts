@@ -180,7 +180,7 @@ export const addReaction = async (req: AuthRequest, res: Response) => {
 
       if (!alreadyAwarded) {
         awardXp(updatedPost.userId, 'HAUL_POST_LIKES', XP_AWARDS.HAUL_POST_LIKES, {
-          description: `Haul post milestone: 10+ likes on post ${photoId}`,
+          description: `Haul post milestone: 10+ likes on post (photoId: ${photoId})`,
         }).catch(err => console.error('[HaulPost] HAUL_POST_LIKES XP award failed:', err));
       }
     }
