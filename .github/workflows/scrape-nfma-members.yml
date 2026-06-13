@@ -1,9 +1,7 @@
 name: Scrape NFMA Member Markets (Playwright)
 
 on:
-  schedule:
-    - cron: '0 4 1 * *'  # Monthly, 1st of month at 4am UTC
-  workflow_dispatch:
+  workflow_dispatch:  # PARKED S960 — Wix site not Playwright-accessible; re-enable if source changes
 
 jobs:
   scrape:
