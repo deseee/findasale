@@ -8,6 +8,18 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S973 — QA/DEV (2026-06-13). Chrome QA of febe1f46 eBay calculated-shipping build (Patrick + artifactmi@gmail.com). 3 bugs found and fixed.**
+- **Shipping dimensions pre-fill ✅:** Package Type=Box(standard), Weight=176oz, L=12, W=9, H=7 all pre-populated on edit-item page. ss_0277k2jba
+- **Weight-tier gap-overshoot toast ✅:** Warning fired during FLAT_TIERS push (176oz hits $75 FedEx tier — actionable message shown to user).
+- **eBay item specifics ✅:** Brand=Danner, MPN=AP-40 confirmed on live eBay listing 137411858004. ss_1925495922 (prior session evidence)
+- **Bug 1 FOUND+FIXED — err:216314 (calculated policy not applying):** MAILING_BOX rejected by eBay LSAS for CALCULATED fulfillment policy. Offer PUT was non-fatal (phantom 200); policy never changed on eBay. Fix: strip packageType from inventory payload when routing.routingReason=calculated-default. ebayController.ts L2131-2138. CODE-ONLY.
+- **Bug 2 FOUND+FIXED — Brand/MPN/Category not pre-populating on edit-item:** GET /api/items/:id select block was missing brand/mpn/upc fields. Form showed empty placeholders despite DB having Danner/AP-40. Fix: added brand/mpn/upc to itemController.ts getItemById select (L533-535). CODE-ONLY.
+- **Bug 3 FOUND+FIXED — ShippingNetPreview (+ Suggest Price) not wired to edit-item page:** S971 built ShippingNetPreview component with POST /api/ebay/shipping-preview/suggest-price but never imported it into edit-item/[id].tsx. Fix: added import + component render when packageWeightOz is set (L1454-1460). CODE-ONLY.
+- **ebayCalculatedPolicyService.ts FIXED:** USPSGroundAdvantage → USPSParcel+USPSPriority (UNKNOWN_SHIPPING_SERVICE_CODE bug). CODE-ONLY.
+- **UNVERIFIED (needs re-push after next deploy):** Calculated policy applying on eBay (err:216314 fix), Brand/MPN/Category pre-fill, ShippingNetPreview rendering + Suggest Price, weight-tier gap-overshoot block in CALCULATED mode.
+- **Push block provided** — 4 files: ebayController.ts, itemController.ts, edit-item/[id].tsx, ebayCalculatedPolicyService.ts.
+- BQ: 2 → 2 (febe1f46 row updated — bugs fixed CODE-ONLY, re-verify still needed post-deploy. #313 unchanged).
+
 **S972 — QA (2026-06-13). Partial Chrome QA of S971 febe1f46 build.**
 - **Deploy verification ✅:** febe1f46 GREEN on Railway (health OK, /api/ebay/shipping-preview endpoint responds) and Vercel (READY, dpl_EGnCoYtcosPKTEVt2naetMT5btLL).
 - **Brand/MPN/UPC on edit-item ✅:** Navigated /organizer/edit-item/cmq2z2ocg001810t51m6su0bb as user1. Brand "e.g. Danner, Sony, Pyrex — leave blank if unbranded" + eBay required note present. MPN "Manufacturer part #" and UPC "Barcode number" visible. ss_6085zmmkb
@@ -104,7 +116,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
-| eBay calculated-shipping / net-engine / estimation build (febe1f46) | PARTIAL Chrome QA S972: deploy GREEN ✅, Brand/MPN/UPC edit-item UI ✅, shipping-mode toggle ✅. UNVERIFIED: Danner pump re-push (CALCULATED path), ShippingNetPreview + net/suggest-price rendering, weight-tier gap-overshoot block message, Brand/MPN/UPC review page. All unverified items require artifactmi@gmail.com (Patrick's real eBay account). | Patrick present with artifactmi@gmail.com → re-push Danner pump (itemId cmqbb252i000i60qq7eilco9z, offer 186196728011) through CALCULATED path. Verify ShippingNetPreview renders estimate→confirm card with weight/box pre-fill, net proceeds, Suggest-price button. Confirm gap-overshoot block message. | S971 |
+| eBay calculated-shipping / net-engine build (febe1f46) — re-verify after deploy | S973 Chrome QA found 3 bugs, all fixed CODE-ONLY: (1) err:216314 MAILING_BOX/LSAS fix in ebayController.ts; (2) brand/mpn/upc missing from getItemById GET response; (3) ShippingNetPreview/SuggestPrice not wired to edit-item page. ebayCalculatedPolicyService.ts USPSGroundAdvantage→USPSParcel+USPSPriority also fixed. Push block delivered S973. | After Patrick pushes 4-file block and Railway deploys: re-push Danner pump as artifactmi, verify (a) calculated policy applies on eBay, (b) Brand/MPN/Category pre-fill on edit-item, (c) ShippingNetPreview renders with Suggest Price. | S971 |
 
 
 
@@ -135,17 +147,16 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S972 — Carry-forward (eBay shipping — GATED on Patrick's real eBay account)
+### S973 — Carry-forward (eBay shipping — push + deploy + re-QA needed)
 
-**Deploy + Brand/MPN/UPC UI + shipping-mode toggle all VERIFIED S972.** Remaining items require Patrick to be present with artifactmi@gmail.com (account cmnxueoas0005tfv8brnc0kky).
+**S973 QA found 3 bugs, all fixed CODE-ONLY. Push block delivered.** After Patrick pushes 4-file block and Railway + Vercel deploy:
 
-**`Skill('findasale-qa')`** — Chrome QA as artifactmi@gmail.com organizer. Re-push the Danner pump (itemId cmqbb252i000i60qq7eilco9z, offer 186196728011) through the new CALCULATED path. Verify:
-1. Estimate→confirm card pre-fills weight/box from PackageProfile
-2. Net proceeds + buyer-shipping preview render in ShippingNetPreview component
-3. Suggest-price button works and returns a value
-4. Pump publishes with Brand=Danner + MPN=AP-40, specific (non-"Other") category, sensible calculated rate (NOT $75)
-5. Weight-tier gap-overshoot block message appears for overshoot scenario (can test with a heavy item on a flat-tier account)
-6. Brand/MPN/UPC visible on review page (organizer has items needing review)
+**`Skill('findasale-qa')`** — Chrome QA as artifactmi@gmail.com organizer. Re-push the Danner pump (itemId cmqbb252i000i60qq7eilco9z, offer 186196728011).
+1. Verify calculated policy applies on eBay (listing should show USPS-calculated rate, NOT $75 FedEx flat)
+2. Brand/MPN/Category pre-fill correctly on edit-item page (Danner/AP-40/category name visible on load)
+3. ShippingNetPreview appears in shipping section when weight is set; Suggest Price button fires a network request and returns a value
+4. Pump publishes with Brand=Danner, MPN=AP-40, sensible non-Other category
+5. Weight-tier gap-overshoot block message in CALCULATED mode
 
 Evidence required per QA Honesty Gate — URL, user, element, outcome, screenshot IDs.
 
@@ -171,13 +182,7 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
    - Press pitch → SW Michigan's Second Wave (feedback@secondwavemedia.com).
    - Press pitch → Crain's GR Business (anna.fifelski@crain.com — confirm byline if desired).
 
-2. **Push S967 research + outreach docs:**
-   ```
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add claude_docs/strategy/roadmap.md claude_docs/strategy/APP-SUBMISSION-DIRECTORY-RESEARCH-2026.md claude_docs/strategy/GREENFIELD-GROWTH-AVENUES-2026.md claude_docs/marketing/west-michigan-local-outreach-2026-06.md claude_docs/STATE.md claude_docs/patrick-dashboard.md
-   git commit -m "S967: app-submission + greenfield growth research, roadmap #489–546, West MI outreach copy"
-   .\push.ps1
-   ```
+2. **~~Push S967 research + outreach docs~~ ✅ CONFIRMED ON GITHUB (S973)** — APP-SUBMISSION-DIRECTORY-RESEARCH-2026.md present on main.
 
 3. **Time-sensitive grants (applications open now):** Start Garden "The 100" (#506) + Start Garden 5×5 Night (#510). Both free, no eligibility gate.
 
@@ -187,18 +192,7 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ### Patrick — Actions Needed (post S964)
 
-1. **Push S964 changes (EstateSale.com scraper + CI fix):**
-   ```
-   cd C:\Users\desee\ClaudeProjects\FindaSale
-   git add packages/backend/src/services/scraper/sources/estateSaleComScraper.ts
-   git add packages/backend/src/services/scraper/sourceRegistry.ts
-   git add .github/workflows/scrape-estatesalecom.yml
-   git add .github/workflows/test-playwright-harness.yml
-   git add claude_docs/STATE.md
-   git add claude_docs/patrick-dashboard.md
-   git commit -m "S964: add EstateSale.com directory scraper (51-state, phone/email/website); fix playwright CI continue-on-error"
-   .\push.ps1
-   ```
+1. **~~Push S964 changes (EstateSale.com scraper + CI fix)~~ ✅ CONFIRMED ON GITHUB (S973)** — estateSaleComScraper.ts + sourceRegistry.ts + .github/workflows/scrape-estatesalecom.yml present on main.
 
 2. **Push S963 changes (if not yet pushed):**
    ```

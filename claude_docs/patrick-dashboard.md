@@ -1,25 +1,52 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S972 — 2026-06-13 (QA: Brand/MPN/UPC edit-item ✅, shipping-mode toggle ✅, deploy GREEN ✅ | Danner pump re-push UNVERIFIED — needs your real eBay account | BQ 2)
+**Last updated:** S973 — 2026-06-13 (QA + DEV: 3 bugs found and fixed | 4-file push block ready | BQ 2 | Next: push → deploy → re-QA the Danner pump)
 
 ---
 
-## Session S972 Summary — Partial Chrome QA of S971 febe1f46 Build
+## Session S973 Summary — Chrome QA with Real Account + 3 Bug Fixes
 
-**Type:** QA — Chrome MCP, sequential
-**BQ:** 2 (unchanged)
+**Type:** QA/DEV — Chrome MCP as artifactmi@gmail.com + inline bug fixes
+**BQ:** 2 (unchanged — febe1f46 row updated; all new bugs fixed CODE-ONLY)
 
 | Item | Status | Details |
 |------|--------|---------|
-| febe1f46 deploy | ✅ VERIFIED GREEN | Railway health OK; `/api/ebay/shipping-preview` responds (CSRF 403 not 404 = endpoint live). Vercel READY (dpl_EGnCoYtcosPKTEVt2naetMT5btLL). |
-| Brand/MPN/UPC on edit-item page | ✅ VERIFIED | Navigated `/organizer/edit-item/cmq2z2ocg001810t51m6su0bb` as user1. Brand field with "e.g. Danner, Sony, Pyrex — leave blank if unbranded" + "Required by eBay" note. MPN "Manufacturer part #". UPC "Barcode number". All present. ss_6085zmmkb |
-| Shipping mode toggle (settings) | ✅ VERIFIED | `/organizer/settings/ebay` — "Calculated" (Recommended) card selected (green border), "Flat-rate tiers" (Advanced) card present. Smart-pick default "Smart-pick (weight tier → calculated → flat-rate → free)" showing. ss_3600f1du9 |
-| ShippingNetPreview component | UNVERIFIED | user1 + user2 have no eBay policies configured — component can't render without a real eBay connection. |
-| Weight-tier gap-overshoot block | UNVERIFIED | CSRF blocks API test without an eBay-connected session. Needs your real account + flat-rate tiers configured. |
-| Danner pump re-push | UNVERIFIED | Requires your real eBay account (artifactmi@gmail.com) to be present. |
-| Brand/MPN/UPC on review page | UNVERIFIED | Review queue is empty on test accounts — user1's items are all Live, user2 has no sales. Needs an unreviewed item. |
+| Shipping dimensions pre-fill | ✅ VERIFIED | Package Type=Box(standard), Weight=176oz, L=12, W=9, H=7 all pre-populated on edit-item page. ss_0277k2jba |
+| Weight-tier overshoot toast | ✅ VERIFIED | Warning appeared during FLAT_TIERS push — 176oz hits $75 FedEx tier, actionable message shown. |
+| eBay item specifics | ✅ VERIFIED | Brand=Danner, MPN=AP-40 confirmed on live eBay listing 137411858004. |
+| err:216314 — MAILING_BOX/LSAS | 🔧 FIXED CODE-ONLY | eBay LSAS rejected MAILING_BOX packageType for calculated policies. Fix: strip packageType from inventory payload in CALCULATED mode. ebayController.ts. Push block ready. |
+| Brand/MPN/Category not pre-filling | 🔧 FIXED CODE-ONLY | GET /api/items/:id wasn't returning brand/mpn/upc in the select. Fixed in itemController.ts. Push block ready. |
+| ShippingNetPreview not wired | 🔧 FIXED CODE-ONLY | S971 built the component but never added it to edit-item page. Fixed — now renders when package weight is set. Push block ready. |
+| Calculated policy on eBay | ⏳ NEEDS RE-VERIFY | Blocked by err:216314 bug (now fixed CODE-ONLY). Push → deploy → re-push Danner pump to confirm. |
+| Suggest Price button | ⏳ NEEDS RE-VERIFY | ShippingNetPreview now wired to page — button will be live after push/deploy. |
 
-**What's next:** Next session re-push the Danner pump through the new CALCULATED path using your real account (artifactmi@gmail.com). That single test will verify the pump, ShippingNetPreview, Suggest-price, and the calculated shipping rate all at once.
+**What you need to do:** Push the 4-file block below → wait for Railway + Vercel to deploy → re-push the Danner pump as artifactmi to confirm calculated shipping + Suggest Price.
+
+---
+
+## 🟠 ACTION NEEDED — Push Block (S973 — 4 files)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add packages/backend/src/services/ebayCalculatedPolicyService.ts
+git commit -m "fix: eBay calculated-shipping bugs (err:216314, brand/mpn GET, ShippingNetPreview wiring)
+
+err:216314: strip packageType from inventory payload when routing CALCULATED
+(LSAS computed-rate engine rejects MAILING_BOX; weight+dims alone are sufficient).
+
+Brand/mpn/upc: add fields to getItemById select — were saved correctly but
+stripped from GET response, so edit-item form showed empty on load.
+
+ShippingNetPreview: import + wire component to edit-item page (built S971 but
+never added to the page). Suggest Price button now live in shipping section.
+
+ebayCalculatedPolicyService: USPSGroundAdvantage → USPSParcel+USPSPriority
+(UNKNOWN_SHIPPING_SERVICE_CODE fix for new calculated-policy provisioning)."
+.\push.ps1
+```
 
 ---
 
