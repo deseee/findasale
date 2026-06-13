@@ -104,13 +104,20 @@ const CONDITION_ID_MAP: Record<string, string> = {
   'D': '6000', // Acceptable
 };
 
-// Secondary category map: tag keywords to eBay category IDs
+// Secondary category map: tag keywords to eBay category IDs.
+// DISABLED (2026-06-13): these values are ROOT categories, not leaves. eBay
+// rejects non-leaf secondary categories with errorId 25005 "category selected
+// is not a leaf category" (param SECONDARY_CATEGORY_ID), so every item tagged
+// with these always failed to publish. The offer payload no longer reads this
+// map. Do NOT re-enable until the values are replaced with real eBay LEAF
+// category IDs (one specific leaf per tag, verified via the Taxonomy API).
+// Kept here as a placeholder for that future leaf-id mapping.
 const SECONDARY_CATEGORY_MAP: Record<string, string> = {
-  vintage: '1',          // Collectibles root
-  antique: '20081',      // Antiques root
-  handmade: '14339',     // Crafts root
-  rare: '1',             // Collectibles root
-  collectible: '1',      // Collectibles root
+  vintage: '1',          // Collectibles root — NON-LEAF, invalid as secondary
+  antique: '20081',      // Antiques root — NON-LEAF, invalid as secondary
+  handmade: '14339',     // Crafts root — NON-LEAF, invalid as secondary
+  rare: '1',             // Collectibles root — NON-LEAF, invalid as secondary
+  collectible: '1',      // Collectibles root — NON-LEAF, invalid as secondary
 };
 
 // ── Vercel Proxy Helpers ────────────────────────────────────────────────────
@@ -2017,6 +2024,19 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           }
           aspects = aspectsObj;
         }
+        // Brand+MPN pairing (evidence 2026-06-13, errorId 25002 param BrandMPN):
+        // eBay categories that require Brand reject with "Input data for tag
+        // <BrandMPN> is invalid or missing" unless MPN is ALSO present. Setting
+        // Brand alone is NOT enough. Whenever aspects ends up with a Brand key
+        // (case-insensitive) but no MPN key, inject MPN ('Does Not Apply' is
+        // eBay's accepted placeholder when there's no real part number).
+        if (aspects) {
+          const hasAspect = (key: string): boolean =>
+            Object.keys(aspects!).some((k) => k.toLowerCase() === key.toLowerCase());
+          if (hasAspect('Brand') && !hasAspect('MPN')) {
+            aspects['MPN'] = [item.mpn?.trim() || 'Does Not Apply'];
+          }
+        }
         const sanitizedDescription = sanitizeDescriptionForEbay(item.description);
         // Bug #424: replace ALL occurrences of {{DESCRIPTION}} in the organizer's template.
         // String.replace() with a string arg only replaces the first match; split/join is
@@ -2037,7 +2057,14 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             imageUrls: photos,
             ...(aspects ? { aspects } : {}),
             ...(item.brand ? { brand: item.brand } : {}),
-            ...(item.mpn ? { mpn: item.mpn } : {}),
+            // Brand+MPN pairing: when brand is sent but no real MPN exists, send
+            // 'Does Not Apply' (eBay's accepted placeholder). Sending brand alone
+            // triggers errorId 25002 <BrandMPN> on Brand-requiring categories.
+            ...(item.mpn
+              ? { mpn: item.mpn }
+              : item.brand
+                ? { mpn: 'Does Not Apply' }
+                : {}),
             ...(item.upc ? { upc: [item.upc] } : {}),
             ...(item.ean ? { ean: [item.ean] } : {}),
             ...(item.isbn ? { isbn: [item.isbn] } : {}),
@@ -2162,9 +2189,21 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               ...(item.bestOfferMinimumAmt ? { autoDeclinePrice: { value: Number(item.bestOfferMinimumAmt).toFixed(2), currency: 'USD' } } : {}),
             },
           } : {}),
-          ...(item.ebaySecondaryCategoryId ? { secondaryCategoryId: item.ebaySecondaryCategoryId } : item.tags?.some((t: string) => Object.keys(SECONDARY_CATEGORY_MAP).includes(t.toLowerCase())) ? {
-            secondaryCategoryId: Object.entries(SECONDARY_CATEGORY_MAP).find(([tag]) => item.tags.some((t: string) => t.toLowerCase() === tag))?.[1],
-          } : {}),
+          // Secondary category (evidence 2026-06-13, errorId 25005 param
+          // SECONDARY_CATEGORY_ID "category selected is not a leaf category"):
+          // eBay rejects any non-leaf secondary category. Only emit
+          // item.ebaySecondaryCategoryId when it's a non-empty LEAF id that is
+          // NOT a known root ('1' Collectibles, '20081' Antiques, '14339' Crafts)
+          // and differs from the primary categoryId. The SECONDARY_CATEGORY_MAP
+          // tag→category branch is DISABLED — that map produced only root
+          // categories, so every tagged item failed to publish with 25005.
+          ...(item.ebaySecondaryCategoryId &&
+            typeof item.ebaySecondaryCategoryId === 'string' &&
+            item.ebaySecondaryCategoryId.trim() &&
+            !['1', '20081', '14339'].includes(item.ebaySecondaryCategoryId.trim()) &&
+            item.ebaySecondaryCategoryId.trim() !== categoryId
+            ? { secondaryCategoryId: item.ebaySecondaryCategoryId.trim() }
+            : {}),
         };
 
         // Resolve existing offerId: use stored value or look up by SKU on eBay
@@ -2832,11 +2871,19 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
           if (!hasKey('Brand')) {
             aspectsObj['Brand'] = item.brand && item.brand.trim() ? [item.brand.trim()] : ['Unbranded'];
           }
-          if (item.mpn && item.mpn.trim() && !hasKey('MPN')) {
-            aspectsObj['MPN'] = [item.mpn.trim()];
+          // Brand+MPN pairing (evidence 2026-06-13, errorId 25002 param BrandMPN):
+          // this self-heal always sets a Brand aspect, so MPN MUST also be present
+          // or eBay re-rejects with the <BrandMPN> error. Inject MPN whenever the
+          // aspect is absent — use the organizer's real MPN or 'Does Not Apply'.
+          if (!hasKey('MPN')) {
+            aspectsObj['MPN'] = [item.mpn?.trim() || 'Does Not Apply'];
           }
           invBody.product.aspects = aspectsObj;
-          console.log(`[eBay PublishNow Retry25002] ${sku}: injecting Brand=${aspectsObj['Brand']?.[0]} and re-publishing`);
+          // Mirror the MPN into the top-level product field so the pair is complete.
+          if (!invBody.product.mpn) {
+            invBody.product.mpn = item.mpn?.trim() || 'Does Not Apply';
+          }
+          console.log(`[eBay PublishNow Retry25002] ${sku}: injecting Brand=${aspectsObj['Brand']?.[0]} + MPN=${aspectsObj['MPN']?.[0]} and re-publishing`);
           const retryInvRes = await fetch(inventoryUrl, {
             method: 'PUT',
             headers: {
