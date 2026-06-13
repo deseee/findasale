@@ -704,7 +704,7 @@ From `claude_docs/strategy/GREENFIELD-GROWTH-AVENUES-2026.md`. App-store paths, 
 | 496 | Google Play via TWA (Bubblewrap/PWABuilder) | ⬜ TODO | $25 one-time. Needs Lighthouse PWA ≥80 (audit first) + assetlinks.json in /.well-known/. Patrick pays + holds signing keys. |
 | 497 | Samsung Galaxy Store (Web Apps) | ⬜ TODO | Free. Email PWA URL to pwasupport@samsung.com. Small reach, trivial effort. |
 | 498 | eBay Partner Network (EPN) | ⬜ TODO — Patrick | Free, near-instant approval, no traffic minimum. Affiliate REVENUE on existing eBay integration. partnernetwork.ebay.com. See also: eBay API/EPN email thread (check Gmail — prior inbound). |
-| 499 | Stripe Partner Directory | ⬜ TODO — Patrick | Free "Verified Partner" badge + listing. stripe.com/partners/become-a-partner. Credibility, not traffic. |
+| 499 | Stripe Partner Directory | ✅ SUBMITTED 2026-06-13 (Patrick) | SaaS Platforms track interest form submitted. Verified Partner badge + directory listing pending Stripe review. |
 | 500 | Alignable | ⬜ TODO | Free local small-biz profile + referral network. Doubles as lead-gen (estate/consignment businesses are the customer). alignable.com. |
 | 501 | Source of Sources (SOS) | ⬜ TODO | Free. Real HARO successor (Shankman). Reply to relevant decluttering/downsizing/resale/side-hustle queries. sourceofsources.com. |
 | 502 | Featured.com (ex-Terkel) | ⬜ TODO | Free tier. Build expert profile; answered questions carry backlinks. featured.com. |
@@ -786,6 +786,4 @@ Local credibility, backlinks, press, and no-gate pitch events near the Paw Paw h
 
 Missing fundamentals identified and addressed in S814 audit. All shipped unless marked PENDING.
 
-| # | Feature | Role | Tier | Notes |
-|---|---------|------|------|-------|
-| 469 | robots.txt (General — Block Private R
+| # | Feature | Role | Tier
