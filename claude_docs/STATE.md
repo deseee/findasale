@@ -8,6 +8,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S971 — DEV/RECORDS (2026-06-13). eBay listing-push fix + calculated-shipping/net-engine build (commit febe1f46).**
+- **Trigger:** organizer couldn't push the Danner AP-40 aquarium pump (itemId cmqbb252i000i60qq7eilco9z) to eBay — friendly "Brand is missing" error.
+- **Root causes (found by hitting the eBay API directly — evidence-first, not guessed):** (1) eBay needs the Brand+MPN PAIR for many categories — real error was errorId 25002 `<BrandMPN>`, the friendly message was misleading; (2) secondaryCategoryId="1" from SECONDARY_CATEGORY_MAP (vintage/rare/collectible→'1', antique→'20081', handmade→'14339' are all NON-LEAF ROOT categories) → errorId 25005; (3) publishItemOffer used the wrong SKU (bare FAS-{id}); real SKU includes skuAppend segments → broke repair paths; (4) category resolver took eBay's "Other/Misc" catch-all blindly (pump landed in 179986 "Other Fish & Aquarium Supplies"); (5) shipping — 11 lb pump billed $75 because the organizer's weight-tier ladder has a gap (≤111oz/$19.99 then nothing until ≤720oz/$75 FedEx).
+- **Listing-push fixes shipped:** Brand→"Unbranded" only when blank; force Brand+MPN aspects on push; publishItemOffer self-heals missing Brand/MPN on 25002; correct SKU via buildCustomLabel in repair paths; secondary-category guard (SECONDARY_CATEGORY_MAP disabled — emitted only invalid root categories); category resolver skips Other/Misc/Everything-Else catch-alls; weight-tier gap-overshoot guard (blocks with an actionable message instead of overcharging); Brand/MPN/UPC inputs added to edit-item + review pages; "Publish to eBay now" saves the form first; drafts API returns brand/mpn/upc.
+- **BIG BUILD (commit febe1f46, 13 files) — eBay calculated-shipping default + fee-aware net-proceeds engine + package-estimation + "Suggest price":** new schema models PackageProfile + EbayCategoryFee, +3 Item cols, +3 EbayConnection cols, +2 EbayPolicyMapping cols (migration 20260613190000_ebay_calculated_shipping_net_engine). New services: ebayCalculatedPolicyService, ebayRateEstimateService, ebayNetProceedsService, ebayPackageEstimateService; cloudAIService extended for weight/dim estimation; resolvePoliciesForItem now CALCULATED-default with FLAT_TIERS backfill for existing organizers; new endpoints POST /ebay/shipping-preview + /shipping-preview/suggest-price; frontend ShippingNetPreview component + PostSaleEbayPanel confirm card + settings shipping-mode toggle. Both TS gates 0 errors (orchestrator-verified). **CODE-ONLY — NOT browser-verified.**
+- **Locked decisions:** default shipping = CHARGED/calculated (buyer pays); free shipping = organizer opt-in; net engine displays net AND ships Suggest-price (never auto-set); fees = real settled-order data + ~1.25% safety buffer (FEE_SAFETY_BUFFER_PCT), seeded from published rates for now; existing flat-tier organizers preserved. Behavior rule added: CLAUDE.md §10b "Evidence-First Debugging Gate" (gather the real error/state from the live system before proposing/shipping any fix).
+- **Pump state:** was published live (listingId 137411387725) via direct eBay API after fixing Brand+MPN+secondary-category, then WITHDRAWN per Patrick. Now reset for a clean re-push — ebayListingId/listedOnEbayAt/ebayCategoryId/ebayCategoryName cleared; brand=Danner, mpn=AP-40 set; offer 186196728011 retained. Ready to re-push through the new calculated path.
+- **✅ MIGRATION APPLIED (2026-06-13):** febe1f46 schema migration applied + verified on Railway — PackageProfile (60 rows) + EbayCategoryFee (5 rows) tables present, new columns present, existing organizer backfilled to FLAT_TIERS (verified via DB query). Remaining for this build: Chrome QA only. Stray `packages/database/prisma/_schema_gen.prisma` should be deleted locally if present (never commit).
+- BQ: 1 (S970 #313) → 2 (added: febe1f46 build CODE-ONLY — migration APPLIED, Chrome QA pending).
+
 **S970 — QA/RECORDS (2026-06-13). S969 records pass + #219 Chrome re-verify.**
 - **Records pass:** applied S969 PCVs to roadmap.md — #164 Tiers Infra (UNVERIFIED S804 → ✅ Claude QA S970), #27b TEAMS watermark toggle (re-confirmed), #317 Geofence QR (both rows: Building backlog inside/outside-radius now ✅, Backlog-P1 row ✅). All had 5-element evidence.
 - **#219 Achievements XP framing — CHROME VERIFIED ✅ (S969 fix confirmed live):** logged in as user5 (Leo Thomas, RANGER) via direct /api/auth/login. /api/xp/profile authoritative = guildXp 2065, RANGER→SAGE, nextRankXp 5000. /shopper/achievements now shows ABSOLUTE "2,065 / 5,000 XP to Sage · 2935 XP remaining" (ss_5725naacs) — identical to /shopper/dashboard "Progress to SAGE · 2,065 / 5,000 XP · 2,935 XP to Sage" (ss_32707qytx). Pre-fix band-relative "865/3,800" gone. achievements.tsx now reads useXpProfile (shared cache → identical numbers). Dark mode clean on both. Roadmap #219 → ✅ CHROME VERIFIED S970.
@@ -87,6 +97,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
+| eBay calculated-shipping / net-engine / estimation build (febe1f46) | CODE-ONLY — TS-clean but NOT browser-verified. Schema migration 20260613190000 APPLIED + verified on Railway 2026-06-13 (tables + columns + FLAT_TIERS backfill confirmed). | (1) confirm backend+frontend deploys green; (2) Chrome QA the shipping system E2E + re-push the Danner pump through the CALCULATED path | S971 |
 
 
 
@@ -116,6 +127,14 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 
 ## Next Session
+
+### S971 — Carry-forward (eBay shipping — GATED on migration)
+
+**STEP 1 — GATING, DO FIRST:** Migration 20260613190000 is APPLIED + verified on Railway (done 2026-06-13). Confirm backend (Railway) + frontend (Vercel) deploys for febe1f46 are GREEN before QA. Delete the stray `packages/database/prisma/_schema_gen.prisma` if still present locally (never commit it).
+
+**STEP 2 — `Skill('findasale-qa')`** — Chrome QA the eBay shipping system end-to-end as the organizer (account cmnxueoas0005tfv8brnc0kky). Re-push the Danner pump (itemId cmqbb252i000i60qq7eilco9z, offer 186196728011) through the new CALCULATED path. Confirm: the estimate→confirm card pre-fills weight/box; the net + buyer-shipping preview render; the Suggest-price button works; and the pump publishes with Brand=Danner + MPN=AP-40, a specific (non-"Other") category, and a sensible calculated shipping rate (NOT $75). Evidence required per QA Honesty Gate — URL, user, element, outcome, screenshot IDs.
+
+**STEP 3 — Smoke-test the other shipped eBay fixes:** Brand/MPN/UPC inputs on the edit-item + review pages; weight-tier gap-overshoot block message (confirm it blocks with an actionable message instead of overcharging $75).
 
 ### S970 — Carry-forward (QA/DEV)
 
@@ -198,6 +217,26 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S971 — 2026-06-13 | DEV/RECORDS (eBay listing-push fix + calculated-shipping/net-engine build)
+
+**Session type:** DEV — eBay push debugging (evidence-first via direct eBay API), large shipping build, session wrap.
+
+**Trigger:** organizer couldn't push the Danner AP-40 aquarium pump to eBay — friendly "Brand is missing" error.
+
+**Root causes (proven by hitting the eBay API directly):** Brand+MPN PAIR required (real errorId 25002 `<BrandMPN>`); secondaryCategoryId="1" from SECONDARY_CATEGORY_MAP (vintage/antique/handmade/collectible all mapped to NON-LEAF root categories) → errorId 25005; publishItemOffer used the wrong (bare FAS-{id}) SKU; category resolver took eBay's "Other/Misc" catch-all; weight-tier ladder gap billed an 11 lb pump $75.
+
+**Work completed:**
+- **Listing-push fixes (commits up to febe1f46):** Brand→"Unbranded" only when blank; force Brand+MPN aspects on push; publishItemOffer self-heals 25002; correct SKU via buildCustomLabel in repair paths; SECONDARY_CATEGORY_MAP disabled (root-category guard); resolver skips Other/Misc/Everything-Else; weight-tier gap-overshoot guard; Brand/MPN/UPC inputs on edit-item + review pages; "Publish to eBay now" saves form first; drafts API returns brand/mpn/upc.
+- **BIG BUILD (febe1f46, 13 files):** eBay calculated-shipping default + fee-aware net-proceeds engine + package-estimation + "Suggest price". Schema: models PackageProfile + EbayCategoryFee, +3 Item / +3 EbayConnection / +2 EbayPolicyMapping cols (migration 20260613190000_ebay_calculated_shipping_net_engine). Services: ebayCalculatedPolicyService, ebayRateEstimateService, ebayNetProceedsService, ebayPackageEstimateService; cloudAIService weight/dim estimation; resolvePoliciesForItem CALCULATED-default + FLAT_TIERS backfill; endpoints POST /ebay/shipping-preview + /shipping-preview/suggest-price; frontend ShippingNetPreview + PostSaleEbayPanel confirm card + settings shipping-mode toggle. Both TS gates 0 errors (orchestrator-verified). **CODE-ONLY — not browser-verified.**
+- **Locked decisions:** default shipping = CHARGED/calculated; free shipping = organizer opt-in; net engine displays net + Suggest-price (never auto-set); fees = real settled-order data + ~1.25% safety buffer, seeded from published rates; existing flat-tier organizers preserved. Behavior rule added: CLAUDE.md §10b Evidence-First Debugging Gate.
+- **Pump:** published live (listingId 137411387725) then WITHDRAWN per Patrick; reset for clean re-push (eBay listing/category fields cleared, brand=Danner/mpn=AP-40 set, offer 186196728011 retained).
+
+**MIGRATION APPLIED ✅ (2026-06-13):** febe1f46 schema migration applied + verified on Railway (tables, columns, and FLAT_TIERS backfill confirmed via DB query). Remaining: confirm deploys green + Chrome QA. Stray `packages/database/prisma/_schema_gen.prisma` should be deleted locally.
+
+**Files changed (docs only this wrap):** claude_docs/STATE.md, claude_docs/patrick-dashboard.md, claude_docs/strategy/roadmap.md. (Code files were pushed by Patrick across several commits, latest febe1f46.)
+
+**BQ delta:** 1 → 2 (added: febe1f46 build CODE-ONLY — migration applied, Chrome QA pending).
 
 ### S970 — 2026-06-13 | QA/RECORDS (S969 PCVs + #219 re-verify)
 

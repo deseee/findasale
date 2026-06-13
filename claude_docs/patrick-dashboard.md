@@ -1,6 +1,50 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S970 — 2026-06-13 (QA/RECORDS: S969 PCVs applied to roadmap | #219 Achievements XP framing Chrome-verified ✅ | BQ 0)
+**Last updated:** S971 — 2026-06-13 (DEV: eBay listing-push fixed + calculated-shipping/net-engine build shipped | MIGRATION APPLIED TO RAILWAY ✅ | browser QA pending | BQ 1)
+
+---
+
+## Session S971 Summary — eBay Push Fixed + Calculated-Shipping/Net-Engine Build (migration applied ✅)
+
+**Type:** DEV — eBay listing-push debugging + a big shipping/pricing build
+**BQ:** 1 → 2
+
+**Why this started:** You couldn't push the Danner aquarium pump to eBay — it kept saying "Brand is missing."
+
+**What we found (by talking to eBay's API directly, not guessing):** The real problem wasn't a missing brand. eBay actually needed a Brand **and** Model-number pair, our category map was sending eBay invalid "root" categories, the pump was landing in a generic "Other" category, and an 11-lb item was being billed **$75** to ship because of a gap in the weight-price ladder.
+
+| Item | Status | Details |
+|------|--------|---------|
+| eBay push fixes | ✅ SHIPPED (code) | Brand/Model now sent correctly; bad category map disabled; resolver skips "Other/Misc"; the $75 overcharge case now **blocks with a clear message** instead of overcharging. Brand/Model/UPC fields added to the edit-item and review pages. "Publish to eBay now" saves your form first. |
+| 🚢 Calculated shipping + net-proceeds engine | ✅ SHIPPED (code) — ⚠️ NOT yet tested in browser | Big build (13 files): eBay now defaults to **calculated shipping** (buyer pays actual cost), with a preview that shows your **net proceeds after fees** and a **"Suggest price"** button. Free shipping becomes an opt-in. Existing organizers on flat-rate tiers are preserved. |
+| The Danner pump | ↩️ Reset & ready | It was published live, then withdrawn at your request, and is now reset so it can be cleanly re-pushed through the new shipping path. |
+| **Database migration** | ✅ **DONE** | Applied + verified on Railway 2026-06-13 (60 package profiles, 5 fee rows, new columns present). The backfill correctly kept existing organizers on flat-rate tiers. Remaining: a browser QA pass. |
+
+**Bottom line:** The code is in and type-clean, but the database migration is **applied and verified on Railway**. It still needs a real browser (QA) test before relying on it end-to-end.
+
+---
+
+## ✅ DONE — eBay Shipping Migration Applied to Railway (S971, 2026-06-13)
+
+The S971 eBay calculated-shipping build added new database tables (`PackageProfile`, `EbayCategoryFee`) and columns. The first deploy used a placeholder database URL and failed, so **these were never created on Railway.** Until this runs, eBay push / shipping-preview / the eBay panel will error in production.
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+# Get DATABASE_URL from Railway dashboard -> findasale-db service -> Variables tab (use the PUBLIC proxy URL)
+$env:DATABASE_URL="[Railway DATABASE_URL - copy from Railway dashboard]"
+npx prisma migrate deploy   # applies migration 20260613190000_ebay_calculated_shipping_net_engine
+npx prisma generate         # regenerates the TypeScript client with the new fields
+npx prisma db seed          # seeds EbayCategoryFee from published rates
+```
+
+Then delete the stray file so it never gets committed:
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+Remove-Item -LiteralPath packages\database\prisma\_schema_gen.prisma
+```
+
+After the migration runs and deploys are green, next session does the Chrome QA + re-pushes the Danner pump through the new calculated path.
 
 ---
 
@@ -116,6 +160,7 @@
 
 | Action | Priority | Instructions |
 |--------|----------|-------------|
+| **eBay shipping migration on Railway** | ✅ **DONE (2026-06-13)** | Applied + verified (60 package profiles, 5 fee rows, columns + FLAT_TIERS backfill confirmed). Stray `_schema_gen.prisma` should be deleted locally if still present. |
 | **Push S966 wrap docs** | HIGH | `git add claude_docs/STATE.md claude_docs/patrick-dashboard.md` → commit → push.ps1 |
 | **Push S964+S965 changes (if not pushed)** | HIGH | See archived push block below |
 | AlternativeTo | HIGH — June 18 deadline | Log in as "FindASale" → alternativeto.net → Add Software |
