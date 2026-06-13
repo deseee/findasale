@@ -2673,6 +2673,9 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         title: true,
         brand: true,
         mpn: true,
+        createdAt: true,
+        costBasis: true,
+        roomTag: true,
         sale: { select: { organizerId: true } },
       },
     });
@@ -2732,6 +2735,11 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
 
     const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
     const proxySecret = process.env.EBAY_PROXY_SECRET;
+    // Canonical SKU — must match the eBay Custom Label originally pushed to eBay.
+    // The repair paths below GET/PUT the inventory item by SKU; using a bare
+    // `FAS-${item.id}` 404s when the organizer has skuAppendDate/Cost/Location toggles
+    // enabled. buildCustomLabel applies those toggles so the SKU matches eBay.
+    const sku = buildCustomLabel(item.id, organizer, item);
     const publishPath = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}/publish`);
     const publishUrl = `${frontendUrl}/api/proxy/ebay?path=${publishPath}`;
 
@@ -2755,9 +2763,6 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
 
       // 25021 retry path: walk accepted conditions and re-publish
       if (publishError.includes('25021') && item.ebayCategoryId) {
-        // TODO: skuAppend toggles not applied here — publishItemNow is a repair path for
-        // already-created offers; the SKU must match the one originally pushed to eBay.
-        const sku = `FAS-${item.id}`;
         const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
         const inventoryUrl = ebayProxyUrl(inventoryPath);
         // Fetch the current inventory item so we have its payload shape
@@ -2812,7 +2817,6 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       // values into product.aspects, PUT it back, then re-publish once. Fall back to
       // "Unbranded" (eBay's accepted no-brand value) when the organizer set no brand.
       if (!ebayListingId && publishError.includes('25002')) {
-        const sku = `FAS-${item.id}`;
         const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
         const inventoryUrl = ebayProxyUrl(inventoryPath);
         const invGet = await fetch(inventoryUrl, { headers: ebayUserHeaders(accessToken) });
