@@ -30,6 +30,11 @@ export interface AITagResult {
   suggestedConditionGrade?: string; // #64: AI-suggested condition grade (S|A|B|C|D)
   photoOrderIndices?: number[]; // Enhancement 2: Best-photo-first sorting — reordered photo indices by Vision quality
   brand?: string; // Task #339: Optional if confidence < 0.6
+  // Calculated-shipping package estimation (same tagging pass, no extra API call)
+  estimatedWeightOz?: number; // packed weight estimate in ounces (null when packageConfidence < 0.5)
+  estimatedDimensionsIn?: { length: number; width: number; height: number }; // packed box dims in inches
+  estimatedPackageType?: string; // eBay packageType enum (MAILING_BOX | PACKAGE_THICK_ENVELOPE | LARGE_PACKAGE | etc.)
+  packageConfidence?: number; // 0.0-1.0 confidence in the package estimate
 }
 
 /** Photo with its computed quality score for best-photo-first sorting */
@@ -181,6 +186,7 @@ Condition: NEW = unused with tags. USED = minimal to normal wear. REFURBISHED = 
 Price: Suggest a realistic secondary market price for this item. Do not use retail pricing as a baseline — derive the price from what similar items actually sell for. If comparable sales are provided above, anchor to those. Do not default to round numbers like $5, $10, $20, $25, $50 — derive a specific price from the item's actual characteristics.
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Always include "Vintage" or "Antique" when applicable. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
+Shipping package: Estimate the PACKED shipping weight (item + box + padding) in ounces, and the packed box outer dimensions (length, width, height) in inches. Pick the eBay packageType enum that best fits: PACKAGE_THICK_ENVELOPE (thin/flat <12oz), MAILING_BOX (most boxed items), LARGE_PACKAGE (over ~18in any side or heavy), USPS_FLAT_RATE_ENVELOPE (documents/flat). Rate packageConfidence 0.0-1.0 on how sure you are of weight + dimensions. If packageConfidence is below 0.5 (you cannot reasonably estimate size/weight), set estimatedWeightOz, estimatedDimensionsIn, and estimatedPackageType to null — do not guess.
 
 {
   "title": "short specific title",
@@ -190,7 +196,11 @@ Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0
   "suggestedConditionGrade": "A | B | C | D | F",
   "suggestedPrice": 12.50,
   "tags": ["Tag1", "Tag2", "Tag3"],
-  "confidence": 0.85
+  "confidence": 0.85,
+  "estimatedWeightOz": 24,
+  "estimatedDimensionsIn": { "length": 10, "width": 8, "height": 6 },
+  "estimatedPackageType": "MAILING_BOX",
+  "packageConfidence": 0.7
 }`,
               },
             ],
@@ -231,6 +241,14 @@ Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0
     if (parsed.confidence < 0.6) {
       parsed.category = undefined;
       parsed.brand = undefined;
+    }
+    // Calculated-shipping: refuse-to-fill package estimate when confidence < 0.5
+    // (mirrors the brand/category discipline above). Downstream package estimator
+    // will fall back to PackageProfile lookup or its own default.
+    if (parsed.packageConfidence == null || parsed.packageConfidence < 0.5) {
+      parsed.estimatedWeightOz = undefined;
+      parsed.estimatedDimensionsIn = undefined;
+      parsed.estimatedPackageType = undefined;
     }
     return parsed;
   } catch (error: any) {

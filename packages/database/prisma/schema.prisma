@@ -615,6 +615,11 @@ model EbayConnection {
   merchantLocationKey    String?
   merchantLocationSource String? // EXISTING | SALE_ADDRESS | ORGANIZER_ADDRESS
 
+  // Calculated-shipping fulfillment policy (auto-provisioned via eBay Account API)
+  calculatedFulfillmentPolicyId String? // eBay fulfillment policy with CALCULATED cost type, provisioned by FindA.Sale
+  calculatedPolicyProvisionedAt DateTime? // When the calculated policy was created/adopted
+  handlingTimeDays              Int       @default(3) // Days from sale to ship — feeds the eBay handlingTime on the calculated policy
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -650,6 +655,10 @@ model EbayPolicyMapping {
   // Push preferences
   pushAsDraft            Boolean @default(false) // if true, create Offer but don't call publish endpoint
   merchantLocationSource String  @default("SALE_ADDRESS") // EXISTING | SALE_ADDRESS | ORGANIZER_ADDRESS
+
+  // Shipping mode: CALCULATED (buyer pays real rate at checkout) vs FLAT_TIERS (legacy weight-tier flat rates)
+  shippingMode      String  @default("CALCULATED") // CALCULATED | FLAT_TIERS
+  freeShippingOptIn Boolean @default(false) // Organizer opt-in to free shipping (seller absorbs cost) — never default
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1150,6 +1159,10 @@ model Item {
   packageWidthIn             Decimal?               @db.Decimal(6, 2)
   packageHeightIn            Decimal?               @db.Decimal(6, 2)
   packageType                String? // BOX | LETTER | MAILING_TUBE | PACKAGE_THICK_ENVELOPE
+  // eBay calculated-shipping package estimation (Phase: calculated shipping + net engine)
+  packageEstimateSource       String? // SEED | CATEGORY | KEYWORD | AI | ORGANIZER — provenance of package estimate
+  packageEstimateConfidence   Decimal?               @db.Decimal(3, 2) // 0.00–1.00 confidence of the package estimate
+  packageConfirmedByOrganizer Boolean                @default(false) // True once organizer reviews/confirms package details — never overwritten by estimates
   // ADR eBay Parity Phase B: Product identifiers for catalog match
   upc                        String?
   ean                        String?
@@ -4914,4 +4927,44 @@ model EmailQuotaLog {
   count       Int       @default(0)
   alertSentAt DateTime? // last time a threshold alert was dispatched
   updatedAt   DateTime  @updatedAt
+}
+
+// Calculated-shipping package estimation — global lookup table of common secondary-sale
+// item types with realistic PACKED weights/dimensions for eBay calculated shipping.
+// Queried by ebayCategoryId → category → keyword (descending precision) to pre-fill
+// package details so organizers don't hand-measure every item.
+model PackageProfile {
+  id             String   @id @default(cuid())
+  ebayCategoryId String? // eBay numeric leaf category ID (most precise match)
+  category       String? // FindA.Sale category label (Furniture, Glassware, Books, etc.)
+  keyword        String? // lowercase keyword fallback (e.g. "mug", "lamp", "skillet")
+  weightOz       Int // PACKED weight in ounces (item + box + padding)
+  lengthIn       Decimal  @db.Decimal(6, 2)
+  widthIn        Decimal  @db.Decimal(6, 2)
+  heightIn       Decimal  @db.Decimal(6, 2)
+  packageType    String // eBay packageType enum (PACKAGE_THICK_ENVELOPE | MAILING_BOX | LARGE_PACKAGE | etc.)
+  confidence     Decimal  @default(0.50) @db.Decimal(3, 2) // 0.00–1.00 estimate confidence
+  source         String   @default("SEED") // SEED | MANUAL | LEARNED
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([ebayCategoryId])
+  @@index([category])
+  @@index([keyword])
+}
+
+// eBay final-value-fee rates by category (for net-proceeds engine). One null-category
+// default row covers everything; category overrides (media/books) take precedence.
+model EbayCategoryFee {
+  id              String   @id @default(cuid())
+  ebayCategoryId  String?  @unique // null = global default row
+  categoryLabel   String? // human label for admin clarity
+  fvfPercent      Decimal  @db.Decimal(5, 4) // e.g. 0.1360 = 13.60% final value fee
+  perOrderFeeCents Int     @default(40) // eBay per-order fixed fee (cents)
+  source          String   @default("MANUAL") // MANUAL | PUBLISHED_RATE | SETTLED
+  effectiveFrom   DateTime @default(now())
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

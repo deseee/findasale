@@ -93,6 +93,8 @@ interface PolicyMapping {
   unknownPolicyId?: string | null;
   // S725: DRAFT mode removed — pushAsDraft removed from UI; backend ignores it.
   merchantLocationSource: 'EXISTING' | 'SALE_ADDRESS' | 'ORGANIZER_ADDRESS';
+  shippingMode?: 'CALCULATED' | 'FLAT_TIERS';
+  freeShippingOptIn?: boolean;
 }
 
 interface SetupData {
@@ -102,6 +104,7 @@ interface SetupData {
   merchantLocations: MerchantLocation[];
   currentMapping: PolicyMapping | null;
   suggestedWeightTiers: SuggestedWeightTier[];
+  handlingTimeDays?: number;
 }
 
 const EbayPolicySetupPage = () => {
@@ -125,6 +128,8 @@ const EbayPolicySetupPage = () => {
   }>({ ebayDefaultShippingPolicyId: null });
 
   // eBay Custom Label (SKU) append toggles
+  const [handlingTimeDays, setHandlingTimeDays] = useState<number>(3);
+  const [originalHandlingTimeDays, setOriginalHandlingTimeDays] = useState<number>(3);
   const [skuAppendDate, setSkuAppendDate] = useState(false);
   const [skuAppendCost, setSkuAppendCost] = useState(false);
   const [skuAppendLocation, setSkuAppendLocation] = useState(false);
@@ -145,6 +150,10 @@ const EbayPolicySetupPage = () => {
           api.get('/organizers/me').catch(() => null), // tolerate failure — organizer defaults are optional
         ]);
         setSetupData(setupRes.data);
+        if (typeof setupRes.data.handlingTimeDays === 'number') {
+          setHandlingTimeDays(setupRes.data.handlingTimeDays);
+          setOriginalHandlingTimeDays(setupRes.data.handlingTimeDays);
+        }
         setEbayConnected(true);
 
         const currentMapping = setupRes.data.currentMapping || {
@@ -159,6 +168,8 @@ const EbayPolicySetupPage = () => {
           unknownPolicyId: null,
           // S725: pushAsDraft removed — DRAFT mode killed
           merchantLocationSource: 'SALE_ADDRESS',
+          shippingMode: 'CALCULATED',
+          freeShippingOptIn: false,
         };
 
         // Assign stable client-only ids to every loaded tier so React keys
@@ -211,7 +222,8 @@ const EbayPolicySetupPage = () => {
     JSON.stringify(organizerDefaults) !== JSON.stringify(originalOrganizerDefaults) ||
     skuAppendDate !== originalSkuToggles.skuAppendDate ||
     skuAppendCost !== originalSkuToggles.skuAppendCost ||
-    skuAppendLocation !== originalSkuToggles.skuAppendLocation;
+    skuAppendLocation !== originalSkuToggles.skuAppendLocation ||
+    handlingTimeDays !== originalHandlingTimeDays;
 
   const handleSaveMapping = async () => {
     if (!mapping) return;
@@ -227,7 +239,7 @@ const EbayPolicySetupPage = () => {
           return aVal - bVal;
         })
         .map(({ _clientId, ...rest }) => rest);
-      const payload = { ...mapping, weightTierMappings: sortedTiers };
+      const payload = { ...mapping, weightTierMappings: sortedTiers, handlingTimeDays };
       // Save the policy mapping (existing path)
       await api.post('/ebay/policy-mapping', payload);
       // Save organizer-level eBay defaults and SKU append toggles.
@@ -257,6 +269,7 @@ const EbayPolicySetupPage = () => {
       setOriginalMapping(JSON.parse(JSON.stringify(savedMapping)));
       setOriginalOrganizerDefaults(JSON.parse(JSON.stringify(organizerDefaults)));
       setOriginalSkuToggles({ skuAppendDate, skuAppendCost, skuAppendLocation });
+      setOriginalHandlingTimeDays(handlingTimeDays);
       // Refetch to ensure sync with backend
       const res = await api.get('/ebay/setup-data');
       setSetupData(res.data);
@@ -502,7 +515,89 @@ const EbayPolicySetupPage = () => {
                   </div>
                 </div>
 
-                {/* Section C: Weight-tier matrix */}
+                {/* Section B3: Shipping mode (calculated vs flat-rate tiers) */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Shipping mode</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Choose how buyers are charged for shipping when your items list on eBay.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => mapping && setMapping({ ...mapping, shippingMode: 'CALCULATED' })}
+                      className={`text-left rounded-lg border p-4 transition-colors ${
+                        (mapping?.shippingMode ?? 'CALCULATED') === 'CALCULATED'
+                          ? 'border-sage-600 bg-sage-50 dark:bg-sage-900/30 ring-1 ring-sage-600'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-gray-900 dark:text-white">Calculated</span>
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sage-100 dark:bg-sage-900 text-sage-700 dark:text-sage-200">Recommended</span>
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        Buyers pay the real shipping rate eBay calculates from their ZIP code. You just confirm each item's weight and box size.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => mapping && setMapping({ ...mapping, shippingMode: 'FLAT_TIERS' })}
+                      className={`text-left rounded-lg border p-4 transition-colors ${
+                        mapping?.shippingMode === 'FLAT_TIERS'
+                          ? 'border-sage-600 bg-sage-50 dark:bg-sage-900/30 ring-1 ring-sage-600'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-gray-900 dark:text-white">Flat-rate tiers</span>
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">Advanced</span>
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        Charge a fixed shipping price based on item weight, using the weight-tier table below.
+                      </p>
+                    </button>
+                  </div>
+
+                  {/* Handling time */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Handling time (days)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={30}
+                      value={handlingTimeDays}
+                      onChange={(e) => setHandlingTimeDays(e.target.value === '' ? 0 : Math.max(0, Math.min(30, parseInt(e.target.value, 10) || 0)))}
+                      className="w-28 px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                      aria-label="Handling time in days"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      How many business days you need to ship an item after it sells.
+                    </p>
+                  </div>
+
+                  {/* Free shipping opt-in */}
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={mapping?.freeShippingOptIn ?? false}
+                      onChange={(e) => mapping && setMapping({ ...mapping, freeShippingOptIn: e.target.checked })}
+                      className="mt-0.5 w-4 h-4 rounded"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Offer free shipping (you absorb the shipping cost)
+                      <span className="block text-xs text-gray-500 dark:text-gray-400">
+                        Off by default. Buyers love free shipping, but it comes out of your net.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                {/* Section C: Weight-tier matrix — only relevant in Flat-rate tiers mode */}
+                {mapping?.shippingMode === 'FLAT_TIERS' && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div>
@@ -592,6 +687,7 @@ const EbayPolicySetupPage = () => {
                     + Add tier
                   </button>
                 </div>
+                )}
 
                 {/* Section D: Shipping classification overrides */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">

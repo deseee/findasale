@@ -11,6 +11,30 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
+import ShippingNetPreview from './ShippingNetPreview';
+
+// Box-size presets for quick package entry. Weights are typical PACKED weights.
+const BOX_PRESETS: Array<{ label: string; weightOz: number; lengthIn: number; widthIn: number; heightIn: number; packageType: string }> = [
+  { label: 'Small (8×6×4)', weightOz: 12, lengthIn: 8, widthIn: 6, heightIn: 4, packageType: 'MAILING_BOX' },
+  { label: 'Medium (12×10×8)', weightOz: 32, lengthIn: 12, widthIn: 10, heightIn: 8, packageType: 'MAILING_BOX' },
+  { label: 'Large (16×14×12)', weightOz: 80, lengthIn: 16, widthIn: 14, heightIn: 12, packageType: 'LARGE_PACKAGE' },
+  { label: 'USPS Flat Rate', weightOz: 16, lengthIn: 12.5, widthIn: 9.5, heightIn: 0.5, packageType: 'USPS_FLAT_RATE_ENVELOPE' },
+];
+
+const EstimateBadge: React.FC<{ confirmed?: boolean; source?: string }> = ({ confirmed, source }) => {
+  if (confirmed || source === 'ORGANIZER') {
+    return (
+      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200">
+        Confirmed
+      </span>
+    );
+  }
+  return (
+    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200">
+      Estimated
+    </span>
+  );
+};
 
 interface UnsoldItem {
   id: string;
@@ -39,6 +63,20 @@ interface UnsoldItem {
   allowBestOffer?: boolean;
   bestOfferAutoAcceptAmt?: number;
   bestOfferMinimumAmt?: number;
+  ebayCategoryId?: string;
+  // Calculated-shipping estimate provenance
+  packageEstimateSource?: string;
+  packageEstimateConfidence?: number;
+  packageConfirmedByOrganizer?: boolean;
+  packageEstimate?: {
+    weightOz: number;
+    lengthIn: number;
+    widthIn: number;
+    heightIn: number;
+    packageType: string;
+    confidence: number;
+    source: string;
+  } | null;
 }
 
 interface EbayPhaseB {
@@ -57,6 +95,8 @@ interface EbayPhaseB {
   allowBestOffer?: boolean;
   bestOfferAutoAcceptAmt?: number;
   bestOfferMinimumAmt?: number;
+  packageConfirmedByOrganizer?: boolean;
+  packageEstimateSource?: string;
 }
 
 interface PostSaleEbayPanelProps {
@@ -99,21 +139,33 @@ const EbayEditForm: React.FC<{
     ean: item.ean || '',
     ebaySubtitle: item.ebaySubtitle || '',
     conditionNotes: item.conditionNotes || '',
-    packageWeightOz: item.packageWeightOz || undefined,
-    packageLengthIn: item.packageLengthIn || undefined,
-    packageWidthIn: item.packageWidthIn || undefined,
-    packageHeightIn: item.packageHeightIn || undefined,
-    packageType: item.packageType || '',
+    packageWeightOz: item.packageWeightOz ?? item.packageEstimate?.weightOz ?? undefined,
+    packageLengthIn: item.packageLengthIn ?? item.packageEstimate?.lengthIn ?? undefined,
+    packageWidthIn: item.packageWidthIn ?? item.packageEstimate?.widthIn ?? undefined,
+    packageHeightIn: item.packageHeightIn ?? item.packageEstimate?.heightIn ?? undefined,
+    packageType: item.packageType || item.packageEstimate?.packageType || '',
     allowBestOffer: item.allowBestOffer || false,
     bestOfferAutoAcceptAmt: item.bestOfferAutoAcceptAmt || undefined,
     bestOfferMinimumAmt: item.bestOfferMinimumAmt || undefined,
   });
 
+  const isPackageEstimated = !item.packageConfirmedByOrganizer;
   const [expandedSections, setExpandedSections] = useState({
     product: false,
-    shipping: false,
+    shipping: isPackageEstimated, // expand when details are still estimated and need confirmation
     offers: false,
   });
+
+  const applyBoxPreset = (preset: { weightOz: number; lengthIn: number; widthIn: number; heightIn: number; packageType: string }) => {
+    setFormData((prev) => ({
+      ...prev,
+      packageWeightOz: preset.weightOz,
+      packageLengthIn: preset.lengthIn,
+      packageWidthIn: preset.widthIn,
+      packageHeightIn: preset.heightIn,
+      packageType: preset.packageType,
+    }));
+  };
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -140,6 +192,9 @@ const EbayEditForm: React.FC<{
       allowBestOffer: formData.allowBestOffer,
       bestOfferAutoAcceptAmt: formData.bestOfferAutoAcceptAmt ? Math.max(0, formData.bestOfferAutoAcceptAmt) : undefined,
       bestOfferMinimumAmt: formData.bestOfferMinimumAmt ? Math.max(0, formData.bestOfferMinimumAmt) : undefined,
+      // Organizer reviewed/confirmed the package details — locks against future estimate overwrites.
+      packageConfirmedByOrganizer: true,
+      packageEstimateSource: 'ORGANIZER',
     };
 
     onSave(item.id, cleanData);
@@ -264,13 +319,40 @@ const EbayEditForm: React.FC<{
           onClick={() => toggleSection('shipping')}
           className="w-full text-left flex items-center justify-between py-2 px-2 hover:bg-warm-100 dark:hover:bg-gray-600 rounded transition-colors"
         >
-          <span className="font-semibold text-warm-900 dark:text-warm-100">Shipping (for calculated rates)</span>
+          <span className="font-semibold text-warm-900 dark:text-warm-100 flex items-center gap-2">
+            Confirm shipping details
+            <EstimateBadge confirmed={item.packageConfirmedByOrganizer} source={item.packageEstimateSource} />
+          </span>
           <span className="text-warm-600 dark:text-warm-400">{expandedSections.shipping ? '▼' : '▶'}</span>
         </button>
         {expandedSections.shipping && (
           <div className="space-y-3 p-3 bg-white dark:bg-gray-800 rounded mb-2">
+            {isPackageEstimated && (
+              <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 rounded px-2 py-1.5">
+                These package details are an estimate. Review and adjust them, then save to confirm — eBay uses them to charge buyers the right shipping.
+              </p>
+            )}
+            {/* Box-size presets */}
             <div>
-              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Weight (ounces)</label>
+              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Pick a box size</label>
+              <div className="flex flex-wrap gap-1.5">
+                {BOX_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => applyBoxPreset(preset)}
+                    className="px-2 py-1 rounded text-xs font-medium bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1 flex items-center gap-2">
+                Weight (ounces)
+                {!item.packageConfirmedByOrganizer && <EstimateBadge confirmed={false} />}
+              </label>
               <input
                 type="number"
                 value={formData.packageWeightOz || ''}
@@ -326,12 +408,26 @@ const EbayEditForm: React.FC<{
                 className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
               >
                 <option value="">Select type...</option>
-                <option value="BOX">Box</option>
-                <option value="LETTER">Envelope</option>
+                <option value="MAILING_BOX">Box</option>
+                <option value="PACKAGE_THICK_ENVELOPE">Thick Envelope / Flat</option>
+                <option value="LARGE_PACKAGE">Large Package</option>
                 <option value="MAILING_TUBE">Mailing Tube</option>
-                <option value="PACKAGE_THICK_ENVELOPE">Thick Envelope</option>
+                <option value="USPS_FLAT_RATE_ENVELOPE">USPS Flat Rate Envelope</option>
               </select>
             </div>
+
+            {/* Live buyer-shipping + net proceeds preview */}
+            <ShippingNetPreview
+              itemId={item.id}
+              itemPrice={item.price}
+              weightOz={formData.packageWeightOz}
+              dims={{
+                length: formData.packageLengthIn,
+                width: formData.packageWidthIn,
+                height: formData.packageHeightIn,
+              }}
+              ebayCategoryId={item.ebayCategoryId ?? null}
+            />
           </div>
         )}
       </div>
