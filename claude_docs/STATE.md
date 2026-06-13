@@ -8,6 +8,12 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S970 — QA/RECORDS (2026-06-13). S969 records pass + #219 Chrome re-verify.**
+- **Records pass:** applied S969 PCVs to roadmap.md — #164 Tiers Infra (UNVERIFIED S804 → ✅ Claude QA S970), #27b TEAMS watermark toggle (re-confirmed), #317 Geofence QR (both rows: Building backlog inside/outside-radius now ✅, Backlog-P1 row ✅). All had 5-element evidence.
+- **#219 Achievements XP framing — CHROME VERIFIED ✅ (S969 fix confirmed live):** logged in as user5 (Leo Thomas, RANGER) via direct /api/auth/login. /api/xp/profile authoritative = guildXp 2065, RANGER→SAGE, nextRankXp 5000. /shopper/achievements now shows ABSOLUTE "2,065 / 5,000 XP to Sage · 2935 XP remaining" (ss_5725naacs) — identical to /shopper/dashboard "Progress to SAGE · 2,065 / 5,000 XP · 2,935 XP to Sage" (ss_32707qytx). Pre-fix band-relative "865/3,800" gone. achievements.tsx now reads useXpProfile (shared cache → identical numbers). Dark mode clean on both. Roadmap #219 → ✅ CHROME VERIFIED S970.
+- **CODE-ONLY verification pass (Patrick request) — 7 gamification XP items re-checked against current backend code (tool-cited):** 5 MATCH (#254 HP 1.5x, #278 HP scan +10%/150 cap, #281 STREAK_7DAY_BONUS 100, #314 ORG_SHOPPER_SIGNUP 10, #315 REFERRAL_ORG_FIRST_SALE 50) — stay ⚠️ CODE-ONLY (browser verify needs real Stripe/GPS/multi-acct). 2 DRIFTED: **#268** = doc drift only (code awards tiered 40-80 XP via TRAIL_COMPLETION + TrailCompletion-unique guard, NOT flat-100/hasEarnedTrailBonus as the claim said — roadmap text corrected, code is correct). **#313 = REAL BUG FOUND + FIXED S970** — HAUL_POST_LIKES idempotency guard was non-functional (dedup queried "photoId: <id>" but award stored "...post <id>"), re-awarding 5 XP on every like ≥10 = XP-farm vector. Dev fix: award description now writes "(photoId: <id>)" so guard matches → fires once per post. 1 file (haulPostController.ts), TS clean, idempotency trace confirmed.
+- BQ: 1 (#313 fix pending Chrome verify — needs 10 accounts liking, env-blocked). PCV table cleared of all applied rows.
+
 **S969 — QA (2026-06-13). S968 post-deploy smoke + Pending-QA burn-down.**
 - **S968 SMOKE OK** — homepage CLS fix LIVE + correct: CityHeat ("Phoenix is heating up") / TreasureHunt / SaleOfDay banners render BELOW the map (no shift); both code-split banners mount; Featured Sales 20/20 + When/Type filter pills render. Organizer pages (dashboard / settings / add-items / POS) + public sale detail all render CLEAN post the app-wide `_app.tsx` ssr:false code-split — no broken overlays. Only console error across all pages = wallet browser-extension conflict (MetaMask/evmAsk inpage.js), NOT app code.
 - **#164 Tiers Backend Infra VERIFIED** — GET /api/tiers/mine (getMyTier) -> HTTP 200 {tier, progress: currentTier BRONZE / nextTier SILVER / completedSales 1 / salesNeeded 4}; OrganizerTierBadge renders "Bronze Organizer" + "1/4 sales until next tier" (ss_5723zet9w). syncTier wired into billingController webhooks (4 events, code-confirmed). **P3 latent:** organizer.tier stores subscription value "PRO" (not BRONZE/SILVER/GOLD) -> getTierBenefits('PRO')=undefined, `benefits` omitted from API; masked by frontend `TIER_CONFIG[tier] || BRONZE` fallback — zero user impact.
@@ -80,9 +86,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| ~~#219 Achievements XP framing~~ | FIXED S969 — was a framing inconsistency (achievements band-relative "865/3800" vs dashboard absolute "2060/5000"), NOT wrong thresholds (backend RANGER=1200 is correct). achievements.tsx now uses useXpProfile (absolute, matches dashboard). Pending Chrome re-verify next session. | — | S969->FIXED S969 |
-| ~~#470 organizer_signup GTM event~~ | RESOLVED S958 — S946 verified this event (dataLayer sequence confirmed with screenshot evidence on /register?invite=QA-GA4-B); S949 re-added in error. BQ item closed. | — | S949→CLOSED S958 |
-| ~~#27c eBay CSV Export~~ | FIXED S963 — Root cause: sale.title special chars broke Content-Disposition header. Fixed: safeTitle sanitization added to ebayController.ts L710. Pending Chrome verify. | — | S962→FIXED S963 |
+| #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
 
 
 
@@ -92,20 +96,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
-| 164 | Tiers Backend Infrastructure (getMyTier/syncTier/display) | Navigated https://finda.sale/organizer/dashboard as Alice Johnson (user1, TEAMS). GET /api/tiers/mine -> HTTP 200 {tier, progress: currentTier BRONZE, nextTier SILVER, completedSales 1, salesNeeded 4}. OrganizerTierBadge renders "Bronze Organizer" + "Reach Silver at 5 sales" + "1/4 sales until next tier" (ss_5723zet9w). syncTier wired into billingController webhooks (4 subscription events, code-confirmed). P3: organizer.tier holds "PRO" not loyalty enum -> benefits omitted from API, masked by frontend BRONZE fallback (no user impact). | S969 |
-| 27b | Watermark TEAMS-gated removal toggle | Navigated https://finda.sale/organizer/settings -> Appearance tab as Alice Johnson (user1, TEAMS). "Watermark Settings" section: "Remove FindA.Sale watermark from exports and shareable images" checkbox CHECKED + enabled, helper copy "your exported PDFs, shareable cards, and images will not display the FindA.Sale branding" (ss_4877f2sdx). PDF footer visual + iCal .ics description text still pending (need non-TEAMS comparison account). | S969 |
-| 317 | Geofence QR Scan Enforcement | Authenticated GET /api/items/90bde6e8-6dc4-4ab7-b8b1-26294ad329cc/qr/scan as Alice (user1) vs geocoded Grand Rapids sale (lat 42.9634 / lng -85.6681). FAR (NYC, ~970km) -> HTTP 403 "You must be at the sale location to scan this QR code." AT-LOCATION (exact coords) -> HTTP 200 (passed 100m gate; dup-check returned already-scanned-today). NO coords -> HTTP 200 graceful fallback (matches S936). haversine 100m enforcement confirmed live. | S969 |
-| 74 | Role-Aware Registration Consent | Navigated https://finda.sale/register as unauthenticated visitor. Clicked role dropdown → "Shopper": saw 1 consent checkbox + ToS, no Business Info. Switched to "Sale Organizer": saw Business Information (Name/Phone/Address) + 1 consent checkbox + ToS. Switched back — Business Info disappeared. Dark mode clean. ss_58428wnau ss_98779g0dj ss_12933c02s | S961 |
-| 463 | Claim Button Click Tracking — CTA #1 hero button | Navigated https://finda.sale/organizers/cmpnk019i02am4kxzospcmvoa as unauthenticated visitor. Clicked "Claim This Profile — It's Free". Saw redirect to /register?claim=cmpnk019i02am4kxzospcmvoa + window.va claim_profile_click event fired + POST /_vercel/insights/event beacon confirmed. ss_6546zegk2 ss_5106am9br ss_203394jm6 | S961 |
-| 472 | send-test-email happy path | Navigated https://finda.sale/admin as user1@example.com (ADMIN). Ran fetch POST /api/admin/send-test-email with {to:"test-delivery@mailinator.com",subject:"Test",body:"Test body"}. Saw 200 {success:true, messageId:"bb5ce99a-96d4-48eb-913d-d5f663bc60fc", rail:"resend"}. Screenshot: ss_6413lunko | S948 |
-| 472 | send-test-email domain block (@system.finda.sale) | Same authenticated session. Sent to {to:"anything@system.finda.sale"}. Saw 400 {"success":false,"error":"Recipient domain blocked — cannot send to this address"}. isEmailDomainBlocked guard fires. Screenshot: ss_6413lunko | S948 |
-| 472 | send-test-email auth gate (unauthenticated) | New unauthenticated tab. Direct Railway backend call POST https://backend-production-153c9.up.railway.app/admin/send-test-email, no credentials/CSRF. Saw 403 {"message":"CSRF token validation failed"}. Defense-in-depth: CSRF before auth. Screenshot: ss_4595bvchx | S948 |
-| #27c | eBay CSV Export — safeTitle fix (S963) | Navigated https://finda.sale/organizer/add-items/59c49908-72f2-4e92-ade9-02bfcfdd9230 as Alice Johnson (user1, organizer). Clicked Export to eBay. Modal: "Export 1 available items as eBay CSV". Clicked Download CSV. Network GET /api/sales/59c49908-72f2-4e92-ade9-02bfcfdd9230/ebay-export?photoMode=watermarked → HTTP 200 (no 500). Toast: "CSV ready. Upload to → Bulk Listings." Sale title contains em dash — exact char that caused HTTP 500 pre-S963. ss_3764vxdwk ss_8508ma6s6 ss_0576eihvm | S965 |
-| 219 | Shopper Achievements | Navigated https://finda.sale/shopper/achievements as Alice Johnson (user1). Achievements tab rendered with XP breakdown, badges grid, rank progress bar. Dark mode clean. ss_5810hhnqu ss_4488tmnlg | S962 |
-| 218 | Shopper Trades | Navigated https://finda.sale/shopper/trades as Alice Johnson (user1). Trades page rendered with active trade listings. ss_9998kdjb8 | S962 |
-| 55 | Seasonal Discovery Challenges | Navigated https://finda.sale/challenges as Alice Johnson (user1). Seasonal challenges page displayed with active challenges list. ss_5780an0ik | S962 |
-| 81 | Empty State Audit | Spot-checked empty state content across key pages as Alice Johnson. States render with messaging and CTAs (not raw empty). ss_2877anw5k | S962 |
-| 127 | POS Value Unlock Tiers | Navigated https://finda.sale/organizer/pos?saleId=59c49908-72f2-4e92-ade9-02bfcfdd9230 as Alice Johnson (user1). Clicked "POS Value Unlock Tiers" button. Widget expanded: Tier 1 "Item Performance Snapshot" unlocked (5 tx + $50 revenue ✓ checkmark), Tier 2 "Category Deep Dive + Repeat Buyer Map" locked (20 tx + $300 revenue, progress bar "15 more sales"), Tier 3 "Regional Pricing Benchmarks + Predictive Demand" locked (50 tx + $1,000 revenue, PRO badge). Header: "1/3 unlocked · 5 sales · $325.00". ss_9169k1up3 ss_0868mkvi8 | S962 |
+_S970 records pass: S969 PCVs (#164 Tiers Infra, #27b watermark toggle, #317 Geofence QR) applied to roadmap.md. Stale already-applied rows (#74/#463/#472×3/#27c/#219/#218/#55/#81/#127 — confirmed applied S949/S962/S963/S965) cleared from table._
 |---|---------|----------|---------|
 | SEO3 | Denver city landing page /estate-sales/denver-co | Navigated https://finda.sale/estate-sales/denver-co. Title: "Estate Sales in Denver, CO \| FindA.Sale" ✅. Meta desc present+keyword-rich ✅. H1: "Estate Sales in Denver, CO" ✅. 50 listings visible ✅. Dark mode clean ✅. ss_34924pp42 ss_8168bplgd | S944 |
 _(#422 ✅ S949 applied S950 — cleared. #75 ✅ S949 applied S950 — cleared. #470 item_viewed ✅ S949 applied S950 — cleared.)_
@@ -126,14 +117,13 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S969 — Carry-forward (QA)
+### S970 — Carry-forward (QA/DEV)
 
-**#219 Achievements XP framing — FIX SHIPPED S969 (Chrome verify owed):** achievements.tsx refactored to use useXpProfile (absolute framing, matches dashboard). After this push deploys, Chrome-verify /shopper/achievements as user5 shows the same XP bar as /shopper/dashboard (e.g. "2,0xx / 5,000 XP to Sage", same %). It was a P3 display-consistency issue, NOT wrong data (backend RANGER threshold=1200 is correct).
+S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unblocked.
 
-1. **Records pass:** apply S969 PCVs to roadmap.md — #164 (Tiers Infra, was UNVERIFIED S804 -> now Claude QA verified), #27b (TEAMS watermark toggle re-confirmed), #317 (Geofence QR scan, was Backlog P1 -> verified). All three have 5-element evidence.
-2. **QA accounts (CLARIFIED):** user12 was removed long ago (~6 seed users remain) — stop referencing it. Use user5 (Leo Thomas) for shopper QA, user1 (Alice) for organizer QA. Smart Cart add-to-cart verified working E2E this session (+ -> localStorage + toast + badge + drawer + Place Hold). No cart bug.
-3. **#27b remaining:** PDF footer visual + iCal `.ics` description text need a non-TEAMS org to verify the watermark on/off comparison.
-4. **#164 P3 (optional, low priority):** organizer.tier stores subscription value "PRO" instead of loyalty enum BRONZE/SILVER/GOLD -> getTierBenefits returns undefined, `benefits` omitted from /api/tiers/mine. Frontend `|| BRONZE` fallback masks it — cosmetic/data-hygiene only.
+1. **#27b remaining:** PDF footer visual + iCal `.ics` description text still need a non-TEAMS org to verify the watermark on/off comparison (the only outstanding sub-checks on #27b).
+2. **#164 P3 (optional, low priority):** organizer.tier stores subscription value "PRO" instead of loyalty enum BRONZE/SILVER/GOLD → getTierBenefits returns undefined, `benefits` omitted from /api/tiers/mine. Frontend `|| BRONZE` fallback masks it — cosmetic/data-hygiene only.
+3. **Next work:** with BQ empty and no open BROKEN rows, the frontier is the directory/growth pipeline (#489–546) and the ⚠️ CODE-ONLY gamification items (#254/#268/#278/#281/#313/#314/#315) that need real Stripe/GPS to Chrome-verify. QA accounts: user5 (Leo Thomas) shopper, user1 (Alice) organizer, Seedy2025!.
 
 ### Patrick — Actions Needed (post S967)
 
@@ -209,6 +199,20 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Recent Sessions
 
+### S970 — 2026-06-13 | QA/RECORDS (S969 PCVs + #219 re-verify)
+
+**Session type:** QA/RECORDS — records pass + Chrome QA (main session, sequential).
+
+**Work completed:**
+- **Records pass:** applied S969 PCVs to roadmap.md — #164 (✅ Claude QA S970, API+UI cols ✅), #27b (S969 re-confirmation appended), #317 (both rows ✅ S970 — inside/outside-radius enforcement now verified). PCV table cleared of all applied rows; 3 strikethrough Blocked Queue rows removed.
+- **#219 Achievements XP framing — CHROME VERIFIED ✅** — user5 (Leo Thomas, RANGER). /shopper/achievements "2,065 / 5,000 XP to Sage · 2935 remaining" (ss_5725naacs) == /shopper/dashboard "Progress to SAGE 2,065 / 5,000 XP" (ss_32707qytx); matches /api/xp/profile (2065/5000). S969 useXpProfile fix confirmed. Roadmap #219 → ✅ CHROME VERIFIED S970.
+
+**Files changed:** claude_docs/strategy/roadmap.md (#164, #27b, #317×2, #219), claude_docs/STATE.md, claude_docs/patrick-dashboard.md
+
+- **CODE-ONLY verification pass (Patrick request):** re-checked 7 gamification XP items vs current code. 5 MATCH (#254/#278/#281/#314/#315 — stay CODE-ONLY). #268 doc drift corrected (tiered 40-80 XP / TRAIL_COMPLETION / TrailCompletion-unique guard — code correct, claim was wrong). **#313 REAL BUG fixed** — HAUL_POST_LIKES dedup guard queried "photoId:" but award stored a different string → re-awarded 5 XP per like ≥10. Fixed (haulPostController.ts description token aligned), TS clean.
+
+**BQ delta:** 0 → 1 (#313 fix pending Chrome verify, env-blocked)
+
 ### S969 — 2026-06-13 | QA (S968 smoke + Pending-QA burn-down)
 
 **Session type:** QA — Chrome MCP, run by main session (sequential).
@@ -279,148 +283,3 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 - `claude_docs/patrick-dashboard.md` — updated
 
 **BQ delta:** 1→0 (#27c FIXED, pending Chrome verify)
-
-### S962 — 2026-06-12 | QA (Records Pass + Chrome QA: #219/#218/#55/#81/#127 + #27c Bug)
-
-**Session type:** QA — autonomous roadmap QA continuation from S961
-
-**Work completed:**
-- **Records pass:** Applied S961 PCVs (#74 Role-Aware Registration Consent + #463 Claim Button Tracking) to roadmap.md Claude QA column (⬜ → ✅ S961). Both had full 5-element evidence.
-- **#219 Shopper Achievements — VERIFIED ✅** — Navigated /shopper/achievements as Alice Johnson. Achievements tab rendered with XP breakdown, badges grid, rank progress. ss_5810hhnqu ss_4488tmnlg. PCV staged.
-- **#218 Shopper Trades — VERIFIED ✅** — Navigated /shopper/trades as Alice Johnson. Trades page rendered with active trade listings. ss_9998kdjb8. PCV staged.
-- **#55 Seasonal Discovery Challenges — VERIFIED ✅** — Navigated /challenges as Alice Johnson. Seasonal challenges page displayed. ss_5780an0ik. PCV staged.
-- **#81 Empty State Audit — VERIFIED ✅ (spot-check)** — Key pages confirmed with empty-state messaging and CTAs. ss_2877anw5k. PCV staged.
-- **#127 POS Value Unlock Tiers — VERIFIED ✅** — Navigated /organizer/pos with Alice's active sale. Widget expanded showing 3-tier dual-gate structure: Tier 1 unlocked (5 tx + $50 revenue), Tier 2 locked (progress bar), Tier 3 locked (PRO gate). Real data: "1/3 unlocked · 5 sales · $325.00". ss_9169k1up3 ss_0868mkvi8. PCV staged.
-- **#27c eBay CSV Export — BUG ❌** — Clicked "Export to eBay" on /organizer/add-items/[saleId]. Modal opened correctly. Clicked "Download CSV". `GET /api/sales/:saleId/ebay-export?photoMode=watermarked → HTTP 500`. generateEbayCsv function reviewed — all schema fields (estimatedValue, aiSuggestedPrice, ebayCategoryId, conditionGrade) exist in schema.prisma. Runtime root cause requires Railway logs. Added to Blocked Queue.
-
-**Files changed:**
-- `claude_docs/strategy/roadmap.md` — #74 + #463 Claude QA columns updated (⬜ → ✅ S961)
-- `claude_docs/STATE.md` — this wrap
-
-**BQ delta:** 0→1 (#27c eBay CSV Export 500)
-
-### S961 — 2026-06-12 | QA (Chrome QA Pass: #463 + #74 + Records Pass)
-
-**Session type:** QA — autonomous QA pass searching roadmap for ⬜ Chrome items
-
-**Work completed:**
-- **Records pass:** SEO3 S944 PCV had full evidence (URL + outcome + 2 screenshot IDs) — applied ✅ S944 to roadmap.md UI column. #472 S948 PCVs (3 rows) already applied to roadmap in S949 but were stale in PCV table — cleared with note.
-- **#463 Claim Button Click Tracking — VERIFIED ✅** — Navigated to organizer profile as unauthenticated visitor, clicked "Claim This Profile — It's Free". Confirmed redirect to /register?claim=, `window.va("event", {name:"claim_profile_click",...})` fired, POST /_vercel/insights/event beacon confirmed in DevTools. ss_6546zegk2 ss_5106am9br ss_203394jm6. PCV staged → roadmap Chrome column update deferred to S962 records pass.
-- **#74 Role-Aware Registration Consent — VERIFIED ✅** — Navigated /register as unauthenticated visitor. Shopper role: 1 consent checkbox + ToS, no Business Info. Sale Organizer role: Business Info (Name/Phone/Address) appeared + 1 consent checkbox + ToS. Switched back → Business Info disappeared. Dark mode clean. ss_58428wnau ss_98779g0dj ss_12933c02s. PCV staged → roadmap Chrome column update deferred to S962 records pass.
-- **Remaining ⬜ items blocked:** #254/#268/#278/#281/#313/#314 (require real Stripe/GPS/concurrent users), #315/#317/#340/#332 (GPS/camera/Shopify — environment-blocked). No additional testable items found.
-
-**Files changed:**
-- `claude_docs/strategy/roadmap.md` — SEO3 UI column updated (⬜ → ✅ S944)
-- `claude_docs/STATE.md` — PCV table updated (#74 + #463 staged, #472 stale rows noted cleared, SEO3 cleared)
-
-**BQ delta:** 0 (unchanged)
-
-### S960 — 2026-06-12 | DEV (Bid13 Scraper + NFMA Park + Dead Directory Research)
-
-**Session type:** DEV — scraper activation, parked stub creation, replacement research
-
-**Work completed:**
-- **Bid13 ACTIVATED** — full rewrite from parked stub to 260-line active scraper. Discovered `POST /api/v1/search.php` JSON API via `bid13_search.js` Drupal module source. 9 US anchor zips at 500-mile radius provide national coverage. Deduplicates by `facility_nid`. Category: `AUCTION_HOUSE`. Complies with robots.txt crawl-delay (5s). `enabled: true` in sourceRegistry. Monthly GitHub Actions workflow created (`0 5 1 * *`). TypeScript: 0 errors.
-- **NFMA Members PARKED** — confirmed login-gated on both web and API. Parked stub + workflow created; workflow no-ops.
-- **Dead flea market directory research** — 7 dead scrapers audited (americanFleaMarkets, fleaMarketCom, fleaMarketDirectory, fleaMarketRover, fleaMarketsNet, ibidNow, vendorsByState). All dead (parked domains, GoDaddy Afternic). FleaMarketZone already in codebase. No replacement warranted now; fleamapket.com + fleamarketlocator.com logged as future Playwright candidates.
-
-**Files changed:**
-- `packages/backend/src/services/scraper/sources/bid13Scraper.ts` — full rewrite (260 lines, parked stub → active scraper)
-- `packages/backend/src/services/scraper/sourceRegistry.ts` — Bid13 `enabled: true`, updated legalNote
-- `.github/workflows/scrape-bid13.yml` — new monthly workflow
-- `packages/backend/src/services/scraper/sources/nfmaMembersScraper.ts` — parked stub (24 lines)
-- `.github/workflows/scrape-nfma-members.yml` — new workflow (no-op)
-
-**BQ delta:** 0 (1 closed item from S958 remains as strikethrough; no new items)
-
-
-### S958 — 2026-06-12 | CI/RESEARCH (OSM 504 Retry + Scraper Verification)
-
-**Session type:** CI/RESEARCH — scraper fix, DB verification, housekeeping
-
-**Work completed:**
-- **OSM 504 retry shipped** — extracted `fetchOverpass()` helper with 8s retry on 504. kumi.systems confirmed working (prior run: New York 46, Buffalo 8, Miami 7).
-- **KY/IN/ME/AL DB check** — 0 records for all 4 phase2 sources. Scrapers fired (202 received) but nothing written. Next step: Railway log investigation + Kentucky control ID check.
-- **Playwright confirmed built** — `playwrightBrowser.ts` fully implemented. STATE.md Option C was stale (said "build the harness" — it already exists).
-- **#470 organizer_signup BQ closed** — S946 had full verification evidence; S949 re-added in error. Closed.
-- **BetaList removed** — dropped from Patrick Actions and Suggested Work per Patrick direction.
-
-**Files changed:**
-- `packages/backend/src/services/scraper/osmScraper.ts` — 504 retry
-- `claude_docs/STATE.md` — this wrap
-
-**BQ delta:** 1→0
-
-### S956 — 2026-06-11 | RESEARCH/CREATIVE (Directory & App Listing Submissions)
-
-**Session type:** RESEARCH/CREATIVE — directory and app listing submission push
-
-**Work completed:**
-- **SaaSHub ✅ SUBMITTED** — saashub.com/finda-sale live (contact: info@finda.sale). Patrick should create account to claim.
-- **Uneed ✅ SUBMITTED** — uneed.best/tool/finda-sale in waiting line. Account: deseee-d1f4. Category: Business. Tags: E-Commerce/Business/Events. Tagline: "Inventory & shopper discovery for secondary sale organizers".
-- **AlternativeTo ⏳ BLOCKED** — account "FindASale" created June 11; 7-day age gate. Eligible June 18 ~9:49 PM Stockholm.
-- **Product Hunt assets ✅** — `claude_docs/brand/product-hunt-assets-2026-06-11.md`. Tagline, 240-char description, maker comment, Q&As, topic tags, screenshot order, hunter guidance.
-- **Crunchbase ✅ SUBMITTED** — Form filled: Name/description/1-10 employees/For Profit/finda.sale/info@finda.sale. Edit URL: crunchbase.com/edit/new/organization.companies/1cf65e18-944e-4036-bb05-a9361c213032. "Edit successfully made!"
-- **BetaList ⏳ PENDING PATRICK** — Submission 170511 filled (name/pitch/website/description). Two actions needed: (a) Patrick uploads logo-icon-512.png via camera icon at betalist.com/submissions/170511/wizard/general; (b) Patrick clicks verification link at patrick@finda.sale. Claude continues wizard after.
-- **Roundup Gmail drafts ✅** — Gitnux r-4990707302036889022 → info@gitnux.org (SEND). WifiTalents r-8399856770625698902 → info@wifitalents.com (SEND). DIYAuctions r1579106969886718270 → DELETE (competitor).
-
-**Files created/updated:**
-- `claude_docs/brand/product-hunt-assets-2026-06-11.md` (new)
-- `claude_docs/brand/roundup-outreach-emails-2026-06-11.md` (new; updated with Gmail draft IDs at wrap)
-- `claude_docs/STATE.md` — this wrap
-- `claude_docs/patrick-dashboard.md` — updated
-- `claude_docs/strategy/roadmap.md` — #477/#478/#480/#481/#484/#487/#488 updated
-
-**BQ delta:** 1 (unchanged — #470 organizer_signup UNVERIFIED)
-
-### S954 — 2026-06-11 | DEV (S952 Scraper Fix Campaign)
-
-**Session type:** DEV — 4 parallel scraper rewrites + scraper coverage/infra research
-
-**Work completed:**
-- **Kentucky phase2 REWRITTEN** — `kentuckyPhase2Scraper.ts`: `web1.ky.gov` dead → `https://oop.ky.gov/lic_search.aspx`. ASP.NET ViewState flow, A–Z last-name iteration, board=34 Auctioneers, dedup by license #, 1.5s delays. 0 TS errors. Control IDs need live run to verify.
-- **Indiana phase2 FIXED** — `indianaPhase2Scraper.ts`: removed `INTENTIONAL_BREAK` early-return; count regex `[\d,]+`; multi-line `<tr>` parser with `[\s\S]*?`. Expected ~1,560 records (was 1). 0 TS errors.
-- **Maine phase2 REWRITTEN** — `mainePhase2Scraper.ts`: `pfr.maine.gov` NXDOMAIN → ALMSOnline `ExportToCSV.aspx` with regulator=4210, scOnlyActive. RFC 4180 CSV parser, fuzzy headers. 0 TS errors.
-- **Alabama phase2 TIMEOUT FIX** — `alabamaPhase2Scraper.ts`: `isTimeoutError()` + `fetchOnce()` + retry-once with 5s wait. 0 TS errors.
-- **Research B — Coverage in dead-scraper states**: NY 31,733 (RETIRE), NJ 703 (RETIRE), MA 267 Phase1 (RETIRE; Phase2 needs DNS unblock), NE Phase1 (RETIRE), RI 64 (RETIRE). NE Phase2 NDBF pawnbroker = gap (no pawn records in DB).
-- **Research C — Infra alternatives**: ME Lic → Playwright/Actions ($0); WY Phase2 → Playwright/Actions ($0); MA Phase2 → API key request; NH → email OPLC; WI → open records request.
-- **Research D — Headless browser ROI**: 26 scrapers unblockable by one shared Playwright + proxy harness. 18 Playwright-only (no WAF), 8 need residential proxy. NAA alone justifies build.
-
-**Files changed (pending Patrick push):**
-- `packages/backend/src/services/scraper/sources/kentuckyPhase2Scraper.ts` — full rewrite
-- `packages/backend/src/services/scraper/sources/indianaPhase2Scraper.ts` — parser fix
-- `packages/backend/src/services/scraper/sources/mainePhase2Scraper.ts` — full rewrite
-- `packages/backend/src/services/scraper/sources/alabamaPhase2Scraper.ts` — timeout fix
-- `claude_docs/STATE.md` — S954 wrap
-- `claude_docs/patrick-dashboard.md` — S954 summary
-
-**BQ delta:** 1 (unchanged — #470 organizer_signup UNVERIFIED)
-
-
-### S951 — 2026-06-11 | RECORDS/AUDIT + SCRAPER DIAGNOSIS (env failure mid-session)
-
-**Session type:** Audit + monitoring tune + scraper diagnostic campaign
-
-**Work completed:**
-- **Scheduled-task fix audit ✅** — documented 3 same-day autonomous fixes already on main but absent from docs: Google Maps billing lockdown (529f4ee7), scraper/email-discovery harden + 65-workflow DB pre-flight (ed5c020e), outreach null-safe GarageSaleFinder fix (bd6e6967). See S951 Current Status entry.
-- **ci-sentry-health urgency reclassification ✅** (skill SKILL.md, OneDrive — intact): DATABASE_URL pre-flight failure → HIGH top-line; ESN/GSF/FB Events aligned; outreach engine HIGH, enrichment MEDIUM; new-regression rule so a newly-broken phase2/licensing escalates above chronic noise.
-- **Scraper fleet diagnosis ✅** — 16 failing workflows (of 132; 81/96 phase2+licensing actually PASS). Root causes proven via live logs + source fetches: 4 FIXABLE (KY/IN/ME-p2/AL — sources confirmed live), ~5 DEAD (NY/NJ/MA auctioneer, NE/RI pawnbroker — no statewide source), ~5 NEEDS-INFRA (NH/ME-lic/WI/WY/MA-p2 — WAF/SPA/CAPTCHA/API-key). HERE Places = secret (now fixed); blocked only by googlePlaces.ts(~526) runtime TS error from 529f4ee7.
-- **❌ Scraper CODE not shipped** — VM filesystem fault corrupted all 5 agents' file writes (truncation + null bytes) AND node_modules (tsc unrunnable, so agent TS gates were false). No scraper pushblock. Files to be restored by Patrick (see Next Session action 1); fixes re-done S952 per dispatch plan.
-
-**Files changed (good, pushable):** claude_docs/STATE.md, claude_docs/patrick-dashboard.md, + ci-sentry-health SKILL.md (OneDrive, installs separately).
-
-**BQ delta:** 1 (unchanged)
-
-### S950 — 2026-06-11 | DEV/RECORDS (Vercel cost fixes + sitemap SEO + this-weekend ISR + records pass)
-
-**Session type:** DEV/RECORDS
-
-**Work completed:**
-- **Records pass ✅** — #422 Chr ✅ S949 (ss_3450u6tgu, ss_8074zis8d), #75 Chr ✅ S949 lapse-state (ss_83752jesk), #470 item_viewed Chr ✅ S949 (ss_8841oxiro, ss_7047o7yzv) applied to roadmap.md.
-- **Sitemap PUBLISHED fix ✅** — `server-sitemap.xml.tsx`: ACTIVE/UPCOMING→PUBLISHED. New `GET /sales/sitemap` backend endpoint (top 5k PUBLISHED). changefreq: hourly→daily. Fixes silent bug causing 0 sale URLs in sitemap for unknown duration.
-- **ISR + CDN caching ✅** (pre-compaction) — `sales/[id].tsx` revalidate 3600→86400. `vercel.json` sitemap s-maxage=3600.
-- **This-weekend dynamic revalidate ✅** — `day>=4 ? 14400 : 43200` (Thu-Sat=4hr, Sun-Wed=12hr).
-
-**Files changed:** packages/backend/src/routes/sales.ts, packages/frontend/pages/server-sitemap.xml.tsx, packages/frontend/pages/this-weekend/[city].tsx, packages/frontend/pages/sales/[id].tsx, packages/frontend/vercel.json, claude_docs/strategy/roadmap.md, claude_docs/STATE.md, claude_docs/patrick-dashboard.md
-
-**BQ delta:** 1 (unchanged)

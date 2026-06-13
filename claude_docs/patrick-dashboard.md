@@ -1,6 +1,22 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S969 — 2026-06-13 (QA: S968 post-deploy smoke OK | #164 Tiers + #27b watermark + #317 geofence verified | finding: prod shopper test-credential stale)
+**Last updated:** S970 — 2026-06-13 (QA/RECORDS: S969 PCVs applied to roadmap | #219 Achievements XP framing Chrome-verified ✅ | BQ 0)
+
+---
+
+## Session S970 Summary — S969 Records Pass + #219 Chrome Re-Verify (COMPLETE)
+
+**Type:** QA / RECORDS — records pass + Chrome verification
+**BQ:** 0 (unchanged)
+
+| Item | Status | Details |
+|------|--------|---------|
+| S969 PCVs → roadmap | ✅ APPLIED | #164 Tiers, #27b watermark toggle, #317 geofence QR all marked verified on the roadmap with their evidence. The old "to-verify" notes are cleared. |
+| Achievements XP (#219) | ✅ VERIFIED LIVE | The fix from last session is confirmed working. Your Achievements page and dashboard now show the **same** XP number — "2,065 / 5,000 XP to Sage" in both places (was showing two different numbers before). Checked live as a shopper account; dark mode clean. |
+| Blocked Queue | ✅ CLEAN (0) | Cleared the 3 already-resolved leftover rows. Nothing blocking. DEV is fully open for new work. |
+| Housekeeping | ✅ DONE | Trimmed STATE.md (427 → 282 lines), moved older session entries to the archive file. |
+| Code verification (7 items) | ✅ DONE | Re-checked 7 gamification XP rewards against the live code. 5 are correct as-is. 1 was just a wrong note in our docs (trail completion — fixed the note). |
+| 🐛 #313 XP-farm bug | ✅ FOUND + FIXED | A real bug: once a "haul" photo post got 10 likes, the author was getting +5 XP on **every** additional like instead of just once — an XP-farming loophole. Fixed so it pays out once per post. (Final browser test needs 10 accounts, so it's queued.) |
 
 ---
 
