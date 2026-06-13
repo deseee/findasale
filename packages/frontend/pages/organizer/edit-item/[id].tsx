@@ -850,6 +850,33 @@ const EditItemPage = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  MPN <span className="text-warm-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.mpn}
+                  onChange={(e) => setFormData({ ...formData, mpn: e.target.value })}
+                  placeholder="Manufacturer part #"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  UPC <span className="text-warm-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.upc}
+                  onChange={(e) => setFormData({ ...formData, upc: e.target.value })}
+                  placeholder="Barcode number"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+
             {/* #64: Condition Grade Picker */}
             <div>
               <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
