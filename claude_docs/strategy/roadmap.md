@@ -726,7 +726,7 @@ Local credibility, backlinks, press, and no-gate pitch events near the Paw Paw h
 
 | # | Avenue | Status | Notes |
 |---|---------|--------|-------|
-| 509 | Paw Paw Area Chamber of Commerce | ⬜ TODO — Patrick | Home-city chamber (129 S Kalamazoo St, Paw Paw). Member directory + hyperlocal credibility. Low small-town dues. pawpawmi.com. |
+| 509 | Paw Paw Area Chamber of Commerce | ⬜ TODO — Patrick | Home-city chamber (206 E Michigan Ave, Paw Paw; 269-657-5395; pawpawareachamber@gmail.com). Member directory + hyperlocal credibility. Low small-town dues. pawpawchamber.com (S971 fix — pawpawmi.com was a parked domain). |
 | 510 | Start Garden 5×5 Night | ⬜ TODO — Patrick | Recurring pitch event (5 slides/5 min/5 judges), $5,000 grant, NO eligibility gate — ideal solo-bootstrapper fit. Free to enter. 5x5night.com. |
 | 511 | The Rapidian (self-publish) | ⬜ TODO | GR citizen-journalism platform — register → reporter status → publish a local-impact story. Owned, controllable GR-domain backlink. Free. therapidian.org. |
 | 512 | Local First of West Michigan | ⬜ EVALUATE — Patrick | Definitive WMI buy-local directory (~600 members). Member listing + backlink + on-brand. Tiered dues (verify). localfirst.org. |

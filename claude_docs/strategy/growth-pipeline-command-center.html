@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FindA.Sale — Growth Pipeline Command Center</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a2129; --panel2:#222b35; --line:#2e3a46;
+    --ink:#e8eef4; --muted:#93a3b3; --accent:#3ba776; --accent2:#2f8fd6;
+    --warn:#e0a23b; --danger:#d9534f; --chip:#27323d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{padding:24px 28px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:linear-gradient(180deg,#0f1419,#0f1419f0);backdrop-filter:blur(6px);z-index:10}
+  h1{margin:0 0 4px;font-size:22px;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:13px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px 80px}
+  .stats{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0 6px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:120px}
+  .stat b{font-size:20px;display:block}
+  .stat span{color:var(--muted);font-size:12px}
+  .bar{height:8px;border-radius:6px;background:var(--panel2);overflow:hidden;margin-top:8px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 6px;align-items:center}
+  .controls input[type=search]{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 12px;min-width:240px}
+  .fbtn{background:var(--panel);border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:6px 13px;cursor:pointer;font-size:13px}
+  .fbtn.active{background:var(--accent);border-color:var(--accent);color:#06140d;font-weight:600}
+  section.bucket{margin-top:26px}
+  .bhead{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+  .bhead h2{font-size:16px;margin:0}
+  .bhead .cnt{color:var(--muted);font-size:12px}
+  .bhead .blurb{color:var(--muted);font-size:12.5px;flex:1}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--panel2)}
+  tr:last-child td{border-bottom:none}
+  tr.done td{opacity:.45}
+  tr.done .name{text-decoration:line-through}
+  td.id{color:var(--muted);font-variant-numeric:tabular-nums;width:42px}
+  td.chk{width:30px}
+  input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
+  .name{font-weight:600}
+  .note{color:var(--muted);font-size:12.5px;margin-top:2px}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);background:var(--chip);color:var(--muted);white-space:nowrap}
+  .c-free{color:#8fe0b6;border-color:#2f5a45}
+  .c-paid{color:#f0c987;border-color:#5a4a2a}
+  .c-low{color:#9fd0ef;border-color:#2a4760}
+  .o-patrick{color:#e3b1e8;border-color:#553560}
+  .o-claude{color:#9fd0ef;border-color:#2a4760}
+  .pill-time{color:#f0c987;border-color:#6a5320;background:#2c2410}
+  .pill-skip{color:#c98b88;border-color:#5a2f2d}
+  footer{color:var(--muted);font-size:12px;margin-top:30px;border-top:1px solid var(--line);padding-top:14px}
+  .reset{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>FindA.Sale — Growth Pipeline Command Center</h1>
+  <div class="sub">Distribution &amp; outreach channels (roadmap #489–546). Check items off as you go — progress saves in this browser. NAP everywhere: <b>219 E Michigan Ave, Suite F, Paw Paw, MI 49079</b> · info@finda.sale · https://finda.sale</div>
+</header>
+<div class="wrap">
+  <div class="stats">
+    <div class="stat"><b id="s-done">0</b><span>Completed</span></div>
+    <div class="stat"><b id="s-total">0</b><span>Total channels</span></div>
+    <div class="stat"><b id="s-free">0</b><span>Free &amp; open now</span></div>
+    <div class="stat" style="flex:1;min-width:200px"><b id="s-pct">0%</b><span>Pipeline progress</span><div class="bar"><i id="s-fill"></i></div></div>
+  </div>
+
+  <div class="controls">
+    <input type="search" id="q" placeholder="Filter by name or note…">
+    <button class="fbtn active" data-f="all">All</button>
+    <button class="fbtn" data-f="free">Free only</button>
+    <button class="fbtn" data-f="open">Hide done</button>
+    <button class="fbtn" data-f="patrick">Yours</button>
+    <span style="flex:1"></span>
+    <button class="reset" id="reset">Reset checkboxes</button>
+  </div>
+
+  <div id="buckets"></div>
+
+  <footer>
+    Source: <b>claude_docs/strategy/roadmap.md</b> Tier 1B–1G (S967 research). Paste-ready field-by-field copy for the "Today" free quick-wins is in
+    <b>growth-pipeline-submission-packets.md</b>. Canonical copy: <b>brand/directory-listing-copy-2026-06.md</b>.
+    Tip: do all the Software Company / local-citation items with the <i>identical</i> NAP — consistency is what drives the "estate sales near me" local SEO lift.
+  </footer>
+</div>
+
+<script>
+const DATA = [
+  // bucket: today | time | press | batch | assoc | evaluate | appstore | later
+  {id:489, name:"Bing Places", bucket:"today", owner:"patrick", cost:"free", eff:"15 min", url:"https://www.bingplaces.com",
+    note:"High-DA local citation. Can import directly from your Google Business Profile. Category: Software Company. Packet ready."},
+  {id:490, name:"Apple Business Connect", bucket:"today", owner:"patrick", cost:"free", eff:"20 min", url:"https://businessconnect.apple.com",
+    note:"Powers Apple Maps. Verify with the Paw Paw address. Packet ready."},
+  {id:491, name:"Yelp for Business", bucket:"today", owner:"patrick", cost:"free", eff:"20 min", url:"https://biz.yelp.com",
+    note:"Free claim. NAP must match GBP exactly. Category: E-commerce / Local Service. Packet ready."},
+  {id:492, name:"Foursquare", bucket:"today", owner:"patrick", cost:"free", eff:"15 min", url:"https://business.foursquare.com",
+    note:"Feeds downstream data aggregators (Data Axle / Localeze / Acxiom) → ripples to 100s of dirs. Packet ready."},
+  {id:500, name:"Alignable", bucket:"today", owner:"patrick", cost:"free", eff:"20 min", url:"https://www.alignable.com",
+    note:"Small-biz network + lead-gen — estate/consignment businesses are literally your customer. Use medium desc + Paw Paw angle. Packet ready."},
+  {id:498, name:"eBay Partner Network", bucket:"today", owner:"patrick", cost:"free", eff:"20 min", url:"https://partnernetwork.ebay.com",
+    note:"Affiliate REVENUE on the eBay integration you already ship. Near-instant approval, no traffic minimum. Packet ready."},
+  {id:499, name:"Stripe Partner Directory", bucket:"today", owner:"patrick", cost:"free", eff:"20 min", url:"https://stripe.com/partners/become-a-partner",
+    note:"Free 'Verified Partner' badge + listing. Credibility signal for organizers."},
+  {id:509, name:"Paw Paw Area Chamber", bucket:"today", owner:"patrick", cost:"low $", eff:"30 min", url:"https://www.pawpawchamber.com",
+    note:"Home-city chamber (206 E Michigan Ave, 269-657-5395, pawpawareachamber@gmail.com). Member directory + hyperlocal credibility. Low small-town dues. Packet ready."},
+  {id:524, name:"GarageSaleFinder.com", bucket:"today", owner:"patrick", cost:"free", eff:"15 min", url:"https://www.garagesalefinder.com",
+    note:"2M+ monthly shoppers + app. Free sale posting = direct high-intent shopper traffic to your sales."},
+  {id:525, name:"YardSaleSearch + YardSales.net", bucket:"today", owner:"patrick", cost:"free", eff:"15 min", url:"https://www.yardsalesearch.com",
+    note:"'Source nodes' — downstream garage-sale apps auto-pull from these → wide free syndication."},
+  {id:497, name:"Samsung Galaxy Store (Web Apps)", bucket:"today", owner:"patrick", cost:"free", eff:"10 min", url:"mailto:pwasupport@samsung.com",
+    note:"Just email your PWA URL to pwasupport@samsung.com. Small reach, trivial effort."},
+  {id:511, name:"The Rapidian (self-publish)", bucket:"today", owner:"claude", cost:"free", eff:"draft", url:"https://therapidian.org",
+    note:"GR citizen-journalism — register → publish a local-impact story. Owned, controllable GR backlink. I can draft the article."},
+  {id:516, name:"Discover Kalamazoo partner listing", bucket:"today", owner:"patrick", cost:"free", eff:"15 min", url:"https://www.discoverkalamazoo.com/partners",
+    note:"Free self-edit partner profile. Backlink + Kalamazoo proximity."},
+
+  {id:506, name:"Start Garden 'The 100'", bucket:"time", owner:"patrick", cost:"free", eff:"video + app", url:"https://startgarden.com",
+    note:"⏰ Non-dilutive GR grant. Apps open (June 1). 100-sec video + milestone app. No eligibility gate."},
+  {id:510, name:"Start Garden 5×5 Night", bucket:"time", owner:"patrick", cost:"free", eff:"5 slides", url:"https://5x5night.com",
+    note:"⏰ Recurring pitch event, $5,000 grant, NO eligibility gate — ideal solo-bootstrapper fit. I can draft the 5-slide deck."},
+
+  {id:513, name:"Crain's Grand Rapids Business (pitch)", bucket:"press", owner:"patrick", cost:"free", eff:"send draft", url:"https://crainsgrandrapids.com",
+    note:"Authoritative WMI business outlet. Pitch DRAFTED (Gmail) → anna.fifelski@crain.com. Just review + send."},
+  {id:514, name:"Rapid Growth Media (pitch)", bucket:"press", owner:"patrick", cost:"free", eff:"send draft", url:"mailto:Editor@RapidGrowthMedia.com",
+    note:"GR entrepreneurship outlet, open submission inbox. Pitch DRAFTED (Gmail). Review + send."},
+  {id:515, name:"SW Michigan's Second Wave (pitch)", bucket:"press", owner:"patrick", cost:"free", eff:"send draft", url:"mailto:feedback@secondwavemedia.com",
+    note:"Solutions journalism covering Kalamazoo/Paw Paw. 'Reduce manual work' framing fits. Pitch DRAFTED (Gmail). Review + send."},
+  {id:518, name:"West MI local TV/press pitches", bucket:"press", owner:"claude", cost:"free", eff:"draft", url:"https://www.woodtv.com",
+    note:"WOOD TV8 (photo→listing demo is telegenic), WWMT desk@wwmt.com, GR Magazine social@grmag.com. I can draft each pitch."},
+  {id:543, name:"National + GR consumer media", bucket:"press", owner:"claude", cost:"free", eff:"draft", url:"https://www.mlive.com",
+    note:"MLive / Grand Rapids Press + WZZM 13 (local product/launch story). HIGH local. I can draft."},
+  {id:540, name:"Antique Trader news tip", bucket:"press", owner:"claude", cost:"free", eff:"draft", url:"mailto:ATNews@aimmedia.com",
+    note:"ATNews@aimmedia.com (6 weeks ahead) + free event listings. National resale/antiques press — HIGH for the niche."},
+  {id:541, name:"National frugal/resale press & creators", bucket:"press", owner:"claude", cost:"free", eff:"draft", url:"https://www.thepennyhoarder.com",
+    note:"The Penny Hoarder (money-saving angle), frugal blogs, reseller-podcast tool-review pitches."},
+
+  {id:534, name:"Indie launch directories (batch)", bucket:"batch", owner:"claude", cost:"free", eff:"bulk", url:"https://github.com/mahseema/awesome-saas-directories",
+    note:"Fazier, MicroLaunch, TinyLaunch, Peerlist, Smol Launch, BetaPage, Startup Stash, Launching Next, Wellfound, F6S, StartupRanking, TinyStartups. I can prep one reusable submission block."},
+  {id:536, name:"Secondary SaaS directories (batch)", bucket:"batch", owner:"claude", cost:"free", eff:"bulk", url:"https://tekpon.com",
+    note:"Tekpon, Crozdesk, SaaSworthy, SoftwareSuggest. (Skip review-gated TrustRadius/Clutch/GoodFirms.)"},
+  {id:537, name:"Secondary local citations (batch)", bucket:"batch", owner:"patrick", cost:"free", eff:"bulk", url:"https://www.bbb.org",
+    note:"BBB, Yellow Pages, Manta, EZlocal, Hotfrog, Brownbook, Cylex. Identical NAP. (Optional later: BrightLocal/Whitespark pushes the aggregators → 300+ dirs.)"},
+  {id:538, name:"Secondary PWA directories", bucket:"batch", owner:"patrick", cost:"free", eff:"bulk", url:"https://webcatalog.io",
+    note:"WebCatalog + progressivewebapp.store. Emphasize installable PWA + screenshots + logo-icon-512.png."},
+  {id:519, name:"Michigan startup directories", bucket:"batch", owner:"claude", cost:"free", eff:"bulk", url:"https://www.crunchbase.com",
+    note:"Crunchbase MI hub (auto once #481 lives), Seedtable, Failory, BuiltIn Michigan. Mostly free."},
+  {id:535, name:"Hacker News 'Show HN' + Indie Hackers", bucket:"batch", owner:"claude", cost:"free", eff:"draft", url:"https://news.ycombinator.com/show",
+    note:"PWA + local-marketplace angle. Coordinate with Product Hunt (#478) launch week. I can draft both posts."},
+
+  {id:522, name:"ASEL — American Society of Estate Liquidators", bucket:"assoc", owner:"patrick", cost:"low $", eff:"pitch", url:"https://aselonline.com",
+    note:"HIGH. Leading estate-sale association since 2001. Member base = your exact organizer audience. Angle: resource/tool feature + sponsored content."},
+  {id:523, name:"NESA — National Estate Sales Association", bucket:"assoc", owner:"patrick", cost:"low $", eff:"pitch", url:"https://nesa-usa.com",
+    note:"HIGH. Member forums + directory (doubles as an organizer outreach list). Angle: forum intro / resource feature."},
+  {id:539, name:"NAOEL + National Auctioneers Association", bucket:"assoc", owner:"patrick", cost:"free", eff:"listing", url:"https://www.nationalauctioneers.org",
+    note:"Remaining estate/auction trade-assoc directories/channels. MEDIUM."},
+  {id:507, name:"SCORE West MI + MI SBDC + The Right Place", bucket:"assoc", owner:"patrick", cost:"free", eff:"30 min", url:"https://www.score.org/westmichigan",
+    note:"Free MI small-biz support / credibility / network. score.org/westmichigan, michigansbdc.org, rightplace.org."},
+
+  {id:504, name:"NASMM Industry Partner", bucket:"evaluate", owner:"patrick", cost:"~$2,200/yr", eff:"decision", url:"https://www.nasmm.org",
+    note:"Best audience fit (senior move managers run estate sales) but pricey. ASK about a listing-only / lower tier before committing."},
+  {id:505, name:"NAPO Business Partner", bucket:"evaluate", owner:"patrick", cost:"$50+$25+dues", eff:"decision", url:"https://www.napo.net",
+    note:"Professional-organizer directory. Annual dues TBD — contact their BD."},
+  {id:508, name:"SBAM membership", bucket:"evaluate", owner:"patrick", cost:"~$195/yr", eff:"decision", url:"https://www.sbam.org",
+    note:"Statewide MI small-biz directory + events."},
+  {id:512, name:"Local First of West Michigan", bucket:"evaluate", owner:"patrick", cost:"tiered dues", eff:"decision", url:"https://localfirst.org",
+    note:"Definitive WMI buy-local directory (~600 members). On-brand. Listing copy already drafted."},
+  {id:517, name:"Southwest Michigan First Chamber", bucket:"evaluate", owner:"patrick", cost:"dues", eff:"decision", url:"https://www.southwestmichiganfirst.com",
+    note:"Regional SW-MI chamber + EDO. Directory + network."},
+  {id:526, name:"EstateSales.org self-listing", bucket:"evaluate", owner:"patrick", cost:"~$50/sale", eff:"decision", url:"https://www.estatesales.org",
+    note:"Source node, scrape-prohibited but self-listing allowed. It's a competitor — deliberate call."},
+  {id:533, name:"Citywide garage-sale registries (white-label pitch)", bucket:"evaluate", owner:"patrick", cost:"partnership", eff:"pitch", url:"https://finda.sale",
+    note:"Pitch FindA.Sale as the registration+mapping tool for municipal citywide sales (Westland/Taylor MI etc.). B2G, high strategic value."},
+  {id:545, name:"Hello Alice + GR Chamber + Seniors Blue Book", bucket:"evaluate", owner:"patrick", cost:"mixed", eff:"decision", url:"https://helloalice.com",
+    note:"Hello Alice (free grant-matching), GR Chamber (paid), Seniors Blue Book (only if a MI edition exists)."},
+  {id:520, name:"Conquer Accelerator (MSU, GR cohort)", bucket:"evaluate", owner:"patrick", cost:"equity?", eff:"decision", url:"https://msufoundation.org/conquer-accelerator",
+    note:"10-wk selective accelerator w/ GR cohort. Apply ONLY if pursuing accelerator/VC path."},
+
+  {id:527, name:"AuctionZip + LiveAuctioneers directories", bucket:"batch", owner:"patrick", cost:"free", eff:"listing", url:"https://www.auctionzip.com",
+    note:"Auctioneer directory self-listing (auction slice). MEDIUM."},
+  {id:528, name:"Flea Market Zone + Flea Market Insiders", bucket:"batch", owner:"patrick", cost:"free", eff:"listing", url:"https://www.fleamarketzone.com",
+    note:"Flea-market directory listings. MEDIUM."},
+  {id:529, name:"TheThriftShopper + MyLocalThriftStore", bucket:"batch", owner:"patrick", cost:"free", eff:"listing", url:"https://www.thethriftshopper.com",
+    note:"Free claimable thrift/consignment directory listings. MEDIUM."},
+  {id:530, name:"Antique Trader business directory + calendar", bucket:"batch", owner:"patrick", cost:"free", eff:"listing", url:"https://www.antiquetrader.com",
+    note:"Free business listing + free event-calendar submissions (print reach). MEDIUM."},
+  {id:532, name:"Event calendars (Eventbrite/Patch/AmericanTowns)", bucket:"batch", owner:"patrick", cost:"free", eff:"per-sale", url:"https://www.eventbrite.com",
+    note:"Free sale/event listings → shopper discovery + SEO. MEDIUM."},
+  {id:531, name:"Classifieds cross-post (ongoing)", bucket:"batch", owner:"patrick", cost:"free", eff:"recurring", url:"https://nextdoor.com",
+    note:"Cross-post sales to Nextdoor, Craigslist garage-sales, FB Marketplace, OfferUp, VarageSale. HIGH reach; recurring."},
+
+  {id:501, name:"Source of Sources (SOS)", bucket:"press", owner:"claude", cost:"free", eff:"monitor", url:"https://sourceofsources.com",
+    note:"Real HARO successor (Shankman). Reply to decluttering/downsizing/resale/side-hustle queries. I can monitor + draft replies."},
+  {id:502, name:"Featured.com (ex-Terkel)", bucket:"press", owner:"claude", cost:"free", eff:"monitor", url:"https://featured.com",
+    note:"Build expert profile; answered questions carry backlinks. I can draft answers."},
+  {id:544, name:"Additional PR source platforms", bucket:"press", owner:"claude", cost:"free", eff:"monitor", url:"https://www.helpareporter.com",
+    note:"Help a B2B Writer→MentionMatch (free), Qwoted (free tier), SourceBottle (free tier)."},
+
+  {id:495, name:"Microsoft Store via PWABuilder", bucket:"appstore", owner:"patrick", cost:"free", eff:"setup", url:"https://www.pwabuilder.com",
+    note:"$0 (reg fees removed 2026). Reserve name in Partner Center → PWABuilder 'Package for Stores' → submit. No native code. Needs MS account + PWABuilder quality pass."},
+  {id:496, name:"Google Play via TWA", bucket:"appstore", owner:"patrick", cost:"$25 once", eff:"setup", url:"https://play.google.com/console",
+    note:"Needs Lighthouse PWA ≥80 (audit first) + assetlinks.json in /.well-known/. You pay + hold signing keys. I can run the Lighthouse PWA audit first."},
+
+  {id:503, name:"Wikidata entity", bucket:"later", owner:"claude", cost:"free", eff:"after PR", url:"https://www.wikidata.org",
+    note:"Feeds the AI knowledge graph. Needs a couple third-party citable mentions first → ties to the press items above. Do after first press hit."},
+  {id:542, name:"Community seeding (manual, karma-first)", bucket:"later", owner:"patrick", cost:"free", eff:"ongoing", url:"https://www.reddit.com/r/estatesales",
+    note:"Reddit r/estatesales, r/garagesales, r/flipping, r/SideProject; reseller Discords; garage-sale FB groups. Self-promo banned — value-first only. Not automatable."},
+  {id:521, name:"Michigan Founders Fund (monitor)", bucket:"later", owner:"patrick", cost:"free", eff:"monitor", url:"https://www.michiganfoundersfund.org",
+    note:"Apps closed, reopen expected 2026. Statewide credibility, not money."},
+  {id:546, name:"Founder-interview sites", bucket:"later", owner:"patrick", cost:"free", eff:"defer", url:"https://www.failory.com",
+    note:"Failory + Starter Story — want revenue traction. Revisit at a traction milestone."},
+
+  {id:493, name:"Appsco.pe (PWA directory)", bucket:"skip", owner:"-", cost:"-", eff:"-", url:"",
+    note:"⛔ DEFUNCT — dead Heroku app, both pages error. Do not attempt."},
+  {id:494, name:"findPWA (PWA directory)", bucket:"skip", owner:"patrick", cost:"free", eff:"retry", url:"https://findpwa.com/submit",
+    note:"⚠️ BLOCKED — form fully filled but their handler returned HTTP 500 (their server). Our data is correct — just retry when their backend recovers."},
+];
+
+const BUCKETS = [
+  {key:"today", title:"① Do today — free &amp; open now", blurb:"$0, no gate, ~15–30 min each. Start here. Use the identical NAP on every one."},
+  {key:"time", title:"② Time-sensitive grants", blurb:"Deadlines are live — non-dilutive money, no eligibility gate."},
+  {key:"press", title:"③ Press &amp; PR (drafts ready or I can draft)", blurb:"Free earned media. Several pitches are already drafted in Gmail — just review &amp; send."},
+  {key:"batch", title:"④ Free batches — bulk submit",  blurb:"Free directory/listing batches. One reusable copy block covers each batch."},
+  {key:"assoc", title:"⑤ High-value trade associations", blurb:"Your exact organizer audience. Worth a pitch even at low membership cost."},
+  {key:"evaluate", title:"⑥ Needs a spend decision", blurb:"Real audience fit but costs money or equity — your call before I prep anything."},
+  {key:"appstore", title:"⑦ App-store paths (PWA)", blurb:"Wrap the existing PWA, no native code. Low cost, more setup."},
+  {key:"later", title:"⑧ Monitor / defer", blurb:"Right idea, wrong time — gated on traction or prior press."},
+  {key:"skip", title:"⊘ Blocked / defunct", blurb:"Tracked so they don't get re-researched. Retry findPWA later; skip Appsco.pe."},
+];
+
+const KEY="fas_growth_pipeline_v1";
+let done = JSON.parse(localStorage.getItem(KEY)||"{}");
+let filter="all", query="";
+
+function costClass(c){ if(/free/i.test(c))return"c-free"; if(/low/i.test(c))return"c-low"; if(c==="-"||!c)return""; return"c-paid"; }
+function save(){ localStorage.setItem(KEY, JSON.stringify(done)); }
+
+function render(){
+  const root=document.getElementById("buckets"); root.innerHTML="";
+  let total=0, dn=0, free=0;
+  DATA.forEach(d=>{ if(d.bucket!=="skip"){total++; if(/free/i.test(d.cost))free++; if(done[d.id])dn++;} });
+
+  BUCKETS.forEach(b=>{
+    let items=DATA.filter(d=>d.bucket===b.key);
+    items=items.filter(d=>{
+      if(filter==="free" && !/free/i.test(d.cost)) return false;
+      if(filter==="open" && done[d.id]) return false;
+      if(filter==="patrick" && d.owner!=="patrick") return false;
+      if(query){ const t=(d.name+" "+d.note).toLowerCase(); if(!t.includes(query)) return false; }
+      return true;
+    });
+    if(!items.length) return;
+    const sec=document.createElement("section"); sec.className="bucket";
+    const doneN=items.filter(d=>done[d.id]).length;
+    sec.innerHTML=`<div class="bhead"><h2>${b.title}</h2><span class="cnt">${doneN}/${items.length}</span><span class="blurb">${b.blurb}</span></div>`;
+    const tbl=document.createElement("table");
+    tbl.innerHTML=`<tr><th class="chk"></th><th class="id">#</th><th>Channel</th><th>Owner</th><th>Cost</th><th>Effort</th></tr>`;
+    items.forEach(d=>{
+      const tr=document.createElement("tr"); if(done[d.id])tr.className="done";
+      const link=d.url?`<a href="${d.url}" target="_blank" rel="noopener">↗</a>`:"";
+      const owner = d.owner==="patrick"?`<span class="chip o-patrick">You</span>`:(d.owner==="claude"?`<span class="chip o-claude">Claude</span>`:`<span class="chip">—</span>`);
+      tr.innerHTML=`
+        <td class="chk"><input type="checkbox" data-id="${d.id}" ${done[d.id]?"checked":""}></td>
+        <td class="id">${d.id}</td>
+        <td><span class="name">${d.name}</span> ${link}<div class="note">${d.note}</div></td>
+        <td>${owner}</td>
+        <td><span class="chip ${costClass(d.cost)}">${d.cost}</span></td>
+        <td><span class="chip">${d.eff}</span></td>`;
+      tbl.appendChild(tr);
+    });
+    sec.appendChild(tbl); root.appendChild(sec);
+  });
+
+  document.getElementById("s-done").textContent=dn;
+  document.getElementById("s-total").textContent=total;
+  document.getElementById("s-free").textContent=free;
+  const pct=total?Math.round(dn/total*100):0;
+  document.getElementById("s-pct").textContent=pct+"%";
+  document.getElementById("s-fill").style.width=pct+"%";
+
+  root.querySelectorAll("input[type=checkbox]").forEach(cb=>{
+    cb.addEventListener("change",e=>{ const id=e.target.dataset.id; if(e.target.checked)done[id]=1; else delete done[id]; save(); render(); });
+  });
+}
+
+document.querySelectorAll(".fbtn").forEach(b=>b.addEventListener("click",e=>{
+  document.querySelectorAll(".fbtn").forEach(x=>x.classList.remove("active"));
+  e.target.classList.add("active"); filter=e.target.dataset.f; render();
+}));
+document.getElementById("q").addEventListener("input",e=>{ query=e.target.value.toLowerCase().trim(); render(); });
+document.getElementById("reset").addEventListener("click",()=>{ if(confirm("Clear all checkmarks?")){ done={}; save(); render(); } });
+render();
+</script>
+</body>
+</html>
