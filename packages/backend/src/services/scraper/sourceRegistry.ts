@@ -21,21 +21,13 @@ import { scrapeMunicibid } from './sources/municibidScraper';
 import { scrapeGovPlanet } from './sources/govPlanetScraper';
 import { scrapeGovernmentLiquidation } from './sources/governmentLiquidationScraper';
 import { scrapeHandbid } from './sources/handbidScraper';
-import { scrapeAmericanFleaMarkets } from './sources/americanFleaMarketsScraper';
-import { scrapeFleaMarketDirectory } from './sources/fleaMarketDirectoryScraper';
-import { scrapeFleaMarketCom } from './sources/fleaMarketComScraper';
-import { scrapeFleaMarketsNet } from './sources/fleaMarketsNetScraper';
-import { scrapeFleaMarketRover } from './sources/fleaMarketRoverScraper';
-import { scrapeVendorsByState } from './sources/vendorsByStateScraper';
 import { scrapeBidSpotter } from './sources/bidSpotterScraper';
 import { scrapeBid13 } from './sources/bid13Scraper';
-import { scrapeIBidNow } from './sources/ibidNowScraper';
 import { scrapeLockerFox } from './sources/lockerFoxScraper';
 import { scrapeStorageUnitAuctionList } from './sources/storageUnitAuctionListScraper';
 import { scrapeStorageBattles } from './sources/storageBattlesScraper';
 import { scrapeInvaluable } from './sources/invaluableAuctionHouseScraper';
 import { runAuctionZipScraper } from './sources/auctionZipScraper';
-import { scrapeSellMyAntiques } from './sources/sellMyAntiquesScraper';
 import { scrapeProxibid } from './sources/proxibidScraper';
 import { scrapeFleamapket } from './sources/fleamapketScraper';
 import { scrapeEstateSalesOrg } from './sources/estatesalesOrgScraper';
@@ -271,68 +263,6 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     legalNote: 'ToS CLEAR — zero anti-scraping language. robots.txt fully open (Allow: / for all agents). events.handbid.com/organizations is static HTML, 789 orgs across 33 pages. Parked on CATEGORY grounds only: orgs are nonprofits/school PTAs/charities. Unpark if FindA.Sale expands to fundraising auction events. Verified 2026-06-10.',
     run: scrapeHandbid,
   },
-  // ─── Flea Market Directory Sources (all PARKED — 2026-06-10 investigation) ────
-  {
-    id: 'AmericanFleaMarkets',
-    displayName: 'AmericanFleaMarkets.com',
-    type: 'directory',
-    runMode: 'national-once',
-    enabled: false, // PARKED — domain returns empty HTTP response, appears dead/inactive.
-    qualityTier: 'medium',
-    legalNote: 'robots.txt: empty (no response). ToS: inaccessible. Domain dead — empty HTTP response on all paths. Verified 2026-06-10.',
-    run: scrapeAmericanFleaMarkets,
-  },
-  {
-    id: 'FleaMarketDirectory',
-    displayName: 'FleaMarketDirectory.com',
-    type: 'directory',
-    runMode: 'national-once',
-    enabled: false, // PARKED — domain redirects to USWantads.com (unrelated general classifieds).
-    qualityTier: 'low',
-    legalNote: 'Domain permanently redirects to uswantads.com (general classifieds, not a flea market directory). No venue data at destination. Verified 2026-06-10.',
-    run: scrapeFleaMarketDirectory,
-  },
-  {
-    id: 'FleaMarketCom',
-    displayName: 'FleaMarket.com',
-    type: 'directory',
-    runMode: 'national-once',
-    enabled: false, // PARKED — domain returns empty HTTP response, appears dead/inactive.
-    qualityTier: 'medium',
-    legalNote: 'robots.txt: empty (no response). ToS: inaccessible. Domain dead — empty HTTP response on all paths. Verified 2026-06-10.',
-    run: scrapeFleaMarketCom,
-  },
-  {
-    id: 'FleaMarketsNet',
-    displayName: 'FleaMarkets.net',
-    type: 'directory',
-    runMode: 'national-once',
-    enabled: false, // PARKED — domain is for sale on GoDaddy Afternic, no directory content.
-    qualityTier: 'low',
-    legalNote: 'Domain is a parked/for-sale listing on GoDaddy Afternic. No flea market directory content. Verified 2026-06-10.',
-    run: scrapeFleaMarketsNet,
-  },
-  {
-    id: 'FleaMarketRover',
-    displayName: 'FleaMarketRover.com',
-    type: 'directory',
-    runMode: 'national-once',
-    enabled: false, // PARKED — domain returns empty HTTP response, appears dead/inactive.
-    qualityTier: 'medium',
-    legalNote: 'robots.txt: empty (no response). ToS: inaccessible. Domain dead — empty HTTP response on all paths. Verified 2026-06-10.',
-    run: scrapeFleaMarketRover,
-  },
-  {
-    id: 'VendorsByState',
-    displayName: 'VendorsByStateUSA.com / VendorsByState.com',
-    type: 'directory',
-    runMode: 'national-once',
-    enabled: false, // PARKED — both domain variants return empty HTTP response.
-    qualityTier: 'medium',
-    legalNote: 'Both vendorsbystateusa.com and vendorsbystate.com return empty HTTP responses. Domains appear dead or expired. Verified 2026-06-10.',
-    run: scrapeVendorsByState,
-  },
-  },
   // ─── Storage Auction Sources (2026-06-10 investigation) ───────────────────
   {
     id: 'BidSpotter',
@@ -354,16 +284,6 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     qualityTier: 'medium',
     legalNote: 'ToS CLEAR — no anti-scraping language (terms-of-service page reviewed 2026-06-12). robots.txt: /api/v1/ path not blocked, crawl-delay: 5 s (respected). API endpoint /api/v1/search.php discovered via bid13_search.js custom module. Confirmed returning live JSON facility data.',
     run: scrapeBid13,
-  },
-  {
-    id: 'IBidNow',
-    displayName: 'iBidNow.com',
-    type: 'directory',
-    runMode: 'national-once',
-    enabled: false, // PARKED — GoDaddy Afternic parked/for-sale domain. Not a live product.
-    qualityTier: 'low',
-    legalNote: 'Not a live storage auction platform. All URLs redirect to GoDaddy Afternic domain sale page (/lander). robots.txt served from Afternic infrastructure. Verified 2026-06-10.',
-    run: scrapeIBidNow,
   },
   {
     id: 'LockerFox',
@@ -425,16 +345,6 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
         itemsFailed: 0,
       };
     },
-  },
-  {
-    id: 'SellMyAntiques',
-    displayName: 'SellMyAntiques.com (Antique Dealer Directory)',
-    type: 'directory',
-    runMode: 'national-once',
-    enabled: false,
-    qualityTier: 'medium',
-    legalNote: 'Domain PARKED (GoDaddy lander) as of 2026-06-12 — all paths redirect to /lander, sitemap contains only /lander. Prior investigation (2026-06-10): ToS CLEAR, robots.txt open, JS-rendered Next.js SPA. Site defunct. Re-check if domain is re-registered.',
-    run: scrapeSellMyAntiques,
   },
   {
     id: 'Proxibid',
