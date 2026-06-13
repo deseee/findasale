@@ -16,7 +16,10 @@
 | #164 Tiers infrastructure | ✅ VERIFIED | Loyalty-tier API returns correctly; the "Bronze Organizer" badge shows the right progress ("1/4 sales until next tier"). Minor data-hygiene note logged (no user impact). |
 | #27b Watermark (TEAMS) | ✅ VERIFIED | The "Remove FindA.Sale watermark" toggle is present + enabled for your TEAMS account. PDF-footer and calendar-text sub-checks still need a non-TEAMS account to compare. |
 | #317 Geofence QR scan | ✅ VERIFIED | Scanning from far away is correctly blocked (403 "must be at the sale location"); at-location and no-location scans pass. 100-meter rule working live. |
-| ⚠️ Test-login finding | NEEDS YOU | The shopper test account `user12@example.com` no longer accepts the standard QA password in production (the organizer account still works). The deeper shopper-page tests were skipped because of this — next session I'll use a different shopper account. Flagging in case the production seed drifted. |
+| ✅ Achievements XP (#219) | FIXED — verify after deploy | **Found in walkthrough AND fixed same session.** The Achievements page and your dashboard were showing the same XP progress two different ways — Achievements counted progress *within* your current rank (865/3,800), the dashboard counted *total* toward the next rank (2,060/5,000). Both technically correct, but confusing side-by-side. Fixed so Achievements now matches the dashboard exactly. Needs a quick click-check once it deploys. |
+| #40 Market Hubs | ✅ AS-INTENDED | The multi-vendor events page (/organizer/hubs) is a clean "coming in Phase 2" teaser — 4 market types, value props, a disabled Create-Event button. Nothing broken; just not built yet. |
+| Full walkthroughs | ✅ CLEAN | Clicked through the organizer product (dashboard, sales, add-items, POS, insights, earnings, holds, reputation, consignors, create-sale) and shopper product (dashboard, sale page, cart, achievements, challenges, wishlist). All render well with real data. One minor label note: "Total Revenue" on Insights vs "Gross Revenue" on Earnings show different numbers (different definitions — not a bug). |
+| user12 account | ℹ️ RESOLVED | The earlier "login failed" was because user12 was removed long ago (you confirmed ~6 seed accounts remain). Not a bug — just outdated QA notes. Using user5/user1 going forward. |
 
 ---
 
