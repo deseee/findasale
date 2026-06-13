@@ -1,6 +1,22 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S968 — 2026-06-12 (Mobile perf code-split | Lighthouse CI built (monthly) | homepage CLS fixed + verified | monthly perf scheduled task)
+**Last updated:** S969 — 2026-06-13 (QA: S968 post-deploy smoke OK | #164 Tiers + #27b watermark + #317 geofence verified | finding: prod shopper test-credential stale)
+
+---
+
+## Session S969 Summary — S968 Post-Deploy Smoke + Pending-QA Burn-Down (COMPLETE)
+
+**Type:** QA — Chrome MCP verification (run by main session)
+**BQ:** 0 (unchanged)
+
+| Item | Status | Details |
+|------|--------|---------|
+| S968 homepage smoke | ✅ PASS | CLS fix is LIVE and correct — the promo banners now sit below the map (no shift). Both code-split banners load, Featured Sales + filter pills render. The only console error anywhere was a wallet browser-extension conflict, not our code. |
+| S968 app-wide pages | ✅ CLEAN | Organizer dashboard / settings / add-items / POS and the public sale-detail page all render cleanly after the app-wide code-split change — no broken overlays. |
+| #164 Tiers infrastructure | ✅ VERIFIED | Loyalty-tier API returns correctly; the "Bronze Organizer" badge shows the right progress ("1/4 sales until next tier"). Minor data-hygiene note logged (no user impact). |
+| #27b Watermark (TEAMS) | ✅ VERIFIED | The "Remove FindA.Sale watermark" toggle is present + enabled for your TEAMS account. PDF-footer and calendar-text sub-checks still need a non-TEAMS account to compare. |
+| #317 Geofence QR scan | ✅ VERIFIED | Scanning from far away is correctly blocked (403 "must be at the sale location"); at-location and no-location scans pass. 100-meter rule working live. |
+| ⚠️ Test-login finding | NEEDS YOU | The shopper test account `user12@example.com` no longer accepts the standard QA password in production (the organizer account still works). The deeper shopper-page tests were skipped because of this — next session I'll use a different shopper account. Flagging in case the production seed drifted. |
 
 ---
 

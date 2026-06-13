@@ -8,6 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S969 — QA (2026-06-13). S968 post-deploy smoke + Pending-QA burn-down.**
+- **S968 SMOKE OK** — homepage CLS fix LIVE + correct: CityHeat ("Phoenix is heating up") / TreasureHunt / SaleOfDay banners render BELOW the map (no shift); both code-split banners mount; Featured Sales 20/20 + When/Type filter pills render. Organizer pages (dashboard / settings / add-items / POS) + public sale detail all render CLEAN post the app-wide `_app.tsx` ssr:false code-split — no broken overlays. Only console error across all pages = wallet browser-extension conflict (MetaMask/evmAsk inpage.js), NOT app code.
+- **#164 Tiers Backend Infra VERIFIED** — GET /api/tiers/mine (getMyTier) -> HTTP 200 {tier, progress: currentTier BRONZE / nextTier SILVER / completedSales 1 / salesNeeded 4}; OrganizerTierBadge renders "Bronze Organizer" + "1/4 sales until next tier" (ss_5723zet9w). syncTier wired into billingController webhooks (4 events, code-confirmed). **P3 latent:** organizer.tier stores subscription value "PRO" (not BRONZE/SILVER/GOLD) -> getTierBenefits('PRO')=undefined, `benefits` omitted from API; masked by frontend `TIER_CONFIG[tier] || BRONZE` fallback — zero user impact.
+- **#27b Watermark TEAMS gate VERIFIED** — /organizer/settings Appearance as Alice (TEAMS): "Remove FindA.Sale watermark from exports and shareable images" checkbox CHECKED + enabled, correct helper copy (ss_4877f2sdx). PDF-footer-visual + iCal `.ics`-text sub-checks still pending (need a non-TEAMS account for the on/off comparison).
+- **#317 Geofence QR scan VERIFIED** — authenticated GET /api/items/:id/qr/scan vs geocoded GR sale: FAR (NYC ~970km) -> HTTP 403 "You must be at the sale location to scan this QR code"; AT-LOCATION -> HTTP 200 (cleared 100m gate, dup-check returned already-scanned); NO coords -> HTTP 200 graceful fallback (matches S936). haversine 100m enforcement confirmed LIVE. Was Backlog P1.
+- **FINDING (QA infra, not a code bug):** `user12@example.com / Seedy2025!` is REJECTED in prod ("Invalid credentials", confirmed with password revealed) while `user1` AND `user5@example.com / Seedy2025!` both work — so the drift is SPECIFIC to user12's prod row (documented "primary shopper" credential is stale). Use **user5 (Leo Thomas)** as the shopper QA account going forward.
+- **Authenticated shopper smoke ✅ (user5 via direct /api/auth/login, bypassing form-autofill):** /shopper/dashboard renders clean — Ranger Explorer rank card, "Progress to SAGE 2,060/5,000 XP" bar, perks, and the NudgeBar code-split overlay ("Only 3 more favorites to reach 5!") all mount (ss_49483yyyg). **Smart Cart E2E ✅** — clicking item "+" fired addItem -> wrote to fas_shopper_cart_<userId> localStorage + "Added to cart" toast; nav cart badge 0->1; drawer (code-split overlay) opened showing "Saved in Cart (1)" Vintage Radio $25 + Place Hold + Cart Subtotal; item card flips to green ✓ in-cart state (ss_45892y66j). (Earlier passes showed cart 0 only because the UI click missed the small button — code path verified correct, NOT a bug.) Confirms shopper-side S968 code-split has no broken mounts.
+- PCVs staged below for the records pass (cross-session rule — roadmap Chrome cols NOT touched this session). BQ: 0 (unchanged).
+
 **S968 — DEV/PERF (2026-06-12). Mobile homepage performance + repeatable audit infrastructure.**
 - **PERF (pushed):** code-split 10 non-critical overlay/banner components to `next/dynamic` ssr:false (_app.tsx ×7 app-wide + index.tsx ×3) + lazy-loaded below-fold item images — trims initial JS/TBT.
 - **LIGHTHOUSE CI BUILT (pushed):** `.github/workflows/lighthouse.yml` (median-of-3, mobile, 4 URLs: /, /pricing, /map, /estate-sales/denver-co; warn-only assertions; temporary-public-storage + artifact) + `lighthouserc.json` + `scripts/psi-audit.mjs` (on-demand PSI). PSI API confirmed **100% free** (25k/day, no billing) — needs a free key to avoid the shared anon 429. Cron set **MONTHLY** (`0 6 1 * *`). Ran green 3× via workflow_dispatch.
@@ -78,6 +87,9 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
+| 164 | Tiers Backend Infrastructure (getMyTier/syncTier/display) | Navigated https://finda.sale/organizer/dashboard as Alice Johnson (user1, TEAMS). GET /api/tiers/mine -> HTTP 200 {tier, progress: currentTier BRONZE, nextTier SILVER, completedSales 1, salesNeeded 4}. OrganizerTierBadge renders "Bronze Organizer" + "Reach Silver at 5 sales" + "1/4 sales until next tier" (ss_5723zet9w). syncTier wired into billingController webhooks (4 subscription events, code-confirmed). P3: organizer.tier holds "PRO" not loyalty enum -> benefits omitted from API, masked by frontend BRONZE fallback (no user impact). | S969 |
+| 27b | Watermark TEAMS-gated removal toggle | Navigated https://finda.sale/organizer/settings -> Appearance tab as Alice Johnson (user1, TEAMS). "Watermark Settings" section: "Remove FindA.Sale watermark from exports and shareable images" checkbox CHECKED + enabled, helper copy "your exported PDFs, shareable cards, and images will not display the FindA.Sale branding" (ss_4877f2sdx). PDF footer visual + iCal .ics description text still pending (need non-TEAMS comparison account). | S969 |
+| 317 | Geofence QR Scan Enforcement | Authenticated GET /api/items/90bde6e8-6dc4-4ab7-b8b1-26294ad329cc/qr/scan as Alice (user1) vs geocoded Grand Rapids sale (lat 42.9634 / lng -85.6681). FAR (NYC, ~970km) -> HTTP 403 "You must be at the sale location to scan this QR code." AT-LOCATION (exact coords) -> HTTP 200 (passed 100m gate; dup-check returned already-scanned-today). NO coords -> HTTP 200 graceful fallback (matches S936). haversine 100m enforcement confirmed live. | S969 |
 | 74 | Role-Aware Registration Consent | Navigated https://finda.sale/register as unauthenticated visitor. Clicked role dropdown → "Shopper": saw 1 consent checkbox + ToS, no Business Info. Switched to "Sale Organizer": saw Business Information (Name/Phone/Address) + 1 consent checkbox + ToS. Switched back — Business Info disappeared. Dark mode clean. ss_58428wnau ss_98779g0dj ss_12933c02s | S961 |
 | 463 | Claim Button Click Tracking — CTA #1 hero button | Navigated https://finda.sale/organizers/cmpnk019i02am4kxzospcmvoa as unauthenticated visitor. Clicked "Claim This Profile — It's Free". Saw redirect to /register?claim=cmpnk019i02am4kxzospcmvoa + window.va claim_profile_click event fired + POST /_vercel/insights/event beacon confirmed. ss_6546zegk2 ss_5106am9br ss_203394jm6 | S961 |
 | 472 | send-test-email happy path | Navigated https://finda.sale/admin as user1@example.com (ADMIN). Ran fetch POST /api/admin/send-test-email with {to:"test-delivery@mailinator.com",subject:"Test",body:"Test body"}. Saw 200 {success:true, messageId:"bb5ce99a-96d4-48eb-913d-d5f663bc60fc", rail:"resend"}. Screenshot: ss_6413lunko | S948 |
@@ -108,6 +120,13 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 
 ## Next Session
+
+### S969 — Carry-forward (QA)
+
+1. **Records pass:** apply S969 PCVs to roadmap.md — #164 (Tiers Infra, was UNVERIFIED S804 -> now Claude QA verified), #27b (TEAMS watermark toggle re-confirmed), #317 (Geofence QR scan, was Backlog P1 -> verified). All three have 5-element evidence.
+2. **QA-infra (RESOLVED this session):** user12's prod credential is stale (user1 + user5 both work with Seedy2025!). Use **user5 (Leo Thomas)** for shopper QA. Authenticated /shopper/* S968 smoke already done this session via user5. Optional: re-seed/repair user12 if it's meant to be the canonical primary shopper. Smart Cart add-to-cart verified working E2E this session (+ -> localStorage + toast + badge + drawer + Place Hold). No cart bug.
+3. **#27b remaining:** PDF footer visual + iCal `.ics` description text need a non-TEAMS org to verify the watermark on/off comparison.
+4. **#164 P3 (optional, low priority):** organizer.tier stores subscription value "PRO" instead of loyalty enum BRONZE/SILVER/GOLD -> getTierBenefits returns undefined, `benefits` omitted from /api/tiers/mine. Frontend `|| BRONZE` fallback masks it — cosmetic/data-hygiene only.
 
 ### Patrick — Actions Needed (post S967)
 
@@ -182,6 +201,22 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 
 ## Recent Sessions
+
+### S969 — 2026-06-13 | QA (S968 smoke + Pending-QA burn-down)
+
+**Session type:** QA — Chrome MCP, run by main session (sequential).
+
+**Verified (evidence in Pending Chrome Verifications):**
+- S968 homepage CLS fix LIVE + correct (banners below map); code-split overlays mount; organizer pages (dashboard/settings/add-items/POS) + public sale detail render clean; no app console errors (only wallet-extension noise).
+- #164 Tiers Backend Infra — /api/tiers/mine 200, Bronze Organizer badge w/ correct progress; syncTier code-confirmed in billing webhooks. P3 data-hygiene note logged.
+- #27b watermark TEAMS toggle — checked + enabled for TEAMS org at settings Appearance.
+- #317 Geofence QR scan — 403 far / 200 at-location / 200 no-coords (graceful fallback); 100m haversine enforcement confirmed.
+
+**Finding (QA infra):** user12/Seedy2025! rejected in prod while user1/Seedy2025! works — primary-shopper seed credential stale; authenticated /shopper/* smoke deferred (public surface verified clean instead).
+
+**Deferred:** #27b PDF-footer/iCal-text (need non-TEAMS acct); authenticated shopper-dashboard smoke (credential).
+
+**BQ delta:** 0 (unchanged).
 
 ### S965 — 2026-06-12 | DEV (Chrome QA #27c + GSalr Research)
 
