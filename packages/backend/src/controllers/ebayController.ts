@@ -5524,6 +5524,8 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     const buyerShipping = freeShippingOptIn ? 0 : rate.estimatedRate;
     // Default label cost to the estimated rate (what the organizer will actually pay).
     const labelCost = body.labelCost != null ? body.labelCost : rate.estimatedRate;
+    const fvfOnShipping = Math.round(rate.estimatedRate * 0.136 * 100) / 100;
+    const netToSeller = Math.round((rate.estimatedRate - fvfOnShipping) * 100) / 100;
 
     const proceeds = await computeNetProceeds({
       itemPrice: itemPrice ?? 0,
@@ -5545,6 +5547,9 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         isEstimate: liveRate === null,
         source: liveRate ? 'ebay_live' : 'estimated',
         freeShippingOptIn,
+        netToSeller,
+        fvfOnShipping,
+        shippingCovered: netToSeller >= labelCost,
       },
     });
   } catch (error: any) {
@@ -5645,6 +5650,8 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         });
     const buyerShipping = freeShippingOptIn ? 0 : rate.estimatedRate;
     const labelCost = body.labelCost != null ? body.labelCost : rate.estimatedRate;
+    const fvfOnShipping = Math.round(rate.estimatedRate * 0.136 * 100) / 100;
+    const netToSeller = Math.round((rate.estimatedRate - fvfOnShipping) * 100) / 100;
 
     const result = await suggestPriceForMargin({
       targetMarginPct,
@@ -5667,6 +5674,9 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         isEstimate: liveRateS === null,
         source: liveRateS ? 'ebay_live' : 'estimated',
         freeShippingOptIn,
+        netToSeller,
+        fvfOnShipping,
+        shippingCovered: netToSeller >= labelCost,
       },
     });
   } catch (error: any) {

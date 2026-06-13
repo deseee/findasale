@@ -7,12 +7,31 @@
  *
  * Rate table source: Pirate Ship USPS Ground Advantage, effective 2026-04-26.
  * Same tier as eBay negotiated rates (USPS Connect eCommerce / below-commercial).
+ *
+ * FVF note: eBay charges its final value fee on the total transaction amount,
+ * including shipping. At 13.6% FVF, the seller nets ~86.4% of the buyer-paid
+ * shipping charge. The label cost equals the buyer rate (same USPS tier), so
+ * sellers are approximately $0.88 short per $6.50 shipping charge.
+ * Use netToSeller / fvfOnShipping / shippingCovered to surface this to organizers.
  */
 
-interface RateBucket {
+/** eBay final value fee rate applied to the shipping portion of the transaction. */
+export const EBAY_SHIPPING_FVF_RATE = 0.136;
+
+export interface RateBucket {
+  /** Rate buyer pays for shipping (eBay calculated, USPS Ground Advantage). */
   estimatedRate: number;
+  /** How eBay computed the billable weight. */
   basis: 'actual' | 'dimensional';
+  /** Shipping service name. */
   service: string;
+  /** Amount eBay retains from the shipping charge as FVF. */
+  fvfOnShipping: number;
+  /**
+   * Amount the seller nets from the buyer's shipping payment after eBay FVF.
+   * Compare to your actual USPS label cost to determine if shipping is covered.
+   */
+  netToSeller: number;
 }
 
 const memoryCache = new Map<string, RateBucket>();
@@ -74,8 +93,17 @@ function estimateZoneKey(fromZip?: string | null, toZip?: string | null): 'z12' 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /**
- * Estimate the buyer-paid shipping rate for an item.
- * Returns eBay-approximate discounted rate, dimensional weight basis, and service name.
+ * Estimate the buyer-paid shipping rate for an item, plus the seller's net after
+ * eBay's final value fee on shipping (13.6%).
+ *
+ * Returns:
+ *   estimatedRate  — what eBay charges the buyer (≈ your USPS label cost)
+ *   fvfOnShipping  — eBay's cut of the shipping charge
+ *   netToSeller    — what you actually receive after FVF (estimatedRate - fvfOnShipping)
+ *
+ * Use shippingCovered = netToSeller >= yourLabelCost to tell organizers whether
+ * the buyer's shipping payment actually covers their postage.
+ *
  * Accuracy: ±5-15% of actual eBay rate. Use getEbayLiveShippingRate() when possible.
  */
 export function estimateBuyerShippingRate(input: RateEstimateInput): RateBucket {
@@ -103,8 +131,10 @@ export function estimateBuyerShippingRate(input: RateEstimateInput): RateBucket 
 
   const row = RATE_TABLE.find((r) => billableLb <= r.maxLb) || RATE_TABLE[RATE_TABLE.length - 1];
   const estimatedRate = round2(row[zoneKey]);
+  const fvfOnShipping = round2(estimatedRate * EBAY_SHIPPING_FVF_RATE);
+  const netToSeller = round2(estimatedRate - fvfOnShipping);
 
-  const result: RateBucket = { estimatedRate, basis, service };
+  const result: RateBucket = { estimatedRate, basis, service, fvfOnShipping, netToSeller };
   memoryCache.set(cacheKey, result);
   return result;
 }
