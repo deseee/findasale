@@ -224,6 +224,36 @@ const EditItemPage = () => {
     },
   });
 
+  // Builds the save payload and PUTs the current form state to the backend.
+  // Shared by handlePushToEbay and handlePublishNow so both persist edits (incl. Brand/MPN/UPC) before any eBay action.
+  const saveFormState = async () => {
+    const toIntOrNull = (v: string) => {
+      const n = parseInt(String(v).trim(), 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    const pushPrice = parseFloat(String(formData.price)) || 0;
+    const pushAcceptPct = typeof formData.bestOfferAcceptPct === 'number' ? formData.bestOfferAcceptPct : null;
+    const pushDeclinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
+    const savePayload = {
+      ...formData,
+      packageWeightOz: toIntOrNull(formData.packageWeightOz),
+      packageLengthIn: toIntOrNull(formData.packageLengthIn),
+      packageWidthIn: toIntOrNull(formData.packageWidthIn),
+      packageHeightIn: toIntOrNull(formData.packageHeightIn),
+      allowBestOffer: formData.allowBestOffer,
+      bestOfferAutoAcceptAmt: formData.allowBestOffer && pushAcceptPct !== null && pushPrice > 0
+        ? parseFloat((pushPrice * (1 - pushAcceptPct / 100)).toFixed(2))
+        : null,
+      bestOfferMinimumAmt: formData.allowBestOffer && pushDeclinePct !== null && pushPrice > 0
+        ? parseFloat((pushPrice * (1 - pushDeclinePct / 100)).toFixed(2))
+        : null,
+      ebayShippingOverride: formData.ebayShippingOverride || null,
+      bestOfferAcceptPct: undefined,
+      bestOfferDeclinePct: undefined,
+    };
+    await api.put(`/items/${id}`, savePayload);
+  };
+
   const handlePushToEbay = async () => {
     if (!ebayConnected) {
       showToast('Connect eBay in Settings first', 'error');
@@ -241,31 +271,7 @@ const EditItemPage = () => {
     try {
       // Auto-save current form state first so eBay push uses the latest values (not stale DB state).
       // Inline PUT (not updateMutation) — updateMutation.onSuccess navigates to /dashboard which would abort the push.
-      const toIntOrNull = (v: string) => {
-        const n = parseInt(String(v).trim(), 10);
-        return Number.isFinite(n) && n > 0 ? n : null;
-      };
-      const pushPrice = parseFloat(String(formData.price)) || 0;
-      const pushAcceptPct = typeof formData.bestOfferAcceptPct === 'number' ? formData.bestOfferAcceptPct : null;
-      const pushDeclinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
-      const savePayload = {
-        ...formData,
-        packageWeightOz: toIntOrNull(formData.packageWeightOz),
-        packageLengthIn: toIntOrNull(formData.packageLengthIn),
-        packageWidthIn: toIntOrNull(formData.packageWidthIn),
-        packageHeightIn: toIntOrNull(formData.packageHeightIn),
-        allowBestOffer: formData.allowBestOffer,
-        bestOfferAutoAcceptAmt: formData.allowBestOffer && pushAcceptPct !== null && pushPrice > 0
-          ? parseFloat((pushPrice * (1 - pushAcceptPct / 100)).toFixed(2))
-          : null,
-        bestOfferMinimumAmt: formData.allowBestOffer && pushDeclinePct !== null && pushPrice > 0
-          ? parseFloat((pushPrice * (1 - pushDeclinePct / 100)).toFixed(2))
-          : null,
-        ebayShippingOverride: formData.ebayShippingOverride || null,
-        bestOfferAcceptPct: undefined,
-        bestOfferDeclinePct: undefined,
-      };
-      await api.put(`/items/${id}`, savePayload);
+      await saveFormState();
     } catch (err) {
       setEbayPushPending(false);
       showToast('Save failed — fix errors before pushing to eBay', 'error');
@@ -274,8 +280,16 @@ const EditItemPage = () => {
     ebayPushMutation.mutate({ itemId: String(id) });
   };
 
-  const handlePublishNow = () => {
+  const handlePublishNow = async () => {
     setEbayPushPending(true);
+    try {
+      // Persist current form state (incl. Brand/MPN/UPC) before publishing so eBay sees latest values.
+      await saveFormState();
+    } catch (err) {
+      setEbayPushPending(false);
+      showToast('Save failed — fix errors before publishing to eBay', 'error');
+      return;
+    }
     ebayPublishMutation.mutate({ itemId: String(id) });
   };
 

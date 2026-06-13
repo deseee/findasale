@@ -59,6 +59,10 @@ interface ItemEditState {
   packageWidthIn?: number;
   packageHeightIn?: number;
   ebayShippingOverride?: string | null;
+  // eBay product identifiers
+  brand?: string;
+  mpn?: string;
+  upc?: string;
 }
 
 interface HealthBreakdown {
@@ -115,6 +119,10 @@ interface Item {
   packageHeightIn?: number | null;
   ebayShippingOverride?: string | null;
   photos?: { url: string }[];
+  // eBay product identifiers
+  brand?: string | null;
+  mpn?: string | null;
+  upc?: string | null;
 }
 
 // Track which items should be pushed to eBay
@@ -656,6 +664,10 @@ const ReviewPage = () => {
         packageWidthIn: item.packageWidthIn ?? undefined,
         packageHeightIn: item.packageHeightIn ?? undefined,
         ebayShippingOverride: item.ebayShippingOverride ?? null,
+        // eBay product identifiers — seed from DB (default to '')
+        brand: item.brand ?? '',
+        mpn: item.mpn ?? '',
+        upc: item.upc ?? '',
       });
       setEditStates(new Map(editStates));
     }
@@ -691,6 +703,10 @@ const ReviewPage = () => {
         packageLengthIn: editState.packageLengthIn ?? null,
         packageWidthIn: editState.packageWidthIn ?? null,
         packageHeightIn: editState.packageHeightIn ?? null,
+        // eBay product identifiers — send '' as null
+        brand: editState.brand?.trim() ? editState.brand.trim() : null,
+        mpn: editState.mpn?.trim() ? editState.mpn.trim() : null,
+        upc: editState.upc?.trim() ? editState.upc.trim() : null,
       },
     });
     showToast('Item saved', 'success');
@@ -1398,6 +1414,46 @@ const ReviewPage = () => {
                                   </button>
                                 ))}
                               </div>
+                            </div>
+                          </div>
+
+                          {/* Brand / MPN / UPC row — eBay product identifiers */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
+                                Brand <span className="text-[#C8552B]">· eBay</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={editState.brand ?? ''}
+                                onChange={(e) => handleEditChange(item.id, 'brand', e.target.value)}
+                                placeholder="e.g. Pyrex"
+                                className="w-full px-3 py-2 text-sm font-mono rounded-lg bg-white dark:bg-[#1C1C1E] text-[#1A1814] dark:text-[#F5F5F0] border border-black/10 dark:border-[#3A3A3C] focus:outline-none focus:border-[rgba(26,24,20,0.3)] dark:focus:border-[#B8B8BA] placeholder-[rgba(26,24,20,0.4)] dark:placeholder-[#B8B8BA]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA] mb-1">
+                                MPN <span className="text-[rgba(26,24,20,0.35)] dark:text-[#8A8A8C]">· optional</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={editState.mpn ?? ''}
+                                onChange={(e) => handleEditChange(item.id, 'mpn', e.target.value)}
+                                placeholder="Mfr part #"
+                                className="w-full px-3 py-2 text-sm font-mono rounded-lg bg-white dark:bg-[#1C1C1E] text-[#1A1814] dark:text-[#F5F5F0] border border-black/10 dark:border-[#3A3A3C] focus:outline-none focus:border-[rgba(26,24,20,0.3)] dark:focus:border-[#B8B8BA] placeholder-[rgba(26,24,20,0.4)] dark:placeholder-[#B8B8BA]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA] mb-1">
+                                UPC <span className="text-[rgba(26,24,20,0.35)] dark:text-[#8A8A8C]">· optional</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={editState.upc ?? ''}
+                                onChange={(e) => handleEditChange(item.id, 'upc', e.target.value)}
+                                placeholder="Barcode"
+                                className="w-full px-3 py-2 text-sm font-mono rounded-lg bg-white dark:bg-[#1C1C1E] text-[#1A1814] dark:text-[#F5F5F0] border border-black/10 dark:border-[#3A3A3C] focus:outline-none focus:border-[rgba(26,24,20,0.3)] dark:focus:border-[#B8B8BA] placeholder-[rgba(26,24,20,0.4)] dark:placeholder-[#B8B8BA]"
+                              />
                             </div>
                           </div>
 

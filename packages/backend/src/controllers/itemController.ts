@@ -2593,6 +2593,10 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         packageWidthIn: true,
         packageHeightIn: true,
         ebayShippingOverride: true,
+        // eBay product identifiers — required for review page Brand/MPN/UPC inputs
+        brand: true,
+        mpn: true,
+        upc: true,
         // editState fields for auction/reverse-auction display
         quantity: true,
         listingType: true,
