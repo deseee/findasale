@@ -698,6 +698,22 @@ list. After dev returns, provide the push block, then immediately write QA dispa
 
 ---
 
+## 10b. Evidence-First Debugging Gate (HARD RULE — survives compression)
+
+When ANY feature, push, or integration fails, Claude MUST gather the real error/state from the live system BEFORE proposing or shipping a fix. Theorizing when evidence is reachable is a rule violation. (Locked 2026-06-13 after the eBay BrandMPN incident: 4 guessed patches shipped before one direct eBay API call revealed the true cause.)
+
+**Before writing or dispatching ANY fix for a failure, answer all 3 — each must be YES:**
+1. **Real error read?** Did Claude pull the ACTUAL error (errorId + parameters + raw body) from the source system — not the user-facing/simplified message? The friendly message lies ("Brand is missing" was really `<BrandMPN>` invalid).
+2. **State confirmed?** Did Claude query the real state (production DB via psycopg2, the third-party API directly, logs) to confirm what is actually set vs. expected?
+3. **Root cause tool-cited?** Is the diagnosis backed by a specific tool output, not "likely/probably/should be"?
+
+**Evidence sources (use them — do not ask Patrick, do not guess):**
+- Production DB: psycopg2 against the Railway public proxy.
+- eBay REST API DIRECTLY: `EbayConnection.accessToken` (valid ~2h) → `GET /sell/inventory/v1/offer/{offerId}`, `GET /sell/inventory/v1/inventory_item/{sku}`, then PUT the fix + re-POST publish and read the next error. Iterate against the real system.
+- Railway logs, GitHub MCP, Vercel MCP, Chrome QA.
+
+**Iterate on real responses, not assumptions:** apply a candidate fix to the live object, re-trigger, read the next real error, repeat until it succeeds. Each cycle is evidence. Shipping a code patch before the live system confirms the cause is prohibited.
+
 ## 11. Token Efficiency Rules
 
 **T1 — Compaction summaries:** ≤15 lines / ~1.5k tokens. One-liner outcomes only.
