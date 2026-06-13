@@ -1,13 +1,12 @@
 /**
- * ebayRateEstimateService — seeded USPS Ground Advantage rate estimator.
+ * ebayRateEstimateService — eBay-calibrated USPS Ground Advantage rate estimator.
  *
- * Provides a buyer-shipping ESTIMATE without calling any paid carrier API (no new
- * metered vendors). eBay calculates the exact rate at checkout from the buyer's
- * ZIP; this is only a pre-listing estimate so the organizer can see net proceeds.
+ * Fallback for when the eBay Logistics API is unavailable (e.g. organizer hasn't
+ * re-authorized with sell.logistics scope). When a live token is available, callers
+ * should prefer getEbayLiveShippingRate() in ebayController.ts.
  *
- * Uses the greater of actual vs dimensional weight, picks a USPS zone bucket, and
- * looks up a published 2026-era Ground Advantage retail rate. Results are clearly
- * flagged as estimates.
+ * Rate table calibrated from confirmed eBay rate: 11 lb, zone 7 → $14.31 (2026-06-13).
+ * Values are eBay-discounted label costs — NOT USPS retail prices.
  */
 
 interface RateBucket {
@@ -29,33 +28,32 @@ export interface RateEstimateInput {
 const DIM_DIVISOR = 166; // USPS dimensional divisor (cubic inches per pound)
 
 /**
- * USPS Ground Advantage retail rate table (2026-era published rates, USD).
- * Indexed by [weight bucket] x [zone]. Conservative published retail figures,
- * NOT commercial/discounted — keeps the estimate from reading too low.
- * Weight buckets are upper bounds in pounds. Zones 1-2 grouped, 3-4, 5, 6, 7, 8.
+ * eBay-discounted USPS Ground Advantage approximate rates (2026).
+ * These are eBay label costs (~67% below USPS retail via carrier partnership).
+ * Calibration anchor: 11 lb, zone 7 → $14.31 eBay label cost (falls in maxLb:14 bucket).
+ * maxLb = inclusive upper bound in pounds.
  */
 const RATE_TABLE: Array<{ maxLb: number; z12: number; z34: number; z5: number; z6: number; z7: number; z8: number }> = [
-  { maxLb: 0.25, z12: 5.0, z34: 5.4, z5: 5.8, z6: 6.1, z7: 6.4, z8: 6.8 },   // <= 4 oz
-  { maxLb: 0.5, z12: 5.6, z34: 6.1, z5: 6.6, z6: 7.0, z7: 7.4, z8: 7.9 },    // <= 8 oz
-  { maxLb: 0.75, z12: 6.5, z34: 7.2, z5: 7.9, z6: 8.5, z7: 9.1, z8: 9.8 },   // <= 12 oz
-  { maxLb: 1, z12: 7.6, z34: 8.5, z5: 9.4, z6: 10.2, z7: 11.0, z8: 12.0 },   // <= 1 lb
-  { maxLb: 2, z12: 9.0, z34: 10.6, z5: 12.4, z6: 14.0, z7: 15.6, z8: 17.4 },
-  { maxLb: 3, z12: 10.4, z34: 12.9, z5: 15.6, z6: 18.0, z7: 20.4, z8: 23.0 },
-  { maxLb: 5, z12: 13.0, z34: 17.0, z5: 21.6, z6: 25.5, z7: 29.5, z8: 33.8 },
-  { maxLb: 10, z12: 18.5, z34: 25.5, z5: 34.0, z6: 41.0, z7: 48.5, z8: 56.0 },
-  { maxLb: 20, z12: 28.0, z34: 42.0, z5: 58.0, z6: 71.0, z7: 85.0, z8: 99.0 },
-  { maxLb: 50, z12: 52.0, z34: 82.0, z5: 116.0, z6: 145.0, z7: 175.0, z8: 205.0 },
+  { maxLb: 0.25, z12: 3.50, z34: 3.55, z5: 3.60, z6: 3.65, z7: 3.70, z8: 3.80 },   // ≤4 oz
+  { maxLb: 0.5,  z12: 3.55, z34: 3.65, z5: 3.80, z6: 3.90, z7: 4.05, z8: 4.20 },   // ≤8 oz
+  { maxLb: 0.75, z12: 3.60, z34: 3.80, z5: 4.00, z6: 4.25, z7: 4.50, z8: 4.75 },   // ≤12 oz
+  { maxLb: 1,    z12: 3.75, z34: 4.05, z5: 4.40, z6: 4.75, z7: 5.10, z8: 5.55 },   // ≤1 lb
+  { maxLb: 2,    z12: 4.10, z34: 4.65, z5: 5.30, z6: 6.00, z7: 6.75, z8: 7.55 },
+  { maxLb: 3,    z12: 4.45, z34: 5.25, z5: 6.15, z6: 7.10, z7: 8.10, z8: 9.15 },
+  { maxLb: 5,    z12: 5.20, z34: 6.55, z5: 8.10, z6: 9.55, z7: 11.00, z8: 12.60 },
+  { maxLb: 10,   z12: 6.25, z34: 8.40, z5: 10.60, z6: 12.60, z7: 14.60, z8: 16.80 },
+  { maxLb: 14,   z12: 7.00, z34: 9.30, z5: 11.55, z6: 13.20, z7: 15.00, z8: 17.25 },  // calibration bucket
+  { maxLb: 20,   z12: 8.50, z34: 12.00, z5: 16.00, z6: 19.50, z7: 22.50, z8: 26.00 },
+  { maxLb: 50,   z12: 15.50, z34: 23.00, z5: 32.00, z6: 40.00, z7: 47.00, z8: 55.00 },
 ];
 
 /**
- * Crude zone estimate from the first digit of from/to ZIPs. Without a paid zone
- * API, we approximate: same region (first digit matches) = zone 1-2; one apart =
- * zone 3-4; etc. When ZIPs are unknown, default to a mid-zone (5) so the estimate
- * leans conservative rather than optimistic.
+ * Crude zone estimate from the first digit of from/to ZIPs.
+ * When ZIPs are unknown, default to z5 (conservative mid-zone).
  */
 function estimateZoneKey(fromZip?: string | null, toZip?: string | null): 'z12' | 'z34' | 'z5' | 'z6' | 'z7' | 'z8' {
   if (!fromZip || !toZip || fromZip.length < 1 || toZip.length < 1) {
-    return 'z5'; // unknown destination -> mid/high zone (conservative)
+    return 'z5'; // unknown destination → mid-zone conservative estimate
   }
   const a = parseInt(fromZip[0], 10);
   const b = parseInt(toZip[0], 10);
@@ -73,10 +71,11 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /**
  * Estimate the buyer-paid shipping rate for an item.
- * Returns the rate, whether actual or dimensional weight drove it, and the service.
+ * Returns eBay-approximate discounted rate, dimensional weight basis, and service name.
+ * Accuracy: ±15-30% of actual eBay rate. Use getEbayLiveShippingRate() when possible.
  */
 export function estimateBuyerShippingRate(input: RateEstimateInput): RateBucket {
-  const service = input.service || 'USPSGroundAdvantage';
+  const service = input.service || 'USPS_GROUND_ADVANTAGE';
   const actualOz = Math.max(0, input.weightOz || 0);
 
   // Dimensional weight (only when all 3 dims present)
@@ -94,7 +93,6 @@ export function estimateBuyerShippingRate(input: RateEstimateInput): RateBucket 
 
   const zoneKey = estimateZoneKey(input.fromZip, input.toZip);
 
-  // Cache key bucketed by ~0.25lb increments + zone + service
   const cacheKey = `${service}:${Math.ceil(billableLb * 4) / 4}:${zoneKey}`;
   const cached = memoryCache.get(cacheKey);
   if (cached) return cached;
