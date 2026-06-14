@@ -135,6 +135,15 @@ const BLOCKLISTED_LOCAL_PARTS = new Set([
   'no-reply',
   'donotreply',
   'user',
+  // Generic person-name placeholders never used as real business contacts
+  'john.doe',
+  'jane.doe',
+  'first.last',
+  'firstname.lastname',
+  'firstname',
+  'lastname',
+  'name.surname',
+  'my.email',
 ]);
 
 /**
@@ -192,6 +201,19 @@ function isJunkEmail(email: string): boolean {
   //    (image filenames, scripts, fonts — e.g. "First_team_vintage_Logo-09_125x@2x.png")
   if (/\.(png|jpg|jpeg|gif|svg|webp|js|css|woff)/i.test(lower)) {
     console.debug(`[emailDiscoveryService] Rejected (asset extension): ${email}`);
+    return true;
+  }
+
+  // 8. Non-IANA / reserved TLD — these domains can never have valid mail servers.
+  //    RFC 2606 reserves .test/.example/.localhost/.invalid; others (.ofc, .local,
+  //    .corp, .lan, .home) are commonly found in scraped placeholder emails.
+  const FAKE_TLDS = new Set([
+    'ofc', 'local', 'internal', 'test', 'example', 'localhost',
+    'invalid', 'fake', 'corp', 'lan', 'home', 'localdomain',
+  ]);
+  const tld = domain.split('.').pop()?.toLowerCase() ?? '';
+  if (FAKE_TLDS.has(tld)) {
+    console.debug(`[emailDiscoveryService] Rejected (fake TLD .${tld}): ${email}`);
     return true;
   }
 
