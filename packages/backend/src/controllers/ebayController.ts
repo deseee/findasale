@@ -22,8 +22,8 @@ import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
 import { domainToL1 } from '../config/ebayCategories';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { ensureCalculatedFulfillmentPolicy } from '../services/ebayCalculatedPolicyService';
-import { ensureFvfFlatRatePolicy } from '../services/ebayFlatRatePolicyService';
-import { estimateBuyerShippingRate } from '../services/ebayRateEstimateService';
+import { ensureFvfFlatRatePolicy, computeFvfFlatRate, roundUpToBucket } from '../services/ebayFlatRatePolicyService';
+import { computeCheapestForOrigin } from '../services/ebayRateEstimateService';
 import { computeNetProceeds, suggestPriceForMargin } from '../services/ebayNetProceedsService';
 import { estimatePackageProfile } from '../services/ebayPackageEstimateService';
 import { modelTokenFrom } from '../services/ebayCatalogLookup';
@@ -5491,6 +5491,67 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
 
   return result;
 }
+type PreviewShippingResult = {
+  buyerShipping: number;
+  labelCost: number;
+  carrier: 'USPS' | 'UPS' | 'FEDEX';
+  basis: 'actual' | 'dimensional';
+  cheapestRate: number;
+  flatPolicy: { name: string; amount: number } | null;
+  shippingMode: 'FLAT_TIERS' | 'CALCULATED';
+};
+
+/**
+ * Resolve preview shipping numbers so they MATCH what the live eBay listing does:
+ *   - FLAT_TIERS: buyer is charged a flat policy rate (FVF-grossed + bucketed);
+ *     organizer's label cost is their real cheapest-carrier rate.
+ *   - CALCULATED: buyer pays the real rate at checkout (~= label cost).
+ *   - free shipping opt-in: buyer pays $0, organizer absorbs the label.
+ * buyerShipping is the eBay FVF base for shipping; labelCost is the organizer's own
+ * outlay -- they are DIFFERENT numbers under FLAT_TIERS.
+ */
+function resolvePreviewShipping(opts: {
+  shippingMode: string;
+  freeShippingOptIn: boolean;
+  weightOz: number;
+  dims?: { length?: number; width?: number; height?: number };
+  origin: { zip?: string | null; lat?: number | null; lng?: number | null };
+  labelCostOverride?: number;
+}): PreviewShippingResult {
+  const cheapest = computeCheapestForOrigin({
+    weightOz: opts.weightOz,
+    dims: opts.dims
+      ? { length: opts.dims.length, width: opts.dims.width, height: opts.dims.height }
+      : null,
+    origin: opts.origin,
+  });
+  const labelCost = opts.labelCostOverride != null ? opts.labelCostOverride : cheapest.rate;
+  const mode: 'FLAT_TIERS' | 'CALCULATED' =
+    opts.shippingMode === 'FLAT_TIERS' ? 'FLAT_TIERS' : 'CALCULATED';
+
+  let buyerShipping: number;
+  let flatPolicy: { name: string; amount: number } | null = null;
+  if (opts.freeShippingOptIn) {
+    buyerShipping = 0;
+  } else if (mode === 'FLAT_TIERS') {
+    const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
+    buyerShipping = flatRate;
+    flatPolicy = { name: `FindA.Sale Flat $${flatRate.toFixed(2)}`, amount: flatRate };
+  } else {
+    buyerShipping = cheapest.rate;
+  }
+
+  return {
+    buyerShipping,
+    labelCost,
+    carrier: cheapest.carrier,
+    basis: cheapest.basis,
+    cheapestRate: cheapest.rate,
+    flatPolicy,
+    shippingMode: mode,
+  };
+}
+
 /**
  * POST /api/ebay/shipping-preview
  * Returns an estimated buyer-shipping rate + net proceeds for a prospective listing.
@@ -5567,21 +5628,22 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     }
 
     const freeShippingOptIn = organizer.ebayPolicyMapping?.freeShippingOptIn ?? false;
+    const shippingMode = organizer.ebayPolicyMapping?.shippingMode ?? 'CALCULATED';
 
-    const rate = estimateBuyerShippingRate({
+    // Mirror the live listing: FLAT_TIERS buyer pays the flat policy rate; CALCULATED
+    // buyer pays the real rate at checkout. labelCost is always the organizer's own cost.
+    const ship = resolvePreviewShipping({
+      shippingMode,
+      freeShippingOptIn,
       weightOz,
-      dims: dims ? { length: dims.length, width: dims.width, height: dims.height } : null,
-      fromZip: body.fromZip ?? null,
-      toZip: body.toZip ?? null,
+      dims,
+      origin: { zip: body.fromZip ?? null, lat: organizer.lat, lng: organizer.lng },
+      labelCostOverride: body.labelCost,
     });
-
-    // When the organizer opts into free shipping, the BUYER pays $0 and the
-    // organizer absorbs the label cost. Otherwise the buyer pays the estimate.
-    const buyerShipping = freeShippingOptIn ? 0 : rate.estimatedRate;
-    // Default label cost to the estimated rate (what the organizer will actually pay).
-    const labelCost = body.labelCost != null ? body.labelCost : rate.estimatedRate;
-    const fvfOnShipping = Math.round(rate.estimatedRate * 0.136 * 100) / 100;
-    const netToSeller = Math.round((rate.estimatedRate - fvfOnShipping) * 100) / 100;
+    const buyerShipping = ship.buyerShipping;
+    const labelCost = ship.labelCost;
+    const fvfOnShipping = Math.round(buyerShipping * 0.136 * 100) / 100;
+    const netToSeller = Math.round((buyerShipping - fvfOnShipping) * 100) / 100;
 
     const proceeds = await computeNetProceeds({
       itemPrice: itemPrice ?? 0,
@@ -5596,13 +5658,17 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       buyerShipping,
       net: proceeds.net,
       breakdown: proceeds.breakdown,
+      shippingMode: ship.shippingMode,
+      flatPolicy: ship.flatPolicy,
       shippingEstimate: {
-        rate: rate.estimatedRate,
-        basis: rate.basis,
-        service: rate.service,
+        rate: ship.cheapestRate,
+        basis: ship.basis,
+        service: ship.carrier,
+        carrier: ship.carrier,
         isEstimate: true,
-        source: 'estimated',
+        source: ship.shippingMode === 'FLAT_TIERS' ? 'flat_policy' : 'calculated',
         freeShippingOptIn,
+        labelCost,
         netToSeller,
         fvfOnShipping,
         shippingCovered: netToSeller >= labelCost,
@@ -5686,16 +5752,19 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
     }
 
     const freeShippingOptIn = organizer.ebayPolicyMapping?.freeShippingOptIn ?? false;
-    const rate = estimateBuyerShippingRate({
+    const shippingMode = organizer.ebayPolicyMapping?.shippingMode ?? 'CALCULATED';
+    const ship = resolvePreviewShipping({
+      shippingMode,
+      freeShippingOptIn,
       weightOz,
-      dims: dims ? { length: dims.length, width: dims.width, height: dims.height } : null,
-      fromZip: body.fromZip ?? null,
-      toZip: body.toZip ?? null,
+      dims,
+      origin: { zip: body.fromZip ?? null, lat: organizer.lat, lng: organizer.lng },
+      labelCostOverride: body.labelCost,
     });
-    const buyerShipping = freeShippingOptIn ? 0 : rate.estimatedRate;
-    const labelCost = body.labelCost != null ? body.labelCost : rate.estimatedRate;
-    const fvfOnShipping = Math.round(rate.estimatedRate * 0.136 * 100) / 100;
-    const netToSeller = Math.round((rate.estimatedRate - fvfOnShipping) * 100) / 100;
+    const buyerShipping = ship.buyerShipping;
+    const labelCost = ship.labelCost;
+    const fvfOnShipping = Math.round(buyerShipping * 0.136 * 100) / 100;
+    const netToSeller = Math.round((buyerShipping - fvfOnShipping) * 100) / 100;
 
     const result = await suggestPriceForMargin({
       targetMarginPct,
@@ -5711,13 +5780,17 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
       projectedNet: result.projectedNet,
       targetMarginPct: result.targetMarginPct,
       breakdown: result.breakdown,
+      shippingMode: ship.shippingMode,
+      flatPolicy: ship.flatPolicy,
       shippingEstimate: {
-        rate: rate.estimatedRate,
-        basis: rate.basis,
-        service: rate.service,
+        rate: ship.cheapestRate,
+        basis: ship.basis,
+        service: ship.carrier,
+        carrier: ship.carrier,
         isEstimate: true,
-        source: 'estimated',
+        source: ship.shippingMode === 'FLAT_TIERS' ? 'flat_policy' : 'calculated',
         freeShippingOptIn,
+        labelCost,
         netToSeller,
         fvfOnShipping,
         shippingCovered: netToSeller >= labelCost,
