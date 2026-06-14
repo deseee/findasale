@@ -1360,17 +1360,37 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
           const authHeaders = { ...proxyHeaders, Authorization: `Bearer ${accessToken}` };
 
-          // Push price if updated
-          if (price !== undefined && updatedItem.price !== null) {
-            const offerPath = `/sell/inventory/v1/offer/${encodeURIComponent(updatedItem.ebayOfferId)}`;
-            const offerBody = {
-              pricingSummary: {
-                price: { value: String(updatedItem.price), currency: 'USD' },
-              },
+          // eBay PUT endpoints are full REPLACE (not partial-merge). Sending a partial
+          // body causes HTTP 400. So we always GET the full object, mutate the changed
+          // field(s), then PUT the complete object back. We also fetch the offer first
+          // to recover the REAL SKU (which carries a date suffix) — `FAS-${id}` is wrong.
+          const offerPath = `/sell/inventory/v1/offer/${encodeURIComponent(updatedItem.ebayOfferId)}`;
+          let offerObject: Record<string, unknown> | null = null;
+          try {
+            const offerGetRes = await fetch(
+              `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(offerPath)}`,
+              { method: 'GET', headers: authHeaders }
+            );
+            if (offerGetRes.ok) {
+              offerObject = (await offerGetRes.json()) as Record<string, unknown>;
+            } else {
+              console.warn(`[eBay PushSync] offer GET failed for item ${id}: HTTP ${offerGetRes.status}`);
+            }
+          } catch (offerGetErr) {
+            console.warn(`[eBay PushSync] offer GET failed for item ${id}:`, (offerGetErr as Error).message);
+          }
+
+          // Push price if updated — GET-merge-PUT the FULL offer object
+          if (offerObject && price !== undefined && updatedItem.price !== null) {
+            const pricingSummary = (offerObject.pricingSummary as Record<string, unknown> | undefined) ?? {};
+            const priceObj = (pricingSummary.price as Record<string, unknown> | undefined) ?? {};
+            offerObject.pricingSummary = {
+              ...pricingSummary,
+              price: { ...priceObj, value: String(updatedItem.price), currency: (priceObj.currency as string) ?? 'USD' },
             };
             const offerRes = await fetch(
               `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(offerPath)}`,
-              { method: 'PUT', headers: authHeaders, body: JSON.stringify(offerBody) }
+              { method: 'PUT', headers: authHeaders, body: JSON.stringify(offerObject) }
             );
             if (!offerRes.ok && offerRes.status !== 204) {
               console.warn(`[eBay PushSync] Offer price push failed for item ${id}: HTTP ${offerRes.status}`);
@@ -1411,27 +1431,48 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
             inventoryUpdates['condition'] = condMap[updatedItem.condition] ?? 'USED_GOOD';
           }
 
-          if (Object.keys(inventoryUpdates).length > 0) {
-            const sku = `FAS-${id}`;
+          // Use the REAL SKU from the offer object (carries a date suffix) — not `FAS-${id}`.
+          const sku = offerObject ? (offerObject.sku as string | undefined) : undefined;
+          if (Object.keys(inventoryUpdates).length > 0 && sku) {
             const invPath = `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-            // Build minimal inventory item body with only the fields that changed
-            const invBody: Record<string, unknown> = {};
-            if ('product.title' in inventoryUpdates || 'product.description' in inventoryUpdates) {
-              invBody.product = {
-                ...(inventoryUpdates['product.title'] ? { title: inventoryUpdates['product.title'] } : {}),
-                ...(inventoryUpdates['product.description'] ? { description: inventoryUpdates['product.description'] } : {}),
-              };
-            }
-            if ('condition' in inventoryUpdates) {
-              invBody.condition = inventoryUpdates['condition'];
+            // GET the full inventory item, MERGE changed fields, PUT the FULL object back.
+            // This preserves valid existing fields (imageUrls/aspects/brand/mpn,
+            // packageWeightAndSize) so we don't trigger packageType/partial-body 400s.
+            let invObject: Record<string, unknown> | null = null;
+            try {
+              const invGetRes = await fetch(
+                `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(invPath)}`,
+                { method: 'GET', headers: authHeaders }
+              );
+              if (invGetRes.ok) {
+                invObject = (await invGetRes.json()) as Record<string, unknown>;
+              } else {
+                console.warn(`[eBay PushSync] inventory item GET failed for SKU ${sku}: HTTP ${invGetRes.status}`);
+              }
+            } catch (invGetErr) {
+              console.warn(`[eBay PushSync] inventory item GET failed for SKU ${sku}:`, (invGetErr as Error).message);
             }
 
-            const invRes = await fetch(
-              `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(invPath)}`,
-              { method: 'PUT', headers: authHeaders, body: JSON.stringify(invBody) }
-            );
-            if (!invRes.ok && invRes.status !== 204) {
-              console.warn(`[eBay PushSync] Inventory item push failed for SKU ${sku}: HTTP ${invRes.status}`);
+            if (invObject) {
+              if ('product.title' in inventoryUpdates || 'product.description' in inventoryUpdates) {
+                const existingProduct = (invObject.product as Record<string, unknown> | undefined) ?? {};
+                invObject.product = {
+                  ...existingProduct,
+                  ...(inventoryUpdates['product.title'] ? { title: inventoryUpdates['product.title'] } : {}),
+                  ...(inventoryUpdates['product.description'] ? { description: inventoryUpdates['product.description'] } : {}),
+                };
+              }
+              if ('condition' in inventoryUpdates) {
+                invObject.condition = inventoryUpdates['condition'];
+              }
+
+              const invRes = await fetch(
+                `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(invPath)}`,
+                { method: 'PUT', headers: authHeaders, body: JSON.stringify(invObject) }
+              );
+              if (!invRes.ok && invRes.status !== 204) {
+                console.warn(`[eBay PushSync] Inventory item push failed for SKU ${sku}: HTTP ${invRes.status}`);
+              }
             }
           }
 
