@@ -416,3 +416,9 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
 export function getSourceById(id: string): ScraperSourceDef | undefined {
   return SOURCE_REGISTRY.find((s) => s.id === id);
 }
+
+export const VALID_SOURCE_IDS: string[] = SOURCE_REGISTRY.map((s) => s.id);
+
+export function getEnabledSources(): ScraperSourceDef[] {
+  return SOURCE_REGISTRY.filter((s) => s.enabled && !s.prohibited);
+}
