@@ -50,8 +50,10 @@ interface ShippingNetPreviewProps {
   onApplySuggestedPrice?: (price: number) => void;
 }
 
-const fmt = (n: number): string =>
-  `$${(Math.round(n * 100) / 100).toFixed(2)}`;
+const fmt = (n: number): string => {
+  const v = Math.round(n * 100) / 100;
+  return v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`;
+};
 
 // The guardrail fires only when the entered price would leave the organizer
 // keeping less than this fraction after eBay fees + shipping. Kept low so it
@@ -296,3 +298,4 @@ const Row: React.FC<{ label: string; value: string; negative?: boolean; bold?: b
 );
 
 export default ShippingNetPreview;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
