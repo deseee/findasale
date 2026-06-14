@@ -3448,13 +3448,6 @@ async function resolvePoliciesForItem(
 
   if (shippingMode === 'CALCULATED') {
     const hasWeight = item.packageWeightOz != null && item.packageWeightOz > 0;
-    const hasAllDims =
-      item.packageLengthIn != null &&
-      item.packageWidthIn != null &&
-      item.packageHeightIn != null &&
-      Number(item.packageLengthIn) > 0 &&
-      Number(item.packageWidthIn) > 0 &&
-      Number(item.packageHeightIn) > 0;
 
     const returnPolicyId = mapping?.defaultReturnPolicyId || conn.returnPolicyId;
     const paymentPolicyId = mapping?.defaultPaymentPolicyId || conn.paymentPolicyId;
@@ -3497,30 +3490,21 @@ async function resolvePoliciesForItem(
           routingReason: `fvf-flat:${fvfResult.flatRate}`,
         };
       }
-      // FVF provisioning failed — fall back to calculated policy (requires dims)
-      if (hasAllDims) {
-        let calcPolicyId = conn.calculatedFulfillmentPolicyId;
-        if (!calcPolicyId) {
-          calcPolicyId = await ensureCalculatedFulfillmentPolicy(organizerId);
-        }
-        if (calcPolicyId) {
-          console.log(`[eBay ShippingPick] item=${item.id} calculated-fallback policy=${calcPolicyId}`);
-          return {
-            fulfillmentPolicyId: calcPolicyId,
-            returnPolicyId,
-            paymentPolicyId,
-            descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
-            pushAsDraft: mapping?.pushAsDraft ?? false,
-            merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
-            routingReason: 'calculated-fallback',
-          };
-        }
-        console.warn(`[eBay ShippingPick] item=${item.id} calculated fallback returned null — falling through`);
-      } else {
-        console.warn(
-          `[eBay ShippingPick] item=${item.id} FVF flat failed and no dims for calculated fallback — falling through`
-        );
-      }
+      // FVF provisioning failed. We NEVER fall back to eBay calculated shipping
+      // (it leaves the seller short on the 13.6% FVF). Soft-block, flag for review,
+      // and return an actionable error so the organizer can retry or adjust.
+      await prisma.item.update({
+        where: { id: item.id },
+        data: { ebayNeedsReview: true },
+      }).catch(() => undefined);
+      console.warn(
+        `[eBay ShippingPick] item=${item.id} FVF flat provisioning failed — soft-blocked (no calculated fallback)`
+      );
+      return {
+        error: 'SHIPPING_POLICY_UNAVAILABLE',
+        code: 'SHIPPING_POLICY_UNAVAILABLE',
+        message: 'We couldn\'t set up a flat-rate shipping policy for this item right now. Confirm your eBay account is connected with return and payment policies set, then try pushing again. If it keeps failing, check the item\'s package weight and box dimensions.',
+      };
     } else if (mapping?.freeShippingOptIn) {
       // Organizer opted into free shipping — fall back to a free/flat policy via smart-pick.
       const smartPicked = await pickFulfillmentPolicySmart(
