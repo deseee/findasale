@@ -699,6 +699,7 @@ export const getItemById = async (req: Request, res: Response) => {
         brand: true,
         mpn: true,
         upc: true,
+        catalogSuggestions: true,
         tags: true,
         qrEmbedEnabled: true,
         isLegendary: true,
