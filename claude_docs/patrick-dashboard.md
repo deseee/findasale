@@ -1,6 +1,24 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S979 — 2026-06-14 (eBay min-price suggester → silent low-price guardrail; $6.22 P2 resolved; deployed green + live-verified)
+**Last updated:** S979 — 2026-06-14 (guardrail + shipping-preview accuracy: flat policy named, label cost separated, net corrected; deployed green + live-verified)
+
+---
+
+## Session S979 (Part 2) — eBay Shipping Preview Accuracy ✅
+
+**What you flagged:** the preview didn't say what the buyer is charged for shipping, never mentioned your $32 flat policy, and made label cost = shipping.
+
+| Change | Result |
+|--------|--------|
+| Preview now reads your shipping mode (flat vs calculated) | ✅ |
+| Flat-rate items show the named policy as the buyer charge | ✅ "Buyer pays $28.00 · Flat rate · FindA.Sale Flat $28.00" |
+| Label cost separated from the buyer charge | ✅ no longer identical by accident |
+| Net corrected | ✅ $148.31 (was understated $145.59) |
+| Latent crash in flat-rate provisioner | ✅ fixed |
+| Backend + frontend TS | ✅ 0 errors |
+| Live-verified (Artifact MI, green build) | ✅ |
+
+**Heads-up:** preview shows $28 (today's recomputed rate); your live listing is still on the older $32 policy. Hit **Re-push to eBay** to sync. Not a bug.
 
 ---
 
