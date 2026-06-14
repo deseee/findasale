@@ -58,6 +58,68 @@ async function findExistingCalculatedPolicyId(accessToken: string): Promise<stri
 }
 
 /**
+ * PATCH an existing eBay fulfillment policy to add/update the packaging &
+ * handling costs (covers eBay FVF ~13.6% applied to the shipping charge).
+ * Fire-and-forget — callers should .catch() this and not await it on the
+ * critical path.
+ */
+async function updateCalculatedPolicyHandlingFee(
+  policyId: string,
+  accessToken: string,
+  handlingTimeDays: number
+): Promise<void> {
+  try {
+    const body = {
+      name: CALCULATED_POLICY_NAME,
+      marketplaceId: 'EBAY_US',
+      categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+      handlingTime: { unit: 'DAY', value: handlingTimeDays },
+      shippingOptions: [
+        {
+          optionType: 'DOMESTIC',
+          costType: 'CALCULATED',
+          shippingServices: [
+            {
+              shippingServiceCode: 'USPSParcel',
+              shippingCarrierCode: 'USPS',
+              sortOrder: 1,
+              freeShipping: false,
+            },
+            {
+              shippingServiceCode: 'USPSPriority',
+              shippingCarrierCode: 'USPS',
+              sortOrder: 2,
+              freeShipping: false,
+            },
+          ],
+          packagingHandlingCosts: { value: '1.50', currency: 'USD' },
+        },
+      ],
+    };
+
+    const res = await fetch(
+      ebayProxyUrl('/sell/account/v1/fulfillment_policy/' + policyId),
+      {
+        method: 'PUT',
+        headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (res.ok) {
+      console.log(`[eBay CalcPolicy] updateHandlingFee success policyId=${policyId}`);
+    } else {
+      const errText = await res.text();
+      console.warn(
+        `[eBay CalcPolicy] updateHandlingFee failed status=${res.status} body=${errText.slice(0, 300)}`
+      );
+    }
+  } catch (err) {
+    console.warn('[eBay CalcPolicy] updateHandlingFee exception', err);
+  }
+}
+
+/**
  * Ensure the organizer has a CALCULATED-cost domestic fulfillment policy.
  * Returns the policy id, persisting it on EbayConnection.
  * Returns null if the organizer is not connected / provisioning failed.
@@ -74,13 +136,19 @@ export async function ensureCalculatedFulfillmentPolicy(organizerId: string): Pr
     return null;
   }
 
-  // Already provisioned
-  if (conn.calculatedFulfillmentPolicyId) {
-    return conn.calculatedFulfillmentPolicyId;
-  }
-
   const accessToken = conn.accessToken;
   const handlingTimeDays = conn.handlingTimeDays ?? 3;
+
+  // Already provisioned — patch handling fee and return immediately.
+  if (conn.calculatedFulfillmentPolicyId) {
+    // Fire-and-forget: patch existing policy with handling fee to cover eBay FVF on shipping.
+    updateCalculatedPolicyHandlingFee(
+      conn.calculatedFulfillmentPolicyId,
+      accessToken,
+      handlingTimeDays
+    ).catch((err) => console.warn('[eBay CalcPolicy] updateHandlingFee error', err));
+    return conn.calculatedFulfillmentPolicyId;
+  }
 
   const body = {
     name: CALCULATED_POLICY_NAME,
@@ -105,6 +173,8 @@ export async function ensureCalculatedFulfillmentPolicy(organizerId: string): Pr
             freeShipping: false,
           },
         ],
+        // $1.50 handling fee covers eBay FVF (~13.6%) applied to shipping.
+        packagingHandlingCosts: { value: '1.50', currency: 'USD' },
       },
     ],
   };
