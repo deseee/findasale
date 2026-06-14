@@ -45,6 +45,172 @@ function decodeHtmlEntities(str: string): string {
     .replace(/&apos;/g, "'");
 }
 
+/**
+ * Bug #469: Live-listing edit propagation.
+ *
+ * eBay updates the live listing ONLY after the offer is (re)published — updating
+ * the inventory item / offer alone does NOT touch what shoppers see. This helper
+ * encapsulates the GET-merge-PUT(inventory item)+republish dance so both the
+ * push-on-save path (updateItem) and the internal /reanalyze-item apply path can
+ * reuse it without duplicating the eBay proxy/auth boilerplate.
+ *
+ * It is best-effort and NEVER throws — callers treat a thrown/failed sync as a
+ * non-fatal warning. eBay PUT endpoints are full REPLACE (not partial-merge), so
+ * we always GET the full inventory item, mutate the changed field(s), and PUT the
+ * complete object back. A `25402` business-policy *warning* in a 2xx publish body
+ * is benign — any 2xx publish is treated as success.
+ *
+ * Primary eBay category is intentionally NOT changed here: eBay locks the primary
+ * category on active listings (changing it requires an end + relist). Callers that
+ * detect a category drift should surface it separately.
+ */
+export async function syncListedItemFieldsToEbay(params: {
+  organizerId: string;
+  ebayOfferId: string;
+  title?: string | null;
+  description?: string | null;
+  /** eBay Inventory API condition enum (e.g. NEW, USED_GOOD) — already mapped by caller. */
+  conditionEnum?: string | null;
+  /** Optional pre-refreshed access token; if omitted the helper refreshes its own. */
+  accessToken?: string | null;
+  logTag?: string;
+}): Promise<{ synced: boolean; published: boolean; reason?: string }> {
+  const tag = params.logTag ?? `[eBay Sync] offer ${params.ebayOfferId}`;
+  try {
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+    const proxySecret = process.env.EBAY_PROXY_SECRET;
+    const proxyHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Content-Language': 'en-US',
+      ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+    };
+
+    let accessToken = params.accessToken ?? null;
+    if (!accessToken) {
+      const { refreshEbayAccessToken } = await import('./ebayController');
+      accessToken = await refreshEbayAccessToken(params.organizerId);
+    }
+    if (!accessToken) {
+      console.warn(`${tag}: could not obtain eBay access token`);
+      return { synced: false, published: false, reason: 'no-token' };
+    }
+    const authHeaders = { ...proxyHeaders, Authorization: `Bearer ${accessToken}` };
+
+    // 1. GET the offer to recover the REAL SKU (carries a date suffix).
+    const offerPath = `/sell/inventory/v1/offer/${encodeURIComponent(params.ebayOfferId)}`;
+    let offerObject: Record<string, unknown> | null = null;
+    try {
+      const offerGetRes = await fetch(
+        `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(offerPath)}`,
+        { method: 'GET', headers: authHeaders }
+      );
+      if (offerGetRes.ok) {
+        offerObject = (await offerGetRes.json()) as Record<string, unknown>;
+      } else {
+        console.warn(`${tag}: offer GET failed HTTP ${offerGetRes.status}`);
+      }
+    } catch (offerGetErr) {
+      console.warn(`${tag}: offer GET failed:`, (offerGetErr as Error).message);
+    }
+
+    const sku = offerObject ? (offerObject.sku as string | undefined) : undefined;
+    if (!sku) {
+      return { synced: false, published: false, reason: 'no-sku' };
+    }
+
+    // 2. GET-merge-PUT the FULL inventory item with the changed fields.
+    const invPath = `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+    let invObject: Record<string, unknown> | null = null;
+    try {
+      const invGetRes = await fetch(
+        `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(invPath)}`,
+        { method: 'GET', headers: authHeaders }
+      );
+      if (invGetRes.ok) {
+        invObject = (await invGetRes.json()) as Record<string, unknown>;
+      } else {
+        console.warn(`${tag}: inventory item GET failed for SKU ${sku}: HTTP ${invGetRes.status}`);
+      }
+    } catch (invGetErr) {
+      console.warn(`${tag}: inventory item GET failed for SKU ${sku}:`, (invGetErr as Error).message);
+    }
+
+    let changedAny = false;
+    if (invObject) {
+      const wantTitle = params.title !== undefined && params.title !== null && params.title !== '';
+      const wantDesc = params.description !== undefined && params.description !== null && params.description !== '';
+      if (wantTitle || wantDesc) {
+        const existingProduct = (invObject.product as Record<string, unknown> | undefined) ?? {};
+        invObject.product = {
+          ...existingProduct,
+          ...(wantTitle ? { title: params.title } : {}),
+          ...(wantDesc ? { description: params.description } : {}),
+        };
+        changedAny = true;
+      }
+      if (params.conditionEnum !== undefined && params.conditionEnum !== null && params.conditionEnum !== '') {
+        invObject.condition = params.conditionEnum;
+        changedAny = true;
+      }
+
+      if (changedAny) {
+        const invRes = await fetch(
+          `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(invPath)}`,
+          { method: 'PUT', headers: authHeaders, body: JSON.stringify(invObject) }
+        );
+        if (!invRes.ok && invRes.status !== 204) {
+          console.warn(`${tag}: inventory item PUT failed for SKU ${sku}: HTTP ${invRes.status}`);
+          return { synced: false, published: false, reason: `inv-put-${invRes.status}` };
+        }
+      }
+    } else {
+      return { synced: false, published: false, reason: 'no-inventory-item' };
+    }
+
+    if (!changedAny) {
+      return { synced: false, published: false, reason: 'no-changes' };
+    }
+
+    // 3. Republish the offer so the LIVE listing reflects the changes. Any 2xx
+    //    (including a 25402 business-policy warning in the body) is success.
+    const published = await republishEbayOffer(params.ebayOfferId, authHeaders, frontendUrl, tag);
+    return { synced: true, published };
+  } catch (err) {
+    console.warn(`${tag}: non-fatal sync error:`, (err as Error).message);
+    return { synced: false, published: false, reason: 'exception' };
+  }
+}
+
+/**
+ * Bug #469: POST the offer publish endpoint so the live listing reflects pushed
+ * inventory/offer changes. Best-effort, never throws. Returns true on any 2xx.
+ */
+export async function republishEbayOffer(
+  ebayOfferId: string,
+  authHeaders: Record<string, string>,
+  frontendUrl: string,
+  logTag: string
+): Promise<boolean> {
+  try {
+    const publishPath = `/sell/inventory/v1/offer/${encodeURIComponent(ebayOfferId)}/publish`;
+    const res = await fetch(
+      `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(publishPath)}`,
+      { method: 'POST', headers: authHeaders, body: JSON.stringify({}) }
+    );
+    if (res.ok) {
+      console.log(`${logTag}: republish ok (HTTP ${res.status})`);
+      return true;
+    }
+    let bodyText = '';
+    try { bodyText = await res.text(); } catch { /* ignore */ }
+    console.warn(`${logTag}: republish failed HTTP ${res.status} ${bodyText.slice(0, 300)}`);
+    return false;
+  } catch (err) {
+    console.warn(`${logTag}: republish failed:`, (err as Error).message);
+    return false;
+  }
+}
+
 // Feature #408: Scan & Split — in-memory tracker for simultaneous QR scans on the same item.
 // Maps itemId → array of { userId, scannedAt } entries. TTL: 60 seconds.
 // No Redis needed — single-instance, ephemeral, POS-day-of-sale usage only.
@@ -1483,8 +1649,18 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
             condition !== undefined ? 'condition' : null,
           ].filter(Boolean);
 
-          if (pushedFields.length > 0) {
+          // Bug #469: Republish the offer so the LIVE listing reflects the pushed
+          // inventory/offer changes. Updating the inventory item / offer alone does
+          // NOT update what shoppers see — only a (re)publish does. Single republish
+          // after both the price and inventory PUTs reflects all changes at once.
+          if (pushedFields.length > 0 && updatedItem.ebayOfferId) {
             console.log(`[eBay PushSync] Item ${id}: pushed ${pushedFields.join('/')} to eBay`);
+            await republishEbayOffer(
+              updatedItem.ebayOfferId,
+              authHeaders,
+              frontendUrl,
+              `[eBay PushSync] Item ${id}`
+            );
           }
         } catch (err) {
           console.warn(`[eBay PushSync] Non-fatal error pushing item ${id} to eBay:`, (err as Error).message);

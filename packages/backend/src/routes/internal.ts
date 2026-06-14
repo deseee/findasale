@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { prisma } from '../lib/prisma';
+import { syncListedItemFieldsToEbay } from '../controllers/itemController'; // Bug #469: live-listing edit propagation
 import { ingestFromGitHubActions } from '../controllers/internalScraperController';
 import { runEnrichmentBackfill } from '../controllers/internalEnrichmentController';
 import {
@@ -1081,6 +1082,7 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
         packageHeightIn: true,
         packageConfirmedByOrganizer: true,
         userEditedFields: true,
+        ebayOfferId: true,
         sale: { select: { id: true, organizerId: true } },
       },
     });
@@ -1239,9 +1241,48 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
       }
     }
 
-    console.log(`[Reanalyze] item=${itemId} applied=${apply} title="${(result.title || item.title || '').slice(0, 80)}"`);
+    // Bug #469: if this item is LIVE on eBay, propagate the applied title/description/
+    // condition changes to the live listing (GET-merge-PUT inventory item + republish).
+    // Non-fatal: a sync error must NEVER fail the reanalyze response. eBay locks the
+    // primary category on active listings, so category drift is reported, not pushed.
+    let ebaySynced = false;
+    let ebaySyncReason: string | undefined;
+    let ebayCategoryLocked: { changed: boolean; from: string | null; to: string | null } | undefined;
+    if (apply && item.ebayOfferId) {
+      try {
+        // Map FindA.Sale condition → eBay Inventory API condition enum (mirrors PushSync).
+        const condMap: Record<string, string> = {
+          NEW: 'NEW',
+          USED: 'USED_GOOD',
+          REFURBISHED: 'SELLER_REFURBISHED',
+          PARTS_OR_REPAIR: 'FOR_PARTS_OR_NOT_WORKING',
+        };
+        const conditionEnum = result.condition ? (condMap[result.condition] ?? 'USED_GOOD') : null;
+        const syncResult = await syncListedItemFieldsToEbay({
+          organizerId: item.sale!.organizerId,
+          ebayOfferId: item.ebayOfferId,
+          title: result.title ?? null,
+          description: result.description ?? null,
+          conditionEnum,
+          logTag: `[Reanalyze eBay] item ${itemId}`,
+        });
+        ebaySynced = syncResult.synced && syncResult.published;
+        ebaySyncReason = syncResult.reason;
+        // Category is locked on active listings — note drift, do not attempt to change it.
+        const newCatId = cat?.categoryId ?? null;
+        if (newCatId && item.ebayCategoryId && newCatId !== item.ebayCategoryId) {
+          ebayCategoryLocked = { changed: true, from: item.ebayCategoryId, to: newCatId };
+        }
+      } catch (syncErr: any) {
+        console.warn(`[Reanalyze eBay] non-fatal sync error for item ${itemId}:`, syncErr?.message || syncErr);
+        ebaySynced = false;
+        ebaySyncReason = 'exception';
+      }
+    }
 
-    res.json({ itemId, applied: apply, before, after });
+    console.log(`[Reanalyze] item=${itemId} applied=${apply} ebaySynced=${ebaySynced} title="${(result.title || item.title || '').slice(0, 80)}"`);
+
+    res.json({ itemId, applied: apply, before, after, ebaySynced, ebaySyncReason, ebayCategoryLocked });
   } catch (err: any) {
     console.error('[Reanalyze] route error:', err?.message || err);
     res.status(500).json({ error: 'reanalyze failed', detail: String(err?.message || err) });
