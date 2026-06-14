@@ -226,6 +226,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
               title={itemTitle}
               category={category}
               condition={condition}
+              currentPrice={currentPrice}
               onApplyPrice={(price) => {
                 if (onPriceSelect) {
                   onPriceSelect(price);

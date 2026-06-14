@@ -64,6 +64,7 @@ const pricesuggestionSchema = z.object({
   title: z.string().min(1, 'title is required'),
   category: z.string().min(1, 'category is required'),
   condition: z.string().min(1, 'condition is required'),
+  currentPrice: z.number().positive().optional(),
 });
 
 const highValueSchema = z.object({
@@ -834,7 +835,7 @@ router.post('/:saleId/bulk-import', authenticate, bulkItemsLimiter, uploadCsv.si
 router.post('/ai/price-suggest', authenticate, async (req, res) => {
   try {
     const validatedData = pricesuggestionSchema.parse(req.body);
-    const { title, category, condition } = validatedData;
+    const { title, category, condition, currentPrice } = validatedData;
 
     // Fetch up to 5 recently sold items in the same category for comparable pricing
     const { prisma } = await import('../index');
@@ -857,7 +858,7 @@ router.post('/ai/price-suggest', authenticate, async (req, res) => {
 
     // Import here to avoid circular dependencies
     const { suggestPrice } = await import('../services/cloudAIService');
-    const suggestion = await suggestPrice(title, category, condition, compData);
+    const suggestion = await suggestPrice(title, category, condition, compData, currentPrice);
 
     res.json(suggestion);
   } catch (error) {

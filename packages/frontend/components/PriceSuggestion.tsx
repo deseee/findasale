@@ -4,6 +4,9 @@
  * Shows AI-powered price suggestions for items based on title, category, and condition.
  * Displays a suggestion card with low/high price range and reasoning.
  * Allows organizer to apply the suggested price to the item form.
+ *
+ * Safety guard (S977): if suggestion is <50% of currentPrice, shows a warning
+ * confirmation step before applying — prevents catastrophic price replacement.
  */
 
 import React, { useState } from 'react';
@@ -14,6 +17,7 @@ interface PriceSuggestionProps {
   title: string;
   category: string;
   condition: string;
+  currentPrice?: number;
   onApplyPrice: (price: number) => void;
 }
 
@@ -28,11 +32,13 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
   title,
   category,
   condition,
+  currentPrice,
   onApplyPrice,
 }) => {
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<SuggestionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState(false);
   const { showToast } = useToast();
 
   const isEnabled = title.trim().length > 0 && category.trim().length > 0;
@@ -46,12 +52,14 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
     setLoading(true);
     setError(null);
     setSuggestion(null);
+    setPendingConfirm(false);
 
     try {
       const response = await api.post('/items/ai/price-suggest', {
         title: title.trim(),
         category: category.trim(),
         condition: condition.trim(),
+        ...(currentPrice && currentPrice > 0 ? { currentPrice } : {}),
       });
 
       setSuggestion(response.data);
@@ -65,16 +73,31 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
     }
   };
 
-  const handleApplyPrice = () => {
-    if (suggestion) {
-      onApplyPrice(suggestion.suggested);
-      showToast(
-        `Price set to $${suggestion.suggested.toFixed(2)}`,
-        'success'
-      );
-      setSuggestion(null);
-    }
+  const applyPrice = (price: number) => {
+    onApplyPrice(price);
+    showToast(`Price set to $${price.toFixed(2)}`, 'success');
+    setSuggestion(null);
+    setPendingConfirm(false);
   };
+
+  const handleApplyPrice = () => {
+    if (!suggestion) return;
+
+    // Safety guard: warn if suggestion is <50% of current price
+    const hasCurrentPrice = currentPrice && currentPrice > 0;
+    const isLargeDrop = hasCurrentPrice && suggestion.suggested < currentPrice * 0.5;
+
+    if (isLargeDrop) {
+      setPendingConfirm(true);
+      return;
+    }
+
+    applyPrice(suggestion.suggested);
+  };
+
+  const dropPct = suggestion && currentPrice && currentPrice > 0
+    ? Math.round((1 - suggestion.suggested / currentPrice) * 100)
+    : 0;
 
   return (
     <div className="space-y-3">
@@ -121,13 +144,37 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
             {suggestion.reasoning}
           </p>
 
-          <button
-            type="button"
-            onClick={handleApplyPrice}
-            className="px-6 py-2.5 bg-[#4A7C59] hover:bg-[#3d654a] dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white text-xs font-medium rounded-lg transition-colors"
-          >
-            Use ${suggestion.suggested.toFixed(2)}
-          </button>
+          {pendingConfirm ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                ⚠️ This is {dropPct}% below your current price of ${currentPrice?.toFixed(2)}. Replace it?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyPrice(suggestion.suggested)}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  Yes, use ${suggestion.suggested.toFixed(2)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingConfirm(false)}
+                  className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-warm-800 dark:text-warm-200 text-xs font-medium rounded-lg transition-colors"
+                >
+                  Keep ${currentPrice?.toFixed(2)}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleApplyPrice}
+              className="px-6 py-2.5 bg-[#4A7C59] hover:bg-[#3d654a] dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              Use ${suggestion.suggested.toFixed(2)}
+            </button>
+          )}
         </div>
       )}
     </div>
