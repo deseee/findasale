@@ -2223,8 +2223,19 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               // Also suppress packageType when routing via LSAS calculated shipping (routingReason='calculated-default'):
               // LSAS computes rates from weight+dims alone and rejects incompatible packageType values (err 216314).
               ...((): { packageType?: string } => {
-                if (routing.routingReason === 'calculated-default') {
-                  // LSAS calculated shipping — strip packageType entirely; weight/dims are sufficient
+                // LSAS-validated auto policies (calculated + FVF flat-rate buckets) reject
+                // box/envelope packageType values incompatible with the weight/dims — e.g.
+                // MAILING_BOX for an ~11lb parcel → errorId 25101 / err:216305 MailingBoxes
+                // (proven via live eBay API, S975). Weight + dims are sufficient for these
+                // paths, so strip packageType. This is why a pump that listed fine via the
+                // calculated path failed once it routed through the new flat-rate path.
+                const rr = routing.routingReason || '';
+                if (
+                  rr === 'calculated-default' ||
+                  rr.startsWith('calculated') ||
+                  rr.startsWith('fvf-flat') ||
+                  rr.startsWith('tier-gap-fvf-flat')
+                ) {
                   return {};
                 }
                 const valid = new Set([
