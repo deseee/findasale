@@ -8,7 +8,7 @@ import { cronGuard } from '../utils/cronGuard';
  */
 export const scheduleConsignorExpiryNoticeCron = (): void => {
   // Run daily at 2 AM UTC
-  cron.schedule('0 2 * * *', cronGuard({ jobName: 'consignorExpiryNoticeJob' }, async () => {
+  cron.schedule('10 2 * * *', cronGuard({ jobName: 'consignorExpiryNoticeJob' }, async () => {
     console.log('[consignor-expiry-cron] Starting consignor expiry notice job...');
     await processConsignorExpiryNotices();
   }));

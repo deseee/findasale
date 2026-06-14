@@ -74,10 +74,10 @@ export const cleanupStaleDrafts = async (): Promise<void> => {
 /**
  * Register the cleanup cron job.
  * Schedule: Daily at 2 AM UTC (configurable via env var if needed).
- * Cron pattern: '0 2 * * *' = every day at 02:00 UTC
+ * Cron pattern: '5 2 * * *' = every day at 02:00 UTC
  */
 export const scheduleCleanupCron = (): void => {
-  cron.schedule('0 2 * * *', cronGuard({ jobName: 'cleanupStaleDrafts' }, async () => {
+  cron.schedule('5 2 * * *', cronGuard({ jobName: 'cleanupStaleDrafts' }, async () => {
     console.log('[cleanupStaleDrafts] Running scheduled cleanup job...');
     await cleanupStaleDrafts();
   }));
