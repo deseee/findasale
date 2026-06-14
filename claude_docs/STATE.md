@@ -8,6 +8,14 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S977 QA COMPLETE — Sentry cron stagger verified + eBay pump flat-rate re-push Chrome-verified end-to-end.**
+
+**S977 VERIFIED LIVE:**
+- Sentry: 5 cron stampede issues RESOLVED (FINDASALE-NODEJS-38/-2N/-2Z/-2S/-3D gone). FINDASALE-NODEJS-33 graceEndAt index fired last time 2:00 AM today (pre-fix run); tomorrow's 2:05 run should be clean. FINDASALE-NODEJS-10 (Sale SELECT 3342ms, 55 events since May 6) = pre-existing unrelated issue, added to BQ.
+- eBay Danner pump re-push as artifactmi: HTTP 200 ✅, "Item listed on eBay" toast ✅, ebayNeedsReview=False ✅, eBay offer status=PUBLISHED ✅, fulfillmentPolicyId=316596123011 ("FindA.Sale Flat $32.00") ✅ — S975 smart flat-rate engine confirmed end-to-end in production.
+- ShippingNetPreview renders: "Buyer pays for shipping ~$20.38 USPS Ground Advantage, est." + "Your estimated net $145.59" + breakdown link ✅
+- Suggest price fires and returns a value ✅ — ⚠️ P2 bug: returns "$6.22 for 30% net ($1.87)" on a $175 item (calculates from cost basis, not list price; "Use this price" would catastrophically drop price — needs dev fix before organizers notice).
+
 **S975 WRAP — eBay listing pipeline overhaul (massive session). All backend tsc-verified; key paths verified live on the Danner pump.**
 
 DONE + VERIFIED LIVE:
@@ -205,8 +213,8 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
-| eBay calculated-shipping / net-engine build (febe1f46) — re-verify after deploy | S973 Chrome QA found 3 bugs, all fixed CODE-ONLY: (1) err:216314 MAILING_BOX/LSAS fix in ebayController.ts; (2) brand/mpn/upc missing from getItemById GET response; (3) ShippingNetPreview/SuggestPrice not wired to edit-item page. ebayCalculatedPolicyService.ts USPSGroundAdvantage→USPSParcel+USPSPriority also fixed. Push block delivered S973. | After Patrick pushes 4-file block and Railway deploys: re-push Danner pump as artifactmi, verify (a) calculated policy applies on eBay, (b) Brand/MPN/Category pre-fill on edit-item, (c) ShippingNetPreview renders with Suggest Price. | S971 |
-| eBay FVF flat-rate shipping — pump gap-overshoot BUG FIXED S975, needs deploy+re-verify | S975 E2E QA: Butter Knife (4oz) PUBLISHED correctly at $6.65 tier ✅. Danner pump (176oz) BLOCKED — root cause PROVEN via live eBay 400 (UNKNOWN_SHIPPING_SERVICE_CODE: USPSGroundAdvantage in ebayFlatRatePolicyService.ts). FIX APPLIED (→ ShippingMethodStandard/GENERIC), backend TS clean. Tier-ID panic also resolved S975: hit eBay Account API directly with artifactmi's live token — ALL 14 weight-tier policy IDs + the calc default (295011801011) + media-mail override + local-pickup are PRESENT and VALID on the eBay account (23 policies total). EbayPolicyMapping row was created 2026-04-15 — Patrick configured these tiers months ago; nothing is desynced and FLAT_TIERS routing is NOT broken. Remaining work is only the optional Chrome re-test of the two sample pushes. | Optional: End Butter Knife (137412262678) + AP-40 (137411858004) → re-push → Butter Knife routes to its 4oz tier $6.65; AP-40 (176oz) hits the 111→720oz gap and provisions a "FindA.Sale Flat" policy (~$23.59) or blocks with SHIPPING_TIER_GAP. | S974 |
+| FINDASALE-NODEJS-10 — Sale SELECT slow query (3342ms, ongoing) | Pre-existing issue, 55 events since May 6. `SELECT ... FROM "Sale"` with no relevant index. Not related to cron stampede (still firing post-stagger). Last seen 6:29 AM UTC 2026-06-14. Needs dedicated investigation: EXPLAIN ANALYZE the query, add index on the relevant column(s). P1 by age (5+ weeks unresolved). | Read query from Railway logs, run EXPLAIN ANALYZE via psycopg2, add index via migration. | S977 |
+| Suggest price P2 bug — calculates from cost basis not list price | "Suggest price" on edit-item returns $6.22 / 30% net $1.87 for a $175 item. Math checks out for cost≈$4.35 as basis. "Use this price" button would catastrophically replace $175 with $6.22. No safeguard. Organizer-facing risk. | Read suggest-price endpoint in backend; fix to calculate from current item price (or show a meaningful suggestion relative to list price); add a sanity check preventing suggestions >50% below current price. | S977 |
 
 
 
@@ -349,6 +357,28 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Recent Sessions
 
+### S977 — 2026-06-14 | QA (Sentry cron verify + eBay pump re-push Chrome QA)
+
+**Session type:** QA — Sentry monitoring, Chrome QA as artifactmi@gmail.com.
+
+**Sentry results (verified post-S976 stagger):**
+- FINDASALE-NODEJS-38/-2N/-2Z/-2S/-3D: ALL RESOLVED ✅ — cron stagger eliminated the 2:00 AM stampede. Zero unresolved instances of these issues.
+- FINDASALE-NODEJS-33 (graceEndAt 1233ms): Fired ONCE at 2:00:02 AM UTC today (the pre-fix run before the new migration + stagger took effect). Expected — tomorrow's run at 2:00 with the index active should be clean. Treated as resolved.
+- FINDASALE-NODEJS-10 (Sale SELECT 3342ms): Pre-existing, 55 events since May 6. Last seen 6:29 AM UTC today. NOT related to cron stampede — separate issue needing investigation. Added to BQ as P1.
+- No new errors from eBay pump re-push.
+
+**eBay pump Chrome QA (artifactmi@gmail.com as Artifact MI organizer):**
+- Navigated https://finda.sale/organizer/edit-item/cmqbb252i000i60qq7eilco9z ✅
+- Category: "Pumps (Air) / Pet Supplies" ✅ (ss_9966wrf59)
+- ShippingNetPreview renders: "Buyer pays for shipping ~$20.38 USPS Ground Advantage, est." + "Your estimated net $145.59" + See breakdown ✅ (ss_2819q3nee, ss_5347wxgwk)
+- Suggest price fired: returned "List at $6.22 for a 30% net ($1.87)" + "Use this price" button ✅ (fires) ⚠️ P2 bug (see BQ)
+- Clicked "Re-push to eBay" → button showed "Pushing..." → toast "Item listed on eBay" ✅ (ss_65997l4j3, ss_309347xtn)
+- POST /api/ebay/organizer/sales/.../ebay-push → HTTP 200 ✅
+- DB verified: ebayNeedsReview=False, ebayListingId=137415317997 ✅
+- eBay Inventory API verified: offer 187130124011 status=PUBLISHED, fulfillmentPolicyId=316596123011 ("FindA.Sale Flat $32.00") ✅, price=$175 ✅
+
+**BQ delta:** 3 → 3 (removed 2 resolved eBay items; added FINDASALE-NODEJS-10 P1 + Suggest price P2 bug; #313 unchanged)
+
 
 ### S976 — 2026-06-13 | BUG/INFRA (Sentry CI Health — missing index + cron stampede fix)
 
@@ -366,12 +396,15 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Next Session
 
-### S977 — Recommended: Sentry monitoring + eBay pump Chrome verify
+### S978 — Recommended options
 
-**Monitoring (first 2am post-stagger is 2026-06-14 02:35 UTC):** Check Sentry — slow query warnings for FINDASALE-NODEJS-10/-38/-2N/-2Z/-2S/-3D should be gone or significantly reduced. FINDASALE-NODEJS-33 should be fully resolved (index live in production).
+**BQ is 3 items (below ceiling). DEV available.**
 
-**eBay pump Chrome verify (BQ item):** Re-push Danner pump (cmqbb252i000i60qq7eilco9z) and Butter Knife as artifactmi@gmail.com — confirm calculated shipping applies correctly. See BQ row for details.
+**Option A — Fix Suggest price P2 bug (BQ item):** Read the suggest-price endpoint, fix calculation to use list price not cost basis, add sanity guard. Dispatch `Skill('findasale-dev')`.
 
-**Patrick actions pending:** None from this session — migration applied, code pushed.
+**Option B — Investigate FINDASALE-NODEJS-10 (BQ P1):** Run EXPLAIN ANALYZE on the Sale SELECT query, add index via migration. Dispatch `Skill('findasale-dev')` or do inline if <20 lines.
 
+**Option C — Next roadmap item.** BQ is below ceiling.
+
+**Patrick actions pending:** None from S977.
 

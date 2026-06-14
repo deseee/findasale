@@ -1,6 +1,26 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S975 — 2026-06-14 (Opus: full eBay listing-pipeline overhaul — shipping engine, category resolver, AI accuracy, enrichment cascade, live-edit propagation; pump verified live)
+**Last updated:** S977 — 2026-06-14 (QA: Sentry cron stagger verified + eBay pump Chrome-verified end-to-end; BQ 3 items)
+
+---
+
+## Session S977 Summary — QA Complete ✅
+
+**Type:** QA — Sentry post-stagger monitoring + eBay pump re-push Chrome verification
+
+| Check | Result |
+|-------|--------|
+| Sentry cron issues (NODEJS-38/-2N/-2Z/-2S/-3D) | ✅ All RESOLVED — stagger working |
+| Sentry NODEJS-33 graceEndAt index | ✅ Fired once pre-fix at 2am today; index active for tomorrow |
+| FINDASALE-NODEJS-10 Sale SELECT slow query | ⚠️ Pre-existing, ongoing since May 6 — added to BQ P1 |
+| eBay pump re-push (artifactmi@gmail.com) | ✅ Published — HTTP 200, toast shown, ebayNeedsReview=False |
+| eBay offer on live eBay | ✅ PUBLISHED, fulfillmentPolicyId=316596123011 "FindA.Sale Flat $32.00" |
+| ShippingNetPreview component | ✅ Renders — ~$20.38 buyer shipping, $145.59 net |
+| Suggest price button | ✅ Fires — ⚠️ P2 bug: returns $6.22 for 30% on a $175 item (calculates from cost basis not list price; "Use this price" would drop price to $6.22 — avoid clicking) |
+
+**No Patrick actions needed from this session.**
+
+**BQ is 3 items — DEV is unblocked.** Recommend next session: fix Suggest price P2 bug OR investigate FINDASALE-NODEJS-10 slow query.
 
 ---
 
