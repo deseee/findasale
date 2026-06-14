@@ -1,6 +1,25 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S978 — 2026-06-14 (DEV: Suggest price P2 safety guard + ShippingNetPreview FVF copy; BQ 2 items)
+**Last updated:** S979 — 2026-06-14 (DEV+QA: eBay min-price suggester → silent low-price guardrail; $6.22 P2 resolved; Chrome QA passed)
+
+---
+
+## Session S979 Summary — DEV + QA Complete ✅
+
+**Type:** DEV (guardrail rebuild) + live Chrome QA
+
+**What you flagged:** The "Min. list price to hit a net margin" widget didn't say what it was for, and suggested an absurd $6.22 on a real item — "we look like idiots."
+
+| Change | Result |
+|--------|--------|
+| Removed the always-on "Min. list price" suggester | ✅ No more $6.22 nonsense on real items |
+| Added silent low-price guardrail | ✅ Warns ONLY when entered price is below the fee-safe floor (15% margin); silent on normal items |
+| One-tap "Use $X" applies the floor | ✅ Verified — applies floor, warning self-clears |
+| Negative dollars render as -$X.XX (was "$-0.87") | ✅ Fixes guardrail text + "Your estimated net" box |
+| Frontend TS | ✅ 0 errors |
+| Live Chrome QA as Artifact MI | ✅ $175 → no warning; $3 → guardrail fires (net -$0.87, floor $4.89); Use $4.89 → net $0.74, warning clears |
+
+**Patrick action:** push 1 code file (block below). Roadmap Chrome ✅ applied next session per the cross-session QA rule.
 
 ---
 

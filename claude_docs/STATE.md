@@ -8,13 +8,20 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S979 DEV+QA COMPLETE — eBay min-price suggester replaced with silent low-price guardrail; $6.22 P2 RESOLVED.**
+- Root problem: the "Min. list price to hit a net margin" widget defined margin as net-as-a-fraction-of-list-price with no cost basis, so on any real item it collapsed to the fee/shipping floor (the embarrassing "$6.22 on a $175 item"). It also never told the organizer what it was for.
+- Fix (Patrick-approved direction = guardrail): removed the always-on suggester. ShippingNetPreview now auto-fetches the fee-safe floor (15% margin) and shows an amber warning ONLY when the entered price is below it — silent on normal items. One-tap "Use $X" applies the floor.
+- Follow-up: fmt() now renders negative dollars as -$X.XX (was "$-0.87") — fixes both the guardrail text and the "Your estimated net" box.
+- File: packages/frontend/components/ShippingNetPreview.tsx (frontend-only; reuses existing /shipping-preview/suggest-price; no schema/migration). Frontend TS 0 errors.
+- Chrome QA PASSED live as Artifact MI (see Pending Chrome Verifications, row 547-GR) — staged for next-session roadmap apply.
+
 **S978 DEV COMPLETE — Suggest price P2 safety guard + ShippingNetPreview FVF copy clarification shipped.**
 
 **S977 VERIFIED LIVE:**
 - Sentry: 5 cron stampede issues RESOLVED (FINDASALE-NODEJS-38/-2N/-2Z/-2S/-3D gone). FINDASALE-NODEJS-33 graceEndAt index fired last time 2:00 AM today (pre-fix run); tomorrow's 2:05 run should be clean. FINDASALE-NODEJS-10 (Sale SELECT 3342ms, 55 events since May 6) = pre-existing unrelated issue, added to BQ.
 - eBay Danner pump re-push as artifactmi: HTTP 200 ✅, "Item listed on eBay" toast ✅, ebayNeedsReview=False ✅, eBay offer status=PUBLISHED ✅, fulfillmentPolicyId=316596123011 ("FindA.Sale Flat $32.00") ✅ — S975 smart flat-rate engine confirmed end-to-end in production.
 - ShippingNetPreview renders: "Buyer pays for shipping ~$20.38 USPS Ground Advantage, est." + "Your estimated net $145.59" + breakdown link ✅
-- Suggest price fires and returns a value ✅ — ⚠️ P2 bug: returns "$6.22 for 30% net ($1.87)" on a $175 item (calculates from cost basis, not list price; "Use this price" would catastrophically drop price — needs dev fix before organizers notice).
+- Suggest price fires and returns a value ✅ — ⚠️ P2 bug: returned "$6.22 for 30% net" on a $175 item — **RESOLVED S979** (suggester replaced with silent low-price guardrail; see S979 status above).
 
 **S975 WRAP — eBay listing pipeline overhaul (massive session). All backend tsc-verified; key paths verified live on the Danner pump.**
 
@@ -226,6 +233,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 _S970 records pass: S969 PCVs (#164 Tiers Infra, #27b watermark toggle, #317 Geofence QR) applied to roadmap.md. Stale already-applied rows (#74/#463/#472×3/#27c/#219/#218/#55/#81/#127 — confirmed applied S949/S962/S963/S965) cleared from table._
 |---|---------|----------|---------|
 | SEO3 | Denver city landing page /estate-sales/denver-co | Navigated https://finda.sale/estate-sales/denver-co. Title: "Estate Sales in Denver, CO \| FindA.Sale" ✅. Meta desc present+keyword-rich ✅. H1: "Estate Sales in Denver, CO" ✅. 50 listings visible ✅. Dark mode clean ✅. ss_34924pp42 ss_8168bplgd | S944 |
+| 547-GR | eBay min-price suggester → silent low-price guardrail (ShippingNetPreview) | Navigated https://finda.sale/organizer/edit-item/cmqbb252i000i60qq7eilco9z as Artifact MI (organizer). At price $175: old "Min. list price" suggester GONE, no warning, net $145.59 ✅ (ss_1110cu5x6). Set price $3: amber guardrail fired — "At $3.00, eBay fees and shipping eat most of your money — you'd keep only about -$0.87. List at $4.89 or more to keep at least 15% after fees" + net box -$0.87 ✅ (ss_6407gnhli). Clicked "Use $4.89": price applied, net flipped to $0.74, warning self-cleared ✅ (ss_2301y95wu). Price restored to $175, not saved. | S979 |
 _(#422 ✅ S949 applied S950 — cleared. #75 ✅ S949 applied S950 — cleared. #470 item_viewed ✅ S949 applied S950 — cleared.)_
 _(SEO3 ✅ S944 applied S961 — UI col ✅ S944 in roadmap.md — cleared. #472 ✅ S948 applied S949 — cleared from PCV table S961.)_
 _(S963 records pass: S962 PCVs #219/#218/#55/#81/#127 all ✅ — 5-element evidence confirmed — applied to roadmap.md Claude QA columns. #27c PCV staged for Chrome verify.)_
