@@ -118,8 +118,13 @@ export async function ensureFvfFlatRatePolicy(
         costType: 'FLAT_RATE',
         shippingServices: [
           {
-            shippingServiceCode: 'USPSGroundAdvantage',
-            shippingCarrierCode: 'USPS',
+            // eBay flat-rate domestic uses the GENERIC ShippingMethodStandard code
+            // (matches the organizer's own working flat-rate tier policies). The
+            // carrier-specific 'USPSGroundAdvantage' code is CALCULATED-only and is
+            // rejected by LSAS for FLAT_RATE policies with errorId 216018
+            // UNKNOWN_SHIPPING_SERVICE_CODE (proven via live eBay API, S975).
+            shippingServiceCode: 'ShippingMethodStandard',
+            shippingCarrierCode: 'GENERIC',
             shippingCost: { value: flatRateStr, currency: 'USD' },
             additionalShippingCost: { value: '0.00', currency: 'USD' },
             sortOrder: 1,
