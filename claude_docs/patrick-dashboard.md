@@ -1,6 +1,21 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S974 — 2026-06-13 (BUG/DEV: FVF flat-rate shipping fix pushed | BQ 3 | Next: end listings → re-push → Chrome verify)
+**Last updated:** S975 — 2026-06-13 (BUG/AUDIT, Opus: verified the eBay system is HEALTHY — the "policies not synced" panic was false | BQ 2 | Next: optional Chrome re-test only)
+
+---
+
+## Session S975 Summary — "Don't trust S973" Verification (Opus)
+
+Patrick flagged the autonomous "Begin 973" Sonnet run (logged S973+S974) as not-to-be-trusted. Opus verified everything directly against the live eBay account and the Railway DB.
+
+| What was claimed | What's actually true (tool-verified) |
+|------------------|--------------------------------------|
+| "Policies weren't synced after reconnect" | FALSE. Live eBay API returned all 23 policies; every weight-tier ID + the calc default are present & valid. Synced fine. |
+| "Tier-ID source unknown — routing may be broken" | FALSE. Patrick configured the tiers himself on 2026-04-15. Routing is sound. |
+| Why the connection broke at all | Sonnet added an invalid `sell.logistics` OAuth scope → broke the connection → advised the disconnect/reconnect. That self-inflicted churn caused all the confusion. |
+| Production state | HEALTHY. Backend OK, scopes clean, no junk policies created. Nothing needs reverting. |
+
+**Bottom line:** No real bug. The shipped code (brand/mpn fix, ShippingNetPreview, FVF flat-rate service you asked for) is fine to keep. Docs corrected so the next session doesn't chase the phantom.
 
 ---
 
