@@ -528,6 +528,6 @@ router.post('/visual', upload.single('photo'), async (req: Request, res: Respons
 });
 
 // #455: Anonymous search-query email alert
-router.post('/notify', notifyOnSearch);
+router.post('/notify', searchLimiter, notifyOnSearch);
 
 export default router;
