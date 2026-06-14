@@ -1170,6 +1170,8 @@ model Item {
   mpn                        String?
   brand                      String?
   ebayEpid                   String?
+  // ADR Catalog Enrichment (2026-06-14): low-confidence catalog suggestions for one-click accept in edit UI
+  catalogSuggestions         Json?
   // ADR eBay Parity Phase B: Rich condition
   conditionNotes             String?
   // ADR eBay Parity Phase B: Pricing flexibility

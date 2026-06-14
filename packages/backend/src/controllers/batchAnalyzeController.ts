@@ -26,7 +26,7 @@ import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { getEbayAccessToken, suggestEbayCategoryForTitle } from './ebayController';
 import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
-import { lookupByBarcode } from '../services/ebayCatalogLookup';
+import { lookupByBarcode, enrichItemFromCatalog } from '../services/ebayCatalogLookup';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -343,7 +343,12 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           try {
             const existing = await prisma.item.findUnique({
               where: { id: itemId },
-              select: { description: true, userEditedFields: true, ebayCategoryId: true },
+              select: {
+                description: true, userEditedFields: true, ebayCategoryId: true,
+                brand: true, mpn: true, upc: true, ean: true, isbn: true,
+                packageWeightOz: true, packageLengthIn: true, packageWidthIn: true,
+                packageHeightIn: true, packageConfirmedByOrganizer: true,
+              },
             });
             const userEdited = existing?.userEditedFields ?? [];
             // No userEditedFields gate on description — composeDescription with 'AUTO' merges safely:
@@ -392,6 +397,60 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               // Non-blocking — never interrupt batch analysis
             }
 
+            // Catalog enrichment (ADR 2026-06-14): non-barcode fallback. Uses AI title +
+            // brand + visible model number to fetch catalog identifiers. HIGH (>=0.85)
+            // auto-fills empty fields; lower confidence is stored as a suggestion only.
+            let catalogApply: Record<string, any> = {};
+            let catalogSuggestionWrite: any = undefined;
+            try {
+              // Skip if a barcode already produced a HIGH match (don't double-enrich).
+              if (!batchBarcodeEnrichment) {
+                const enrichment = await enrichItemFromCatalog({
+                  title: summary.suggestedTitle,
+                  brand: existing?.brand ?? analysis?.brand ?? null,
+                  mpn: existing?.mpn ?? analysis?.mpn ?? null,
+                  upc: existing?.upc ?? null,
+                  ean: existing?.ean ?? null,
+                  isbn: existing?.isbn ?? null,
+                  tags: summary.suggestedTags ?? null,
+                });
+                if (enrichment) {
+                  const ue = existing?.userEditedFields ?? [];
+                  if (enrichment.confidence >= 0.85) {
+                    // HIGH: fill empty identifier fields (organizer values win).
+                    const id = enrichment.identifiers;
+                    if (id.mpn && !ue.includes('mpn') && !existing?.mpn) catalogApply.mpn = id.mpn;
+                    if (id.upc && !existing?.upc) catalogApply.upc = id.upc;
+                    if (id.ean && !existing?.ean) catalogApply.ean = id.ean;
+                    if (id.epid && !(existing as any)?.ebayEpid) catalogApply.ebayEpid = id.epid;
+                    if (id.brand && !ue.includes('brand') && !existing?.brand) catalogApply.brand = id.brand;
+                    // Package dims only when organizer hasn't confirmed package.
+                    if (existing && existing.packageConfirmedByOrganizer === false && enrichment.package) {
+                      const pk = enrichment.package;
+                      if (pk.weightOz != null && !ue.includes('packageWeightOz') && existing.packageWeightOz == null) catalogApply.packageWeightOz = pk.weightOz;
+                      if (pk.lengthIn != null && existing.packageLengthIn == null) catalogApply.packageLengthIn = pk.lengthIn;
+                      if (pk.widthIn != null && existing.packageWidthIn == null) catalogApply.packageWidthIn = pk.widthIn;
+                      if (pk.heightIn != null && existing.packageHeightIn == null) catalogApply.packageHeightIn = pk.heightIn;
+                    }
+                    // HIGH match clears any stale low-confidence suggestion.
+                    catalogSuggestionWrite = null;
+                  } else {
+                    // Below HIGH: store as a one-click suggestion; touch no real fields.
+                    catalogSuggestionWrite = {
+                      source: (existing?.upc || existing?.ean || existing?.isbn) ? 'barcode' : 'ebay-catalog',
+                      confidence: enrichment.confidence,
+                      identifiers: enrichment.identifiers,
+                      ...(enrichment.package ? { package: enrichment.package } : {}),
+                      ...(enrichment.matchedTitle ? { matchedTitle: enrichment.matchedTitle } : {}),
+                      suggestedAt: new Date().toISOString(),
+                    };
+                  }
+                }
+              }
+            } catch (enrichErr) {
+              console.warn(`[batchAnalyze] catalog enrichment failed for item ${itemId}:`, enrichErr);
+            }
+
             await prisma.item.update({
               where: { id: itemId },
               data: {
@@ -424,6 +483,9 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                     ? { ebayCategoryId: batchBarcodeEnrichment.ebayCategoryId, ebayCategoryName: batchBarcodeEnrichment.ebayCategoryName ?? ebayCategoryName }
                     : {}),
                 } : {}),
+                // Catalog enrichment: HIGH-confidence auto-fills + suggestion write.
+                ...catalogApply,
+                ...(catalogSuggestionWrite !== undefined ? { catalogSuggestions: catalogSuggestionWrite } : {}),
               },
             });
           } catch (err) {

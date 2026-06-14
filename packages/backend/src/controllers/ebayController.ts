@@ -26,6 +26,7 @@ import { ensureFvfFlatRatePolicy } from '../services/ebayFlatRatePolicyService';
 import { estimateBuyerShippingRate } from '../services/ebayRateEstimateService';
 import { computeNetProceeds, suggestPriceForMargin } from '../services/ebayNetProceedsService';
 import { estimatePackageProfile } from '../services/ebayPackageEstimateService';
+import { modelTokenFrom } from '../services/ebayCatalogLookup';
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -346,8 +347,15 @@ async function getEbayPriceComps(
       return words.slice(0, 5).join(' ');
     };
 
-    const query = encodeURIComponent(cleanTitle(title));
-    console.log(`[eBay] Price comps query: "${cleanTitle(title)}" (from: "${title.slice(0, 60)}")`);
+    // Catalog Enrichment (ADR 2026-06-14): enforce a model token so comps don't drift
+    // across near-name models (AP-4 / AP-100 vs AP-40). Comps only has the title here.
+    const compsModelToken = modelTokenFrom({ title });
+    const cleanedTitle = cleanTitle(title);
+    const queryText = compsModelToken && !cleanedTitle.toUpperCase().includes(compsModelToken)
+      ? `${cleanedTitle} ${compsModelToken}`
+      : cleanedTitle;
+    const query = encodeURIComponent(queryText);
+    console.log(`[eBay] Price comps query: "${queryText}" (from: "${title.slice(0, 60)}"${compsModelToken ? `, model token: ${compsModelToken}` : ''})`);
     const browseUrl =
       `https://api.ebay.com/buy/browse/v1/item_summary/search?` +
       `q=${query}&` +
@@ -375,7 +383,19 @@ async function getEbayPriceComps(
     }
 
     const data = (await response.json()) as any;
-    const items = data.itemSummaries || [];
+    let items = data.itemSummaries || [];
+
+    // Model-token post-filter: drop listings whose title lacks the exact model token.
+    // If filtering leaves fewer than 2 comps, fall back to the unfiltered set (never empty).
+    if (compsModelToken && items.length) {
+      const tokenLower = compsModelToken.toLowerCase();
+      const filtered = items.filter((it: any) =>
+        (it?.title ?? '').toLowerCase().includes(tokenLower)
+      );
+      if (filtered.length >= 2) {
+        items = filtered;
+      }
+    }
 
     if (!items.length) {
       const emptyResult = {

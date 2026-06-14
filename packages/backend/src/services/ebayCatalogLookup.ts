@@ -7,6 +7,7 @@
  */
 
 import { getEbayAccessToken } from '../controllers/ebayController';
+import { searchCatalogProduct } from './ebayTaxonomyService';
 
 export interface EbayCatalogResult {
   found: true;
@@ -239,4 +240,152 @@ export async function lookupByBarcode(
     ebayCategoryId: topCategory?.categoryId,
     ebayCategoryName: topCategory?.categoryName,
   };
+}
+
+// ── Catalog Enrichment (ADR 2026-06-14) ─────────────────────────────────────
+
+/**
+ * Derive a normalized model/part token from an item's mpn or title.
+ * Prefers an explicit mpn; otherwise regex-extracts a model-looking token from
+ * the title (e.g. "AP-40", "XR500", "B 3"). Returns the normalized token
+ * (uppercased, single internal hyphen) or null. Shared by enrichment + comps.
+ */
+export function modelTokenFrom(opts: { mpn?: string | null; title?: string | null }): string | null {
+  const normalize = (raw: string): string =>
+    raw.trim().toUpperCase().replace(/[\s_]+/g, '-').replace(/-+/g, '-');
+
+  // 1. Prefer an explicit mpn (still validate it looks like a model token).
+  if (opts.mpn && opts.mpn.trim()) {
+    const m = opts.mpn.match(/[A-Z]{0,4}[-\s]?\d{1,5}[A-Z]?/i);
+    if (m) return normalize(m[0]);
+    // mpn present but no alphanumeric model shape — still return normalized mpn
+    return normalize(opts.mpn);
+  }
+
+  // 2. Else scan the title for a model-looking token.
+  if (opts.title && opts.title.trim()) {
+    const m = opts.title.match(/\b[A-Z]{1,4}[-\s]?\d{1,4}[A-Z]?\b/);
+    if (m) return normalize(m[0]);
+  }
+
+  return null;
+}
+
+/** Result of a catalog-enrichment attempt. */
+export interface CatalogEnrichmentResult {
+  confidence: number; // 1.0 = HIGH (barcode-equivalent or brand+model exact), ~0.6 = partial
+  identifiers: {
+    mpn?: string;
+    upc?: string;
+    ean?: string;
+    epid?: string;
+    brand?: string;
+  };
+  package?: {
+    weightOz?: number;
+    lengthIn?: number;
+    widthIn?: number;
+    heightIn?: number;
+  };
+  matchedTitle?: string;
+}
+
+/**
+ * Best-effort catalog enrichment for an item.
+ *
+ * Path A — barcode-equivalent (HIGH, confidence 1.0): if the item already carries
+ *   a upc/ean/isbn, treat it as a scanned barcode and run lookupByBarcode. Returns
+ *   the catalog identifiers + package dims.
+ *
+ * Path B — brand + model catalog search: requires a brand AND a derivable model
+ *   token (from mpn or title). Calls searchCatalogProduct (eBay Catalog API) and
+ *   scores the best product:
+ *     - confidence 1.0 (HIGH) when the catalog product's brand matches the item
+ *       brand (case-insensitive) AND the model token appears in the product title.
+ *     - confidence 0.6 (partial) otherwise.
+ *   The Catalog API product summary only exposes epid + title + brand, so Path B
+ *   yields identifiers (epid/brand) and matchedTitle but no package dims.
+ *
+ * Returns null on no match or any error (never throws out).
+ */
+export async function enrichItemFromCatalog(item: {
+  title?: string | null;
+  brand?: string | null;
+  mpn?: string | null;
+  upc?: string | null;
+  ean?: string | null;
+  isbn?: string | null;
+  tags?: string[] | null;
+}): Promise<CatalogEnrichmentResult | null> {
+  try {
+    // ── Path A: existing barcode-equivalent identifier → HIGH ───────────────
+    const barcode =
+      (item.upc && item.upc.trim() && { code: item.upc.trim(), type: 'UPC' }) ||
+      (item.ean && item.ean.trim() && { code: item.ean.trim(), type: 'EAN' }) ||
+      (item.isbn && item.isbn.trim() && { code: item.isbn.trim(), type: 'ISBN' }) ||
+      null;
+
+    if (barcode) {
+      const hit = await lookupByBarcode(barcode.code, barcode.type);
+      if (hit) {
+        return {
+          confidence: 1.0,
+          identifiers: {
+            ...(hit.mpn ? { mpn: hit.mpn } : {}),
+            ...(hit.upc ? { upc: hit.upc } : {}),
+            ...(hit.ean ? { ean: hit.ean } : {}),
+            ...(hit.brand ? { brand: hit.brand } : {}),
+          },
+          package: {
+            ...(hit.weightOz != null ? { weightOz: hit.weightOz } : {}),
+            ...(hit.lengthIn != null ? { lengthIn: hit.lengthIn } : {}),
+            ...(hit.widthIn != null ? { widthIn: hit.widthIn } : {}),
+            ...(hit.heightIn != null ? { heightIn: hit.heightIn } : {}),
+          },
+          matchedTitle: hit.title,
+        };
+      }
+      // barcode present but no catalog hit — fall through to Path B attempt
+    }
+
+    // ── Path B: brand + model token → catalog product search ────────────────
+    const brand = item.brand?.trim();
+    const modelToken = modelTokenFrom({ mpn: item.mpn, title: item.title });
+    if (!brand || !modelToken) return null;
+
+    const token = await getEbayAccessToken();
+    if (!token) return null;
+
+    const products = await searchCatalogProduct(token, { mpn: modelToken, brand });
+    if (!products.length) return null;
+
+    // Pick the best product: prefer one whose brand matches AND whose title
+    // contains the model token; else the first returned.
+    const tokenLower = modelToken.toLowerCase();
+    const brandLower = brand.toLowerCase();
+    const best =
+      products.find(
+        (p) =>
+          (p.brand?.toLowerCase() === brandLower) &&
+          (p.title?.toLowerCase().includes(tokenLower) ?? false)
+      ) ?? products[0];
+
+    const brandExact = best.brand?.toLowerCase() === brandLower;
+    const tokenInTitle = best.title?.toLowerCase().includes(tokenLower) ?? false;
+    const confidence = brandExact && tokenInTitle ? 1.0 : 0.6;
+
+    return {
+      confidence,
+      identifiers: {
+        mpn: modelToken,
+        ...(best.epid ? { epid: best.epid } : {}),
+        ...(best.brand ? { brand: best.brand } : {}),
+      },
+      // Catalog API product summary carries no weight/dims — package omitted here.
+      matchedTitle: best.title,
+    };
+  } catch (err: any) {
+    console.error('[ebayCatalog] enrichItemFromCatalog error:', err?.message ?? err);
+    return null;
+  }
 }
