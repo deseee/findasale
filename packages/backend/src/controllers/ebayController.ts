@@ -22,8 +22,14 @@ import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
 import { domainToL1 } from '../config/ebayCategories';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { ensureCalculatedFulfillmentPolicy } from '../services/ebayCalculatedPolicyService';
-import { ensureFvfFlatRatePolicy, computeFvfFlatRate, roundUpToBucket } from '../services/ebayFlatRatePolicyService';
-import { computeCheapestForOrigin } from '../services/ebayRateEstimateService';
+import { ensureFvfFlatRatePolicy } from '../services/ebayFlatRatePolicyService';
+import {
+  computeCheapestForOrigin,
+  USPS_RATE_EFFECTIVE_DATE,
+  UPS_RATE_EFFECTIVE_DATE,
+  FEDEX_RATE_EFFECTIVE_DATE,
+} from '../services/ebayRateEstimateService';
+import { resolveItemShipping } from '../services/ebayShippingResolver';
 import { computeNetProceeds, suggestPriceForMargin } from '../services/ebayNetProceedsService';
 import { estimatePackageProfile } from '../services/ebayPackageEstimateService';
 import { modelTokenFrom } from '../services/ebayCatalogLookup';
@@ -2899,12 +2905,27 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not authorized to publish this item' });
     }
 
-    // Already live? Idempotent — return current listing URL.
+    // Already live? Idempotent — but re-pin shipping first (Part B).
+    // Re-pushing a live item is a signal the organizer may have re-rated it
+    // (re-weighed/measured), so re-resolve and re-apply the shipping policy to
+    // the live offer before returning. Never let resync failure break the
+    // idempotent response — the listing URL must always come back.
     if (item.ebayListingId) {
+      let shippingResynced = false;
+      try {
+        const resync = await resyncItemShippingPolicy(item.id);
+        shippingResynced = resync.changed;
+      } catch (resyncErr) {
+        console.warn(
+          `[eBay PublishNow] shipping resync failed for item ${item.id} (non-fatal):`,
+          (resyncErr as Error).message
+        );
+      }
       return res.json({
         ebayListingId: item.ebayListingId,
         ebayItemUrl: `https://www.ebay.com/itm/${item.ebayListingId}`,
         alreadyPublished: true,
+        shippingResynced,
       });
     }
 
@@ -3767,6 +3788,250 @@ async function resolvePoliciesForItem(
   };
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 2 (Part B): Shipping-policy re-sync for LIVE listings.
+// ADR: claude_docs/feature-notes/adr-shipping-policy-resync.md
+//
+// When a live eBay listing's shipping-determining inputs change (organizer
+// weighs/measures the item, or re-pushes), re-resolve the authoritative
+// fulfillment policy and re-apply it to the live offer. publishItemOffer used
+// to no-op on already-live items, so the policy never updated. These helpers
+// fix that. Conservative by design: only re-pin when the policy id actually
+// differs, always respect the rate limiter, never throw.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Concatenated carrier rate-table effective-date version string, e.g.
+ * `USPS:2026-04-26|UPS:2026-06-14|FEDEX:2026-06-14`. Stored on the item when a
+ * shipping policy is (re)applied so Phase 3 drift detection can tell whether the
+ * applied amount reflects the current rate tables.
+ */
+export function currentEbayRateVersion(): string {
+  return `USPS:${USPS_RATE_EFFECTIVE_DATE}|UPS:${UPS_RATE_EFFECTIVE_DATE}|FEDEX:${FEDEX_RATE_EFFECTIVE_DATE}`;
+}
+
+/**
+ * Apply a new fulfillmentPolicyId to an EXISTING live eBay offer.
+ *
+ * eBay offer PUT is a full REPLACE (not partial-merge), so we GET the current
+ * offer, merge in the new listingPolicies.fulfillmentPolicyId, strip read-only
+ * fields eBay rejects on PUT (offerId/offerState/listing/status), and PUT the
+ * complete object back. Mirrors the GET-merge-PUT + read-only-strip pattern used
+ * in the 25005 retry path of pushSaleToEbay.
+ *
+ * Returns { success } — never throws.
+ */
+export async function applyFulfillmentPolicyToOffer(
+  offerId: string,
+  fulfillmentPolicyId: string,
+  accessToken: string
+): Promise<{ success: boolean; status?: number; error?: string }> {
+  try {
+    const headers = { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() };
+    const offerPath = `/sell/inventory/v1/offer/${offerId}`;
+
+    // GET current offer (full object).
+    const getRes = await fetch(ebayProxyUrl(encodeURIComponent(offerPath)), { headers });
+    if (!getRes.ok) {
+      const t = await getRes.text();
+      console.warn(`[eBay ResyncShipping] offer GET failed: ${getRes.status} ${t.slice(0, 200)}`);
+      return { success: false, status: getRes.status, error: 'OFFER_GET_FAILED' };
+    }
+    const offer = (await getRes.json()) as any;
+
+    // Merge in the new fulfillment policy id, preserving the other listing policies.
+    const existingPolicies = (offer.listingPolicies as Record<string, unknown> | undefined) ?? {};
+    if (existingPolicies.fulfillmentPolicyId === fulfillmentPolicyId) {
+      // Nothing to change on eBay — caller decides what to persist.
+      return { success: true, status: getRes.status };
+    }
+    offer.listingPolicies = { ...existingPolicies, fulfillmentPolicyId };
+
+    // Strip read-only fields eBay rejects on PUT.
+    delete offer.offerId;
+    delete offer.offerState;
+    delete offer.listing;
+    delete offer.status;
+
+    const putRes = await fetch(ebayProxyUrl(encodeURIComponent(offerPath)), {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(offer),
+    });
+    if (!putRes.ok && putRes.status !== 204) {
+      const t = await putRes.text();
+      console.warn(`[eBay ResyncShipping] offer PUT failed: ${putRes.status} ${t.slice(0, 300)}`);
+      return { success: false, status: putRes.status, error: 'OFFER_PUT_FAILED' };
+    }
+    trackEbayCall();
+    return { success: true, status: putRes.status };
+  } catch (err) {
+    console.warn('[eBay ResyncShipping] applyFulfillmentPolicyToOffer threw:', (err as Error).message);
+    return { success: false, error: 'EXCEPTION' };
+  }
+}
+
+/**
+ * Re-resolve and (if changed) re-apply the shipping policy for a LIVE item.
+ *
+ * Used by (a) the edit-save path when package dims/weight/type change, and
+ * (b) publishItemOffer when re-pushing an already-live item. Conservative:
+ * only re-pins when the resolved policy id actually differs from the stored
+ * applied id, always respects the rate limiter, and never throws.
+ *
+ * Returns { changed, reason }. `changed` is true only when the live offer's
+ * fulfillment policy was actually updated on eBay.
+ */
+export async function resyncItemShippingPolicy(
+  itemId: string
+): Promise<{ changed: boolean; reason: string }> {
+  try {
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        ebayListingId: true,
+        ebayOfferId: true,
+        ebayFulfillmentPolicyId: true,
+        ebayShippingAmountCents: true,
+        packageWeightOz: true,
+        packageLengthIn: true,
+        packageWidthIn: true,
+        packageHeightIn: true,
+        packageType: true,
+        ebayShippingClassification: true,
+        ebayCategoryId: true,
+        category: true,
+        ebayShippingOverride: true,
+        sale: {
+          select: {
+            zip: true,
+            organizer: {
+              select: {
+                id: true,
+                lat: true,
+                lng: true,
+                ebayPolicyMapping: {
+                  select: { shippingMode: true, freeShippingOptIn: true, weightTierMappings: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!item) return { changed: false, reason: 'not-found' };
+    if (!item.ebayListingId || !item.ebayOfferId) return { changed: false, reason: 'not-live' };
+
+    const organizer = item.sale?.organizer;
+    if (!organizer) return { changed: false, reason: 'no-organizer' };
+
+    // Don't spend eBay calls when rate-limited.
+    if (isEbayRateLimited()) return { changed: false, reason: 'rate-limited' };
+
+    const accessToken = await refreshEbayAccessToken(organizer.id);
+    if (!accessToken) return { changed: false, reason: 'no-token' };
+
+    const fromZip = item.sale?.zip || null;
+
+    // Authoritative new policy id (provisions FVF-flat via ensureFvfFlatRatePolicy
+    // when needed). Pass a fetcher so resolvePoliciesForItem can look up real ids.
+    const fetchFulfillmentPolicies = async (): Promise<any[]> => {
+      try {
+        const res = await fetch(
+          ebayProxyUrl('/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US&limit=100'),
+          { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } }
+        );
+        if (res.ok) {
+          trackEbayCall();
+          const data = (await res.json()) as any;
+          return data.fulfillmentPolicies || [];
+        }
+      } catch (err) {
+        console.warn('[eBay ResyncShipping] fulfillment policy fetch failed:', (err as Error).message);
+      }
+      return [];
+    };
+
+    const routing = await resolvePoliciesForItem(
+      organizer.id,
+      {
+        id: item.id,
+        packageWeightOz: item.packageWeightOz,
+        packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+        packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+        packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+        packageType: item.packageType,
+        ebayShippingClassification: item.ebayShippingClassification,
+        ebayCategoryId: item.ebayCategoryId,
+        category: item.category,
+        ebayShippingOverride: item.ebayShippingOverride,
+      },
+      { fetchFulfillmentPolicies, fromZip }
+    );
+
+    if ('error' in routing) {
+      return { changed: false, reason: routing.code };
+    }
+
+    // New buyer-facing shipping amount (for drift detection / persistence).
+    const shipping = await resolveItemShipping({
+      organizer: { lat: organizer.lat, lng: organizer.lng },
+      mapping: organizer.ebayPolicyMapping,
+      item: {
+        packageWeightOz: item.packageWeightOz,
+        packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+        packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+        packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+        ebayShippingOverride: item.ebayShippingOverride,
+      },
+      fromZip,
+    });
+    const buyerAmountCents = shipping.buyerAmountCents;
+
+    // Only re-pin the live offer when the resolved policy id actually differs.
+    if (routing.fulfillmentPolicyId !== item.ebayFulfillmentPolicyId) {
+      const applied = await applyFulfillmentPolicyToOffer(
+        item.ebayOfferId,
+        routing.fulfillmentPolicyId,
+        accessToken
+      );
+      if (!applied.success) {
+        return { changed: false, reason: applied.error || 'apply-failed' };
+      }
+      await prisma.item.update({
+        where: { id: item.id },
+        data: {
+          ebayFulfillmentPolicyId: routing.fulfillmentPolicyId,
+          ebayShippingAmountCents: buyerAmountCents,
+          ebayShippingRatedAt: new Date(),
+          ebayRateVersion: currentEbayRateVersion(),
+        },
+      });
+      console.log(
+        `[eBay ResyncShipping] item=${item.id} re-pinned policy ${item.ebayFulfillmentPolicyId ?? '(none)'} -> ${routing.fulfillmentPolicyId} ($${(buyerAmountCents / 100).toFixed(2)})`
+      );
+      return { changed: true, reason: 'repinned' };
+    }
+
+    // Policy unchanged — still refresh the rated amount/version so drift
+    // detection has current data on file.
+    await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        ebayShippingAmountCents: buyerAmountCents,
+        ebayShippingRatedAt: new Date(),
+        ebayRateVersion: currentEbayRateVersion(),
+      },
+    });
+    return { changed: false, reason: 'already-current' };
+  } catch (err) {
+    console.warn(`[eBay ResyncShipping] resyncItemShippingPolicy threw for item ${itemId}:`, (err as Error).message);
+    return { changed: false, reason: 'exception' };
+  }
+}
 /**
  * Helper: Map condition ID to eBay Inventory API condition enum.
  * Trading API IDs → Inventory API string enums (NOT the same scale).
@@ -5502,17 +5767,15 @@ type PreviewShippingResult = {
 };
 
 /**
- * Resolve preview shipping numbers so they MATCH what the live eBay listing does:
- *   - FLAT_TIERS: buyer is charged a flat policy rate (FVF-grossed + bucketed);
- *     organizer's label cost is their real cheapest-carrier rate.
- *   - CALCULATED: buyer pays the real rate at checkout (~= label cost).
- *   - free shipping opt-in: buyer pays $0, organizer absorbs the label.
- * buyerShipping is the eBay FVF base for shipping; labelCost is the organizer's own
- * outlay -- they are DIFFERENT numbers under FLAT_TIERS.
+ * Resolve the organizer's own label-cost infra for the preview (cheapest carrier rate,
+ * basis, carrier, shippingMode). The buyer-paid amount + flat policy are NOT computed
+ * here -- resolveItemShipping (ebayShippingResolver.ts) is the single source of truth
+ * for those, shared with the listing-push path so preview and listing can never disagree.
+ * labelCost is the organizer's own outlay -- a DIFFERENT number from buyerShipping under
+ * FLAT_TIERS.
  */
 function resolvePreviewShipping(opts: {
   shippingMode: string;
-  freeShippingOptIn: boolean;
   weightOz: number;
   dims?: { length?: number; width?: number; height?: number };
   origin: { zip?: string | null; lat?: number | null; lng?: number | null };
@@ -5529,25 +5792,17 @@ function resolvePreviewShipping(opts: {
   const mode: 'FLAT_TIERS' | 'CALCULATED' =
     opts.shippingMode === 'FLAT_TIERS' ? 'FLAT_TIERS' : 'CALCULATED';
 
-  let buyerShipping: number;
-  let flatPolicy: { name: string; amount: number } | null = null;
-  if (opts.freeShippingOptIn) {
-    buyerShipping = 0;
-  } else if (mode === 'FLAT_TIERS') {
-    const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
-    buyerShipping = flatRate;
-    flatPolicy = { name: `FindA.Sale Flat $${flatRate.toFixed(2)}`, amount: flatRate };
-  } else {
-    buyerShipping = cheapest.rate;
-  }
-
+  // buyerShipping + flatPolicy are NOT computed here. resolveItemShipping is the single
+  // source of truth for the buyer-paid amount (ADR Part A) — the caller fills those in.
+  // This helper only computes the organizer's own label cost + carrier infra, which is a
+  // DIFFERENT number from buyerShipping under FLAT_TIERS.
   return {
-    buyerShipping,
+    buyerShipping: 0,
     labelCost,
     carrier: cheapest.carrier,
     basis: cheapest.basis,
     cheapestRate: cheapest.rate,
-    flatPolicy,
+    flatPolicy: null,
     shippingMode: mode,
   };
 }
@@ -5630,17 +5885,31 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     const freeShippingOptIn = organizer.ebayPolicyMapping?.freeShippingOptIn ?? false;
     const shippingMode = organizer.ebayPolicyMapping?.shippingMode ?? 'CALCULATED';
 
-    // Mirror the live listing: FLAT_TIERS buyer pays the flat policy rate; CALCULATED
-    // buyer pays the real rate at checkout. labelCost is always the organizer's own cost.
+    // labelCost / carrier / cheapestRate infra (organizer's own outlay).
     const ship = resolvePreviewShipping({
       shippingMode,
-      freeShippingOptIn,
       weightOz,
       dims,
       origin: { zip: body.fromZip ?? null, lat: organizer.lat, lng: organizer.lng },
       labelCostOverride: body.labelCost,
     });
-    const buyerShipping = ship.buyerShipping;
+    // Single source of truth for what the buyer is charged (matches the live listing).
+    const resolved = await resolveItemShipping({
+      organizer: { lat: organizer.lat, lng: organizer.lng },
+      mapping: organizer.ebayPolicyMapping,
+      item: {
+        packageWeightOz: weightOz,
+        packageLengthIn: dims?.length ?? null,
+        packageWidthIn: dims?.width ?? null,
+        packageHeightIn: dims?.height ?? null,
+      },
+      fromZip: body.fromZip ?? null,
+    });
+    const buyerShipping = resolved.buyerAmountCents / 100;
+    const flatPolicy =
+      resolved.source === 'weight-tier' || resolved.source === 'fvf-flat'
+        ? { name: resolved.policyName ?? `FindA.Sale Flat $${buyerShipping.toFixed(2)}`, amount: buyerShipping }
+        : null;
     const labelCost = ship.labelCost;
     const fvfOnShipping = Math.round(buyerShipping * 0.136 * 100) / 100;
     const netToSeller = Math.round((buyerShipping - fvfOnShipping) * 100) / 100;
@@ -5659,7 +5928,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       net: proceeds.net,
       breakdown: proceeds.breakdown,
       shippingMode: ship.shippingMode,
-      flatPolicy: ship.flatPolicy,
+      flatPolicy,
       shippingEstimate: {
         rate: ship.cheapestRate,
         basis: ship.basis,
@@ -5755,13 +6024,28 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
     const shippingMode = organizer.ebayPolicyMapping?.shippingMode ?? 'CALCULATED';
     const ship = resolvePreviewShipping({
       shippingMode,
-      freeShippingOptIn,
       weightOz,
       dims,
       origin: { zip: body.fromZip ?? null, lat: organizer.lat, lng: organizer.lng },
       labelCostOverride: body.labelCost,
     });
-    const buyerShipping = ship.buyerShipping;
+    // Single source of truth for what the buyer is charged (matches the live listing).
+    const resolved = await resolveItemShipping({
+      organizer: { lat: organizer.lat, lng: organizer.lng },
+      mapping: organizer.ebayPolicyMapping,
+      item: {
+        packageWeightOz: weightOz,
+        packageLengthIn: dims?.length ?? null,
+        packageWidthIn: dims?.width ?? null,
+        packageHeightIn: dims?.height ?? null,
+      },
+      fromZip: body.fromZip ?? null,
+    });
+    const buyerShipping = resolved.buyerAmountCents / 100;
+    const flatPolicy =
+      resolved.source === 'weight-tier' || resolved.source === 'fvf-flat'
+        ? { name: resolved.policyName ?? `FindA.Sale Flat $${buyerShipping.toFixed(2)}`, amount: buyerShipping }
+        : null;
     const labelCost = ship.labelCost;
     const fvfOnShipping = Math.round(buyerShipping * 0.136 * 100) / 100;
     const netToSeller = Math.round((buyerShipping - fvfOnShipping) * 100) / 100;
@@ -5781,7 +6065,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
       targetMarginPct: result.targetMarginPct,
       breakdown: result.breakdown,
       shippingMode: ship.shippingMode,
-      flatPolicy: ship.flatPolicy,
+      flatPolicy,
       shippingEstimate: {
         rate: ship.cheapestRate,
         basis: ship.basis,

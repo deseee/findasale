@@ -1181,6 +1181,11 @@ model Item {
   // ADR eBay Parity Phase B: Listing extras
   ebaySecondaryCategoryId    String?
   ebaySubtitle               String?
+  // ADR eBay Shipping Drift Detection: record applied policy/amount on the live offer
+  ebayFulfillmentPolicyId    String? // eBay fulfillment policy currently applied to the live offer
+  ebayShippingAmountCents    Int? // buyer shipping amount (cents) of the applied policy, for drift detection
+  ebayShippingRatedAt        DateTime? // when the applied shipping policy/amount was last computed
+  ebayRateVersion            String? // carrier-rate-table version string in effect when last rated
   // Feature: Graceful Tier Degradation — grace lock status
   graceLockedAt              DateTime? // When item was locked due to tier downgrade
   graceLockedReason          String? // Reason for grace lock (e.g., "items_over_limit")

@@ -1481,6 +1481,19 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // ADR Part B: detect whether this save changed any shipping-determining
+    // package input vs. the pre-update item. Used below to trigger a live-offer
+    // shipping-policy re-sync. Compare normalized numbers so Decimal/number/null
+    // shapes line up (e.g. Prisma Decimal vs. request number).
+    const numOrNull = (v: any): number | null =>
+      v === undefined || v === null || v === '' ? null : Number(v);
+    const shippingInputsChanged =
+      (packageWeightOz !== undefined && numOrNull(updatedItem.packageWeightOz) !== numOrNull(item.packageWeightOz)) ||
+      (packageLengthIn !== undefined && numOrNull(updatedItem.packageLengthIn) !== numOrNull(item.packageLengthIn)) ||
+      (packageWidthIn !== undefined && numOrNull(updatedItem.packageWidthIn) !== numOrNull(item.packageWidthIn)) ||
+      (packageHeightIn !== undefined && numOrNull(updatedItem.packageHeightIn) !== numOrNull(item.packageHeightIn)) ||
+      (packageType !== undefined && (updatedItem.packageType ?? null) !== (item.packageType ?? null));
+
     res.json(updatedItem);
 
     // Bug #461: FB nudge on single-item status → SOLD transition
@@ -1662,6 +1675,26 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
               frontendUrl,
               `[eBay PushSync] Item ${id}`
             );
+          }
+
+          // ADR Part B: if the organizer changed a shipping-determining input
+          // (weight/dims/packageType) on a LIVE listing, re-resolve and re-apply
+          // the eBay fulfillment policy so the live buyer is charged the correct
+          // shipping. resyncItemShippingPolicy internally guards on ebayListingId
+          // + ebayOfferId + the rate limiter and never throws.
+          if (shippingInputsChanged && updatedItem.ebayListingId) {
+            try {
+              const { resyncItemShippingPolicy } = await import('../controllers/ebayController');
+              const resync = await resyncItemShippingPolicy(id);
+              console.log(
+                `[eBay PushSync] Item ${id}: shipping resync changed=${resync.changed} reason=${resync.reason}`
+              );
+            } catch (resyncErr) {
+              console.warn(
+                `[eBay PushSync] Item ${id}: shipping resync failed (non-fatal):`,
+                (resyncErr as Error).message
+              );
+            }
           }
         } catch (err) {
           console.warn(`[eBay PushSync] Non-fatal error pushing item ${id} to eBay:`, (err as Error).message);
