@@ -163,7 +163,7 @@ export async function ensureFvfFlatRatePolicy(
       const policyId: string = data.fulfillmentPolicyId;
       policyCache.set(cacheKey, policyId);
       console.log(
-        `[eBay FvfFlat] created organizer=${organizerId} flatRate=${flatRateStr} policy=${policyId} estimatedRate=${rateResult.estimatedRate}`
+        `[eBay FvfFlat] created organizer=${organizerId} flatRate=${flatRateStr} policy=${policyId} estimatedRate=${cheapest.rate}`
       );
       return { policyId, flatRate };
     }

@@ -30,10 +30,14 @@ interface PreviewResponse {
   buyerShipping: number;
   net: number;
   breakdown: Breakdown;
+  shippingMode?: 'FLAT_TIERS' | 'CALCULATED';
+  flatPolicy?: { name: string; amount: number } | null;
   shippingEstimate: {
     rate: number;
     basis: 'actual' | 'dimensional';
     service: string;
+    carrier?: 'USPS' | 'UPS' | 'FEDEX' | string;
+    labelCost?: number;
     isEstimate: boolean;
     freeShippingOptIn: boolean;
   };
@@ -54,6 +58,9 @@ const fmt = (n: number): string => {
   const v = Math.round(n * 100) / 100;
   return v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`;
 };
+
+const carrierLabel = (c?: string): string =>
+  c === 'UPS' ? 'UPS Ground' : c === 'FEDEX' ? 'FedEx Ground' : 'USPS Ground Advantage';
 
 // The guardrail fires only when the entered price would leave the organizer
 // keeping less than this fraction after eBay fees + shipping. Kept low so it
@@ -180,10 +187,12 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
           ) : data && !data.shippingEstimate.freeShippingOptIn ? (
             <>
               <div className="mt-0.5 text-lg font-bold text-warm-900 dark:text-warm-100">
-                ~{fmt(data.buyerShipping)}
+                {data.flatPolicy ? fmt(data.buyerShipping) : `~${fmt(data.buyerShipping)}`}
               </div>
               <div className="text-[11px] text-warm-500 dark:text-warm-400">
-                USPS Ground Advantage, est.
+                {data.flatPolicy
+                  ? `Flat rate · ${data.flatPolicy.name}`
+                  : `${carrierLabel(data.shippingEstimate.carrier)} · calculated at checkout`}
               </div>
             </>
           ) : data && data.shippingEstimate.freeShippingOptIn ? (
@@ -229,7 +238,10 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
       {expanded && data && (
         <div className="rounded-md bg-warm-50 dark:bg-gray-700 p-3 text-xs space-y-1 text-warm-700 dark:text-warm-300">
           <Row label="Item price" value={fmt(data.breakdown.itemPrice)} />
-          <Row label="+ Buyer shipping" value={fmt(data.breakdown.buyerShipping)} />
+          <Row
+            label={data.flatPolicy ? '+ Buyer pays (flat rate)' : '+ Buyer shipping'}
+            value={fmt(data.breakdown.buyerShipping)}
+          />
           <Row
             label={`− eBay fee (${(data.breakdown.fvfPercentApplied * 100).toFixed(1)}%)`}
             value={`−${fmt(data.breakdown.fvfAmount)}`}
@@ -243,6 +255,13 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
           <div className="border-t border-warm-200 dark:border-gray-600 mt-1 pt-1">
             <Row label="= Your net" value={fmt(data.breakdown.net)} bold />
           </div>
+          {data.flatPolicy && (
+            <p className="text-[11px] text-warm-500 dark:text-warm-400 pt-1">
+              Your buyer pays the {data.flatPolicy.name} flat rate ({fmt(data.breakdown.buyerShipping)}). Your
+              label costs about {fmt(data.breakdown.labelCost)} — the difference, minus eBay's fee on the full
+              shipping amount, is yours.
+            </p>
+          )}
           <p className="text-[11px] text-warm-500 dark:text-warm-400 pt-1">
             Fees include a small safety buffer, so your real net is usually a little higher.
           </p>
