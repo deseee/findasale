@@ -24,8 +24,7 @@ import { prisma } from '../lib/prisma';
 import axios from 'axios';
 import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
-import { suggestCategories } from '../services/ebayTaxonomyService';
-import { getEbayAccessToken } from './ebayController';
+import { getEbayAccessToken, suggestEbayCategoryForTitle } from './ebayController';
 import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
 import { lookupByBarcode } from '../services/ebayCatalogLookup';
 
@@ -358,13 +357,16 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             let ebayCategoryName: string | undefined;
             if (!userEdited.includes('ebayCategoryId') && !existing?.ebayCategoryId && summary.suggestedTitle) {
               try {
-                const token = await getEbayAccessToken();
-                if (token) {
-                  const suggestions = await suggestCategories(token, summary.suggestedTitle);
-                  if (suggestions.length > 0) {
-                    ebayCategoryId = suggestions[0].categoryId;
-                    ebayCategoryName = suggestions[0].categoryName;
-                  }
+                // Unified domain-aware resolver (ADR 2026-06-14) — same logic as the
+                // push path. Pass summary.suggestedCategory as the domain hint so the
+                // camera path also picks within the right eBay top-level.
+                const resolved = await suggestEbayCategoryForTitle(
+                  summary.suggestedTitle,
+                  summary.suggestedCategory
+                );
+                if (resolved) {
+                  ebayCategoryId = resolved.categoryId;
+                  ebayCategoryName = resolved.categoryName;
                 }
               } catch (ebayErr) {
                 console.warn(`[batchAnalyze] eBay category suggestion failed for item ${itemId}:`, ebayErr);

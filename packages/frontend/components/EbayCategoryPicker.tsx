@@ -51,12 +51,15 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Pre-populate confirmed selection when component loads with an existing ebayCategoryName
+  // Pre-populate the confirmed-selection chip from a saved ebayCategoryName so a
+  // resolved/edited category is always visible (ADR 2026-06-14 — it previously
+  // rendered blank when only an ID was saved). Item data loads async, so this fires
+  // when ebayCategoryName arrives; the L1 sublabel tracks `value` once it loads too.
   useEffect(() => {
     if (ebayCategoryName && !selectedLeaf) {
       setSelectedLeaf({ name: ebayCategoryName, l1: value || '' });
     }
-  }, [ebayCategoryName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ebayCategoryName, value]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced category search
   useEffect(() => {

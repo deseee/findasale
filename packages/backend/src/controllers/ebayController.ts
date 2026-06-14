@@ -948,9 +948,19 @@ function ebayUserHeaders(accessToken: string): Record<string, string> {
  * Fetch eBay category suggestions for a title, sorted deepest-level first.
  * Returns up to 5 candidates. Deeper = more likely to be a leaf category.
  */
+interface EbayCategoryCandidate {
+  categoryId: string;
+  categoryName: string;
+  level: number;
+  /** Original eBay relevance order (0 = top-ranked). Preserve this — do NOT depth-sort. */
+  index: number;
+  /** Ancestor path top→leaf, e.g. [{Pet Supplies}, {Fish & Aquariums}, {Pumps}]. */
+  ancestors: Array<{ categoryId: string; categoryName: string }>;
+}
+
 async function getEbayCategoryCandidates(
   title: string
-): Promise<Array<{ categoryId: string; categoryName: string; level: number }>> {
+): Promise<EbayCategoryCandidate[]> {
   try {
     const appToken = await getEbayAccessToken();
     if (!appToken) {
@@ -978,47 +988,131 @@ async function getEbayCategoryCandidates(
       categorySuggestions?: Array<{
         category: { categoryId: string; categoryName: string };
         categoryTreeNodeLevel?: number;
+        categoryTreeNodeAncestors?: Array<{ categoryId: string; categoryName: string }>;
       }>;
     };
     const suggestions = data.categorySuggestions ?? [];
-    return suggestions
-      .slice(0, 5)
-      .map((s) => ({
-        categoryId: s.category.categoryId,
-        categoryName: s.category.categoryName,
-        level: s.categoryTreeNodeLevel ?? 0,
-      }))
-      .sort((a, b) => b.level - a.level); // deepest first
+    // PRESERVE eBay's relevance order. eBay returns candidates ranked by relevance;
+    // re-sorting deepest-first (the prior behavior) promoted wrong-domain deep leaves
+    // (the Danner aquarium pump landed under Fishing › Bait Buckets — 2026-06-14).
+    // `index` captures the original rank so the domain-aware selector can use it as
+    // the within-domain tiebreaker.
+    return suggestions.slice(0, 5).map((s, index) => ({
+      categoryId: s.category.categoryId,
+      categoryName: s.category.categoryName,
+      level: s.categoryTreeNodeLevel ?? 0,
+      index,
+      // eBay returns ancestors leaf→root in get_category_suggestions; normalize to a
+      // plain id+name list (order not relied on — we match on membership).
+      ancestors: (s.categoryTreeNodeAncestors ?? []).map((a) => ({
+        categoryId: a.categoryId,
+        categoryName: a.categoryName,
+      })),
+    }));
   } catch (err) {
     console.error('[eBay Taxonomy] Error:', err);
     return [];
   }
 }
 
-async function suggestEbayCategoryForTitle(title: string): Promise<string | null> {
+/**
+ * Map a free-text AI domain hint (item.category / summary.suggestedCategory) to the
+ * eBay top-level (L1) ancestor name(s) we expect the correct category to live under.
+ * Short + extensible — add rows as new domains surface. First-match wins; a hint may
+ * map to multiple acceptable L1 names. Empty array = no domain constraint.
+ */
+function ebayTopLevelForDomain(domainHint: string | null | undefined): string[] {
+  if (!domainHint) return [];
+  const h = domainHint.toLowerCase();
+  const MAP: Array<{ pattern: RegExp; l1: string[] }> = [
+    { pattern: /aquarium|aquatic|fish\s*tank|reptile|terrarium|pet|cat|dog|bird|hamster|aerator/i, l1: ['Pet Supplies'] },
+    { pattern: /guitar|amp|drum|keyboard|piano|violin|instrument|microphone|music gear|dj\b/i, l1: ['Musical Instruments & Gear'] },
+    { pattern: /furniture|home decor|kitchen|garden|patio|bedding|lamp|rug|cookware|appliance/i, l1: ['Home & Garden'] },
+    { pattern: /jewelry|watch|ring|necklace|bracelet|earring|pendant/i, l1: ['Jewelry & Watches'] },
+    { pattern: /clothing|apparel|shirt|dress|pants|shoes|jacket|coat|sweater|handbag|purse/i, l1: ['Clothing, Shoes & Accessories'] },
+    { pattern: /book|magazine|novel|textbook|comic/i, l1: ['Books & Magazines', 'Books'] },
+    { pattern: /electronic|tv|stereo|camera|phone|laptop|computer|tablet|headphone|audio/i, l1: ['Consumer Electronics'] },
+    { pattern: /antique|vintage|collectible|coin|stamp|memorabilia/i, l1: ['Collectibles', 'Antiques'] },
+    { pattern: /\bart\b|painting|print|sculpture|canvas/i, l1: ['Art'] },
+    { pattern: /tool|hardware|power tool|drill|saw|wrench|hammer/i, l1: ['Business & Industrial', 'Home & Garden'] },
+    { pattern: /toy|game|puzzle|doll|lego|action figure|board game|hobby/i, l1: ['Toys & Hobbies'] },
+    { pattern: /sport|bike|bicycle|fitness|golf|camping|outdoor|exercise/i, l1: ['Sporting Goods'] },
+    { pattern: /baby|infant|toddler|nursery|stroller/i, l1: ['Baby'] },
+    { pattern: /makeup|cosmetic|skincare|fragrance|beauty|perfume/i, l1: ['Health & Beauty'] },
+    { pattern: /car part|auto|automotive|motorcycle|vehicle|tire/i, l1: ['eBay Motors'] },
+  ];
+  for (const { pattern, l1 } of MAP) {
+    if (pattern.test(h)) return l1;
+  }
+  return [];
+}
+
+const isCatchAllCategory = (name: string): boolean =>
+  /\b(other|misc|miscellaneous|everything\s+else)\b/i.test(name);
+
+/**
+ * Domain-aware eBay category resolver (ADR 2026-06-14).
+ *
+ * Selection order:
+ *   1. If a domainHint maps to expected eBay top-level(s), prefer candidates whose
+ *      ancestor path contains a matching top-level — taking the best eBay relevance
+ *      rank (lowest index) among those, skipping catch-all buckets.
+ *   2. Else any non-catch-all candidate in eBay relevance order.
+ *   3. Else candidates[0].
+ *
+ * The depth re-sort is gone: relevance order is the tiebreaker WITHIN the right
+ * domain. The domain hint is what prevents cross-domain misfiles (aquarium pump →
+ * Pet Supplies, not Fishing › Bait Buckets).
+ *
+ * @param domainHint Free-text AI category (item.category / summary.suggestedCategory).
+ * @returns { categoryId, categoryName } or null if eBay returned nothing.
+ */
+export async function suggestEbayCategoryForTitle(
+  title: string,
+  domainHint?: string | null
+): Promise<{ categoryId: string; categoryName: string } | null> {
   const candidates = await getEbayCategoryCandidates(title);
   if (candidates.length === 0) {
     console.warn(`[eBay Taxonomy] No suggestions for "${title.slice(0, 60)}"`);
     return null;
   }
-  // Prefer a specific leaf over eBay's generic catch-all buckets. eBay's
-  // get_category_suggestions frequently ranks an "Other …" / "Misc" category
-  // high for generic titles; shipping those hurts discoverability (the Danner
-  // aquarium pump landed in 179986 "Other Fish & Aquarium Supplies" instead of
-  // a real Aquarium Pumps leaf — 2026-06-13). candidates are sorted deepest-first,
-  // so the first non-catch-all is the deepest specific category available.
-  const isCatchAll = (name: string) => /\b(other|misc|miscellaneous|everything\s+else)\b/i.test(name);
-  const specific = candidates.find((c) => !isCatchAll(c.categoryName));
-  const best = specific ?? candidates[0];
-  if (!specific) {
+
+  // In eBay relevance order (candidates already preserve it; sort defensively by index).
+  const byRelevance = [...candidates].sort((a, b) => a.index - b.index);
+
+  // Domain match: ancestor path (or the candidate's own name) contains an expected L1.
+  // Detect the domain from the AI category hint AND the title — the AI's free-text
+  // category is unreliable (e.g. an aquarium air pump was labeled "Electronics"), but
+  // the title ("...Aquarium Aerator...") carries the real signal. Combining both makes
+  // the resolver robust to a wrong AI category. (S975)
+  const expectedL1 = ebayTopLevelForDomain([domainHint, title].filter(Boolean).join(' '));
+  const matchesDomain = (c: EbayCategoryCandidate): boolean => {
+    if (expectedL1.length === 0) return false;
+    const names = [c.categoryName, ...c.ancestors.map((a) => a.categoryName)].map((n) => n.toLowerCase());
+    return expectedL1.some((l1) => names.some((n) => n.includes(l1.toLowerCase())));
+  };
+
+  // 1. matching-domain, non-catch-all, best relevance
+  const domainPick = byRelevance.find((c) => matchesDomain(c) && !isCatchAllCategory(c.categoryName));
+  // 2. any non-catch-all, best relevance
+  const nonCatchAll = byRelevance.find((c) => !isCatchAllCategory(c.categoryName));
+  // 3. candidates[0] (eBay top-ranked, even if catch-all)
+  const best = domainPick ?? nonCatchAll ?? byRelevance[0];
+
+  if (!domainPick && expectedL1.length > 0) {
+    console.warn(
+      `[eBay Taxonomy] "${title.slice(0, 40)}" hint="${domainHint}" (expect L1 ${expectedL1.join('/')}) → no ancestor match; falling back to ${best.categoryId} (${best.categoryName})`
+    );
+  }
+  if (best === byRelevance[0] && isCatchAllCategory(best.categoryName)) {
     console.warn(
       `[eBay Taxonomy] "${title.slice(0, 40)}" → only catch-all categories returned; using ${best.categoryId} (${best.categoryName})`
     );
   }
   console.log(
-    `[eBay Taxonomy] "${title.slice(0, 40)}" → ${best.categoryId} (${best.categoryName}) level=${best.level}${specific && specific !== candidates[0] ? ` [skipped catch-all ${candidates[0].categoryName}]` : ''}`
+    `[eBay Taxonomy] "${title.slice(0, 40)}" hint="${domainHint ?? ''}" → ${best.categoryId} (${best.categoryName}) level=${best.level} index=${best.index}${domainPick ? ' [domain-matched]' : ''}`
   );
-  return best.categoryId;
+  return { categoryId: best.categoryId, categoryName: best.categoryName };
 }
 
 /**
@@ -1756,12 +1850,14 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
     // for the Taxonomy API call; refresh lazily only when we need to suggest.
     let categoryId: string | null = item.ebayCategoryId || null;
     if (!categoryId) {
-      const suggested = await suggestEbayCategoryForTitle(item.title);
+      const suggested = await suggestEbayCategoryForTitle(item.title, item.category);
       if (suggested) {
-        categoryId = suggested;
+        categoryId = suggested.categoryId;
         await prisma.item.update({
           where: { id: item.id },
-          data: { ebayCategoryId: suggested },
+          // Persist BOTH id + name so the edit-item Category picker can surface the
+          // resolved category (ADR 2026-06-14) instead of rendering blank.
+          data: { ebayCategoryId: suggested.categoryId, ebayCategoryName: suggested.categoryName },
         });
       }
     }
@@ -2074,12 +2170,16 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // 3. Static name→ID map (last resort; may land on a branch → 25021)
         let categoryId: string | null = item.ebayCategoryId || null;
         if (!categoryId) {
-          categoryId = await suggestEbayCategoryForTitle(item.title);
-          if (categoryId) {
-            // Cache — idempotent, cheap, avoids repeated API calls on re-push
+          // Domain-aware resolve (ADR 2026-06-14): pass item.category as the domain
+          // hint so an aquarium pump lands under Pet Supplies, not Fishing.
+          const resolved = await suggestEbayCategoryForTitle(item.title, item.category);
+          if (resolved) {
+            categoryId = resolved.categoryId;
+            // Cache — idempotent, cheap, avoids repeated API calls on re-push.
+            // Persist BOTH id + name so the resolved category is visible in edit-item.
             await prisma.item.update({
               where: { id: item.id },
-              data: { ebayCategoryId: categoryId },
+              data: { ebayCategoryId: resolved.categoryId, ebayCategoryName: resolved.categoryName },
             });
           }
         }
@@ -2622,7 +2722,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
                 categoryId = candidate.categoryId;
                 await prisma.item.update({
                   where: { id: item.id },
-                  data: { ebayCategoryId: candidate.categoryId },
+                  // Persist name too so the retry-resolved category shows in edit-item.
+                  data: { ebayCategoryId: candidate.categoryId, ebayCategoryName: candidate.categoryName },
                 });
                 console.log(`[eBay Retry25005] ${sku}: succeeded with category=${candidate.categoryId}`);
                 break;
