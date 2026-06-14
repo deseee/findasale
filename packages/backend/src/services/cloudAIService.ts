@@ -32,6 +32,7 @@ export interface AITagResult {
   photoOrderIndices?: number[]; // Enhancement 2: Best-photo-first sorting — reordered photo indices by Vision quality
   brand?: string; // Task #339: Optional if confidence < 0.6
   mpn?: string; // Catalog Enrichment (2026-06-14): visible model/part number from labels/markings (evidence-only)
+  upc?: string; // Enrichment Cascade (2026-06-14): visible UPC — barcode or printed digits ONLY (evidence-only, never recalled)
   // Calculated-shipping package estimation (same tagging pass, no extra API call)
   estimatedWeightOz?: number; // packed weight estimate in ounces (null when packageConfidence < 0.5)
   estimatedDimensionsIn?: { length: number; width: number; height: number }; // packed box dims in inches
@@ -190,6 +191,7 @@ Price: Suggest a realistic secondary market price for this item. Do not use reta
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Only add "Vintage" (roughly 20+ years), "Antique" (roughly 100+ years), or a specific era when there is real evidence of age — a datable maker mark, a date, or distinct period styling. Do NOT call an item vintage or antique just because it looks worn, used, or generic; when age is unclear, omit era tags entirely. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
 Model number: If a model number or part number is actually VISIBLE on a label, plate, or marking in the photos (e.g. "Model AP-40", "Part No. 12345", "M/N: XR500"), capture it exactly as printed in the "mpn" field. Evidence-only: include mpn ONLY when you can literally read it from the item — never infer or guess a model number. If no model/part number is visible, set mpn to null or omit it.
+UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in the photos, read the digits exactly as shown and put them in the "upc" field. HARD RULE: never invent a UPC or exact dimensions from memory — a UPC must be visibly present in the photo (as a scannable barcode or printed digits) or omitted. If no UPC is visible, set upc to null or omit it.
 Shipping package: Estimate the PACKED shipping weight (item + box + padding) in ounces, and the packed box outer dimensions (length, width, height) in inches. Pick the eBay packageType enum that best fits: PACKAGE_THICK_ENVELOPE (thin/flat <12oz), MAILING_BOX (most boxed items), LARGE_PACKAGE (over ~18in any side or heavy), USPS_FLAT_RATE_ENVELOPE (documents/flat). Rate packageConfidence 0.0-1.0 on how sure you are of weight + dimensions. If packageConfidence is below 0.5 (you cannot reasonably estimate size/weight), set estimatedWeightOz, estimatedDimensionsIn, and estimatedPackageType to null — do not guess.
 
 {
@@ -202,6 +204,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
   "tags": ["Tag1", "Tag2", "Tag3"],
   "confidence": 0.85,
   "mpn": null,
+  "upc": null,
   "estimatedWeightOz": 24,
   "estimatedDimensionsIn": { "length": 10, "width": 8, "height": 6 },
   "estimatedPackageType": "MAILING_BOX",
@@ -248,6 +251,8 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
       parsed.brand = undefined;
       // Catalog Enrichment: model number is evidence-only — drop it under low confidence too
       parsed.mpn = undefined;
+      // Enrichment Cascade: a UPC must be visibly read, never recalled — drop it under low confidence too
+      parsed.upc = undefined;
     }
     // Calculated-shipping: refuse-to-fill package estimate when confidence < 0.5
     // (mirrors the brand/category discipline above). Downstream package estimator
@@ -759,6 +764,7 @@ Price: Suggest a realistic secondary market price for this item. Do not use reta
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Only add "Vintage" (roughly 20+ years), "Antique" (roughly 100+ years), or a specific era when there is real evidence of age — a datable maker mark, a date, or distinct period styling. Do NOT call an item vintage or antique just because it looks worn, used, or generic; when age is unclear, omit era tags entirely. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
 Model number: If a model number or part number is actually VISIBLE on a label, plate, or marking in any of the photos (e.g. "Model AP-40", "Part No. 12345", "M/N: XR500"), capture it exactly as printed in the "mpn" field. Evidence-only: include mpn ONLY when you can literally read it from the item — never infer or guess a model number. If no model/part number is visible, set mpn to null or omit it.
+UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in any of the photos, read the digits exactly as shown and put them in the "upc" field. HARD RULE: never invent a UPC or exact dimensions from memory — a UPC must be visibly present in the photo (as a scannable barcode or printed digits) or omitted. If no UPC is visible, set upc to null or omit it.
 
 {
   "title": "short specific title",
@@ -769,7 +775,8 @@ Model number: If a model number or part number is actually VISIBLE on a label, p
   "suggestedPrice": 12.50,
   "tags": ["Tag1", "Tag2", "Tag3"],
   "confidence": 0.85,
-  "mpn": null
+  "mpn": null,
+  "upc": null
 }`,
     });
 
@@ -820,6 +827,8 @@ Model number: If a model number or part number is actually VISIBLE on a label, p
       parsed.brand = undefined;
       // Catalog Enrichment: model number is evidence-only — drop it under low confidence too
       parsed.mpn = undefined;
+      // Enrichment Cascade: a UPC must be visibly read, never recalled — drop it under low confidence too
+      parsed.upc = undefined;
     }
 
     return parsed;
