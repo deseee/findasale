@@ -26,7 +26,8 @@ import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { getEbayAccessToken, suggestEbayCategoryForTitle } from './ebayController';
 import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
-import { lookupByBarcode, enrichItemFromCatalog } from '../services/ebayCatalogLookup';
+import { lookupByBarcode } from '../services/ebayCatalogLookup';
+import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -381,12 +382,14 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             // Barcode auto-detection: scan the cluster's first photo buffer.
             // Non-blocking — any error = silent skip. Barcode eBay category overrides AI.
             let batchBarcodeEnrichment: import('../services/ebayCatalogLookup').EbayCatalogResult | null = null;
+            let batchDecodedBarcode: { code: string; type?: string } | undefined = undefined;
             try {
               const firstBuffer = clusterImages[0]?.buffer;
               if (firstBuffer) {
                 const detected = await decodeBarcodeFromImage(firstBuffer);
                 if (detected) {
                   console.log(`[batchAnalyze] Barcode detected for item ${itemId}: ${detected.code} (${detected.codeType})`);
+                  batchDecodedBarcode = { code: detected.code, type: detected.codeType };
                   batchBarcodeEnrichment = await lookupByBarcode(detected.code, detected.codeType);
                   if (batchBarcodeEnrichment) {
                     console.log(`[batchAnalyze] Barcode enrichment found for item ${itemId}: "${batchBarcodeEnrichment.title}"`);
@@ -397,58 +400,46 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               // Non-blocking — never interrupt batch analysis
             }
 
-            // Catalog enrichment (ADR 2026-06-14): non-barcode fallback. Uses AI title +
-            // brand + visible model number to fetch catalog identifiers. HIGH (>=0.85)
-            // auto-fills empty fields; lower confidence is stored as a suggestion only.
+            // Enrichment cascade (ADR 2026-06-14): unified provider cascade. Stores any
+            // decoded barcode straight onto upc/ean, then runs localBarcode → openLibrary →
+            // openFoodFacts → ebayCatalog → goUpc(off) → aiEstimate. HIGH/authoritative
+            // results auto-fill EMPTY fields (organizer values always win); weaker results
+            // become a `catalogSuggestions` write.
             let catalogApply: Record<string, any> = {};
             let catalogSuggestionWrite: any = undefined;
             try {
-              // Skip if a barcode already produced a HIGH match (don't double-enrich).
-              if (!batchBarcodeEnrichment) {
-                const enrichment = await enrichItemFromCatalog({
-                  title: summary.suggestedTitle,
-                  brand: existing?.brand ?? analysis?.brand ?? null,
-                  mpn: existing?.mpn ?? analysis?.mpn ?? null,
-                  upc: existing?.upc ?? null,
-                  ean: existing?.ean ?? null,
-                  isbn: existing?.isbn ?? null,
-                  tags: summary.suggestedTags ?? null,
-                });
-                if (enrichment) {
-                  const ue = existing?.userEditedFields ?? [];
-                  if (enrichment.confidence >= 0.85) {
-                    // HIGH: fill empty identifier fields (organizer values win).
-                    const id = enrichment.identifiers;
-                    if (id.mpn && !ue.includes('mpn') && !existing?.mpn) catalogApply.mpn = id.mpn;
-                    if (id.upc && !existing?.upc) catalogApply.upc = id.upc;
-                    if (id.ean && !existing?.ean) catalogApply.ean = id.ean;
-                    if (id.epid && !(existing as any)?.ebayEpid) catalogApply.ebayEpid = id.epid;
-                    if (id.brand && !ue.includes('brand') && !existing?.brand) catalogApply.brand = id.brand;
-                    // Package dims only when organizer hasn't confirmed package.
-                    if (existing && existing.packageConfirmedByOrganizer === false && enrichment.package) {
-                      const pk = enrichment.package;
-                      if (pk.weightOz != null && !ue.includes('packageWeightOz') && existing.packageWeightOz == null) catalogApply.packageWeightOz = pk.weightOz;
-                      if (pk.lengthIn != null && existing.packageLengthIn == null) catalogApply.packageLengthIn = pk.lengthIn;
-                      if (pk.widthIn != null && existing.packageWidthIn == null) catalogApply.packageWidthIn = pk.widthIn;
-                      if (pk.heightIn != null && existing.packageHeightIn == null) catalogApply.packageHeightIn = pk.heightIn;
-                    }
-                    // HIGH match clears any stale low-confidence suggestion.
-                    catalogSuggestionWrite = null;
-                  } else {
-                    // Below HIGH: store as a one-click suggestion; touch no real fields.
-                    catalogSuggestionWrite = {
-                      source: (existing?.upc || existing?.ean || existing?.isbn) ? 'barcode' : 'ebay-catalog',
-                      confidence: enrichment.confidence,
-                      identifiers: enrichment.identifiers,
-                      ...(enrichment.package ? { package: enrichment.package } : {}),
-                      ...(enrichment.matchedTitle ? { matchedTitle: enrichment.matchedTitle } : {}),
-                      suggestedAt: new Date().toISOString(),
-                    };
-                  }
-                }
-              }
+              const enrichInput = {
+                title: summary.suggestedTitle,
+                brand: existing?.brand ?? analysis?.brand ?? null,
+                mpn: existing?.mpn ?? analysis?.mpn ?? null,
+                upc: existing?.upc ?? null,
+                ean: existing?.ean ?? null,
+                isbn: existing?.isbn ?? null,
+                tags: summary.suggestedTags ?? null,
+              };
+              const { merged } = await enrichItem(enrichInput, {
+                decodedBarcode: batchDecodedBarcode,
+                aiResult: analysis,
+              });
+              const plan = planEnrichmentApply(merged, {
+                brand: existing?.brand ?? null,
+                mpn: existing?.mpn ?? null,
+                upc: existing?.upc ?? null,
+                ean: existing?.ean ?? null,
+                isbn: existing?.isbn ?? null,
+                ebayEpid: (existing as any)?.ebayEpid ?? null,
+                ebayCategoryId: existing?.ebayCategoryId ?? null,
+                packageWeightOz: existing?.packageWeightOz ?? null,
+                packageLengthIn: existing?.packageLengthIn ?? null,
+                packageWidthIn: existing?.packageWidthIn ?? null,
+                packageHeightIn: existing?.packageHeightIn ?? null,
+                packageConfirmedByOrganizer: existing?.packageConfirmedByOrganizer ?? null,
+                userEditedFields: existing?.userEditedFields ?? [],
+              });
+              catalogApply = plan.apply;
+              catalogSuggestionWrite = plan.suggestion;
             } catch (enrichErr) {
-              console.warn(`[batchAnalyze] catalog enrichment failed for item ${itemId}:`, enrichErr);
+              console.warn(`[batchAnalyze] enrichment cascade failed for item ${itemId}:`, enrichErr);
             }
 
             await prisma.item.update({

@@ -133,7 +133,7 @@ import { runWestVirginiaPhase2Scraper } from '../services/scraper/sources/westVi
 import * as Sentry from '@sentry/node';
 import axios from 'axios';
 import { analyzeItemImages } from '../services/cloudAIService';
-import { enrichItemFromCatalog } from '../services/ebayCatalogLookup';
+import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
 import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 
 const router = express.Router();
@@ -1141,52 +1141,45 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
     // Catalog enrichment (ADR 2026-06-14): best-effort identifier/dims fill from the
     // AI title + brand + visible model number. HIGH (>=0.85) auto-fills empty fields
     // (organizer values win); lower confidence becomes a catalogSuggestions write.
-    let enrichment: Awaited<ReturnType<typeof enrichItemFromCatalog>> = null;
+    let merged: Record<string, { value: string | number; source: string; confidence: number }> = {};
     try {
-      enrichment = await enrichItemFromCatalog({
-        title: result.title || item.title,
-        brand: item.brand ?? result.brand ?? null,
-        mpn: item.mpn ?? result.mpn ?? null,
-        upc: item.upc ?? null,
-        ean: item.ean ?? null,
-        isbn: item.isbn ?? null,
-        tags: (result.tags && result.tags.length ? result.tags : result.suggestedTags) ?? null,
-      });
+      const out = await enrichItem(
+        {
+          title: result.title || item.title,
+          brand: item.brand ?? result.brand ?? null,
+          mpn: item.mpn ?? result.mpn ?? null,
+          upc: item.upc ?? null,
+          ean: item.ean ?? null,
+          isbn: item.isbn ?? null,
+          tags: (result.tags && result.tags.length ? result.tags : result.suggestedTags) ?? null,
+        },
+        { aiResult: result },
+      );
+      merged = out.merged;
     } catch (err: any) {
-      console.warn('[Reanalyze] catalog enrichment failed:', err?.message || err);
+      console.warn('[Reanalyze] enrichment cascade failed:', err?.message || err);
     }
 
     // Build the catalog apply/suggestion payload (shared by `after` + the apply write).
-    const ue = item.userEditedFields ?? [];
-    const catalogApply: Record<string, any> = {};
-    let catalogSuggestionWrite: any = undefined;
-    if (enrichment) {
-      if (enrichment.confidence >= 0.85) {
-        const id = enrichment.identifiers;
-        if (id.mpn && !ue.includes('mpn') && !item.mpn) catalogApply.mpn = id.mpn;
-        if (id.upc && !item.upc) catalogApply.upc = id.upc;
-        if (id.ean && !item.ean) catalogApply.ean = id.ean;
-        if (id.epid && !item.ebayEpid) catalogApply.ebayEpid = id.epid;
-        if (id.brand && !ue.includes('brand') && !item.brand) catalogApply.brand = id.brand;
-        if (item.packageConfirmedByOrganizer === false && enrichment.package) {
-          const pk = enrichment.package;
-          if (pk.weightOz != null && !ue.includes('packageWeightOz') && item.packageWeightOz == null) catalogApply.packageWeightOz = pk.weightOz;
-          if (pk.lengthIn != null && item.packageLengthIn == null) catalogApply.packageLengthIn = pk.lengthIn;
-          if (pk.widthIn != null && item.packageWidthIn == null) catalogApply.packageWidthIn = pk.widthIn;
-          if (pk.heightIn != null && item.packageHeightIn == null) catalogApply.packageHeightIn = pk.heightIn;
-        }
-        catalogSuggestionWrite = null;
-      } else {
-        catalogSuggestionWrite = {
-          source: (item.upc || item.ean || item.isbn) ? 'barcode' : 'ebay-catalog',
-          confidence: enrichment.confidence,
-          identifiers: enrichment.identifiers,
-          ...(enrichment.package ? { package: enrichment.package } : {}),
-          ...(enrichment.matchedTitle ? { matchedTitle: enrichment.matchedTitle } : {}),
-          suggestedAt: new Date().toISOString(),
-        };
-      }
-    }
+    const plan = planEnrichmentApply(merged, {
+      brand: item.brand ?? null,
+      mpn: item.mpn ?? null,
+      upc: item.upc ?? null,
+      ean: item.ean ?? null,
+      isbn: item.isbn ?? null,
+      ebayEpid: item.ebayEpid ?? null,
+      ebayCategoryId: item.ebayCategoryId ?? null,
+      packageWeightOz: item.packageWeightOz ?? null,
+      packageLengthIn: item.packageLengthIn ?? null,
+      packageWidthIn: item.packageWidthIn ?? null,
+      packageHeightIn: item.packageHeightIn ?? null,
+      packageConfirmedByOrganizer: item.packageConfirmedByOrganizer ?? null,
+      userEditedFields: item.userEditedFields ?? [],
+    });
+    const catalogApply: Record<string, any> = plan.apply;
+    const catalogSuggestionWrite: any = plan.suggestion;
+    // Sources observed across the merged cascade result (for the `after` payload).
+    const enrichmentSources = Array.from(new Set(Object.values(merged).map((m) => m.source)));
 
     const before = {
       title: item.title,
@@ -1212,13 +1205,14 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
       ebayCategoryId: cat?.categoryId ?? null,
       ebayCategoryName: cat?.categoryName ?? null,
       aiConfidence: result.confidence ?? null,
-      // Catalog enrichment outcome (ADR 2026-06-14): what enrichment would/did apply.
-      catalogEnrichment: enrichment
+      // Enrichment cascade outcome (ADR 2026-06-14): merged per-field result with sources,
+      // which fields WOULD auto-apply, and the suggestion that would be written.
+      catalogEnrichment: Object.keys(merged).length > 0
         ? {
-            confidence: enrichment.confidence,
-            applied: enrichment.confidence >= 0.85 ? catalogApply : {},
+            sources: enrichmentSources,
+            merged,
+            wouldApply: catalogApply,
             suggestion: catalogSuggestionWrite ?? null,
-            matchedTitle: enrichment.matchedTitle ?? null,
           }
         : null,
     };

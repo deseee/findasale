@@ -5,7 +5,8 @@ import { composeDescription } from '../services/descriptionMerger'; // Item Desc
 import { suggestCategories } from '../services/ebayTaxonomyService';
 import { getEbayAccessToken } from '../controllers/ebayController';
 import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
-import { lookupByBarcode, enrichItemFromCatalog } from '../services/ebayCatalogLookup';
+import { lookupByBarcode } from '../services/ebayCatalogLookup';
+import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
 
 /**
  * processRapidDraft — Background job for Rapidfire Mode Phase 2A
@@ -215,11 +216,13 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       // Fires AFTER AI tagging. Non-blocking — any error or timeout = silent skip.
       // Barcode enrichment overrides AI title-based eBay category (stronger signal).
       let barcodeEnrichment: import('../services/ebayCatalogLookup').EbayCatalogResult | null = null;
+      let rapidDecodedBarcode: { code: string; type?: string } | undefined = undefined;
       for (const photoBuffer of photoBuffers) {
         try {
           const detected = await decodeBarcodeFromImage(photoBuffer);
           if (detected) {
             console.log(`[rapidfire] Barcode detected for item ${itemId}: ${detected.code} (${detected.codeType})`);
+            if (!rapidDecodedBarcode) rapidDecodedBarcode = { code: detected.code, type: detected.codeType };
             barcodeEnrichment = await lookupByBarcode(detected.code, detected.codeType);
             if (barcodeEnrichment) {
               console.log(`[rapidfire] Barcode enrichment found for item ${itemId}: "${barcodeEnrichment.title}"`);
@@ -237,8 +240,8 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       let rapidCatalogApply: Record<string, any> = {};
       let rapidCatalogSuggestion: any = undefined;
       try {
-        if (!barcodeEnrichment) {
-          const enrichment = await enrichItemFromCatalog({
+        const { merged } = await enrichItem(
+          {
             title: aiResult.title || item.title,
             brand: item.brand ?? aiResult.brand ?? null,
             mpn: item.mpn ?? aiResult.mpn ?? null,
@@ -246,37 +249,28 @@ export async function processRapidDraft(itemId: string): Promise<void> {
             ean: item.ean ?? null,
             isbn: item.isbn ?? null,
             tags: aiResult.tags ?? null,
-          });
-          if (enrichment) {
-            if (enrichment.confidence >= 0.85) {
-              const id = enrichment.identifiers;
-              if (id.mpn && !userEdited.includes('mpn') && !item.mpn) rapidCatalogApply.mpn = id.mpn;
-              if (id.upc && !item.upc) rapidCatalogApply.upc = id.upc;
-              if (id.ean && !item.ean) rapidCatalogApply.ean = id.ean;
-              if (id.epid && !item.ebayEpid) rapidCatalogApply.ebayEpid = id.epid;
-              if (id.brand && !userEdited.includes('brand') && !item.brand) rapidCatalogApply.brand = id.brand;
-              if (item.packageConfirmedByOrganizer === false && enrichment.package) {
-                const pk = enrichment.package;
-                if (pk.weightOz != null && !userEdited.includes('packageWeightOz') && item.packageWeightOz == null) rapidCatalogApply.packageWeightOz = pk.weightOz;
-                if (pk.lengthIn != null && item.packageLengthIn == null) rapidCatalogApply.packageLengthIn = pk.lengthIn;
-                if (pk.widthIn != null && item.packageWidthIn == null) rapidCatalogApply.packageWidthIn = pk.widthIn;
-                if (pk.heightIn != null && item.packageHeightIn == null) rapidCatalogApply.packageHeightIn = pk.heightIn;
-              }
-              rapidCatalogSuggestion = null;
-            } else {
-              rapidCatalogSuggestion = {
-                source: (item.upc || item.ean || item.isbn) ? 'barcode' : 'ebay-catalog',
-                confidence: enrichment.confidence,
-                identifiers: enrichment.identifiers,
-                ...(enrichment.package ? { package: enrichment.package } : {}),
-                ...(enrichment.matchedTitle ? { matchedTitle: enrichment.matchedTitle } : {}),
-                suggestedAt: new Date().toISOString(),
-              };
-            }
-          }
-        }
+          },
+          { decodedBarcode: rapidDecodedBarcode, aiResult },
+        );
+        const plan = planEnrichmentApply(merged, {
+          brand: item.brand ?? null,
+          mpn: item.mpn ?? null,
+          upc: item.upc ?? null,
+          ean: item.ean ?? null,
+          isbn: item.isbn ?? null,
+          ebayEpid: item.ebayEpid ?? null,
+          ebayCategoryId: item.ebayCategoryId ?? null,
+          packageWeightOz: item.packageWeightOz ?? null,
+          packageLengthIn: item.packageLengthIn ?? null,
+          packageWidthIn: item.packageWidthIn ?? null,
+          packageHeightIn: item.packageHeightIn ?? null,
+          packageConfirmedByOrganizer: item.packageConfirmedByOrganizer ?? null,
+          userEditedFields: userEdited,
+        });
+        rapidCatalogApply = plan.apply;
+        rapidCatalogSuggestion = plan.suggestion;
       } catch (enrichErr) {
-        console.warn(`[rapidfire] catalog enrichment failed for item ${itemId}:`, enrichErr);
+        console.warn(`[rapidfire] enrichment cascade failed for item ${itemId}:`, enrichErr);
       }
 
       const updateData = {
