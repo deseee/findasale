@@ -1,6 +1,24 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S976 — 2026-06-13 | Sentry CI health: missing grace-period index + 2am cron stampede fixed. Migration applied. Next: verify Sentry after 2026-06-14 02:35 UTC.
+**Last updated:** S975 — 2026-06-14 (Opus: full eBay listing-pipeline overhaul — shipping engine, category resolver, AI accuracy, enrichment cascade, live-edit propagation; pump verified live)
+
+---
+
+## Session S975 Summary — eBay Listing Pipeline Overhaul
+
+Started as "don't trust S973" and turned into a full rebuild of the eBay listing path. Everything backend is compile-verified; the Danner pump was the live test item and is now fully correct (Pet Supplies › Pumps Air, $32 flat shipping, no "Vintage" in the title).
+
+| Area | What changed | Status |
+|------|--------------|--------|
+| Shipping | Smart flat-rate engine: cheapest of USPS/UPS/FedEx, priced to your farthest-zone, FVF-grossed-up, bounded reusable buckets. No more $75 mis-tier. | ✅ live ($32 on pump) |
+| packageType | MAILING_BOX rejected for heavy parcels — now stripped on flat-rate. | ✅ live |
+| Category | Domain-aware resolver (stops aquarium pump → Bait Buckets); single canonical eBay L1 list shared by AI + resolver. | ✅ live (pump → Pumps Air) |
+| AI accuracy | Vintage/era only with real evidence; categorize by use not components; never fabricate a UPC. | ✅ live (Vintage dropped) |
+| Enrichment | Free-first provider cascade (barcode→UPC, Open Library, Open Food Facts, eBay-catalog slot, AI estimate; paid Go-UPC wired-off). Comps now match the exact model. | ✅ built (eBay slot waits on your Buy-API grant) |
+| Live edits | Title/desc/condition edits now republish so they reach the live listing. | ✅ fixed |
+| Tooling | On-demand re-analyze endpoint + one-click "accept suggestion" panel. | ✅ built |
+
+**Heads-up:** eBay's Catalog/Buy API is 403 for the app (you applied for access — it lights up automatically when granted). Frontend changes (suggestion panel, category picker prefill) couldn't be compile-checked in this environment — verify in a real build.
 
 ---
 

@@ -8,6 +8,28 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S975 WRAP — eBay listing pipeline overhaul (massive session). All backend tsc-verified; key paths verified live on the Danner pump.**
+
+DONE + VERIFIED LIVE:
+- Smart bounded FVF flat-rate shipping engine (cheapest of USPS/UPS/FedEx → farthest-CONUS coverage zone → FVF gross-up → bounded reusable bucket ladder; no calc fallback). Pump lists at FindA.Sale Flat $32.00.
+- packageType fix (strip MAILING_BOX on flat-rate routing — eBay err 25101/216305).
+- Domain-aware eBay category resolver (no depth-sort, title+AI domain match, persist+show name) + single-source EBAY_L1_CATEGORIES. Pump now in Pet Supplies › Pumps (Air) 100351 (was Bait Buckets).
+- AI accuracy pass: Vintage/Antique + era only with evidence; decade allowed-but-not-forced; accuracy-over-richness. Verified: pump re-analysis dropped Vintage/1980s.
+- PushSync GET-merge-PUT (real SKU) + dead Logistics call removed.
+- On-demand /api/internal/reanalyze-item (secret-protected, dry-run+apply) — used live to verify the accuracy fix.
+- Product enrichment cascade (productEnrichment.ts): barcode→UPC (free), Open Library, Open Food Facts, eBay Catalog (dormant—403 until Buy-API grant), Go-UPC (paid, env-gated OFF), AI estimate. Confidence-gated apply; visible-UPC read with hard no-fabrication rule. Comps now model-token-enforced (fixes AP-4/AP-100 + skewed price).
+- Live-edit propagation: republish offer after inventory sync so title/desc/condition edits reach the live listing (PushSync + reanalyze). Proven via direct eBay PUT+publish.
+- Accept-suggestion UI: getItemById returns catalogSuggestions; CatalogSuggestionPanel renders low-confidence enrichment with one-click accept on edit-item page.
+
+KEY FINDINGS: eBay Catalog API + Browse get_item = 403 (app lacks Buy-API access — Patrick applied for it; enrichment lights up automatically on grant). eBay locks PRIMARY CATEGORY on active listings → category changes need end+relist (title/condition update in place fine).
+
+## Next Session
+- ⚠️ FRONTEND NOT TSC-VERIFIED (VM node_modules corrupt): EbayCategoryPicker prefill, CatalogSuggestionPanel, edit-item panel render. Verify in a real build / Chrome before trusting.
+- When eBay Buy-API grant lands: ebayCatalog provider activates automatically — verify it returns identifiers/dims; consider adding get_product/{epid} for fuller aspects.
+- Optional: Go-UPC paid provider is wired but OFF (set GOUPC_API_KEY to enable; cache makes it ~once-per-product).
+- Chrome QA: verify CatalogSuggestionPanel renders + accept fills fields; verify live title-edit propagation end to end as an organizer.
+- Frontend "tie-it-together" UX polish for enrichment suggestions if desired.
+
 **S975 LIVE-LISTING EDIT PROPAGATION FIXED — backend-tsc clean, push pending:** Patrick: customers WILL want to edit live titles — must propagate. Root cause (proven via direct eBay API: PUT inventory_item new title + POST offer/publish → 200, live title updated): the sync updated the eBay inventory item but NEVER republished the offer, so edits never reached the live listing. eBay only reflects changes to shoppers after a republish. FIX: added `republishEbayOffer` + `syncListedItemFieldsToEbay` helpers (itemController) — GET offer (real SKU) → GET-merge-PUT inventory → republish; non-fatal, 25402 business-policy warning treated as success. Wired republish into PushSync (after price+inventory PUTs, gated on pushedFields>0 && ebayOfferId). /reanalyze-item now syncs+republishes title/desc/condition on apply for listed items (category drift detected+reported, NOT pushed — eBay locks primary category on active listings → needs end+relist); response adds ebaySynced/ebaySyncReason/ebayCategoryLocked. Files: itemController.ts, internal.ts. Backend tsc 0 errors. (Pump's live title already corrected manually via direct PUT during diagnosis — listing now fully correct: "Danner Manufacturing AP-40 Air Pump, Aquarium" / Pet Supplies 100351 / $32 flat.)
 
 **S975 PRODUCT ENRICHMENT CASCADE — built (Architect ADR-enrichment-cascade-2026-06-14), backend-tsc clean, needs DDL + push, then pump test:** Provider-cascade `enrichItem(item, ctx)` in new productEnrichment.ts — runs free-first, first-non-null-per-field, cached by identifier, NEVER throws. Providers: localBarcode (decoded UPC/EAN, no API, conf 1.0) → openLibrary (ISBN, free, live-verified) → openFoodFacts (grocery UPC → brand + product_quantity g→oz, free, live-verified) → ebayCatalog (wraps enrichItemFromCatalog; null on current 403, lights up on Buy-API grant) → goUpc (PAID, env-gated OFF via GOUPC_API_KEY) → aiEstimate (dims fallback). NO GS1. Apply rule (planEnrichmentApply): auto-apply when source∈{barcode,openLibrary,openFoodFacts,ebayCatalog,goUpc} OR conf≥0.85, EMPTY fields only (organizer wins), dims only if !packageConfirmedByOrganizer; else → catalogSuggestions. Haiku one-pass now reads visible UPC + HARD no-fabrication rule (never invent a UPC/dims from memory). Decoded barcode stored straight onto upc/ean (no API). Wired into batchAnalyze + processRapidDraft + /reanalyze-item. Reuses Item.catalogSuggestions column (needs the DDL run). Comps model-token filter + AI model capture from prior build intact. Files: productEnrichment.ts(new), cloudAIService.ts, batchAnalyzeController.ts, processRapidDraft.ts, internal.ts (+ prior catalog-enrichment: schema.prisma, ebayCatalogLookup.ts, ebayController.ts). Backend tsc 0 errors. NEXT: run catalogSuggestions DDL on Railway → push all → re-analyze pump w/apply to test full chain (Vintage gone, Pet Supplies cat, model-enforced comps, enrichment). Frontend Accept-suggestion UI = follow-up.

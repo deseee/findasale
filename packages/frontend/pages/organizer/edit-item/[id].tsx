@@ -33,6 +33,7 @@ import EbayCompTiles from '../../../components/EbayCompTiles';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import VoiceDescriptionInput from '../../../components/VoiceDescriptionInput';
 import BarcodeScanner from '../../../components/BarcodeScanner';
+import CatalogSuggestionPanel from '../../../components/CatalogSuggestionPanel';
 import { ShippingNetPreview } from '../../../components/ShippingNetPreview';
 import { Mic } from 'lucide-react';
 
@@ -891,6 +892,17 @@ const EditItemPage = () => {
                 />
               </div>
             </div>
+
+            {/* Catalog enrichment suggestions — additive, renders only when present.
+                Accepting fills the form field; existing Save flow persists it. */}
+            {item?.catalogSuggestions && (
+              <CatalogSuggestionPanel
+                suggestions={item.catalogSuggestions}
+                onAccept={(field, value) =>
+                  setFormData((prev) => ({ ...prev, [field]: value }))
+                }
+              />
+            )}
 
             {/* #64: Condition Grade Picker */}
             <div>
