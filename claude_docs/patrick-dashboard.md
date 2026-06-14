@@ -1,26 +1,27 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S973 — 2026-06-13 (QA + DEV: 3 bugs found and fixed | 4-file push block ready | BQ 2 | Next: push → deploy → re-QA the Danner pump)
+**Last updated:** S974 — 2026-06-13 (BUG/DEV: FVF flat-rate shipping fix pushed | BQ 3 | Next: end listings → re-push → Chrome verify)
 
 ---
 
-## Session S973 Summary — Chrome QA with Real Account + 3 Bug Fixes
+## Session S974 Summary — eBay FVF Flat-Rate Shipping Fix
 
-**Type:** QA/DEV — Chrome MCP as artifactmi@gmail.com + inline bug fixes
-**BQ:** 2 (unchanged — febe1f46 row updated; all new bugs fixed CODE-ONLY)
+**Type:** BUG/DEV — root cause confirmed, 3 files shipped (commit 11cfb344), Railway deploying
+**BQ:** 3 (+1: FVF flat-rate Chrome verify + tier-ID investigation needed)
 
 | Item | Status | Details |
 |------|--------|---------|
-| Shipping dimensions pre-fill | ✅ VERIFIED | Package Type=Box(standard), Weight=176oz, L=12, W=9, H=7 all pre-populated on edit-item page. ss_0277k2jba |
-| Weight-tier overshoot toast | ✅ VERIFIED | Warning appeared during FLAT_TIERS push — 176oz hits $75 FedEx tier, actionable message shown. |
-| eBay item specifics | ✅ VERIFIED | Brand=Danner, MPN=AP-40 confirmed on live eBay listing 137411858004. |
-| err:216314 — MAILING_BOX/LSAS | 🔧 FIXED CODE-ONLY | eBay LSAS rejected MAILING_BOX packageType for calculated policies. Fix: strip packageType from inventory payload in CALCULATED mode. ebayController.ts. Push block ready. |
-| Brand/MPN/Category not pre-filling | 🔧 FIXED CODE-ONLY | GET /api/items/:id wasn't returning brand/mpn/upc in the select. Fixed in itemController.ts. Push block ready. |
-| ShippingNetPreview not wired | 🔧 FIXED CODE-ONLY | S971 built the component but never added it to edit-item page. Fixed — now renders when package weight is set. Push block ready. |
-| Calculated policy on eBay | ⏳ NEEDS RE-VERIFY | Blocked by err:216314 bug (now fixed CODE-ONLY). Push → deploy → re-push Danner pump to confirm. |
-| Suggest Price button | ⏳ NEEDS RE-VERIFY | ShippingNetPreview now wired to page — button will be live after push/deploy. |
+| AP-40 $75 root cause | ✅ CONFIRMED | FLAT_TIERS gap — USPS caps at 111oz, 11lb AP-40 fell into FedEx $75 catch-all tier |
+| FVF flat-rate service | 🔧 SHIPPED CODE-ONLY | New ebayFlatRatePolicyService.ts creates "FindA.Sale Flat $X.XX" policies on eBay per item |
+| Gap-overshoot guard fix | 🔧 SHIPPED CODE-ONLY | Gap now tries FVF flat-rate first instead of blocking. AP-40 → ~$23.59 |
+| Butter Knife re-push | ⏳ NEEDS CHROME VERIFY | Expected: $6.65 (exact FLAT_TIERS tier match) |
+| AP-40 re-push | ⏳ NEEDS CHROME VERIFY | Expected: ~$23.59 (new "FindA.Sale Flat $23.59" policy created on eBay) |
+| Tier-ID source | ⚠️ UNKNOWN | How did 23 tier policy IDs get into FindA.Sale DB? "Sync from eBay" only saves ONE default. Opus must investigate. |
 
-**What you need to do:** Push the 4-file block below → wait for Railway + Vercel to deploy → re-push the Danner pump as artifactmi to confirm calculated shipping + Suggest Price.
+**What you need to do:**
+1. Wait for Railway to finish deploying commit 11cfb344 (~2-3 min)
+2. "Remove from eBay" on Butter Knife (137412262678) and AP-40 (137411858004)
+3. "Re-push to eBay" on both — verify prices
 
 ---
 

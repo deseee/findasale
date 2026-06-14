@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S973 — QA/DEV (2026-06-13). Chrome QA of febe1f46 eBay calculated-shipping build (Patrick + artifactmi@gmail.com). 3 bugs found and fixed.**
+**S974 — BUG/DEV (2026-06-13). eBay FVF-inclusive flat-rate shipping fix. 3 files shipped (commit 11cfb344). CODE-ONLY — Railway deployed, Chrome verify pending.**
 - **Shipping dimensions pre-fill ✅:** Package Type=Box(standard), Weight=176oz, L=12, W=9, H=7 all pre-populated on edit-item page. ss_0277k2jba
 - **Weight-tier gap-overshoot toast ✅:** Warning fired during FLAT_TIERS push (176oz hits $75 FedEx tier — actionable message shown to user).
 - **eBay item specifics ✅:** Brand=Danner, MPN=AP-40 confirmed on live eBay listing 137411858004. ss_1925495922 (prior session evidence)
@@ -117,6 +117,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
 | eBay calculated-shipping / net-engine build (febe1f46) — re-verify after deploy | S973 Chrome QA found 3 bugs, all fixed CODE-ONLY: (1) err:216314 MAILING_BOX/LSAS fix in ebayController.ts; (2) brand/mpn/upc missing from getItemById GET response; (3) ShippingNetPreview/SuggestPrice not wired to edit-item page. ebayCalculatedPolicyService.ts USPSGroundAdvantage→USPSParcel+USPSPriority also fixed. Push block delivered S973. | After Patrick pushes 4-file block and Railway deploys: re-push Danner pump as artifactmi, verify (a) calculated policy applies on eBay, (b) Brand/MPN/Category pre-fill on edit-item, (c) ShippingNetPreview renders with Suggest Price. | S971 |
+| eBay FVF flat-rate shipping (S974) — Chrome verify pending + tier-ID source unknown | Commit 11cfb344 pushed. ebayFlatRatePolicyService.ts creates "FindA.Sale Flat $X.XX" policies; gap-overshoot guard now tries FVF flat-rate before blocking. ALSO: Opus must investigate how the 23 tier policy IDs in the FLAT_TIERS table got into FindA.Sale DB — "Sync from eBay" button only saves ONE default policy, not the full tier mapping. If tier IDs are wrong, FLAT_TIERS routing is broken. | End Butter Knife (137412262678) + AP-40 (137411858004) listings → re-push → verify Butter Knife=$6.65, AP-40=~$23.59, "FindA.Sale Flat $23.59" policy appears on eBay account. | S974 |
 
 
 
@@ -146,6 +147,34 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 
 ## Next Session
+
+### S974 — Carry-forward (eBay FVF flat-rate — Chrome verify + tier-ID investigation)
+
+**CRITICAL for Opus — read before touching eBay code:**
+1. Investigate how the 23 FLAT_TIERS weight-tier policy IDs got into FindA.Sale's DB. Patrick says he didn't sync them via "Sync from eBay" (confirmed: that button only saves ONE default policy to EbayConnection). Find the actual source or this whole routing path may be broken.
+2. Chrome verify as artifactmi@gmail.com: End Butter Knife (137412262678) + AP-40 (137411858004) → re-push → expect Butter Knife=$6.65, AP-40=~$23.59 with new "FindA.Sale Flat $23.59" policy appearing on eBay.
+3. Three mistakes from S974 are documented in the session block above — don't repeat them.
+
+### S974 — 2026-06-13 | BUG/DEV (eBay FVF shipping — flat-rate fix)
+
+**Session type:** BUG/DEV — evidence-first debugging, service build, code push
+
+**Root cause:** AP-40 listed at $75 FedEx because organizer is on FLAT_TIERS mode with a gap — USPS caps at 111oz, next tier is FedEx 45lb $75 catch-all (maxOz 720). The 11lb (176oz) AP-40 fell through. Gap-overshoot guard (commit 3db01c72) was added after the AP-40 was first pushed, so it was already live at $75.
+
+**Fix shipped (commit 11cfb344, 3 files):**
+- `ebayFlatRatePolicyService.ts` — NEW (195 lines). Creates "FindA.Sale Flat $X.XX" per-organizer flat-rate policies on eBay, idempotent (name-check + error 20400 guard), in-process cache, graceful fallback. Calls eBay via proxy with EBAY_PROXY_SECRET — works in production (403 was VM-only; Railway has the secret).
+- `ebayController.ts` — gap-overshoot guard (~L3621) now tries ensureFvfFlatRatePolicy FIRST before returning SHIPPING_TIER_GAP error.
+- `ebayRateEstimateService.ts` — rewritten with real 2026-04-26 Pirate Ship USPS GA rates. Exports EBAY_SHIPPING_FVF_RATE=0.136.
+
+**Expected after Railway deploy (NOT Chrome-verified):** Butter Knife (4oz) → $6.65 (FLAT_TIERS exact tier); AP-40 (11lb/176oz) → $23.59 (new "FindA.Sale Flat $23.59" policy created on eBay).
+
+**Mistakes made (Opus must not repeat):**
+1. Built Option A ($1.50 handling fee) before confirming with Patrick — he wanted Option B (per-item FVF flat-rate). Wasted 1 build cycle.
+2. Reasoned from code/DB without testing live eBay API. Patrick correct callout.
+3. Wrong about eBay policy sync — kept saying policies ARE synced. Patrick is RIGHT: "Sync from eBay" button only saves ONE default policy per type to EbayConnection. It does NOT populate the FLAT_TIERS tier mapping. The 23 weight-based tier entries and their eBay policy IDs — source unknown. Patrick says he didn't sync them. Opus MUST investigate before assuming FLAT_TIERS routing is correct.
+
+**BQ delta:** 2 → 3 (added: FVF flat-rate Chrome verify + tier-ID source investigation)
+
 
 ### S973 — Carry-forward (eBay shipping — push + deploy + re-QA needed)
 
