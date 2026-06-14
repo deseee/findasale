@@ -131,6 +131,9 @@ import { runTennesseePhase2Scraper } from '../services/scraper/sources/tennessee
 import { runVermontPhase2Scraper } from '../services/scraper/sources/vermontPhase2Scraper';
 import { runWestVirginiaPhase2Scraper } from '../services/scraper/sources/westVirginiaPhase2Scraper';
 import * as Sentry from '@sentry/node';
+import axios from 'axios';
+import { analyzeItemImages } from '../services/cloudAIService';
+import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 
 const router = express.Router();
 
@@ -1033,6 +1036,146 @@ router.post('/backfill-photos', requireSecret, async (req: express.Request, res:
   } catch (err) {
     console.error('[backfill-photos] error:', err);
     res.status(500).json({ message: 'Backfill failed', error: String(err) });
+  }
+});
+
+// POST /api/internal/reanalyze-item
+// Admin/internal on-demand re-analysis of an item's photos through the multi-image AI tagger.
+// Dry-run by default (apply=false): returns before/after diff without writing.
+// apply=true: writes AI title/description/category/condition/conditionGrade/tags + eBay category.
+// NEVER overwrites price (organizer pricing preserved). NOT user-facing.
+router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const itemId = typeof req.body?.itemId === 'string' ? req.body.itemId.trim() : '';
+    const apply = req.body?.apply === true;
+
+    if (!itemId) {
+      res.status(400).json({ error: 'itemId is required' });
+      return;
+    }
+
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        category: true,
+        condition: true,
+        conditionGrade: true,
+        price: true,
+        tags: true,
+        photoUrls: true,
+        ebayCategoryId: true,
+        ebayCategoryName: true,
+        sale: { select: { id: true, organizerId: true } },
+      },
+    });
+
+    if (!item) {
+      res.status(404).json({ error: 'item not found' });
+      return;
+    }
+
+    if (!item.photoUrls || item.photoUrls.length === 0) {
+      res.status(400).json({ error: 'no photos' });
+      return;
+    }
+
+    // Download up to the first 5 photos into Buffers (skip failures).
+    const buffers: Buffer[] = [];
+    const mimeTypes: string[] = [];
+    for (const url of item.photoUrls.slice(0, 5)) {
+      try {
+        const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000 });
+        buffers.push(Buffer.from(resp.data));
+        mimeTypes.push('image/jpeg');
+      } catch (err: any) {
+        console.error(`[Reanalyze] photo download failed (${url}):`, err?.message || err);
+      }
+    }
+
+    if (buffers.length === 0) {
+      res.status(502).json({ error: 'photo download failed' });
+      return;
+    }
+
+    let result;
+    try {
+      result = await analyzeItemImages(buffers, mimeTypes);
+    } catch (err: any) {
+      console.error('[Reanalyze] analyzeItemImages threw:', err?.message || err);
+      res.status(503).json({ error: 'AI unavailable' });
+      return;
+    }
+
+    if (!result) {
+      res.status(503).json({ error: 'AI unavailable' });
+      return;
+    }
+
+    // Re-resolve eBay category (best-effort; tolerate null).
+    let cat: { categoryId: string; categoryName: string } | null = null;
+    try {
+      cat = await suggestEbayCategoryForTitle(
+        result.title || item.title,
+        result.category || item.category
+      );
+    } catch (err: any) {
+      console.warn('[Reanalyze] eBay category resolve failed:', err?.message || err);
+    }
+
+    const before = {
+      title: item.title,
+      description: item.description,
+      category: item.category,
+      condition: item.condition,
+      conditionGrade: item.conditionGrade,
+      price: item.price,
+      tags: item.tags,
+      ebayCategoryId: item.ebayCategoryId,
+      ebayCategoryName: item.ebayCategoryName,
+    };
+
+    const after = {
+      title: result.title ?? null,
+      description: result.description ?? null,
+      category: result.category ?? null,
+      condition: result.condition ?? null,
+      conditionGrade: result.suggestedConditionGrade ?? null,
+      // suggestedPrice shown for visibility only — price is NEVER overwritten.
+      suggestedPrice: result.suggestedPrice ?? null,
+      tags: (result.tags && result.tags.length ? result.tags : result.suggestedTags) ?? null,
+      ebayCategoryId: cat?.categoryId ?? null,
+      ebayCategoryName: cat?.categoryName ?? null,
+      aiConfidence: result.confidence ?? null,
+    };
+
+    if (apply) {
+      const data: Record<string, any> = {};
+      if (result.title) data.title = result.title;
+      if (result.description) data.description = result.description;
+      if (result.category) data.category = result.category;
+      if (result.condition) data.condition = result.condition;
+      if (result.suggestedConditionGrade) data.conditionGrade = result.suggestedConditionGrade;
+      const nextTags = (result.tags && result.tags.length ? result.tags : result.suggestedTags);
+      if (nextTags && nextTags.length) data.tags = nextTags;
+      if (cat?.categoryId) {
+        data.ebayCategoryId = cat.categoryId;
+        data.ebayCategoryName = cat.categoryName;
+      }
+      // Price intentionally excluded — organizer pricing always wins.
+      if (Object.keys(data).length > 0) {
+        await prisma.item.update({ where: { id: itemId }, data });
+      }
+    }
+
+    console.log(`[Reanalyze] item=${itemId} applied=${apply} title="${(result.title || item.title || '').slice(0, 80)}"`);
+
+    res.json({ itemId, applied: apply, before, after });
+  } catch (err: any) {
+    console.error('[Reanalyze] route error:', err?.message || err);
+    res.status(500).json({ error: 'reanalyze failed', detail: String(err?.message || err) });
   }
 });
 
