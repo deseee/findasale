@@ -14,6 +14,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - Follow-up: fmt() now renders negative dollars as -$X.XX (was "$-0.87") — fixes both the guardrail text and the "Your estimated net" box.
 - File: packages/frontend/components/ShippingNetPreview.tsx (frontend-only; reuses existing /shipping-preview/suggest-price; no schema/migration). Frontend TS 0 errors.
 - Chrome QA PASSED live as Artifact MI (see Pending Chrome Verifications, row 547-GR) — staged for next-session roadmap apply.
+- Deploy arc: first push built RED on Vercel — `Type error: Invalid character` from **554 trailing NUL bytes** appended to ShippingNetPreview.tsx in the push round-trip (NOT a code bug; local tsc passed clean both times). Pulled the real Vercel build log (evidence-first), stripped the nulls, re-pushed → GREEN. New memory: reference_nul_byte_file_corruption.
+- RE-VERIFIED on the green production build as Artifact MI: net box and guardrail both render -$0.87 (clean), guardrail fires at $3 / clears via "Use $4.89". Done end-to-end.
 
 **S978 DEV COMPLETE — Suggest price P2 safety guard + ShippingNetPreview FVF copy clarification shipped.**
 
@@ -363,6 +365,20 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S979 — 2026-06-14 | BUG→DEV→QA (eBay min-price suggester → low-price guardrail)
+
+**Session type:** Patrick flagged the "Min. list price to hit a net margin" widget — unclear purpose + absurd $6.22 suggestion on a $175 item.
+
+**Diagnosis (read both layers):** the suggester defined "margin" as net-as-fraction-of-list-price with no cost basis (`suggestPriceForMargin` in ebayNetProceedsService.ts), so on any real item it collapsed to the fee/shipping floor — correct math, wrong question. Copy never said what it was for.
+
+**Fix (Patrick chose guardrail direction):** removed the always-on suggester in `components/ShippingNetPreview.tsx`; now auto-fetches the fee-safe floor (15% margin, reuses existing /shipping-preview/suggest-price) and shows an amber warning ONLY when entered price < floor. Silent on normal items. One-tap "Use $X" applies the floor. Frontend-only, no schema. Plus fmt() negative-dollar fix (-$X.XX not $-0.87) — covers net box too.
+
+**Deploy:** push #1 RED — 554 trailing NUL bytes corrupted the file in the push round-trip (`Invalid character`; local tsc clean). Stripped nulls, re-pushed → GREEN. New memory reference_nul_byte_file_corruption.
+
+**QA:** live Chrome as Artifact MI on both the pre- and post-fix builds — $175 = no warning + old suggester gone; $3 = guardrail fires (net -$0.87, floor $4.89); "Use $4.89" → net $0.74, warning clears. Staged in Pending Chrome Verifications row 547-GR for next-session roadmap apply.
+
+**Files Changed:** packages/frontend/components/ShippingNetPreview.tsx; claude_docs/STATE.md, patrick-dashboard.md, strategy/roadmap.md.
 
 ### S978 — 2026-06-14 | DEV (Suggest price P2 safety guard + ShippingNetPreview copy)
 

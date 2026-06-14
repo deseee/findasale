@@ -1,6 +1,6 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S979 — 2026-06-14 (DEV+QA: eBay min-price suggester → silent low-price guardrail; $6.22 P2 resolved; Chrome QA passed)
+**Last updated:** S979 — 2026-06-14 (eBay min-price suggester → silent low-price guardrail; $6.22 P2 resolved; deployed green + live-verified)
 
 ---
 
@@ -19,7 +19,7 @@
 | Frontend TS | ✅ 0 errors |
 | Live Chrome QA as Artifact MI | ✅ $175 → no warning; $3 → guardrail fires (net -$0.87, floor $4.89); Use $4.89 → net $0.74, warning clears |
 
-**Patrick action:** push 1 code file (block below). Roadmap Chrome ✅ applied next session per the cross-session QA rule.
+**Status:** Shipped, deployed GREEN, live-verified ✅. (Push #1 went red on a trailing-NUL-byte file corruption — diagnosed via Vercel build log, stripped + re-pushed green.) Roadmap Chrome ✅ applied next session per the cross-session QA rule. **No action needed.**
 
 ---
 
