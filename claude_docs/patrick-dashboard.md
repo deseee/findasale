@@ -1,6 +1,27 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S977 — 2026-06-14 (QA: Sentry cron stagger verified + eBay pump Chrome-verified end-to-end; BQ 3 items)
+**Last updated:** S978 — 2026-06-14 (DEV: Suggest price P2 safety guard + ShippingNetPreview FVF copy; BQ 2 items)
+
+---
+
+## Session S978 Summary — DEV Complete ✅
+
+**Type:** DEV — P2 bug fix (Suggest price safety guard) + UX copy clarification (ShippingNetPreview)
+
+| Change | Result |
+|--------|--------|
+| Suggest price — currentPrice to AI | ✅ AI now sees the organizer's $175 price; will explain large deviations in reasoning |
+| Suggest price — safety gate (<50% of current) | ✅ If AI suggests below half the current price, shows warning with Yes/Keep buttons instead of auto-applying |
+| ShippingNetPreview — section header | ✅ "Min. list price to hit a net margin" (was "Suggest price for a target margin") |
+| ShippingNetPreview — FVF context | ✅ Added paragraph explaining eBay charges FVF on both item price AND shipping |
+| ShippingNetPreview — result label | ✅ "List item at $X — nets Y% after eBay fees (Z est.)" (was "List at $X for a Y% net") |
+| ShippingNetPreview — button | ✅ "Calculate" (was "Suggest price") |
+| Backend TS | ✅ 0 errors |
+| Frontend TS | ✅ 0 errors |
+
+**No Patrick actions needed from this session.** (Push block below — 5 code files + 2 wrap docs)
+
+**BQ is 2 items.** Recommend next session: FINDASALE-NODEJS-10 slow query fix (P1) or Chrome QA the P2 safety guard.
 
 ---
 

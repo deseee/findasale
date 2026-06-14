@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S977 QA COMPLETE — Sentry cron stagger verified + eBay pump flat-rate re-push Chrome-verified end-to-end.**
+**S978 DEV COMPLETE — Suggest price P2 safety guard + ShippingNetPreview FVF copy clarification shipped.**
 
 **S977 VERIFIED LIVE:**
 - Sentry: 5 cron stampede issues RESOLVED (FINDASALE-NODEJS-38/-2N/-2Z/-2S/-3D gone). FINDASALE-NODEJS-33 graceEndAt index fired last time 2:00 AM today (pre-fix run); tomorrow's 2:05 run should be clean. FINDASALE-NODEJS-10 (Sale SELECT 3342ms, 55 events since May 6) = pre-existing unrelated issue, added to BQ.
@@ -214,7 +214,6 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
 | FINDASALE-NODEJS-10 — Sale SELECT slow query (3342ms, ongoing) | Pre-existing issue, 55 events since May 6. `SELECT ... FROM "Sale"` with no relevant index. Not related to cron stampede (still firing post-stagger). Last seen 6:29 AM UTC 2026-06-14. Needs dedicated investigation: EXPLAIN ANALYZE the query, add index on the relevant column(s). P1 by age (5+ weeks unresolved). | Read query from Railway logs, run EXPLAIN ANALYZE via psycopg2, add index via migration. | S977 |
-| Suggest price P2 bug — calculates from cost basis not list price | "Suggest price" on edit-item returns $6.22 / 30% net $1.87 for a $175 item. Math checks out for cost≈$4.35 as basis. "Use this price" button would catastrophically replace $175 with $6.22. No safeguard. Organizer-facing risk. | Read suggest-price endpoint in backend; fix to calculate from current item price (or show a meaningful suggestion relative to list price); add a sanity check preventing suggestions >50% below current price. | S977 |
 
 
 
@@ -357,6 +356,23 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Recent Sessions
 
+### S978 — 2026-06-14 | DEV (Suggest price P2 safety guard + ShippingNetPreview copy)
+
+**Session type:** DEV — P2 bug fix dispatch (findasale-dev), copy clarification.
+
+**Suggest price P2 safety guard — FIXED:**
+- Root cause: `PriceSuggestion` sent only `{title, category, condition}` to the AI — no awareness of the organizer's current price. AI correctly priced a generic pump at $6.22; "Use this price" would have catastrophically replaced a $175 price.
+- Fix (3 files): `routes/items.ts` — added `currentPrice` to pricesuggestionSchema; `services/cloudAIService.ts` — `suggestPrice()` now accepts `currentPrice` as 5th param and injects it into the Claude Haiku prompt ("differs >30%, explain why clearly"); `components/PriceSuggestion.tsx` — full rewrite (137→184 lines): passes `currentPrice` in API body, adds `pendingConfirm` safety gate that fires when suggestion < 50% of current price, shows "⚠️ This is X% below your current price of $Y. Replace it?" with explicit Yes/Keep buttons instead of silently applying.
+- `components/PriceResearchPanel.tsx` — was NOT forwarding `currentPrice` to `<PriceSuggestion>` despite having it in props; added `currentPrice={currentPrice}` to JSX.
+- Backend TS: 0 errors. Frontend TS: 0 errors.
+
+**ShippingNetPreview FVF copy — CLARIFIED:**
+- Problem: "Suggest price for a target margin" section looked visually identical to the PriceSuggestion widget above it; result "List at $6.22" read like an item price, not a min-list-price-to-net-margin back-solver.
+- Fix (`components/ShippingNetPreview.tsx`): section header → "Min. list price to hit a net margin"; added FVF context paragraph ("eBay charges its Final Value Fee on both the item price and the shipping amount. This calculates the minimum item price to still net your target margin after both fees."); result label → "List item at $X — nets Y% after eBay fees (Z est.)"; button → "Calculate".
+- Backend TS: 0 errors. Frontend TS: 0 errors.
+
+**BQ delta:** 3 → 2 (Suggest price P2 bug FIXED + removed; #313 + NODEJS-10 remain)
+
 ### S977 — 2026-06-14 | QA (Sentry cron verify + eBay pump re-push Chrome QA)
 
 **Session type:** QA — Sentry monitoring, Chrome QA as artifactmi@gmail.com.
@@ -396,15 +412,15 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Next Session
 
-### S978 — Recommended options
+### S979 — Recommended options
 
-**BQ is 3 items (below ceiling). DEV available.**
+**BQ is 2 items (below ceiling). DEV available.**
 
-**Option A — Fix Suggest price P2 bug (BQ item):** Read the suggest-price endpoint, fix calculation to use list price not cost basis, add sanity guard. Dispatch `Skill('findasale-dev')`.
+**Option A (P1) — FINDASALE-NODEJS-10 slow query:** Sale SELECT 3342ms, 55+ events since May 6. Run EXPLAIN ANALYZE on the query via psycopg2, add index via migration. Dispatch `Skill('findasale-dev')`.
 
-**Option B — Investigate FINDASALE-NODEJS-10 (BQ P1):** Run EXPLAIN ANALYZE on the Sale SELECT query, add index via migration. Dispatch `Skill('findasale-dev')` or do inline if <20 lines.
+**Option B — Chrome QA for S978 P2 fix:** Navigate to edit-item for the Danner pump ($175 item) as artifactmi. Click Suggest Price. Verify (1) AI reasoning cites the $175 current price, (2) if suggestion is still < $87.50, warning confirmation UI appears instead of auto-applying. Dispatch `Skill('findasale-qa')` (Chrome sequential).
 
 **Option C — Next roadmap item.** BQ is below ceiling.
 
-**Patrick actions pending:** None from S977.
+**Patrick actions pending:** None from S978.
 
