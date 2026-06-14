@@ -21,6 +21,7 @@ import {
 import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { ensureCalculatedFulfillmentPolicy } from '../services/ebayCalculatedPolicyService';
+import { ensureFvfFlatRatePolicy } from '../services/ebayFlatRatePolicyService';
 import { estimateBuyerShippingRate } from '../services/ebayRateEstimateService';
 import { computeNetProceeds, suggestPriceForMargin } from '../services/ebayNetProceedsService';
 import { estimatePackageProfile } from '../services/ebayPackageEstimateService';
@@ -2051,7 +2052,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             category: item.category,
             ebayShippingOverride: item.ebayShippingOverride,
           },
-          { fetchFulfillmentPolicies: getFulfillmentPoliciesOnce }
+          { fetchFulfillmentPolicies: getFulfillmentPoliciesOnce, fromZip: sale.zip || null }
         );
 
         if ('error' in routing) {
@@ -3371,6 +3372,7 @@ async function resolvePoliciesForItem(
   },
   smartPickContext?: {
     fetchFulfillmentPolicies?: () => Promise<any[]>;
+    fromZip?: string | null;
   }
 ): Promise<PolicyRoutingResult | { error: string; code: string; message: string }> {
   const organizer = await prisma.organizer.findUnique({
@@ -3457,7 +3459,7 @@ async function resolvePoliciesForItem(
     const returnPolicyId = mapping?.defaultReturnPolicyId || conn.returnPolicyId;
     const paymentPolicyId = mapping?.defaultPaymentPolicyId || conn.paymentPolicyId;
 
-    if (hasWeight && hasAllDims) {
+    if (hasWeight) {
       if (!returnPolicyId || !paymentPolicyId) {
         return {
           error: 'POLICIES_NOT_CONFIGURED',
@@ -3465,24 +3467,60 @@ async function resolvePoliciesForItem(
           message: 'Please set default return and payment policies in eBay Settings.',
         };
       }
-      // Provision the calculated fulfillment policy if not yet created.
-      let calcPolicyId = conn.calculatedFulfillmentPolicyId;
-      if (!calcPolicyId) {
-        calcPolicyId = await ensureCalculatedFulfillmentPolicy(organizerId);
-      }
-      if (calcPolicyId) {
-        console.log(`[eBay ShippingPick] item=${item.id} calculated-default policy=${calcPolicyId}`);
+      // FVF-inclusive flat-rate path (S968): items with a known weight use a per-bucket
+      // flat-rate policy priced at ceil(estimatedRate / 0.864) so the organizer nets at
+      // least the USPS label cost after eBay's 13.6% FVF on shipping.
+      // Falls back to calculated policy if provisioning fails.
+      const fromZip = smartPickContext?.fromZip ?? null;
+      const dims = (
+        item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
+          ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
+          : null
+      );
+      const fvfResult = await ensureFvfFlatRatePolicy(
+        organizerId,
+        item.packageWeightOz!,
+        dims,
+        fromZip
+      );
+      if (fvfResult) {
+        console.log(
+          `[eBay ShippingPick] item=${item.id} fvf-flat flatRate=${fvfResult.flatRate} policy=${fvfResult.policyId}`
+        );
         return {
-          fulfillmentPolicyId: calcPolicyId,
+          fulfillmentPolicyId: fvfResult.policyId,
           returnPolicyId,
           paymentPolicyId,
           descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
           pushAsDraft: mapping?.pushAsDraft ?? false,
           merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
-          routingReason: 'calculated-default',
+          routingReason: `fvf-flat:${fvfResult.flatRate}`,
         };
       }
-      console.warn(`[eBay ShippingPick] item=${item.id} calculated policy provisioning returned null — falling through`);
+      // FVF provisioning failed — fall back to calculated policy (requires dims)
+      if (hasAllDims) {
+        let calcPolicyId = conn.calculatedFulfillmentPolicyId;
+        if (!calcPolicyId) {
+          calcPolicyId = await ensureCalculatedFulfillmentPolicy(organizerId);
+        }
+        if (calcPolicyId) {
+          console.log(`[eBay ShippingPick] item=${item.id} calculated-fallback policy=${calcPolicyId}`);
+          return {
+            fulfillmentPolicyId: calcPolicyId,
+            returnPolicyId,
+            paymentPolicyId,
+            descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
+            pushAsDraft: mapping?.pushAsDraft ?? false,
+            merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+            routingReason: 'calculated-fallback',
+          };
+        }
+        console.warn(`[eBay ShippingPick] item=${item.id} calculated fallback returned null — falling through`);
+      } else {
+        console.warn(
+          `[eBay ShippingPick] item=${item.id} FVF flat failed and no dims for calculated fallback — falling through`
+        );
+      }
     } else if (mapping?.freeShippingOptIn) {
       // Organizer opted into free shipping — fall back to a free/flat policy via smart-pick.
       const smartPicked = await pickFulfillmentPolicySmart(
