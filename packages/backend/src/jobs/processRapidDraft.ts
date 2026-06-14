@@ -5,7 +5,7 @@ import { composeDescription } from '../services/descriptionMerger'; // Item Desc
 import { suggestCategories } from '../services/ebayTaxonomyService';
 import { getEbayAccessToken } from '../controllers/ebayController';
 import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
-import { lookupByBarcode } from '../services/ebayCatalogLookup';
+import { lookupByBarcode, enrichItemFromCatalog } from '../services/ebayCatalogLookup';
 
 /**
  * processRapidDraft — Background job for Rapidfire Mode Phase 2A
@@ -231,6 +231,54 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         }
       }
 
+      // Catalog enrichment (ADR 2026-06-14): non-barcode fallback using AI title +
+      // brand + visible model number. HIGH (>=0.85) auto-fills empty fields; lower
+      // confidence is stored under catalogSuggestions for one-click accept in the edit UI.
+      let rapidCatalogApply: Record<string, any> = {};
+      let rapidCatalogSuggestion: any = undefined;
+      try {
+        if (!barcodeEnrichment) {
+          const enrichment = await enrichItemFromCatalog({
+            title: aiResult.title || item.title,
+            brand: item.brand ?? aiResult.brand ?? null,
+            mpn: item.mpn ?? aiResult.mpn ?? null,
+            upc: item.upc ?? null,
+            ean: item.ean ?? null,
+            isbn: item.isbn ?? null,
+            tags: aiResult.tags ?? null,
+          });
+          if (enrichment) {
+            if (enrichment.confidence >= 0.85) {
+              const id = enrichment.identifiers;
+              if (id.mpn && !userEdited.includes('mpn') && !item.mpn) rapidCatalogApply.mpn = id.mpn;
+              if (id.upc && !item.upc) rapidCatalogApply.upc = id.upc;
+              if (id.ean && !item.ean) rapidCatalogApply.ean = id.ean;
+              if (id.epid && !item.ebayEpid) rapidCatalogApply.ebayEpid = id.epid;
+              if (id.brand && !userEdited.includes('brand') && !item.brand) rapidCatalogApply.brand = id.brand;
+              if (item.packageConfirmedByOrganizer === false && enrichment.package) {
+                const pk = enrichment.package;
+                if (pk.weightOz != null && !userEdited.includes('packageWeightOz') && item.packageWeightOz == null) rapidCatalogApply.packageWeightOz = pk.weightOz;
+                if (pk.lengthIn != null && item.packageLengthIn == null) rapidCatalogApply.packageLengthIn = pk.lengthIn;
+                if (pk.widthIn != null && item.packageWidthIn == null) rapidCatalogApply.packageWidthIn = pk.widthIn;
+                if (pk.heightIn != null && item.packageHeightIn == null) rapidCatalogApply.packageHeightIn = pk.heightIn;
+              }
+              rapidCatalogSuggestion = null;
+            } else {
+              rapidCatalogSuggestion = {
+                source: (item.upc || item.ean || item.isbn) ? 'barcode' : 'ebay-catalog',
+                confidence: enrichment.confidence,
+                identifiers: enrichment.identifiers,
+                ...(enrichment.package ? { package: enrichment.package } : {}),
+                ...(enrichment.matchedTitle ? { matchedTitle: enrichment.matchedTitle } : {}),
+                suggestedAt: new Date().toISOString(),
+              };
+            }
+          }
+        }
+      } catch (enrichErr) {
+        console.warn(`[rapidfire] catalog enrichment failed for item ${itemId}:`, enrichErr);
+      }
+
       const updateData = {
         title: !userEdited.includes('title') ? (aiResult.title || item.title) : item.title,
         description: composedDescription,
@@ -266,6 +314,9 @@ export async function processRapidDraft(itemId: string): Promise<void> {
             ? { ebayCategoryId: barcodeEnrichment.ebayCategoryId, ebayCategoryName: barcodeEnrichment.ebayCategoryName ?? ebayCategoryName }
             : {}),
         } : {}),
+        // Catalog enrichment: HIGH-confidence auto-fills + suggestion write.
+        ...rapidCatalogApply,
+        ...(rapidCatalogSuggestion !== undefined ? { catalogSuggestions: rapidCatalogSuggestion } : {}),
       };
 
       // Optimistic lock: include updatedAt in where clause to detect concurrent edits
