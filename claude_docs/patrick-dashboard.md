@@ -1,6 +1,24 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S975 — 2026-06-13 (Opus: pump bug fixed + smart flat-rate engine built & compile-verified | push block ready | Next: deploy → re-push pump to confirm)
+**Last updated:** S976 — 2026-06-13 | Sentry CI health: missing grace-period index + 2am cron stampede fixed. Migration applied. Next: verify Sentry after 2026-06-14 02:35 UTC.
+
+---
+
+## Session S976 Summary — Sentry CI Health (COMPLETE)
+
+**Type:** BUG/INFRA — Sentry triage, production index migration, cron stampede fix
+**BQ:** 3 (unchanged)
+
+| Issue | Root Cause | Fix | Status |
+|-------|-----------|-----|--------|
+| SyntaxError crash (NODEJS-D) | Release 9873b2f9 (Brand/MPN/UPC edit-item) crashed Railway at 16:00 UTC | Already auto-resolved — prod is on 11cfb344 | ✅ No action needed |
+| tierGraceCron 1233ms (NODEJS-33) | schema.prisma declared `@@index([graceEndAt, graceTierBefore])` but NO migration ever created it — index never existed in production | New migration `20260614000000_add_grace_period_index` + `prisma migrate deploy` | ✅ Index live in Railway |
+| 6 slow queries 1081–2487ms (NODEJS-10/-38/-2N/-2Z/-2S/-3D) | 9 cron jobs all firing simultaneously at 2:00am UTC — connection/lock contention under concurrent load | Staggered 7 jobs across 2:00–2:35am in 5-min increments | ✅ Deployed — verify after 2026-06-14 02:35 UTC |
+| Full table COUNT (NODEJS-1N) | `SELECT COUNT(*) FROM Organizer WHERE 1=1` — no filter, no index can help | No fix needed — P3 background stat | ✅ P3/accepted |
+
+**What Patrick did:** Pushed 8 files + ran `prisma migrate deploy` against Railway. All done.
+
+**Next:** Check Sentry after tonight's 2am run (2026-06-14 02:35 UTC) to confirm slow queries are cleared.
 
 ---
 

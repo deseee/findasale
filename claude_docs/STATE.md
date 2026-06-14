@@ -286,129 +286,29 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Recent Sessions
 
-### S972 — 2026-06-13 | QA (Partial Chrome QA of S971 febe1f46 build)
 
-**Session type:** QA — Chrome MCP, main session, sequential.
+### S976 — 2026-06-13 | BUG/INFRA (Sentry CI Health — missing index + cron stampede fix)
 
-**Context:** Continuing from context compaction. Previous session had logged in as user5 (Leo Thomas, shopper) and was switching to user1 for eBay QA.
+**Session type:** BUG/INFRA — Sentry triage, production DB migration, cron schedule stagger.
 
-**Verified ✅ (with evidence):**
-- **Deploy GREEN:** febe1f46 on Railway (health `{"status":"ok"}`; /api/ebay/shipping-preview returns CSRF 403, not 404 → endpoint live). Vercel READY (dpl_EGnCoYtcosPKTEVt2naetMT5btLL). Wrap commit 3dfe5c58 still BUILDING (docs only, no impact).
-- **Brand/MPN/UPC on edit-item:** Navigated /organizer/edit-item/cmq2z2ocg001810t51m6su0bb as user1 (Alice). Brand field with placeholder "e.g. Danner, Sony, Pyrex — leave blank if unbranded" + "Required by eBay for many categories. Your value is always used exactly as entered." MPN (optional) "Manufacturer part #". UPC (optional) "Barcode number". ss_6085zmmkb
-- **Shipping mode toggle (settings/ebay):** "Calculated" (Recommended) card selected, "Flat-rate tiers" (Advanced) card present. Smart-pick default policy dropdown "Smart-pick (weight tier → calculated → flat-rate → free)" showing. Push Defaults section + Special Shipping Rules + Category Overrides sections all render. ss_3600f1du9
+**Sentry triage results (9 active issues):**
+- **FINDASALE-NODEJS-D (SyntaxError crash):** Release 9873b2f9 "feat: add Brand/MPN/UPC inputs to edit-item page" crashed Railway at 16:00 UTC. Already auto-resolved — current prod 11cfb344 healthy. No action.
+- **FINDASALE-NODEJS-33 (tierGraceCron 1233ms) — FIXED:** schema.prisma declared `@@index([graceEndAt, graceTierBefore])` but zero migrations ever created it. Created `20260614000000_add_grace_period_index` migration. Patrick applied `prisma migrate deploy` — index now in production.
+- **FINDASALE-NODEJS-10/-38/-2N/-2Z/-2S/-3D (6 slow queries 1081–2487ms) — FIXED:** 9 cron jobs all fired simultaneously at `0 2 * * *`, causing connection/lock contention. Staggered 7 jobs: cleanupStaleDrafts→2:05, consignorExpiry→2:10, xpExpiry→2:15, referralReward→2:20, reputationScore→2:25, foundingOrgBadge→2:30, fraudDetection→2:35. tierGraceCronJob stays 2:00.
+- **FINDASALE-NODEJS-1N (full table COUNT) — P3/NO-ACTION:** `SELECT COUNT(*) FROM Organizer WHERE 1=1` with no filter; no index can help. Acceptable background stat.
 
-**UNVERIFIED (requires Patrick's real account — artifactmi@gmail.com):**
-- Danner pump re-push through CALCULATED path (requires real eBay connection)
-- ShippingNetPreview component (net + buyer-shipping preview rendering)
-- Suggest-price button
-- Weight-tier gap-overshoot block message (CSRF blocks API test; needs eBay-connected account with flat-rate tiers)
-- Brand/MPN/UPC on review page (user1 review queue empty — all items live; user2 has no sales yet)
+**Files changed:** `packages/database/prisma/migrations/20260614000000_add_grace_period_index/migration.sql` (new), 7 × `packages/backend/src/jobs/*.ts` (cron schedule strings only). Backend TS: 0 errors. Migration applied to Railway. Push + `prisma migrate deploy` done by Patrick.
 
-**No DB mutations made.** No cleanup required.
+**BQ delta:** 3 (unchanged)
 
-**BQ delta:** 2 (unchanged)
+## Next Session
 
-### S971 — 2026-06-13 | DEV/RECORDS (eBay listing-push fix + calculated-shipping/net-engine build)
+### S977 — Recommended: Sentry monitoring + eBay pump Chrome verify
 
-**Session type:** DEV — eBay push debugging (evidence-first via direct eBay API), large shipping build, session wrap.
+**Monitoring (first 2am post-stagger is 2026-06-14 02:35 UTC):** Check Sentry — slow query warnings for FINDASALE-NODEJS-10/-38/-2N/-2Z/-2S/-3D should be gone or significantly reduced. FINDASALE-NODEJS-33 should be fully resolved (index live in production).
 
-**Trigger:** organizer couldn't push the Danner AP-40 aquarium pump to eBay — friendly "Brand is missing" error.
+**eBay pump Chrome verify (BQ item):** Re-push Danner pump (cmqbb252i000i60qq7eilco9z) and Butter Knife as artifactmi@gmail.com — confirm calculated shipping applies correctly. See BQ row for details.
 
-**Root causes (proven by hitting the eBay API directly):** Brand+MPN PAIR required (real errorId 25002 `<BrandMPN>`); secondaryCategoryId="1" from SECONDARY_CATEGORY_MAP (vintage/antique/handmade/collectible all mapped to NON-LEAF root categories) → errorId 25005; publishItemOffer used the wrong (bare FAS-{id}) SKU; category resolver took eBay's "Other/Misc" catch-all; weight-tier ladder gap billed an 11 lb pump $75.
+**Patrick actions pending:** None from this session — migration applied, code pushed.
 
-**Work completed:**
-- **Listing-push fixes (commits up to febe1f46):** Brand→"Unbranded" only when blank; force Brand+MPN aspects on push; publishItemOffer self-heals 25002; correct SKU via buildCustomLabel in repair paths; SECONDARY_CATEGORY_MAP disabled (root-category guard); resolver skips Other/Misc/Everything-Else; weight-tier gap-overshoot guard; Brand/MPN/UPC inputs on edit-item + review pages; "Publish to eBay now" saves form first; drafts API returns brand/mpn/upc.
-- **BIG BUILD (febe1f46, 13 files):** eBay calculated-shipping default + fee-aware net-proceeds engine + package-estimation + "Suggest price". Schema: models PackageProfile + EbayCategoryFee, +3 Item / +3 EbayConnection / +2 EbayPolicyMapping cols (migration 20260613190000_ebay_calculated_shipping_net_engine). Services: ebayCalculatedPolicyService, ebayRateEstimateService, ebayNetProceedsService, ebayPackageEstimateService; cloudAIService weight/dim estimation; resolvePoliciesForItem CALCULATED-default + FLAT_TIERS backfill; endpoints POST /ebay/shipping-preview + /shipping-preview/suggest-price; frontend ShippingNetPreview + PostSaleEbayPanel confirm card + settings shipping-mode toggle. Both TS gates 0 errors (orchestrator-verified). **CODE-ONLY — not browser-verified.**
-- **Locked decisions:** default shipping = CHARGED/calculated; free shipping = organizer opt-in; net engine displays net + Suggest-price (never auto-set); fees = real settled-order data + ~1.25% safety buffer, seeded from published rates; existing flat-tier organizers preserved. Behavior rule added: CLAUDE.md §10b Evidence-First Debugging Gate.
-- **Pump:** published live (listingId 137411387725) then WITHDRAWN per Patrick; reset for clean re-push (eBay listing/category fields cleared, brand=Danner/mpn=AP-40 set, offer 186196728011 retained).
 
-**MIGRATION APPLIED ✅ (2026-06-13):** febe1f46 schema migration applied + verified on Railway (tables, columns, and FLAT_TIERS backfill confirmed via DB query). Remaining: confirm deploys green + Chrome QA. Stray `packages/database/prisma/_schema_gen.prisma` should be deleted locally.
-
-**Files changed (docs only this wrap):** claude_docs/STATE.md, claude_docs/patrick-dashboard.md, claude_docs/strategy/roadmap.md. (Code files were pushed by Patrick across several commits, latest febe1f46.)
-
-**BQ delta:** 1 → 2 (added: febe1f46 build CODE-ONLY — migration applied, Chrome QA pending).
-
-### S970 — 2026-06-13 | QA/RECORDS (S969 PCVs + #219 re-verify)
-
-**Session type:** QA/RECORDS — records pass + Chrome QA (main session, sequential).
-
-**Work completed:**
-- **Records pass:** applied S969 PCVs to roadmap.md — #164 (✅ Claude QA S970, API+UI cols ✅), #27b (S969 re-confirmation appended), #317 (both rows ✅ S970 — inside/outside-radius enforcement now verified). PCV table cleared of all applied rows; 3 strikethrough Blocked Queue rows removed.
-- **#219 Achievements XP framing — CHROME VERIFIED ✅** — user5 (Leo Thomas, RANGER). /shopper/achievements "2,065 / 5,000 XP to Sage · 2935 remaining" (ss_5725naacs) == /shopper/dashboard "Progress to SAGE 2,065 / 5,000 XP" (ss_32707qytx); matches /api/xp/profile (2065/5000). S969 useXpProfile fix confirmed. Roadmap #219 → ✅ CHROME VERIFIED S970.
-
-**Files changed:** claude_docs/strategy/roadmap.md (#164, #27b, #317×2, #219), claude_docs/STATE.md, claude_docs/patrick-dashboard.md
-
-- **CODE-ONLY verification pass (Patrick request):** re-checked 7 gamification XP items vs current code. 5 MATCH (#254/#278/#281/#314/#315 — stay CODE-ONLY). #268 doc drift corrected (tiered 40-80 XP / TRAIL_COMPLETION / TrailCompletion-unique guard — code correct, claim was wrong). **#313 REAL BUG fixed** — HAUL_POST_LIKES dedup guard queried "photoId:" but award stored a different string → re-awarded 5 XP per like ≥10. Fixed (haulPostController.ts description token aligned), TS clean.
-
-**BQ delta:** 0 → 1 (#313 fix pending Chrome verify, env-blocked)
-
-### S969 — 2026-06-13 | QA (S968 smoke + Pending-QA burn-down)
-
-**Session type:** QA — Chrome MCP, run by main session (sequential).
-
-**Verified (evidence in Pending Chrome Verifications):**
-- S968 homepage CLS fix LIVE + correct (banners below map); code-split overlays mount; organizer pages (dashboard/settings/add-items/POS) + public sale detail render clean; no app console errors (only wallet-extension noise).
-- #164 Tiers Backend Infra — /api/tiers/mine 200, Bronze Organizer badge w/ correct progress; syncTier code-confirmed in billing webhooks. P3 data-hygiene note logged.
-- #27b watermark TEAMS toggle — checked + enabled for TEAMS org at settings Appearance.
-- #317 Geofence QR scan — 403 far / 200 at-location / 200 no-coords (graceful fallback); 100m haversine enforcement confirmed.
-
-**Finding (QA infra):** user12/Seedy2025! rejected in prod while user1/Seedy2025! works — primary-shopper seed credential stale; authenticated /shopper/* smoke deferred (public surface verified clean instead).
-
-**Deferred:** #27b PDF-footer/iCal-text (need non-TEAMS acct); authenticated shopper-dashboard smoke (credential).
-
-**BQ delta:** 0 (unchanged).
-
-### S965 — 2026-06-12 | DEV (Chrome QA #27c + GSalr Research)
-
-**Session type:** DEV — Chrome QA, scraper research
-
-**Work completed:**
-- **#27c eBay CSV Export — VERIFIED ✅** — Navigated https://finda.sale/organizer/add-items/59c49908-72f2-4e92-ade9-02bfcfdd9230 as Alice Johnson (user1). Export to eBay modal → clicked Download CSV → Network GET ebay-export → HTTP 200 (no 500). Toast confirmed. Em dash in sale title (exact pre-S963 failure condition) passed without error. ss_3764vxdwk ss_8508ma6s6 ss_0576eihvm. PCV #27c staged earlier in session — now Chrome-verified.
-- **GSalr.com (#381) — researched and ruled out PROHIBITED.** Technically excellent: static HTML city pages at /garage-sales-{city}-{state}.html, full schema.org data (title/street/city/state/zip/lat/lon/startDate/endDate/saleType), 97%+ address availability, 41+ listings/viewport, 51-state sitemap, 726 Michigan cities. No AJAX — all data in HTML DOM. BUT: ToS §2.3+§3.1 explicitly prohibit scraping with $10k/day liquidated damages for "competing service" use. robots.txt allows city pages — block is contractual not technical. Roadmap #381 updated to PROHIBITED. #379 stale reference to #381 as "legal alternative" corrected.
-- **AuctionTime.com — Cloudflare-blocked.** Direct fetch returns Cloudflare challenge page. May be resolvable with UA rotation (see AuctionZip precedent) — not attempted this session.
-
-**Files changed:**
-- `claude_docs/strategy/roadmap.md` — #381 updated PROHIBITED S965; #379 stale reference corrected
-- `claude_docs/STATE.md` — this wrap
-- `claude_docs/patrick-dashboard.md` — updated
-
-**BQ delta:** 0 (unchanged — #27c Chrome-verified, BQ stays empty)
-
-### S964 — 2026-06-12 | DEV (EstateSale.com Scraper + Playwright CI Fix)
-
-**Session type:** DEV — scraper research, new scraper build, CI fix
-
-**Work completed:**
-- **EstateSale.com scraper built** — 15,631 companies in their DB; state listing pages are static HTML (no JS required). Two-phase scraper: Phase 1 iterates 51 state pages at `/states/featuredCompanies/{id}/...` to collect company profile URLs. Phase 2 visits each profile for phone, email, and website (Crawl-Delay:10 respected, ~2–3hr quarterly runtime). Registered in sourceRegistry.ts as 'EstateSaleCom', ESTATE_SALE_CO category, `qualityTier: high` (featured listings = paid/active = best outreach leads). TypeScript: 0 errors.
-- **Playwright CI harness fixed** — `test-playwright-harness.yml` fires only on `workflow_dispatch` (never on push). Patrick was manually triggering it; fleamarkets.org (Wix) blocks headless Chrome → job failed. Fix: `continue-on-error: true` on the failing step. This is non-fatal — the harness is a dev tool, not a CI gate.
-- **Clark's Flea Market USA — ruled out** — clarksfleamarketusa.com returned empty on fetch (client-rendered JS app). No sitemap. Skipped.
-- **New target research completed** — EstateSale.com, Clark's, Bidsquare, AuctionTime evaluated. AuctionTime auctioneers list identified as next viable static-HTML target.
-
-**Files changed:**
-- `packages/backend/src/services/scraper/sources/estateSaleComScraper.ts` — new (153 lines)
-- `packages/backend/src/services/scraper/sourceRegistry.ts` — import + registry entry added
-- `.github/workflows/scrape-estatesalecom.yml` — new quarterly workflow
-- `.github/workflows/test-playwright-harness.yml` — continue-on-error fix
-- `claude_docs/STATE.md` — this wrap
-- `claude_docs/patrick-dashboard.md` — updated
-
-**BQ delta:** 0 (unchanged)
-
-### S963 — 2026-06-12 | DEV/RECORDS/WRAP (Records Pass S962 PCVs + #27c Fix + SellMyAntiques Investigation)
-
-**Session type:** DEV/RECORDS — records pass, bug fix, scraper investigation, session wrap
-
-**Work completed:**
-- **Records pass:** Applied S962 PCVs (#127 POS Value Unlock, #55 Seasonal Challenges, #218 Shopper Trades, #219 Shopper Achievements, #81 Empty State Audit) to roadmap.md Claude QA columns (⬜ → ✅ S962). All 5 had full 5-element evidence.
-- **#27c eBay CSV Export FIXED** — Railway logs confirmed: `TypeError [ERR_INVALID_CHAR]: Invalid character in header content ["Content-Disposition"]` at ebayController.js:597. Root cause: `sale.title` with special characters (quotes, colons, non-ASCII) passed directly into the filename. Fix: `safeTitle` sanitization strips non-word chars, collapses hyphens, falls back to 'sale' if empty. TypeScript: 0 errors. Staged for Chrome verify.
-- **SellMyAntiques investigation CLOSED** — Domain investigated for Playwright scraper implementation. Found: all paths return GoDaddy parking lander (wsimg.com infrastructure, sitemap contains only /lander). Domain was active Next.js SPA on 2026-06-10; parked by 2026-06-12. Scraper stub and sourceRegistry docs updated. Task closed — no Playwright scraper buildable against a parked domain.
-
-**Files changed:**
-- `packages/backend/src/controllers/ebayController.ts` — safeTitle sanitization at L710–711
-- `packages/backend/src/services/scraper/sources/sellMyAntiquesScraper.ts` — PARKED reason updated to "domain is GoDaddy parking page"
-- `packages/backend/src/services/scraper/sourceRegistry.ts` — SellMyAntiques legalNote updated
-- `claude_docs/strategy/roadmap.md` — S962 PCVs applied (5 rows)
-- `claude_docs/STATE.md` — this wrap
-- `claude_docs/patrick-dashboard.md` — updated
-
-**BQ delta:** 1→0 (#27c FIXED, pending Chrome verify)
