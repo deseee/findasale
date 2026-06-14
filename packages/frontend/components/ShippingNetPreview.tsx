@@ -1,10 +1,12 @@
 /**
  * ShippingNetPreview — live two-column strip showing estimated buyer shipping and
  * the organizer's estimated net proceeds for an eBay listing. Includes an
- * expandable fee breakdown and a "Suggest price" (target-margin) helper that
- * back-solves the item price needed to hit a chosen net margin.
+ * expandable fee breakdown and a low-price guardrail that warns ONLY when the
+ * organizer's entered price is below the fee-safe floor (the point where eBay
+ * fees + shipping would eat most of their money).
  *
- * The price suggestion is never auto-applied — the organizer accepts it.
+ * The guardrail is silent on normal items. When it fires, the organizer can
+ * accept the floor price — it is never auto-applied.
  * Calls POST /api/ebay/shipping-preview (debounced).
  */
 
@@ -44,14 +46,17 @@ interface ShippingNetPreviewProps {
   dims?: { length?: number; width?: number; height?: number };
   ebayCategoryId?: string | null;
   fromZip?: string | null;
-  /** Called when the organizer accepts a suggested price. */
+  /** Called when the organizer accepts the suggested floor price. */
   onApplySuggestedPrice?: (price: number) => void;
 }
 
 const fmt = (n: number): string =>
   `$${(Math.round(n * 100) / 100).toFixed(2)}`;
 
-const MARGIN_PRESETS = [0.2, 0.3, 0.4];
+// The guardrail fires only when the entered price would leave the organizer
+// keeping less than this fraction after eBay fees + shipping. Kept low so it
+// only warns on genuinely bad prices and stays silent on normal items.
+const GUARDRAIL_MARGIN_PCT = 0.15;
 
 export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
   itemId,
@@ -67,9 +72,8 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
 
-  const [targetMargin, setTargetMargin] = useState<number>(0.3);
-  const [suggesting, setSuggesting] = useState(false);
-  const [suggestion, setSuggestion] = useState<{ price: number; net: number } | null>(null);
+  // Fee-safe floor price (min item price to keep GUARDRAIL_MARGIN_PCT after fees).
+  const [floorPrice, setFloorPrice] = useState<number | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -89,6 +93,22 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
         fromZip,
       });
       setData(res.data as PreviewResponse);
+
+      // Fetch the fee-safe floor for the low-price guardrail (best-effort).
+      try {
+        const floorRes = await api.post('/ebay/shipping-preview/suggest-price', {
+          itemId,
+          weightOz,
+          dims,
+          ebayCategoryId,
+          fromZip,
+          targetMarginPct: GUARDRAIL_MARGIN_PCT,
+        });
+        const p = floorRes.data?.suggestedItemPrice;
+        setFloorPrice(typeof p === 'number' && isFinite(p) ? p : null);
+      } catch {
+        setFloorPrice(null);
+      }
     } catch (err: any) {
       const code = err.response?.data?.code;
       if (code === 'NEEDS_PACKAGE_DETAILS') {
@@ -97,6 +117,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
         setError('Could not estimate shipping right now.');
       }
       setData(null);
+      setFloorPrice(null);
     } finally {
       setLoading(false);
     }
@@ -107,6 +128,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!hasInputs) {
       setData(null);
+      setFloorPrice(null);
       return;
     }
     debounceRef.current = setTimeout(() => {
@@ -118,27 +140,6 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weightOz, dims?.length, dims?.width, dims?.height, itemPrice, ebayCategoryId, fromZip]);
 
-  const handleSuggest = async () => {
-    if (!hasInputs) return;
-    setSuggesting(true);
-    setSuggestion(null);
-    try {
-      const res = await api.post('/ebay/shipping-preview/suggest-price', {
-        itemId,
-        weightOz,
-        dims,
-        ebayCategoryId,
-        fromZip,
-        targetMarginPct: targetMargin,
-      });
-      setSuggestion({ price: res.data.suggestedItemPrice, net: res.data.projectedNet });
-    } catch {
-      setSuggestion(null);
-    } finally {
-      setSuggesting(false);
-    }
-  };
-
   // Empty state — no weight yet.
   if (!hasInputs) {
     return (
@@ -147,6 +148,15 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
       </div>
     );
   }
+
+  // Guardrail fires only when a real price is entered AND it sits below the floor.
+  const showGuardrail =
+    !loading &&
+    !!data &&
+    floorPrice != null &&
+    itemPrice != null &&
+    itemPrice > 0 &&
+    itemPrice < floorPrice;
 
   return (
     <div className="rounded-lg border border-warm-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 space-y-3">
@@ -237,58 +247,32 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
         </div>
       )}
 
-      {/* Suggest price for target margin */}
-      <div className="rounded-md border border-warm-200 dark:border-gray-600 p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-warm-700 dark:text-warm-300">Min. list price to hit a net margin</span>
-        </div>
-        <p className="text-xs text-warm-500 dark:text-warm-400 leading-relaxed mt-1">
-          eBay charges its Final Value Fee on both the item price and the shipping amount. This calculates the minimum item price to still net your target margin after both fees.
-        </p>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex gap-1">
-            {MARGIN_PRESETS.map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setTargetMargin(m)}
-                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                  targetMargin === m
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 hover:bg-warm-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                {Math.round(m * 100)}%
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={handleSuggest}
-            disabled={suggesting}
-            className="px-3 py-1 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white transition-colors"
-          >
-            {suggesting ? 'Calculating…' : 'Calculate'}
-          </button>
-        </div>
-        {suggestion && (
-          <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/30 rounded px-2 py-2">
-            <div className="text-xs text-warm-800 dark:text-warm-200">
-              List item at <span className="font-bold">{fmt(suggestion.price)}</span> — nets{" "}
-              {Math.round(targetMargin * 100)}% after eBay fees <span className="text-warm-500 dark:text-warm-400">({fmt(suggestion.net)} est.)</span>
+      {/* Low-price guardrail — only when the entered price is below the fee-safe floor */}
+      {showGuardrail && floorPrice != null && itemPrice != null && data && (
+        <div className="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 p-3 space-y-2">
+          <div className="flex items-start gap-2">
+            <span className="text-amber-600 dark:text-amber-400 text-sm leading-none mt-0.5">⚠️</span>
+            <div className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+              At <span className="font-bold">{fmt(itemPrice)}</span>, eBay fees and shipping eat
+              most of your money — you'd keep only about{' '}
+              <span className="font-bold">{fmt(data.net)}</span>. List at{' '}
+              <span className="font-bold">{fmt(floorPrice)}</span> or more to keep at least{' '}
+              {Math.round(GUARDRAIL_MARGIN_PCT * 100)}% after fees.
             </div>
-            {onApplySuggestedPrice && (
+          </div>
+          {onApplySuggestedPrice && (
+            <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => onApplySuggestedPrice(suggestion.price)}
-                className="ml-2 px-2 py-1 rounded text-xs font-medium bg-green-600 hover:bg-green-700 text-white transition-colors"
+                onClick={() => onApplySuggestedPrice(floorPrice)}
+                className="px-2 py-1 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white transition-colors"
               >
-                Use this price
+                Use {fmt(floorPrice)}
               </button>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
