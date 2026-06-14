@@ -509,6 +509,33 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
           continue;
         }
 
+        // Third safety net: unsendable/reserved TLDs (e.g. .ofc, .local) — no valid mail
+        // server exists. Catches scraped placeholder emails that slipped past seeding filters.
+        const emailTld = record.emailAddress.split('.').pop()?.toLowerCase() ?? '';
+        const UNSENDABLE_TLDS = new Set([
+          'ofc', 'local', 'internal', 'test', 'example', 'localhost',
+          'invalid', 'fake', 'corp', 'lan', 'home', 'localdomain',
+        ]);
+        if (UNSENDABLE_TLDS.has(emailTld)) {
+          console.warn(`[OutreachCron] Skipped org:${record.organizerId} — unsendable TLD .${emailTld}; suppressing`);
+          await suppressionService.addSuppression(record.emailAddress, 'manual', { organizerId: record.organizerId });
+          continue;
+        }
+
+        // Fourth safety net: well-known placeholder local-part patterns (e.g. john.doe, first.last).
+        // These are template/dummy addresses scraped from websites that were never filled in.
+        const emailAtIdx = record.emailAddress.indexOf('@');
+        const emailLocal = emailAtIdx >= 0 ? record.emailAddress.substring(0, emailAtIdx).toLowerCase() : '';
+        const PLACEHOLDER_LOCALS = new Set([
+          'john.doe', 'jane.doe', 'first.last', 'firstname.lastname',
+          'firstname', 'lastname', 'name.surname', 'my.email',
+        ]);
+        if (PLACEHOLDER_LOCALS.has(emailLocal)) {
+          console.warn(`[OutreachCron] Skipped org:${record.organizerId} — placeholder local-part "${emailLocal}"; suppressing`);
+          await suppressionService.addSuppression(record.emailAddress, 'manual', { organizerId: record.organizerId });
+          continue;
+        }
+
         touchNum = determineTouchToSend(record);
         if (!touchNum) continue;
 

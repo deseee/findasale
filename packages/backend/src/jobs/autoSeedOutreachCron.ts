@@ -39,6 +39,20 @@ const PLACEHOLDER_FULL_ADDRESSES = new Set([
   'donotreply@gmail.com',
 ]);
 
+// Fake/reserved TLDs that have no IANA registration and no valid mail servers.
+// `.test`, `.example`, `.localhost`, `.invalid` are RFC 2606 reserved.
+// Others (`.ofc`, `.local`, `.corp`, `.lan`) are commonly found in scraped placeholder emails.
+const FAKE_TLDS = new Set([
+  'ofc', 'local', 'internal', 'test', 'example', 'localhost',
+  'invalid', 'fake', 'corp', 'lan', 'home', 'localdomain',
+]);
+
+// Placeholder local-part patterns — generic person/template names never used as real business contacts
+const PLACEHOLDER_LOCAL_PARTS = new Set([
+  'john.doe', 'jane.doe', 'first.last', 'firstname.lastname',
+  'firstname', 'lastname', 'name.surname', 'my.email',
+]);
+
 const IMAGE_EXTENSION_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?|ico)(\b|$)/i;
 
 const isValidEmail = (email: string): boolean => {
@@ -53,9 +67,18 @@ const isValidEmail = (email: string): boolean => {
 const isPlaceholderEmail = (email: string): boolean => {
   const lower = email.toLowerCase().trim();
   if (PLACEHOLDER_FULL_ADDRESSES.has(lower)) return true;
-  const domain = lower.split('@')[1];
-  if (domain && PLACEHOLDER_DOMAINS.has(domain)) return true;
-  if (domain && domain.endsWith('.wixpress.com')) return true;
+  const atIdx = lower.indexOf('@');
+  if (atIdx < 0) return true; // malformed
+  const localPart = lower.substring(0, atIdx);
+  const domain = lower.substring(atIdx + 1);
+  if (!domain) return true;
+  if (PLACEHOLDER_DOMAINS.has(domain)) return true;
+  if (domain.endsWith('.wixpress.com')) return true;
+  // Fake/reserved TLD — no valid mail server exists for these
+  const tld = domain.split('.').pop() ?? '';
+  if (FAKE_TLDS.has(tld)) return true;
+  // Known placeholder local-part patterns (e.g. john.doe, first.last)
+  if (PLACEHOLDER_LOCAL_PARTS.has(localPart)) return true;
   return false;
 };
 
