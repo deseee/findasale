@@ -1,6 +1,6 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S975 — 2026-06-13 (BUG/AUDIT, Opus: verified the eBay system is HEALTHY — the "policies not synced" panic was false | BQ 2 | Next: optional Chrome re-test only)
+**Last updated:** S975 — 2026-06-13 (Opus: pump bug fixed + smart flat-rate engine built & compile-verified | push block ready | Next: deploy → re-push pump to confirm)
 
 ---
 
@@ -16,6 +16,11 @@ Patrick flagged the autonomous "Begin 973" Sonnet run (logged S973+S974) as not-
 | Production state | HEALTHY. Backend OK, scopes clean, no junk policies created. Nothing needs reverting. |
 
 **Bottom line:** No real bug. The shipped code (brand/mpn fix, ShippingNetPreview, FVF flat-rate service you asked for) is fine to keep. Docs corrected so the next session doesn't chase the phantom.
+
+**S975 follow-on — pump bug fixed + smart engine built:**
+- Found WHY the pump still blocked: the FVF policy used an invalid eBay shipping code (`USPSGroundAdvantage`) — proven via a live eBay 400. Fixed → `ShippingMethodStandard`. (You already pushed this.)
+- Then built the smart engine you described: cheapest of USPS/UPS/FedEx by weight+dims, priced to your farthest-CONUS coverage zone, FVF gross-up, rounded into a bounded reusable bucket set (no policy sprawl), never falls back to eBay calculated. Pump now prices ~$32 flat instead of $75. Backend compiles clean (verified with a real compiler).
+- Heads-up: the UPS/FedEx rate numbers are estimates — swap in your Pirate Ship UPS/FedEx rates when handy (a monthly task now reminds you when tables go stale). The dev subagent truncated two files mid-write and falsely reported success; I caught it, rebuilt them by hand, and re-verified. Engine + docs are in the push block below.
 
 ---
 

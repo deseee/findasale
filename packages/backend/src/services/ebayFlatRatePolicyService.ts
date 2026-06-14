@@ -19,7 +19,7 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { estimateBuyerShippingRate, EBAY_SHIPPING_FVF_RATE } from './ebayRateEstimateService';
+import { computeCheapestForOrigin, EBAY_SHIPPING_FVF_RATE } from './ebayRateEstimateService';
 
 // In-process cache: `${organizerId}:${flatRateStr}` → eBay fulfillmentPolicyId
 const policyCache = new Map<string, string>();
@@ -50,6 +50,21 @@ export function computeFvfFlatRate(estimatedRate: number): number {
 }
 
 /**
+ * Round a rate UP to the next bounded-ladder bucket so the policy set stays small and
+ * reusable: $0.50 steps <=$15, $1 <=$40, $2.50 <=$100, $5 above. Round UP so the seller
+ * is never short; overage <= one bucket width.
+ */
+export function roundUpToBucket(rate: number): number {
+  let step: number;
+  if (rate <= 15) step = 0.5;
+  else if (rate <= 40) step = 1;
+  else if (rate <= 100) step = 2.5;
+  else step = 5;
+  const bucketed = Math.ceil((rate - 1e-9) / step) * step;
+  return Math.round(bucketed * 100) / 100;
+}
+
+/**
  * Compute the flat rate for an item given its weight, dims, and fromZip,
  * then get-or-create the matching eBay fulfillment policy for the organizer.
  *
@@ -73,14 +88,15 @@ export async function ensureFvfFlatRatePolicy(
     return null;
   }
 
-  // Estimate the buyer-paid USPS rate
-  const rateResult = estimateBuyerShippingRate({
+  // Price at the cheapest carrier for the organizer's farthest-CONUS coverage zone,
+  // gross up for eBay's FVF on shipping, then round UP into the bounded bucket ladder.
+  const cheapest = computeCheapestForOrigin({
     weightOz,
     dims: dims ?? null,
-    fromZip: fromZip ?? null,
+    origin: { zip: fromZip ?? null, lat: organizer?.lat ?? null, lng: organizer?.lng ?? null },
   });
 
-  const flatRate = computeFvfFlatRate(rateResult.estimatedRate);
+  const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
   const flatRateStr = flatRate.toFixed(2);
   const policyName = `${POLICY_NAME_PREFIX}${flatRateStr}`;
 

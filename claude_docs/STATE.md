@@ -24,6 +24,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - **No junk policies created on the eBay account** (the diagnostic POST 400'd, nothing persisted).
 - **Files changed S975:** packages/backend/src/services/ebayFlatRatePolicyService.ts (fix), claude_docs/STATE.md, claude_docs/patrick-dashboard.md.
 
+**S975 SMART FLAT-RATE ENGINE BUILT (Patrick-approved design, ADR-smart-flat-rate-shipping-engine-2026-06-14):**
+- Multi-carrier cheapest-rate (USPS/UPS/FedEx Ground, per-carrier dim divisor) priced at the organizer's FARTHEST-CONUS coverage zone (per-origin, from geocoded lat/lng or ZIP fallback), FVF gross-up (÷0.864), rounded UP into a bounded reusable bucket ladder ($0.50/$1/$2.50/$5 steps). Never falls back to eBay calculated (removed). Block-for-details when weight/dims missing.
+- Numeric check: 11lb pump (zone 7) → cheapest USPS $26.99 → gross $31.24 → bucket **$32.00** (vs old $75 catch-all). Light 4oz → USPS wins. Bucket ladder rounds up + stays bounded.
+- Files: ebayRateEstimateService.ts (+182 lines: UPS/FedEx tables, coverageZoneForOrigin, estimateCheapestRate, computeCheapestForOrigin, CARRIER_TABLES + effectiveDate/source consts), ebayFlatRatePolicyService.ts (cheapest-carrier + roundUpToBucket rewire), ebayController.ts (calc fallback removed → SHIPPING_POLICY_UNAVAILABLE soft-block).
+- **VERIFIED:** full backend tsc (typescript 5.9.3 from pnpm store) = 0 errors. NOTE: the workspace `npx tsc` is broken (Cannot find module ../lib/tsc.js) → it silently "passes" without checking. Always run tsc via `node node_modules/.pnpm/typescript@*/node_modules/typescript/lib/tsc.js` for a real check.
+- ⚠️ **UPS/FedEx rate NUMBERS are best-available ESTIMATES** (flagged in-code with the S975 verify comment) — replace with Patrick's Pirate Ship UPS/FedEx rate card. USPS table is the real Pirate Ship data. Structure/logic are correct regardless.
+- ⚠️ **SUBAGENT WRITE TRUNCATION (recurring):** the findasale-dev dispatch silently truncated ebayRateEstimateService.ts (→107 lines, mid-array) and ebayFlatRatePolicyService.ts (→189 lines, mid-statement) while reporting success. Caught via line-count/tail verification; both restored from HEAD and rebuilt via verified bash writes in the main session. Reinforces: never trust subagent Write without wc -l + tail + real tsc.
+- **Rate-staleness mechanism:** monthly Cowork scheduled task created to flag when carrier rate tables age past reprice windows (Patrick requirement).
+- **PUSH BLOCK (6 files):** ebayRateEstimateService.ts, ebayFlatRatePolicyService.ts, ebayController.ts, ADR doc, STATE.md, patrick-dashboard.md. After deploy: re-push Danner pump to confirm it publishes at the bucketed flat rate (no SHIPPING_TIER_GAP block).
+
 **S974 — BUG/DEV (2026-06-13). eBay FVF-inclusive flat-rate shipping fix. 3 files shipped (commit 11cfb344). CODE-ONLY — Railway deployed, Chrome verify pending.**
 - **Shipping dimensions pre-fill ✅:** Package Type=Box(standard), Weight=176oz, L=12, W=9, H=7 all pre-populated on edit-item page. ss_0277k2jba
 - **Weight-tier gap-overshoot toast ✅:** Warning fired during FLAT_TIERS push (176oz hits $75 FedEx tier — actionable message shown to user).
