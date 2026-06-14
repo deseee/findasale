@@ -41,6 +41,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - NOTE: during the diagnostic replay I PUT the live pump inventory item without packageType (200), so its inventory item is currently valid; a fresh app push (post-deploy) will apply the $32 policy + republish + clear ebayNeedsReview.
 - **PUSH BLOCK (this fix): packages/backend/src/controllers/ebayController.ts** (+ STATE.md, patrick-dashboard.md). After deploy: final pump re-push → expect publish at $32 flat, ebayNeedsReview cleared.
 
+**S975 FINAL ✅ FULLY VERIFIED (live, post-packageType-fix deploy):** Danner pump re-push → toast "Item listed on eBay" (ss_4305vnsyw); DB ebayNeedsReview=FALSE; eBay offer 186196728011 PUBLISHED with fulfillmentPolicyId 316596123011 = "FindA.Sale Flat $32.00". Full chain verified end-to-end: smart engine (cheapest carrier → coverage zone → FVF gross-up → bounded bucket) + packageType strip on flat-rate path. Butter Knife ($6.65 tier) also ✅. eBay shipping system DONE.
+
 **S974 — BUG/DEV (2026-06-13). eBay FVF-inclusive flat-rate shipping fix. 3 files shipped (commit 11cfb344). CODE-ONLY — Railway deployed, Chrome verify pending.**
 - **Shipping dimensions pre-fill ✅:** Package Type=Box(standard), Weight=176oz, L=12, W=9, H=7 all pre-populated on edit-item page. ss_0277k2jba
 - **Weight-tier gap-overshoot toast ✅:** Warning fired during FLAT_TIERS push (176oz hits $75 FedEx tier — actionable message shown to user).
