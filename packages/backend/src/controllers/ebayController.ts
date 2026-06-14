@@ -828,95 +828,6 @@ export async function refreshEbayAccessToken(organizerId: string): Promise<strin
   }
 }
 
-/**
- * Fetch real-time eBay shipping rates via the Logistics API (sell/logistics/v1_beta/shipment/getRates).
- * Requires sell.logistics OAuth scope — returns null on any failure so caller falls back
- * to estimateBuyerShippingRate() table.
- */
-async function getEbayLiveShippingRate(
-  accessToken: string,
-  fromZip: string,
-  toZip: string,
-  weightOz: number,
-  dims?: { length?: number | null; width?: number | null; height?: number | null } | null,
-): Promise<{ rate: number; service: string } | null> {
-  try {
-    const weightLb = Math.max(0.1, weightOz / 16);
-    const pkg: Record<string, unknown> = {
-      weight: {
-        value: String(Math.round(weightLb * 100) / 100),
-        unit: 'POUND',
-      },
-    };
-    if (dims?.length && dims?.width && dims?.height) {
-      pkg['dimensions'] = {
-        length: String(dims.length),
-        width: String(dims.width),
-        height: String(dims.height),
-        unit: 'INCH',
-      };
-    }
-
-    const body = {
-      packages: [pkg],
-      shipFrom: { postalCode: fromZip, countryCode: 'US' },
-      shipTo: { postalCode: toZip, countryCode: 'US' },
-    };
-
-    const path = encodeURIComponent('/sell/logistics/v1_beta/shipment/getRates');
-    const response = await fetch(ebayProxyUrl(path), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
-        ...ebayProxyHeaders(),
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.warn(`[eBay Logistics] getRates ${response.status}:`, errText.slice(0, 300));
-      return null;
-    }
-
-    const data = await response.json() as {
-      rates?: Array<{
-        shippingServiceCode?: string;
-        baseShippingCost?: { value?: string };
-        totalShippingCost?: { value?: string };
-      }>;
-    };
-
-    const rates = data.rates || [];
-    if (rates.length === 0) return null;
-
-    // Prefer USPS Ground Advantage; fall back to cheapest available rate.
-    const uspsGround = rates.find((r) => {
-      const code = (r.shippingServiceCode || '').toUpperCase();
-      return code.includes('GROUND_ADVANTAGE') || code.includes('GROUNDADVANTAGE');
-    });
-    const sorted = [...rates].sort((a, b) => {
-      const av = Number(a.totalShippingCost?.value ?? a.baseShippingCost?.value ?? 9999);
-      const bv = Number(b.totalShippingCost?.value ?? b.baseShippingCost?.value ?? 9999);
-      return av - bv;
-    });
-    const best = uspsGround ?? sorted[0];
-    if (!best) return null;
-
-    const rateValue = Number(best.totalShippingCost?.value ?? best.baseShippingCost?.value ?? 0);
-    if (rateValue <= 0) return null;
-
-    return {
-      rate: Math.round(rateValue * 100) / 100,
-      service: best.shippingServiceCode || 'USPS_GROUND_ADVANTAGE',
-    };
-  } catch (err) {
-    console.error('[eBay Logistics] getRates error:', err);
-    return null;
-  }
-}
 
 /**
  * Standard headers for all eBay REST API calls that require a user access token.
@@ -5636,27 +5547,13 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     }
 
     const freeShippingOptIn = organizer.ebayPolicyMapping?.freeShippingOptIn ?? false;
-    const fromZip = body.fromZip ?? (organizer.address?.match(/\b\d{5}\b/)?.[0] ?? '49001');
-    const toZip = body.toZip ?? '10001';
 
-    // Try live eBay Logistics rate first (requires sell.logistics OAuth scope).
-    // Falls back to estimate table if scope not granted or API call fails.
-    const accessToken = await refreshEbayAccessToken(organizer.id);
-    let liveRate: { rate: number; service: string } | null = null;
-    if (accessToken) {
-      liveRate = await getEbayLiveShippingRate(
-        accessToken, fromZip, toZip, weightOz,
-        dims ? { length: dims.length, width: dims.width, height: dims.height } : null,
-      );
-    }
-    const rate = liveRate
-      ? { estimatedRate: liveRate.rate, basis: 'actual' as const, service: liveRate.service }
-      : estimateBuyerShippingRate({
-          weightOz,
-          dims: dims ? { length: dims.length, width: dims.width, height: dims.height } : null,
-          fromZip: body.fromZip ?? null,
-          toZip: body.toZip ?? null,
-        });
+    const rate = estimateBuyerShippingRate({
+      weightOz,
+      dims: dims ? { length: dims.length, width: dims.width, height: dims.height } : null,
+      fromZip: body.fromZip ?? null,
+      toZip: body.toZip ?? null,
+    });
 
     // When the organizer opts into free shipping, the BUYER pays $0 and the
     // organizer absorbs the label cost. Otherwise the buyer pays the estimate.
@@ -5683,8 +5580,8 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         rate: rate.estimatedRate,
         basis: rate.basis,
         service: rate.service,
-        isEstimate: liveRate === null,
-        source: liveRate ? 'ebay_live' : 'estimated',
+        isEstimate: true,
+        source: 'estimated',
         freeShippingOptIn,
         netToSeller,
         fvfOnShipping,
@@ -5769,24 +5666,12 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
     }
 
     const freeShippingOptIn = organizer.ebayPolicyMapping?.freeShippingOptIn ?? false;
-    const fromZipS = body.fromZip ?? (organizer.address?.match(/\b\d{5}\b/)?.[0] ?? '49001');
-    const toZipS = body.toZip ?? '10001';
-    const accessTokenS = await refreshEbayAccessToken(organizer.id);
-    let liveRateS: { rate: number; service: string } | null = null;
-    if (accessTokenS) {
-      liveRateS = await getEbayLiveShippingRate(
-        accessTokenS, fromZipS, toZipS, weightOz,
-        dims ? { length: dims.length, width: dims.width, height: dims.height } : null,
-      );
-    }
-    const rate = liveRateS
-      ? { estimatedRate: liveRateS.rate, basis: 'actual' as const, service: liveRateS.service }
-      : estimateBuyerShippingRate({
-          weightOz,
-          dims: dims ? { length: dims.length, width: dims.width, height: dims.height } : null,
-          fromZip: body.fromZip ?? null,
-          toZip: body.toZip ?? null,
-        });
+    const rate = estimateBuyerShippingRate({
+      weightOz,
+      dims: dims ? { length: dims.length, width: dims.width, height: dims.height } : null,
+      fromZip: body.fromZip ?? null,
+      toZip: body.toZip ?? null,
+    });
     const buyerShipping = freeShippingOptIn ? 0 : rate.estimatedRate;
     const labelCost = body.labelCost != null ? body.labelCost : rate.estimatedRate;
     const fvfOnShipping = Math.round(rate.estimatedRate * 0.136 * 100) / 100;
@@ -5810,8 +5695,8 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         rate: rate.estimatedRate,
         basis: rate.basis,
         service: rate.service,
-        isEstimate: liveRateS === null,
-        source: liveRateS ? 'ebay_live' : 'estimated',
+        isEstimate: true,
+        source: 'estimated',
         freeShippingOptIn,
         netToSeller,
         fvfOnShipping,
