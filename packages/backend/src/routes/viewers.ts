@@ -4,6 +4,7 @@ import {
   pingViewer,
   removeViewer,
 } from '../controllers/viewerController';
+import { optionalAuthenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -14,6 +15,9 @@ router.get('/:saleId', getViewerCount);
 router.post('/:saleId/ping', pingViewer);
 
 // DELETE /api/viewers/:saleId/:viewerId — remove viewer on unmount
-router.delete('/:saleId/:viewerId', removeViewer);
+// optionalAuthenticate: attaches req.user if a valid token is present so the
+// controller can scope deletion to the authenticated user; unauthenticated
+// requests are still accepted (viewer records are ephemeral session data).
+router.delete('/:saleId/:viewerId', optionalAuthenticate, removeViewer);
 
 export default router;
