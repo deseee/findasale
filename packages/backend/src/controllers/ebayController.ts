@@ -19,6 +19,7 @@ import {
   WeightTierMapping,
 } from '../utils/ebayPolicyParser';
 import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
+import { domainToL1 } from '../config/ebayCategories';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { ensureCalculatedFulfillmentPolicy } from '../services/ebayCalculatedPolicyService';
 import { ensureFvfFlatRatePolicy } from '../services/ebayFlatRatePolicyService';
@@ -1016,35 +1017,14 @@ async function getEbayCategoryCandidates(
 }
 
 /**
- * Map a free-text AI domain hint (item.category / summary.suggestedCategory) to the
- * eBay top-level (L1) ancestor name(s) we expect the correct category to live under.
- * Short + extensible — add rows as new domains surface. First-match wins; a hint may
- * map to multiple acceptable L1 names. Empty array = no domain constraint.
+ * Map a free-text AI domain hint (item.category / summary.suggestedCategory) and/or
+ * title to the eBay top-level (L1) ancestor name(s) we expect the correct category to
+ * live under. The keyword map and the canonical L1 name set now live in the shared
+ * config module (ebayCategories.ts) so this resolver and the AI prompt that produces
+ * `item.category` cannot drift. Empty array = no domain constraint.
  */
 function ebayTopLevelForDomain(domainHint: string | null | undefined): string[] {
-  if (!domainHint) return [];
-  const h = domainHint.toLowerCase();
-  const MAP: Array<{ pattern: RegExp; l1: string[] }> = [
-    { pattern: /aquarium|aquatic|fish\s*tank|reptile|terrarium|pet|cat|dog|bird|hamster|aerator/i, l1: ['Pet Supplies'] },
-    { pattern: /guitar|amp|drum|keyboard|piano|violin|instrument|microphone|music gear|dj\b/i, l1: ['Musical Instruments & Gear'] },
-    { pattern: /furniture|home decor|kitchen|garden|patio|bedding|lamp|rug|cookware|appliance/i, l1: ['Home & Garden'] },
-    { pattern: /jewelry|watch|ring|necklace|bracelet|earring|pendant/i, l1: ['Jewelry & Watches'] },
-    { pattern: /clothing|apparel|shirt|dress|pants|shoes|jacket|coat|sweater|handbag|purse/i, l1: ['Clothing, Shoes & Accessories'] },
-    { pattern: /book|magazine|novel|textbook|comic/i, l1: ['Books & Magazines', 'Books'] },
-    { pattern: /electronic|tv|stereo|camera|phone|laptop|computer|tablet|headphone|audio/i, l1: ['Consumer Electronics'] },
-    { pattern: /antique|vintage|collectible|coin|stamp|memorabilia/i, l1: ['Collectibles', 'Antiques'] },
-    { pattern: /\bart\b|painting|print|sculpture|canvas/i, l1: ['Art'] },
-    { pattern: /tool|hardware|power tool|drill|saw|wrench|hammer/i, l1: ['Business & Industrial', 'Home & Garden'] },
-    { pattern: /toy|game|puzzle|doll|lego|action figure|board game|hobby/i, l1: ['Toys & Hobbies'] },
-    { pattern: /sport|bike|bicycle|fitness|golf|camping|outdoor|exercise/i, l1: ['Sporting Goods'] },
-    { pattern: /baby|infant|toddler|nursery|stroller/i, l1: ['Baby'] },
-    { pattern: /makeup|cosmetic|skincare|fragrance|beauty|perfume/i, l1: ['Health & Beauty'] },
-    { pattern: /car part|auto|automotive|motorcycle|vehicle|tire/i, l1: ['eBay Motors'] },
-  ];
-  for (const { pattern, l1 } of MAP) {
-    if (pattern.test(h)) return l1;
-  }
-  return [];
+  return domainToL1(domainHint);
 }
 
 const isCatchAllCategory = (name: string): boolean =>
