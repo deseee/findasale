@@ -240,8 +240,11 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
       {/* Suggest price for target margin */}
       <div className="rounded-md border border-warm-200 dark:border-gray-600 p-3 space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-warm-700 dark:text-warm-300">Suggest price for a target margin</span>
+          <span className="text-xs font-medium text-warm-700 dark:text-warm-300">Min. list price to hit a net margin</span>
         </div>
+        <p className="text-xs text-warm-500 dark:text-warm-400 leading-relaxed mt-1">
+          eBay charges its Final Value Fee on both the item price and the shipping amount. This calculates the minimum item price to still net your target margin after both fees.
+        </p>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1">
             {MARGIN_PRESETS.map((m) => (
@@ -265,14 +268,14 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
             disabled={suggesting}
             className="px-3 py-1 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white transition-colors"
           >
-            {suggesting ? 'Calculating…' : 'Suggest price'}
+            {suggesting ? 'Calculating…' : 'Calculate'}
           </button>
         </div>
         {suggestion && (
           <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/30 rounded px-2 py-2">
             <div className="text-xs text-warm-800 dark:text-warm-200">
-              List at <span className="font-bold">{fmt(suggestion.price)}</span> for a{' '}
-              {Math.round(targetMargin * 100)}% net ({fmt(suggestion.net)})
+              List item at <span className="font-bold">{fmt(suggestion.price)}</span> — nets{" "}
+              {Math.round(targetMargin * 100)}% after eBay fees <span className="text-warm-500 dark:text-warm-400">({fmt(suggestion.net)} est.)</span>
             </div>
             {onApplySuggestedPrice && (
               <button
