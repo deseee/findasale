@@ -14,7 +14,7 @@ const FOUNDING_ORG_LIMIT = 500;
 
 export function scheduleFoundingOrgBadgeCron() {
   // 0 2 * * * — 2 AM UTC daily
-  cron.schedule('0 2 * * *', cronGuard({ jobName: 'foundingOrgBadgeJob' }, async () => {
+  cron.schedule('30 2 * * *', cronGuard({ jobName: 'foundingOrgBadgeJob' }, async () => {
     console.log('[FoundingOrgBadge] Starting nightly badge award check...');
 
     // Fast exit: if there are no eligible organizers without the badge, skip

@@ -16,7 +16,7 @@ import { getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from '../services/referralFra
 
 export function scheduleReferralRewardAgeGateCron() {
   // 0 2 * * * = every day at 2 AM UTC
-  cron.schedule('0 2 * * *', cronGuard({ jobName: 'referralRewardAgeGateJob' }, async () => {
+  cron.schedule('20 2 * * *', cronGuard({ jobName: 'referralRewardAgeGateJob' }, async () => {
     try {
       console.log('[referralRewardAgeGateCron] Starting at', new Date().toISOString());
 

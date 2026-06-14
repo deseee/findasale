@@ -27,10 +27,10 @@ export const recomputeReputationScores = async (): Promise<void> => {
 /**
  * Register the reputation score recomputation cron job.
  * Schedule: Daily at 2 AM UTC (02:00 UTC)
- * Cron pattern: '0 2 * * *' = every day at 02:00 UTC
+ * Cron pattern: '25 2 * * *' = every day at 02:00 UTC
  */
 export const scheduleReputationScoreCron = (): void => {
-  cron.schedule('0 2 * * *', cronGuard({ jobName: 'reputationScoreJob' }, async () => {
+  cron.schedule('25 2 * * *', cronGuard({ jobName: 'reputationScoreJob' }, async () => {
     console.log('[reputationScoreJob] Running scheduled reputation score recomputation job...');
     recomputeReputationScores();
   }));
