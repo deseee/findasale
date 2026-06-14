@@ -3623,6 +3623,31 @@ async function resolvePoliciesForItem(
         item.packageWeightOz > 16 &&
         tier.maxOz > item.packageWeightOz * 2
       ) {
+        // Tier gap: item overshot the organizer's USPS tier table.
+        // Before blocking, try the FVF flat-rate path — it provisions a fresh
+        // eBay policy at the correct USPS rate so the organizer doesn't get
+        // slotted into an oversized catch-all (e.g. 45-lb FedEx $75 for 11 lb).
+        const _gapFromZip = smartPickContext?.fromZip ?? null;
+        const _gapDims = (
+          item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
+            ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
+            : null
+        );
+        const _gapFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz!, _gapDims, _gapFromZip);
+        if (_gapFvf) {
+          console.log(
+            `[eBay ShippingPick] item=${item.id} tier-gap fvf-flat flatRate=${_gapFvf.flatRate} policy=${_gapFvf.policyId}`
+          );
+          return {
+            fulfillmentPolicyId: _gapFvf.policyId,
+            returnPolicyId: mapping.defaultReturnPolicyId || conn.returnPolicyId,
+            paymentPolicyId: mapping.defaultPaymentPolicyId || conn.paymentPolicyId,
+            descriptionHtml: mapping.defaultDescriptionHtml ?? null,
+            pushAsDraft: mapping.pushAsDraft ?? false,
+            merchantLocationSource: mapping.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+            routingReason: `tier-gap-fvf-flat:${_gapFvf.flatRate}`,
+          };
+        }
         console.warn(
           `[eBay ShippingPick] item=${item.id} tier-gap overshoot: weight=${item.packageWeightOz}oz matched tier maxOz=${tier.maxOz} — blocked to avoid overcharge`
         );
