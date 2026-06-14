@@ -983,7 +983,8 @@ export async function suggestPrice(
   title: string,
   category: string,
   condition: string,
-  comps?: ComparableSale[]
+  comps?: ComparableSale[],
+  currentPrice?: number
 ): Promise<PriceSuggestion> {
   if (!ANTHROPIC_API_KEY) {
     return {
@@ -1011,11 +1012,16 @@ export async function suggestPrice(
         ? `Comparable sales from our platform:\n${comps.map(c => `- "${c.title}": sold for $${c.price} (${c.soldAt})`).join('\n')}\n\n`
         : '';
 
+    const currentPriceContext = currentPrice && currentPrice > 0
+      ? `\nThe organizer has currently priced this item at $${currentPrice}. If your suggested price differs from this by more than 30%, explain why clearly in your reasoning.`
+      : '';
+
     const prompt = `You are a secondary market pricing expert. Suggest a realistic price for this item based on what it actually sells for in the secondary market.
 
 Item: ${title}
 Category: ${category}
 Condition: ${condition}
+${currentPriceContext}
 
 ${compsContext}Respond with ONLY valid JSON in this exact format:
 {"low": 7, "high": 23, "suggested": 14, "reasoning": "Similar items in this condition sell for $12-18 based on recent comparable sales"}
