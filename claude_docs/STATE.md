@@ -238,8 +238,8 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
-| FINDASALE-NODEJS-10 — Sale SELECT slow query (3342ms, ongoing) | Pre-existing issue, 55 events since May 6. `SELECT ... FROM "Sale"` with no relevant index. Not related to cron stampede (still firing post-stagger). Last seen 6:29 AM UTC 2026-06-14. Needs dedicated investigation: EXPLAIN ANALYZE the query, add index on the relevant column(s). P1 by age (5+ weeks unresolved). | Read query from Railway logs, run EXPLAIN ANALYZE via psycopg2, add index via migration. | S977 |
-| eBay AI package-weight estimation not wired | `estimatePackageProfile` step-4 AI path reads `aiEstimatedWeightOz`/`aiPackageConfidence`/`aiEstimatedDimensions` which are NOT Item columns and the caller never supplies them → inert. Items lacking a keyword/category-default profile fall to the 24oz generic fallback (e.g. cables). cloudAIService estimates weight/dims (roadmap #547) but its output never reaches the estimator. P1 — causes wrong shipping weights → wrong policy/price. | Architect ADR: where AI weight/dim lives (Item cols vs JSON vs table) + how it flows into estimatePackageProfile + dev sequence. | S980 |
+| FINDASALE-NODEJS-10 — Sale SELECT slow query (3342ms, ongoing) | Migration created S981 (20260614000000_fix_sale_slow_query_nodejs10) — 2 partial indexes. Patrick must run migrate deploy after push. Pending Railway deploy + Sentry NODEJS-10 resolution verify. | Patrick: push + migrate deploy; next session: verify Sentry NODEJS-10 is resolved | S977 → S981 updated |
+| eBay AI package-weight estimation not wired | ADR written S981 (adr-ai-package-weight-wiring.md). Dev implemented S981: 3 new Item cols + write side (batchAnalyzeController/processRapidDraft) + read side (ebayController). Push block provided. Pending Railway deploy + verify cables/misc items get correct AI-estimated weights. | Patrick: push + migrate deploy | S980 → S981 updated |
 
 
 
@@ -251,11 +251,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | # | Feature | Evidence | Session |
 _S970 records pass: S969 PCVs (#164 Tiers Infra, #27b watermark toggle, #317 Geofence QR) applied to roadmap.md. Stale already-applied rows (#74/#463/#472×3/#27c/#219/#218/#55/#81/#127 — confirmed applied S949/S962/S963/S965) cleared from table._
 |---|---------|----------|---------|
-| SEO3 | Denver city landing page /estate-sales/denver-co | Navigated https://finda.sale/estate-sales/denver-co. Title: "Estate Sales in Denver, CO \| FindA.Sale" ✅. Meta desc present+keyword-rich ✅. H1: "Estate Sales in Denver, CO" ✅. 50 listings visible ✅. Dark mode clean ✅. ss_34924pp42 ss_8168bplgd | S944 |
-| 547-GR | eBay min-price suggester → silent low-price guardrail (ShippingNetPreview) | Navigated https://finda.sale/organizer/edit-item/cmqbb252i000i60qq7eilco9z as Artifact MI (organizer). At price $175: old "Min. list price" suggester GONE, no warning, net $145.59 ✅ (ss_1110cu5x6). Set price $3: amber guardrail fired — "At $3.00, eBay fees and shipping eat most of your money — you'd keep only about -$0.87. List at $4.89 or more to keep at least 15% after fees" + net box -$0.87 ✅ (ss_6407gnhli). Clicked "Use $4.89": price applied, net flipped to $0.74, warning self-cleared ✅ (ss_2301y95wu). Price restored to $175, not saved. | S979 |
-| 547-SHIP | eBay shipping preview reflects actual shipping mode (flat policy vs calculated) | Navigated https://finda.sale/organizer/edit-item/cmqbb252i000i60qq7eilco9z as Artifact MI on the green prod build. Top-line via get_page_text: "Buyer pays for shipping $28.00 · Flat rate · FindA.Sale Flat $28.00" ✅; "Your estimated net $148.31" ✅ (was wrong $145.59). Net math confirms label cost (~$24 cheapest-carrier) now distinct from the $28 buyer charge. Screenshot tool errored (params) + breakdown-panel toggle flaky — breakdown rows not captured; top-line conclusive. (NOTE: the $28 here was later found WRONG — missing origin ZIP; corrected to $32, see 547-ZIP S980.) | S979 |
-| 547-ZIP | eBay shipping preview uses the sale origin ZIP (now matches the live listing) | Navigated https://finda.sale/organizer/edit-item/cmqbb252i000i60qq7eilco9z as Artifact MI on green prod (after origin-ZIP fix). get_page_text: "Buyer pays for shipping $32.00 · Flat rate · FindA.Sale Flat $32.00" ✅, "Your estimated net $148.87" ✅ — matches the live eBay $32 policy (was wrongly $28 from missing origin). Direct eBay API confirmed live offer fulfillmentPolicyId=316596123011 "FindA.Sale Flat $32.00". | S980 |
-| 547-SWEEP | Bulk shipping-drift sweep — REAL run verified end-to-end | dryRun:true showed guard works (10→7). Then dryRun:false ran: 9 re-pinned. Direct eBay API confirms live offer policies moved: Steve Yzerman 8oz$6.99→12oz$7.75, Brett Hull→$7.75, Porcelain pickup→1+lb$12.49, Casio→8oz$6.99 (after weights set 18/5oz); Celestion excluded via LOCAL_PICKUP_ONLY. All 9 DB tracking cols match live policy. Offer-PUT mechanism PROVEN in prod. | S980 |
+_(SEO3 ✅ S944 applied S981 — roadmap already had ✅ S944 in Human QA from S961 — cleared. 547-GR/547-SHIP/547-ZIP/547-SWEEP ✅ S979/S980 applied S981 — roadmap.md #547 Claude QA col updated to ✅ S979/S980 — cleared.)_
 _(#422 ✅ S949 applied S950 — cleared. #75 ✅ S949 applied S950 — cleared. #470 item_viewed ✅ S949 applied S950 — cleared.)_
 _(SEO3 ✅ S944 applied S961 — UI col ✅ S944 in roadmap.md — cleared. #472 ✅ S948 applied S949 — cleared from PCV table S961.)_
 _(S963 records pass: S962 PCVs #219/#218/#55/#81/#127 all ✅ — 5-element evidence confirmed — applied to roadmap.md Claude QA columns. #27c PCV staged for Chrome verify.)_
@@ -386,6 +382,22 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Recent Sessions
 
+### S981 — 2026-06-14 | DEV (Records pass + BQ burn-down: NODEJS-10 index + AI package-weight wiring)
+
+**Session type:** DEV — parallel dispatch (BQ = 3, below ceiling)
+
+**Shipped:**
+- **Records pass** — SEO3 PCV stale (already applied S961); 547-GR/SHIP/ZIP/SWEEP applied → roadmap.md #547 Claude QA col → ✅ S979/S980. PCV table cleared.
+- **NODEJS-10 slow query fix (BQ P1)** — 2 partial indexes via migration 20260614000000_fix_sale_slow_query_nodejs10. Root cause confirmed: saleAutoCloseCron planner picks wrong status-only index → heap-scans 14k PUBLISHED rows (3342ms); sourceName COUNT had no index (49ms seqscan). Partial indexes: 239x faster (0.046ms). TS: 0 errors.
+- **Architect ADR: AI package-weight wiring** — adr-ai-package-weight-wiring.md. Decision: 3 nullable Item cols (aiPackageWeightOz/aiPackageDimsJson/aiPackageConfidence). Write: batchAnalyzeController + processRapidDraft. Read: ebayController → estimatePackageProfile step-4.
+- **Dev: AI package-weight implementation** — Schema + migration (20260614100000_add_item_ai_package_estimate_columns) + 3 backend files. Wires cloudAI estimates from analysis into the estimator so cables/misc items stop falling to 24oz SEED. TS: 0 errors.
+
+**BQ delta:** 3 → 3 (NODEJS-10 + AI package-weight both fixed CODE-ONLY pending deploy; #313 unchanged)
+
+**Patrick actions needed:**
+1. Push block (see Next Session)
+2. Run `migrate deploy` for BOTH new migrations after push
+
 ### S980 — 2026-06-14 | DEV+QA (eBay shipping preview/policy accuracy — multi-phase)
 
 **Patrick's thread:** flagged the shipping preview as wrong/embarrassing → uncovered a chain of issues, all fixed + deployed green.
@@ -468,11 +480,37 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Next Session
 
-### S980 wrap → Next Session
+### S981 → S982 Carry-Forward
 
-**Carry-forward dispatch stubs (eBay shipping — runtime verification + AI-weight wiring):**
+**Patrick push block (combined — do this first):**
+```powershell
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260614000000_fix_sale_slow_query_nodejs10/migration.sql
+git add packages/database/prisma/migrations/20260614100000_add_item_ai_package_estimate_columns/migration.sql
+git add packages/backend/src/controllers/batchAnalyzeController.ts
+git add packages/backend/src/services/processRapidDraft.ts
+git add packages/backend/src/controllers/ebayController.ts
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/feature-notes/adr-ai-package-weight-wiring.md
+git commit -m "S981: NODEJS-10 slow query fix + AI package-weight wiring + records pass"
+.\push.ps1
+```
 
-1. **`Skill('findasale-architect')` → wire AI package-weight estimation (also in Blocked Queue).** Root cause: `estimatePackageProfile` step-4 AI path is inert — reads `aiEstimated*` which aren't Item columns; caller never supplies them. cloudAIService estimates weight/dims (roadmap #547) but output never reaches the estimator. Expected: ADR on where AI weight/dim lives + how it flows into the estimator + dev sequence. (This is why a cable falls to the 24oz generic fallback.)
+**After push — Patrick runs (ONE block, applies BOTH migrations):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:tEYYjdiay8x8q8N7A6LojJtG04R7sDBN@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-**Patrick actions pending:** none — the 3 items were handled this session (Celestion→pickup override; Porcelain 18oz + Casio 5oz set + re-pinned live). Patrick may adjust Porcelain/Casio weights if he knows the real values; a NEW 'cable' PackageProfile (5oz) was added so the estimator handles cables going forward.
+**Next session verification:**
+1. Sentry: verify FINDASALE-NODEJS-10 stops firing after the next 4AM cron run
+2. Chrome QA: re-analyze a cable item (e.g. Casio cable) — verify AI weight/dims populate correctly and estimatePackageProfile uses them (no 24oz SEED fallback)
+3. #27b remaining: PDF footer visual + iCal .ics text sub-checks on a non-TEAMS account
+
+**Prior S980 carry-forward (still valid):**
+- When eBay Buy-API grant lands: ebayCatalog provider activates automatically — verify identifiers/dims return; consider adding get_product/{epid} for fuller aspects.
 

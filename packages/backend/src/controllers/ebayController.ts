@@ -5390,6 +5390,10 @@ export const getUnsoldItems = async (req: AuthRequest, res: Response) => {
             packageEstimateSource: true,
             packageEstimateConfidence: true,
             packageConfirmedByOrganizer: true,
+            // AI package estimate — feeds estimatePackageProfile step-4 AI path
+            aiPackageWeightOz: true,
+            aiPackageDimsJson: true,
+            aiPackageConfidence: true,
           },
         },
       },
@@ -5437,6 +5441,10 @@ export const getUnsoldItems = async (req: AuthRequest, res: Response) => {
               packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
               packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
               packageType: item.packageType,
+              // AI package estimate from cloudAI tagging pass
+              aiEstimatedWeightOz: item.aiPackageWeightOz ?? null,
+              aiEstimatedDimensions: item.aiPackageDimsJson as { length: number; width: number; height: number } | null ?? null,
+              aiPackageConfidence: item.aiPackageConfidence != null ? Number(item.aiPackageConfidence) : null,
             });
             packageEstimate = {
               weightOz: est.weightOz,

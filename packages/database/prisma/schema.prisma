@@ -986,6 +986,11 @@ model Sale {
   @@index([lastScrapedAt]) // Sentry slow query fix 2026-05-30: scraper deduplication queries + UPDATE lastScrapedAt WHERE id (4225ms) — helps scraper dedup; UPDATE latency may need VACUUM ANALYZE for table bloat
   @@index([city]) // Sentry slow query fix 2026-05-30: Sale SELECT (6298ms) — ILIKE city queries; note leading-wildcard ILIKE won't use index, but prefix matches benefit
   @@index([status, isInventoryContainer, endDate]) // Sentry NODEJS-3E: search.ts COUNT WHERE status=PUBLISHED AND isInventoryContainer=false AND endDate >= now (missing covering index)
+  // Sentry NODEJS-10 fix (partial indexes — raw SQL only, Prisma @@index does not support WHERE predicates):
+  //   Sale_status_endDate_autoclose_idx: (status, endDate) WHERE deletedAt IS NULL
+  //     → saleAutoCloseCron was bitmap-scanning 14k PUBLISHED rows via wrong index; partial index → 0.046ms
+  //   Sale_sourceName_sourceUrl_idx: (sourceName, sourceUrl) WHERE sourceName IS NOT NULL AND sourceUrl IS NOT NULL
+  //     → saleDetailEnrichmentController COUNT seqscan 49ms → 6ms index-only scan
 }
 
 // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
@@ -1163,6 +1168,11 @@ model Item {
   packageEstimateSource       String? // SEED | CATEGORY | KEYWORD | AI | ORGANIZER — provenance of package estimate
   packageEstimateConfidence   Decimal?               @db.Decimal(3, 2) // 0.00–1.00 confidence of the package estimate
   packageConfirmedByOrganizer Boolean                @default(false) // True once organizer reviews/confirms package details — never overwritten by estimates
+  // AI-estimated package profile (from cloudAI tagging pass — not organizer-confirmed)
+  // Used by estimatePackageProfile step 4 when no PackageProfile keyword/category match exists.
+  aiPackageWeightOz           Int?                                        // packed weight estimate in ounces from cloudAI
+  aiPackageDimsJson           Json?                                       // { length, width, height } dims in inches from cloudAI
+  aiPackageConfidence         Decimal?               @db.Decimal(3, 2)   // 0.00–1.00; only written when >= 0.5 (cloudAIService gate)
   // ADR eBay Parity Phase B: Product identifiers for catalog match
   upc                        String?
   ean                        String?

@@ -1,6 +1,47 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S980 — 2026-06-14 (eBay shipping accuracy overhaul: preview=listing via origin ZIP, live re-pin on change, bulk drift sweep, estimator fix — all deployed + live-verified; 9 listings re-pinned)
+**Last updated:** S981 — 2026-06-14 (Records pass + BQ burn-down: NODEJS-10 partial indexes + AI package-weight wiring — both CODE-ONLY pending push + migrate deploy)
+
+---
+
+## 🟠 ACTION NEEDED — S981 Push Block (2 migrations)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260614000000_fix_sale_slow_query_nodejs10/migration.sql
+git add packages/database/prisma/migrations/20260614100000_add_item_ai_package_estimate_columns/migration.sql
+git add packages/backend/src/controllers/batchAnalyzeController.ts
+git add packages/backend/src/services/processRapidDraft.ts
+git add packages/backend/src/controllers/ebayController.ts
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/feature-notes/adr-ai-package-weight-wiring.md
+git commit -m "S981: NODEJS-10 slow query fix + AI package-weight wiring + records pass"
+.\push.ps1
+```
+
+**Then run migrations (Railway):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:tEYYjdiay8x8q8N7A6LojJtG04R7sDBN@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+---
+
+## Session S981 — BQ Burn-Down: NODEJS-10 + AI Package-Weight ✅ (CODE-ONLY)
+
+| What | Result |
+|------|--------|
+| Records pass (SEO3 + #547 PCV rows) | ✅ SEO3 stale/already applied; 547-GR/SHIP/ZIP/SWEEP → roadmap.md #547 Claude QA col → ✅ S979/S980. PCV table cleared. |
+| NODEJS-10 slow query fix (BQ P1) | ✅ CODE-ONLY — 2 partial indexes via migration 20260614000000_fix_sale_slow_query_nodejs10. Root cause: saleAutoCloseCron heap-scanned 14k PUBLISHED rows (3342ms); sourceName COUNT had no index (49ms). Partial indexes bring it to <50ms (239x faster). TS: 0 errors. Needs push + migrate deploy + verify Sentry NODEJS-10 resolves. |
+| Architect ADR: AI package-weight wiring | ✅ DONE — adr-ai-package-weight-wiring.md. Decision: 3 nullable Item cols (aiPackageWeightOz/aiPackageDimsJson/aiPackageConfidence). Write side: batchAnalyzeController + processRapidDraft persist AI estimates. Read side: ebayController passes to estimatePackageProfile step-4. |
+| Dev: AI package-weight implementation | ✅ CODE-ONLY — schema.prisma + migration 20260614100000_add_item_ai_package_estimate_columns + batchAnalyzeController + processRapidDraft + ebayController. Cables/misc items will stop falling to the 24oz SEED fallback once deployed. TS: 0 errors. |
+
+**Next session:** After push + migrate deploy + Railway deploys → Sentry check for NODEJS-10 + Chrome QA a cable item to confirm AI weights flow through.
 
 ---
 
@@ -333,9 +374,9 @@ Tables, columns, and backfill all verified on Railway. Nothing more needed here.
 
 | Action | Priority | Instructions |
 |--------|----------|-------------|
-| **Push S972 wrap docs** | HIGH | See push block below — STATE.md + patrick-dashboard.md |
-| **Danner pump re-push (next session)** | HIGH | Be present with artifactmi@gmail.com account — next session re-pushes the Danner pump through the new CALCULATED path to verify ShippingNetPreview, Suggest-price, and eBay calculated rate |
-| eBay shipping migration | ✅ DONE (2026-06-13) | Applied + verified on Railway. |
+| **Push S981 + run migrate deploy** | HIGH — do first | See push block above. TWO new migrations must be applied after push. |
+| **Next session: verify NODEJS-10 resolved** | HIGH | After push+deploy, check Sentry — FINDASALE-NODEJS-10 should stop firing after the next 4AM cron run |
+| **Next session: Chrome QA cable item** | MEDIUM | Re-analyze a cable item to confirm AI weight/dims populate + estimatePackageProfile uses them (no 24oz fallback) |
 | AlternativeTo | HIGH — June 18 deadline | Log in as "FindASale" → alternativeto.net → Add Software |
 | Trustpilot (#485) retry | MEDIUM | Try with support@finda.sale |
 | KY/ME workflow triggers | MEDIUM | GitHub Actions → scrape-kentucky-phase2 + scrape-maine-phase2 → Run workflow |

@@ -477,6 +477,13 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 // Catalog enrichment: HIGH-confidence auto-fills + suggestion write.
                 ...catalogApply,
                 ...(catalogSuggestionWrite !== undefined ? { catalogSuggestions: catalogSuggestionWrite } : {}),
+                // AI package estimate persistence — feeds estimatePackageProfile step-4 AI path.
+                // cloudAIService already gates these at packageConfidence >= 0.5 before returning.
+                ...(analysis?.estimatedWeightOz != null && analysis?.packageConfidence != null ? {
+                  aiPackageWeightOz: Math.round(analysis.estimatedWeightOz),
+                  aiPackageDimsJson: analysis.estimatedDimensionsIn ?? null,
+                  aiPackageConfidence: analysis.packageConfidence,
+                } : {}),
               },
             });
           } catch (err) {
