@@ -132,6 +132,7 @@ export const register = async (req: Request, res: Response) => {
           email,
           name,
           role: effectiveRole,
+          roles: effectiveRole === 'USER' ? ['USER'] : ['USER', effectiveRole], // S983: set roles array on create (default is ['USER'] which bypasses the fallback for organizers)
           password: hashedPassword,
           referralCode: userReferralCode,
           deviceFingerprint: hashedFingerprint,
