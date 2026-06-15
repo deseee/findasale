@@ -69,6 +69,8 @@ const organizerProfileSchema = z.object({
   skuAppendDate: z.boolean().optional(),
   skuAppendCost: z.boolean().optional(),
   skuAppendLocation: z.boolean().optional(),
+  // Feature #358: Follower count visibility toggle
+  showFollowerCount: z.boolean().optional(),
 }).strict();
 
 const awardBadgesSchema = z.object({
@@ -327,7 +329,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address, skuAppendDate, skuAppendCost, skuAppendLocation } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address, skuAppendDate, skuAppendCost, skuAppendLocation, showFollowerCount } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -373,6 +375,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(skuAppendDate !== undefined && { skuAppendDate }),
         ...(skuAppendCost !== undefined && { skuAppendCost }),
         ...(skuAppendLocation !== undefined && { skuAppendLocation }),
+        ...(showFollowerCount !== undefined && { showFollowerCount }),
       },
     });
 
@@ -549,6 +552,7 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       skuAppendDate: (organizer as any).skuAppendDate ?? false,
       skuAppendCost: (organizer as any).skuAppendCost ?? false,
       skuAppendLocation: (organizer as any).skuAppendLocation ?? false,
+      showFollowerCount: (organizer as any).showFollowerCount ?? true,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);
@@ -1146,6 +1150,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
       reviewCount: reviewCount,
       avgRating: Math.round(avgRating * 10) / 10,
       followerCount: (organizer as any)._count?.followers ?? 0,
+      showFollowerCount: (organizer as any).showFollowerCount ?? true,
       isFollowing,
       isClaimed: organizer.isClaimed,
       isUnmanagedListing: organizer.isUnmanagedListing,

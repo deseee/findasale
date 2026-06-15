@@ -6,12 +6,14 @@ interface FollowButtonProps {
   organizerId: string;
   initialFollowing: boolean;
   initialCount: number;
+  showCount?: boolean; // Feature #358: organizer can hide follower count
 }
 
 const FollowButton: React.FC<FollowButtonProps> = ({
   organizerId,
   initialFollowing,
   initialCount,
+  showCount = true,
 }) => {
   const { user } = useAuth();
   const [isFollowing, setIsFollowing] = useState(initialFollowing);
@@ -52,9 +54,11 @@ const FollowButton: React.FC<FollowButtonProps> = ({
       >
         {loading ? '...' : isFollowing ? 'Following' : 'Follow'}
       </button>
-      <span className="text-sm text-warm-500">
-        {followerCount} follower{followerCount !== 1 ? 's' : ''}
-      </span>
+      {showCount && (
+        <span className="text-sm text-warm-500">
+          {followerCount} follower{followerCount !== 1 ? 's' : ''}
+        </span>
+      )}
     </div>
   );
 };

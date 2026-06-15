@@ -489,6 +489,8 @@ model Organizer {
   emailDiscoveredAt        DateTime?
   // S696: permanent badge for first 500 organizers
   foundingOrgBadge         Boolean   @default(false)
+  // Feature #358: Follower count visibility — organizer can hide count from their storefront
+  showFollowerCount         Boolean   @default(true)
   // S696: Cash-to-Digital Bridge POS nudge handles
   venmoHandle              String?
   zelleHandle              String?
