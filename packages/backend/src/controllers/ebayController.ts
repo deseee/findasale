@@ -5846,6 +5846,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     let dims = body.dims;
     let itemPrice = body.itemPrice;
     let ebayCategoryId: string | null = body.ebayCategoryId ?? null;
+    let saleZip: string | null = null;
 
     // If an itemId was passed, load real values (organizer-scoped).
     if (body.itemId) {
@@ -5858,11 +5859,13 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
           packageWidthIn: true,
           packageHeightIn: true,
           ebayCategoryId: true,
+          sale: { select: { zip: true } },
         },
       });
       if (!item) {
         return res.status(404).json({ message: 'Item not found' });
       }
+      saleZip = item.sale?.zip ?? null;
       if (weightOz == null && item.packageWeightOz != null) weightOz = item.packageWeightOz;
       if (!dims) {
         dims = {
@@ -5890,7 +5893,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       shippingMode,
       weightOz,
       dims,
-      origin: { zip: body.fromZip ?? null, lat: organizer.lat, lng: organizer.lng },
+      origin: { zip: body.fromZip ?? saleZip, lat: organizer.lat, lng: organizer.lng },
       labelCostOverride: body.labelCost,
     });
     // Single source of truth for what the buyer is charged (matches the live listing).
@@ -5903,7 +5906,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         packageWidthIn: dims?.width ?? null,
         packageHeightIn: dims?.height ?? null,
       },
-      fromZip: body.fromZip ?? null,
+      fromZip: body.fromZip ?? saleZip,
     });
     const buyerShipping = resolved.buyerAmountCents / 100;
     const flatPolicy =
@@ -5987,6 +5990,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
     let weightOz = body.weightOz;
     let dims = body.dims;
     let ebayCategoryId: string | null = body.ebayCategoryId ?? null;
+    let saleZip: string | null = null;
 
     if (body.itemId) {
       const item = await prisma.item.findFirst({
@@ -5997,11 +6001,13 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
           packageWidthIn: true,
           packageHeightIn: true,
           ebayCategoryId: true,
+          sale: { select: { zip: true } },
         },
       });
       if (!item) {
         return res.status(404).json({ message: 'Item not found' });
       }
+      saleZip = item.sale?.zip ?? null;
       if (weightOz == null && item.packageWeightOz != null) weightOz = item.packageWeightOz;
       if (!dims) {
         dims = {
@@ -6026,7 +6032,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
       shippingMode,
       weightOz,
       dims,
-      origin: { zip: body.fromZip ?? null, lat: organizer.lat, lng: organizer.lng },
+      origin: { zip: body.fromZip ?? saleZip, lat: organizer.lat, lng: organizer.lng },
       labelCostOverride: body.labelCost,
     });
     // Single source of truth for what the buyer is charged (matches the live listing).
@@ -6039,7 +6045,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         packageWidthIn: dims?.width ?? null,
         packageHeightIn: dims?.height ?? null,
       },
-      fromZip: body.fromZip ?? null,
+      fromZip: body.fromZip ?? saleZip,
     });
     const buyerShipping = resolved.buyerAmountCents / 100;
     const flatPolicy =
