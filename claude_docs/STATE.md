@@ -239,10 +239,11 @@ _S937d: BOUNCE-FLOOD FIXED (rail-level). Root cause: a Gmail-rail event send (li
 _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 reframed P2 latent after Resend dashboard check (send.finda.sale not a Resend domain; SES_FROM_EMAIL env almost certainly overrides the dead fallback — verify, don't rewrite). NO SES rail exists in code. NOTED (not yet fixed, awaiting Patrick scope): ~9 more Gmail-rail senders lack suppression — most important `lib/notificationService.createNotification` (central fan-out), plus buyingPool/reservation/saleWaitlist/waitlist/abandonedCheckout/curator/monthlyTrendReport/emailReminder/organizers. Transactional ones (auction receipt, reservation, contact) should suppress hard-bounce+blocked-domain only, NOT opt-out. BQ: 1→2._
 
 _S987: #318 tab filter FIXED CODE-ONLY (affiliate.tsx useState<string> active state) — removed from BQ. BQ: 2→1._
+_S989: #313 HAUL_POST_LIKES Chrome-verified ✅ (user1 reaction→ user5 XP 416→421 +5 once; user2 reaction→ user5 XP stays 421, no re-award). BQ: 1→0._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
+
 
 
 
@@ -264,7 +265,8 @@ _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #47
 |---|---------|----------|---------|
 _(#465 S984 PCVs — roadmap #465 Claude QA col already shows ⏳ 3/4 Chr verified S984. All 4 rows cleared S986.)_
 _(⁠#358 OFF direction ✅ S986 applied S987 records pass — roadmap.md #358 Claude QA col → ⏳ OFF ✅ S986 / ON pending Chr verify — cleared.)_
-| #358 | Follower Count Toggle — ON direction | Navigated https://finda.sale/organizers/cmomwf956000z11qwnjieosli as Leo Thomas (user5). get_page_text confirmed “Follow / 1 follower” next to Follow button. showFollowerCount=true → followerCount displayed. Apply: Claude QA col → ✅ S987. | S987 |
+_(#318 ✅ S988 applied S989 records pass — roadmap.md #318 Chrome QA col → ✅ S988 — cleared.)_
+| #313 | HAUL_POST_LIKES XP idempotency | Navigated https://finda.sale/shopper/haul-posts as user1 (Alice Johnson / Seedy2025!). user1 reacted to haul post 4 via POST /api/ugc-photos/4/reactions — DB confirmed user5 XP 416→421 (+5 exactly once), PointsTransaction created (desc: "Haul post milestone: 2+ likes on post (photoId: 4)"). user2 reacted via same endpoint (JWT auth) — DB confirmed user5 XP remained 421 (0 re-award, idempotency guard blocked). likesCount 14→15→16. Apply: roadmap.md #313 Chrome QA col → ✅ S989. | S989 |
 _(S935 PCV rows — #317 Geofence graceful fallback ⚠️ S936, #470 GA4 conversion CODE-ONLY S936 — applied to roadmap.md in S936 records pass — cleared.)_
 _(S931 PCV rows — #462 Attribution, #237 Command Center, /admin/outreach-opens, SEO1 SSR, #455 Notify Me, #464 SEO footer, sale detail, /trending, /map — applied to roadmap.md in S932 records pass — cleared.)_
 _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Explorer Profile, #123 rank label, #199 Hunt Pass — applied to roadmap.md in S931 records pass — cleared.)
@@ -276,16 +278,15 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S987 → S988
+### S989 → S990
 
 **Records pass (first action):**
-Apply #358 ON direction ✅ from S987 PCV to roadmap.md — update Claude QA col from `⏳ OFF ✅ S986 / ON pending Chr verify` to `✅ S987`. Evidence: URL https://finda.sale/organizers/cmomwf956000z11qwnjieosli, Leo Thomas (user5), Follow button + "1 follower" text confirmed via get_page_text, screenshot ss_9942gchzq. 5-element gate: URL ✅, user ✅, element (Follow button + "1 follower" count text) ✅, outcome (follower count displayed) ✅, screenshot ID ss_9942gchzq ✅.
-
-**#318 Chrome verify (after Patrick pushes + deploys):**
-Navigate to https://finda.sale/organizer/affiliate as user with affiliate link. Click a non-"All" tab (Pending / Paid / Rejected). Verify active indicator updates to the clicked tab (blue highlight moves off "All"). Evidence: URL, user, element clicked, outcome, screenshot ID.
+Apply #313 ✅ from S989 PCV to roadmap.md — update Chrome QA col to `✅ S989`. Evidence: URL https://finda.sale/shopper/haul-posts, user1 + user2, POST /api/ugc-photos/4/reactions — user5 XP 416→421 (+5 once on user1 react), stays 421 on user2 react (idempotency confirmed). 5-element gate: URL ✅, user (user1/user2) ✅, element (reactions endpoint) ✅, outcome (XP +5 once, blocked on 2nd) ✅, DB evidence (PointsTransaction count=1 confirmed) ✅.
 
 **eBay carry-forward (still valid):**
 When eBay Buy-API grant lands: ebayCatalog provider activates — verify identifiers/dims return.
+
+**BQ = 0** — fully unblocked. Dev can proceed on any roadmap item.
 
 ---
 
@@ -400,6 +401,30 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S989 — 2026-06-15 | QA + RECORDS (#313 HAUL_POST_LIKES verified; #318 records pass)
+
+**Session type:** QA + RECORDS — records pass (#318 applied), Chrome QA #313
+
+**Records pass:** roadmap.md #318 Chrome QA col updated from `⏳ CODE-ONLY` to `✅ S988` (Python bash confirmed, evidence from S988 PCV). PCV #318 row cleared.
+
+**#313 HAUL_POST_LIKES XP idempotency — CHROME VERIFIED ✅:** Navigated https://finda.sale/shopper/haul-posts as user1 (Alice Johnson). Confirmed threshold is 2 (code: `likesCount >= 2`, haulPostController.ts L171). user1 reacted via POST /api/ugc-photos/4/reactions (201) — DB: user5 XP 416→421 (+5), 1 PointsTransaction created with desc "Haul post milestone: 2+ likes on post (photoId: 4)". user2 logged in via /api/auth/login JWT, reacted (201) — DB: user5 XP stayed 421, no second HAUL_POST_LIKES transaction. Idempotency guard confirmed functional. S970 fix verified end-to-end.
+
+**BQ delta:** 1 → 0
+
+**Files changed:** claude_docs/strategy/roadmap.md, claude_docs/STATE.md, claude_docs/patrick-dashboard.md
+
+### S988 — 2026-06-15 | QA + RECORDS (#318 affiliate tab fix Chrome-verified; #358 records pass)
+
+**Session type:** QA + RECORDS — records pass, Chrome QA #318
+
+**Records pass:** roadmap.md #358 Claude QA col updated from `⏳ OFF ✅ S986 / ON pending Chr verify` to `✅ S987` (Python bash confirmed). PCV #358 row cleared.
+
+**#318 Affiliate tab filter — CHROME VERIFIED ✅:** Navigated https://finda.sale/organizer/affiliate as Alice Johnson (user1 / Seedy2025!). Clicked Pending tab (ref_69) — orange highlight moved from All to Pending + "Loading referrals..." API call fired (ss_53773zh3u). Clicked Cancelled — orange moved to Cancelled (ss_3742seq7c). Active state correctly tracks clicks across all tabs. S987 fix confirmed live. PCV staged for next-session roadmap.md update.
+
+**BQ delta:** 1 → 1 (unchanged — #313 env-blocked)
+
+**Files changed:** claude_docs/strategy/roadmap.md, claude_docs/STATE.md, claude_docs/patrick-dashboard.md
 
 ### S987 — 2026-06-15 | DEV+QA (#318 affiliate tab fix, #358 copy fix, #358 ON Chrome verified)
 

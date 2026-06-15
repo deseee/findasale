@@ -6,7 +6,7 @@
 
 The big story this week was eBay shipping accuracy — the preview tool was computing from a null location instead of the sale's ZIP code, so it showed $28 while the live listing correctly charged $32. That's now fixed: preview matches the listing. We also overhauled the confusing "minimum price" widget (it now shows a quiet amber warning only when you're pricing too low, instead of the embarrassing $6.22 suggestion). A P1 bug was caught and fixed: new organizer accounts weren't getting their ORGANIZER role properly, which would have blocked dashboard access after sign-up. That's cleared.
 
-In S986–S987 we finished QA on #358 Follower Count Toggle — both directions now verified end-to-end. The affiliate dashboard (#318) had a P2 bug where the referrals tab filter didn't visually update on click — that's been fixed (CODE-ONLY, needs your push). Two smaller fixes also shipped: the settings helper text for the follower count toggle was wrong (it said "The Follow button always remains visible" but that's not true for visitors), and the affiliate tab active-state logic was fragile. Both corrected.
+In S986–S989 we finished QA on #358 Follower Count Toggle (both directions Chrome-verified), #318 affiliate tab filter (Chrome-verified ✅ S988), and #313 HAUL_POST_LIKES XP idempotency (Chrome-verified ✅ S989 — XP fires once when post hits 2+ likes, idempotency guard blocks re-awards on subsequent likes). BQ is now 0.
 
 ---
 
@@ -30,29 +30,29 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 **Follower count toggle:** Organizers can now reliably show or hide their follower count on their storefront. Both ON and OFF directions verified live.
 
-**Affiliate dashboard:** The referrals tab filter now correctly highlights the active tab when clicked.
+**Affiliate dashboard (#318):** The referrals tab filter now correctly highlights the active tab when clicked. Chrome-verified S988.
+
+**XP idempotency (#313):** Haul post milestone XP (5 XP when post hits 2+ likes) now fires exactly once per post. The idempotency guard was broken before S970 — it would re-award XP on every subsequent like. Chrome-verified S989.
 
 ---
 
 ## This Week's Priority
 
 1. **⚠️ AlternativeTo deadline June 18** — TWO DAYS. Log into alternativeto.net as "FindASale" → Add Software.
-2. **Push the S987 code** (see push block below) — #318 and #358 fixes need to reach Vercel before Chrome QA can verify them.
+2. **Push S989 wrap docs** (see push block below).
 
 ---
 
 ## Action Items for Patrick
 
 - [ ] **⚠️ URGENT — AlternativeTo deadline June 18.** Log into alternativeto.net as "FindASale" → Add Software. Two days left.
-- [ ] **Push the S987 code changes + wrap docs:**
+- [ ] **Push S989 wrap docs:**
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale
-  git add packages/frontend/pages/organizer/affiliate.tsx
-  git add packages/frontend/pages/organizer/settings.tsx
   git add claude_docs/strategy/roadmap.md
   git add claude_docs/STATE.md
   git add claude_docs/patrick-dashboard.md
-  git commit -m "S987: fix #318 affiliate tab active state; fix #358 settings copy; records pass + wrap"
+  git commit -m "S989: #313 Chrome verified; #318 records pass; wrap"
   .\push.ps1
   ```
 - [ ] **Send the 4 Gmail drafts** sitting in your inbox: eBay developer ticket reply, Rapid Growth pitch, Second Wave pitch, Crain's GR pitch (confirm byline if you want your name on it).
