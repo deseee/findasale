@@ -239,6 +239,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
+| P1 — Organizer registration roles bug | FIXED S983 CODE-ONLY. Root cause: schema `roles String[] @default(["USER"])` means new users get ["USER"] in DB even for organizers; fallback `[user.role]` never fires because roles is non-empty. Fix: `roles: effectiveRole === "USER" ? ["USER"] : ["USER", effectiveRole]` added to tx.user.create. | Chrome verify: register new organizer → confirm redirect to /organizer/dashboard (not /); confirm organizer routes accessible immediately | S983 |
 
 
 
