@@ -136,6 +136,7 @@ import axios from 'axios';
 import { analyzeItemImages } from '../services/cloudAIService';
 import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
 import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
+import { resyncShippingDriftSweep } from '../jobs/resyncShippingDrift'; // ADR shipping-resync Phase 3 / Part C: bulk rate-drift re-pin
 
 const router = express.Router();
 
@@ -1286,6 +1287,29 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
   } catch (err: any) {
     console.error('[Reanalyze] route error:', err?.message || err);
     res.status(500).json({ error: 'reanalyze failed', detail: String(err?.message || err) });
+  }
+});
+
+// POST /api/internal/resync-shipping-drift
+// ADR Shipping-Policy-Resync Phase 3 / Part C: on-demand bulk re-pin of live listings
+// whose carrier rate-version drifted. Manual/testing companion to the daily cron.
+// Body: { limit?: number, dryRun?: boolean }. dryRun:true previews would-be re-pins
+// without spending eBay calls or writing any item. Gated on the cheap local recompute
+// + isEbayRateLimited() inside the sweep — see resyncShippingDrift.ts.
+router.post('/resync-shipping-drift', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const rawLimit = req.body?.limit;
+    const limit =
+      typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit > 0
+        ? Math.floor(rawLimit)
+        : undefined;
+    const dryRun = req.body?.dryRun === true;
+
+    const summary = await resyncShippingDriftSweep({ limit, dryRun });
+    res.json(summary);
+  } catch (err: any) {
+    console.error('[ResyncShippingDrift] route error:', err?.message || err);
+    res.status(500).json({ error: 'resync-shipping-drift failed', detail: String(err?.message || err) });
   }
 });
 
