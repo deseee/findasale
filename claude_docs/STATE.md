@@ -8,6 +8,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S990 — QA/RECORDS (2026-06-15). Records pass + GA4 Tier 2 events Chrome-verified (#465).**
+- Records pass: #313 HAUL_POST_LIKES ✅ S989 applied to roadmap.md (Claude QA col ✅ S989). PCV cleared.
+- Chrome QA: GA4 Tier 2 events (#465) — 3 of 3 remaining events verified via gtag interceptor as Artifact MI.
+  - `shopper_item_favorited` ✅ — navigated items/cmo3etp4d005djqsu4yi9w45m, clicked Save, gtag fired {eventName: 'shopper_item_favorited', params: {event_category: 'engagement', item_id: 'cmo3etp4d005djqsu4yi9w45m'}} (ss_0216lvvsn)
+  - `checkout_initiated` ✅ — same item, clicked Buy It Now, gtag fired {eventName: 'checkout_initiated', params: {event_category: 'engagement', item_id: '...'}} 
+  - `first_item_published` ✅ — created test sale (cmqflappy014ebo1n952gj4z7), Manual Entry item saved, gtag fired {eventName: 'first_item_published', params: {event_category: 'engagement', sale_id: '...'}}. Test sale deleted after verify.
+  - `organizer_registration_complete` was already Chr ✅ S984 per roadmap. #465 now 4/4 Chrome-verified.
+- PCVs staged for next session records pass (cross-session rule — roadmap.md #465 Chrome col NOT updated this session).
+- BQ: 0 (unchanged).
+
 **S980 DEV+QA COMPLETE — eBay shipping accuracy overhaul (preview matches the live listing; live re-pin on change; bulk rate-drift sweep; package-estimator fix). All deployed green; user-visible pieces verified.**
 - ROOT CAUSE (evidence-first, the big one): the shipping PREVIEW computed from organizer lat/lng (NULL) with no origin ZIP → defaulted to the farthest zone → showed $28, while the LIVE listing correctly charged $32 from Paw Paw MI (49079). The listing was right; the preview was the bug. FIX: preview endpoints load `sale.zip` as origin → preview reads $32, matching the listing. VERIFIED LIVE (Artifact MI, get_page_text "$32.00 · FindA.Sale Flat $32.00"; eBay API confirmed live offer policy 316596123011).
 - Shared resolver `ebayShippingResolver.ts` (`resolveItemShipping`) — preview == listing single source of truth (weight-tier items show real tier rate, not a fabricated FVF flat).
@@ -264,9 +274,13 @@ _(S940 PCV rows — #27b watermark settings gating ✅ PRO/TEAMS, #75 non-lapsed
 _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #470 RUNTIME-VERIFIED already in roadmap — cleared S941.)_
 |---|---------|----------|---------|
 _(#465 S984 PCVs — roadmap #465 Claude QA col already shows ⏳ 3/4 Chr verified S984. All 4 rows cleared S986.)_
+| #465 | GA4 shopper_item_favorited | Navigated https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m as Artifact MI. Clicked Save button. gtag interceptor fired {eventName: 'shopper_item_favorited', params: {event_category:'engagement', item_id:'cmo3etp4d005djqsu4yi9w45m'}}. Reloaded — item saved in favorites. (ss_0216lvvsn ss_3418eo8gk) | S990 |
+| #465 | GA4 checkout_initiated | Same item page, Artifact MI. Clicked Buy It Now. gtag interceptor fired {eventName: 'checkout_initiated', params: {event_category:'engagement', item_id:'cmo3etp4d005djqsu4yi9w45m'}}. Checkout flow initiated. (ss_0216lvvsn) | S990 |
+| #465 | GA4 first_item_published | Navigated /organizer/add-items/cmqflappy014ebo1n952gj4z7 (new empty sale) as Artifact MI. Manual Entry — typed title + price, clicked Save Item. gtag interceptor fired {eventName: 'first_item_published', params: {event_category:'engagement', sale_id:'cmqflappy014ebo1n952gj4z7'}}. items.length was 0 before save — event gate confirmed correct. Test sale deleted. (ss_7000y2s0t ss_3418eo8gk) | S990 |
+
 _(⁠#358 OFF direction ✅ S986 applied S987 records pass — roadmap.md #358 Claude QA col → ⏳ OFF ✅ S986 / ON pending Chr verify — cleared.)_
 _(#318 ✅ S988 applied S989 records pass — roadmap.md #318 Chrome QA col → ✅ S988 — cleared.)_
-| #313 | HAUL_POST_LIKES XP idempotency | Navigated https://finda.sale/shopper/haul-posts as user1 (Alice Johnson / Seedy2025!). user1 reacted to haul post 4 via POST /api/ugc-photos/4/reactions — DB confirmed user5 XP 416→421 (+5 exactly once), PointsTransaction created (desc: "Haul post milestone: 2+ likes on post (photoId: 4)"). user2 reacted via same endpoint (JWT auth) — DB confirmed user5 XP remained 421 (0 re-award, idempotency guard blocked). likesCount 14→15→16. Apply: roadmap.md #313 Chrome QA col → ✅ S989. | S989 |
+_(#313 ✅ S989 applied S990 — roadmap.md #313 Claude QA col → ✅ S989. HAUL_POST_LIKES idempotency confirmed. Cleared.)_
 _(S935 PCV rows — #317 Geofence graceful fallback ⚠️ S936, #470 GA4 conversion CODE-ONLY S936 — applied to roadmap.md in S936 records pass — cleared.)_
 _(S931 PCV rows — #462 Attribution, #237 Command Center, /admin/outreach-opens, SEO1 SSR, #455 Notify Me, #464 SEO footer, sale detail, /trending, /map — applied to roadmap.md in S932 records pass — cleared.)_
 _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Explorer Profile, #123 rank label, #199 Hunt Pass — applied to roadmap.md in S931 records pass — cleared.)
@@ -278,10 +292,14 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S989 → S990
+### S990 → S991
 
 **Records pass (first action):**
-Apply #313 ✅ from S989 PCV to roadmap.md — update Chrome QA col to `✅ S989`. Evidence: URL https://finda.sale/shopper/haul-posts, user1 + user2, POST /api/ugc-photos/4/reactions — user5 XP 416→421 (+5 once on user1 react), stays 421 on user2 react (idempotency confirmed). 5-element gate: URL ✅, user (user1/user2) ✅, element (reactions endpoint) ✅, outcome (XP +5 once, blocked on 2nd) ✅, DB evidence (PointsTransaction count=1 confirmed) ✅.
+Apply #465 PCVs from S990 to roadmap.md — update Chrome QA col from `⏳ 3/4 Chr verified S984` to `✅ S990` (all 4 events verified). Evidence:
+- shopper_item_favorited ✅: URL https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m, Artifact MI, Save button click, gtag interceptor captured event (ss_0216lvvsn ss_3418eo8gk)
+- checkout_initiated ✅: same item, Buy It Now click, gtag interceptor captured event (ss_0216lvvsn)
+- first_item_published ✅: empty test sale (deleted post-test), Manual Entry first item save, gtag interceptor captured event (ss_7000y2s0t ss_3418eo8gk)
+5-element gate: URL ✅, user (Artifact MI) ✅, element (gtag interceptor) ✅, outcome (events captured) ✅, screenshot IDs ✅.
 
 **eBay carry-forward (still valid):**
 When eBay Buy-API grant lands: ebayCatalog provider activates — verify identifiers/dims return.
