@@ -829,13 +829,8 @@ export const exportFacebookXLSX = async (
       wsData.push([title, price, condition, description, category]);
     }
 
-    // If items were truncated, add a note row after the data
-    if (truncated) {
-      wsData.push([
-        `Note: Export limited to 50 items. Visit finda.sale/sales/${saleId} for full inventory.`,
-        '', '', '', ''
-      ]);
-    }
+    // Note: truncation is communicated via the API response header, not in the file.
+    // Adding a note row would cause Facebook to reject the spreadsheet as having too many items.
 
     // Build workbook using SheetJS
     // eslint-disable-next-line @typescript-eslint/no-var-requires
