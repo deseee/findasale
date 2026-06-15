@@ -12,8 +12,10 @@
 --   - Covers the autoclose pattern exactly: status=PUBLISHED satisfies the partial predicate,
 --     endDate<now is the range condition, deletedAt IS NULL is the WHERE guard.
 --   - Eliminates the 14k-row heap fan-out entirely for this query.
---   - CONCURRENTLY: builds without locking writes (safe on live Railway).
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "Sale_status_endDate_autoclose_idx"
+--   - Note: CONCURRENTLY removed — Prisma wraps migrations in transactions, and
+--     CONCURRENTLY cannot run inside a transaction block (PostgreSQL error 25001).
+--     The Sale table is small enough that a brief lock is acceptable.
+CREATE INDEX IF NOT EXISTS "Sale_status_endDate_autoclose_idx"
   ON "Sale" (status, "endDate")
   WHERE "deletedAt" IS NULL;
 
@@ -26,6 +28,6 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "Sale_status_endDate_autoclose_idx"
 --   - Partial predicate eliminates soft-deleted / null-sourceName rows from the index.
 --   - sourceUrl included so the filter IS NOT NULL is satisfied from the index alone.
 --   - COUNT goes from 49ms seqscan → 6ms index-only scan (8x faster).
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "Sale_sourceName_sourceUrl_idx"
+CREATE INDEX IF NOT EXISTS "Sale_sourceName_sourceUrl_idx"
   ON "Sale" ("sourceName", "sourceUrl")
   WHERE "sourceName" IS NOT NULL AND "sourceUrl" IS NOT NULL;
