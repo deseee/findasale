@@ -311,6 +311,13 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         // Catalog enrichment: HIGH-confidence auto-fills + suggestion write.
         ...rapidCatalogApply,
         ...(rapidCatalogSuggestion !== undefined ? { catalogSuggestions: rapidCatalogSuggestion } : {}),
+        // AI package estimate persistence — feeds estimatePackageProfile step-4 AI path.
+        // cloudAIService already gates these at packageConfidence >= 0.5 before returning.
+        ...(aiResult?.estimatedWeightOz != null && aiResult?.packageConfidence != null ? {
+          aiPackageWeightOz: Math.round(aiResult.estimatedWeightOz),
+          aiPackageDimsJson: aiResult.estimatedDimensionsIn ?? null,
+          aiPackageConfidence: aiResult.packageConfidence,
+        } : {}),
       };
 
       // Optimistic lock: include updatedAt in where clause to detect concurrent edits
