@@ -88,16 +88,9 @@ export async function estimatePackageProfile(item: PackageEstimateItem): Promise
       if (byCat) return toEstimate(byCat, 'CATEGORY');
     }
 
-    // 2. FindA.Sale category match
-    if (item.category) {
-      const byLabel = await prisma.packageProfile.findFirst({
-        where: { category: { equals: item.category, mode: 'insensitive' } },
-        orderBy: { confidence: 'desc' },
-      });
-      if (byLabel) return toEstimate(byLabel, 'CATEGORY');
-    }
-
-    // 3. keyword match against the item title
+    // 2. Keyword match against the item title — a specific item type must beat a
+    //    broad category (e.g. "figurine" wins over a generic "Collectibles" profile).
+    //    Runs BEFORE the category-label match (was step 3; reordered).
     if (item.title) {
       const title = item.title.toLowerCase();
       const keywordProfiles = await prisma.packageProfile.findMany({
@@ -107,11 +100,26 @@ export async function estimatePackageProfile(item: PackageEstimateItem): Promise
       const hit = keywordProfiles.find((p) => p.keyword && title.includes(p.keyword.toLowerCase()));
       if (hit) return toEstimate(hit, 'KEYWORD');
     }
+
+    // 3. FindA.Sale category match — ONLY true category defaults (keyword IS NULL).
+    //    Without this guard, a broad parent category ("Collectibles"/"Electronics")
+    //    matches a miscategorized keyword profile (coin 4oz / camera 36oz) and applies
+    //    it to every item in the bucket. Defaults only; specific items are handled above.
+    if (item.category) {
+      const byLabel = await prisma.packageProfile.findFirst({
+        where: { category: { equals: item.category, mode: 'insensitive' }, keyword: null },
+        orderBy: { confidence: 'desc' },
+      });
+      if (byLabel) return toEstimate(byLabel, 'CATEGORY');
+    }
   } catch (err) {
     console.warn('[PackageEstimate] PackageProfile lookup failed', err);
   }
 
-  // 4. AI estimate (only if it cleared the confidence gate in cloudAIService)
+  // 4. AI estimate (only if it cleared the confidence gate in cloudAIService).
+  //     NOTE (flagged to architect): the caller does not currently supply aiEstimated*
+  //     fields (they are not Item columns), so this path is presently inert. Wiring
+  //     cloudAIService weight/dim output into the estimator is a separate roadmap item.
   if (
     item.aiPackageConfidence != null &&
     item.aiPackageConfidence >= 0.5 &&

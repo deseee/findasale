@@ -3928,6 +3928,12 @@ export async function resyncItemShippingPolicy(
     const organizer = item.sale?.organizer;
     if (!organizer) return { changed: false, reason: 'no-organizer' };
 
+    // Safety: never auto-price an item with no weight, and never convert a
+    // local-pickup-only listing onto a shipping policy. These need the organizer
+    // to add a weight / clear the pickup override — they must not be guessed.
+    if (item.packageWeightOz == null || item.packageWeightOz <= 0) return { changed: false, reason: 'no-weight' };
+    if (item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') return { changed: false, reason: 'local-pickup' };
+
     // Don't spend eBay calls when rate-limited.
     if (isEbayRateLimited()) return { changed: false, reason: 'rate-limited' };
 
