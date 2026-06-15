@@ -1,6 +1,22 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S979 — 2026-06-14 (guardrail + shipping-preview accuracy: flat policy named, label cost separated, net corrected; deployed green + live-verified)
+**Last updated:** S980 — 2026-06-14 (eBay shipping accuracy overhaul: preview=listing via origin ZIP, live re-pin on change, bulk drift sweep, estimator fix — all deployed + live-verified; 9 listings re-pinned)
+
+---
+
+## Session S980 — eBay Shipping Accuracy Overhaul ✅
+
+| What | Result |
+|------|--------|
+| Preview showed wrong $28 vs live $32 | ✅ Root cause: preview had no origin ZIP (lat/lng null) → wrong zone. Now uses sale ZIP → **$32, matches the listing**. The listing was right all along. |
+| Preview ≠ listing | ✅ One shared resolver — preview now shows the real policy a listing uses |
+| "Weigh it later → policy follows" | ✅ Edit-save + re-push re-pin the live eBay offer when weight/dims change |
+| Carrier rates drift | ✅ Daily 4AM bulk sweep re-pins drifted listings (≥$0.50/5%), budget-aware |
+| Package estimator gave junk (figurine=4oz coin, cable=36oz camera) | ✅ Fixed: keyword beats broad category; figurine→18oz, cable→5oz (added a 'cable' profile) |
+| The 3 weightless items | ✅ Handled live: Celestion→pickup (oversized), Porcelain→18oz **now ships $12.49**, Casio→5oz **now ships $6.99** |
+| Real sweep run | ✅ **9 live listings re-pinned**; eBay API confirms each policy moved. Steve Yzerman was mis-tiered 8oz $6.99 → now 12oz $7.75 |
+
+**Still open (logged):** AI weight estimation isn't wired to the estimator (cloudAIService output never reaches it) — items with no keyword/category profile fall back to a generic 24oz. Architect ADR queued.
 
 ---
 

@@ -8,6 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S980 DEV+QA COMPLETE — eBay shipping accuracy overhaul (preview matches the live listing; live re-pin on change; bulk rate-drift sweep; package-estimator fix). All deployed green; user-visible pieces verified.**
+- ROOT CAUSE (evidence-first, the big one): the shipping PREVIEW computed from organizer lat/lng (NULL) with no origin ZIP → defaulted to the farthest zone → showed $28, while the LIVE listing correctly charged $32 from Paw Paw MI (49079). The listing was right; the preview was the bug. FIX: preview endpoints load `sale.zip` as origin → preview reads $32, matching the listing. VERIFIED LIVE (Artifact MI, get_page_text "$32.00 · FindA.Sale Flat $32.00"; eBay API confirmed live offer policy 316596123011).
+- Shared resolver `ebayShippingResolver.ts` (`resolveItemShipping`) — preview == listing single source of truth (weight-tier items show real tier rate, not a fabricated FVF flat).
+- Phase 2 live re-pin: migration `20260614224302_add_item_ebay_shipping_applied_fields` (4 Item cols ebayFulfillmentPolicyId/ShippingAmountCents/ShippingRatedAt/RateVersion) APPLIED to Railway. `resyncItemShippingPolicy` + `applyFulfillmentPolicyToOffer` fire on edit-save (weight/dims change) and edit-item re-push. Guarded: skips null-weight + LOCAL_PICKUP_ONLY.
+- Phase 3 bulk sweep: `resyncShippingDriftSweep` daily 4AM cron + POST /api/internal/resync-shipping-drift (dryRun). Re-pins only on ≥$0.50/≥5% drift, eBay-budget-aware, gated on rate-version. Dry-run VERIFIED 7 candidates after guard (was 10).
+- Package-estimator fix (`ebayPackageEstimateService.ts`): keyword match runs BEFORE broad-category; category-label match restricted to keyword-IS-NULL defaults. Stops broad buckets mis-pricing (Collectibles→coin 4oz, Electronics→camera 36oz). VERIFIED: porcelain figurine 4→18oz, Casio cable 36→24oz fallback.
+- Also: negative-$ fmt fix; NUL-byte build corruption recovered (memory); latent crash fixed in ebayFlatRatePolicyService (rateResult→cheapest.rate). ADR: claude_docs/feature-notes/adr-shipping-policy-resync.md.
+- RUNTIME VERIFIED LIVE (S980): ran the real sweep (dryRun:false) → 9 live listings re-pinned; direct eBay API confirms each offer's fulfillmentPolicyId now matches stored. Real corrections landed — Steve Yzerman 8oz$6.99→12oz$7.75, Brett Hull→$7.75; Porcelain (set 18oz figurine est) pickup→1+lb$12.49; Casio (set 5oz via NEW 'cable' PackageProfile) →8oz$6.99; Celestion set LOCAL_PICKUP_ONLY (oversized, excluded). Other 5 = no-op backfills. Offer-PUT mechanism PROVEN.
+
 **S979 DEV+QA COMPLETE — eBay min-price suggester replaced with silent low-price guardrail; $6.22 P2 RESOLVED.**
 - Root problem: the "Min. list price to hit a net margin" widget defined margin as net-as-a-fraction-of-list-price with no cost basis, so on any real item it collapsed to the fee/shipping floor (the embarrassing "$6.22 on a $175 item"). It also never told the organizer what it was for.
 - Fix (Patrick-approved direction = guardrail): removed the always-on suggester. ShippingNetPreview now auto-fetches the fee-safe floor (15% margin) and shows an amber warning ONLY when the entered price is below it — silent on normal items. One-tap "Use $X" applies the floor.
@@ -230,6 +239,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
 | FINDASALE-NODEJS-10 — Sale SELECT slow query (3342ms, ongoing) | Pre-existing issue, 55 events since May 6. `SELECT ... FROM "Sale"` with no relevant index. Not related to cron stampede (still firing post-stagger). Last seen 6:29 AM UTC 2026-06-14. Needs dedicated investigation: EXPLAIN ANALYZE the query, add index on the relevant column(s). P1 by age (5+ weeks unresolved). | Read query from Railway logs, run EXPLAIN ANALYZE via psycopg2, add index via migration. | S977 |
+| eBay AI package-weight estimation not wired | `estimatePackageProfile` step-4 AI path reads `aiEstimatedWeightOz`/`aiPackageConfidence`/`aiEstimatedDimensions` which are NOT Item columns and the caller never supplies them → inert. Items lacking a keyword/category-default profile fall to the 24oz generic fallback (e.g. cables). cloudAIService estimates weight/dims (roadmap #547) but its output never reaches the estimator. P1 — causes wrong shipping weights → wrong policy/price. | Architect ADR: where AI weight/dim lives (Item cols vs JSON vs table) + how it flows into estimatePackageProfile + dev sequence. | S980 |
 
 
 
@@ -243,7 +253,9 @@ _S970 records pass: S969 PCVs (#164 Tiers Infra, #27b watermark toggle, #317 Geo
 |---|---------|----------|---------|
 | SEO3 | Denver city landing page /estate-sales/denver-co | Navigated https://finda.sale/estate-sales/denver-co. Title: "Estate Sales in Denver, CO \| FindA.Sale" ✅. Meta desc present+keyword-rich ✅. H1: "Estate Sales in Denver, CO" ✅. 50 listings visible ✅. Dark mode clean ✅. ss_34924pp42 ss_8168bplgd | S944 |
 | 547-GR | eBay min-price suggester → silent low-price guardrail (ShippingNetPreview) | Navigated https://finda.sale/organizer/edit-item/cmqbb252i000i60qq7eilco9z as Artifact MI (organizer). At price $175: old "Min. list price" suggester GONE, no warning, net $145.59 ✅ (ss_1110cu5x6). Set price $3: amber guardrail fired — "At $3.00, eBay fees and shipping eat most of your money — you'd keep only about -$0.87. List at $4.89 or more to keep at least 15% after fees" + net box -$0.87 ✅ (ss_6407gnhli). Clicked "Use $4.89": price applied, net flipped to $0.74, warning self-cleared ✅ (ss_2301y95wu). Price restored to $175, not saved. | S979 |
-| 547-SHIP | eBay shipping preview reflects actual shipping mode (flat policy vs calculated) | Navigated https://finda.sale/organizer/edit-item/cmqbb252i000i60qq7eilco9z as Artifact MI on the green prod build. Top-line via get_page_text: "Buyer pays for shipping $28.00 · Flat rate · FindA.Sale Flat $28.00" ✅; "Your estimated net $148.31" ✅ (was wrong $145.59). Net math confirms label cost (~$24 cheapest-carrier) now distinct from the $28 buyer charge. Screenshot tool errored (params) + breakdown-panel toggle flaky — breakdown rows not captured; top-line conclusive. | S979 |
+| 547-SHIP | eBay shipping preview reflects actual shipping mode (flat policy vs calculated) | Navigated https://finda.sale/organizer/edit-item/cmqbb252i000i60qq7eilco9z as Artifact MI on the green prod build. Top-line via get_page_text: "Buyer pays for shipping $28.00 · Flat rate · FindA.Sale Flat $28.00" ✅; "Your estimated net $148.31" ✅ (was wrong $145.59). Net math confirms label cost (~$24 cheapest-carrier) now distinct from the $28 buyer charge. Screenshot tool errored (params) + breakdown-panel toggle flaky — breakdown rows not captured; top-line conclusive. (NOTE: the $28 here was later found WRONG — missing origin ZIP; corrected to $32, see 547-ZIP S980.) | S979 |
+| 547-ZIP | eBay shipping preview uses the sale origin ZIP (now matches the live listing) | Navigated https://finda.sale/organizer/edit-item/cmqbb252i000i60qq7eilco9z as Artifact MI on green prod (after origin-ZIP fix). get_page_text: "Buyer pays for shipping $32.00 · Flat rate · FindA.Sale Flat $32.00" ✅, "Your estimated net $148.87" ✅ — matches the live eBay $32 policy (was wrongly $28 from missing origin). Direct eBay API confirmed live offer fulfillmentPolicyId=316596123011 "FindA.Sale Flat $32.00". | S980 |
+| 547-SWEEP | Bulk shipping-drift sweep — REAL run verified end-to-end | dryRun:true showed guard works (10→7). Then dryRun:false ran: 9 re-pinned. Direct eBay API confirms live offer policies moved: Steve Yzerman 8oz$6.99→12oz$7.75, Brett Hull→$7.75, Porcelain pickup→1+lb$12.49, Casio→8oz$6.99 (after weights set 18/5oz); Celestion excluded via LOCAL_PICKUP_ONLY. All 9 DB tracking cols match live policy. Offer-PUT mechanism PROVEN in prod. | S980 |
 _(#422 ✅ S949 applied S950 — cleared. #75 ✅ S949 applied S950 — cleared. #470 item_viewed ✅ S949 applied S950 — cleared.)_
 _(SEO3 ✅ S944 applied S961 — UI col ✅ S944 in roadmap.md — cleared. #472 ✅ S948 applied S949 — cleared from PCV table S961.)_
 _(S963 records pass: S962 PCVs #219/#218/#55/#81/#127 all ✅ — 5-element evidence confirmed — applied to roadmap.md Claude QA columns. #27c PCV staged for Chrome verify.)_
@@ -374,6 +386,16 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Recent Sessions
 
+### S980 — 2026-06-14 | DEV+QA (eBay shipping preview/policy accuracy — multi-phase)
+
+**Patrick's thread:** flagged the shipping preview as wrong/embarrassing → uncovered a chain of issues, all fixed + deployed green.
+
+**Shipped:** (1) Preview origin-ZIP fix — preview computed from NULL lat/lng with no zip → wrong zone → $28; now loads `sale.zip` → $32 matching the live listing (the listing was right all along). VERIFIED LIVE. (2) Shared resolver `ebayShippingResolver.ts` — preview==listing single source of truth. (3) Phase 2 live re-pin — migration 20260614224302 (4 Item cols, APPLIED to Railway); resyncItemShippingPolicy + applyFulfillmentPolicyToOffer on edit-save + re-push; guarded vs null-weight + LOCAL_PICKUP_ONLY. (4) Phase 3 bulk sweep — resyncShippingDriftSweep daily 4AM cron + internal endpoint; re-pins on ≥$0.50/≥5% drift; dry-run verified 7 candidates post-guard. (5) Package-estimator fix — keyword-before-category + category-defaults-only; figurine 4→18oz, cable 36→24oz fallback. (6) fmt negative-$ fix; latent crash fix (ebayFlatRatePolicyService); NUL-byte recovery.
+
+**Files:** ShippingNetPreview.tsx, ebayController.ts, ebayShippingResolver.ts (new), ebayPackageEstimateService.ts, ebayFlatRatePolicyService.ts, itemController.ts, jobs/resyncShippingDrift.ts (new), routes/internal.ts, index.ts, schema.prisma + migration 20260614224302, feature-notes/adr-shipping-policy-resync.md.
+
+**RUNTIME VERIFIED LIVE:** ran the real sweep (dryRun:false) — 9 listings re-pinned, eBay API confirms each offer policy matches stored. Yzerman 8oz$6.99→12oz$7.75 + Brett Hull→$7.75 (mis-tier fixes); Porcelain pickup→$12.49 + Casio→$6.99 (after setting weights 18oz/5oz; added a 'cable' PackageProfile to fix the cable gap); Celestion→LOCAL_PICKUP_ONLY. Offer-PUT proven.
+
 ### S979 — 2026-06-14 | BUG→DEV→QA (eBay min-price suggester → low-price guardrail)
 
 **Session type:** Patrick flagged the "Min. list price to hit a net margin" widget — unclear purpose + absurd $6.22 suggestion on a $175 item.
@@ -446,15 +468,11 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Next Session
 
-### S979 — Recommended options
+### S980 wrap → Next Session
 
-**BQ is 2 items (below ceiling). DEV available.**
+**Carry-forward dispatch stubs (eBay shipping — runtime verification + AI-weight wiring):**
 
-**Option A (P1) — FINDASALE-NODEJS-10 slow query:** Sale SELECT 3342ms, 55+ events since May 6. Run EXPLAIN ANALYZE on the query via psycopg2, add index via migration. Dispatch `Skill('findasale-dev')`.
+1. **`Skill('findasale-architect')` → wire AI package-weight estimation (also in Blocked Queue).** Root cause: `estimatePackageProfile` step-4 AI path is inert — reads `aiEstimated*` which aren't Item columns; caller never supplies them. cloudAIService estimates weight/dims (roadmap #547) but output never reaches the estimator. Expected: ADR on where AI weight/dim lives + how it flows into the estimator + dev sequence. (This is why a cable falls to the 24oz generic fallback.)
 
-**Option B — Chrome QA for S978 P2 fix:** Navigate to edit-item for the Danner pump ($175 item) as artifactmi. Click Suggest Price. Verify (1) AI reasoning cites the $175 current price, (2) if suggestion is still < $87.50, warning confirmation UI appears instead of auto-applying. Dispatch `Skill('findasale-qa')` (Chrome sequential).
-
-**Option C — Next roadmap item.** BQ is below ceiling.
-
-**Patrick actions pending:** None from S978.
+**Patrick actions pending:** none — the 3 items were handled this session (Celestion→pickup override; Porcelain 18oz + Casio 5oz set + re-pinned live). Patrick may adjust Porcelain/Casio weights if he knows the real values; a NEW 'cable' PackageProfile (5oz) was added so the estimator handles cables going forward.
 
