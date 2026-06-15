@@ -24,6 +24,7 @@ const AffiliateOrganizer = () => {
   const { showToast } = useToast();
   const [copiedCode, setCopiedCode] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<string | undefined>(undefined);
+  const [activeTab, setActiveTab] = useState<string>('All');
   const [currentOffset, setCurrentOffset] = useState(0);
 
   // Redirect if not authenticated/authorized
@@ -286,10 +287,11 @@ const AffiliateOrganizer = () => {
                       key={status.value || 'all'}
                       onClick={() => {
                         setCurrentStatus(status.value);
+                        setActiveTab(status.label);
                         setCurrentOffset(0);
                       }}
                       className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                        currentStatus === status.value
+                        activeTab === status.label
                           ? 'bg-amber-600 text-white'
                           : 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200 dark:hover:bg-gray-600'
                       }`}
