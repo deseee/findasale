@@ -1388,7 +1388,7 @@ const OrganizerSettingsPage = () => {
                     {followerCountUpdating ? 'Updating...' : 'Show follower count on your storefront'}
                   </span>
                 </label>
-                <p className="mt-2 text-sm text-warm-600 dark:text-gray-400">When enabled, shoppers can see how many people follow you. The Follow button always remains visible.</p>
+                <p className="mt-2 text-sm text-warm-600 dark:text-gray-400">Logged-in followers can see your count. Visitors see the Follow button only when signed in.</p>
               </div>
 
               {/* Broadcast to Followers Section — Feature #356 */}

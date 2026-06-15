@@ -238,10 +238,11 @@ _S937e: SOURCE PROVEN + rail-suppression aligned. Bounce source was NOT saleLive
 _S937d: BOUNCE-FLOOD FIXED (rail-level). Root cause: a Gmail-rail event send (likely saleLiveEmailService on scraped-sale publish) was emailing scraped organizers' own User.email = scraper+slug@system.finda.sale (72,060 such users); S929 only blocked @system in the 3 outreach SEEDERS, never the send rails. FIX: `isEmailDomainBlocked()` now blocks the ENTIRE finda.sale zone (domain==='finda.sale' OR endsWith '.finda.sale') — no real user ever has an @finda.sale address — with a one-address allowlist for SUPPORT_EMAIL (contact-form support@finda.sale). Plus a hard guard at the emailService.emails.send Gmail chokepoint (filters unsendable recipients before quota+send). Covers BOTH rails (Resend checkMultiple + Gmail rail guard), autoSeed, and the 16 guarded senders. Verified: 7/7 logic cases, backend TS 0 errors. In-flight DSNs from the pre-fix 06-08 batch will taper as Gmail stops retrying (~21h); they don't pollute suppression (bounce parser ignores finda.sale). Files: suppressionService.ts, emailService.ts (already in push block)._
 _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 reframed P2 latent after Resend dashboard check (send.finda.sale not a Resend domain; SES_FROM_EMAIL env almost certainly overrides the dead fallback — verify, don't rewrite). NO SES rail exists in code. NOTED (not yet fixed, awaiting Patrick scope): ~9 more Gmail-rail senders lack suppression — most important `lib/notificationService.createNotification` (central fan-out), plus buyingPool/reservation/saleWaitlist/waitlist/abandonedCheckout/curator/monthlyTrendReport/emailReminder/organizers. Transactional ones (auction receipt, reservation, contact) should suppress hard-bounce+blocked-domain only, NOT opt-out. BQ: 1→2._
 
+_S987: #318 tab filter FIXED CODE-ONLY (affiliate.tsx useState<string> active state) — removed from BQ. BQ: 2→1._
+
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
-| #318 Affiliate tab filter P2 | Referrals tab filter active indicator stays on "All" regardless of tab click — visual state not updating | Re-dispatch findasale-dev: fix active tab state management in affiliate dashboard | S986 |
 
 
 
@@ -262,7 +263,8 @@ _(S940 PCV rows — #27b watermark settings gating ✅ PRO/TEAMS, #75 non-lapsed
 _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #470 RUNTIME-VERIFIED already in roadmap — cleared S941.)_
 |---|---------|----------|---------|
 _(#465 S984 PCVs — roadmap #465 Claude QA col already shows ⏳ 3/4 Chr verified S984. All 4 rows cleared S986.)_
-| #358 | Follower Count Toggle — OFF direction | Navigated https://finda.sale/organizer/settings as user2 (Bob Smith). Clicked Profile tab. Clicked Follower Count toggle (ref_165) to uncheck — saw “Updating…” — settled unchecked. Reloaded — still unchecked (ss_41825ttx9). DB: showFollowerCount=false via psycopg2. Navigated https://finda.sale/organizers/cmomwf956000z11qwnjieosli — __NEXT_DATA__ {followerCount:1,showFollowerCount:false} — storefront showed “Follow” with NO count despite 1 follower. ON direction CODE-ONLY (Chrome disconnected; DB reset to true). Apply: Claude QA col → ⏳ OFF ✅ S986 / ON pending. | S986 |
+_(⁠#358 OFF direction ✅ S986 applied S987 records pass — roadmap.md #358 Claude QA col → ⏳ OFF ✅ S986 / ON pending Chr verify — cleared.)_
+| #358 | Follower Count Toggle — ON direction | Navigated https://finda.sale/organizers/cmomwf956000z11qwnjieosli as Leo Thomas (user5). get_page_text confirmed “Follow / 1 follower” next to Follow button. showFollowerCount=true → followerCount displayed. Apply: Claude QA col → ✅ S987. | S987 |
 _(S935 PCV rows — #317 Geofence graceful fallback ⚠️ S936, #470 GA4 conversion CODE-ONLY S936 — applied to roadmap.md in S936 records pass — cleared.)_
 _(S931 PCV rows — #462 Attribution, #237 Command Center, /admin/outreach-opens, SEO1 SSR, #455 Notify Me, #464 SEO footer, sale detail, /trending, /map — applied to roadmap.md in S932 records pass — cleared.)_
 _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Explorer Profile, #123 rank label, #199 Hunt Pass — applied to roadmap.md in S931 records pass — cleared.)
@@ -274,19 +276,13 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S986 → S987
+### S987 → S988
 
 **Records pass (first action):**
-Apply #358 OFF direction ✅ from S986 PCV to roadmap.md — update Claude QA col from `⏳ Pending Chr QA S986` to `⏳ OFF ✅ S986 / ON pending Chr verify`. Evidence: URL https://finda.sale/organizer/settings, user2, ref_165, outcome (count suppressed on storefront), screenshot ss_41825ttx9.
+Apply #358 ON direction ✅ from S987 PCV to roadmap.md — update Claude QA col from `⏳ OFF ✅ S986 / ON pending Chr verify` to `✅ S987`. Evidence: URL https://finda.sale/organizers/cmomwf956000z11qwnjieosli, Leo Thomas (user5), Follow button + "1 follower" text confirmed via get_page_text, screenshot ss_9942gchzq. 5-element gate: URL ✅, user ✅, element (Follow button + "1 follower" count text) ✅, outcome (follower count displayed) ✅, screenshot ID ss_9942gchzq ✅.
 
-**#358 ⚠️ P2 copy fix (dispatch to findasale-dev):**
-Settings card text "The Follow button always remains visible" is wrong — FollowButton returns null for unauthenticated users. Fix copy to: "Logged-in followers can see your count. Visitors see the Follow button only when signed in."
-
-**#318 P2 fix (dispatch to findasale-dev):**
-Affiliate dashboard referrals tab filter: active indicator stays "All" regardless of tab click. Fix tab state management (useState activeTab + className conditional on click handler).
-
-**#358 ON direction verify (Chrome):**
-Log in as user5@example.com (Seedy2025!). Navigate to https://finda.sale/organizers/cmomwf956000z11qwnjieosli. Verify "1 follower" text appears next to Follow button (showFollowerCount=true, followerCount=1 in DB). Evidence required per PRE-VERIFICATION GATE.
+**#318 Chrome verify (after Patrick pushes + deploys):**
+Navigate to https://finda.sale/organizer/affiliate as user with affiliate link. Click a non-"All" tab (Pending / Paid / Rejected). Verify active indicator updates to the clicked tab (blue highlight moves off "All"). Evidence: URL, user, element clicked, outcome, screenshot ID.
 
 **eBay carry-forward (still valid):**
 When eBay Buy-API grant lands: ebayCatalog provider activates — verify identifiers/dims return.
@@ -404,6 +400,22 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S987 — 2026-06-15 | DEV+QA (#318 affiliate tab fix, #358 copy fix, #358 ON Chrome verified)
+
+**Session type:** DEV+QA — records pass, parallel dev dispatch (CODE-ONLY), Chrome QA
+
+**Records pass:** roadmap.md #358 Claude QA col updated from `⏳ Pending Chr QA S986` to `⏳ OFF ✅ S986 / ON pending Chr verify` (Python bash confirmed). roadmap.md #318 Chrome QA col updated: ⚠️ P2 FIXED S987 CODE-ONLY — pending push + Chrome verify.
+
+**#358 Follower Count Toggle — ON direction Chrome verified ✅:** Navigated https://finda.sale/organizers/cmomwf956000z11qwnjieosli as Leo Thomas (user5 / Seedy2025!). get_page_text confirmed "Follow / 1 follower" next to Follow button. showFollowerCount=true → followerCount displayed (ss_9942gchzq). Evidence staged in PCV table — next session applies #358 Claude QA col → ✅ S987.
+
+**#318 affiliate tab filter — FIXED CODE-ONLY:** Root cause: active class derived from `currentStatus === status.value` with `undefined` sentinel — doesn't update on click. Fix: `useState<string>('All')` + `setActiveTab(status.label)` on click; active class = `activeTab === status.label`. File: packages/frontend/pages/organizer/affiliate.tsx. TS: 0 errors.
+
+**#358 settings copy fix — FIXED CODE-ONLY:** Old: "The Follow button always remains visible" (wrong — FollowButton returns null for unauthenticated). New: "Logged-in followers can see your count. Visitors see the Follow button only when signed in." File: packages/frontend/pages/organizer/settings.tsx. TS: 0 errors.
+
+**BQ delta:** 2 → 1 (#318 removed — fixed CODE-ONLY; #313 env-blocked remains)
+
+**Files changed:** packages/frontend/pages/organizer/affiliate.tsx, packages/frontend/pages/organizer/settings.tsx, claude_docs/strategy/roadmap.md, claude_docs/STATE.md, claude_docs/patrick-dashboard.md
 
 ### S986 — 2026-06-15 | QA (#358 Follower Count Toggle + #318 Affiliate Dashboard)
 
