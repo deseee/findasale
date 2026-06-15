@@ -1,26 +1,18 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S982 — 2026-06-15 (BQ burn-down: NODEJS-10 + AI weight cleared; #27b watermark sub-checks all ✅; GA4 Tier 2 events shipped)
+**Last updated:** S984 — 2026-06-15 (P1 roles bug Chrome-verified ✅ CLEARED; GA4 Tier 2 events 3/4 browser-verified)
 
 ---
 
-## ✅ NO PUSH BLOCK NEEDED FROM PATRICK FOR BQ ITEMS
+## 🟠 ACTION NEEDED — S984 Push Block (wrap docs only)
 
-S981 push + migrations are already live (Patrick confirmed at S982 start). S982 code changes are being pushed in the block below.
-
----
-
-## 🟠 ACTION NEEDED — S982 Push Block
+S982 + S983 already on GitHub ✅ (confirmed via GitHub MCP). Just push the session wrap docs.
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/register.tsx
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add "packages/frontend/pages/items/[id].tsx"
-git add packages/backend/src/services/ebayPackageEstimateService.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S982: GA4 Tier 2 events + stale comment fix + BQ wrap"
+git commit -m "S984: QA wrap — P1 roles bug ✅ CLEARED, GA4 Tier 2 3/4 browser-verified"
 .\push.ps1
 ```
 
@@ -28,23 +20,25 @@ No schema changes. No migrations needed.
 
 ---
 
-## Session S982 — BQ Burn-Down + GA4 Tier 2 ✅
+## Session S984 — QA Wrap ✅
 
 | What | Result |
 |------|--------|
-| FINDASALE-NODEJS-10 (BQ P1) | ✅ CLEARED — migration `20260614000000_fix_sale_slow_query_nodejs10` confirmed applied 2026-06-15 03:58 UTC. No June 15 Sentry events. Issue marked resolved in Sentry. |
-| eBay AI package-weight wiring (BQ) | ✅ CLEARED CODE-ONLY — confirmed via API: ebayController correctly maps aiPackageWeightOz → aiEstimatedWeightOz when calling estimatePackageProfile (L5445-5447). Stale "this path is presently inert" comment fixed. 0/129 items currently have AI weight data — activates on new uploads/re-analyses. |
-| #313 HAUL_POST_LIKES | ⏸ Still env-blocked (needs 10 accounts liking same post). Remains in BQ. |
-| #27b watermark — PDF + iCal sub-checks | ✅ All 4 verified: iCal non-TEAMS has watermark ✅; iCal TEAMS (toggle on) no watermark ✅; PDF non-TEAMS has "Find more sales at FindA.Sale" ✅; PDF TEAMS (toggle on) no watermark ✅. Staged in PCV for roadmap update next session. |
-| GA4 Tier 2 events (#465) | ✅ CODE-ONLY — 4 events added: `organizer_registration_complete` (register.tsx), `first_item_published` (add-items/[saleId].tsx), `shopper_item_favorited` (items/[id].tsx), `checkout_initiated` (items/[id].tsx). `sale_created` was already present. TS: 0 errors. Needs Chrome QA to confirm events fire. |
+| P1 organizer roles bug (BQ) | ✅ CLEARED — Chrome-verified: new organizer account `deseee+s984qa@yahoo.com` has `roles=['USER','ORGANIZER']` in DB; login JWT confirmed; /organizer/dashboard accessible immediately after registration. |
+| #313 HAUL_POST_LIKES | ⏸ Still env-blocked (needs 10 accounts). Remains in BQ. |
+| GA4 `shopper_item_favorited` | ✅ Browser-verified — favorites API 200 + GA4 collect hit `en=shopper_item_favorited`, 204 |
+| GA4 `checkout_initiated` | ✅ Browser-verified — GA4 collect hit `en=checkout_initiated`, 204 |
+| GA4 `organizer_registration_complete` | ✅ Browser-verified — GA4 collect hit `en=organizer_registration_complete,ep.role=organizer`, 204 |
+| GA4 `first_item_published` | CODE-ONLY — condition `items.length===0` confirmed in code; identical GA4 plumbing to verified events |
+| #27b watermark PCV (S982) | ✅ Confirmed already applied to roadmap.md — CLEARED from PCV table |
 
-**BQ: 3 → 1** (#313 only)
+**BQ: 2 → 1** (#313 env-blocked only). DEV fully unblocked.
 
 ---
 
-## Session S981 — NODEJS-10 + AI Package-Weight ✅ (DONE — already deployed)
+## Session S983 — P1 Roles Bug Fix ✅ (CODE-ONLY → Chrome-verified S984)
 
-Both migrations applied. Sentry NODEJS-10 resolved. ✅
+Fixed `authController.ts`: new organizer registrations now always get `['USER', 'ORGANIZER']` in their roles array.
 
 ---
 
