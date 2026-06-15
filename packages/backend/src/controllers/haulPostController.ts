@@ -162,13 +162,13 @@ export const addReaction = async (req: AuthRequest, res: Response) => {
       }),
     ]);
 
-    // HAUL_POST_LIKES: Award 5 XP to post author when post hits 10+ likes (once per post)
+    // HAUL_POST_LIKES: Award 5 XP to post author when post hits 2+ likes (once per post)
     const updatedPost = await prisma.uGCPhoto.findUnique({
       where: { id: photoId },
       select: { likesCount: true, userId: true },
     });
 
-    if (updatedPost && updatedPost.likesCount >= 10 && updatedPost.userId) {
+    if (updatedPost && updatedPost.likesCount >= 2 && updatedPost.userId) {
       // Idempotency: only award once per post
       const alreadyAwarded = await prisma.pointsTransaction.findFirst({
         where: {
@@ -180,7 +180,7 @@ export const addReaction = async (req: AuthRequest, res: Response) => {
 
       if (!alreadyAwarded) {
         awardXp(updatedPost.userId, 'HAUL_POST_LIKES', XP_AWARDS.HAUL_POST_LIKES, {
-          description: `Haul post milestone: 10+ likes on post (photoId: ${photoId})`,
+          description: `Haul post milestone: 2+ likes on post (photoId: ${photoId})`,
         }).catch(err => console.error('[HaulPost] HAUL_POST_LIKES XP award failed:', err));
       }
     }
