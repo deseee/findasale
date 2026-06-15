@@ -979,7 +979,6 @@ model Sale {
   @@index([city, status, endDate]) // Sentry P0: geo-filtered feed performance
   @@index([status, startDate]) // Sentry P0: upcoming sales ordering
   @@index([sourceUrl]) // Sentry P0: scraper deduplication queries
-  @@index([status, markdownEnabled]) // Sentry slow query: markdownCron findMany WHERE status=PUBLISHED AND markdownEnabled=true
   @@index([createdAt]) // Sentry NODEJS-2K: adminController sale.count WHERE createdAt >= 7d ago (sparklines + new sales)
   @@index([status, markdownEnabled, startDate]) // Sentry NODEJS-2J: markdownCron findMany WHERE status=PUBLISHED AND markdownEnabled=true AND startDate <= now
   @@index([organizerId, startDate]) // Sentry slow query A: Review JOIN Sale WHERE Sale.organizerId + ORDER BY startDate
