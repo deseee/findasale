@@ -870,3 +870,155 @@ export const exportFacebookXLSX = async (
     res.status(500).json({ message: 'Export failed' });
   }
 };
+
+
+/**
+ * Strip HTML tags from a string
+ */
+function stripHtml(html: string | null | undefined): string {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+}
+
+/**
+ * Map FindA.Sale item condition to Facebook Commerce Manager catalog condition enum
+ * FB accepted values: new, refurbished, used_like_new, used_good, used_fair, used_poor
+ */
+function mapConditionForCommerceManager(condition: string | null | undefined): string {
+  switch (condition) {
+    case 'NEW':
+      return 'new';
+    case 'REFURBISHED':
+      return 'used_like_new';
+    case 'USED':
+      return 'used_good';
+    case 'PARTS_OR_REPAIR':
+      return 'used_fair';
+    default:
+      return 'used';
+  }
+}
+
+/**
+ * Escape a field value for RFC 4180 CSV (quote if contains comma, double-quote, or newline)
+ * Does NOT apply formula-injection prefix — Commerce Manager feed is machine-read, not spreadsheet.
+ */
+function escapeCommerceFeedCSV(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+/**
+ * Public endpoint: Export sale items as a Facebook Commerce Manager CSV data feed
+ * GET /api/sales/:saleId/export/commerce-feed
+ *
+ * No auth required — Facebook's crawler has no session token.
+ * Returns text/csv with one row per item that has at least one photo.
+ * Sold items are included as "out of stock" so FB can de-list them from the catalog.
+ */
+export const exportCommerceManagerFeed = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { saleId } = req.params;
+
+    // Fetch sale and all its items (no auth filter — public crawlable feed)
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: {
+        id: true,
+        items: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            price: true,
+            condition: true,
+            brand: true,
+            photoUrls: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!sale) {
+      res.status(404).json({ message: 'Sale not found' });
+      return;
+    }
+
+    // Only include items that have at least one photo (image_link is required by FB)
+    const feedItems = (sale.items ?? []).filter(
+      (item) => item.photoUrls && item.photoUrls.length > 0
+    );
+
+    // CSV headers — official FB Commerce Manager catalog column names
+    const headers = [
+      'id',
+      'title',
+      'description',
+      'availability',
+      'condition',
+      'price',
+      'link',
+      'image_link',
+      'additional_image_link',
+      'brand',
+    ];
+
+    const rows: string[] = [headers.join(',')];
+
+    for (const item of feedItems) {
+      const availability = item.status === 'SOLD' ? 'out of stock' : 'in stock';
+      const condition = mapConditionForCommerceManager(item.condition);
+      const price = item.price != null ? `${Number(item.price).toFixed(2)} USD` : '0.00 USD';
+      const link = `https://finda.sale/sales/${saleId}/items/${item.id}`;
+
+      // photoUrls[0] is image_link; remaining (up to 19 more) are additional_image_link
+      const [primaryPhoto, ...extraPhotos] = item.photoUrls;
+      const additionalPhotos = extraPhotos.slice(0, 19).join('|');
+
+      const brand = item.brand && item.brand.trim() ? item.brand.trim() : 'N/A';
+
+      const title = escapeCommerceFeedCSV(stripHtml(item.title));
+      const description = escapeCommerceFeedCSV(
+        truncate(stripHtml(item.description), 9999)
+      );
+
+      const row = [
+        escapeCommerceFeedCSV(item.id),
+        title,
+        description,
+        escapeCommerceFeedCSV(availability),
+        escapeCommerceFeedCSV(condition),
+        escapeCommerceFeedCSV(price),
+        escapeCommerceFeedCSV(link),
+        escapeCommerceFeedCSV(primaryPhoto),
+        escapeCommerceFeedCSV(additionalPhotos),
+        escapeCommerceFeedCSV(brand),
+      ].join(',');
+
+      rows.push(row);
+    }
+
+    const csvContent = rows.join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="commerce-feed-${saleId}.csv"`
+    );
+    // Allow FB's crawler to cache for up to 1 hour
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+
+    res.status(200).send(csvContent);
+  } catch (error) {
+    console.error('exportCommerceManagerFeed error:', error);
+    res.status(500).json({ message: 'Feed generation failed' });
+  }
+};
