@@ -86,7 +86,13 @@ export async function resyncShippingDriftSweep(opts?: {
     where: {
       ebayListingId: { not: null },
       status: 'AVAILABLE',
-      OR: [{ ebayRateVersion: null }, { ebayRateVersion: { not: version } }],
+      // Never auto-price weightless items (can't compute a real rate) or convert
+      // local-pickup-only listings onto a shipping policy — leave those to the organizer.
+      packageWeightOz: { gt: 0 },
+      AND: [
+        { OR: [{ ebayRateVersion: null }, { ebayRateVersion: { not: version } }] },
+        { OR: [{ ebayShippingOverride: null }, { ebayShippingOverride: { not: 'LOCAL_PICKUP_ONLY' } }] },
+      ],
     },
     take: limit,
     orderBy: [{ ebayShippingRatedAt: { sort: 'asc', nulls: 'first' } }],
