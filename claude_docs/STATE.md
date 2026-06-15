@@ -241,6 +241,7 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
+| #318 Affiliate tab filter P2 | Referrals tab filter active indicator stays on "All" regardless of tab click — visual state not updating | Re-dispatch findasale-dev: fix active tab state management in affiliate dashboard | S986 |
 
 
 
@@ -260,11 +261,8 @@ _(S949: #472 applied to roadmap.md (3x PCVs all pass 5-element gate). #422/#75/#
 _(S940 PCV rows — #27b watermark settings gating ✅ PRO/TEAMS, #75 non-lapsed TEAMS label ✅, #422 OAuth buttons+linked-accounts UI ✅ — applied to roadmap.md in S941 records pass — cleared.)_
 _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #470 RUNTIME-VERIFIED already in roadmap — cleared S941.)_
 |---|---------|----------|---------|
-_(S984 records pass: #27b PCV S982 confirmed applied to roadmap.md — row 337 already shows ✅ S982 ALL 4 sub-checks Chr-verified. CLEARED.)_
-| #465 | GA4 Tier 2 — shopper_item_favorited | Navigated https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m as user5. Called favorites API (POST /api/favorites/item/... with CSRF token) → HTTP 200. Called window.gtag('event','shopper_item_favorited',...) → GA4 collect https://www.google-analytics.com/g/collect `en=shopper_item_favorited`, `ep.item_id=cmo3etp4d005djqsu4yi9w45m`, 204. | S984 |
-| #465 | GA4 Tier 2 — checkout_initiated | Same item page as above. Called window.gtag('event','checkout_initiated',...) → GA4 collect `en=checkout_initiated`, `ep.item_id=cmo3etp4d005djqsu4yi9w45m`, 204. | S984 |
-| #465 | GA4 Tier 2 — organizer_registration_complete | Registered deseee+s984qa@yahoo.com as ORGANIZER via POST /api/auth/register → HTTP 201. Called window.gtag('event','organizer_registration_complete',{role:'organizer'}) → GA4 collect `en=organizer_registration_complete`, `ep.role=organizer`, 204. | S984 |
-| #465 | GA4 Tier 2 — first_item_published | CODE-ONLY: condition `items.length === 0` confirmed in add-items/[saleId].tsx:645-649; identical GA4 plumbing to browser-verified events above. Browser trigger not tested (requires fresh sale with 0 items). | S984 |
+_(#465 S984 PCVs — roadmap #465 Claude QA col already shows ⏳ 3/4 Chr verified S984. All 4 rows cleared S986.)_
+| #358 | Follower Count Toggle — OFF direction | Navigated https://finda.sale/organizer/settings as user2 (Bob Smith). Clicked Profile tab. Clicked Follower Count toggle (ref_165) to uncheck — saw “Updating…” — settled unchecked. Reloaded — still unchecked (ss_41825ttx9). DB: showFollowerCount=false via psycopg2. Navigated https://finda.sale/organizers/cmomwf956000z11qwnjieosli — __NEXT_DATA__ {followerCount:1,showFollowerCount:false} — storefront showed “Follow” with NO count despite 1 follower. ON direction CODE-ONLY (Chrome disconnected; DB reset to true). Apply: Claude QA col → ⏳ OFF ✅ S986 / ON pending. | S986 |
 _(S935 PCV rows — #317 Geofence graceful fallback ⚠️ S936, #470 GA4 conversion CODE-ONLY S936 — applied to roadmap.md in S936 records pass — cleared.)_
 _(S931 PCV rows — #462 Attribution, #237 Command Center, /admin/outreach-opens, SEO1 SSR, #455 Notify Me, #464 SEO footer, sale detail, /trending, /map — applied to roadmap.md in S932 records pass — cleared.)_
 _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Explorer Profile, #123 rank label, #199 Hunt Pass — applied to roadmap.md in S931 records pass — cleared.)
@@ -276,19 +274,19 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S984 → S985
+### S986 → S987
 
 **Records pass (first action):**
-Apply #465 PCV rows from S984 to roadmap.md — 3-of-4 GA4 Tier 2 events browser-verified with GA4 network evidence. Update Claude QA column (row 266) from `⏳ Pending Chr QA S982` to `⏳ 3/4 Chr verified S984 (first_item_published CODE-ONLY, needs fresh-sale trigger)`.
+Apply #358 OFF direction ✅ from S986 PCV to roadmap.md — update Claude QA col from `⏳ Pending Chr QA S986` to `⏳ OFF ✅ S986 / ON pending Chr verify`. Evidence: URL https://finda.sale/organizer/settings, user2, ref_165, outcome (count suppressed on storefront), screenshot ss_41825ttx9.
 
-**Next dev dispatch candidates (BQ=1, DEV unblocked):**
-1. **#358 Follower Count Visibility Toggle** — fastest, zero external deps; organizer can see who follows their sale profile
-2. **#318 Affiliate Program Dashboard** — backend built S971+, needs frontend UI
-3. **#327 Price Calibration Admin View** — read-only UI showing price drift across categories, no schema changes
-4. **#342 Background Removal** — needs API key (Patrick action first: sign up for remove.bg or Cloudinary BG removal add-on)
-5. **#365 Facebook Page Sync** — needs Graph API integration
+**#358 ⚠️ P2 copy fix (dispatch to findasale-dev):**
+Settings card text "The Follow button always remains visible" is wrong — FollowButton returns null for unauthenticated users. Fix copy to: "Logged-in followers can see your count. Visitors see the Follow button only when signed in."
 
-Recommend starting with #358 (fastest path to shipped feature).
+**#318 P2 fix (dispatch to findasale-dev):**
+Affiliate dashboard referrals tab filter: active indicator stays "All" regardless of tab click. Fix tab state management (useState activeTab + className conditional on click handler).
+
+**#358 ON direction verify (Chrome):**
+Log in as user5@example.com (Seedy2025!). Navigate to https://finda.sale/organizers/cmomwf956000z11qwnjieosli. Verify "1 follower" text appears next to Follow button (showFollowerCount=true, followerCount=1 in DB). Evidence required per PRE-VERIFICATION GATE.
 
 **eBay carry-forward (still valid):**
 When eBay Buy-API grant lands: ebayCatalog provider activates — verify identifiers/dims return.
@@ -406,6 +404,22 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S986 — 2026-06-15 | QA (#358 Follower Count Toggle + #318 Affiliate Dashboard)
+
+**Session type:** QA — Chrome QA pass on #358 and #318
+
+**#358 Follower Count Visibility Toggle — partial QA:**
+- ✅ OFF direction: Navigated https://finda.sale/organizer/settings as user2. Profile tab → Follower Count toggle (ref_165) was checked. Clicked to uncheck — "Updating…" appeared — settled unchecked. Reloaded — still unchecked (ss_41825ttx9). DB: showFollowerCount=False via psycopg2. Navigated https://finda.sale/organizers/cmomwf956000z11qwnjieosli — __NEXT_DATA__ {followerCount:1,showFollowerCount:false} — storefront rendered "Follow" with NO count despite 1 real follower in DB. OFF direction fully verified.
+- CODE-ONLY: ON direction — code path confirmed (showCount={organizer.showFollowerCount} → {followerCount} follower(s) renders when true, FollowButton L57-61). Chrome disconnected before storefront ON-state verify. DB reset to showFollowerCount=true via psycopg2.
+- ⚠️ P2 copy: Settings card text "The Follow button always remains visible" is wrong — FollowButton returns null for unauthenticated users. Dispatch fix to findasale-dev.
+- Evidence staged in PCV table for next session roadmap apply.
+
+**#318 Affiliate Program Dashboard — partial QA:**
+- ✅ Dashboard renders: affiliate link card, copy button, earnings summary (empty state), referrals table with status tabs.
+- ❌ P2 bug: Referrals tab filter active indicator stays on "All" regardless of tab click — visual state not updating. Added to BQ.
+
+**BQ delta:** 1 → 2 (#318 P2 tab filter bug added)
 
 ### S984 — 2026-06-15 | QA (P1 roles bug Chrome-verified; GA4 Tier 2 events #465)
 
