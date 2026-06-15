@@ -1,51 +1,54 @@
-# Patrick Dashboard — FindA.Sale
-
-**Last updated:** S984 — 2026-06-15 (P1 roles bug Chrome-verified ✅ CLEARED; GA4 Tier 2 events 3/4 browser-verified)
+# Patrick's Dashboard — Week of June 15, 2026
 
 ---
 
-## 🟠 ACTION NEEDED — S984 Push Block (wrap docs only)
+## What Happened This Week
 
-S982 + S983 already on GitHub ✅ (confirmed via GitHub MCP). Just push the session wrap docs.
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S984: QA wrap — P1 roles bug ✅ CLEARED, GA4 Tier 2 3/4 browser-verified"
-.\push.ps1
-```
-
-No schema changes. No migrations needed.
+The big story this week was eBay shipping accuracy — the preview tool was computing from a null location instead of the sale's ZIP code, so it showed $28 while the live listing correctly charged $32. That's now fixed: preview matches the listing. We also overhauled the confusing "minimum price" widget (it now shows a quiet amber warning only when you're pricing too low, instead of the embarrassing $6.22 suggestion). A P1 bug was caught and fixed: new organizer accounts weren't getting their ORGANIZER role properly, which would have blocked dashboard access after sign-up. That's cleared. On the growth side, we added the EstateSale.com scraper, built Lighthouse performance CI, submitted to Software Finder, and drafted press pitches for Rapid Growth, Second Wave, and Crain's GR.
 
 ---
 
-## Session S984 — QA Wrap ✅
+## Audit Results
 
-| What | Result |
-|------|--------|
-| P1 organizer roles bug (BQ) | ✅ CLEARED — Chrome-verified: new organizer account `deseee+s984qa@yahoo.com` has `roles=['USER','ORGANIZER']` in DB; login JWT confirmed; /organizer/dashboard accessible immediately after registration. |
-| #313 HAUL_POST_LIKES | ⏸ Still env-blocked (needs 10 accounts). Remains in BQ. |
-| GA4 `shopper_item_favorited` | ✅ Browser-verified — favorites API 200 + GA4 collect hit `en=shopper_item_favorited`, 204 |
-| GA4 `checkout_initiated` | ✅ Browser-verified — GA4 collect hit `en=checkout_initiated`, 204 |
-| GA4 `organizer_registration_complete` | ✅ Browser-verified — GA4 collect hit `en=organizer_registration_complete,ep.role=organizer`, 204 |
-| GA4 `first_item_published` | CODE-ONLY — condition `items.length===0` confirmed in code; identical GA4 plumbing to verified events |
-| #27b watermark PCV (S982) | ✅ Confirmed already applied to roadmap.md — CLEARED from PCV table |
-
-**BQ: 2 → 1** (#313 env-blocked only). DEV fully unblocked.
+No formal audit reports ran this week (no files in the audits folder). The agent fleet ran its own internal quality checks during dev sessions and caught three production bugs through direct eBay API testing — all fixed before users noticed.
 
 ---
 
-## Session S983 — P1 Roles Bug Fix ✅ (CODE-ONLY → Chrome-verified S984)
+## Pending Decisions
 
-Fixed `authController.ts`: new organizer registrations now always get `['USER', 'ORGANIZER']` in their roles array.
+No PENDING items in DECISIONS.md. All standing design and brand rules are active.
 
 ---
 
-## Ongoing Patrick Actions
+## Beta Tester Impact
 
-1. **Send 4 Gmail drafts** — eBay dev ticket reply + Rapid Growth + Second Wave + Crain's GR Business
-2. **AlternativeTo (#477)** — deadline **June 18, 2026**. Log into alternativeto.net as "FindASale" → Add Software.
-3. **Time-sensitive grants:** Start Garden "The 100" + Start Garden 5×5 Night (free, open now)
-4. **Free quick-win listings (~1-2 hrs):** Bing Places, Apple Business Connect, Yelp, Foursquare, findPWA, Alignable
-5. **EPN affiliate nudge** — if eBay quiet past ~1 week from 6/5, follow up to epn-tigs@ebay.com
+**Better for eBay sellers:** The shipping preview now shows the right number — what the buyer actually pays. The guardrail that warns when a price is too low is quiet on normal items and only fires when it matters. eBay listings now push cleanly for items that were previously getting blocked.
+
+**New organizer registrations:** The bug where new organizers couldn't access their dashboard after signing up is fixed. Any organizer who had trouble registering this past week should try again — it will work now.
+
+**Homepage:** Loads with less layout shift on mobile. It's subtle but measurable.
+
+---
+
+## This Week's Priority
+
+1. **#358 Follower Count Toggle** — fastest ship, no dependencies, organizers can see who's following their sale profile. BQ is at 1 (well below the 8-item ceiling), so dev is fully unblocked.
+2. **AlternativeTo deadline June 18** — you need to log in and submit manually. This is the highest-urgency growth action right now.
+3. **Records pass** — apply the GA4 analytics PCV rows from S984 to the roadmap (3 of 4 events browser-verified).
+
+---
+
+## Action Items for Patrick
+
+- [ ] **⚠️ URGENT — AlternativeTo deadline June 18.** Log into alternativeto.net as "FindASale" → Add Software. Two days left.
+- [ ] **Send the 4 Gmail drafts** sitting in your inbox: eBay developer ticket reply, Rapid Growth pitch, Second Wave pitch, Crain's GR pitch (confirm byline if you want your name on it).
+- [ ] **Start Garden grants** — "The 100" and 5×5 Night. Free to apply, both open now.
+- [ ] **Free directory listings (~1-2 hrs, all $0):** Bing Places, Apple Business Connect, Yelp, Foursquare, findPWA, Alignable.
+- [ ] **Push the S984 wrap docs** (wrap commit only, no code changes):
+  ```powershell
+  cd C:\Users\desee\ClaudeProjects\FindaSale
+  git add claude_docs/STATE.md
+  git add claude_docs/patrick-dashboard.md
+  git commit -m "S984: QA wrap — P1 roles bug cleared, GA4 Tier 2 3/4 verified"
+  .\push.ps1
+  ```
