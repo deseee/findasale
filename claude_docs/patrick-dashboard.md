@@ -1,443 +1,57 @@
 # Patrick Dashboard — FindA.Sale
 
-**Last updated:** S981 — 2026-06-14 (Records pass + BQ burn-down: NODEJS-10 partial indexes + AI package-weight wiring — both CODE-ONLY pending push + migrate deploy)
+**Last updated:** S982 — 2026-06-15 (BQ burn-down: NODEJS-10 + AI weight cleared; #27b watermark sub-checks all ✅; GA4 Tier 2 events shipped)
 
 ---
 
-## 🟠 ACTION NEEDED — S981 Push Block (2 migrations)
+## ✅ NO PUSH BLOCK NEEDED FROM PATRICK FOR BQ ITEMS
+
+S981 push + migrations are already live (Patrick confirmed at S982 start). S982 code changes are being pushed in the block below.
+
+---
+
+## 🟠 ACTION NEEDED — S982 Push Block
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260614000000_fix_sale_slow_query_nodejs10/migration.sql
-git add packages/database/prisma/migrations/20260614100000_add_item_ai_package_estimate_columns/migration.sql
-git add packages/backend/src/controllers/batchAnalyzeController.ts
-git add packages/backend/src/services/processRapidDraft.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add claude_docs/strategy/roadmap.md
+git add packages/frontend/pages/register.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add "packages/frontend/pages/items/[id].tsx"
+git add packages/backend/src/services/ebayPackageEstimateService.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/feature-notes/adr-ai-package-weight-wiring.md
-git commit -m "S981: NODEJS-10 slow query fix + AI package-weight wiring + records pass"
+git commit -m "S982: GA4 Tier 2 events + stale comment fix + BQ wrap"
 .\push.ps1
 ```
 
-**Then run migrations (Railway):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:tEYYjdiay8x8q8N7A6LojJtG04R7sDBN@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+No schema changes. No migrations needed.
 
 ---
 
-## Session S981 — BQ Burn-Down: NODEJS-10 + AI Package-Weight ✅ (CODE-ONLY)
+## Session S982 — BQ Burn-Down + GA4 Tier 2 ✅
 
 | What | Result |
 |------|--------|
-| Records pass (SEO3 + #547 PCV rows) | ✅ SEO3 stale/already applied; 547-GR/SHIP/ZIP/SWEEP → roadmap.md #547 Claude QA col → ✅ S979/S980. PCV table cleared. |
-| NODEJS-10 slow query fix (BQ P1) | ✅ CODE-ONLY — 2 partial indexes via migration 20260614000000_fix_sale_slow_query_nodejs10. Root cause: saleAutoCloseCron heap-scanned 14k PUBLISHED rows (3342ms); sourceName COUNT had no index (49ms). Partial indexes bring it to <50ms (239x faster). TS: 0 errors. Needs push + migrate deploy + verify Sentry NODEJS-10 resolves. |
-| Architect ADR: AI package-weight wiring | ✅ DONE — adr-ai-package-weight-wiring.md. Decision: 3 nullable Item cols (aiPackageWeightOz/aiPackageDimsJson/aiPackageConfidence). Write side: batchAnalyzeController + processRapidDraft persist AI estimates. Read side: ebayController passes to estimatePackageProfile step-4. |
-| Dev: AI package-weight implementation | ✅ CODE-ONLY — schema.prisma + migration 20260614100000_add_item_ai_package_estimate_columns + batchAnalyzeController + processRapidDraft + ebayController. Cables/misc items will stop falling to the 24oz SEED fallback once deployed. TS: 0 errors. |
+| FINDASALE-NODEJS-10 (BQ P1) | ✅ CLEARED — migration `20260614000000_fix_sale_slow_query_nodejs10` confirmed applied 2026-06-15 03:58 UTC. No June 15 Sentry events. Issue marked resolved in Sentry. |
+| eBay AI package-weight wiring (BQ) | ✅ CLEARED CODE-ONLY — confirmed via API: ebayController correctly maps aiPackageWeightOz → aiEstimatedWeightOz when calling estimatePackageProfile (L5445-5447). Stale "this path is presently inert" comment fixed. 0/129 items currently have AI weight data — activates on new uploads/re-analyses. |
+| #313 HAUL_POST_LIKES | ⏸ Still env-blocked (needs 10 accounts liking same post). Remains in BQ. |
+| #27b watermark — PDF + iCal sub-checks | ✅ All 4 verified: iCal non-TEAMS has watermark ✅; iCal TEAMS (toggle on) no watermark ✅; PDF non-TEAMS has "Find more sales at FindA.Sale" ✅; PDF TEAMS (toggle on) no watermark ✅. Staged in PCV for roadmap update next session. |
+| GA4 Tier 2 events (#465) | ✅ CODE-ONLY — 4 events added: `organizer_registration_complete` (register.tsx), `first_item_published` (add-items/[saleId].tsx), `shopper_item_favorited` (items/[id].tsx), `checkout_initiated` (items/[id].tsx). `sale_created` was already present. TS: 0 errors. Needs Chrome QA to confirm events fire. |
 
-**Next session:** After push + migrate deploy + Railway deploys → Sentry check for NODEJS-10 + Chrome QA a cable item to confirm AI weights flow through.
-
----
-
-## Session S980 — eBay Shipping Accuracy Overhaul ✅
-
-| What | Result |
-|------|--------|
-| Preview showed wrong $28 vs live $32 | ✅ Root cause: preview had no origin ZIP (lat/lng null) → wrong zone. Now uses sale ZIP → **$32, matches the listing**. The listing was right all along. |
-| Preview ≠ listing | ✅ One shared resolver — preview now shows the real policy a listing uses |
-| "Weigh it later → policy follows" | ✅ Edit-save + re-push re-pin the live eBay offer when weight/dims change |
-| Carrier rates drift | ✅ Daily 4AM bulk sweep re-pins drifted listings (≥$0.50/5%), budget-aware |
-| Package estimator gave junk (figurine=4oz coin, cable=36oz camera) | ✅ Fixed: keyword beats broad category; figurine→18oz, cable→5oz (added a 'cable' profile) |
-| The 3 weightless items | ✅ Handled live: Celestion→pickup (oversized), Porcelain→18oz **now ships $12.49**, Casio→5oz **now ships $6.99** |
-| Real sweep run | ✅ **9 live listings re-pinned**; eBay API confirms each policy moved. Steve Yzerman was mis-tiered 8oz $6.99 → now 12oz $7.75 |
-
-**Still open (logged):** AI weight estimation isn't wired to the estimator (cloudAIService output never reaches it) — items with no keyword/category profile fall back to a generic 24oz. Architect ADR queued.
+**BQ: 3 → 1** (#313 only)
 
 ---
 
-## Session S979 (Part 2) — eBay Shipping Preview Accuracy ✅
+## Session S981 — NODEJS-10 + AI Package-Weight ✅ (DONE — already deployed)
 
-**What you flagged:** the preview didn't say what the buyer is charged for shipping, never mentioned your $32 flat policy, and made label cost = shipping.
-
-| Change | Result |
-|--------|--------|
-| Preview now reads your shipping mode (flat vs calculated) | ✅ |
-| Flat-rate items show the named policy as the buyer charge | ✅ "Buyer pays $28.00 · Flat rate · FindA.Sale Flat $28.00" |
-| Label cost separated from the buyer charge | ✅ no longer identical by accident |
-| Net corrected | ✅ $148.31 (was understated $145.59) |
-| Latent crash in flat-rate provisioner | ✅ fixed |
-| Backend + frontend TS | ✅ 0 errors |
-| Live-verified (Artifact MI, green build) | ✅ |
-
-**Heads-up:** preview shows $28 (today's recomputed rate); your live listing is still on the older $32 policy. Hit **Re-push to eBay** to sync. Not a bug.
+Both migrations applied. Sentry NODEJS-10 resolved. ✅
 
 ---
 
-## Session S979 Summary — DEV + QA Complete ✅
-
-**Type:** DEV (guardrail rebuild) + live Chrome QA
-
-**What you flagged:** The "Min. list price to hit a net margin" widget didn't say what it was for, and suggested an absurd $6.22 on a real item — "we look like idiots."
-
-| Change | Result |
-|--------|--------|
-| Removed the always-on "Min. list price" suggester | ✅ No more $6.22 nonsense on real items |
-| Added silent low-price guardrail | ✅ Warns ONLY when entered price is below the fee-safe floor (15% margin); silent on normal items |
-| One-tap "Use $X" applies the floor | ✅ Verified — applies floor, warning self-clears |
-| Negative dollars render as -$X.XX (was "$-0.87") | ✅ Fixes guardrail text + "Your estimated net" box |
-| Frontend TS | ✅ 0 errors |
-| Live Chrome QA as Artifact MI | ✅ $175 → no warning; $3 → guardrail fires (net -$0.87, floor $4.89); Use $4.89 → net $0.74, warning clears |
-
-**Status:** Shipped, deployed GREEN, live-verified ✅. (Push #1 went red on a trailing-NUL-byte file corruption — diagnosed via Vercel build log, stripped + re-pushed green.) Roadmap Chrome ✅ applied next session per the cross-session QA rule. **No action needed.**
-
----
-
-## Session S978 Summary — DEV Complete ✅
-
-**Type:** DEV — P2 bug fix (Suggest price safety guard) + UX copy clarification (ShippingNetPreview)
-
-| Change | Result |
-|--------|--------|
-| Suggest price — currentPrice to AI | ✅ AI now sees the organizer's $175 price; will explain large deviations in reasoning |
-| Suggest price — safety gate (<50% of current) | ✅ If AI suggests below half the current price, shows warning with Yes/Keep buttons instead of auto-applying |
-| ShippingNetPreview — section header | ✅ "Min. list price to hit a net margin" (was "Suggest price for a target margin") |
-| ShippingNetPreview — FVF context | ✅ Added paragraph explaining eBay charges FVF on both item price AND shipping |
-| ShippingNetPreview — result label | ✅ "List item at $X — nets Y% after eBay fees (Z est.)" (was "List at $X for a Y% net") |
-| ShippingNetPreview — button | ✅ "Calculate" (was "Suggest price") |
-| Backend TS | ✅ 0 errors |
-| Frontend TS | ✅ 0 errors |
-
-**No Patrick actions needed from this session.** (Push block below — 5 code files + 2 wrap docs)
-
-**BQ is 2 items.** Recommend next session: FINDASALE-NODEJS-10 slow query fix (P1) or Chrome QA the P2 safety guard.
-
----
-
-## Session S977 Summary — QA Complete ✅
-
-**Type:** QA — Sentry post-stagger monitoring + eBay pump re-push Chrome verification
-
-| Check | Result |
-|-------|--------|
-| Sentry cron issues (NODEJS-38/-2N/-2Z/-2S/-3D) | ✅ All RESOLVED — stagger working |
-| Sentry NODEJS-33 graceEndAt index | ✅ Fired once pre-fix at 2am today; index active for tomorrow |
-| FINDASALE-NODEJS-10 Sale SELECT slow query | ⚠️ Pre-existing, ongoing since May 6 — added to BQ P1 |
-| eBay pump re-push (artifactmi@gmail.com) | ✅ Published — HTTP 200, toast shown, ebayNeedsReview=False |
-| eBay offer on live eBay | ✅ PUBLISHED, fulfillmentPolicyId=316596123011 "FindA.Sale Flat $32.00" |
-| ShippingNetPreview component | ✅ Renders — ~$20.38 buyer shipping, $145.59 net |
-| Suggest price button | ✅ Fires — ⚠️ P2 bug: returns $6.22 for 30% on a $175 item (calculates from cost basis not list price; "Use this price" would drop price to $6.22 — avoid clicking) |
-
-**No Patrick actions needed from this session.**
-
-**BQ is 3 items — DEV is unblocked.** Recommend next session: fix Suggest price P2 bug OR investigate FINDASALE-NODEJS-10 slow query.
-
----
-
-## Session S975 Summary — eBay Listing Pipeline Overhaul
-
-Started as "don't trust S973" and turned into a full rebuild of the eBay listing path. Everything backend is compile-verified; the Danner pump was the live test item and is now fully correct (Pet Supplies › Pumps Air, $32 flat shipping, no "Vintage" in the title).
-
-| Area | What changed | Status |
-|------|--------------|--------|
-| Shipping | Smart flat-rate engine: cheapest of USPS/UPS/FedEx, priced to your farthest-zone, FVF-grossed-up, bounded reusable buckets. No more $75 mis-tier. | ✅ live ($32 on pump) |
-| packageType | MAILING_BOX rejected for heavy parcels — now stripped on flat-rate. | ✅ live |
-| Category | Domain-aware resolver (stops aquarium pump → Bait Buckets); single canonical eBay L1 list shared by AI + resolver. | ✅ live (pump → Pumps Air) |
-| AI accuracy | Vintage/era only with real evidence; categorize by use not components; never fabricate a UPC. | ✅ live (Vintage dropped) |
-| Enrichment | Free-first provider cascade (barcode→UPC, Open Library, Open Food Facts, eBay-catalog slot, AI estimate; paid Go-UPC wired-off). Comps now match the exact model. | ✅ built (eBay slot waits on your Buy-API grant) |
-| Live edits | Title/desc/condition edits now republish so they reach the live listing. | ✅ fixed |
-| Tooling | On-demand re-analyze endpoint + one-click "accept suggestion" panel. | ✅ built |
-
-**Heads-up:** eBay's Catalog/Buy API is 403 for the app (you applied for access — it lights up automatically when granted). Frontend changes (suggestion panel, category picker prefill) couldn't be compile-checked in this environment — verify in a real build.
-
----
-
-## Session S976 Summary — Sentry CI Health (COMPLETE)
-
-**Type:** BUG/INFRA — Sentry triage, production index migration, cron stampede fix
-**BQ:** 3 (unchanged)
-
-| Issue | Root Cause | Fix | Status |
-|-------|-----------|-----|--------|
-| SyntaxError crash (NODEJS-D) | Release 9873b2f9 (Brand/MPN/UPC edit-item) crashed Railway at 16:00 UTC | Already auto-resolved — prod is on 11cfb344 | ✅ No action needed |
-| tierGraceCron 1233ms (NODEJS-33) | schema.prisma declared `@@index([graceEndAt, graceTierBefore])` but NO migration ever created it — index never existed in production | New migration `20260614000000_add_grace_period_index` + `prisma migrate deploy` | ✅ Index live in Railway |
-| 6 slow queries 1081–2487ms (NODEJS-10/-38/-2N/-2Z/-2S/-3D) | 9 cron jobs all firing simultaneously at 2:00am UTC — connection/lock contention under concurrent load | Staggered 7 jobs across 2:00–2:35am in 5-min increments | ✅ Deployed — verify after 2026-06-14 02:35 UTC |
-| Full table COUNT (NODEJS-1N) | `SELECT COUNT(*) FROM Organizer WHERE 1=1` — no filter, no index can help | No fix needed — P3 background stat | ✅ P3/accepted |
-
-**What Patrick did:** Pushed 8 files + ran `prisma migrate deploy` against Railway. All done.
-
-**Next:** Check Sentry after tonight's 2am run (2026-06-14 02:35 UTC) to confirm slow queries are cleared.
-
----
-
-## Session S975 Summary — "Don't trust S973" Verification (Opus)
-
-Patrick flagged the autonomous "Begin 973" Sonnet run (logged S973+S974) as not-to-be-trusted. Opus verified everything directly against the live eBay account and the Railway DB.
-
-| What was claimed | What's actually true (tool-verified) |
-|------------------|--------------------------------------|
-| "Policies weren't synced after reconnect" | FALSE. Live eBay API returned all 23 policies; every weight-tier ID + the calc default are present & valid. Synced fine. |
-| "Tier-ID source unknown — routing may be broken" | FALSE. Patrick configured the tiers himself on 2026-04-15. Routing is sound. |
-| Why the connection broke at all | Sonnet added an invalid `sell.logistics` OAuth scope → broke the connection → advised the disconnect/reconnect. That self-inflicted churn caused all the confusion. |
-| Production state | HEALTHY. Backend OK, scopes clean, no junk policies created. Nothing needs reverting. |
-
-**Bottom line:** No real bug. The shipped code (brand/mpn fix, ShippingNetPreview, FVF flat-rate service you asked for) is fine to keep. Docs corrected so the next session doesn't chase the phantom.
-
-**S975 follow-on — pump bug fixed + smart engine built:**
-- Found WHY the pump still blocked: the FVF policy used an invalid eBay shipping code (`USPSGroundAdvantage`) — proven via a live eBay 400. Fixed → `ShippingMethodStandard`. (You already pushed this.)
-- Then built the smart engine you described: cheapest of USPS/UPS/FedEx by weight+dims, priced to your farthest-CONUS coverage zone, FVF gross-up, rounded into a bounded reusable bucket set (no policy sprawl), never falls back to eBay calculated. Pump now prices ~$32 flat instead of $75. Backend compiles clean (verified with a real compiler).
-- Heads-up: the UPS/FedEx rate numbers are estimates — swap in your Pirate Ship UPS/FedEx rates when handy (a monthly task now reminds you when tables go stale). The dev subagent truncated two files mid-write and falsely reported success; I caught it, rebuilt them by hand, and re-verified. Engine + docs are in the push block below.
-
----
-
-## Session S974 Summary — eBay FVF Flat-Rate Shipping Fix
-
-**Type:** BUG/DEV — root cause confirmed, 3 files shipped (commit 11cfb344), Railway deploying
-**BQ:** 3 (+1: FVF flat-rate Chrome verify + tier-ID investigation needed)
-
-| Item | Status | Details |
-|------|--------|---------|
-| AP-40 $75 root cause | ✅ CONFIRMED | FLAT_TIERS gap — USPS caps at 111oz, 11lb AP-40 fell into FedEx $75 catch-all tier |
-| FVF flat-rate service | 🔧 SHIPPED CODE-ONLY | New ebayFlatRatePolicyService.ts creates "FindA.Sale Flat $X.XX" policies on eBay per item |
-| Gap-overshoot guard fix | 🔧 SHIPPED CODE-ONLY | Gap now tries FVF flat-rate first instead of blocking. AP-40 → ~$23.59 |
-| Butter Knife re-push | ⏳ NEEDS CHROME VERIFY | Expected: $6.65 (exact FLAT_TIERS tier match) |
-| AP-40 re-push | ⏳ NEEDS CHROME VERIFY | Expected: ~$23.59 (new "FindA.Sale Flat $23.59" policy created on eBay) |
-| Tier-ID source | ⚠️ UNKNOWN | How did 23 tier policy IDs get into FindA.Sale DB? "Sync from eBay" only saves ONE default. Opus must investigate. |
-
-**What you need to do:**
-1. Wait for Railway to finish deploying commit 11cfb344 (~2-3 min)
-2. "Remove from eBay" on Butter Knife (137412262678) and AP-40 (137411858004)
-3. "Re-push to eBay" on both — verify prices
-
----
-
-## 🟠 ACTION NEEDED — Push Block (S973 — 4 files)
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/pages/organizer/edit-item/[id].tsx
-git add packages/backend/src/services/ebayCalculatedPolicyService.ts
-git commit -m "fix: eBay calculated-shipping bugs (err:216314, brand/mpn GET, ShippingNetPreview wiring)
-
-err:216314: strip packageType from inventory payload when routing CALCULATED
-(LSAS computed-rate engine rejects MAILING_BOX; weight+dims alone are sufficient).
-
-Brand/mpn/upc: add fields to getItemById select — were saved correctly but
-stripped from GET response, so edit-item form showed empty on load.
-
-ShippingNetPreview: import + wire component to edit-item page (built S971 but
-never added to the page). Suggest Price button now live in shipping section.
-
-ebayCalculatedPolicyService: USPSGroundAdvantage → USPSParcel+USPSPriority
-(UNKNOWN_SHIPPING_SERVICE_CODE fix for new calculated-policy provisioning)."
-.\push.ps1
-```
-
----
-
-## Session S971 Summary — eBay Push Fixed + Calculated-Shipping/Net-Engine Build (migration applied ✅)
-
-**Type:** DEV — eBay listing-push debugging + a big shipping/pricing build
-**BQ:** 1 → 2
-
-| Item | Status | Details |
-|------|--------|---------|
-| eBay push fixes | ✅ SHIPPED + ✅ UI VERIFIED | Brand/Model now sent correctly; bad category map disabled; resolver skips "Other/Misc"; $75 overcharge case blocks with clear message. Brand/Model/UPC fields confirmed on edit-item page (S972 Chrome ✅). |
-| 🚢 Calculated shipping + net-proceeds engine | ✅ SHIPPED — partially browser-verified | Shipping-mode toggle confirmed on settings page (S972 Chrome ✅). ShippingNetPreview + Danner pump re-push still need your real eBay account. |
-| The Danner pump | ↩️ Reset & ready | Reset so it can be cleanly re-pushed through the new shipping path. |
-| Database migration | ✅ DONE | Applied + verified on Railway 2026-06-13. |
-
----
-
-## ✅ DONE — eBay Shipping Migration Applied to Railway (S971, 2026-06-13)
-
-Tables, columns, and backfill all verified on Railway. Nothing more needed here.
-
----
-
-## Session S970 Summary — S969 Records Pass + #219 Chrome Re-Verify (COMPLETE)
-
-**Type:** QA / RECORDS — records pass + Chrome verification
-**BQ:** 0 (unchanged)
-
-| Item | Status | Details |
-|------|--------|---------|
-| S969 PCVs → roadmap | ✅ APPLIED | #164 Tiers, #27b watermark toggle, #317 geofence QR all marked verified on the roadmap with their evidence. The old "to-verify" notes are cleared. |
-| Achievements XP (#219) | ✅ VERIFIED LIVE | The fix from last session is confirmed working. Your Achievements page and dashboard now show the **same** XP number — "2,065 / 5,000 XP to Sage" in both places (was showing two different numbers before). Checked live as a shopper account; dark mode clean. |
-| Blocked Queue | ✅ CLEAN (0) | Cleared the 3 already-resolved leftover rows. Nothing blocking. DEV is fully open for new work. |
-| Housekeeping | ✅ DONE | Trimmed STATE.md (427 → 282 lines), moved older session entries to the archive file. |
-| Code verification (7 items) | ✅ DONE | Re-checked 7 gamification XP rewards against the live code. 5 are correct as-is. 1 was just a wrong note in our docs (trail completion — fixed the note). |
-| 🐛 #313 XP-farm bug | ✅ FOUND + FIXED | A real bug: once a "haul" photo post got 10 likes, the author was getting +5 XP on **every** additional like instead of just once — an XP-farming loophole. Fixed so it pays out once per post. (Final browser test needs 10 accounts, so it's queued.) |
-
----
-
-## Session S969 Summary — S968 Post-Deploy Smoke + Pending-QA Burn-Down (COMPLETE)
-
-**Type:** QA — Chrome MCP verification (run by main session)
-**BQ:** 0 (unchanged)
-
-| Item | Status | Details |
-|------|--------|---------|
-| S968 homepage smoke | ✅ PASS | CLS fix is LIVE and correct — the promo banners now sit below the map (no shift). Both code-split banners load, Featured Sales + filter pills render. The only console error anywhere was a wallet browser-extension conflict, not our code. |
-| S968 app-wide pages | ✅ CLEAN | Organizer dashboard / settings / add-items / POS and the public sale-detail page all render cleanly after the app-wide code-split change — no broken overlays. |
-| #164 Tiers infrastructure | ✅ VERIFIED | Loyalty-tier API returns correctly; the "Bronze Organizer" badge shows the right progress ("1/4 sales until next tier"). Minor data-hygiene note logged (no user impact). |
-| #27b Watermark (TEAMS) | ✅ VERIFIED | The "Remove FindA.Sale watermark" toggle is present + enabled for your TEAMS account. PDF-footer and calendar-text sub-checks still need a non-TEAMS account to compare. |
-| #317 Geofence QR scan | ✅ VERIFIED | Scanning from far away is correctly blocked (403 "must be at the sale location"); at-location and no-location scans pass. 100-meter rule working live. |
-| ✅ Achievements XP (#219) | FIXED — verify after deploy | **Found in walkthrough AND fixed same session.** The Achievements page and your dashboard were showing the same XP progress two different ways — Achievements counted progress *within* your current rank (865/3,800), the dashboard counted *total* toward the next rank (2,060/5,000). Both technically correct, but confusing side-by-side. Fixed so Achievements now matches the dashboard exactly. Needs a quick click-check once it deploys. |
-| #40 Market Hubs | ✅ AS-INTENDED | The multi-vendor events page (/organizer/hubs) is a clean "coming in Phase 2" teaser — 4 market types, value props, a disabled Create-Event button. Nothing broken; just not built yet. |
-| Full walkthroughs | ✅ CLEAN | Clicked through the organizer product (dashboard, sales, add-items, POS, insights, earnings, holds, reputation, consignors, create-sale) and shopper product (dashboard, sale page, cart, achievements, challenges, wishlist). All render well with real data. One minor label note: "Total Revenue" on Insights vs "Gross Revenue" on Earnings show different numbers (different definitions — not a bug). |
-| user12 account | ℹ️ RESOLVED | The earlier "login failed" was because user12 was removed long ago (you confirmed ~6 seed accounts remain). Not a bug — just outdated QA notes. Using user5/user1 going forward. |
-
----
-
-## Session S968 Summary — Mobile Perf + Lighthouse Audit Infrastructure + CLS Fix (COMPLETE)
-
-**Type:** DEV / PERF — homepage performance, repeatable audit setup, Core Web Vitals fix
-**BQ:** 0 (unchanged)
-
-| Item | Status | Details |
-|------|--------|---------|
-| Mobile homepage perf | ✅ SHIPPED | Code-split 10 overlay/banner components to `next/dynamic` ssr:false (7 app-wide in _app.tsx + 3 on homepage) + lazy-loaded below-fold item images. Trims initial JS / TBT. |
-| Lighthouse CI | ✅ BUILT + RUNNING | New GitHub Action (median-of-3, mobile, 4 key URLs, warn-only). Runs **monthly** (1st) + on-demand. Plus `scripts/psi-audit.mjs` for instant checks (PSI API is 100% free — grab a free key to skip the rate limit). |
-| Homepage CLS | ✅ FIXED + VERIFIED | First attempt regressed (0.204→0.284) and was reverted. Diagnosed the real culprit (promo banners shoving the map down), then moved the banners below the map. CI median CLS now **< 0.1** (warning cleared); sandbox 0.135→0.019. |
-| Vercel Speed Insights | ✅ CONFIRMED LIVE | Real users are healthy: mobile Real Experience Score **91 "Great"**, LCP 1.68s. Already collecting — view in Vercel → Speed Insights. |
-| findPWA listing (#494) | ⛔ THEIR SERVER DOWN | Submission attempted; findPWA's backend returned HTTP 500. NOT submitted — retry when their site recovers. Form data + screenshots are ready. |
-| Appsco.pe (#493) | ⛔ DEAD SITE | Entire site is a broken Heroku app → mark defunct on roadmap. |
-| Monthly perf scheduled task | ✅ CREATED | Cowork task `findasale-monthly-perf-audit` (2nd of month) reviews the audit + field data and reports CWV status. |
-
-## Session S967 Summary — Submission Research + eBay Catch-up + Local Outreach (COMPLETE)
-
-**Type:** RESEARCH / OUTREACH — where-else-to-submit research, eBay email catch-up, West Michigan outreach prep
-**BQ:** 0 (unchanged)
-
-| Item | Status | Details |
-|------|--------|---------|
-| App-submission research | ✅ DONE | Reconciled vs existing pipeline → `APP-SUBMISSION-DIRECTORY-RESEARCH-2026.md`. Part A = already done/queued/rejected; Part B = net-new. |
-| Greenfield growth research | ✅ DONE | `GREENFIELD-GROWTH-AVENUES-2026.md` — app-store paths, vendor programs, AI discovery, PR platforms, MI ecosystem + West-MI deep-dig. |
-| Roadmap rows #489–546 | ✅ ADDED | Tier 1B (local citations + PWA), 1C (greenfield), 1D (West Michigan local). Skip-lists flagged. |
-| AI discovery | ✅ VERIFIED ALREADY SHIPPED | schema.org JSON-LD on 26 page types (Event on sales/[id].tsx), indexNowService.ts, robots.txt allows AI crawlers. Only Wikidata entity left — no dev needed. |
-| eBay Developer ticket #260428-000018 | ✍️ REPLY DRAFTED | Browse API Growth Check was waiting on us; draft links it to the completed EPN questionnaire to stop auto-close. Pending Patrick send. |
-| eBay EPN affiliate #00448478 | ✅ UP TO DATE | We replied 6/5 (fixes live); awaiting eBay. |
-| eBay Marketplace Insights #00447997 | ℹ️ CLOSED BY EBAY | Access requests currently closed — dead end, no action. |
-| West Michigan outreach | ✅ DRAFTED | `marketing/west-michigan-local-outreach-2026-06.md` — Paw Paw Chamber + Local First listing copy + 3 press pitches. 3 Gmail drafts created (Rapid Growth, Second Wave, Crain's/Anna Fifelski). |
-
----
-
-## Session S966 Summary — Directory Listings Sprint (COMPLETE)
-
-**Type:** RESEARCH — external directory listing setup
-**BQ:** 0 (unchanged)
-
-| Item | Status | Details |
-|------|--------|---------|
-| Software Finder (#483) | ✅ SUBMITTED | Full profile built: accurate description, 5 real features, 3 real FAQs. Patrick clicked Submit Profile. |
-| Trustpilot (#485) | ⛔ BLOCKED | Account creation fails with Yahoo + Gmail. Try support@finda.sale or defer. |
-| SourceForge (#482) | ✅ DONE | Completed prior session. |
-
----
-
-## Session S965 Summary — #27c Verified ✅ + GSalr Ruled Out (COMPLETE)
-
-**Type:** DEV — Chrome QA, scraper research
-**BQ:** 0 (unchanged)
-
-| Item | Status | Details |
-|------|--------|---------|
-| #27c eBay CSV Export | ✅ VERIFIED | Chrome QA confirmed: HTTP 200 (no 500). Em dash in sale title passed cleanly. S963 fix confirmed working. ss_3764vxdwk ss_8508ma6s6 ss_0576eihvm |
-| GSalr.com (#381) | ⛔ PROHIBITED | Technically excellent (static HTML, full schema.org data, 51-state coverage) but ToS §2.3+§3.1 ban scraping with $10k/day liquidated damages for competing service use. Roadmap updated. |
-| AuctionTime.com | ⚠️ BLOCKED | Cloudflare challenge on direct fetch. UA rotation may help — not attempted this session. |
-
----
-
-## Session S964 Summary — EstateSale.com Scraper Built (COMPLETE)
-
-**Type:** DEV — new directory scraper, CI fix, session wrap
-**BQ:** 0 (unchanged)
-
-| Item | Status | Details |
-|------|--------|---------|
-| EstateSale.com scraper | ✅ BUILT | Two-phase scraper: 51 state pages → profile visits for phone/email/website. ESTATE_SALE_CO category. Crawl-Delay:10 respected. 500–1,500 featured companies (paid listings = best outreach leads). Quarterly GitHub Actions workflow. TypeScript: 0 errors. |
-| Playwright CI fix | ✅ FIXED | `continue-on-error: true` on fleamarkets.org step — workflow no longer fails when Patrick manually triggers it. |
-| Clark's Flea Market USA | ⛔ SKIPPED | Client-rendered JS app — empty fetch + empty sitemap. No static scraping possible. |
-| sourceRegistry.ts | ✅ UPDATED | Import + EstateSaleCom entry added (enabled, qualityTier: high). Python via bash (Edit tool banned). |
-
----
-
-## Open Patrick Actions
-
-| Action | Priority | Instructions |
-|--------|----------|-------------|
-| **Push S981 + run migrate deploy** | HIGH — do first | See push block above. TWO new migrations must be applied after push. |
-| **Next session: verify NODEJS-10 resolved** | HIGH | After push+deploy, check Sentry — FINDASALE-NODEJS-10 should stop firing after the next 4AM cron run |
-| **Next session: Chrome QA cable item** | MEDIUM | Re-analyze a cable item to confirm AI weight/dims populate + estimatePackageProfile uses them (no 24oz fallback) |
-| AlternativeTo | HIGH — June 18 deadline | Log in as "FindASale" → alternativeto.net → Add Software |
-| Trustpilot (#485) retry | MEDIUM | Try with support@finda.sale |
-| KY/ME workflow triggers | MEDIUM | GitHub Actions → scrape-kentucky-phase2 + scrape-maine-phase2 → Run workflow |
-
----
-
-## Push Block (S964 + S965)
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/services/scraper/sources/estateSaleComScraper.ts
-git add packages/backend/src/services/scraper/sourceRegistry.ts
-git add .github/workflows/scrape-estatesalecom.yml
-git add .github/workflows/test-playwright-harness.yml
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S964/S965: EstateSale.com scraper; playwright CI fix; #27c Chrome-verified; GSalr PROHIBITED"
-.\push.ps1
-```
-
----
-
-## Push Block (S963 — if not yet pushed)
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/services/scraper/sources/sellMyAntiquesScraper.ts
-git commit -m "S963: fix eBay CSV export HTTP 500 (Content-Disposition); update SellMyAntiques status"
-.\push.ps1
-```
-
----
-
-## Session S963 Summary — #27c eBay CSV Fix ✅ + SellMyAntiques Dead + Records Pass (COMPLETE)
-
-**Type:** DEV/RECORDS/WRAP — bug fix, scraper investigation, records pass, session wrap
-**BQ:** 1→0 (#27c FIXED; pending Chrome verify)
-
-| Item | Status | Details |
-|------|--------|---------|
-| #27c eBay CSV Export | ✅ FIXED + VERIFIED | Railway root cause: `ERR_INVALID_CHAR` in Content-Disposition. Fix: `safeTitle` strips special chars. Chrome verified S963: em-dash + ampersand title → CSV downloads with success toast. ss_6584f6gkh ss_1265m9qvy |
-| SellMyAntiques scraper | ⛔ PARKED | Domain is GoDaddy lander as of 2026-06-12 — all paths redirect to /lander. Prior status (2026-06-10): JS-rendered SPA. Domain defunct. Docs updated. |
-| S962 PCVs → roadmap.md | ✅ DONE | Records pass: #127 POS Tiers, #55 Seasonal Challenges, #218 Shopper Trades, #219 Achievements, #81 Empty States → all ✅ S962 in Chrome QA column. |
-| SaaSHub (#480) | ✅ CLAIMED | Patrick logged in + claimed listing. Edit page live at saashub.com/manage/finda-sale/edit. "FindA.Sale was verified." banner confirmed. |
-| KY/ME workflows | ✅ TRIGGERED | Patrick triggered scrape-kentucky-phase2 + scrape-maine-phase2 workflow_dispatch. S959 scraper fixes verified. |
-
----
-
-## Session S962 Summary — QA Pass: #219/#218/#55/#81/#127 ✅ + #27c Bug ❌ (COMPLETE)
-
-**Type:** QA — autonomous roadmap Chrome QA continuation
-**BQ:** 0→1 (#27c eBay CSV Export 500)
-
-| Item | Status | Details |
-|------|--------|---------|
-| Records pass (#74 + #463) | ✅ DONE | Applied S961 PCVs to roadmap.md Claude QA column. Both had full 5-element evidence. |
-| #219 Shopper Achievements | ✅ VERIFIED | /shopper/achievements as Alice — XP breakdown, badges, rank progress. ss_5810hhnqu ss_4488tmnlg |
-| #218 Shopper Trades | ✅ VERIFIED | /shopper/trades as Alice — trades page renders with active listings. ss_9998kdjb8 |
-| #55 Seasonal Challenges | ✅ VERIFIED | /challenges as Alice — challenge list renders. ss_5780an0ik |
-| #81 Empty State Audit | ✅ VERIFIED (spot-check) | Key pages confirmed with empty-state messaging + CTAs. ss_2877anw5k |
-| #127 POS Value Unlock Tiers | ✅ VERIFIED | /organizer/pos with active sale — widget expanded, 3 tiers visible, Tier 1 unlocked. ss_9169k1up3 ss_0868mkvi8 |
-| #27c eBay CSV Export | ❌ BUG | Click "Export to eBay" → modal opens → "Download CSV" → HTTP 500. Added to BQ. |
+## Ongoing Patrick Actions
+
+1. **Send 4 Gmail drafts** — eBay dev ticket reply + Rapid Growth + Second Wave + Crain's GR Business
+2. **AlternativeTo (#477)** — deadline **June 18, 2026**. Log into alternativeto.net as "FindASale" → Add Software.
+3. **Time-sensitive grants:** Start Garden "The 100" + Start Garden 5×5 Night (free, open now)
+4. **Free quick-win listings (~1-2 hrs):** Bing Places, Apple Business Connect, Yelp, Foursquare, findPWA, Alignable
+5. **EPN affiliate nudge** — if eBay quiet past ~1 week from 6/5, follow up to epn-tigs@ebay.com

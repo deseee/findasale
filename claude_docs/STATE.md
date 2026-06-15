@@ -219,6 +219,7 @@ Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
 
 ## Blocked Queue
 
+_S982: NODEJS-10 CLEARED (migration applied 2026-06-15 03:58 UTC; no June 15 Sentry events; resolved in Sentry). eBay AI weight CLEARED CODE-ONLY (ebayController L5445-5447 maps aiPackageWeightOz→aiEstimatedWeightOz). BQ: 3→1._
 _S772 reconciliation: graduated/closed rows removed — reconciled into strategy/roadmap.md. Only genuinely open items remain._
 _⚠️ P0 AGING: #332 at 73+ sessions — mandatory P0 per CLAUDE.md §10a._
 _S919 WRAP: #230 RESOLVED (SmartBuyerWidget rendering confirmed). FB Marketplace RESOLVED (Patrick decision: DEFERRED — Apify path added to roadmap #380). #335 updated: Jane Thrift is fictional. BQ: 7→5._
@@ -238,8 +239,6 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | #313 HAUL_POST_LIKES re-award fix | Idempotency bug FIXED S970 (was XP-farm vector); browser-verify needs 10 accounts liking one haul post — not reproducible in QA env | 10 accounts to like a post past threshold, confirm author XP fires once only | S970 |
-| FINDASALE-NODEJS-10 — Sale SELECT slow query (3342ms, ongoing) | Migration created S981 (20260614000000_fix_sale_slow_query_nodejs10) — 2 partial indexes. Patrick must run migrate deploy after push. Pending Railway deploy + Sentry NODEJS-10 resolution verify. | Patrick: push + migrate deploy; next session: verify Sentry NODEJS-10 is resolved | S977 → S981 updated |
-| eBay AI package-weight estimation not wired | ADR written S981 (adr-ai-package-weight-wiring.md). Dev implemented S981: 3 new Item cols + write side (batchAnalyzeController/processRapidDraft) + read side (ebayController). Push block provided. Pending Railway deploy + verify cables/misc items get correct AI-estimated weights. | Patrick: push + migrate deploy | S980 → S981 updated |
 
 
 
@@ -259,6 +258,7 @@ _(S949: #472 applied to roadmap.md (3x PCVs all pass 5-element gate). #422/#75/#
 _(S940 PCV rows — #27b watermark settings gating ✅ PRO/TEAMS, #75 non-lapsed TEAMS label ✅, #422 OAuth buttons+linked-accounts UI ✅ — applied to roadmap.md in S941 records pass — cleared.)_
 _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #470 RUNTIME-VERIFIED already in roadmap — cleared S941.)_
 |---|---------|----------|---------|
+| #27b | Watermark PDF+iCal all 4 sub-checks | iCal SIMPLE/non-TEAMS ✅ (curl /calendar.ics → DESCRIPTION suffix "Shared via FindA.Sale — finda.sale" present); iCal TEAMS toggle=true ✅ (no suffix); PDF TEAMS toggle=false ✅ ("Find more sales at FindA.Sale" in PDF stream); PDF TEAMS toggle=true ✅ (no watermark). Chrome: navigated https://finda.sale/organizer/print-kit/59c49908... as user1 (Alice, TEAMS). ss_9159a4n2v. | S982 |
 _(S935 PCV rows — #317 Geofence graceful fallback ⚠️ S936, #470 GA4 conversion CODE-ONLY S936 — applied to roadmap.md in S936 records pass — cleared.)_
 _(S931 PCV rows — #462 Attribution, #237 Command Center, /admin/outreach-opens, SEO1 SSR, #455 Notify Me, #464 SEO footer, sale detail, /trending, /map — applied to roadmap.md in S932 records pass — cleared.)_
 _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Explorer Profile, #123 rank label, #199 Hunt Pass — applied to roadmap.md in S931 records pass — cleared.)
@@ -269,6 +269,19 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 
 ## Next Session
+
+### S982 → S983 Carry-Forward
+
+**Chrome QA (#465 GA4 Tier 2) — needed:**
+`Skill('findasale-qa')` — verify events fire in browser (network tab): (1) register new organizer → `organizer_registration_complete`; (2) add first item to a sale → `first_item_published`; (3) user5 favorites an item → `shopper_item_favorited`; (4) user5 clicks Buy Now on eBay-listed item → `checkout_initiated`. All 4 are new S982 events.
+
+**Records pass (findasale-records next session):**
+Apply #27b PCV row to roadmap.md Chrome QA column — all 4 sub-checks ✅ S982. Update roadmap #465 GA4 Tier 2 → Pending Chrome QA S982.
+
+**eBay carry-forward (still valid):**
+When eBay Buy-API grant lands: ebayCatalog provider activates — verify identifiers/dims return.
+
+---
 
 ### S974 — Carry-forward (eBay FVF flat-rate — Chrome verify + tier-ID investigation)
 
@@ -382,6 +395,23 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Recent Sessions
 
+### S982 — 2026-06-15 | DEV+QA (BQ burn-down: NODEJS-10 + AI weight + #27b watermark + GA4 Tier 2)
+
+**Session type:** DEV — parallel dispatch (BQ = 3 → 1, below ceiling)
+
+**BQ cleared:**
+- **NODEJS-10 (P1)** — Migration `20260614000000_fix_sale_slow_query_nodejs10` confirmed applied 2026-06-15 03:58 UTC (fixed: removed CONCURRENTLY). No June 15 Sentry events. Issue marked resolved in Sentry. ✅ CLEARED
+- **eBay AI package-weight (CODE-ONLY)** — Wiring verified via API: ebayController L5445-5447 maps `aiPackageWeightOz → aiEstimatedWeightOz` before calling `estimatePackageProfile`. Step-4 AI path fires correctly when confidence ≥ 0.5 and weight/dims present. 0/129 production items currently populated (expected — feature activates on new uploads/re-analyses). Stale comment in ebayPackageEstimateService.ts L119-122 corrected. ✅ CLEARED CODE-ONLY
+- **#313 HAUL_POST_LIKES** — Env-blocked (needs 10 accounts). Remains in BQ.
+
+**#27b watermark (Chrome QA)** — All 4 sub-checks confirmed: iCal non-TEAMS (watermark present ✅), iCal TEAMS + toggle=true (no watermark ✅), PDF TEAMS + toggle=false (watermark present ✅), PDF TEAMS + toggle=true (no watermark ✅). Evidence staged in PCV table — findasale-records applies to roadmap.md next session.
+
+**GA4 Tier 2 events (#465)** — 4 events added to frontend: `organizer_registration_complete` (register.tsx L188), `first_item_published` (add-items/[saleId].tsx L648), `shopper_item_favorited` (items/[id].tsx L295), `checkout_initiated` (items/[id].tsx L430). `sale_created` was already present (create-sale.tsx L2188). TS: 0 errors. Pending Chrome QA to verify events fire.
+
+**Files changed:** packages/frontend/pages/register.tsx, packages/frontend/pages/organizer/add-items/[saleId].tsx, packages/frontend/pages/items/[id].tsx, packages/backend/src/services/ebayPackageEstimateService.ts (stale comment fix), claude_docs/STATE.md, claude_docs/patrick-dashboard.md
+
+**BQ delta:** 3 → 1 (#313 env-blocked remains)
+
 ### S981 — 2026-06-14 | DEV (Records pass + BQ burn-down: NODEJS-10 index + AI package-weight wiring)
 
 **Session type:** DEV — parallel dispatch (BQ = 3, below ceiling)
@@ -462,55 +492,4 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 - eBay Inventory API verified: offer 187130124011 status=PUBLISHED, fulfillmentPolicyId=316596123011 ("FindA.Sale Flat $32.00") ✅, price=$175 ✅
 
 **BQ delta:** 3 → 3 (removed 2 resolved eBay items; added FINDASALE-NODEJS-10 P1 + Suggest price P2 bug; #313 unchanged)
-
-
-### S976 — 2026-06-13 | BUG/INFRA (Sentry CI Health — missing index + cron stampede fix)
-
-**Session type:** BUG/INFRA — Sentry triage, production DB migration, cron schedule stagger.
-
-**Sentry triage results (9 active issues):**
-- **FINDASALE-NODEJS-D (SyntaxError crash):** Release 9873b2f9 "feat: add Brand/MPN/UPC inputs to edit-item page" crashed Railway at 16:00 UTC. Already auto-resolved — current prod 11cfb344 healthy. No action.
-- **FINDASALE-NODEJS-33 (tierGraceCron 1233ms) — FIXED:** schema.prisma declared `@@index([graceEndAt, graceTierBefore])` but zero migrations ever created it. Created `20260614000000_add_grace_period_index` migration. Patrick applied `prisma migrate deploy` — index now in production.
-- **FINDASALE-NODEJS-10/-38/-2N/-2Z/-2S/-3D (6 slow queries 1081–2487ms) — FIXED:** 9 cron jobs all fired simultaneously at `0 2 * * *`, causing connection/lock contention. Staggered 7 jobs: cleanupStaleDrafts→2:05, consignorExpiry→2:10, xpExpiry→2:15, referralReward→2:20, reputationScore→2:25, foundingOrgBadge→2:30, fraudDetection→2:35. tierGraceCronJob stays 2:00.
-- **FINDASALE-NODEJS-1N (full table COUNT) — P3/NO-ACTION:** `SELECT COUNT(*) FROM Organizer WHERE 1=1` with no filter; no index can help. Acceptable background stat.
-
-**Files changed:** `packages/database/prisma/migrations/20260614000000_add_grace_period_index/migration.sql` (new), 7 × `packages/backend/src/jobs/*.ts` (cron schedule strings only). Backend TS: 0 errors. Migration applied to Railway. Push + `prisma migrate deploy` done by Patrick.
-
-**BQ delta:** 3 (unchanged)
-
-## Next Session
-
-### S981 → S982 Carry-Forward
-
-**Patrick push block (combined — do this first):**
-```powershell
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260614000000_fix_sale_slow_query_nodejs10/migration.sql
-git add packages/database/prisma/migrations/20260614100000_add_item_ai_package_estimate_columns/migration.sql
-git add packages/backend/src/controllers/batchAnalyzeController.ts
-git add packages/backend/src/services/processRapidDraft.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/feature-notes/adr-ai-package-weight-wiring.md
-git commit -m "S981: NODEJS-10 slow query fix + AI package-weight wiring + records pass"
-.\push.ps1
-```
-
-**After push — Patrick runs (ONE block, applies BOTH migrations):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:tEYYjdiay8x8q8N7A6LojJtG04R7sDBN@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-**Next session verification:**
-1. Sentry: verify FINDASALE-NODEJS-10 stops firing after the next 4AM cron run
-2. Chrome QA: re-analyze a cable item (e.g. Casio cable) — verify AI weight/dims populate correctly and estimatePackageProfile uses them (no 24oz SEED fallback)
-3. #27b remaining: PDF footer visual + iCal .ics text sub-checks on a non-TEAMS account
-
-**Prior S980 carry-forward (still valid):**
-- When eBay Buy-API grant lands: ebayCatalog provider activates automatically — verify identifiers/dims return; consider adding get_product/{epid} for fuller aspects.
 

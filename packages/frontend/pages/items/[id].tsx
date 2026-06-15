@@ -290,6 +290,10 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
       refetchFavoriteStatus();
       queryClient.invalidateQueries({ queryKey: ['favorites'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      // GA4 #465 Tier 2: shopper_item_favorited
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'shopper_item_favorited', { event_category: 'engagement', item_id: String(id) });
+      }
     },
   });
 
@@ -420,6 +424,10 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
       showToast('Please log in to purchase items', 'warning');
       router.push('/login');
       return;
+    }
+    // GA4 #465 Tier 2: checkout_initiated
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'checkout_initiated', { event_category: 'engagement', item_id: String(id) });
     }
     // Open checkout directly (no cart endpoint needed)
     setShowCheckoutModal(true);

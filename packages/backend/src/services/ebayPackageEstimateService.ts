@@ -116,10 +116,9 @@ export async function estimatePackageProfile(item: PackageEstimateItem): Promise
     console.warn('[PackageEstimate] PackageProfile lookup failed', err);
   }
 
-  // 4. AI estimate (only if it cleared the confidence gate in cloudAIService).
-  //     NOTE (flagged to architect): the caller does not currently supply aiEstimated*
-  //     fields (they are not Item columns), so this path is presently inert. Wiring
-  //     cloudAIService weight/dim output into the estimator is a separate roadmap item.
+  // 4. AI estimate — uses aiPackageWeightOz/aiPackageDimsJson/aiPackageConfidence columns (added S981).
+  //     ebayController maps these to aiEstimatedWeightOz/aiEstimatedDimensions before calling this fn.
+  //     Fires when aiPackageConfidence >= 0.5 and weight/dims are populated (new uploads only).
   if (
     item.aiPackageConfidence != null &&
     item.aiPackageConfidence >= 0.5 &&

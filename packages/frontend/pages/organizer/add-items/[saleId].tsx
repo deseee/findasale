@@ -645,6 +645,7 @@ const AddItemsDetailPage = () => {
       // GA4 #470: first_item_uploaded conversion event (fires when items.length was 0 before this upload)
       if (items.length === 0 && typeof window !== 'undefined' && window.gtag) {
         window.gtag('event', 'first_item_uploaded', { sale_id: saleId as string });
+        window.gtag('event', 'first_item_published', { event_category: 'engagement', sale_id: saleId as string }); // GA4 #465 Tier 2
       }
 
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
