@@ -152,6 +152,33 @@ if ($behind -gt 0) {
     Write-Host "[4/5] Already up to date." -ForegroundColor Green
 }
 
+
+# CREDENTIAL SCAN — block push if postgres URI found in committed docs
+Write-Host "[pre-push] Scanning committed docs for credentials..." -ForegroundColor Yellow
+$credPatterns = @("postgresql://", "postgres://", "rlwy.net", "railway.internal")
+$scanFiles = @("claude_docs/STATE.md", "claude_docs/patrick-dashboard.md")
+$credFound = $false
+foreach ($sf in $scanFiles) {
+    $exists = git cat-file -e "HEAD:$sf" 2>$null
+    if ($LASTEXITCODE -ne 0) { continue }
+    $fileContent = git show "HEAD:$sf" 2>$null
+    foreach ($pat in $credPatterns) {
+        if ($fileContent -match [regex]::Escape($pat)) {
+            Write-Host "  BLOCKED - Credential '$pat' found in $sf" -ForegroundColor Red
+            Write-Host "  Replace the connection string with a placeholder and recommit." -ForegroundColor Yellow
+            $credFound = $true
+        }
+    }
+}
+if ($credFound) {
+    Write-Host ""
+    Write-Host "Push blocked to prevent credential exposure." -ForegroundColor Red
+    Write-Host "Find the line, replace the value with: [Railway DATABASE_URL - copy from Railway dashboard]" -ForegroundColor DarkGray
+    Write-Host "Then: git add claude_docs/STATE.md (or patrick-dashboard.md) -> git commit --amend --no-edit -> .\push.ps1" -ForegroundColor DarkGray
+    exit 1
+}
+Write-Host "  OK - No credentials found in committed docs." -ForegroundColor Green
+
 # 5. Push
 Write-Host "[5/5] Pushing to origin/main..." -ForegroundColor Yellow
 $pushOutput = git push origin main 2>&1
