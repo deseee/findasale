@@ -78,6 +78,8 @@ const OrganizerSettingsPage = () => {
   const queryClient = useQueryClient();
   const [removeWatermarkEnabled, setRemoveWatermarkEnabled] = useState(false);
   const [watermarkUpdating, setWatermarkUpdating] = useState(false);
+  const [showFollowerCount, setShowFollowerCount] = useState(true);
+  const [followerCountUpdating, setFollowerCountUpdating] = useState(false);
   const [organizerTier, setOrganizerTier] = useState<string | null>(null);
   const [broadcastSubject, setBroadcastSubject] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
@@ -382,6 +384,9 @@ const OrganizerSettingsPage = () => {
           setStripeConnected(response.data.stripeConnected || false);
           setFoundingOrgBadge(response.data.foundingOrgBadge || false);
           setOrganizerTier(response.data.subscriptionTier || null);
+          if (response.data.showFollowerCount !== undefined) {
+            setShowFollowerCount(response.data.showFollowerCount);
+          }
           setTimezone(response.data.timezone || '');
           setByAppointment(response.data.byAppointment || false);
           setOrganizerTypes(response.data.organizerTypes || []);
@@ -538,6 +543,20 @@ const OrganizerSettingsPage = () => {
       setRemoveWatermarkEnabled(!enabled);
     } finally {
       setWatermarkUpdating(false);
+    }
+  };
+
+  const handleShowFollowerCountToggle = async (enabled: boolean) => {
+    setFollowerCountUpdating(true);
+    setShowFollowerCount(enabled);
+    try {
+      await api.patch('/organizers/me', { showFollowerCount: enabled });
+    } catch (error: any) {
+      // Revert on error
+      setShowFollowerCount(!enabled);
+      showToast('Failed to update follower count visibility', 'error');
+    } finally {
+      setFollowerCountUpdating(false);
     }
   };
 
@@ -1348,6 +1367,28 @@ const OrganizerSettingsPage = () => {
                     </label>
                   ))}
                 </div>
+              </div>
+
+
+              {/* Feature #358: Follower Count Visibility Toggle */}
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Follower Count</h2>
+                  <Tooltip content="Control whether shoppers can see your follower count on your storefront." position="right" />
+                </div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={showFollowerCount}
+                    onChange={(e) => handleShowFollowerCountToggle(e.target.checked)}
+                    disabled={followerCountUpdating}
+                    className="w-4 h-4 rounded disabled:opacity-50"
+                  />
+                  <span className="ml-2 text-warm-700 dark:text-gray-300 font-medium">
+                    {followerCountUpdating ? 'Updating...' : 'Show follower count on your storefront'}
+                  </span>
+                </label>
+                <p className="mt-2 text-sm text-warm-600 dark:text-gray-400">When enabled, shoppers can see how many people follow you. The Follow button always remains visible.</p>
               </div>
 
               {/* Broadcast to Followers Section — Feature #356 */}

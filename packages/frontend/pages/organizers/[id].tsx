@@ -76,6 +76,7 @@ interface OrganizerProfile {
   avgRating?: number;
   reviewCount?: number;
   followerCount: number;
+  showFollowerCount: boolean;
   isFollowing: boolean;
   isClaimed: boolean;
   isUnmanagedListing: boolean;
@@ -358,6 +359,7 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
                   organizerId={organizer.id}
                   initialFollowing={organizer.isFollowing}
                   initialCount={organizer.followerCount}
+                  showCount={organizer.showFollowerCount}
                 />
               </div>
               {(organizer.phone || organizer.contactEmail || organizer.website) && (
