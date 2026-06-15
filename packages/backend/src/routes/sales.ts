@@ -33,6 +33,7 @@ import treasureHuntQRRoutes from './treasureHuntQR'; // Feature #85: Treasure Hu
 import { createAlaCarteCheckout } from '../controllers/stripeController'; // #132: À La Carte
 import { getApproachNotes, updateApproachNotes, sendApproachNotification } from '../controllers/arrivalController'; // Feature #84: Approach Notes
 import { exportSaleToEbay } from '../controllers/ebayController'; // Feature #244: eBay CSV export
+import { exportCommerceManagerFeed } from '../controllers/exportController'; // Commerce Manager data feed
 import { returnItemsToInventoryHandler } from '../controllers/returnToInventoryController'; // Feature #300: Return to Inventory
 import { toggleSaleRSVP, removeRSVP, getRSVPCount, getMyRSVPStatus, getRSVPAttendees } from '../controllers/rsvpController'; // Feature #154: Sale RSVP
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -562,6 +563,9 @@ router.post('/:saleId/send-approach-notification', authenticate, requireOrganize
 
 // Feature #244: eBay CSV export
 router.get('/:saleId/ebay-export', authenticate, requireOrganizer, exportSaleToEbay);
+
+// Facebook Commerce Manager data feed — public, no auth (FB crawler has no session token)
+router.get('/:saleId/export/commerce-feed', exportCommerceManagerFeed);
 
 // Feature #300: Return to Inventory — return unsold items from ENDED sale to inventory
 router.post('/:saleId/return-items', authenticate, requireOrganizer, returnItemsToInventoryHandler);
