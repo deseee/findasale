@@ -52,6 +52,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
 import SmartSearchViewsCard from '../../components/SmartSearchViewsCard';
 import DemandSignalsCard from '../../components/DemandSignalsCard';
+import PlatformHighlightsWidget from '../../components/PlatformHighlightsWidget';
 
 // Selling Tools grid configuration (6 tools, tier-gated)
 const SELLING_TOOLS = [
@@ -61,6 +62,7 @@ const SELLING_TOOLS = [
   { label: 'POS Checkout', icon: '💳', href: '/organizer/pos', requiredTier: null },
   { label: 'Print Inventory', icon: '🖨️', href: '/organizer/print-inventory', requiredTier: 'PRO' },
   { label: 'Analytics', icon: '📊', href: '/organizer/insights', requiredTier: 'SIMPLE' },
+  { label: 'Platforms', icon: '🌐', href: '/organizer/platforms', requiredTier: null },
 ];
 
 type DashboardState = 'new' | 'active' | 'between';
@@ -1657,6 +1659,11 @@ const OrganizerDashboard = () => {
 
               {/* Search Engine Visibility card — #446 GEO Phase 7 */}
               <SmartSearchViewsCard />
+
+              {/* Platform Reach Widget — shows headline platform stats */}
+              {dashboardState !== 'new' && (
+                <PlatformHighlightsWidget />
+              )}
 
               {/* Demand Signals card — #454 Organizer Demand Dashboard */}
               <DemandSignalsCard />

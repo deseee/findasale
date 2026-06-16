@@ -1953,6 +1953,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             tags: true,
             ebayOfferId: true,
             ebayListingId: true,
+            ebayListedAt: true,
             ebayCategoryId: true,
             ebayNeedsReview: true,
             ebayShippingClassification: true,
@@ -2763,6 +2764,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           data: {
             ebayListingId,
             listedOnEbayAt: new Date(),
+            // ebayListedAt: first listing timestamp — only set once, never overwritten on relist
+            ...(item.ebayListedAt == null ? { ebayListedAt: new Date() } : {}),
             ebayNeedsReview: false,
           },
         });
@@ -2873,6 +2876,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         id: true,
         ebayOfferId: true,
         ebayListingId: true,
+        ebayListedAt: true,
         ebayCategoryId: true,
         title: true,
         brand: true,
@@ -3116,6 +3120,8 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       data: {
         ebayListingId,
         listedOnEbayAt: new Date(),
+        // ebayListedAt: first listing timestamp — only set once, never overwritten on relist
+        ...(item.ebayListedAt == null ? { ebayListedAt: new Date() } : {}),
         ebayNeedsReview: false,
       },
     });
@@ -4668,6 +4674,43 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       });
     }
 
+    // --- Title reconciliation helper (links classic / non-FAS eBay listings to existing items) ---
+    const normTitleForMatch = (v: string | null | undefined): string =>
+      (v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    // Returns true if an existing organizer item was backfilled with this listing —
+    // caller must then skip creating a duplicate inventory item.
+    const tryReconcileByTitle = async (
+      rawTitle: string,
+      listingId: string,
+      categoryId: string | null,
+      categoryName: string | null,
+    ): Promise<boolean> => {
+      const target = normTitleForMatch(rawTitle);
+      if (!target || !listingId) return false;
+      const candidates = await prisma.item.findMany({
+        where: { organizerId: organizer.id, ebayListingId: null },
+        select: { id: true, title: true, listedOnEbayAt: true, ebayCategoryId: true, category: true },
+      });
+      const hits = candidates.filter((c) => normTitleForMatch(c.title) === target);
+      if (hits.length === 0) return false;
+      if (hits.length > 1) {
+        console.warn(`[eBay Import] Title tie — ${hits.length} existing items match "${target}" for organizer ${organizer.id}; skipping reconciliation, creating inventory item.`);
+        return false;
+      }
+      const hit = hits[0];
+      await prisma.item.update({
+        where: { id: hit.id },
+        data: {
+          ebayListingId: listingId,
+          listedOnEbayAt: hit.listedOnEbayAt ?? new Date(),
+          ...(hit.ebayCategoryId || !categoryId ? {} : { ebayCategoryId: categoryId }),
+          ...(hit.category || !categoryName ? {} : { category: categoryName }),
+        },
+      });
+      console.log(`[eBay Import] Reconciled eBay listing ${listingId} to existing item ${hit.id} by title match ("${target}")`);
+      return true;
+    };
+
     // Paginate eBay Inventory API (covers items created via eBay Inventory API)
     // Note: items created via eBay's regular Sell/Seller Hub interface do NOT appear here.
     // They appear in the Offers endpoint instead — we check both below.
@@ -4848,6 +4891,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           : conditionGrade ? 'USED'
           : null;
 
+        // Reconcile this classic/non-FAS listing with an existing item by normalized title before creating a duplicate
+        if (await tryReconcileByTitle(title, ebayListingIdToStore, null, null)) { skipped++; continue; }
+
         await prisma.item.create({
           data: {
             title: title.slice(0, 255),
@@ -5013,6 +5059,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             skipped++;
             continue;
           }
+
+          // Reconcile this classic listing with an existing item by normalized title before creating a duplicate
+          if (await tryReconcileByTitle(titleRaw, ebayItemId, ebayCategoryIdFromImport ?? null, ebayCategory ?? null)) { skipped++; continue; }
 
           await prisma.item.create({
             data: {

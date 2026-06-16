@@ -16,6 +16,7 @@ import { awardOrganizerClaimedXp, getOrgReferralStats, generateReferralCode } fr
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
+import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue } from '../controllers/platformStatsController';
 
 const router = Router();
 
@@ -84,6 +85,13 @@ const claimRequestSchema = z.object({
   claimantName: z.string().min(1, 'Name is required'),
   message: z.string().optional(),
 }).strict();
+
+// Platform stats: per-platform listing counts, coverage score, eBay queue management
+router.get('/me/platform-stats', authenticate, getPlatformStats);
+router.get('/me/platform-gap', authenticate, getPlatformGap);
+router.patch('/me/ebay-queue-settings', authenticate, updateEbayQueueSettings);
+router.post('/me/ebay-queue', authenticate, addToEbayQueue);
+router.delete('/me/ebay-queue/:itemId', authenticate, removeFromEbayQueue);
 
 // Authenticated: get revenue analytics for the current organizer
 router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response) => {
