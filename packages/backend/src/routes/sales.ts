@@ -204,7 +204,6 @@ router.get('/by-city/:citySlug', async (req, res) => {
 
     const whereClause: any = {
       status: 'PUBLISHED',
-      endDate: { gte: new Date() },
       city: { equals: cityName, mode: 'insensitive' },
       state: { equals: stateCode, mode: 'insensitive' },
     };
@@ -239,7 +238,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
           },
         },
       },
-      orderBy: { startDate: 'asc' },
+      orderBy: [{ endDate: 'desc' }, { startDate: 'asc' }],
       take: fetchLimit,
     });
 
@@ -269,7 +268,6 @@ router.get('/by-city/:citySlug', async (req, res) => {
       ? await prisma.sale.findMany({
           where: {
             status: 'PUBLISHED',
-            endDate: { gte: new Date() },
             city: { equals: cityName, mode: 'insensitive' },
             state: { equals: stateCode, mode: 'insensitive' },
           },
