@@ -15,8 +15,10 @@
  * Framework exports:
  *   CityMeta         — type for per-city content
  *   FaqItem          — type for FAQ entries
- *   getCityMeta()    — returns CityMeta for a slug, or a generated fallback
- *   getEstateSalesFaqs() — returns FAQ array for a city
+ *   getCityMeta()        — returns CityMeta for a slug, or a generated fallback
+ *   getYardSaleMeta()   — returns yard-sale-specific knownFor/tip for the About section
+ *   getEstateSalesFaqs() — returns FAQ array for a city (estate-sales)
+ *   getYardSaleFaqs()   — returns FAQ array for a city (yard-sales)
  *   buildFaqJsonLd() — returns FAQPage JSON-LD object
  *   buildSeoTitle()  — consistent <title> builder
  *   buildSeoDescription() — consistent meta description builder
@@ -657,6 +659,126 @@ export function getNearbyLinks(
       .join(' ');
     return { slug, label: `${name}, ${sc}` };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Yard-sale-specific About content
+// ---------------------------------------------------------------------------
+// knownFor and tip for yard/garage sale city pages.
+// Estate-sale content in CITY_DATA is specific to estate sale culture and
+// should NOT be reused on yard-sales pages.
+// Cities not listed here get a generic yard-sale fallback.
+
+const YARD_SALE_ABOUT: Record<string, { knownFor: string; tip: string }> = {
+  'grand-rapids-mi': {
+    knownFor:
+      'Grand Rapids yard sales and garage sales thrive in established West Michigan neighborhoods — expect furniture, tools, outdoor gear, and household goods from family-friendly subdivisions and Dutch Colonial homes throughout the city.',
+    tip:
+      'East Hills, Heritage Hill, and the East Beltline corridor are reliable hunting grounds for weekend garage sales. Check listings Thursday evening — popular sales in GR fill up fast on Saturday mornings.',
+  },
+  'denver-co': {
+    knownFor:
+      'Denver yard sales reflect the city's outdoor-active culture — expect camping gear, ski equipment, bikes, and sporting goods alongside furniture and household items from Washington Park, Capitol Hill, and the suburbs.',
+    tip:
+      'Washington Park and the Highlands neighborhoods are hotspots for quality garage sales. Denver's mile-high sunshine means sales run year-round, with peak volume April through October.',
+  },
+  'chicago-il': {
+    knownFor:
+      'Chicago's garage sale scene is massive — North Side neighborhoods like Lincoln Square, Andersonville, and Irving Park see hundreds of sales each spring weekend, with everything from vintage finds to everyday household goods.',
+    tip:
+      'North Side neighborhoods are the best hunting ground for weekend garage sales. Subscribe to FindA.Sale alerts mid-week — new Chicago listings are added constantly through Friday.',
+  },
+  'phoenix-az': {
+    knownFor:
+      'Phoenix yard sales are a year-round activity thanks to the desert climate — Scottsdale, Tempe, and Chandler neighborhoods produce a steady flow of outdoor gear, patio furniture, and household goods from relocating families.',
+    tip:
+      'October through April is peak garage sale season in Phoenix (the weather is perfect). Start early — Arizona heat makes afternoon shopping uncomfortable, and the best items are claimed by 9 AM.',
+  },
+  'dallas-tx': {
+    knownFor:
+      'Dallas garage sales are abundant across the metro — Highland Park, Plano, and Frisco suburbs see heavy weekend activity with furniture, clothing, toys, and tools from active families and frequent movers.',
+    tip:
+      'Preston Hollow and the Park Cities are consistent sources of quality garage sales in Dallas. Spring (March–May) sees the highest volume as families clear out before the summer heat.',
+  },
+  'los-angeles-ca': {
+    knownFor:
+      'Los Angeles yard sales span the full spectrum of California life — Silver Lake, Echo Park, and the Valley produce eclectic finds from creative professionals, while San Fernando Valley suburbia yields classic garage sale staples.',
+    tip:
+      'Silver Lake, Los Feliz, and Pasadena are the best neighborhoods for LA garage sales. LA sales tend to list late (Thursday or Friday) — check often for last-minute weekend additions.',
+  },
+  'new-york-ny': {
+    knownFor:
+      'New York City yard sales are a treasure hunt — Brooklyn's Park Slope, Ditmas Park, and Astoria in Queens produce some of the most eclectic garage and stoop sales in the country, packed with vintage finds and quality castoffs.',
+    tip:
+      'Brooklyn and Queens neighborhoods host the most yard and stoop sales. NYC sales list quickly and move fast — set up FindA.Sale alerts and be ready to move on Saturday morning.',
+  },
+  'houston-tx': {
+    knownFor:
+      'Houston garage sales are plentiful across the sprawling metro — River Oaks, Memorial, and The Woodlands suburbs see regular weekend sales from active families, and the warm climate keeps them running nearly year-round.',
+    tip:
+      'Memorial and River Oaks areas yield the highest-quality Houston garage sales. November through March is the most comfortable weather for morning shopping — arrive by 8 AM for the best picks.',
+  },
+  'seattle-wa': {
+    knownFor:
+      'Seattle yard sales reflect Pacific Northwest life — Capitol Hill, Ballard, and Fremont neighborhoods produce sales packed with outdoor gear, Pacific Rim finds, artisan goods, and quality mid-century furniture.',
+    tip:
+      'Ballard and Queen Anne are Seattle's best garage sale neighborhoods. Target dry weekends in May–September — Seattle's rainy season (October–April) significantly reduces outdoor sale activity.',
+  },
+  'atlanta-ga': {
+    knownFor:
+      'Atlanta garage sales are active across the metro's many suburban communities — Decatur, Smyrna, and Marietta produce a steady stream of family sales with furniture, clothing, toys, and Southern household goods.',
+    tip:
+      'Decatur and the Intown neighborhoods host the most eclectic Atlanta yard sales. Spring (March–May) is Atlanta's peak garage sale season — summer heat slows outdoor selling considerably.',
+  },
+  'minneapolis-mn': {
+    knownFor:
+      'Minneapolis garage sales are a Midwest staple — Uptown, South Minneapolis, and the western suburbs produce well-organized weekend sales with furniture, winter gear, sports equipment, and Scandinavian-influenced household goods.',
+    tip:
+      'South Minneapolis and Edina suburbs are reliable for quality garage sales. Season runs May through September — Minneapolis winters shut down outdoor sales entirely, making spring sales particularly stocked.',
+  },
+  'portland-or': {
+    knownFor:
+      'Portland yard sales capture the city's creative, DIY spirit — SE Portland, Sellwood, and Mississippi Avenue neighborhoods produce eclectic finds: vintage clothing, handmade goods, vinyl records, and quality furniture.',
+    tip:
+      'Sellwood and SE Portland are the best neighborhoods for Portland garage sales. The season runs April through October — aim for clear weekend days and check listings Friday morning for new additions.',
+  },
+  'austin-tx': {
+    knownFor:
+      'Austin garage sales reflect the city's rapid growth and diverse population — Hyde Park, Cherrywood, and South Austin neighborhoods produce sales ranging from vintage finds and music gear to outdoor equipment and family household goods.',
+    tip:
+      'Hyde Park and the 78704 zip code (South Austin) are Austin's best garage sale zones. October through April offers the most comfortable weather for morning shopping.',
+  },
+  'boston-ma': {
+    knownFor:
+      'Boston yard sales draw from one of America's oldest cities — Brookline, Newton, and Arlington suburbs produce sales with a mix of colonial-era antiques, university-adjacent books and furniture, and quality New England household goods.',
+    tip:
+      'Brookline and Newton are consistently the best Boston-area neighborhoods for garage sales. Spring sales (April–June) are the richest as families clear out after long winters.',
+  },
+  'nashville-tn': {
+    knownFor:
+      'Nashville garage sales have surged with the city's growth — 12South, East Nashville, and the surrounding suburbs produce a mix of vintage finds, music memorabilia, furniture, and household goods from a rapidly changing population.',
+    tip:
+      'East Nashville and Donelson are the most active Nashville garage sale areas. Spring (March–May) is peak season — summer heat makes outdoor sales less common in Middle Tennessee.',
+  },
+};
+
+/**
+ * Returns yard-sale-specific About content (knownFor + tip) for a city page.
+ * Falls back to a generic yard-sale template for cities not in YARD_SALE_ABOUT.
+ */
+export function getYardSaleMeta(
+  slug: string,
+  cityName: string,
+  stateCode: string
+): { knownFor: string; tip: string } {
+  if (YARD_SALE_ABOUT[slug]) {
+    return YARD_SALE_ABOUT[slug];
+  }
+  // Generic yard-sale fallback — accurate and not estate-sale-branded
+  return {
+    knownFor: `${cityName} yard sales and garage sales offer a wide range of finds — furniture, tools, clothing, toys, and household goods from families across the metro. Sales are posted throughout the week with new listings added regularly.`,
+    tip: `Check listings Thursday evening for the freshest weekend sales in ${cityName}. Arrive at or before posted start times for the best selection — popular items go quickly on Saturday mornings.`,
+  };
 }
 
 /**

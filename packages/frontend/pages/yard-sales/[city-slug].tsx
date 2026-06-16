@@ -22,6 +22,7 @@ import {
   CityMeta,
   FaqItem,
   getCityMeta,
+  getYardSaleMeta,
   getYardSaleFaqs,
   buildFaqJsonLd,
   buildSeoTitle,
@@ -104,6 +105,7 @@ interface YardSalesCityPageProps {
   cityName: string;
   cityState: string;
   cityMeta: CityMeta;
+  yardSalesAbout: { knownFor: string; tip: string };
   faqs: FaqItem[];
   sales: SaleListing[];
   totalCount: number;
@@ -114,6 +116,7 @@ export default function YardSalesCityPage({
   cityName,
   cityState,
   cityMeta,
+  yardSalesAbout,
   faqs,
   sales,
   totalCount,
@@ -399,11 +402,11 @@ export default function YardSalesCityPage({
               About Yard Sales in {cityName}, {cityState}
             </h2>
             <p className="text-warm-600 dark:text-warm-400 text-sm leading-relaxed mb-3">
-              {cityMeta.knownFor}
+              {yardSalesAbout.knownFor}
             </p>
             <p className="text-warm-600 dark:text-warm-400 text-sm leading-relaxed">
               <span className="font-medium text-warm-700 dark:text-warm-300">Shopper tip: </span>
-              {cityMeta.tip}
+              {yardSalesAbout.tip}
             </p>
           </div>
 
@@ -518,6 +521,7 @@ export const getStaticProps: GetStaticProps<YardSalesCityPageProps> = async ({ p
 
   // Load city-specific SEO content from the framework
   const cityMeta = getCityMeta(citySlug);
+  const yardSalesAbout = getYardSaleMeta(citySlug, cityName, stateCode);
   const faqs = getYardSaleFaqs(cityName, stateCode);
 
   let sales: SaleListing[] = [];
@@ -545,6 +549,7 @@ export const getStaticProps: GetStaticProps<YardSalesCityPageProps> = async ({ p
       cityName,
       cityState: stateCode,
       cityMeta,
+      yardSalesAbout,
       faqs,
       sales,
       totalCount,

@@ -264,6 +264,7 @@ _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Exp
 _(S925 PCV rows — logout flow Chr✅, #463 CODE-ONLY, #462 CSRF partial — applied to roadmap.md in S930 records pass — cleared.)
 _(S927 PCV rows #79/#164/#316 applied to roadmap.md in S928 records pass — cleared.)
 _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared.)_
+| SEO4-YardSalesAbout | yard-sales About section (S995 fix) — verify post-deploy | P2 bug fixed S995: getCityMeta() estate-sale copy replaced with getYardSaleMeta() yard-sale copy. Re-verify after push: navigate /yard-sales/grand-rapids-mi, confirm About body says yard-sale copy (NOT "Grand Rapids estate sales reflect the city's Dutch heritage"). Screenshot required. | S995 |
 ---
 
 
@@ -271,26 +272,32 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ### S995 onward
 
-**Push block (first action):**
-Push the S994 SEO work:
-```
-git add packages/frontend/pages/yard-sales/[city-slug].tsx
+**Push block (first action — S993+S994+S995 combined):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add "packages/frontend/pages/yard-sales/[city-slug].tsx"
 git add packages/frontend/lib/seo/cityData.ts
 git add packages/frontend/pages/server-sitemap.xml.tsx
+git add "packages/frontend/pages/estate-sales/[city-slug].tsx"
+git add packages/frontend/pages/checkout.tsx
+git add packages/backend/src/jobs/autoSeedOutreachCron.ts
+git add packages/backend/src/scripts/seedDirectoryClaimEmails.ts
+git add packages/backend/src/services/emailDiscoveryService.ts
+git add claude_docs/scripts/oauth_setup2.py
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "feat: yard-sales city landing pages + GSC crawl-budget audit"
+git commit -m "S995: fix yard-sales About section (estate-sale copy bug) + S994 yard-sales pages + S993 outreach fix + S992 city SEO/checkout"
 .\push.ps1
 ```
 
 **Chrome QA (after deploy):**
 `Skill('findasale-qa')` → Navigate https://finda.sale/yard-sales/grand-rapids-mi. Verify:
 1. H1 = "Yard Sales in Grand Rapids, MI" (not "Estate Sales")
-2. FAQ section renders (7 yard-sale FAQs)
-3. Nearby city links present
-4. Sale listings or appropriate empty state
-5. FAQPage JSON-LD in page source (view-source)
+2. About section body is yard-sale copy (NOT "Grand Rapids estate sales reflect the city's Dutch heritage...")
+3. FAQ section renders (7 yard-sale FAQs)
+4. Nearby city links present (5 cities)
+5. Sale listings or appropriate empty state
+6. FAQPage JSON-LD in page source (view-source)
 Evidence: URL, user, element, outcome, screenshot IDs required.
 
 **GSC P1 fix — dispatch after push:**
@@ -420,6 +427,53 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S995 — 2026-06-16 | QA + BUG FIX (S991–S994 QA pass; yard-sales About section P2 fix)
+
+**Session type:** QA — QA pass on S991/S992/S993/S994 + P2 bug fix dispatch
+
+**QA results:**
+- S991 (shipping preview null organizerId) ✅ CHROME VERIFIED — Celestion Vintage returned shipping + net estimate correctly (ss_5973i4mmj). organizerId=NULL no longer 404s.
+- S992 FB checkout ✅ CHROME VERIFIED — `fas_shopper_cart` localStorage confirmed with correct item/price/saleId. Patrick's own live test (S992) also confirmed Super Mario Bros + X-Force #1 at correct prices.
+- S993 outreach pipeline ✅ DB VERIFIED — PENDING 2,284 / SENT 699 / ARCHIVED 430 / OPTED_OUT 1. Null-safe Prisma filter working.
+- S994 yard-sales pages ✅ PARTIAL — H1, title, listings, Nearby Cities (5 links), FAQs (7 items), FAQPage JSON-LD all confirmed. BUG FOUND: About section showed "Grand Rapids estate sales reflect the city's Dutch heritage..." (estate-sale copy on a yard-sales page). P2.
+
+**P2 bug fix shipped:**
+- Root cause: `yard-sales/[city-slug].tsx` used `cityMeta.knownFor`/`cityMeta.tip` from `getCityMeta()` — estate-sale branded content.
+- Fix: Added `YARD_SALE_ABOUT` record (15 cities) + `getYardSaleMeta()` export to `cityData.ts`. Updated `[city-slug].tsx` import → interface → destructure → getStaticProps → About section render.
+- TypeScript: 0 errors. PCV staged — re-verify /yard-sales/grand-rapids-mi About section after deploy.
+
+**Files changed:** `packages/frontend/lib/seo/cityData.ts`, `packages/frontend/pages/yard-sales/[city-slug].tsx`
+
+**BQ delta:** 3 → 3 (unchanged — 2 GSC P1 items + prior GSC monitor)
+
+### S994 — 2026-06-16 | SEO/DEV (yard-sales city pages + GSC crawl-budget audit)
+
+**Session type:** SEO/DEV — yard-sales ISR pages + GSC root cause
+
+**Completed:**
+- Built `packages/frontend/pages/yard-sales/[city-slug].tsx` (554 lines) — 47-city ISR (revalidate:86400), yard-sale-specific H1/title/FAQs/nearby-cities, FAQPage JSON-LD.
+- Extended `cityData.ts` with `getYardSaleFaqs()` — 7 yard-sale-specific FAQs.
+- Updated `server-sitemap.xml.tsx` with `yardSalesUrls` block (priority 0.70).
+- GSC audit: root cause of 2,071 discovered-not-indexed = 10,000 /items/{id} SSR pages exhausting crawl budget. Both items added to BQ as P1.
+- Records pass: #465 Chrome QA col confirmed already ✅ S990 in roadmap.md.
+
+**Files changed:** `packages/frontend/pages/yard-sales/[city-slug].tsx` (new), `packages/frontend/lib/seo/cityData.ts`, `packages/frontend/pages/server-sitemap.xml.tsx`
+
+**BQ delta:** 1 → 3 (2 GSC P1 items added: sitemap itemUrls removal + items ISR conversion)
+
+### S993 — 2026-06-16 | BUG/DATA (outreach pipeline root-cause fix + RDAP Stage 3)
+
+**Session type:** BUG/DATA — outreach pipeline null-exclusion bug + RDAP email discovery
+
+**Completed:**
+- Root cause confirmed (Prisma NULL bug): `NOT: [{emailDiscoveryConfidence: 0.0}]` → SQL `NOT (col = 0.0)` → PostgreSQL NULL comparison returns NULL → 12,136 scraper-email organizers with NULL confidence permanently excluded. Fixed with null-safe Prisma filter in `autoSeedOutreachCron.ts` and `seedDirectoryClaimEmails.ts`.
+- Data fix: reset 2,276 ARCHIVED rows (valid categories, non-junk domains) back to PENDING. Queue: PENDING 2,292, SENT 699, ARCHIVED 422.
+- RDAP Stage 3 implemented in `emailDiscoveryService.ts` — rdap.org query, vCard 4.0 parser, 13-domain privacy-proxy filter. 5,057 organizers with website but no email now addressable.
+
+**Files changed:** `packages/backend/src/jobs/autoSeedOutreachCron.ts`, `packages/backend/src/scripts/seedDirectoryClaimEmails.ts`, `packages/backend/src/services/emailDiscoveryService.ts`
+
+**BQ delta:** 0 → 0
 
 ### S992 — 2026-06-16 | SEO/DEV (analytics OAuth + city SEO framework)
 
