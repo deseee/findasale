@@ -150,6 +150,22 @@ export function parseGarageSalesFinderListing(html: string): Partial<ParsedListi
 }
 
 /**
+ * Parse a GarageSaleFinder gallery page to extract full-size images.
+ * Gallery pages serve w700-h500 JPEGs in static HTML — no JS needed.
+ */
+export function parseGarageSalesFinderGallery(html: string): string[] {
+  const $ = cheerio.load(html);
+  const photos: string[] = [];
+  $('img[src*="w700-h500"]').each((_, el) => {
+    const src = $(el).attr('src');
+    if (src && (src.includes('tlstatic.com') || src.includes('tlcdn'))) {
+      photos.push(src);
+    }
+  });
+  return photos.slice(0, 5);
+}
+
+/**
  * Extract email addresses from text (for organizer contact)
  */
 export function extractEmails(text: string): string[] {

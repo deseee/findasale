@@ -12,7 +12,7 @@
  */
 import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
-import { parseGarageSalesFinderListing, extractEmails } from '../htmlParser';
+import { parseGarageSalesFinderListing, parseGarageSalesFinderGallery, extractEmails } from '../htmlParser';
 import { ingestScrapedListing, ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
 
@@ -67,7 +67,21 @@ export async function scrapeGarageSaleFinder(
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // Extract sale detail links — GarageSaleFinder uses /garage-sales/[id] paths
+    // Build map of saleId → {galleryUrl, thumbnailUrl} from listing cards that have photos
+    const galleryMap = new Map<string, { galleryUrl: string; thumbnailUrl: string }>();
+    $('a[href*="/gallery"]').each((_, el) => {
+      const galleryHref = $(el).attr('href') ?? '';
+      const img = $(el).find('img[itemprop="image"]');
+      const thumbSrc = img.attr('src');
+      const idMatch = galleryHref.match(/\/s\/([A-Za-z0-9]+)\//);
+      if (idMatch && thumbSrc && galleryHref.includes('/gallery')) {
+        galleryMap.set(idMatch[1], { galleryUrl: galleryHref, thumbnailUrl: thumbSrc });
+      }
+    });
+
+    console.log(`[GarageSaleFinder] Found ${galleryMap.size} listings with gallery photos in ${metro}`);
+
+    // Extract sale detail links — GarageSaleFinder uses /s/[id] paths
     const saleLinks: string[] = [];
     const seen = new Set<string>();
 
@@ -90,7 +104,10 @@ export async function scrapeGarageSaleFinder(
     // Process each sale link (cap at 50 per metro per run)
     for (const saleUrl of saleLinks.slice(0, 50)) {
       await jitterDelay(300, 1200);
-      const item = await parseGarageSalesFinderSale(saleUrl, rateLimiter);
+      const idMatch = saleUrl.match(/\/s\/([A-Za-z0-9]+)\//);
+      const saleId = idMatch ? idMatch[1] : '';
+      const galleryInfo = galleryMap.get(saleId);
+      const item = await parseGarageSalesFinderSale(saleUrl, rateLimiter, galleryInfo);
       if (!item) {
         stats.failed++;
         continue;
@@ -113,10 +130,12 @@ export async function scrapeGarageSaleFinder(
 
 /**
  * Parse a single GarageSaleFinder sale detail page.
+ * If galleryInfo is provided, fetches the gallery page to extract full-size images.
  */
 export async function parseGarageSalesFinderSale(
   saleUrl: string,
-  rateLimiter: RateLimiter
+  rateLimiter: RateLimiter,
+  galleryInfo?: { galleryUrl: string; thumbnailUrl: string }
 ): Promise<ScrapedItem | null> {
   try {
     const domain = new URL(saleUrl).hostname;
@@ -149,6 +168,35 @@ export async function parseGarageSalesFinderSale(
       return null;
     }
 
+    // Attempt gallery photo fetch if galleryInfo was found on the metro page
+    let galleryPhotos: string[] = [];
+    if (galleryInfo) {
+      try {
+        const galleryUrl = galleryInfo.galleryUrl.startsWith('http')
+          ? galleryInfo.galleryUrl
+          : `${GARAGE_SALES_BASE_URL}${galleryInfo.galleryUrl}`;
+
+        if (rateLimiter.isAllowed(galleryUrl)) {
+          await jitterDelay(200, 800);
+          await rateLimiter.waitBeforeRequest(domain);
+
+          const galleryResponse = await fetch(galleryUrl, {
+            headers: { 'User-Agent': getRandomUserAgent() },
+            signal: AbortSignal.timeout(10000),
+          });
+
+          if (galleryResponse.ok) {
+            const galleryHtml = await galleryResponse.text();
+            galleryPhotos = parseGarageSalesFinderGallery(galleryHtml);
+            console.log(`[GarageSaleFinder] Gallery fetched: ${galleryPhotos.length} photos from ${galleryUrl}`);
+          }
+        }
+      } catch (galleryError) {
+        // Gallery fetch failed — fall back gracefully to no photos
+        console.warn(`[GarageSaleFinder] Gallery fetch failed for ${saleUrl}:`, galleryError);
+      }
+    }
+
     const emails = extractEmails(html);
     const idMatch = saleUrl.match(/\/s\/([A-Za-z0-9]+)\//);
     const sourceItemId = idMatch ? idMatch[1] : saleUrl.split('/').pop() ?? '';
@@ -167,7 +215,7 @@ export async function parseGarageSalesFinderSale(
       saleType: parsed.saleType ?? 'YARD',
       organizerName: parsed.organizerName,
       organizerEmail: parsed.organizerEmail,
-      photoUrls: parsed.photoUrls,
+      photoUrls: galleryPhotos.length > 0 ? galleryPhotos : parsed.photoUrls,
       sourceUrl: saleUrl,
       sourceName: 'GarageSaleFinder',
       sourceItemId: `garagesalefinder.com:${sourceItemId}`,
