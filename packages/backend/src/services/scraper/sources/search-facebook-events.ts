@@ -613,7 +613,6 @@ async function searchScaleSerp(query: string, apiKey: string): Promise<SearchRes
 export interface FbSearchOptions {
   searloKey?:    string;
   braveKey?:     string;
-  serperKey?:    string;
   scaleSerpKey?: string;
 }
 
@@ -672,12 +671,17 @@ export async function scrapeFacebookEventsForMetro(
 
     let rawResults: SearchResult[] = [];
     let usedEngine = '';
+    // Track whether Searlo completed without throwing (even if it returned 0 results).
+    // Fallback engines only fire on actual Searlo errors, NOT on empty results —
+    // 0 results means the market has no events, not that Searlo failed.
+    let searloSucceeded = false;
 
     // --- Engine 1: Searlo (PRIMARY — geo-accurate Google SERP proxy, no expiry) ---
     if (opts.searloKey) {
       try {
         rawResults = await searchSearlo(query, opts.searloKey);
         usedEngine = 'searlo';
+        searloSucceeded = true; // Searlo completed — even 0 results is a valid answer
         console.log(
           `[FB-Events] Searlo OK for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
         );
@@ -689,29 +693,15 @@ export async function scrapeFacebookEventsForMetro(
       }
     }
 
-    // --- Engine 2: Serper (first fallback — best geo-targeting) ---
-    if (rawResults.length === 0 && opts.serperKey) {
-      try {
-        rawResults = await searchSerper(query, opts.serperKey);
-        usedEngine = 'serper';
-        console.log(
-          `[FB-Events] Serper backup for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
-        );
-      } catch (err) {
-        console.warn(
-          `[FB-Events] Serper failed for ${metro.city}, ${metro.state} [${sub.typeHint}]:`,
-          err instanceof Error ? err.message : err
-        );
-      }
-    }
-
-    // --- Engine 3: Brave (backup — free fallback; ≤3 OR terms required) ---
-    if (rawResults.length === 0 && opts.braveKey) {
+    // --- Engine 2: Brave (error-only fallback — free; ≤3 OR terms required) ---
+    // NOTE: Serper was removed. Searlo 0 results = empty market = no fallback needed.
+    // Brave only fires if Searlo threw an error (searloSucceeded=false).
+    if (!searloSucceeded && rawResults.length === 0 && opts.braveKey) {
       try {
         rawResults = await searchBrave(query, opts.braveKey);
         usedEngine = 'brave';
         console.log(
-          `[FB-Events] Brave backup for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
+          `[FB-Events] Brave fallback (Searlo error) for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
         );
       } catch (err) {
         console.warn(
@@ -721,13 +711,13 @@ export async function scrapeFacebookEventsForMetro(
       }
     }
 
-    // --- Engine 4: ScaleSerp (second backup) ---
-    if (rawResults.length === 0 && opts.scaleSerpKey) {
+    // --- Engine 3: ScaleSerp (error-only fallback) ---
+    if (!searloSucceeded && rawResults.length === 0 && opts.scaleSerpKey) {
       try {
         rawResults = await searchScaleSerp(query, opts.scaleSerpKey);
         usedEngine = 'scaleserp';
         console.log(
-          `[FB-Events] ScaleSerp backup for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
+          `[FB-Events] ScaleSerp fallback (Searlo error) for ${metro.city}, ${metro.state} [${sub.typeHint}] — ${rawResults.length} results`
         );
       } catch (err) {
         console.warn(
