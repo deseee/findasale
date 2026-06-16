@@ -96,16 +96,16 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
     }
 
     // Build filter for eBay Fulfillment API
-    // Fixed 7-day sliding window — always look back 7 days regardless of lastEbaySoldSyncAt.
-    // This is idempotent (items already SOLD are skipped by the availableItems query)
-    // and robust against transient outages or items that were added to eBay outside our normal push flow.
-    // Use lastmodifieddate (NOT creationdate) so we catch late payments — an order
-    // created before the window but paid AFTER it would be permanently skipped if we
-    // filtered on creationdate. lastmodifieddate updates on payment, so the order enters
-    // our window when it becomes fulfilled.
-    const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // 90-day creationdate window — catches all orders placed in the last 90 days.
+    // Idempotent: items already SOLD are skipped by the availableItems query above.
+    // Using creationdate (not lastmodifieddate) because a settled order that was paid
+    // and shipped quickly falls out of a short lastmodifieddate window permanently.
+    // creationdate is fixed at order creation — an order placed 60 days ago will always
+    // be in a 90-day window until day 91, regardless of whether it has been modified.
+    // 90 days covers all normal eBay order timelines including late payments and disputes.
+    const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
     const endDate = new Date().toISOString();
-    const filter = `lastmodifieddate:[${startDate}..${endDate}]`;
+    const filter = `creationdate:[${startDate}..${endDate}]`;
 
     // Call eBay Fulfillment API
     const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
@@ -139,7 +139,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
     const orders = ebayData.orders || [];
 
     console.log(
-      `[eBay Sync] Organizer ${organizerId}: ${orders.length} fulfilled orders from eBay, ${availableItems.length} local items to check`
+      `[eBay Sync] Organizer ${organizerId}: ${orders.length} orders (90-day window) from eBay, ${availableItems.length} local items to check`
     );
 
     // Process each order's line items
