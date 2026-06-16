@@ -208,16 +208,25 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
                 Continue Shopping
               </button>
 
-              {/* Go to Checkout (TBD) */}
-              <button
-                onClick={() => {
-                  // TODO (post-launch): Integrate hold-to-pay checkout flow
-                  showToast('Checkout feature coming soon', 'info');
-                }}
-                className="w-full bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
-              >
-                Go to Checkout
-              </button>
+              {/* Go to Checkout — login gate for unauthenticated shoppers (e.g. Facebook) */}
+              {user ? (
+                <button
+                  onClick={() => {
+                    // TODO (post-launch): Integrate hold-to-pay checkout flow
+                    showToast('Checkout feature coming soon', 'info');
+                  }}
+                  className="w-full bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                  Go to Checkout
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-center block"
+                >
+                  Login or Register to Checkout
+                </Link>
+              )}
 
               {/* Share with cashier */}
               {cart.saleId && (
