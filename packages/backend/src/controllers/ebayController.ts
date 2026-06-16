@@ -4879,10 +4879,12 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       });
     }
 
-    // If Inventory API returned 0 items, fall back to eBay Trading API GetMyeBaySelling.
-    // This is the only eBay endpoint that returns ALL active listings regardless of how they were created.
-    if (totalFetched === 0) {
-      console.log('[eBay Import] Inventory API returned 0. Trying Trading API GetMyeBaySelling...');
+    // Always run Trading API GetMyeBaySelling to capture classic listings (created directly on eBay,
+    // not via the Inventory API). ArtifactMI and similar sellers use BOTH: some items pushed via
+    // FindA.Sale (appear in Inventory API) and some listed manually on eBay (classic listings).
+    // Dedup logic below handles items already imported — running both paths is always safe.
+    {
+      console.log('[eBay Import] Running Trading API GetMyeBaySelling to capture classic listings...');
 
       const tradingConditionMap: Record<string, string> = {
         '1000': 'S', '1500': 'S', '1750': 'A', '2000': 'A', '2500': 'A',
