@@ -182,6 +182,10 @@ function formatAmazonCsv(items: Item[], organizer: WatermarkPolicyOrganizer | nu
 /**
  * Facebook Marketplace Format: title, price, category, condition, description, availability, image_url
  */
+/**
+ * @deprecated Not surfaced in any UI route. Use exportCommerceManagerFeed (exportController.ts)
+ * for Commerce Manager, or exportFacebookXLSX/JSON for Marketplace. Pending removal — flagged S1000.
+ */
 function formatFacebookCsv(items: Item[], organizer: WatermarkPolicyOrganizer | null = null): string {
   const headers = ['title', 'price', 'category', 'condition', 'description', 'availability', 'image_url'];
   const rows: string[] = [headers.map(escapeCsvField).join(',')];
