@@ -1661,9 +1661,7 @@ const OrganizerDashboard = () => {
               <SmartSearchViewsCard />
 
               {/* Platform Reach Widget — shows headline platform stats */}
-              {dashboardState !== 'new' && (
-                <PlatformHighlightsWidget />
-              )}
+              <PlatformHighlightsWidget />
 
               {/* Demand Signals card — #454 Organizer Demand Dashboard */}
               <DemandSignalsCard />
