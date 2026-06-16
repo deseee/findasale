@@ -232,6 +232,7 @@ import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature
 import { scheduleGoogleMerchantFeedCron } from './jobs/googleMerchantFeedCron'; // Feature #463: Google Merchant Center feed
 import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jobs/pricingEngineCron'; // Phase S574: Pricing engine quota + recovery
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
+import { startEbayListingQueueCron } from './jobs/ebayListingQueueCron'; // eBay Queue Mode engine
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
 import { startEbayListingSyncCron } from './jobs/ebayListingSyncCron'; // Feature #244 Phase 4: eBay bidirectional listing sync
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
@@ -780,6 +781,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #244 Phase 3: Register eBay sold sync cron (every 15 minutes — polling fallback)
   startEbaySoldSyncCron();
+
+  // eBay Queue Mode engine — auto-manage listing slots (every 30 minutes)
+  startEbayListingQueueCron();
 
   // Feature #244 Phase 3: Register eBay ended listings sync cron (every 4 hours — passive reconciliation)
   startEbayEndedListingsSyncCron();

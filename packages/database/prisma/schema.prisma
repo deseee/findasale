@@ -369,6 +369,8 @@ model Organizer {
   // Feature #244 Phase 2c: eBay Policy Routing — per-organizer weight-tier policy mappings
   ebayPolicyMapping           EbayPolicyMapping?             @relation("OrganizerEbayPolicyMapping")
   ebaySubscriptionId          String? // ORDER_CONFIRMATION subscription ID from eBay Notification API
+  ebayQueueMode               Boolean                        @default(false) // Opt-in: auto-manage eBay listing slots
+  ebayQueueRotation           Boolean                        @default(false) // Opt-in: cycle oldest listings when queue has waiting items
   workspaceChatMessages       WorkspaceChatMessage[]         @relation("WorkspaceChatMessages")
   // Feature #S483: Organizer Signals — expansion + churn scoring
   organizerScore              OrganizerScore?
@@ -1225,6 +1227,8 @@ model Item {
   bundleId                   String?
   bundle                     ItemBundle?            @relation("BundleItems", fields: [bundleId], references: [id])
   // Feature: Facebook Export Tracking — stamped when item is included in FB Marketplace XLSX/JSON export
+  ebayQueuedAt               DateTime? // When item was added to eBay listing queue (null = not queued)
+  ebayListedAt               DateTime? // When item was first listed on eBay (set on first push, never updated on relist)
   fbExportedAt               DateTime?
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
