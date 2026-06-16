@@ -395,6 +395,16 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     }
   }, [id]);
 
+  // Facebook Commerce Manager: auto-open cart drawer when arriving from /checkout?cart=open
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (router.query.cart !== 'open') return;
+    openCart();
+    // Clean the param without a full page reload
+    const { cart: _cart, ...rest } = router.query;
+    void router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
+  }, [router.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Phase 19: Award 1 point for visiting a sale page (once per sale per day, auth required)
   // Phase 27: Show amber toast when points are awarded
   useEffect(() => {

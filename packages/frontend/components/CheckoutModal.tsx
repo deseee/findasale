@@ -313,6 +313,16 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
   const [started, setStarted] = useState(!!initialPurchaseId); // auction resumption skips coupon step
   const [couponInput, setCouponInput] = useState('');
 
+  // Pre-fill coupon from Facebook Commerce Manager redirect (/checkout?coupon=CODE)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const pending = localStorage.getItem('fas_pending_coupon');
+    if (pending) {
+      setCouponInput(pending);
+      localStorage.removeItem('fas_pending_coupon');
+    }
+  }, []); // runs once on mount
+
   useEffect(() => {
     if (!started) return; // wait until user clicks "Continue to Pay"
 
