@@ -2,22 +2,38 @@
  * Estate Sales City SEO Landing Page
  * URL: /estate-sales/denver-co
  *      /estate-sales/chicago-il
- *      /estate-sales/phoenix-az
+ *      /estate-sales/birmingham-al
  *
  * Dedicated landing page for the "estate sales in [city]" GSC cluster.
  * Uses getStaticProps (ISR) — renders server-side for SEO.
  *
- * SEO rationale: GSC shows "denver estate sales" / "estate sale denver" at
- * positions 27–30 with 28+ impressions and no dedicated landing page.
- * This route creates a permanent URL pattern for all cities.
+ * SEO framework: @/lib/seo/cityData.ts
+ * All city content, FAQ data, title/description builders, and nearby-city
+ * links are managed there. To improve a city's content, edit cityData.ts.
+ * To add a new page type (yard-sales, auctions), create a parallel page and
+ * import the same framework.
  */
 
 import { GetStaticProps, GetStaticPaths } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
+import {
+  CityMeta,
+  FaqItem,
+  getCityMeta,
+  getEstateSalesFaqs,
+  buildFaqJsonLd,
+  buildSeoTitle,
+  buildSeoDescription,
+  getNearbyLinks,
+} from '@/lib/seo/cityData';
 
-// Prerender top estate-sale markets at build time; rest use blocking fallback
+// ---------------------------------------------------------------------------
+// Prerender list — build-time static generation
+// Add cities with known GSC impressions here. All other slugs use blocking ISR.
+// ---------------------------------------------------------------------------
 const TOP_ESTATE_SALE_CITIES = [
+  // Core US markets
   'denver-co',
   'grand-rapids-mi',
   'chicago-il',
@@ -33,6 +49,39 @@ const TOP_ESTATE_SALE_CITIES = [
   'seattle-wa',
   'atlanta-ga',
   'minneapolis-mn',
+  // GSC-confirmed markets (showing impressions in Search Console)
+  'birmingham-al',
+  'long-beach-ca',
+  'boston-ma',
+  'nashville-tn',
+  'charlotte-nc',
+  'austin-tx',
+  'fort-worth-tx',
+  'columbus-oh',
+  'cleveland-oh',
+  'cincinnati-oh',
+  'pittsburgh-pa',
+  'richmond-va',
+  'raleigh-nc',
+  'milwaukee-wi',
+  'indianapolis-in',
+  'memphis-tn',
+  'louisville-ky',
+  'kansas-city-mo',
+  'st-louis-mo',
+  'san-diego-ca',
+  'san-francisco-ca',
+  'sacramento-ca',
+  'las-vegas-nv',
+  'salt-lake-city-ut',
+  'oklahoma-city-ok',
+  'albuquerque-nm',
+  'tucson-az',
+  'el-paso-tx',
+  'jacksonville-fl',
+  'orlando-fl',
+  'miami-fl',
+  'tampa-fl',
 ];
 
 interface SaleListing {
@@ -53,6 +102,8 @@ interface EstateSalesCityPageProps {
   citySlug: string;
   cityName: string;
   cityState: string;
+  cityMeta: CityMeta;
+  faqs: FaqItem[];
   sales: SaleListing[];
   totalCount: number;
 }
@@ -61,20 +112,28 @@ export default function EstateSalesCityPage({
   citySlug,
   cityName,
   cityState,
+  cityMeta,
+  faqs,
   sales,
   totalCount,
 }: EstateSalesCityPageProps) {
-  const title = `Estate Sales in ${cityName}, ${cityState} | FindA.Sale`;
-  const description = `Browse ${totalCount > 0 ? totalCount : 'upcoming'} estate sale${totalCount !== 1 ? 's' : ''} in ${cityName}, ${cityState}. Find furniture, antiques, collectibles, jewelry, and more. Updated daily on FindA.Sale.`;
+  const title = buildSeoTitle(cityName, cityState, totalCount);
+  const description = buildSeoDescription(cityName, cityState, totalCount);
   const canonicalUrl = `https://finda.sale/estate-sales/${citySlug}`;
+  const nearbyLinks = getNearbyLinks(cityMeta);
 
   const breadcrumbJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home',         item: 'https://finda.sale' },
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://finda.sale' },
       { '@type': 'ListItem', position: 2, name: 'Estate Sales', item: 'https://finda.sale/city/estate-sales' },
-      { '@type': 'ListItem', position: 3, name: `Estate Sales in ${cityName}, ${cityState}`, item: canonicalUrl },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: `Estate Sales in ${cityName}, ${cityState}`,
+        item: canonicalUrl,
+      },
     ],
   };
 
@@ -116,6 +175,8 @@ export default function EstateSalesCityPage({
     })),
   };
 
+  const faqJsonLd = buildFaqJsonLd(faqs);
+
   return (
     <>
       <Head>
@@ -123,7 +184,7 @@ export default function EstateSalesCityPage({
         <meta name="description" content={description} />
         <meta
           name="keywords"
-          content={`estate sales ${cityName} ${cityState}, estate sale ${cityName}, antiques ${cityName}, furniture ${cityName}, collectibles, vintage, estate auction`}
+          content={`estate sales ${cityName} ${cityState}, estate sale ${cityName}, ${cityName} estate sales, antiques ${cityName}, furniture ${cityName}, collectibles, vintage, estate auction`}
         />
         <link rel="canonical" href={canonicalUrl} key="canonical" />
         <meta property="og:title" content={title} />
@@ -142,13 +203,21 @@ export default function EstateSalesCityPage({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
         />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+        />
       </Head>
 
       <main className="min-h-screen bg-white dark:bg-slate-900">
         {/* Breadcrumb */}
         <nav className="max-w-5xl mx-auto px-4 pt-4 pb-2 text-sm text-warm-500 dark:text-warm-400">
           <ol className="flex flex-wrap items-center gap-1">
-            <li><Link href="/" className="hover:text-amber-600">Home</Link></li>
+            <li>
+              <Link href="/" className="hover:text-amber-600">
+                Home
+              </Link>
+            </li>
             <li aria-hidden="true">/</li>
             <li>
               <Link href={`/city/${citySlug}/estate-sales`} className="hover:text-amber-600">
@@ -211,27 +280,40 @@ export default function EstateSalesCityPage({
         {/* Sale grid */}
         <div className="max-w-5xl mx-auto px-4 pb-16">
           {sales.length === 0 ? (
-            <div className="py-16 text-center">
+            <div className="py-12 text-center">
               <p className="text-warm-500 dark:text-warm-400 text-lg mb-2">
                 No estate sales currently listed in {cityName}.
               </p>
               <p className="text-warm-400 dark:text-warm-500 text-sm mb-6">
                 New sales are added daily — check back soon or browse nearby cities.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link
-                  href="/cities"
-                  className="text-amber-600 hover:text-amber-700 font-medium"
-                >
+              <div className="flex flex-col sm:flex-row gap-3 justify-center mb-8">
+                <Link href="/cities" className="text-amber-600 hover:text-amber-700 font-medium">
                   Browse other cities →
                 </Link>
-                <Link
-                  href="/map"
-                  className="text-amber-600 hover:text-amber-700 font-medium"
-                >
+                <Link href="/map" className="text-amber-600 hover:text-amber-700 font-medium">
                   View sales map →
                 </Link>
               </div>
+              {/* Nearby city links on empty state */}
+              {nearbyLinks.length > 0 && (
+                <div className="max-w-sm mx-auto">
+                  <p className="text-warm-500 dark:text-warm-400 text-sm font-medium mb-3">
+                    Estate sales near {cityName}:
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {nearbyLinks.map(({ slug, label }) => (
+                      <Link
+                        key={slug}
+                        href={`/estate-sales/${slug}`}
+                        className="px-3 py-1.5 rounded-full text-sm border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:border-amber-500 hover:text-amber-600 transition-colors"
+                      >
+                        {label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
@@ -291,7 +373,11 @@ export default function EstateSalesCityPage({
                       <p className="text-xs text-warm-600 dark:text-warm-400">
                         {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         {' – '}
-                        {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {end.toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
                       </p>
 
                       {sale.address && (
@@ -306,22 +392,71 @@ export default function EstateSalesCityPage({
             </div>
           )}
 
-          {/* About estate sales in this city — SEO content block */}
+          {/* City-specific content block — powered by lib/seo/cityData.ts */}
           <div className="mt-12 p-6 bg-warm-50 dark:bg-slate-800 rounded-xl border border-warm-200 dark:border-slate-700">
             <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-3">
               About Estate Sales in {cityName}, {cityState}
             </h2>
+            <p className="text-warm-600 dark:text-warm-400 text-sm leading-relaxed mb-3">
+              {cityMeta.knownFor}
+            </p>
             <p className="text-warm-600 dark:text-warm-400 text-sm leading-relaxed">
-              Estate sales in {cityName} are one of the best ways to find furniture, antiques,
-              jewelry, collectibles, art, and household goods at below-retail prices. Sales are
-              typically held over a weekend and run by professional estate sale organizers.
-              FindA.Sale lists every estate sale in {cityName} as soon as it goes live — bookmark
-              this page to stay current.
+              <span className="font-medium text-warm-700 dark:text-warm-300">Shopper tip: </span>
+              {cityMeta.tip}
             </p>
           </div>
 
+          {/* Nearby cities */}
+          {nearbyLinks.length > 0 && (
+            <div className="mt-6 p-6 bg-warm-50 dark:bg-slate-800 rounded-xl border border-warm-200 dark:border-slate-700">
+              <h2 className="text-base font-semibold text-warm-900 dark:text-warm-100 mb-3">
+                Estate Sales Near {cityName}
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {nearbyLinks.map(({ slug, label }) => (
+                  <Link
+                    key={slug}
+                    href={`/estate-sales/${slug}`}
+                    className="px-3 py-1.5 rounded-full text-sm border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:border-amber-500 hover:text-amber-600 transition-colors"
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* FAQ section */}
+          <div className="mt-6">
+            <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">
+              Frequently Asked Questions About Estate Sales in {cityName}
+            </h2>
+            <div className="space-y-4">
+              {faqs.map((faq, i) => (
+                <details
+                  key={i}
+                  className="group border border-warm-200 dark:border-slate-700 rounded-xl overflow-hidden"
+                >
+                  <summary className="flex justify-between items-center p-4 cursor-pointer list-none bg-warm-50 dark:bg-slate-800 hover:bg-warm-100 dark:hover:bg-slate-700 transition-colors">
+                    <span className="font-medium text-warm-900 dark:text-warm-100 text-sm pr-4">
+                      {faq.question}
+                    </span>
+                    <span className="flex-shrink-0 text-warm-400 dark:text-warm-500 group-open:rotate-180 transition-transform text-lg leading-none">
+                      ›
+                    </span>
+                  </summary>
+                  <div className="p-4 pt-0 bg-white dark:bg-slate-900">
+                    <p className="text-warm-600 dark:text-warm-400 text-sm leading-relaxed pt-3 border-t border-warm-100 dark:border-slate-700">
+                      {faq.answer}
+                    </p>
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+
           {/* Organizer CTA */}
-          <div className="mt-6 p-6 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-center border border-amber-200 dark:border-amber-800">
+          <div className="mt-8 p-6 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-center border border-amber-200 dark:border-amber-800">
             <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">
               Running an estate sale in {cityName}?
             </h2>
@@ -354,9 +489,9 @@ export const getStaticPaths: GetStaticPaths = async () => {
         .map((item) => (typeof item === 'string' ? item : item.slug))
         .filter(Boolean);
       if (fetched.length > 0) {
-        // Merge API slugs with our top list, deduplicated, capped at 100
+        // Merge API slugs with our top list, deduplicated, capped at 200
         const merged = Array.from(new Set([...TOP_ESTATE_SALE_CITIES, ...fetched]));
-        slugs = merged.slice(0, 100);
+        slugs = merged.slice(0, 200);
       }
     }
   } catch (err) {
@@ -380,12 +515,15 @@ export const getStaticProps: GetStaticProps<EstateSalesCityPageProps> = async ({
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 
+  // Load city-specific SEO content from the framework
+  const cityMeta = getCityMeta(citySlug);
+  const faqs = getEstateSalesFaqs(cityName, stateCode);
+
   let sales: SaleListing[] = [];
   let totalCount = 0;
 
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    // Reuse the existing by-city endpoint, filtered to estate sales only
     const res = await fetch(
       `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}?category=estate-sales`,
       { headers: { 'Content-Type': 'application/json' } }
@@ -405,6 +543,8 @@ export const getStaticProps: GetStaticProps<EstateSalesCityPageProps> = async ({
       citySlug,
       cityName,
       cityState: stateCode,
+      cityMeta,
+      faqs,
       sales,
       totalCount,
     },
