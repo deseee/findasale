@@ -658,3 +658,40 @@ export function getNearbyLinks(
     return { slug, label: `${name}, ${sc}` };
   });
 }
+
+/**
+ * Returns FAQ items for a yard sales city page.
+ * Questions are city-name-aware and specific to yard/garage sale culture.
+ */
+export function getYardSaleFaqs(cityName: string, stateCode: string): FaqItem[] {
+  return [
+    {
+      question: `When are yard sales typically held in ${cityName}, ${stateCode}?`,
+      answer: `In ${cityName}, yard sales are most common on Friday mornings, Saturdays, and Sundays between April and October. Weekend mornings — especially Saturday from 7–8 AM — are peak time for serious shoppers. Spring cleaning season (April–May) and fall (September–October) bring the highest volume of sales.`,
+    },
+    {
+      question: `How do I find yard sales near me in ${cityName}?`,
+      answer: `FindA.Sale lists yard sales in ${cityName} as soon as they're posted. Check this page Thursday evening — most organizers post weekend sales mid-week. You can also use the map view to find sales within a specific distance from your current location.`,
+    },
+    {
+      question: `What's the best app for finding yard sales in ${cityName}, ${stateCode}?`,
+      answer: `FindA.Sale is your best resource for finding yard sales in ${cityName}. It lists yard sales, garage sales, estate sales, and flea markets in one place — updated daily. Bookmark this page or browse the map to find sales near you this weekend.`,
+    },
+    {
+      question: `Are there garage sales this weekend in ${cityName}?`,
+      answer: `This page is updated daily with yard and garage sales in ${cityName}. Check back Thursday night or Friday morning for the most complete weekend listing. Sales go up throughout the week, so the freshest listings appear as the weekend approaches.`,
+    },
+    {
+      question: `What time do yard sales start in ${cityName}?`,
+      answer: `Most yard sales in ${cityName} start between 7–9 AM and run until early afternoon. Experienced shoppers arrive at or before posted start times for the best selection on furniture, tools, and collectibles. Many sellers mark prices down 25–50% in the final hour to avoid hauling items back inside.`,
+    },
+    {
+      question: `How do I post a yard sale in ${cityName}, ${stateCode}?`,
+      answer: `You can list your yard or garage sale on FindA.Sale for free. Create an account, add your sale date, address, and a few photos of what you're selling — listings go live immediately and appear in local search results. Adding photos significantly increases how many shoppers find and attend your sale.`,
+    },
+    {
+      question: `What items sell best at yard sales in ${cityName}?`,
+      answer: `Furniture, tools, sporting goods, kitchen items, children's toys, clothing, and vintage or collectible items consistently sell well at yard sales in ${cityName}. Anything priced under $10 moves quickly. Electronics sell well when they're demonstrated to work. Clear labeling and organized displays help shoppers find what they want and increase total sales.`,
+    },
+  ];
+}
