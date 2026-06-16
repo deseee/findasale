@@ -8,6 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S997 — SEO/DEV (2026-06-16). Yard-sales Chrome QA verified + GSC sitemap itemUrls fix.**
+- **Chrome QA (S995 fix confirmed):** Navigated https://finda.sale/yard-sales/grand-rapids-mi as logged-in user. H1 = "Yard Sales in Grand Rapids, MI" ✅. About section = yard-sale copy (not Dutch heritage text) ✅. 7 yard-sale FAQs rendered ✅. 5 nearby city links (Detroit, Kalamazoo, Lansing, Chicago, Toledo) ✅. 7 sale listings ✅. FAQPage JSON-LD in source (BreadcrumbList + ItemList + FAQPage confirmed) ✅. Screenshots: ss_14861obk4, ss_59206270m, ss_6493n5xfp. PCV staged for S998 roadmap Chrome column update (per cross-session rule).
+- **GSC P1 fix — server-sitemap.xml.tsx:** Removed itemUrls block (try/catch calling /items/sitemap + itemUrls map + ...itemUrls spread). 255→241 lines. ~10,000 /items/{id} SSR leaf pages removed from sitemap — crawl budget freed for city/sale/guide pages. Comment added explaining the intentional exclusion. TypeScript: 0 errors. 1 file changed.
+- **BQ: 3→2** (sitemap itemUrls CLEARED; items ISR conversion remains P1).
+
 **S996 — BUG (2026-06-16). eBay sold sync window fix — 90-day creationdate replaces 7-day lastmodifieddate.**
 - **Root cause:** `ebaySoldSyncCron.ts` used `lastmodifieddate` filter (7-day window) on the eBay Fulfillment API. A settled order (paid + shipped quickly) has its `lastmodifieddate` frozen within hours of creation. After 7 days it falls outside the window permanently — the cron never sees it again. Items sold on eBay were never marked SOLD on FindA.Sale.
 - **Fix:** Changed filter to `creationdate:[now-90d..now]`. `creationdate` is immutable — an order placed 60 days ago always appears in a 90-day window until day 91. Idempotency preserved: cron pre-filters to AVAILABLE items only so already-SOLD items are never re-processed.
@@ -238,10 +243,10 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 _S987: #318 tab filter FIXED CODE-ONLY (affiliate.tsx useState<string> active state) — removed from BQ. BQ: 2→1._
 _S989: #313 HAUL_POST_LIKES Chrome-verified ✅ (user1 reaction→ user5 XP 416→421 +5 once; user2 reaction→ user5 XP stays 421, no re-award). BQ: 1→0._
 _S991 SEO MONITOR: GSC discovered-not-indexed 2,071 pages (core nav never crawled since 5/23/26) added as P1 per §10a mandatory trigger. BQ: 0→1._
+_S997: GSC sitemap itemUrls CLEARED — removed itemUrls block from server-sitemap.xml.tsx (255→241 lines, TS 0 errors). BQ: 3→2._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| GSC crawl-budget: 10,000 /items/{id} URLs in sitemap exhaust crawl budget | P1 — item pages are thin leaf pages (SSR, transactional) crowding out SEO-value pages; root cause of 2,071 discovered-not-indexed (S994 audit) | Remove itemUrls block from server-sitemap.xml.tsx; dispatch findasale-dev | S994 |
 | GSC: /items/[id].tsx uses SSR (getServerSideProps) — no CDN caching, slow TTFB | P1 — every Googlebot hit on /items/{id} hits Railway live; deprioritizes crawl after sitemap fix | Convert to getStaticProps + ISR revalidate:3600 with fallback:blocking | S994 |
 
 
@@ -275,57 +280,38 @@ _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Exp
 _(S925 PCV rows — logout flow Chr✅, #463 CODE-ONLY, #462 CSRF partial — applied to roadmap.md in S930 records pass — cleared.)
 _(S927 PCV rows #79/#164/#316 applied to roadmap.md in S928 records pass — cleared.)
 _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared.)_
-| SEO4-YardSalesAbout | yard-sales About section (S995 fix) — verify post-deploy | P2 bug fixed S995: getCityMeta() estate-sale copy replaced with getYardSaleMeta() yard-sale copy. Re-verify after push: navigate /yard-sales/grand-rapids-mi, confirm About body says yard-sale copy (NOT "Grand Rapids estate sales reflect the city's Dutch heritage"). Screenshot required. | S995 |
+| SEO4-YardSalesAbout | yard-sales About + FAQ + nearby cities Chrome-verified S997 | Navigated https://finda.sale/yard-sales/grand-rapids-mi as logged-in user. H1 = "Yard Sales in Grand Rapids, MI". About body = yard-sale copy (NOT Dutch heritage text). 7 yard-sale FAQs rendered. 5 nearby city links. 7 sale listings. FAQPage JSON-LD confirmed (BreadcrumbList + ItemList + FAQPage). Screenshots: ss_14861obk4, ss_59206270m, ss_6493n5xfp. Apply to roadmap.md SEO4 Chr col → ✅ S997. | S997 |
 ---
 
 
 ## Next Session
 
-### S995 onward
+### S998 onward
 
-**Push block (first action — S993+S994+S995 combined):**
+**First action — roadmap Chrome column update (S998 records pass):**
+Apply SEO4 PCV from PCV table above to roadmap.md:
+- SEO4 row (line ~141): change Chr column from `⬜` to `✅ S997`
+- Evidence gate passes: URL ✅, user ✅ (logged-in), element ✅ (H1/About/FAQ/cities/JSON-LD), outcome ✅, screenshot IDs ✅ (ss_14861obk4, ss_59206270m, ss_6493n5xfp)
+- Then clear the SEO4 PCV row from the PCV table.
+
+**Push block (S997 changes):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add "packages/frontend/pages/yard-sales/[city-slug].tsx"
-git add packages/frontend/lib/seo/cityData.ts
 git add packages/frontend/pages/server-sitemap.xml.tsx
-git add "packages/frontend/pages/estate-sales/[city-slug].tsx"
-git add packages/frontend/pages/checkout.tsx
-git add packages/backend/src/jobs/autoSeedOutreachCron.ts
-git add packages/backend/src/scripts/seedDirectoryClaimEmails.ts
-git add packages/backend/src/services/emailDiscoveryService.ts
-git add packages/backend/src/jobs/ebaySoldSyncCron.ts
-git add claude_docs/scripts/oauth_setup2.py
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S992-S996: city SEO + yard-sales pages + outreach Prisma fix + RDAP + eBay sold sync + cityData apostrophe fix"
+git commit -m "S997: GSC sitemap itemUrls removed from server-sitemap + STATE + dashboard"
 .\push.ps1
 ```
 
-**Chrome QA (after deploy):**
-`Skill('findasale-qa')` → Navigate https://finda.sale/yard-sales/grand-rapids-mi. Verify:
-1. H1 = "Yard Sales in Grand Rapids, MI" (not "Estate Sales")
-2. About section body is yard-sale copy (NOT "Grand Rapids estate sales reflect the city's Dutch heritage...")
-3. FAQ section renders (7 yard-sale FAQs)
-4. Nearby city links present (5 cities)
-5. Sale listings or appropriate empty state
-6. FAQPage JSON-LD in page source (view-source)
-Evidence: URL, user, element, outcome, screenshot IDs required.
+**GSC P1 remaining: /items/[id].tsx ISR conversion (BQ item)**
+After sitemap fix is live and indexed (allow 1–2 weeks for GSC crawl budget to reset):
+`Skill('findasale-dev')` → Convert `pages/items/[id].tsx` from getServerSideProps to getStaticProps + ISR revalidate:3600 + fallback:blocking. This is the second BQ P1 item.
 
-**GSC P1 fix — dispatch after push:**
-`Skill('findasale-dev')` → Remove `itemUrls` block from `packages/frontend/pages/server-sitemap.xml.tsx`:
-- Find the try/catch block that calls `/items/sitemap` and builds `itemUrls`
-- Remove the API call, the itemUrls variable, and the `...itemUrls` spread in the fields array
-- This removes ~10,000 thin SSR leaf pages from the sitemap → frees crawl budget for city/sale/guide pages
-- TypeScript 0 errors required
-- Return diff + changed-files list
-
-After that fix is live and indexed (1–2 weeks): dispatch ISR conversion for `pages/items/[id].tsx` (convert from getServerSideProps to getStaticProps + revalidate:3600 + fallback:blocking).
-
-**eBay carry-forward (still valid):**
+**eBay carry-forward:**
 When eBay Buy-API grant lands: ebayCatalog provider activates — verify identifiers/dims return.
 
-**BQ = 3** — 2 GSC P1 items (sitemap itemUrls + items ISR) + prior GSC monitor.
+**BQ = 2** (1 GSC P1: items ISR conversion + prior GSC monitor)
 
 
 ### S974 — Carry-forward (eBay FVF flat-rate — Chrome verify + tier-ID investigation)
