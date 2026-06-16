@@ -388,33 +388,25 @@ async function main() {
   const users: any[] = [];
 
 
-  // 23 users: 1 admin (user1) + 11 organizers (user2-12, includes unclaimed user11) + 11 shoppers (user13-23).
+  // 23 users: 11 organizers (user1-11, includes unclaimed user11) + 12 shoppers (user12-23). user1 is TEAMS organizer (no longer ADMIN — Patrick/deseee@gmail.com is the only admin).
   // The shoppers cover hardcoded references for bids, Hunt Pass, and completed-sale purchases.
   // user11 = unclaimed organizer for #361 Claim-This-Listing test (isClaimed=false).
   for (let i = 0; i < 23; i++) {
     const firstName = firstNames[i % firstNames.length];
     const lastName  = lastNames[i % lastNames.length];
     const email     = `user${i + 1}@example.com`;
-    const isAdmin   = i === 0;
     const isOrg     = i < 11; // Now includes user11
     const isShopper = i >= 11;
 
     // Compute roles array based on user type
-    let rolesArray: string[];
-    if (isAdmin) {
-      rolesArray = ['USER', 'ORGANIZER', 'ADMIN'];
-    } else if (isOrg) {
-      rolesArray = ['USER', 'ORGANIZER'];
-    } else {
-      rolesArray = ['USER'];
-    }
+    const rolesArray: string[] = isOrg ? ['USER', 'ORGANIZER'] : ['USER'];
 
     const user = await prisma.user.create({
       data: {
         email,
         password: defaultPassword,
         name: `${firstName} ${lastName}`,
-        role:  isAdmin ? 'ADMIN' : (isOrg ? 'ORGANIZER' : 'USER'),
+        role:  isOrg ? 'ORGANIZER' : 'USER',
         roles: rolesArray,
 
         phone: `616-555-${String(i).padStart(4, '0')}`,
@@ -431,7 +423,7 @@ async function main() {
   console.log('🏢 Creating 11 organizers...');
   const organizers: any[] = [];
   // Subscription tiers by organizer index (0-based): 0=TEAMS, 1=PRO, 2=SIMPLE, rest=SIMPLE
-  // user1 = TEAMS + ADMIN (founder-level), user2 = PRO, user3 = SIMPLE, user11 = unclaimed for #361 test
+  // user1 = TEAMS organizer, user2 = PRO, user3 = SIMPLE, user11 = unclaimed for #361 test. Admin = Patrick (deseee@gmail.com) only.
   const orgTiers: Record<number, string> = { 0: 'TEAMS', 1: 'PRO', 2: 'SIMPLE' };
 
   for (let i = 0; i < 11; i++) {
@@ -1272,7 +1264,7 @@ async function main() {
 
   console.log('\n✨ Seed complete!');
   console.log('\n📋 Data Summary:');
-  console.log(`  • Users:            23 (user1=ADMIN+TEAMS organizer, user2=PRO organizer, user3=SIMPLE organizer, user11=unclaimed organizer, user12=primary shopper)`);
+  console.log(`  • Users:            23 (user1=TEAMS organizer, user2=PRO organizer, user3=SIMPLE organizer, user11=unclaimed organizer, user12=primary shopper)`);
   console.log(`  • Organizers:       11 (tiers: 1×TEAMS, 1×PRO, 9×SIMPLE; user11=unclaimed w/ isClaimed=false) [#361 test]`);
   console.log(`  • Sales:            ${sales.length} (8 upcoming, 8 active, 5 ended, 4 draft)`);
   console.log(`  • Items:            ${items.length} + ${auctionItems.length} auction items [TD-04: stable picsum.photos URLs]`);
@@ -1292,7 +1284,7 @@ async function main() {
   console.log(`  • Points tx:        6`);
   console.log(`  • Conversations:    up to 2 | Messages: up to 5`);
   console.log('\n🔑 Test accounts (all passwords: Seedy2025!):');
-  console.log('   user1@example.com     — ADMIN + TEAMS organizer');
+  console.log('   user1@example.com     — TEAMS organizer (no admin)');
   console.log('   user2@example.com     — PRO organizer [TD-01: Stripe acct_test_user2]');
   console.log('   user3@example.com     — SIMPLE organizer [TD-01: Stripe acct_test_user3]');
   console.log('   user11@example.com    — Unclaimed organizer [#361 test: isClaimed=false, isUnmanagedListing=true]');
