@@ -3,7 +3,7 @@
  * Used by the /organizer/platforms page.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import Skeleton from './Skeleton';
@@ -74,7 +74,7 @@ export default function PlatformGapPanel({
       ? `&reason=${REASON_PARAM_MAP[activeGoogleFilter] || activeGoogleFilter}`
       : '';
 
-  const { isLoading, isFetching } = useQuery<PlatformGapResponse>({
+  const { isLoading, isFetching, data: gapData } = useQuery<PlatformGapResponse>({
     queryKey: ['platform-gap', platform, page, activeGoogleFilter],
     queryFn: async () => {
       const res = await api.get(
@@ -82,18 +82,20 @@ export default function PlatformGapPanel({
       );
       return res.data as PlatformGapResponse;
     },
-    onSuccess: (d: PlatformGapResponse) => {
-      setTotalNotListed(d.totalNotListed);
-      if (page === 1) {
-        setAllItems(d.items);
-      } else {
-        setAllItems((prev: GapItem[]) => [...prev, ...d.items]);
-      }
-      setInitialized(true);
-    },
-    keepPreviousData: true,
+    placeholderData: (prev) => prev,
     staleTime: 30_000,
   });
+
+  useEffect(() => {
+    if (!gapData) return;
+    setTotalNotListed(gapData.totalNotListed);
+    if (page === 1) {
+      setAllItems(gapData.items);
+    } else {
+      setAllItems((prev: GapItem[]) => [...prev, ...gapData.items]);
+    }
+    setInitialized(true);
+  }, [gapData, page]);
 
   const addToQueueMutation = useMutation({
     mutationFn: (itemIds: string[]) =>
