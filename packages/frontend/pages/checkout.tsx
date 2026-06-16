@@ -64,7 +64,7 @@ export default function CheckoutPage() {
     if (!router.isReady) return;
 
     const run = async () => {
-      const { products } = router.query;
+      const { products, coupon } = router.query;
 
       if (!products || typeof products !== 'string') {
         console.warn('[checkout] Missing or invalid products param — redirecting to /');
@@ -158,7 +158,12 @@ export default function CheckoutPage() {
 
         localStorage.setItem(CART_KEY, JSON.stringify(updatedCart));
 
-        router.replace(`/sales/${encodeURIComponent(saleId)}`);
+        // Store coupon for CheckoutModal to pre-fill (Facebook ?coupon= param)
+        if (coupon && typeof coupon === 'string' && coupon.trim()) {
+          localStorage.setItem('fas_pending_coupon', coupon.trim().toUpperCase());
+        }
+
+        router.replace(`/sales/${encodeURIComponent(saleId)}?cart=open`);
       } catch (err) {
         console.warn('[checkout] Unexpected error — redirecting to /:', err);
         router.replace('/');
