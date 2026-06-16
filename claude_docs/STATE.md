@@ -179,6 +179,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - **Bid13 ACTIVATED** — full rewrite from parked stub. `POST /api/v1/search.php` JSON API confirmed. 9 national coverage zips at 500-mile radius, paginated, deduplicated by `facility_nid`. Category: `AUCTION_HOUSE`. Respects crawl-delay (5s). `enabled: true` in sourceRegistry. Monthly GH Actions workflow created. TypeScript: 0 errors. Push block delivered — pending Patrick push.
 - **NFMA PARKED** — member directory behind NFMA login wall. Parked stub created with investigation date. Workflow created but effectively no-ops.
 - **Dead flea market research** — 7 dead scrapers investigated. Space largely collapsed 2020–2024. FleaMarketZone already in codebase and is the main comprehensive survivor. fleamapket.com and fleamarketlocator.com flagged as potential future Playwright candidates (neither worth building now).
+**S994 — SEO/DEV (2026-06-16). Yard-sales city landing pages built + GSC discovered-not-indexed root cause audited.**
+- **Records pass:** #465 Chrome QA col already ✅ S990 in roadmap.md — confirmed applied. #465 PCV table rows cleared.
+- **GitHub verification:** all S992/S993 files confirmed on GitHub main (cityData.ts sha:db2dbd65, autoSeedOutreachCron.ts sha:40ec378f, seedDirectoryClaimEmails.ts sha:cc30ff53, oauth_setup2.py sha:81ae1cd2). No push blocks needed for prior sessions.
+- **SEO4 yard-sales city page SHIPPED (CODE-ONLY):** Created `packages/frontend/pages/yard-sales/[city-slug].tsx` (554 lines) — full ISR page (revalidate:86400, 47-city prerender, fallback:blocking). Copies estate-sales page pattern exactly, changes saleType filter to yard-sales, uses yard-sale copy/FAQs throughout.
+- **cityData.ts extended:** Added `getYardSaleFaqs(cityName, stateCode): FaqItem[]` — 7 yard-sale-specific FAQs (timing, how to find, best app, this-weekend, start times, how to post, best sellers). No existing exports touched.
+- **server-sitemap.xml.tsx updated:** Added `yardSalesUrls` block (mirrors `estateSalesUrls`, priority 0.70) spread into fields.
+- TypeScript: 0 errors (frontend tsc clean). 3 files changed.
+- **GSC audit completed (P1 findings):** Root cause of 2,071 discovered-not-indexed = 10,000 /items/{id} URLs in sitemap exhausting crawl budget. Items are SSR (getServerSideProps), thin leaf pages, not the right index targets. Fix: remove itemUrls from sitemap; then convert /items/[id].tsx to ISR. Secondary: /guides/[slug] exists but not in sitemap (P2). Crawl-delay:2 in robots.txt (P3). Both P1 items added to BQ.
+- BQ: 1 → 3 (old generic GSC entry replaced with 2 specific P1 items: sitemap itemUrls removal + items ISR conversion).
+
 ## Pool Audit Findings
 
 Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
@@ -220,7 +230,8 @@ _S991 SEO MONITOR: GSC discovered-not-indexed 2,071 pages (core nav never crawle
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| GSC "Discovered not indexed" — 2,071 pages rising (core nav: /about, /categories/*, /city-heat-index never crawled since 5/23/26) | P1 — crawl budget problem; Google knows about pages (sitemap) but has never fetched them | Audit: (1) noindex meta on core pages, (2) SSR output, (3) internal links from indexed pages, (4) sitemap quality/dilution | S991 SEO monitor |
+| GSC crawl-budget: 10,000 /items/{id} URLs in sitemap exhaust crawl budget | P1 — item pages are thin leaf pages (SSR, transactional) crowding out SEO-value pages; root cause of 2,071 discovered-not-indexed (S994 audit) | Remove itemUrls block from server-sitemap.xml.tsx; dispatch findasale-dev | S994 |
+| GSC: /items/[id].tsx uses SSR (getServerSideProps) — no CDN caching, slow TTFB | P1 — every Googlebot hit on /items/{id} hits Railway live; deprioritizes crawl after sitemap fix | Convert to getStaticProps + ISR revalidate:3600 with fallback:blocking | S994 |
 
 
 
@@ -242,9 +253,7 @@ _(S940 PCV rows — #27b watermark settings gating ✅ PRO/TEAMS, #75 non-lapsed
 _(S939 PCV rows — SEO3 REJECTED no screenshot ID (Human QA ⬜ unchanged), #470 RUNTIME-VERIFIED already in roadmap — cleared S941.)_
 |---|---------|----------|---------|
 _(#465 S984 PCVs — roadmap #465 Claude QA col already shows ⏳ 3/4 Chr verified S984. All 4 rows cleared S986.)_
-| #465 | GA4 shopper_item_favorited | Navigated https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m as Artifact MI. Clicked Save button. gtag interceptor fired {eventName: 'shopper_item_favorited', params: {event_category:'engagement', item_id:'cmo3etp4d005djqsu4yi9w45m'}}. Reloaded — item saved in favorites. (ss_0216lvvsn ss_3418eo8gk) | S990 |
-| #465 | GA4 checkout_initiated | Same item page, Artifact MI. Clicked Buy It Now. gtag interceptor fired {eventName: 'checkout_initiated', params: {event_category:'engagement', item_id:'cmo3etp4d005djqsu4yi9w45m'}}. Checkout flow initiated. (ss_0216lvvsn) | S990 |
-| #465 | GA4 first_item_published | Navigated /organizer/add-items/cmqflappy014ebo1n952gj4z7 (new empty sale) as Artifact MI. Manual Entry — typed title + price, clicked Save Item. gtag interceptor fired {eventName: 'first_item_published', params: {event_category:'engagement', sale_id:'cmqflappy014ebo1n952gj4z7'}}. items.length was 0 before save — event gate confirmed correct. Test sale deleted. (ss_7000y2s0t ss_3418eo8gk) | S990 |
+_(#465 S990 PCVs — shopper_item_favorited / checkout_initiated / first_item_published — all 4 events confirmed in roadmap.md row #465 Chrome QA col as ✅ S990. Cleared S994.)_
 
 _(⁠#358 OFF direction ✅ S986 applied S987 records pass — roadmap.md #358 Claude QA col → ⏳ OFF ✅ S986 / ON pending Chr verify — cleared.)_
 _(#318 ✅ S988 applied S989 records pass — roadmap.md #318 Chrome QA col → ✅ S988 — cleared.)_
@@ -260,46 +269,44 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S994 onward
+### S995 onward
 
-**Records pass (first action):**
-Apply #465 PCVs from S990 to roadmap.md — update Chrome QA col from `⏳ 3/4 Chr verified S984` to `✅ S990` (all 4 events verified). Evidence:
-- shopper_item_favorited ✅: URL https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m, Artifact MI, Save button click, gtag interceptor (ss_0216lvvsn ss_3418eo8gk)
-- checkout_initiated ✅: same item, Buy It Now click, gtag interceptor (ss_0216lvvsn)
-- first_item_published ✅: empty test sale (deleted post-test), Manual Entry first item save, gtag interceptor (ss_7000y2s0t ss_3418eo8gk)
-5-element gate: URL ✅, user ✅, element ✅, outcome ✅, screenshot IDs ✅.
+**Push block (first action):**
+Push the S994 SEO work:
+```
+git add packages/frontend/pages/yard-sales/[city-slug].tsx
+git add packages/frontend/lib/seo/cityData.ts
+git add packages/frontend/pages/server-sitemap.xml.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "feat: yard-sales city landing pages + GSC crawl-budget audit"
+.\push.ps1
+```
 
-**Push S993 wrap:** push block — `packages/backend/src/jobs/autoSeedOutreachCron.ts` + `packages/backend/src/scripts/seedDirectoryClaimEmails.ts` + wrap docs.
+**Chrome QA (after deploy):**
+`Skill('findasale-qa')` → Navigate https://finda.sale/yard-sales/grand-rapids-mi. Verify:
+1. H1 = "Yard Sales in Grand Rapids, MI" (not "Estate Sales")
+2. FAQ section renders (7 yard-sale FAQs)
+3. Nearby city links present
+4. Sale listings or appropriate empty state
+5. FAQPage JSON-LD in page source (view-source)
+Evidence: URL, user, element, outcome, screenshot IDs required.
 
-**Push S992 wrap (if not yet pushed):** push block below — `packages/frontend/lib/seo/cityData.ts` (new) + `packages/frontend/pages/estate-sales/[city-slug].tsx` (updated) + `claude_docs/scripts/oauth_setup2.py` (new) + wrap docs.
+**GSC P1 fix — dispatch after push:**
+`Skill('findasale-dev')` → Remove `itemUrls` block from `packages/frontend/pages/server-sitemap.xml.tsx`:
+- Find the try/catch block that calls `/items/sitemap` and builds `itemUrls`
+- Remove the API call, the itemUrls variable, and the `...itemUrls` spread in the fields array
+- This removes ~10,000 thin SSR leaf pages from the sitemap → frees crawl budget for city/sale/guide pages
+- TypeScript 0 errors required
+- Return diff + changed-files list
 
-**SEO framework extension — extend cityData.ts to other city page types:**
-The reusable framework at `packages/frontend/lib/seo/cityData.ts` is ready. The next step is to create parallel pages for the other sale types that benefit from city landing pages. Highest-priority by GSC search volume:
-
-`Skill('findasale-dev')` → Create `packages/frontend/pages/yard-sales/[city-slug].tsx`
-- Copy the estate-sales page as base (same ISR/getStaticProps/getStaticPaths pattern)
-- Change `saleType` filter in API call from `estate-sales` to `yard-sales`
-- Import the same framework: `getCityMeta`, `buildSeoTitle`, `buildSeoDescription`, `buildFaqJsonLd`, `getNearbyLinks`
-- Update `getEstateSalesFaqs` — or create `getYardSaleFaqs(cityName, stateCode)` in cityData.ts with yard-sale-specific questions (e.g. "When do yard sales happen in [city]?", "How to find yard sales near [city] this weekend?")
-- Update all heading copy (h1, breadcrumb, sale-type pill, organizer CTA) for yard sales
-- Keep top 20–25 cities in the prerender list (same GSC markets)
-- Add `cityData.ts` export for `getYardSaleFaqs` alongside existing `getEstateSalesFaqs`
-- TypeScript 0 errors required before returning
-
-Also add to `claude_docs/server-sitemap.xml.tsx` — include `/yard-sales/{slug}` URLs at priority 0.70 for all canonicalCitySlugs returned by the API.
-
-Note: DO NOT modify `lib/seo/cityData.ts` schema — only ADD the `getYardSaleFaqs` export. All existing exports stay intact.
-
-Acceptance criteria:
-- `/yard-sales/denver-co` renders with yard-sale-specific title, FAQ schema, city content, nearby cities
-- `/yard-sales/birmingham-al` is pre-rendered (in paths list)
-- TypeScript 0 errors on frontend
-- Changed files list returned (for push block)
+After that fix is live and indexed (1–2 weeks): dispatch ISR conversion for `pages/items/[id].tsx` (convert from getServerSideProps to getStaticProps + revalidate:3600 + fallback:blocking).
 
 **eBay carry-forward (still valid):**
 When eBay Buy-API grant lands: ebayCatalog provider activates — verify identifiers/dims return.
 
-**BQ = 1** — GSC "discovered not indexed" monitor active; expect improvement post S991 crawl-budget fixes.
+**BQ = 3** — 2 GSC P1 items (sitemap itemUrls + items ISR) + prior GSC monitor.
 
 
 ### S974 — Carry-forward (eBay FVF flat-rate — Chrome verify + tier-ID investigation)

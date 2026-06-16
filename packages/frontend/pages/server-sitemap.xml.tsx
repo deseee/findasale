@@ -134,6 +134,15 @@ export async function getServerSideProps(ctx: any) {
       priority: 0.75, // lower from 0.85 — was outcompeting core nav pages for crawl budget
     }));
 
+    // /yard-sales/{city-slug} — dedicated yard-sales city landing pages
+    // Targets GSC cluster: "yard sales [city]" / "garage sales [city]"
+    const yardSalesUrls = canonicalCitySlugs.map((slug: string) => ({
+      loc: `${baseUrl}/yard-sales/${slug}`,
+      lastmod: new Date().toISOString(),
+      changefreq: 'daily',
+      priority: 0.70,
+    }));
+
     // Generate neighborhood URLs
     const neighborhoodUrls = neighborhoods.map((neighborhood: string) => ({
       loc: `${baseUrl}/neighborhoods/${neighborhood}`,
@@ -224,6 +233,7 @@ export async function getServerSideProps(ctx: any) {
       ...cityCategoryUrls,
       ...thisWeekendUrls,
       ...estateSalesUrls,
+      ...yardSalesUrls,
       ...neighborhoodUrls,
       ...zipUrls,
       ...tagUrls,
