@@ -8,6 +8,21 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1000 — DEV (2026-06-16). Facebook Commerce Manager overhaul — 8 issues fixed.**
+- **Root cause (ArtifactMI error report):** All 10 CM items "Not visible in Shops" — single missing field `quantity_to_sell_on_facebook`. Audit surfaced 7 additional FB integration gaps.
+- **Issue 1 (CRITICAL):** Added `quantity_to_sell_on_facebook` to `exportCommerceManagerFeed` — `1` for AVAILABLE, `0` for SOLD.
+- **Issue 2 (HIGH):** Fixed `brand` fallback from `'N/A'` → `''` (FB spec requires empty string for unknown brand).
+- **Issue 3 (HIGH):** New organizer-level CM feed endpoint: `GET /api/organizers/:organizerId/export/commerce-feed` — stable URL across all active sales. Per-sale endpoint kept for backward compat.
+- **Issue 4 (MEDIUM):** Added `Organizer.fbCatalogEnabled Boolean @default(false)` + `fbCatalogRegisteredAt DateTime?`. Migration: `20260616000002_add_organizer_fb_catalog_enabled`. `platformStatsService` now uses flag for facebook.connected + facebook.listed.
+- **Issue 5 (MEDIUM):** Settings page — new "Facebook Commerce Manager" section with feed URL + registration toggle. PATCH /organizers/me handles `fbCatalogEnabled`.
+- **Issue 6 (LOW):** `facebookNudgeService` routes to `business.facebook.com/commerce` for CM users, `facebook.com/marketplace/selling/` for Marketplace users.
+- **Issue 7 (LOW):** `formatFacebookCsv` in `exportService.ts` marked `@deprecated` (not deleted — removal gate).
+- **Issue 8 (LOW):** Promote page — Commerce Manager section with organizer-level feed URL + copy button.
+- **Schema:** Migration `20260616000002_add_organizer_fb_catalog_enabled` — Patrick MUST run `prisma migrate deploy` + `prisma generate`.
+- **TypeScript:** 0 errors (both packages). ADR saved to `claude_docs/feature-notes/adr-facebook-commerce-manager-2026-06-16.md`.
+- **QA:** CODE-ONLY — pending Chrome verification. 4 items added to Blocked Queue.
+- **BQ delta:** 5 → 9.
+
 **S999 — DEV (2026-06-16). Platform Metrics Dashboard + eBay Queue Mode engine shipped.**
 - **Shipped:** 12 files — 4 new backend (platformStatsService.ts, platformStatsController.ts, ebayListingQueueCron.ts, 5 new routes), 3 new frontend (platforms.tsx, PlatformHighlightsWidget.tsx, PlatformGapPanel.tsx), 5 modified (organizers.ts, index.ts, ebayController.ts, dashboard.tsx).
 - **Schema:** 4 new fields — Item.ebayQueuedAt, Item.ebayListedAt, Organizer.ebayQueueMode, Organizer.ebayQueueRotation. Migration: 20260616000001_ebay_queue_mode.
@@ -269,6 +284,11 @@ _S997: GSC sitemap itemUrls CLEARED — removed itemUrls block from server-sitem
 | PlatformHighlightsWidget on dashboard | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: verify widget appears on dashboard between SmartSearchViewsCard and DemandSignalsCard, stats load, link to /organizer/platforms works | S999 |
 | eBay Queue Mode toggle + queue management | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: enable Queue Mode via PATCH endpoint, verify queue panel appears, add item to queue, verify queued count updates | S999 |
 | ebayListingQueueCron Phase A + B | CODE-ONLY: not browser-verified | Verify cron starts in Railway logs, verify Phase A fills slots on next 30-min cycle (requires organizer with ebayQueueMode=true and items in queue) | S999 |
+| FB Commerce Manager — settings FM toggle + feed URL | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: navigate to /organizer/settings, verify CM section renders, copy feed URL, toggle fbCatalogEnabled on | S1000 |
+| FB Commerce Manager — promote page CM section | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: navigate to /organizer/promote/[saleId], verify CM section renders with organizer-level feed URL | S1000 |
+| FB organizer-level CM feed endpoint | CODE-ONLY: not browser-verified | Hit GET /api/organizers/:organizerId/export/commerce-feed — verify CSV with quantity_to_sell_on_facebook column returns correctly | S1000 |
+| Platform stats — fbCatalogEnabled connected/listed logic | CODE-ONLY: not browser-verified | Toggle fbCatalogEnabled then reload /organizer/platforms — verify facebook.connected=true and listed count = total AVAILABLE items | S1000 |
+
 
 
 
