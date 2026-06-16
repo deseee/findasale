@@ -678,13 +678,13 @@ const YARD_SALE_ABOUT: Record<string, { knownFor: string; tip: string }> = {
   },
   'denver-co': {
     knownFor:
-      'Denver yard sales reflect the city's outdoor-active culture — expect camping gear, ski equipment, bikes, and sporting goods alongside furniture and household items from Washington Park, Capitol Hill, and the suburbs.',
+      "Denver yard sales reflect the city's outdoor-active culture — expect camping gear, ski equipment, bikes, and sporting goods alongside furniture and household items from Washington Park, Capitol Hill, and the suburbs.",
     tip:
-      'Washington Park and the Highlands neighborhoods are hotspots for quality garage sales. Denver's mile-high sunshine means sales run year-round, with peak volume April through October.',
+      "Washington Park and the Highlands neighborhoods are hotspots for quality garage sales. Denver's mile-high sunshine means sales run year-round, with peak volume April through October.",
   },
   'chicago-il': {
     knownFor:
-      'Chicago's garage sale scene is massive — North Side neighborhoods like Lincoln Square, Andersonville, and Irving Park see hundreds of sales each spring weekend, with everything from vintage finds to everyday household goods.',
+      "Chicago's garage sale scene is massive — North Side neighborhoods like Lincoln Square, Andersonville, and Irving Park see hundreds of sales each spring weekend, with everything from vintage finds to everyday household goods.",
     tip:
       'North Side neighborhoods are the best hunting ground for weekend garage sales. Subscribe to FindA.Sale alerts mid-week — new Chicago listings are added constantly through Friday.',
   },
@@ -708,7 +708,7 @@ const YARD_SALE_ABOUT: Record<string, { knownFor: string; tip: string }> = {
   },
   'new-york-ny': {
     knownFor:
-      'New York City yard sales are a treasure hunt — Brooklyn's Park Slope, Ditmas Park, and Astoria in Queens produce some of the most eclectic garage and stoop sales in the country, packed with vintage finds and quality castoffs.',
+      "New York City yard sales are a treasure hunt — Brooklyn's Park Slope, Ditmas Park, and Astoria in Queens produce some of the most eclectic garage and stoop sales in the country, packed with vintage finds and quality castoffs.",
     tip:
       'Brooklyn and Queens neighborhoods host the most yard and stoop sales. NYC sales list quickly and move fast — set up FindA.Sale alerts and be ready to move on Saturday morning.',
   },
@@ -722,13 +722,13 @@ const YARD_SALE_ABOUT: Record<string, { knownFor: string; tip: string }> = {
     knownFor:
       'Seattle yard sales reflect Pacific Northwest life — Capitol Hill, Ballard, and Fremont neighborhoods produce sales packed with outdoor gear, Pacific Rim finds, artisan goods, and quality mid-century furniture.',
     tip:
-      'Ballard and Queen Anne are Seattle's best garage sale neighborhoods. Target dry weekends in May–September — Seattle's rainy season (October–April) significantly reduces outdoor sale activity.',
+      "Ballard and Queen Anne are Seattle's best garage sale neighborhoods. Target dry weekends in May–September — Seattle's rainy season (October–April) significantly reduces outdoor sale activity.",
   },
   'atlanta-ga': {
     knownFor:
-      'Atlanta garage sales are active across the metro's many suburban communities — Decatur, Smyrna, and Marietta produce a steady stream of family sales with furniture, clothing, toys, and Southern household goods.',
+      "Atlanta garage sales are active across the metro's many suburban communities — Decatur, Smyrna, and Marietta produce a steady stream of family sales with furniture, clothing, toys, and Southern household goods.",
     tip:
-      'Decatur and the Intown neighborhoods host the most eclectic Atlanta yard sales. Spring (March–May) is Atlanta's peak garage sale season — summer heat slows outdoor selling considerably.',
+      "Decatur and the Intown neighborhoods host the most eclectic Atlanta yard sales. Spring (March–May) is Atlanta's peak garage sale season — summer heat slows outdoor selling considerably.",
   },
   'minneapolis-mn': {
     knownFor:
@@ -738,25 +738,25 @@ const YARD_SALE_ABOUT: Record<string, { knownFor: string; tip: string }> = {
   },
   'portland-or': {
     knownFor:
-      'Portland yard sales capture the city's creative, DIY spirit — SE Portland, Sellwood, and Mississippi Avenue neighborhoods produce eclectic finds: vintage clothing, handmade goods, vinyl records, and quality furniture.',
+      "Portland yard sales capture the city's creative, DIY spirit — SE Portland, Sellwood, and Mississippi Avenue neighborhoods produce eclectic finds: vintage clothing, handmade goods, vinyl records, and quality furniture.",
     tip:
       'Sellwood and SE Portland are the best neighborhoods for Portland garage sales. The season runs April through October — aim for clear weekend days and check listings Friday morning for new additions.',
   },
   'austin-tx': {
     knownFor:
-      'Austin garage sales reflect the city's rapid growth and diverse population — Hyde Park, Cherrywood, and South Austin neighborhoods produce sales ranging from vintage finds and music gear to outdoor equipment and family household goods.',
+      "Austin garage sales reflect the city's rapid growth and diverse population — Hyde Park, Cherrywood, and South Austin neighborhoods produce sales ranging from vintage finds and music gear to outdoor equipment and family household goods.",
     tip:
-      'Hyde Park and the 78704 zip code (South Austin) are Austin's best garage sale zones. October through April offers the most comfortable weather for morning shopping.',
+      "Hyde Park and the 78704 zip code (South Austin) are Austin's best garage sale zones. October through April offers the most comfortable weather for morning shopping.",
   },
   'boston-ma': {
     knownFor:
-      'Boston yard sales draw from one of America's oldest cities — Brookline, Newton, and Arlington suburbs produce sales with a mix of colonial-era antiques, university-adjacent books and furniture, and quality New England household goods.',
+      "Boston yard sales draw from one of America's oldest cities — Brookline, Newton, and Arlington suburbs produce sales with a mix of colonial-era antiques, university-adjacent books and furniture, and quality New England household goods.",
     tip:
       'Brookline and Newton are consistently the best Boston-area neighborhoods for garage sales. Spring sales (April–June) are the richest as families clear out after long winters.',
   },
   'nashville-tn': {
     knownFor:
-      'Nashville garage sales have surged with the city's growth — 12South, East Nashville, and the surrounding suburbs produce a mix of vintage finds, music memorabilia, furniture, and household goods from a rapidly changing population.',
+      "Nashville garage sales have surged with the city's growth — 12South, East Nashville, and the surrounding suburbs produce a mix of vintage finds, music memorabilia, furniture, and household goods from a rapidly changing population.",
     tip:
       'East Nashville and Donelson are the most active Nashville garage sale areas. Spring (March–May) is peak season — summer heat makes outdoor sales less common in Middle Tennessee.',
   },
