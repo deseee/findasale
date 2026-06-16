@@ -7,11 +7,15 @@
  *   /checkout?products=ITEM_ID:QUANTITY,ITEM_ID2:QUANTITY2&coupon=PROMO_CODE
  *
  * Client-side flow:
- *   1. Parse the first ITEM_ID from the products param
- *   2. Fetch the item from the backend (/api/items/:id)
- *   3. Write it into localStorage cart (fas_shopper_cart)
+ *   1. Parse ALL item IDs from the products param
+ *   2. Fetch each item from the backend (/api/items/:id) in parallel
+ *   3. Determine the primary saleId (first successfully-fetched item)
+ *   4. Filter to items from that same sale (single-sale cart constraint)
+ *   5. Write them into localStorage cart (fas_shopper_cart)
  *      - Append if same saleId already in cart; replace if different saleId
- *   4. Redirect to /sales/:saleId where the cart drawer is accessible
+ *      - Price stored in CENTS (multiply API dollars × 100) so ShopperCartDrawer
+ *        can display with its standard `(price / 100).toFixed(2)` logic
+ *   6. Redirect to /sales/:saleId where the cart drawer is accessible
  *
  * Fallback: redirect to / on any parse / fetch error.
  *
@@ -36,6 +40,22 @@ interface CartState {
   saleId: string | null;
 }
 
+/** Convert a raw API item record to a CartItem with price in CENTS. */
+function toCartItem(item: Record<string, unknown>, saleId: string): CartItem {
+  return {
+    id: item.id as string,
+    title: item.title as string,
+    // API returns price in dollars; ShopperCartDrawer displays (price / 100)
+    price:
+      item.price != null ? Math.round(Number(item.price) * 100) : null,
+    photoUrl:
+      Array.isArray(item.photoUrls) && (item.photoUrls as unknown[]).length > 0
+        ? (item.photoUrls as string[])[0]
+        : undefined,
+    saleId,
+  };
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
 
@@ -52,29 +72,42 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Parse "ID:QTY,ID2:QTY2" — take only the first item ID
-      const firstEntry = products.split(',')[0] ?? '';
-      const itemId = firstEntry.split(':')[0].trim();
+      // Parse "ID:QTY,ID2:QTY2" — extract all item IDs
+      const entries = products.split(',');
+      const itemIds: string[] = entries
+        .map((e) => e.split(':')[0].trim())
+        .filter(Boolean);
 
-      if (!itemId) {
-        console.warn('[checkout] Could not parse itemId — redirecting to /');
+      if (itemIds.length === 0) {
+        console.warn('[checkout] Could not parse any itemIds — redirecting to /');
         router.replace('/');
         return;
       }
 
       try {
-        const res = await fetch(`/api/items/${encodeURIComponent(itemId)}`, {
-          credentials: 'include',
-        });
+        // Fetch all items in parallel
+        const results = await Promise.all(
+          itemIds.map((id) =>
+            fetch(`/api/items/${encodeURIComponent(id)}`, {
+              credentials: 'include',
+            }).then((res) =>
+              res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))
+            )
+          )
+        );
 
-        if (!res.ok) {
-          console.warn(`[checkout] Backend returned ${res.status} for item ${itemId} — redirecting to /`);
+        // Determine primary saleId from the first successfully-resolved item
+        const primaryItem = results[0] as Record<string, unknown> | undefined;
+        if (!primaryItem) {
+          console.warn('[checkout] No items returned — redirecting to /');
           router.replace('/');
           return;
         }
 
-        const item = await res.json();
-        const saleId: string | null = item.saleId ?? item.sale?.id ?? null;
+        const saleId: string | null =
+          (primaryItem.saleId as string | undefined) ??
+          ((primaryItem.sale as Record<string, unknown> | undefined)?.id as string | undefined) ??
+          null;
 
         if (!saleId) {
           console.warn('[checkout] Item has no saleId — redirecting to /');
@@ -82,15 +115,21 @@ export default function CheckoutPage() {
           return;
         }
 
-        const cartItem: CartItem = {
-          id: item.id,
-          title: item.title,
-          price: item.price ?? null,
-          photoUrl: Array.isArray(item.photoUrls) && item.photoUrls.length > 0
-            ? item.photoUrls[0]
-            : undefined,
-          saleId,
-        };
+        // Build cart items — only include items from the same sale
+        const newCartItems: CartItem[] = (results as Record<string, unknown>[])
+          .filter((item) => {
+            const itemSaleId =
+              (item.saleId as string | undefined) ??
+              ((item.sale as Record<string, unknown> | undefined)?.id as string | undefined);
+            return itemSaleId === saleId;
+          })
+          .map((item) => toCartItem(item, saleId));
+
+        if (newCartItems.length === 0) {
+          console.warn('[checkout] No valid cart items after sale filter — redirecting to /');
+          router.replace('/');
+          return;
+        }
 
         // Read existing cart, merge or replace
         let existing: CartState = { items: [], saleId: null };
@@ -105,14 +144,15 @@ export default function CheckoutPage() {
 
         let updatedCart: CartState;
         if (existing.saleId && existing.saleId !== saleId) {
-          // Different sale — replace cart
-          updatedCart = { items: [cartItem], saleId };
+          // Different sale — replace entire cart with incoming items
+          updatedCart = { items: newCartItems, saleId };
         } else {
-          // Same sale (or empty cart) — append if not already present
-          const alreadyInCart = existing.items.some((i) => i.id === cartItem.id);
+          // Same sale (or empty cart) — append items not already present
+          const existingIds = new Set(existing.items.map((i) => i.id));
+          const toAdd = newCartItems.filter((i) => !existingIds.has(i.id));
           updatedCart = {
             saleId,
-            items: alreadyInCart ? existing.items : [...existing.items, cartItem],
+            items: [...existing.items, ...toAdd],
           };
         }
 
