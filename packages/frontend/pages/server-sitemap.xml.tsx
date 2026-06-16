@@ -210,22 +210,9 @@ export async function getServerSideProps(ctx: any) {
       // Graceful fallback — encyclopedia URLs are optional
     }
 
-    // Individual item pages
-    let itemUrls: any[] = [];
-    try {
-      const itemsResponse = await api.get('/items/sitemap');
-      const items = itemsResponse.data.items || itemsResponse.data || [];
-      itemUrls = items.map((item: any) => ({
-        loc: `${baseUrl}/items/${item.id}`,
-        lastmod: item.updatedAt ? new Date(item.updatedAt).toISOString() : new Date().toISOString(),
-        changefreq: 'daily',
-        priority: 0.8,
-      }));
-    } catch {
-      // Graceful fallback — item URLs are optional
-    }
-
     // Combine all URL sets
+    // Note: /items/{id} URLs intentionally excluded — ~10k SSR leaf pages
+    // exhaust crawl budget, crowding out city/sale/guide pages. ISR conversion pending.
     const fields = [
       ...staticUrls,
       ...saleUrls,
@@ -240,7 +227,6 @@ export async function getServerSideProps(ctx: any) {
       ...guideUrls,
       ...categoryUrls,
       ...encyclopediaUrls,
-      ...itemUrls,
     ];
 
     return getServerSideSitemap(ctx, fields);
