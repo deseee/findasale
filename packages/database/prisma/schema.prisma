@@ -1230,6 +1230,11 @@ model Item {
   ebayQueuedAt               DateTime? // When item was added to eBay listing queue (null = not queued)
   ebayListedAt               DateTime? // When item was first listed on eBay (set on first push, never updated on relist)
   fbExportedAt               DateTime?
+  // ADR ebay-multiquantity (2026-06-16): track eBay multi-quantity listing units.
+  // NOTE: distinct from `quantity` above (which means "set of N sold as one lot").
+  ebayQuantityAvailable      Int? // total units on the eBay listing (null/1 = single-unit)
+  ebayQuantitySold           Int                    @default(0) // units sold via eBay, projected from EbaySoldEvent
+  ebaySoldEvents             EbaySoldEvent[]
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -1247,6 +1252,25 @@ model Item {
   @@index([saleId])
   @@index([saleId, status]) // Sentry slow query: SELECT Item WHERE saleId+status (1351ms) — public item browse + POS organizer item search with optional status filter
   @@index([saleId, markdownApplied]) // Sentry slow query: markdownCron findMany WHERE saleId+markdownApplied=false — eliminates per-sale full scans in markdown job
+}
+
+// ADR ebay-multiquantity (2026-06-16): idempotent ledger of eBay unit sales.
+// One row per eBay sale line (unique orderId+lineItemId) — the reprocessing guard the
+// sold-sync needs so multi-quantity listings alert once per unit and never double-count.
+model EbaySoldEvent {
+  id             String   @id @default(uuid())
+  itemId         String
+  item           Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ebayListingId  String   // legacyItemId at time of sale
+  ebayOrderId    String   // eBay order id
+  ebayLineItemId String   // eBay line item id within the order
+  quantitySold   Int      @default(1) // units in this line item
+  soldAt         DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@unique([ebayOrderId, ebayLineItemId]) // IDEMPOTENCY KEY — one row per eBay sale line
+  @@index([itemId])
+  @@index([ebayListingId])
 }
 
 // ADR-069 Phase 2: Photo role taxonomy
