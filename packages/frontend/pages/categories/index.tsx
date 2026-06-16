@@ -5,6 +5,7 @@
 import React from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import type { GetStaticProps } from 'next';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
@@ -496,7 +497,11 @@ const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
 };
 
 
-const CategoriesIndexPage = () => {
+interface Props {
+  initialData?: { categories: Record<string, number> };
+}
+
+const CategoriesIndexPage = ({ initialData }: Props) => {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['item-categories'],
     queryFn: async () => {
@@ -504,6 +509,9 @@ const CategoriesIndexPage = () => {
       return res.data as { categories: Record<string, number> };
     },
     staleTime: 5 * 60_000,
+    // SSG: seed the cache with server-fetched data so Google crawls real content.
+    // TanStack Query treats initialData as already-fresh (uses staleTime).
+    initialData,
   });
 
   // M-008 + L-003: Dedupe identical leaf names (case/whitespace) and roll up
@@ -673,3 +681,27 @@ const CategoriesIndexPage = () => {
 };
 
 export default CategoriesIndexPage;
+
+export const getStaticProps: GetStaticProps<Props> = async () => {
+  try {
+    // Use backend URL directly — avoids double-hop through Next.js API routes at build time.
+    const apiBaseUrl =
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.INTERNAL_API_URL ||
+      'http://localhost:4000/api';
+    const res = await fetch(`${apiBaseUrl}/items/categories`);
+    if (!res.ok) throw new Error(`/items/categories returned ${res.status}`);
+    const data = (await res.json()) as { categories: Record<string, number> };
+    return {
+      props: { initialData: data },
+      revalidate: 300, // ISR: re-render every 5 minutes on Vercel
+    };
+  } catch (err) {
+    console.error('[categories/index] getStaticProps error:', err);
+    // Graceful fallback: serve page without pre-rendered data; client hydrates.
+    return {
+      props: {},
+      revalidate: 60, // retry sooner after error
+    };
+  }
+};

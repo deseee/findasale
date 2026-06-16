@@ -29,7 +29,6 @@ export async function getServerSideProps(ctx: any) {
       { path: '/cities', priority: 0.8, changefreq: 'weekly' },
       { path: '/categories', priority: 0.8, changefreq: 'weekly' },
       { path: '/encyclopedia', priority: 0.7, changefreq: 'weekly' },
-      { path: '/city-heat-index', priority: 0.7, changefreq: 'weekly' },
       { path: '/about', priority: 0.6, changefreq: 'monthly' },
       { path: '/contact', priority: 0.5, changefreq: 'monthly' },
       { path: '/faq', priority: 0.5, changefreq: 'monthly' },
@@ -106,7 +105,7 @@ export async function getServerSideProps(ctx: any) {
         loc: `${baseUrl}/city/${slug}`,
         lastmod: new Date().toISOString(),
         changefreq: 'daily',
-        priority: 0.8,
+        priority: 0.75, // lowered from 0.8 — preserve crawl budget for core nav pages
       });
       for (const category of SALE_CATEGORIES) {
         cityCategoryUrls.push({
@@ -123,7 +122,7 @@ export async function getServerSideProps(ctx: any) {
       loc: `${baseUrl}/this-weekend/${slug}`,
       lastmod: new Date().toISOString(),
       changefreq: 'daily',
-      priority: 0.8,
+      priority: 0.7, // lowered from 0.8 — reduce crawl budget drain on GEO variants
     }));
 
     // /estate-sales/{city-slug} — dedicated estate-sales city landing pages (SEO3)
@@ -132,7 +131,7 @@ export async function getServerSideProps(ctx: any) {
       loc: `${baseUrl}/estate-sales/${slug}`,
       lastmod: new Date().toISOString(),
       changefreq: 'daily',
-      priority: 0.85, // higher than generic city pages — exact-intent match
+      priority: 0.75, // lower from 0.85 — was outcompeting core nav pages for crawl budget
     }));
 
     // Generate neighborhood URLs
