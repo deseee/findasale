@@ -2,20 +2,23 @@
  * Feature #49: City Heat Index
  *
  * Page: /city-heat-index
- * - Redirects to /cities
+ * - Server-side 301 redirect to /cities (the canonical URL).
+ * - Previous implementation used useEffect + router.push, which returns null
+ *   to crawlers and cannot be followed by Google — causing the page to sit
+ *   permanently in the "Discovered - currently not indexed" bucket.
  */
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
+import { GetServerSideProps } from 'next';
 
-const CityHeatIndexPage = () => {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.push('/cities');
-  }, [router]);
-
-  return null;
+export const getServerSideProps: GetServerSideProps = async () => {
+  return {
+    redirect: {
+      destination: '/cities',
+      permanent: true, // HTTP 301 — passes PageRank to /cities
+    },
+  };
 };
 
+// Component never renders — redirect fires server-side before hydration.
+const CityHeatIndexPage = () => null;
 export default CityHeatIndexPage;
