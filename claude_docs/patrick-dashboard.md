@@ -1,10 +1,12 @@
-# Patrick's Dashboard — Week of June 16, 2026 (Updated S998)
+# Patrick's Dashboard — Week of June 16, 2026 (Updated S999)
 
 ---
 
 ## What Happened This Week
 
-**S998 (today — eBay bidirectional sync restored):** Fixed the root cause of classic eBay listings (items listed directly on eBay, not via FindA.Sale) showing "Push to eBay" even though they were already live. Root cause: the import function had an `if (totalFetched === 0)` guard before the Trading API block — ArtifactMI has 18 Inventory API items, so the guard always fired and the Trading API (`GetMyeBaySelling`, which returns ALL listings regardless of how they were created) never ran. Fix: removed the guard — both APIs now always run. Dedup logic handles items found by both paths. Patrick confirmed after deploy: "wrap it synced now." Also shipped: `seed.ts` fix removing user1 ADMIN role and eBay connection from test seeding.
+**S999 (today — Platform Metrics Dashboard + eBay Queue Mode engine):** Built the full platform coverage analytics system. Organizers now get a /organizer/platforms page showing coverage score (0–100), per-platform listed vs. total counts for eBay, Google Merchant, Facebook, and Shopify, and a slide-in gap panel listing items not yet on each platform. The organizer dashboard now shows a PlatformHighlightsWidget with the coverage score and headline stats. eBay Queue Mode engine built: organizers can opt in to auto-queue management — the system runs every 30 minutes, fills empty eBay slots from the queue (Phase A), and optionally rotates oldest listings (Phase B, 10% cap per cycle). 12 files shipped, 4 new schema fields, migration required before next Railway deploy.
+
+**S998 (today — eBay bidirectional sync restored):** Fixed the root cause of classic eBay listings (items listed directly on eBay, not via FindA.Sale) showing "Push to eBay" even though they were already live. Root cause: the import function had an `if (totalFetched === 0)` guard before the Trading API block — ArtifactMI has 18 Inventory API items, so the guard always fired and the Trading API (`GetMyeBaySelling`, which returns ALL listings regardless of how they were created) never ran. Fix: removed the guard — both APIs now always run. Dedup logic handles items found by both paths. Patrick confirmed after deploy: "wrap it synced now."
 
 **S997 (today — Yard-sales Chrome QA + GSC sitemap fix):** Chrome-verified `/yard-sales/grand-rapids-mi` — H1 correct, About shows yard-sale copy, 7 FAQs, 5 nearby city links, 7 listings, FAQPage JSON-LD confirmed. Also shipped GSC P1 fix: removed 10,000 `/items/{id}` URLs from sitemap. Crawl budget freed for city/sale/guide pages.
 
@@ -12,9 +14,18 @@
 
 **S994/S995 (today — Yard-sales SEO pages):** Built `/yard-sales/[city-slug].tsx` (47-city ISR). Fixed Vercel build error (possessive apostrophes in string literals). Yard-sale-specific FAQs, About copy, nearby city links, FAQPage JSON-LD all live.
 
-**S993 (today — Outreach pipeline fix + RDAP email discovery):** Found and fixed why the outreach pipeline only ever sent 848 emails despite 80k organizers. Prisma NULL bug + 2,276 ARCHIVED rows. Queue: 2,292 PENDING. 5,057 more organizers now addressable via RDAP.
+---
 
-**S992 (today — SEO + FB Commerce Manager checkout):** Analytics OAuth restored. City SEO framework built (50+ cities). Estate-sales landing pages upgraded with FAQ schema. FB checkout flow confirmed working live.
+## REQUIRED ACTION BEFORE NEXT SESSION
+
+**Run the database migration — backend will error on startup without it:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="[Railway DB URL — copy from Railway dashboard → your DB service → Variables tab]"
+npx prisma migrate deploy
+npx prisma generate
+```
+This adds 4 new columns: `Item.ebayQueuedAt`, `Item.ebayListedAt`, `Organizer.ebayQueueMode`, `Organizer.ebayQueueRotation`.
 
 ---
 
@@ -26,28 +37,31 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 ## Beta Tester Impact
 
+**Platform Metrics Dashboard (S999 — CODE-ONLY, pending QA):** Organizers will get a /organizer/platforms page with coverage score, per-platform gap analysis, and one-click "Add to Queue" for items not yet on eBay.
+
+**eBay Queue Mode (S999 — CODE-ONLY, pending QA):** Organizers can enable auto-queue management — the system will automatically fill empty eBay slots and optionally rotate oldest listings every 30 minutes.
+
 **eBay bidirectional sync (S998):** ArtifactMI (and any organizer with a mix of FAS-pushed and manually-listed eBay items) will now see all their eBay classic listings in FindA.Sale after running "Import from eBay."
 
 **eBay sold sync (S996):** Items sold on eBay now get marked SOLD on FindA.Sale within 15 minutes of the cron cycle.
-
-**Yard-sales pages (S994+S995):** 47 markets now have ISR landing pages with FAQ schema, city-specific yard-sale content, and nearby city links.
-
-**Outreach pipeline (S993):** 2,292 PENDING organizers now eligible. RDAP adds 5,057 more addressable.
 
 ---
 
 ## This Week's Priority
 
-1. **Push S997+S998 changes** (push block below — 5 files).
-2. **GSC improvement live:** sitemap no longer includes 10k /items/{id} URLs — crawl budget freed.
-3. **GSC P1 remaining (wait 1–2 weeks):** After sitemap fix is indexed, dispatch ISR conversion for `/items/[id].tsx`.
-4. **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket, 3 press pitches).
+1. **Run migration** (required — see above before anything else).
+2. **Next session: QA mode** — Chrome-verify the platforms page, dashboard widget, and queue mode UI (4 CODE-ONLY BQ items).
+3. **Push S997+S998 changes** if not yet done (push block in Action Items below).
+4. **GSC P1 remaining (wait 1–2 weeks):** After sitemap fix is indexed, dispatch ISR conversion for `/items/[id].tsx`.
+5. **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket, 3 press pitches).
 
 ---
 
 ## Action Items for Patrick
 
-- [ ] **Push S997+S998 changes:**
+- [ ] **Run migration before next Railway deploy** (see REQUIRED ACTION above)
+
+- [ ] **Push S997+S998 changes (if not yet pushed):**
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale
   git add packages/frontend/pages/server-sitemap.xml.tsx
@@ -69,9 +83,13 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 ## BQ Status
 
-**Count: 2** — below QA ceiling (≥8 triggers QA mode). Dev fully unblocked.
+**Count: 5** — below QA ceiling (≥8 triggers QA mode). Next session QA recommended to clear the 4 new CODE-ONLY items.
 
 | Feature | Status |
 |---------|--------|
 | GSC: /items/[id].tsx SSR, no CDN caching (P1) | Sitemap fix shipped S997 — wait 1–2 weeks for GSC crawl reset, then convert to ISR revalidate:3600 |
 | GSC discovered-not-indexed monitor | Sitemap itemUrls fix live; crawl budget improving |
+| Platform Metrics Dashboard — /organizer/platforms | CODE-ONLY S999 — pending Chrome QA next session |
+| PlatformHighlightsWidget on dashboard | CODE-ONLY S999 — pending Chrome QA next session |
+| eBay Queue Mode toggle + queue management | CODE-ONLY S999 — pending Chrome QA next session |
+| ebayListingQueueCron Phase A + B | CODE-ONLY S999 — verify in Railway logs next session |

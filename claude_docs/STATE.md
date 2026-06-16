@@ -8,6 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S999 — DEV (2026-06-16). Platform Metrics Dashboard + eBay Queue Mode engine shipped.**
+- **Shipped:** 12 files — 4 new backend (platformStatsService.ts, platformStatsController.ts, ebayListingQueueCron.ts, 5 new routes), 3 new frontend (platforms.tsx, PlatformHighlightsWidget.tsx, PlatformGapPanel.tsx), 5 modified (organizers.ts, index.ts, ebayController.ts, dashboard.tsx).
+- **Schema:** 4 new fields — Item.ebayQueuedAt, Item.ebayListedAt, Organizer.ebayQueueMode, Organizer.ebayQueueRotation. Migration: 20260616000001_ebay_queue_mode.
+- **Status:** Pushed. Patrick MUST run `prisma migrate deploy` before backend will start correctly.
+- **Build fixes:** Removed TanStack Query v5-incompatible `onSuccess` + `keepPreviousData` → useEffect + `placeholderData` pattern in PlatformGapPanel.tsx and platforms.tsx.
+- **TypeScript:** 0 errors. All pushes completed.
+- **QA:** CODE-ONLY — pending Chrome verification. 4 items added to Blocked Queue.
+- **BQ delta:** 2 → 5.
+
 **S998 — BUG (2026-06-16). eBay bidirectional sync restored — Trading API now always runs after Inventory API.**
 - **Root cause (tool-cited):** `importInventoryFromEbay` in `ebayController.ts` had `if (totalFetched === 0)` guard before the Trading API `GetMyeBaySelling` block. ArtifactMI has 18 Inventory API items → `totalFetched = 18` → guard prevented Trading API from running → 75+ classic eBay listings (created directly on eBay, not via FindA.Sale) never synced. Items showed "Push to eBay" despite being live on eBay.
 - **Fix (commit 5e517cf7):** Changed `if (totalFetched === 0) {` to a bare block `{`. Trading API now always runs after Inventory API loop. Dedup (`prisma.item.findFirst({ OR: [{ebayListingId: storedId}, {ebayListingId: ebayItemId}] })`) handles items found by both paths safely.
@@ -256,6 +265,10 @@ _S997: GSC sitemap itemUrls CLEARED — removed itemUrls block from server-sitem
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | GSC: /items/[id].tsx uses SSR (getServerSideProps) — no CDN caching, slow TTFB | P1 — every Googlebot hit on /items/{id} hits Railway live; deprioritizes crawl after sitemap fix | Convert to getStaticProps + ISR revalidate:3600 with fallback:blocking | S994 |
+| Platform Metrics Dashboard — /organizer/platforms page | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: navigate to /organizer/platforms, verify 4 platform cards load, coverage score renders, gap panel opens | S999 |
+| PlatformHighlightsWidget on dashboard | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: verify widget appears on dashboard between SmartSearchViewsCard and DemandSignalsCard, stats load, link to /organizer/platforms works | S999 |
+| eBay Queue Mode toggle + queue management | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: enable Queue Mode via PATCH endpoint, verify queue panel appears, add item to queue, verify queued count updates | S999 |
+| ebayListingQueueCron Phase A + B | CODE-ONLY: not browser-verified | Verify cron starts in Railway logs, verify Phase A fills slots on next 30-min cycle (requires organizer with ebayQueueMode=true and items in queue) | S999 |
 
 
 
@@ -294,13 +307,40 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S999 onward
+### S1000 onward
+
+**Patrick MUST do BEFORE starting (migration required):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="[Railway DB URL from Railway dashboard — Variables tab]"
+npx prisma migrate deploy
+npx prisma generate
+```
+Backend will error on startup until migration is applied (4 new columns on Item + Organizer).
+
+**Session type: QA**
 
 **First action — roadmap Chrome column update (records pass):**
 Apply SEO4 PCV from PCV table above to roadmap.md:
 - SEO4 row (line ~141): change Chr column from `⬜` to `✅ S997`
 - Evidence gate passes: URL ✅, user ✅ (logged-in), element ✅ (H1/About/FAQ/cities/JSON-LD), outcome ✅, screenshot IDs ✅ (ss_14861obk4, ss_59206270m, ss_6493n5xfp)
 - Then clear the SEO4 PCV row from the PCV table.
+
+**QA dispatch order (SEQUENTIAL — one at a time, Chrome agents conflict if parallel):**
+
+**Dispatch 1 — Platform page structure:**
+`Skill('findasale-qa')` → Navigate to https://finda.sale/organizer/platforms as test organizer. Verify: page loads without error, 4 platform cards render (eBay, Google Merchant, Facebook, Shopify), coverage score ring displays a number 0-100, each card shows a listed count. Evidence required: screenshot IDs + "Navigated to [URL] as [user]. Clicked [element]. Saw [outcome]."
+
+**Dispatch 2 — Platform gap panel:**
+`Skill('findasale-qa')` → On /organizer/platforms, click "View X not listed →" on the eBay card. Verify: gap panel slides in from right, shows a list of items not on eBay (or "All items listed" empty state), each item shows thumbnail + title + price. For Google panel: verify reason filter tabs (All / No Photo / No Price / Auction) appear and are clickable.
+
+**Dispatch 3 — Dashboard widget:**
+`Skill('findasale-qa')` → Navigate to https://finda.sale/organizer/dashboard as test organizer. Verify: PlatformHighlightsWidget appears in the active-sale dashboard view, shows coverage score badge + 3 platform stats + link to /organizer/platforms. Click the link — verify it navigates to /organizer/platforms.
+
+**Dispatch 4 — eBay Queue Mode UI:**
+`Skill('findasale-qa')` → On /organizer/platforms, scroll to eBay Queue Mode section. Verify: "Enable Queue Mode" button is visible (queue mode starts OFF). Click it — verify toggle fires PATCH /api/organizers/me/ebay-queue-settings. Verify queue panel state changes to show queue management UI. Check Railway logs for PATCH route hit.
+
+**Other carry-forward items:**
 
 **Push block (S997+S998 changes — if not yet pushed):**
 ```powershell
@@ -329,7 +369,7 @@ After sitemap fix is live and indexed (allow 1–2 weeks for GSC crawl budget to
 **eBay carry-forward:**
 When eBay Buy-API grant lands: ebayCatalog provider activates — verify identifiers/dims return.
 
-**BQ = 2** (1 GSC P1: items ISR conversion + prior GSC monitor)
+**BQ = 5** (1 GSC P1 item + 4 new Platform Dashboard / Queue Mode CODE-ONLY items)
 
 
 ### S974 — Carry-forward (eBay FVF flat-rate — Chrome verify + tier-ID investigation)
@@ -443,6 +483,16 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S999 — 2026-06-16 | DEV (Platform Metrics Dashboard + eBay Queue Mode)
+
+**Session type:** DEV
+**Shipped:** Platform Metrics Dashboard + eBay Queue Mode engine
+**Files changed:** 12 files — 4 new backend, 3 new frontend, 5 modified. Migration: 20260616000001_ebay_queue_mode (4 new schema fields).
+**Schema:** Item.ebayQueuedAt, Item.ebayListedAt, Organizer.ebayQueueMode, Organizer.ebayQueueRotation.
+**Status:** Pushed. Patrick must run `prisma migrate deploy` before backend will start correctly.
+**QA:** Pending Chrome verification next session — 4 items added to Blocked Queue (platforms page, dashboard widget, queue mode toggle, cron verification).
+**BQ delta:** 2 → 5.
 
 ### S998 — 2026-06-16 | BUG (eBay bidirectional sync fix)
 
