@@ -203,7 +203,8 @@ router.get('/by-city/:citySlug', async (req, res) => {
     const saleTypeFilter = category ? categoryMap[category] : undefined;
 
     const whereClause: any = {
-      status: { in: ['PUBLISHED', 'ENDED'] },
+      status: 'PUBLISHED',
+      endDate: { gte: new Date() },
       city: { equals: cityName, mode: 'insensitive' },
       state: { equals: stateCode, mode: 'insensitive' },
     };
@@ -267,7 +268,8 @@ router.get('/by-city/:citySlug', async (req, res) => {
     const allSalesForCategories = saleTypeFilter
       ? await prisma.sale.findMany({
           where: {
-            status: { in: ['PUBLISHED', 'ENDED'] },
+            status: 'PUBLISHED',
+            endDate: { gte: new Date() },
             city: { equals: cityName, mode: 'insensitive' },
             state: { equals: stateCode, mode: 'insensitive' },
           },
