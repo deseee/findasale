@@ -295,7 +295,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
       {activeFilterCount > 0 && (
         <button
           onClick={handleClearFilters}
-          className="w-full px-4 py-2 border border-warm-300 hover:bg-warm-100 text-warm-700 font-medium rounded-lg transition-colors text-sm"
+          className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 hover:bg-warm-100 dark:hover:bg-gray-700 text-warm-700 dark:text-warm-300 font-medium rounded-lg transition-colors text-sm"
         >
           Clear Filters
         </button>
@@ -311,7 +311,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
           <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Filters</h2>
           {filterContent}
           {resultCount !== undefined && (
-            <p className="text-xs text-warm-500 mt-6">
+            <p className="text-xs text-warm-500 dark:text-warm-400 mt-6">
               {resultCount} item{resultCount !== 1 ? 's' : ''} found with these filters
             </p>
           )}
@@ -342,7 +342,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
         <div className="mt-4 p-4 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg space-y-4">
           {filterContent}
           {resultCount !== undefined && (
-            <p className="text-xs text-warm-500">
+            <p className="text-xs text-warm-500 dark:text-warm-400">
               {resultCount} item{resultCount !== 1 ? 's' : ''} found
             </p>
           )}

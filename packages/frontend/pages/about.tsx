@@ -9,9 +9,9 @@ const AboutPage = () => {
     <>
       <Head>
         <title>About FindA.Sale</title>
-        <meta name="description" content="Learn about FindA.Sale and our mission to simplify sales management." />
+        <meta name="description" content="Learn how FindA.Sale helps organizers of estate sales, garage sales, auctions, flea markets, and more reach local buyers — and helps shoppers discover secondhand treasures near them." />
         <meta property="og:title" content="About FindA.Sale" />
-        <meta property="og:description" content="FindA.Sale is a digital platform for sale organizers and shoppers in your community." />
+        <meta property="og:description" content="FindA.Sale connects organizers of estate sales, yard sales, auctions, flea markets, and consignment events with local shoppers. Reduce manual work. Reach more buyers." />
         <meta property="og:url" content="https://finda.sale/about" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />
