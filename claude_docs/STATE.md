@@ -8,6 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S996 — BUG (2026-06-16). eBay sold sync window fix — 90-day creationdate replaces 7-day lastmodifieddate.**
+- **Root cause:** `ebaySoldSyncCron.ts` used `lastmodifieddate` filter (7-day window) on the eBay Fulfillment API. A settled order (paid + shipped quickly) has its `lastmodifieddate` frozen within hours of creation. After 7 days it falls outside the window permanently — the cron never sees it again. Items sold on eBay were never marked SOLD on FindA.Sale.
+- **Fix:** Changed filter to `creationdate:[now-90d..now]`. `creationdate` is immutable — an order placed 60 days ago always appears in a 90-day window until day 91. Idempotency preserved: cron pre-filters to AVAILABLE items only so already-SOLD items are never re-processed.
+- Backend TS 0 errors. 1 file: `packages/backend/src/jobs/ebaySoldSyncCron.ts`.
+
 **S993 — BUG/DATA (2026-06-16). Outreach pipeline root-cause fix — ARCHIVED rows + Prisma NULL-exclusion bug.**
 - **Why ARCHIVED?** No application code ever sets DCE.status='ARCHIVED'. All rows were set via direct SQL in past maintenance sessions. Undocumented unofficial status.
 - **Root cause of auto-seed underperformance (Prisma NULL bug):** `autoSeedOutreachCron.ts` used `NOT: [{ emailDiscoveryConfidence: 0.0 }]` → SQL `NOT (col = 0.0)` → PostgreSQL NULL comparison returns NULL (not true) → 12,136 organizers with NULL confidence (scraped emails, labeled "trusted" in comments) silently excluded. Only ~329 positive-confidence orgs ever passed. This is why the pipeline only sent 848 emails despite 80,852 organizer records.
@@ -283,10 +288,11 @@ git add packages/frontend/pages/checkout.tsx
 git add packages/backend/src/jobs/autoSeedOutreachCron.ts
 git add packages/backend/src/scripts/seedDirectoryClaimEmails.ts
 git add packages/backend/src/services/emailDiscoveryService.ts
+git add packages/backend/src/jobs/ebaySoldSyncCron.ts
 git add claude_docs/scripts/oauth_setup2.py
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S995: fix yard-sales About section (estate-sale copy bug) + S994 yard-sales pages + S993 outreach fix + S992 city SEO/checkout"
+git commit -m "S996: eBay sold sync 90-day creationdate fix + S995 yard-sales About fix + S994 yard-sales pages + S993 outreach + S992 city SEO/checkout"
 .\push.ps1
 ```
 
@@ -427,6 +433,18 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S996 — 2026-06-16 | BUG (eBay sold sync window fix)
+
+**Session type:** BUG — evidence-first diagnosis, targeted fix
+
+**Root cause:** `ebaySoldSyncCron.ts` used `lastmodifieddate` (7-day window). Settled orders stop being "recently modified" within hours — permanently dropping out of the window after 7 days. Result: items sold on eBay never marked SOLD on FindA.Sale.
+
+**Fix:** Switched to `creationdate` (90-day window). Immutable at order creation — always returned until day 91. Idempotency preserved by AVAILABLE-only pre-filter.
+
+**Files changed:** `packages/backend/src/jobs/ebaySoldSyncCron.ts`
+
+**BQ delta:** 3 → 3 (unchanged)
 
 ### S995 — 2026-06-16 | QA + BUG FIX (S991–S994 QA pass; yard-sales About section P2 fix)
 
