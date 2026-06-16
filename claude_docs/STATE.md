@@ -8,6 +8,12 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S991 — BUG (2026-06-16). Shipping preview "Could not estimate shipping right now" root cause found + fixed.**
+- Root cause: `Item.organizerId = NULL` on items created via sale flow. `getShippingNetPreview` and `getSuggestedPriceForMargin` both queried `WHERE id = itemId AND organizerId = organizer.id` — returning null → silent 404 → "Could not estimate shipping right now." No Railway log entry because 404 returns before the catch block.
+- Fix (2 lines, 1 file): both controllers now query `WHERE id = itemId AND sale: { organizerId: organizer.id }` — matching the same ownership pattern `getUnsoldItems` already uses.
+- Files changed: packages/backend/src/controllers/ebayController.ts (lines 5868 + 6011).
+- BQ: 0→1 (SEO monitor P1: GSC discovered-not-indexed 2,071 pages).
+
 **S990 — QA/RECORDS (2026-06-15). Records pass + GA4 Tier 2 events Chrome-verified (#465).**
 - Records pass: #313 HAUL_POST_LIKES ✅ S989 applied to roadmap.md (Claude QA col ✅ S989). PCV cleared.
 - Chrome QA: GA4 Tier 2 events (#465) — 3 of 3 remaining events verified via gtag interceptor as Artifact MI.
@@ -250,9 +256,11 @@ _S937: G3 suppression gap FIXED (8 bulk lifecycle services, pending push). G1 re
 
 _S987: #318 tab filter FIXED CODE-ONLY (affiliate.tsx useState<string> active state) — removed from BQ. BQ: 2→1._
 _S989: #313 HAUL_POST_LIKES Chrome-verified ✅ (user1 reaction→ user5 XP 416→421 +5 once; user2 reaction→ user5 XP stays 421, no re-award). BQ: 1→0._
+_S991 SEO MONITOR: GSC discovered-not-indexed 2,071 pages (core nav never crawled since 5/23/26) added as P1 per §10a mandatory trigger. BQ: 0→1._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
+| GSC "Discovered not indexed" — 2,071 pages rising (core nav: /about, /categories/*, /city-heat-index never crawled since 5/23/26) | P1 — crawl budget problem; Google knows about pages (sitemap) but has never fetched them | Audit: (1) noindex meta on core pages, (2) SSR output, (3) internal links from indexed pages, (4) sitemap quality/dilution | S991 SEO monitor |
 
 
 
@@ -292,10 +300,12 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S990 → S991
+### S991 → S992
 
 **Records pass (first action):**
 Apply #465 PCVs from S990 to roadmap.md — update Chrome QA col from `⏳ 3/4 Chr verified S984` to `✅ S990` (all 4 events verified). Evidence:
+
+**Push S991 fix (before records pass):** push block below — `ebayController.ts` (shipping preview organizerId → sale.organizerId fix) must deploy before the Celestion item can be used.
 - shopper_item_favorited ✅: URL https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m, Artifact MI, Save button click, gtag interceptor captured event (ss_0216lvvsn ss_3418eo8gk)
 - checkout_initiated ✅: same item, Buy It Now click, gtag interceptor captured event (ss_0216lvvsn)
 - first_item_published ✅: empty test sale (deleted post-test), Manual Entry first item save, gtag interceptor captured event (ss_7000y2s0t ss_3418eo8gk)
@@ -420,6 +430,18 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 ## Recent Sessions
 
+### S991 — 2026-06-16 | BUG (shipping preview 404 on null organizerId items)
+
+**Session type:** BUG — evidence-first debug, 2-line fix
+
+**Root cause found:** Patrick reported "Could not estimate shipping right now" when entering weight/dimensions for the Celestion Vintage item in PostSaleEbayPanel. Direct DB query revealed `Item.organizerId = NULL` on this item (items created through the sale flow aren't always backfilled with organizerId). Both `getShippingNetPreview` and `getSuggestedPriceForMargin` queried `WHERE id = itemId AND organizerId = organizer.id` — getting no result → 404 → frontend catch block → generic error message. No Railway log entry because the 404 returns early, before the catch block.
+
+**Fix:** Changed both item ownership checks from `organizerId: organizer.id` to `sale: { organizerId: organizer.id }` — same ownership pattern `getUnsoldItems` already uses correctly.
+
+**Files changed:** packages/backend/src/controllers/ebayController.ts (lines 5868 + 6011)
+
+**BQ delta:** 0 → 0
+
 ### S989 — 2026-06-15 | QA + RECORDS (#313 HAUL_POST_LIKES verified; #318 records pass)
 
 **Session type:** QA + RECORDS — records pass (#318 applied), Chrome QA #313
@@ -459,6 +481,12 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 **BQ delta:** 2 → 1 (#318 removed — fixed CODE-ONLY; #313 env-blocked remains)
 
 **Files changed:** packages/frontend/pages/organizer/affiliate.tsx, packages/frontend/pages/organizer/settings.tsx, claude_docs/strategy/roadmap.md, claude_docs/STATE.md, claude_docs/patrick-dashboard.md
+
+
+---
+
+
+_(Archived — see session-log-archive.md)_
 
 ### S986 — 2026-06-15 | QA (#358 Follower Count Toggle + #318 Affiliate Dashboard)
 
