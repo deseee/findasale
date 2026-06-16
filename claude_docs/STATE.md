@@ -8,6 +8,14 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S998 — BUG (2026-06-16). eBay bidirectional sync restored — Trading API now always runs after Inventory API.**
+- **Root cause (tool-cited):** `importInventoryFromEbay` in `ebayController.ts` had `if (totalFetched === 0)` guard before the Trading API `GetMyeBaySelling` block. ArtifactMI has 18 Inventory API items → `totalFetched = 18` → guard prevented Trading API from running → 75+ classic eBay listings (created directly on eBay, not via FindA.Sale) never synced. Items showed "Push to eBay" despite being live on eBay.
+- **Fix (commit 5e517cf7):** Changed `if (totalFetched === 0) {` to a bare block `{`. Trading API now always runs after Inventory API loop. Dedup (`prisma.item.findFirst({ OR: [{ebayListingId: storedId}, {ebayListingId: ebayItemId}] })`) handles items found by both paths safely.
+- **Also shipped:** `seed.ts` — user1 no longer seeded as ADMIN + eBay connection removed (commit 97e78a3f).
+- **Patrick confirmed:** "wrap it synced now" — post-deploy sync ran and imported classic listings.
+- **Pending:** 4 UNPUBLISHED items (Loy Norrix Choirs offerId=166668232011, Kirkland Pepper offerId=166412704011, Whip-It Butane offerId=151850469011, Contigo Travel Mug offerId=151769728011) have offers on eBay but no ebayListingId in DB — need ebayOfferId backfilled to publish from FindA.Sale.
+- **BQ delta:** 2 → 2 (unchanged).
+
 **S997 — SEO/DEV (2026-06-16). Yard-sales Chrome QA verified + GSC sitemap itemUrls fix.**
 - **Chrome QA (S995 fix confirmed):** Navigated https://finda.sale/yard-sales/grand-rapids-mi as logged-in user. H1 = "Yard Sales in Grand Rapids, MI" ✅. About section = yard-sale copy (not Dutch heritage text) ✅. 7 yard-sale FAQs rendered ✅. 5 nearby city links (Detroit, Kalamazoo, Lansing, Chicago, Toledo) ✅. 7 sale listings ✅. FAQPage JSON-LD in source (BreadcrumbList + ItemList + FAQPage confirmed) ✅. Screenshots: ss_14861obk4, ss_59206270m, ss_6493n5xfp. PCV staged for S998 roadmap Chrome column update (per cross-session rule).
 - **GSC P1 fix — server-sitemap.xml.tsx:** Removed itemUrls block (try/catch calling /items/sitemap + itemUrls map + ...itemUrls spread). 255→241 lines. ~10,000 /items/{id} SSR leaf pages removed from sitemap — crawl budget freed for city/sale/guide pages. Comment added explaining the intentional exclusion. TypeScript: 0 errors. 1 file changed.
@@ -286,23 +294,33 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S998 onward
+### S999 onward
 
-**First action — roadmap Chrome column update (S998 records pass):**
+**First action — roadmap Chrome column update (records pass):**
 Apply SEO4 PCV from PCV table above to roadmap.md:
 - SEO4 row (line ~141): change Chr column from `⬜` to `✅ S997`
 - Evidence gate passes: URL ✅, user ✅ (logged-in), element ✅ (H1/About/FAQ/cities/JSON-LD), outcome ✅, screenshot IDs ✅ (ss_14861obk4, ss_59206270m, ss_6493n5xfp)
 - Then clear the SEO4 PCV row from the PCV table.
 
-**Push block (S997 changes):**
+**Push block (S997+S998 changes — if not yet pushed):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/pages/server-sitemap.xml.tsx
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/database/prisma/seed.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S997: GSC sitemap itemUrls removed from server-sitemap + STATE + dashboard"
+git commit -m "S997+S998: GSC sitemap itemUrls removed; eBay bidirectional sync fix; seed user1 ADMIN removed"
 .\push.ps1
 ```
+
+**4 UNPUBLISHED eBay items (optional follow-up):**
+These items have FAS- SKUs + offers on eBay but no `ebayListingId` in DB — they show "Pending Publish" in edit-item but can't be actioned:
+- Loy Norrix Choirs: offerId=166668232011, listing=137309862925
+- Kirkland Pepper: offerId=166412704011, listing=137308308467
+- Whip-It Butane: offerId=151850469011
+- Contigo Travel Mug: offerId=151769728011, listing=137227039608
+To fix: backfill `ebayOfferId` (and `ebayListingId` where known) on each Item. Can do via psycopg2 or dispatch to findasale-dev.
 
 **GSC P1 remaining: /items/[id].tsx ISR conversion (BQ item)**
 After sitemap fix is live and indexed (allow 1–2 weeks for GSC crawl budget to reset):
@@ -425,6 +443,24 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S998 — 2026-06-16 | BUG (eBay bidirectional sync fix)
+
+**Session type:** BUG — evidence-first diagnosis, targeted fix
+
+**Root cause:** `importInventoryFromEbay` had `if (totalFetched === 0)` guard before the Trading API `GetMyeBaySelling` block. ArtifactMI has 18 items in eBay Inventory API → guard prevented Trading API from running → 75+ classic eBay listings (created directly on eBay, not via FindA.Sale) never imported. Items showed "Push to eBay" despite being live on eBay.
+
+**Fix (commit 5e517cf7):** Changed `if (totalFetched === 0) {` to a bare block `{`. Trading API `GetMyeBaySelling` now always runs after Inventory API loop completes. Dedup logic handles items found by both paths safely (imported++ for new, skipped++ for existing).
+
+**Also shipped:** `seed.ts` fix — user1 ADMIN role + eBay connection removed (commit 97e78a3f).
+
+**Patrick confirmed:** "wrap it synced now" — sync ran successfully post-deploy and imported classic listings.
+
+**Pending (not addressed this session):** 4 UNPUBLISHED eBay items (Loy Norrix Choirs/Kirkland Pepper/Whip-It Butane/Contigo Travel Mug) have FAS- SKUs + offers on eBay but no ebayListingId in DB. Need ebayOfferId backfilled so they can be published from FindA.Sale.
+
+**Files changed:** `packages/backend/src/controllers/ebayController.ts`, `packages/database/prisma/seed.ts`
+
+**BQ delta:** 2 → 2 (unchanged)
 
 ### S996 — 2026-06-16 | BUG (eBay sold sync window fix)
 

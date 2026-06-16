@@ -1,20 +1,20 @@
-# Patrick's Dashboard — Week of June 16, 2026 (Updated S997)
+# Patrick's Dashboard — Week of June 16, 2026 (Updated S998)
 
 ---
 
 ## What Happened This Week
 
-**S996 (today — eBay sold sync fix):** Found and fixed the reason items sold on eBay weren't being marked SOLD on FindA.Sale. Root cause: the sync cron used a 7-day `lastmodifieddate` filter. Once an order settles (paid + shipped), eBay stops updating its `lastmodifieddate` within hours — so after 7 days the order permanently drops out of the polling window. Fix: switched to a 90-day `creationdate` window. `creationdate` is immutable — an order placed 60 days ago is always returned until day 91. Existing sold items won't double-mark (the cron only looks at AVAILABLE items). 1 file changed, 0 TS errors.
+**S998 (today — eBay bidirectional sync restored):** Fixed the root cause of classic eBay listings (items listed directly on eBay, not via FindA.Sale) showing "Push to eBay" even though they were already live. Root cause: the import function had an `if (totalFetched === 0)` guard before the Trading API block — ArtifactMI has 18 Inventory API items, so the guard always fired and the Trading API (`GetMyeBaySelling`, which returns ALL listings regardless of how they were created) never ran. Fix: removed the guard — both APIs now always run. Dedup logic handles items found by both paths. Patrick confirmed after deploy: "wrap it synced now." Also shipped: `seed.ts` fix removing user1 ADMIN role and eBay connection from test seeding.
 
-**S995–S997 (today):** S995 built the GarageSaleFinder photo pipeline (gallery page scraper to pull real 700×500 images) + cityData.ts About/meta for yard-sales pages. S996 fixed eBay sold sync (7-day → 90-day creationdate window). S997 fixed a Vercel TypeScript build error blocking deployment of all S994–S996 work: 12 single-quoted strings in `YARD_SALE_ABOUT` contained possessive apostrophes (city\'s, Chicago\'s, etc.) which terminated the string literals prematurely. Fixed by converting to double-quoted strings. Vercel build unblocked.
+**S997 (today — Yard-sales Chrome QA + GSC sitemap fix):** Chrome-verified `/yard-sales/grand-rapids-mi` — H1 correct, About shows yard-sale copy, 7 FAQs, 5 nearby city links, 7 listings, FAQPage JSON-LD confirmed. Also shipped GSC P1 fix: removed 10,000 `/items/{id}` URLs from sitemap. Crawl budget freed for city/sale/guide pages.
 
-**S997 (today — Yard-sales Chrome QA + GSC sitemap fix):** Chrome-verified `/yard-sales/grand-rapids-mi` — H1 correct ("Yard Sales in Grand Rapids, MI"), About section shows yard-sale copy (NOT estate-sale text), 7 yard-sale FAQs render, 5 nearby city links, 7 listings, FAQPage JSON-LD confirmed. All 6 QA criteria passed. Also shipped GSC P1 fix: removed 10,000 `/items/{id}` URLs from `server-sitemap.xml.tsx` (255→241 lines, TS 0 errors). Crawl budget now freed for city/sale/guide pages.
+**S996 (today — eBay sold sync fix):** Items sold on eBay will now actually get marked SOLD on FindA.Sale. Root cause was a 7-day `lastmodifieddate` window that permanently dropped settled orders after a week. Fixed to 90-day `creationdate` window.
 
-**S994 (today — Yard-sales SEO pages + GSC audit):** Built `/yard-sales/[city-slug].tsx` (47-city ISR, same pattern as estate-sales). Added `getYardSaleFaqs()` to `cityData.ts`. Updated sitemap with `yardSalesUrls` at priority 0.70. Also audited the 2,071 discovered-not-indexed issue — root cause confirmed: 10,000 `/items/{id}` SSR pages in the sitemap exhaust crawl budget. P1 fix dispatch ready for next session.
+**S994/S995 (today — Yard-sales SEO pages):** Built `/yard-sales/[city-slug].tsx` (47-city ISR). Fixed Vercel build error (possessive apostrophes in string literals). Yard-sale-specific FAQs, About copy, nearby city links, FAQPage JSON-LD all live.
 
-**S993 (today — Outreach pipeline fix + RDAP email discovery):** Found and fixed the reason the outreach pipeline only ever sent 848 emails despite 80k organizers. Root cause 1: a Prisma ORM quirk where `NOT: [{emailDiscoveryConfidence: 0.0}]` silently excludes NULL values — blocking 12,136 scraped-email organizers. Root cause 2: 2,276 ARCHIVED rows permanently dead-ending the queue. Fixed both. Queue: 2,292 PENDING. Also implemented RDAP Stage 3 — pipeline now queries ICANN's registrar database for organizer emails. 5,057 more organizers now addressable.
+**S993 (today — Outreach pipeline fix + RDAP email discovery):** Found and fixed why the outreach pipeline only ever sent 848 emails despite 80k organizers. Prisma NULL bug + 2,276 ARCHIVED rows. Queue: 2,292 PENDING. 5,057 more organizers now addressable via RDAP.
 
-**S992 (today — SEO + FB Commerce Manager checkout):** Analytics OAuth restored. Built city SEO framework (`cityData.ts`, 50+ cities). Estate-sales landing pages upgraded with FAQ schema, city-specific content, Nearby Cities links. Built `checkout.tsx` for Facebook Commerce Manager integration — confirmed working live with Super Mario Bros + X-Force #1.
+**S992 (today — SEO + FB Commerce Manager checkout):** Analytics OAuth restored. City SEO framework built (50+ cities). Estate-sales landing pages upgraded with FAQ schema. FB checkout flow confirmed working live.
 
 ---
 
@@ -26,20 +26,20 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 ## Beta Tester Impact
 
-**eBay sold sync (S996):** Items sold on eBay will now actually get marked SOLD on FindA.Sale within 15 minutes of the cron cycle. Previously the 7-day window was missing settled orders permanently.
+**eBay bidirectional sync (S998):** ArtifactMI (and any organizer with a mix of FAS-pushed and manually-listed eBay items) will now see all their eBay classic listings in FindA.Sale after running "Import from eBay."
 
-**Yard-sales pages (S994+S995):** `/yard-sales/[city-slug].tsx` — 47 markets now have ISR landing pages with FAQ schema, city-specific yard-sale content, and nearby city links. The estate-sale copy bug (About section) is fixed.
+**eBay sold sync (S996):** Items sold on eBay now get marked SOLD on FindA.Sale within 15 minutes of the cron cycle.
 
-**Outreach pipeline (S993):** 2,292 PENDING organizers now eligible (was effectively ~329 due to Prisma NULL bug). RDAP adds 5,057 more addressable via registrar email lookup.
+**Yard-sales pages (S994+S995):** 47 markets now have ISR landing pages with FAQ schema, city-specific yard-sale content, and nearby city links.
 
-**FB Commerce Manager (S992):** Checkout flow confirmed — feed products link directly to a cart page that injects items and redirects to the sale.
+**Outreach pipeline (S993):** 2,292 PENDING organizers now eligible. RDAP adds 5,057 more addressable.
 
 ---
 
 ## This Week's Priority
 
-1. **Push S997 changes** (push block below — 3 files: server-sitemap.xml.tsx + STATE.md + dashboard).
-2. **GSC improvement live:** sitemap no longer includes 10k /items/{id} URLs — Googlebot crawl budget freed for your SEO pages.
+1. **Push S997+S998 changes** (push block below — 5 files).
+2. **GSC improvement live:** sitemap no longer includes 10k /items/{id} URLs — crawl budget freed.
 3. **GSC P1 remaining (wait 1–2 weeks):** After sitemap fix is indexed, dispatch ISR conversion for `/items/[id].tsx`.
 4. **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket, 3 press pitches).
 
@@ -47,13 +47,15 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 ## Action Items for Patrick
 
-- [ ] **Push S997 changes:**
+- [ ] **Push S997+S998 changes:**
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale
   git add packages/frontend/pages/server-sitemap.xml.tsx
+  git add packages/backend/src/controllers/ebayController.ts
+  git add packages/database/prisma/seed.ts
   git add claude_docs/STATE.md
   git add claude_docs/patrick-dashboard.md
-  git commit -m "S997: GSC sitemap itemUrls removed from server-sitemap + STATE + dashboard"
+  git commit -m "S997+S998: GSC sitemap itemUrls removed; eBay bidirectional sync fix; seed user1 ADMIN removed"
   .\push.ps1
   ```
 
