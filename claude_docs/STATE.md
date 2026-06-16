@@ -8,11 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S991 — BUG (2026-06-16). Shipping preview "Could not estimate shipping right now" root cause found + fixed.**
-- Root cause: `Item.organizerId = NULL` on items created via sale flow. `getShippingNetPreview` and `getSuggestedPriceForMargin` both queried `WHERE id = itemId AND organizerId = organizer.id` — returning null → silent 404 → "Could not estimate shipping right now." No Railway log entry because 404 returns before the catch block.
-- Fix (2 lines, 1 file): both controllers now query `WHERE id = itemId AND sale: { organizerId: organizer.id }` — matching the same ownership pattern `getUnsoldItems` already uses.
-- Files changed: packages/backend/src/controllers/ebayController.ts (lines 5868 + 6011).
-- BQ: 0→1 (SEO monitor P1: GSC discovered-not-indexed 2,071 pages).
+**S991 — BUG + SEO (2026-06-16). Shipping preview fix + SEO crawl budget fixes.**
+- SHIPPING BUG (prior): `Item.organizerId = NULL` on items created via sale flow. `getShippingNetPreview` and `getSuggestedPriceForMargin` both queried `WHERE id = itemId AND organizerId = organizer.id`. Fixed to use `sale: { organizerId: organizer.id }` join.
+- SEO CRAWL FIX (dispatch all): 3 root causes of 2,071 "Discovered not indexed" pages fixed:
+  1. `/city-heat-index` — was returning null to crawlers (useEffect redirect). Converted to `getServerSideProps` 301. Removed from sitemap.
+  2. `/categories` (index) — was pure CSR (no getStaticProps). Added getStaticProps + ISR (revalidate 300s) so Google crawls real category data.
+  3. Sitemap priorities — `estate-sales/{slug}` was 0.85 (higher than /categories 0.8, /about 0.6). Rebalanced: estate-sales→0.75, this-weekend→0.7, city/{slug}→0.75.
+  4. P3 (no code fix): 3 GSC "redirect" pages = `/create-sale`, `/manage-sales`, `/hall-of-fame` — all correct 301s in next.config.js, no action needed.
+- Files: packages/frontend/pages/city-heat-index.tsx, pages/categories/index.tsx, pages/server-sitemap.xml.tsx.
+- BQ: 0→1 (SEO monitor P1: GSC discovered-not-indexed 2,071 pages — will improve post-deploy but monitoring required).
 
 **S990 — QA/RECORDS (2026-06-15). Records pass + GA4 Tier 2 events Chrome-verified (#465).**
 - Records pass: #313 HAUL_POST_LIKES ✅ S989 applied to roadmap.md (Claude QA col ✅ S989). PCV cleared.
@@ -300,12 +304,12 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S991 → S992
+### S992 → S993
 
 **Records pass (first action):**
 Apply #465 PCVs from S990 to roadmap.md — update Chrome QA col from `⏳ 3/4 Chr verified S984` to `✅ S990` (all 4 events verified). Evidence:
 
-**Push S991 fix (before records pass):** push block below — `ebayController.ts` (shipping preview organizerId → sale.organizerId fix) must deploy before the Celestion item can be used.
+**Push S991+S992 wrap (before records pass):** push block below — `ebayController.ts` (shipping preview organizerId → sale.organizerId fix) + wrap docs. `checkout.tsx` already pushed (3 push blocks delivered S992).
 - shopper_item_favorited ✅: URL https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m, Artifact MI, Save button click, gtag interceptor captured event (ss_0216lvvsn ss_3418eo8gk)
 - checkout_initiated ✅: same item, Buy It Now click, gtag interceptor captured event (ss_0216lvvsn)
 - first_item_published ✅: empty test sale (deleted post-test), Manual Entry first item save, gtag interceptor captured event (ss_7000y2s0t ss_3418eo8gk)
@@ -429,6 +433,20 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S992 — 2026-06-16 | DEV+QA (Facebook Commerce Manager checkout page)
+
+**Session type:** DEV+QA — external integration (Facebook Commerce Manager)
+
+**Facebook Commerce Manager feed:** Verified Artifact MI commerce feed live (103 products imported). Investigated FB Partner API — EU-only per EC antitrust ruling, not available for US. Data feed approach confirmed correct.
+
+**Checkout page built + verified live:** FB Commerce Manager requires a checkout URL before allowing Marketplace connection. Built `pages/checkout.tsx` (186 lines, new file) — client-side cart injection. Three iterations. Root issues found + fixed: (1) first version used `getServerSideProps` — server-side, can't access localStorage; (2) second version took only the first product ID, price not converted to cents (stored $9 → displayed $0.09; ShopperCartDrawer expects cents); (3) final: `useEffect` client-side, parses all IDs, `Promise.all` parallel fetch, `Math.round(price * 100)` for cents, merges cart, redirects to `/sales/:saleId`.
+
+**Verified live (Patrick):** Facebook sent Super Mario Bros + X-Force #1. Both added to cart at correct prices. Redirected to sale page. Cart opened correctly. X-Force #1 at $62 is correct market price (sealed/polybagged 1991 first Deadpool appearance).
+
+**Files changed:** packages/frontend/pages/checkout.tsx (new, 186 lines) — pushed via 3 push blocks during session.
+
+**BQ delta:** 1 → 1 (unchanged)
 
 ### S991 — 2026-06-16 | BUG (shipping preview 404 on null organizerId items)
 
