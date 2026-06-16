@@ -194,6 +194,12 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - **GSC audit completed (P1 findings):** Root cause of 2,071 discovered-not-indexed = 10,000 /items/{id} URLs in sitemap exhausting crawl budget. Items are SSR (getServerSideProps), thin leaf pages, not the right index targets. Fix: remove itemUrls from sitemap; then convert /items/[id].tsx to ISR. Secondary: /guides/[slug] exists but not in sitemap (P2). Crawl-delay:2 in robots.txt (P3). Both P1 items added to BQ.
 - BQ: 1 → 3 (old generic GSC entry replaced with 2 specific P1 items: sitemap itemUrls removal + items ISR conversion).
 
+**S995 — BUG (2026-06-16). Vercel TypeScript build error fix — cityData.ts apostrophe escape.**
+- **Root cause:** 12 single-quoted TypeScript string values in `YARD_SALE_ABOUT` (lines 672–763) contained possessive apostrophes (city\'s, Chicago\'s, Denver\'s, etc.) which prematurely closed the string delimiters. TypeScript reported "Type \'number\' is not assignable to type \'Record<...>\'" at the const declaration — the classic signature of a misparse from a prior unterminated expression.
+- **Fix:** Python script converted the 12 affected `tip:` and `knownFor:` values from single-quoted to double-quoted strings. None of the affected strings contain double quotes. No logic change.
+- **File:** `packages/frontend/lib/seo/cityData.ts` (1 file). Node syntax check: 0 issues in YARD_SALE_ABOUT block.
+- **Impact:** Unblocks Vercel build for S994 yard-sales city pages, photo-enriched scraped listings (S995 backend), and sort-before-disappear date fix.
+
 ## Pool Audit Findings
 
 Run: 2026-05-18 (S756). Railway DB queried directly via psycopg2.
@@ -292,7 +298,7 @@ git add packages/backend/src/jobs/ebaySoldSyncCron.ts
 git add claude_docs/scripts/oauth_setup2.py
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S996: eBay sold sync 90-day creationdate fix + S995 yard-sales About fix + S994 yard-sales pages + S993 outreach + S992 city SEO/checkout"
+git commit -m "S992-S996: city SEO + yard-sales pages + outreach Prisma fix + RDAP + eBay sold sync + cityData apostrophe fix"
 .\push.ps1
 ```
 

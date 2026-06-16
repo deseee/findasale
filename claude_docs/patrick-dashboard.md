@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Week of June 16, 2026 (Updated S996)
+# Patrick's Dashboard — Week of June 16, 2026 (Updated S997)
 
 ---
 
@@ -6,7 +6,7 @@
 
 **S996 (today — eBay sold sync fix):** Found and fixed the reason items sold on eBay weren't being marked SOLD on FindA.Sale. Root cause: the sync cron used a 7-day `lastmodifieddate` filter. Once an order settles (paid + shipped), eBay stops updating its `lastmodifieddate` within hours — so after 7 days the order permanently drops out of the polling window. Fix: switched to a 90-day `creationdate` window. `creationdate` is immutable — an order placed 60 days ago is always returned until day 91. Existing sold items won't double-mark (the cron only looks at AVAILABLE items). 1 file changed, 0 TS errors.
 
-**S995 (today — QA pass + yard-sales About bug fix):** Ran QA on everything shipped this week. S991 shipping preview fix ✅ Chrome-verified (Celestion Vintage now shows net estimate). S992 FB checkout ✅ Chrome-verified. S993 outreach pipeline ✅ DB-verified (2,284 PENDING ready to send). S994 yard-sales pages ✅ PARTIAL — found and fixed a P2 bug: the About section on `/yard-sales/grand-rapids-mi` was showing estate-sale copy ("Grand Rapids estate sales reflect the city's Dutch heritage..."). Root cause: the page was pulling from `getCityMeta()` which returns estate-sale branded content. Fix: added a separate `YARD_SALE_ABOUT` record (15 cities) + `getYardSaleMeta()` function to `cityData.ts`. Yard-sales About now says yard-sale copy. TypeScript 0 errors.
+**S995–S997 (today):** S995 built the GarageSaleFinder photo pipeline (gallery page scraper to pull real 700×500 images) + cityData.ts About/meta for yard-sales pages. S996 fixed eBay sold sync (7-day → 90-day creationdate window). S997 fixed a Vercel TypeScript build error blocking deployment of all S994–S996 work: 12 single-quoted strings in `YARD_SALE_ABOUT` contained possessive apostrophes (city\'s, Chicago\'s, etc.) which terminated the string literals prematurely. Fixed by converting to double-quoted strings. Vercel build unblocked.
 
 **S994 (today — Yard-sales SEO pages + GSC audit):** Built `/yard-sales/[city-slug].tsx` (47-city ISR, same pattern as estate-sales). Added `getYardSaleFaqs()` to `cityData.ts`. Updated sitemap with `yardSalesUrls` at priority 0.70. Also audited the 2,071 discovered-not-indexed issue — root cause confirmed: 10,000 `/items/{id}` SSR pages in the sitemap exhaust crawl budget. P1 fix dispatch ready for next session.
 
@@ -60,7 +60,7 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
   git add claude_docs/scripts/oauth_setup2.py
   git add claude_docs/STATE.md
   git add claude_docs/patrick-dashboard.md
-  git commit -m "S996: eBay sold sync 90-day creationdate fix + S995 yard-sales About fix + S994 yard-sales pages + S993 outreach + S992 city SEO/checkout"
+  git commit -m "S992-S997: city SEO + yard-sales pages + outreach Prisma fix + RDAP + eBay sold sync + cityData apostrophe fix"
   .\push.ps1
   ```
 
