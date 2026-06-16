@@ -96,9 +96,9 @@ async function main() {
         contactEmail: { not: null },
         // Must not be CLAIMED or OPTED_OUT
         claimStatus: { notIn: ['CLAIMED', 'OPTED_OUT'] },
-        // Skip emails marked as junk by emailDiscoveryService (confidence=0.0)
-        // NULL confidence = scraper-set email (trusted); 0.0 = known junk (blocked)
-        NOT: { emailDiscoveryConfidence: 0.0 },
+        // Null-safe: block only 0.0 (junk). NULL = scraped (trusted), >0 = verified.
+        // Cannot use NOT:{emailDiscoveryConfidence:0.0} — Prisma NOT excludes NULLs in SQL.
+        AND: [{ OR: [{ emailDiscoveryConfidence: null }, { emailDiscoveryConfidence: { gt: 0 } }] }],
       },
       select: {
         id: true,
