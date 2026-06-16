@@ -7,7 +7,7 @@
  * Section 4: Unlisted Inventory table
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -190,25 +190,27 @@ export default function PlatformsPage() {
   });
 
   // Unlisted inventory (ebay gap as primary)
-  const { isFetching: unlistedFetching } = useQuery<PlatformGapResponse>({
+  const { isFetching: unlistedFetching, data: unlistedData } = useQuery<PlatformGapResponse>({
     queryKey: ['platform-gap-unlisted', unlistedPage],
     queryFn: async () => {
       const res = await api.get(`/organizers/me/platform-gap?platform=ebay&page=${unlistedPage}`);
       return res.data as PlatformGapResponse;
     },
-    onSuccess: (d: PlatformGapResponse) => {
-      setUnlistedTotal(d.totalNotListed);
-      if (unlistedPage === 1) {
-        setUnlistedItems(d.items);
-      } else {
-        setUnlistedItems((prev: GapItem[]) => [...prev, ...d.items]);
-      }
-      setUnlistedInit(true);
-    },
-    keepPreviousData: true,
+    placeholderData: (prev) => prev,
     staleTime: 30_000,
     enabled: !!user?.id,
   });
+
+  useEffect(() => {
+    if (!unlistedData) return;
+    setUnlistedTotal(unlistedData.totalNotListed);
+    if (unlistedPage === 1) {
+      setUnlistedItems(unlistedData.items);
+    } else {
+      setUnlistedItems((prev: GapItem[]) => [...prev, ...unlistedData.items]);
+    }
+    setUnlistedInit(true);
+  }, [unlistedData, unlistedPage]);
 
   // Queue settings mutation
   const queueSettingsMutation = useMutation({
