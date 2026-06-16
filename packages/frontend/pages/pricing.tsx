@@ -199,9 +199,9 @@ const PricingPage = () => {
     <>
       <Head>
         <title>Pricing - FindA.Sale</title>
-        <meta name="description" content="Choose the perfect plan for managing your sales." />
+        <meta name="description" content="Simple, fair pricing for estate sale companies, garage sale hosts, auctioneers, and flea market operators. Start free — keep 90% of what you sell." />
         <meta property="og:title" content="Pricing - FindA.Sale" />
-        <meta property="og:description" content="Choose the perfect plan for managing your sales." />
+        <meta property="og:description" content="Simple, fair pricing for estate sale companies, garage sale hosts, auctioneers, and flea market operators. Start free — keep 90% of what you sell." />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

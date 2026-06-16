@@ -404,7 +404,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
                 type="button"
                 onClick={handleConfirmAppraisal}
                 disabled={appraisalSubmitting}
-                className="flex-1 px-4 py-2 bg-[#4A7C59] hover:bg-[#3d654a] disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 bg-[#4A7C59] hover:bg-[#3d654a] dark:bg-[#3d654a] dark:hover:bg-[#325440] disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
               >
                 {appraisalSubmitting ? 'Submitting...' : 'Confirm & Submit'}
               </button>
