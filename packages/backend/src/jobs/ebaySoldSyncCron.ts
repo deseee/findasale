@@ -26,6 +26,8 @@ interface EbayItem {
   ebayOfferId: string | null;
   title: string;
   saleId: string | null; // Feature #300: nullable — inventory items have no sale
+  ebayQuantityAvailable: number | null; // ADR ebay-multiquantity: total units on the eBay listing (null/1 = single)
+  ebayQuantitySold: number; // ADR ebay-multiquantity: units already sold via eBay
 }
 
 interface SyncResult {
@@ -71,12 +73,12 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
     // when eBay orders come in for items listed directly on eBay (not via FindA.Sale push).
     const availableItems: EbayItem[] = await prisma.item.findMany({
       where: {
-        status: 'AVAILABLE',
-        // Include BOTH sale items and inventory items (saleId=null) — inventory items
-        // imported from eBay can also sell on eBay and must trigger a sold alert.
-        OR: [
-          { sale: { organizerId } },
-          { organizerId, saleId: null },
+        AND: [
+          // AVAILABLE single-unit items, PLUS multi-quantity items even once flipped to SOLD
+          // (so the idempotent ledger can still absorb re-runs of an already-counted order).
+          { OR: [ { status: 'AVAILABLE' }, { ebayQuantityAvailable: { gt: 1 } } ] },
+          // Both sale items and inventory items (saleId=null) imported from eBay.
+          { OR: [ { sale: { organizerId } }, { organizerId, saleId: null } ] },
         ],
       },
       select: {
@@ -85,6 +87,8 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         ebayOfferId: true,
         title: true,
         saleId: true,
+        ebayQuantityAvailable: true,
+        ebayQuantitySold: true,
       },
     });
 
@@ -139,7 +143,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
 
     const ebayData = (await ebayResponse.json()) as { orders?: Array<{
       orderId: string;
-      lineItems?: Array<{ sku?: string; legacyItemId?: string; title?: string }>;
+      lineItems?: Array<{ sku?: string; legacyItemId?: string; title?: string; lineItemId?: string; quantity?: number }>;
     }> };
     const orders = ebayData.orders || [];
 
@@ -202,34 +206,79 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
           continue; // Not our item — belongs to a different organizer or untracked listing
         }
 
-        // Mark item SOLD
-        await prisma.item.update({
+        // --- Idempotent ledger (ADR ebay-multiquantity) ---
+        // One EbaySoldEvent per (ebayOrderId, ebayLineItemId). The unique constraint is the
+        // reprocessing guard: multi-quantity listings sell multiple units over time, and the
+        // old "status=SOLD stops reprocessing" guard missed every unit after the first.
+        const lineItemId = lineItem.lineItemId || '';
+        const unitQty =
+          typeof lineItem.quantity === 'number' && lineItem.quantity > 0 ? lineItem.quantity : 1;
+        if (!lineItemId) {
+          console.warn(
+            `[eBay Sync] Order ${order.orderId} line for item ${matchedItem.id} has no lineItemId — skipping (cannot dedupe)`
+          );
+          continue;
+        }
+
+        try {
+          await prisma.ebaySoldEvent.create({
+            data: {
+              itemId: matchedItem.id,
+              ebayListingId: matchedItem.ebayListingId || legacyItemId || '',
+              ebayOrderId: order.orderId,
+              ebayLineItemId: lineItemId,
+              quantitySold: unitQty,
+            },
+          });
+        } catch (err: any) {
+          // P2002 = unique (orderId+lineItemId) already processed → idempotent no-op
+          if (err?.code === 'P2002') {
+            continue;
+          }
+          throw err;
+        }
+
+        // Atomic increment so multiple unit sales in the same run stay correct.
+        const updated = await prisma.item.update({
           where: { id: matchedItem.id },
-          data: { status: 'SOLD' },
+          data: { ebayQuantitySold: { increment: unitQty } },
+          select: { ebayQuantitySold: true, ebayQuantityAvailable: true, status: true },
         });
+        const avail = updated.ebayQuantityAvailable ?? 1;
+        const soldCount = updated.ebayQuantitySold;
+        const fullySold = soldCount >= avail;
 
-        // Withdraw eBay listing so item can't be purchased again on eBay (fire-and-forget)
-        endEbayListingIfExists(matchedItem.id).catch(err =>
-          console.warn(`[eBay Sync] withdraw failed for item ${matchedItem!.id}:`, err.message)
-        );
-        notifyFacebookExportedItemSold(matchedItem.id).catch(err =>
-          console.warn(`[FB Nudge] failed for item ${matchedItem!.id}:`, err.message)
-        );
+        if (fullySold && updated.status !== 'SOLD') {
+          await prisma.item.update({
+            where: { id: matchedItem.id },
+            data: { status: 'SOLD' },
+          });
+          // Withdraw the eBay listing only once it's fully sold out (fire-and-forget)
+          endEbayListingIfExists(matchedItem.id).catch((err) =>
+            console.warn(`[eBay Sync] withdraw failed for item ${matchedItem!.id}:`, err.message)
+          );
+          notifyFacebookExportedItemSold(matchedItem.id).catch((err) =>
+            console.warn(`[FB Nudge] failed for item ${matchedItem!.id}:`, err.message)
+          );
+        }
 
-        // Notify organizer
+        // Notify organizer — one alert per unit sale (idempotent: only on a NEW ledger row)
         await prisma.notification.create({
           data: {
             userId: organizer.userId,
             type: 'SALE_UPDATE',
             title: 'Item sold on eBay',
-            body: `"${matchedItem.title}" was purchased on eBay and has been marked as sold.`,
+            body:
+              avail > 1
+                ? `"${matchedItem.title}" sold a unit on eBay (${soldCount} of ${avail}).`
+                : `"${matchedItem.title}" was purchased on eBay and has been marked as sold.`,
             link: matchedItem.saleId ? `/organizer/sales/${matchedItem.saleId}` : `/organizer/inventory`,
             notificationChannel: 'IN_APP',
           },
         });
 
         console.log(
-          `[eBay Sync] Item ${matchedItem.id} ("${matchedItem.title}") marked SOLD — eBay order ${order.orderId}`
+          `[eBay Sync] Item ${matchedItem.id} ("${matchedItem.title}") — unit sold via eBay order ${order.orderId} (${soldCount}/${avail}${fullySold ? ', now SOLD' : ''})`
         );
 
         result.synced++;
