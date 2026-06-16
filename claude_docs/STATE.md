@@ -8,74 +8,21 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S991 — BUG + SEO (2026-06-16). Shipping preview fix + SEO crawl budget fixes.**
-- SHIPPING BUG (prior): `Item.organizerId = NULL` on items created via sale flow. `getShippingNetPreview` and `getSuggestedPriceForMargin` both queried `WHERE id = itemId AND organizerId = organizer.id`. Fixed to use `sale: { organizerId: organizer.id }` join.
-- SEO CRAWL FIX (dispatch all): 3 root causes of 2,071 "Discovered not indexed" pages fixed:
-  1. `/city-heat-index` — was returning null to crawlers (useEffect redirect). Converted to `getServerSideProps` 301. Removed from sitemap.
-  2. `/categories` (index) — was pure CSR (no getStaticProps). Added getStaticProps + ISR (revalidate 300s) so Google crawls real category data.
-  3. Sitemap priorities — `estate-sales/{slug}` was 0.85 (higher than /categories 0.8, /about 0.6). Rebalanced: estate-sales→0.75, this-weekend→0.7, city/{slug}→0.75.
-  4. P3 (no code fix): 3 GSC "redirect" pages = `/create-sale`, `/manage-sales`, `/hall-of-fame` — all correct 301s in next.config.js, no action needed.
-- Files: packages/frontend/pages/city-heat-index.tsx, pages/categories/index.tsx, pages/server-sitemap.xml.tsx.
-- BQ: 0→1 (SEO monitor P1: GSC discovered-not-indexed 2,071 pages — will improve post-deploy but monitoring required).
-
-**S990 — QA/RECORDS (2026-06-15). Records pass + GA4 Tier 2 events Chrome-verified (#465).**
-- Records pass: #313 HAUL_POST_LIKES ✅ S989 applied to roadmap.md (Claude QA col ✅ S989). PCV cleared.
-- Chrome QA: GA4 Tier 2 events (#465) — 3 of 3 remaining events verified via gtag interceptor as Artifact MI.
-  - `shopper_item_favorited` ✅ — navigated items/cmo3etp4d005djqsu4yi9w45m, clicked Save, gtag fired {eventName: 'shopper_item_favorited', params: {event_category: 'engagement', item_id: 'cmo3etp4d005djqsu4yi9w45m'}} (ss_0216lvvsn)
-  - `checkout_initiated` ✅ — same item, clicked Buy It Now, gtag fired {eventName: 'checkout_initiated', params: {event_category: 'engagement', item_id: '...'}} 
-  - `first_item_published` ✅ — created test sale (cmqflappy014ebo1n952gj4z7), Manual Entry item saved, gtag fired {eventName: 'first_item_published', params: {event_category: 'engagement', sale_id: '...'}}. Test sale deleted after verify.
-  - `organizer_registration_complete` was already Chr ✅ S984 per roadmap. #465 now 4/4 Chrome-verified.
-- PCVs staged for next session records pass (cross-session rule — roadmap.md #465 Chrome col NOT updated this session).
-- BQ: 0 (unchanged).
-
-**S980 DEV+QA COMPLETE — eBay shipping accuracy overhaul (preview matches the live listing; live re-pin on change; bulk rate-drift sweep; package-estimator fix). All deployed green; user-visible pieces verified.**
-- ROOT CAUSE (evidence-first, the big one): the shipping PREVIEW computed from organizer lat/lng (NULL) with no origin ZIP → defaulted to the farthest zone → showed $28, while the LIVE listing correctly charged $32 from Paw Paw MI (49079). The listing was right; the preview was the bug. FIX: preview endpoints load `sale.zip` as origin → preview reads $32, matching the listing. VERIFIED LIVE (Artifact MI, get_page_text "$32.00 · FindA.Sale Flat $32.00"; eBay API confirmed live offer policy 316596123011).
-- Shared resolver `ebayShippingResolver.ts` (`resolveItemShipping`) — preview == listing single source of truth (weight-tier items show real tier rate, not a fabricated FVF flat).
-- Phase 2 live re-pin: migration `20260614224302_add_item_ebay_shipping_applied_fields` (4 Item cols ebayFulfillmentPolicyId/ShippingAmountCents/ShippingRatedAt/RateVersion) APPLIED to Railway. `resyncItemShippingPolicy` + `applyFulfillmentPolicyToOffer` fire on edit-save (weight/dims change) and edit-item re-push. Guarded: skips null-weight + LOCAL_PICKUP_ONLY.
-- Phase 3 bulk sweep: `resyncShippingDriftSweep` daily 4AM cron + POST /api/internal/resync-shipping-drift (dryRun). Re-pins only on ≥$0.50/≥5% drift, eBay-budget-aware, gated on rate-version. Dry-run VERIFIED 7 candidates after guard (was 10).
-- Package-estimator fix (`ebayPackageEstimateService.ts`): keyword match runs BEFORE broad-category; category-label match restricted to keyword-IS-NULL defaults. Stops broad buckets mis-pricing (Collectibles→coin 4oz, Electronics→camera 36oz). VERIFIED: porcelain figurine 4→18oz, Casio cable 36→24oz fallback.
-- Also: negative-$ fmt fix; NUL-byte build corruption recovered (memory); latent crash fixed in ebayFlatRatePolicyService (rateResult→cheapest.rate). ADR: claude_docs/feature-notes/adr-shipping-policy-resync.md.
-- RUNTIME VERIFIED LIVE (S980): ran the real sweep (dryRun:false) → 9 live listings re-pinned; direct eBay API confirms each offer's fulfillmentPolicyId now matches stored. Real corrections landed — Steve Yzerman 8oz$6.99→12oz$7.75, Brett Hull→$7.75; Porcelain (set 18oz figurine est) pickup→1+lb$12.49; Casio (set 5oz via NEW 'cable' PackageProfile) →8oz$6.99; Celestion set LOCAL_PICKUP_ONLY (oversized, excluded). Other 5 = no-op backfills. Offer-PUT mechanism PROVEN.
-
-**S979 DEV+QA COMPLETE — eBay min-price suggester replaced with silent low-price guardrail; $6.22 P2 RESOLVED.**
-- Root problem: the "Min. list price to hit a net margin" widget defined margin as net-as-a-fraction-of-list-price with no cost basis, so on any real item it collapsed to the fee/shipping floor (the embarrassing "$6.22 on a $175 item"). It also never told the organizer what it was for.
-- Fix (Patrick-approved direction = guardrail): removed the always-on suggester. ShippingNetPreview now auto-fetches the fee-safe floor (15% margin) and shows an amber warning ONLY when the entered price is below it — silent on normal items. One-tap "Use $X" applies the floor.
-- Follow-up: fmt() now renders negative dollars as -$X.XX (was "$-0.87") — fixes both the guardrail text and the "Your estimated net" box.
-- File: packages/frontend/components/ShippingNetPreview.tsx (frontend-only; reuses existing /shipping-preview/suggest-price; no schema/migration). Frontend TS 0 errors.
-- Chrome QA PASSED live as Artifact MI (see Pending Chrome Verifications, row 547-GR) — staged for next-session roadmap apply.
-- Deploy arc: first push built RED on Vercel — `Type error: Invalid character` from **554 trailing NUL bytes** appended to ShippingNetPreview.tsx in the push round-trip (NOT a code bug; local tsc passed clean both times). Pulled the real Vercel build log (evidence-first), stripped the nulls, re-pushed → GREEN. New memory: reference_nul_byte_file_corruption.
-- RE-VERIFIED on the green production build as Artifact MI: net box and guardrail both render -$0.87 (clean), guardrail fires at $3 / clears via "Use $4.89". Done end-to-end.
-
-**S979 PART 2 — eBay shipping preview now reflects ACTUAL shipping mode (flat policy vs calculated). Patrick flag: preview lied about buyer shipping.**
-- Bug: `getShippingNetPreview` ignored `EbayPolicyMapping.shippingMode` and fed the calculated USPS estimate ($20.38) into BOTH buyerShipping AND labelCost. For a FLAT_TIERS organizer (artifactmi) the buyer is actually charged a flat policy rate, the $32/$28 policy was never named, and label==shipping was an accident. Net was understated.
-- Fix (architect ADR → dev): added `resolvePreviewShipping` helper in ebayController.ts. FLAT_TIERS → buyer pays the flat policy amount `roundUpToBucket(computeFvfFlatRate(computeCheapestForOrigin().rate))` (same pure functions that provision the live policy, zero eBay calls); label cost = real cheapest-carrier rate; response adds `shippingMode`, `flatPolicy{name,amount}`, `shippingEstimate.carrier/labelCost`. Same branch applied to `getSuggestedPriceForMargin` so the guardrail floor is consistent. CALCULATED/free unchanged. Frontend names the policy + separates label cost + flat-vs-label explainer. Also fixed a latent crash in ebayFlatRatePolicyService.ts:166 (undefined `rateResult.estimatedRate` → `cheapest.rate`).
-- Files: packages/backend/src/controllers/ebayController.ts, packages/backend/src/services/ebayFlatRatePolicyService.ts, packages/frontend/components/ShippingNetPreview.tsx. Backend + frontend TS 0 errors. No schema/migration.
-- VERIFIED LIVE (green, Artifact MI, pump cmqbb252i000i60qq7eilco9z): "Buyer pays for shipping **$28.00** · Flat rate · FindA.Sale Flat $28.00"; net **$148.31** (was wrong $145.59). Top-line confirmed via get_page_text (screenshot tool was erroring). Staged PCV row 547-SHIP.
-- NUANCE for Patrick: preview recomputes from CURRENT carrier rates (UPS/FedEx tables added 2026-06-14), so it shows $28 = what a re-push lists at now, while the live listing is still on the older "FindA.Sale Flat $32.00" policy. Re-push syncs them. Not a bug — preview is the truthful "today" number.
-
-**S978 DEV COMPLETE — Suggest price P2 safety guard + ShippingNetPreview FVF copy clarification shipped.**
-
-**S977 VERIFIED LIVE:**
-- Sentry: 5 cron stampede issues RESOLVED (FINDASALE-NODEJS-38/-2N/-2Z/-2S/-3D gone). FINDASALE-NODEJS-33 graceEndAt index fired last time 2:00 AM today (pre-fix run); tomorrow's 2:05 run should be clean. FINDASALE-NODEJS-10 (Sale SELECT 3342ms, 55 events since May 6) = pre-existing unrelated issue, added to BQ.
-- eBay Danner pump re-push as artifactmi: HTTP 200 ✅, "Item listed on eBay" toast ✅, ebayNeedsReview=False ✅, eBay offer status=PUBLISHED ✅, fulfillmentPolicyId=316596123011 ("FindA.Sale Flat $32.00") ✅ — S975 smart flat-rate engine confirmed end-to-end in production.
-- ShippingNetPreview renders: "Buyer pays for shipping ~$20.38 USPS Ground Advantage, est." + "Your estimated net $145.59" + breakdown link ✅
-- Suggest price fires and returns a value ✅ — ⚠️ P2 bug: returned "$6.22 for 30% net" on a $175 item — **RESOLVED S979** (suggester replaced with silent low-price guardrail; see S979 status above).
-
-**S975 WRAP — eBay listing pipeline overhaul (massive session). All backend tsc-verified; key paths verified live on the Danner pump.**
-
-DONE + VERIFIED LIVE:
-- Smart bounded FVF flat-rate shipping engine (cheapest of USPS/UPS/FedEx → farthest-CONUS coverage zone → FVF gross-up → bounded reusable bucket ladder; no calc fallback). Pump lists at FindA.Sale Flat $32.00.
-- packageType fix (strip MAILING_BOX on flat-rate routing — eBay err 25101/216305).
-- Domain-aware eBay category resolver (no depth-sort, title+AI domain match, persist+show name) + single-source EBAY_L1_CATEGORIES. Pump now in Pet Supplies › Pumps (Air) 100351 (was Bait Buckets).
-- AI accuracy pass: Vintage/Antique + era only with evidence; decade allowed-but-not-forced; accuracy-over-richness. Verified: pump re-analysis dropped Vintage/1980s.
-- PushSync GET-merge-PUT (real SKU) + dead Logistics call removed.
-- On-demand /api/internal/reanalyze-item (secret-protected, dry-run+apply) — used live to verify the accuracy fix.
-- Product enrichment cascade (productEnrichment.ts): barcode→UPC (free), Open Library, Open Food Facts, eBay Catalog (dormant—403 until Buy-API grant), Go-UPC (paid, env-gated OFF), AI estimate. Confidence-gated apply; visible-UPC read with hard no-fabrication rule. Comps now model-token-enforced (fixes AP-4/AP-100 + skewed price).
-- Live-edit propagation: republish offer after inventory sync so title/desc/condition edits reach the live listing (PushSync + reanalyze). Proven via direct eBay PUT+publish.
-- Accept-suggestion UI: getItemById returns catalogSuggestions; CatalogSuggestionPanel renders low-confidence enrichment with one-click accept on edit-item page.
-
-KEY FINDINGS: eBay Catalog API + Browse get_item = 403 (app lacks Buy-API access — Patrick applied for it; enrichment lights up automatically on grant). eBay locks PRIMARY CATEGORY on active listings → category changes need end+relist (title/condition update in place fine).
-
+**S992 — SEO/DEV (2026-06-16). Analytics OAuth restored + city SEO framework built + estate-sales landing pages upgraded.**
+- Analytics pipeline: created `claude_docs/scripts/oauth_setup2.py` (missing file referenced by scheduled task), repaired truncated `.analytics-creds.json`, ran weekly report successfully. OAuth re-auth flow documented.
+- New file: `packages/frontend/lib/seo/cityData.ts` — reusable SEO framework for all city/category landing pages:
+  - 50+ city `CITY_DATA` lookup with unique `knownFor`, `tip`, and `nearbySlugs` per city
+  - Builders: `getCityMeta`, `getEstateSalesFaqs` (7 city-specific FAQs), `buildFaqJsonLd` (FAQPage JSON-LD), `buildSeoTitle` (count-aware, hits multiple query variants), `buildSeoDescription`, `getNearbyLinks`
+  - Designed for reuse by: `/yard-sales/[city-slug]`, `/auctions/[city-slug]`, `/flea-markets/[city-slug]` (next session)
+- Updated: `packages/frontend/pages/estate-sales/[city-slug].tsx` — consumed the framework:
+  - Birmingham AL + Long Beach CA added to prerender list (GSC fix — both showing impressions at pos 27+, zero clicks)
+  - Prerender list expanded to 45 cities covering all known GSC impression markets
+  - FAQPage JSON-LD schema on every page (Google rich result eligibility)
+  - City-specific About section (`knownFor` + `tip` — no more identical boilerplate on every page)
+  - Nearby cities section (internal link equity across city pages)
+  - Empty-state nearby city links (reduces pogo-stick on zero-sale pages)
+  - Count-aware title: `"51 Estate Sales in Denver, CO — Find Local Sales | FindA.Sale"` (multi-variant)
+- TypeScript: 0 errors (frontend tsc clean). BQ unchanged = 1.
 ## Next Session
 - ⚠️ FRONTEND NOT TSC-VERIFIED (VM node_modules corrupt): EbayCategoryPicker prefill, CatalogSuggestionPanel, edit-item panel render. Verify in a real build / Chrome before trusting.
 - When eBay Buy-API grant lands: ebayCatalog provider activates automatically — verify it returns identifiers/dims; consider adding get_product/{epid} for fuller aspects.
@@ -304,23 +251,45 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S992 → S993
+### S993 → S994
 
 **Records pass (first action):**
 Apply #465 PCVs from S990 to roadmap.md — update Chrome QA col from `⏳ 3/4 Chr verified S984` to `✅ S990` (all 4 events verified). Evidence:
+- shopper_item_favorited ✅: URL https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m, Artifact MI, Save button click, gtag interceptor (ss_0216lvvsn ss_3418eo8gk)
+- checkout_initiated ✅: same item, Buy It Now click, gtag interceptor (ss_0216lvvsn)
+- first_item_published ✅: empty test sale (deleted post-test), Manual Entry first item save, gtag interceptor (ss_7000y2s0t ss_3418eo8gk)
+5-element gate: URL ✅, user ✅, element ✅, outcome ✅, screenshot IDs ✅.
 
-**Push S991+S992 wrap (before records pass):** push block below — `ebayController.ts` (shipping preview organizerId → sale.organizerId fix) + wrap docs. `checkout.tsx` already pushed (3 push blocks delivered S992).
-- shopper_item_favorited ✅: URL https://finda.sale/items/cmo3etp4d005djqsu4yi9w45m, Artifact MI, Save button click, gtag interceptor captured event (ss_0216lvvsn ss_3418eo8gk)
-- checkout_initiated ✅: same item, Buy It Now click, gtag interceptor captured event (ss_0216lvvsn)
-- first_item_published ✅: empty test sale (deleted post-test), Manual Entry first item save, gtag interceptor captured event (ss_7000y2s0t ss_3418eo8gk)
-5-element gate: URL ✅, user (Artifact MI) ✅, element (gtag interceptor) ✅, outcome (events captured) ✅, screenshot IDs ✅.
+**Push S992 wrap (if not yet pushed):** push block below — `packages/frontend/lib/seo/cityData.ts` (new) + `packages/frontend/pages/estate-sales/[city-slug].tsx` (updated) + `claude_docs/scripts/oauth_setup2.py` (new) + wrap docs.
+
+**SEO framework extension — extend cityData.ts to other city page types:**
+The reusable framework at `packages/frontend/lib/seo/cityData.ts` is ready. The next step is to create parallel pages for the other sale types that benefit from city landing pages. Highest-priority by GSC search volume:
+
+`Skill('findasale-dev')` → Create `packages/frontend/pages/yard-sales/[city-slug].tsx`
+- Copy the estate-sales page as base (same ISR/getStaticProps/getStaticPaths pattern)
+- Change `saleType` filter in API call from `estate-sales` to `yard-sales`
+- Import the same framework: `getCityMeta`, `buildSeoTitle`, `buildSeoDescription`, `buildFaqJsonLd`, `getNearbyLinks`
+- Update `getEstateSalesFaqs` — or create `getYardSaleFaqs(cityName, stateCode)` in cityData.ts with yard-sale-specific questions (e.g. "When do yard sales happen in [city]?", "How to find yard sales near [city] this weekend?")
+- Update all heading copy (h1, breadcrumb, sale-type pill, organizer CTA) for yard sales
+- Keep top 20–25 cities in the prerender list (same GSC markets)
+- Add `cityData.ts` export for `getYardSaleFaqs` alongside existing `getEstateSalesFaqs`
+- TypeScript 0 errors required before returning
+
+Also add to `claude_docs/server-sitemap.xml.tsx` — include `/yard-sales/{slug}` URLs at priority 0.70 for all canonicalCitySlugs returned by the API.
+
+Note: DO NOT modify `lib/seo/cityData.ts` schema — only ADD the `getYardSaleFaqs` export. All existing exports stay intact.
+
+Acceptance criteria:
+- `/yard-sales/denver-co` renders with yard-sale-specific title, FAQ schema, city content, nearby cities
+- `/yard-sales/birmingham-al` is pre-rendered (in paths list)
+- TypeScript 0 errors on frontend
+- Changed files list returned (for push block)
 
 **eBay carry-forward (still valid):**
 When eBay Buy-API grant lands: ebayCatalog provider activates — verify identifiers/dims return.
 
-**BQ = 0** — fully unblocked. Dev can proceed on any roadmap item.
+**BQ = 1** — GSC "discovered not indexed" monitor active; expect improvement post S991 crawl-budget fixes.
 
----
 
 ### S974 — Carry-forward (eBay FVF flat-rate — Chrome verify + tier-ID investigation)
 
@@ -433,6 +402,20 @@ S969 PCVs applied + #219 Chrome-verified this session. BQ is 0 — DEV fully unb
 
 
 ## Recent Sessions
+
+### S992 — 2026-06-16 | SEO/DEV (analytics OAuth + city SEO framework)
+
+**Session type:** SEO/DEV — analytics pipeline repair + city landing page SEO upgrade
+
+**Completed:**
+- Created `claude_docs/scripts/oauth_setup2.py` — OAuth2 re-auth helper for GA4/Search Console (was referenced by scheduled task but didn't exist). Repaired truncated `.analytics-creds.json`. Weekly analytics report ran successfully.
+- NEW: `packages/frontend/lib/seo/cityData.ts` — reusable SEO framework (50+ cities with unique `knownFor`, `tip`, `nearbySlugs`; builders for FAQ JSON-LD, count-aware titles, descriptions, nearby links). Designed for reuse by all city page types.
+- UPDATED: `packages/frontend/pages/estate-sales/[city-slug].tsx` — added Birmingham AL + Long Beach CA to prerender list (GSC fix); 45-city prerender total; FAQPage JSON-LD schema; city-specific About section; Nearby Cities section with internal links; empty-state nearby links; count-aware title variants.
+
+**Files changed:** `packages/frontend/lib/seo/cityData.ts` (new), `packages/frontend/pages/estate-sales/[city-slug].tsx` (updated), `claude_docs/scripts/oauth_setup2.py` (new)
+
+**BQ delta:** 1 → 1 (GSC "discovered not indexed" monitor — no change)
+
 
 ### S992 — 2026-06-16 | DEV+QA (Facebook Commerce Manager checkout page)
 

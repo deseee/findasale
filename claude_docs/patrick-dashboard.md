@@ -6,15 +6,7 @@
 
 The big story this week was eBay shipping accuracy — the preview tool was computing from a null location instead of the sale's ZIP code, so it showed $28 while the live listing correctly charged $32. That's now fixed: preview matches the listing. We also overhauled the confusing "minimum price" widget (it now shows a quiet amber warning only when you're pricing too low). A P1 bug was caught and fixed: new organizer accounts weren't getting their ORGANIZER role properly. QA is fully caught up — #358 Follower Count Toggle, #318 affiliate tab filter, #313 HAUL_POST_LIKES XP idempotency, and #465 GA4 Tier 2 events are all Chrome-verified. BQ is at 1 (GSC indexing — see below).
 
-**S991 (today):** Fixed the "Could not estimate shipping right now" error in the Celestion Vintage item shipping preview. Root cause: items created through the sale flow had a null `organizerId` field, so the ownership check silently failed and returned a 404 with no log entry. Two-line fix — both preview endpoints now verify ownership through the sale instead of the item directly.
-
-**S992 (today):** Facebook Commerce Manager is live for Artifact MI. Commerce feed verified (103 products imported). Built and verified the `/checkout` page Facebook requires before allowing Marketplace connection — it reads Facebook's `products` query param, fetches all items in parallel, puts them in the FindA.Sale cart at correct prices, and redirects to the sale page. Patrick tested with two items — both landed in cart at the right prices.
-
----
-
-## Audit Results
-
-No formal audit reports ran this week. Dev sessions caught production bugs through direct eBay API and DB testing — all fixed before users noticed.
+**S992 (today — SEO):** Analytics OAuth pipeline restored (Google token had expired; created the missing `oauth_setup2.py` helper, ran the weekly report). Built a reusable city SEO framework (`lib/seo/cityData.ts`) covering 50+ cities with unique content per city. Upgraded the estate-sales city landing pages: Birmingham AL and Long Beach CA are now pre-rendered (they had GSC impressions but no clicks because the pages weren't building at deploy time), FAQPage schema added, city-specific "About" content replaces the identical boilerplate, and a Nearby Cities section creates internal link equity across pages.
 
 ---
 
@@ -26,19 +18,13 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 ## Beta Tester Impact
 
-**Facebook Commerce Manager (S992):** Artifact MI's 103 items are now in a Facebook catalog. Shoppers clicking "Buy on Website" from Facebook/Instagram land on the correct FindA.Sale sale page with those items already in their cart.
+**City SEO pages (S992):** Birmingham AL, Long Beach CA, and 43 other markets now have pre-rendered landing pages with FAQ schema (Google rich result eligible), city-specific content, and nearby city links. Estate sale searchers in those markets land on real pages instead of a blocking ISR spin.
 
-**Better for eBay sellers (S991):** The shipping preview now works when entering weight/dimensions for items whose sale was created before the `organizerId` backfill. The Celestion Vintage item is unblocked.
+**eBay shipping fix (S991):** The "Could not estimate shipping right now" error on items with null organizerId (items created through the sale flow) is fixed. The Celestion Vintage item unblocked.
 
 **Better for eBay sellers (S979/S980):** The shipping preview shows the right number — what the buyer actually pays. The guardrail that warns when a price is too low fires quietly and only when it matters.
 
 **New organizer registrations (S983/S984):** The bug where new organizers couldn't access their dashboard after signing up is fixed.
-
-**Follower count toggle (S986/S987):** Both ON and OFF directions verified live.
-
-**Affiliate dashboard (#318):** The referrals tab filter now correctly highlights the active tab. Chrome-verified S988.
-
-**XP idempotency (#313):** Haul post milestone XP fires exactly once per post. Chrome-verified S989.
 
 **GA4 Tier 2 events (#465):** All four engagement events confirmed firing in production. Chrome-verified S990.
 
@@ -46,40 +32,38 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 ## This Week's Priority
 
-1. **Push S991+S992 wrap docs** (see push block below — `ebayController.ts` + `STATE.md` + `patrick-dashboard.md`). Note: `checkout.tsx` was already pushed during S992.
-2. **GSC indexing (BQ P1):** 2,071 pages discovered-not-indexed since 5/23. Next session should audit: noindex metas on core nav pages, SSR output, internal links from indexed pages, sitemap quality.
-3. **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket, 3 press pitches).
+1. **Push S992 code + wrap docs** (push block below).
+2. **GSC indexing (BQ P1):** 2,071 pages discovered-not-indexed since 5/23. S991 shipped 3 root-cause fixes — monitoring required. Expect improvement over next 1–2 weeks as Googlebot recrawls.
+3. **S993: Extend city SEO framework to yard-sales pages** — `Skill('findasale-dev')` dispatch ready in STATE.md Next Session.
+4. **S993 records pass:** Apply #465 PCVs to roadmap.md (5-element evidence confirmed S990).
+5. **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket, 3 press pitches).
 
 ---
 
 ## Action Items for Patrick
 
-- [ ] **Push S991+S992 wrap:**
+- [ ] **Push S992 code + wrap (combine into one commit):**
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale
-  git add packages/backend/src/controllers/ebayController.ts
+  git add packages/frontend/lib/seo/cityData.ts
+  git add "packages/frontend/pages/estate-sales/[city-slug].tsx"
+  git add claude_docs/scripts/oauth_setup2.py
   git add claude_docs/STATE.md
   git add claude_docs/patrick-dashboard.md
-  git commit -m "S991: fix shipping preview 404 on null organizerId; S992: wrap"
+  git commit -m "S992: city SEO framework + estate-sales upgrade + analytics OAuth helper + wrap"
   .\push.ps1
   ```
-- [ ] **Send the 4 Gmail drafts** sitting in your inbox: eBay developer ticket reply, Rapid Growth pitch, Second Wave pitch, Crain's GR pitch.
-- [ ] **Start Garden grants** — "The 100" and 5×5 Night. Free to apply, both open now.
-- [ ] **Free directory listings (~1-2 hrs, all $0):** Bing Places, Apple Business Connect, Yelp, Foursquare, findPWA, Alignable.
-- [ ] **EPN affiliate nudge** — if eBay stays quiet, send a short follow-up to epn-tigs@ebay.com.
+
+- [ ] **Send 4 Gmail drafts** (eBay dev ticket reply + 3 press pitches — review before sending)
+
+- [ ] **Directory quick-wins (~1–2 hrs, all free):** Bing Places, Apple Business Connect, Yelp, Foursquare, Appsco.pe, findPWA, eBay Partner Network, Alignable, Paw Paw Chamber.
 
 ---
 
-## ⚠️ Brand Drift Alert — 2026-06-16
+## BQ Status
 
-**Weekly brand scan found 1 P0 and 2 P1 issues (all pre-existing, none new this week).**
+**Count: 1** — below QA ceiling. Dev fully unblocked.
 
-| Severity | File | Issue |
-|----------|------|-------|
-| **P0** | `SearchFilterPanel.tsx` lines 298/314/345 | Clear Filters button + result count text have no dark mode variants — renders light-on-light in dark mode. **3 consecutive audits (~20+ sessions) without a fix.** |
-| **P1** | `pages/about.tsx` lines 12/14 | Meta + OG descriptions don't mention any sale types — missed SEO positioning. |
-| **P1** | `pages/pricing.tsx` lines 202/204 | Meta + OG descriptions don't mention any sale types — missed SEO positioning. |
-
-All fixes are small (3 lines of Tailwind, 2 lines of copy). Route: `Skill('findasale-dev')` for SearchFilterPanel; `Skill('findasale-marketing')` for the two meta descriptions.
-
-**Full report:** `claude_docs/audits/brand-drift-2026-06-16.md`
+| Feature | Status |
+|---------|--------|
+| GSC "Discovered not indexed" — 2,071 pages (P1 monitor) | S991 root causes fixed; monitoring |
