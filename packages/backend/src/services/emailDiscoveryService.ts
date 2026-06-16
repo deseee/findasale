@@ -146,6 +146,25 @@ const BLOCKLISTED_LOCAL_PARTS = new Set([
   'my.email',
 ]);
 
+
+/**
+ * Privacy proxy registrar email domains — RDAP returns these instead of real owner contacts
+ */
+const PRIVACY_PROXY_DOMAINS = new Set([
+  'whoisguard.com', 'domainsbyproxy.com', 'contactprivacy.com',
+  'privacyprotect.org', 'networksolutionsprivate.com', 'anonymize-me.de',
+  'registrar-servers.com', 'privacy-service.info', 'whoisprivacyprotect.com',
+  'withheldforprivacy.com', 'identity-protect.org', 'privacydotlink.com',
+  'secret-registration.com',
+]);
+
+function isPrivacyProxy(email: string): boolean {
+  const atIdx = email.indexOf('@');
+  if (atIdx < 0) return true;
+  const domain = email.substring(atIdx + 1).toLowerCase();
+  return PRIVACY_PROXY_DOMAINS.has(domain);
+}
+
 /**
  * Validate an email address before storage.
  * Returns true if the email should be REJECTED (blocked/invalid).
@@ -349,6 +368,75 @@ async function scrapeWebsiteEmails(domain: string): Promise<string[]> {
 }
 
 /**
+ * Extract the first email from a vCard array (RDAP entity format).
+ * vCard 4.0 structure: [version, [properties...], ...]
+ * Each property: [type, params, valueType, value]
+ */
+function extractEmailFromVcard(vcardArray: unknown): string | null {
+  if (!Array.isArray(vcardArray) || vcardArray.length < 2) return null;
+  const properties = vcardArray[1];
+  if (!Array.isArray(properties)) return null;
+  for (const prop of properties) {
+    if (Array.isArray(prop) && prop[0] === 'email' && typeof prop[3] === 'string') {
+      const email = prop[3].trim();
+      if (email) return email;
+    }
+  }
+  return null;
+}
+
+/**
+ * Stage 3: RDAP Registrant Lookup
+ * Queries rdap.org to find the domain registrant's contact email.
+ * Returns null on privacy proxy, junk, or any network/parse failure.
+ */
+async function lookupRdapEmail(domain: string): Promise<string | null> {
+  try {
+    // rdap.org auto-routes to the correct RDAP server for any TLD
+    const rdapUrl = `https://rdap.org/domain/${encodeURIComponent(domain)}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(rdapUrl, {
+      signal: controller.signal,
+      headers: { 'Accept': 'application/rdap+json, application/json' },
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+
+    const data: {
+      entities?: Array<{
+        roles?: string[];
+        vcardArray?: unknown;
+        entities?: Array<{ vcardArray?: unknown }>;
+      }>;
+    } = await response.json();
+
+    // Try registrant first (owner), then admin, then technical
+    const priorityRoles = ['registrant', 'admin', 'technical'];
+    const entities = data.entities ?? [];
+
+    for (const role of priorityRoles) {
+      for (const entity of entities) {
+        if (!entity.roles?.includes(role)) continue;
+        const email = extractEmailFromVcard(entity.vcardArray);
+        if (email && !isPrivacyProxy(email) && !isJunkEmail(email)) return email;
+        // Some registrars nest the contact entity inside the registrant entity
+        for (const nested of (entity.entities ?? [])) {
+          const nestedEmail = extractEmailFromVcard(nested.vcardArray);
+          if (nestedEmail && !isPrivacyProxy(nestedEmail) && !isJunkEmail(nestedEmail)) return nestedEmail;
+        }
+      }
+    }
+    return null;
+  } catch {
+    // Network error, timeout, invalid JSON — not a hard failure
+    return null;
+  }
+}
+
+/**
  * Stage 2: Common Email Pattern Generator
  * Generate candidate emails based on business name and domain
  * Ordered by likelihood for estate sale organizers
@@ -421,7 +509,19 @@ export async function discoverEmail(organizerId: string): Promise<string | null>
     }
 
     // SMTP pattern probing removed — port 25 is blocked on Railway.
-    // Website scrape is the sole discovery stage on this infrastructure.
+
+    // Stage 3: RDAP registrant lookup
+    // Base confidence 0.80 — owner's email from registrar, high signal but not scraped from site
+    const rdapEmail = await lookupRdapEmail(domain);
+    if (rdapEmail) {
+      const emailDomain = rdapEmail.substring(rdapEmail.indexOf('@') + 1).toLowerCase();
+      const confidence = calibrateConfidence(0.80, 'whois', emailDomain, domain, organizer.address ?? null);
+      if (confidence >= MIN_CONFIDENCE_TO_STORE) {
+        await updateOrganizerEmail(organizerId, rdapEmail, 'whois', confidence);
+        return rdapEmail;
+      }
+    }
+
     return null;
   } catch (err) {
     console.error(
@@ -437,9 +537,10 @@ export async function discoverEmail(organizerId: string): Promise<string | null>
  */
 function toDiscoveryMethod(
   source: 'website_scrape' | 'smtp_pattern' | 'whois'
-): 'website_scrape' | 'smtp_probe' | 'pattern_match' {
+): 'website_scrape' | 'smtp_probe' | 'pattern_match' | 'whois_rdap' {
   if (source === 'website_scrape') return 'website_scrape';
   if (source === 'smtp_pattern') return 'smtp_probe';
+  if (source === 'whois') return 'whois_rdap';
   return 'pattern_match';
 }
 

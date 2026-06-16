@@ -6,7 +6,7 @@
 
 The big story this week was eBay shipping accuracy — the preview tool was computing from a null location instead of the sale's ZIP code, so it showed $28 while the live listing correctly charged $32. That's now fixed: preview matches the listing. We also overhauled the confusing "minimum price" widget (it now shows a quiet amber warning only when you're pricing too low). A P1 bug was caught and fixed: new organizer accounts weren't getting their ORGANIZER role properly. QA is fully caught up — #358 Follower Count Toggle, #318 affiliate tab filter, #313 HAUL_POST_LIKES XP idempotency, and #465 GA4 Tier 2 events are all Chrome-verified. BQ is at 1 (GSC indexing — see below).
 
-**S993 (today — Outreach pipeline fix):** Found and fixed the reason the outreach pipeline only ever sent 848 emails despite 80k organizers. Root cause: a Prisma ORM quirk where `NOT: [{emailDiscoveryConfidence: 0.0}]` silently excludes NULL values in SQL — blocking 12,136 scraped-email organizers that the code explicitly labelled "trusted". Only ~329 orgs with confirmed email-discovery scores were ever passing the filter. Also found 2,276 ARCHIVED rows (from past maintenance SQL) permanently dead-ending out of the queue. Fixed both: reset valid ARCHIVED rows to PENDING, fixed the null-safe filter in two files. Queue: 2,292 PENDING. Pipeline should start seeding 500 new rows/day.
+**S993 (today — Outreach pipeline fix + RDAP email discovery):** Found and fixed the reason the outreach pipeline only ever sent 848 emails despite 80k organizers. Root cause 1: a Prisma ORM quirk where `NOT: [{emailDiscoveryConfidence: 0.0}]` silently excludes NULL values in SQL — blocking 12,136 scraped-email organizers the code labelled "trusted". Root cause 2: 2,276 ARCHIVED rows (past maintenance SQL) were permanently dead-ending out of the queue. Fixed both: reset valid ARCHIVED rows to PENDING, fixed the null-safe filter in two files. Queue: 2,292 PENDING. Also implemented RDAP Stage 3 in the email discovery service — the pipeline now queries ICANN's registrar database for the registrant's email when the website scraper finds nothing. 5,057 organizers with a website but no email are now addressable. Privacy proxy detection filters fake registrar addresses automatically.
 
 **S992 (yesterday — SEO):** Analytics OAuth pipeline restored (Google token had expired; created the missing `oauth_setup2.py` helper, ran the weekly report). Built a reusable city SEO framework (`lib/seo/cityData.ts`) covering 50+ cities with unique content per city. Upgraded the estate-sales city landing pages: Birmingham AL and Long Beach CA are now pre-rendered (they had GSC impressions but no clicks because the pages weren't building at deploy time), FAQPage schema added, city-specific "About" content replaces the identical boilerplate, and a Nearby Cities section creates internal link equity across pages.
 
@@ -45,14 +45,15 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 ## Action Items for Patrick
 
-- [ ] **Push S993 outreach fix:**
+- [ ] **Push S993 outreach fix + RDAP:**
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale
   git add packages/backend/src/jobs/autoSeedOutreachCron.ts
   git add packages/backend/src/scripts/seedDirectoryClaimEmails.ts
+  git add packages/backend/src/services/emailDiscoveryService.ts
   git add claude_docs/STATE.md
   git add claude_docs/patrick-dashboard.md
-  git commit -m "S993: fix outreach pipeline — null-safe Prisma confidence filter + ARCHIVED→PENDING reset"
+  git commit -m "S993: fix outreach pipeline + RDAP Stage 3 email discovery"
   .\push.ps1
   ```
 
