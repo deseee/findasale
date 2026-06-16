@@ -5767,10 +5767,25 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
 
         result.checked++;
 
-        // If listing is ENDED or COMPLETED, clear the eBay fields
-        if (status === 'Ended' || status === 'Completed') {
+        // eBay status semantics — `Completed` and `Ended` are NOT the same:
+        //   Completed = the listing SOLD (closed by a buyer).
+        //   Ended     = the seller pulled the listing while it was still unsold.
+        // SOLD (Completed): do NOT clear the eBay fields and do NOT tell the organizer to
+        // re-push. Leave the item fully linked so ebaySoldSyncCron can match the eBay order
+        // (by ebayListingId) and mark it SOLD with the correct "Item sold on eBay" alert.
+        // Clearing here would flip a sold item back to "Push to eBay" AND destroy the match
+        // key the sold-sync needs (the sold alert would then never fire).
+        if (status === 'Completed') {
           console.log(
-            `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing status = ${status}`
+            `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing Completed (SOLD) — leaving linked for sold-sync to reconcile`
+          );
+          continue;
+        }
+
+        // UNSOLD (Ended): clear the eBay link and invite a re-push.
+        if (status === 'Ended') {
+          console.log(
+            `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing Ended (unsold) — clearing eBay link`
           );
 
           // Clear eBay fields

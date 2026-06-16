@@ -72,7 +72,12 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
     const availableItems: EbayItem[] = await prisma.item.findMany({
       where: {
         status: 'AVAILABLE',
-        sale: { organizerId },
+        // Include BOTH sale items and inventory items (saleId=null) — inventory items
+        // imported from eBay can also sell on eBay and must trigger a sold alert.
+        OR: [
+          { sale: { organizerId } },
+          { organizerId, saleId: null },
+        ],
       },
       select: {
         id: true,
@@ -154,7 +159,9 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         let matchedItem: EbayItem | undefined;
 
         if (sku.startsWith('FAS-')) {
-          const itemId = sku.substring(4);
+          // Re-listed items carry a date-appended SKU (e.g. "FAS-<id> 2026-05-21").
+          // Take only the cuid before the first whitespace so the match still works.
+          const itemId = sku.substring(4).split(/\s+/)[0];
           matchedItem = availableItems.find((item) => item.id === itemId);
         }
 
@@ -259,20 +266,12 @@ async function syncEbaySoldItems(): Promise<void> {
     // Items live under Sale, so the path is: EbayConnection -> Organizer -> Sales -> Items
     // Note: we no longer require ebayListingId IS NOT NULL here — title-based matching
     // inside syncSoldItemsForOrganizer handles items that were listed directly on eBay.
+    // Fetch all connected organizers. We intentionally do NOT filter on "has AVAILABLE
+    // items under a sale": inventory items (saleId=null) can also sell on eBay and must be
+    // reconciled, and there is no Organizer->Item relation to express "has available
+    // inventory items". syncSoldItemsForOrganizer early-returns cheaply (before any token
+    // refresh) when an organizer has no AVAILABLE items, so processing every connection is safe.
     const connections = await prisma.ebayConnection.findMany({
-      where: {
-        organizer: {
-          sales: {
-            some: {
-              items: {
-                some: {
-                  status: 'AVAILABLE',
-                },
-              },
-            },
-          },
-        },
-      },
       select: { organizerId: true },
     });
 
