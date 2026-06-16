@@ -5865,7 +5865,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     // If an itemId was passed, load real values (organizer-scoped).
     if (body.itemId) {
       const item = await prisma.item.findFirst({
-        where: { id: body.itemId, organizerId: organizer.id },
+        where: { id: body.itemId, sale: { organizerId: organizer.id } },
         select: {
           price: true,
           packageWeightOz: true,
@@ -6008,7 +6008,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
 
     if (body.itemId) {
       const item = await prisma.item.findFirst({
-        where: { id: body.itemId, organizerId: organizer.id },
+        where: { id: body.itemId, sale: { organizerId: organizer.id } },
         select: {
           packageWeightOz: true,
           packageLengthIn: true,
