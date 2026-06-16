@@ -130,6 +130,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       ebayStoreUrl: true,
       shopifyEnabled: true,
       facebookPageId: true,
+      fbCatalogEnabled: true,
       ebayQueueMode: true,
       ebayQueueRotation: true,
       ebayConnection: { select: { id: true } },
@@ -168,8 +169,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       where: { organizerId, status: 'ACTIVE' },
     }),
 
-    // Facebook: items ever exported (fbExportedAt stamped) — not restricted to AVAILABLE
-    // so organizer sees honest "X items exported" count across all statuses
+    // Facebook: items ever exported (fbExportedAt stamped) — Marketplace users
     prisma.item.count({
       where: { ...baseWhere, fbExportedAt: { not: null } },
     }),
@@ -284,13 +284,15 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
     },
 
     facebook: {
-      connected: !!org.facebookPageId,
-      listed: facebookCount,
+      connected: !!(org as any).fbCatalogEnabled || !!org.facebookPageId,
+      listed: (org as any).fbCatalogEnabled
+        ? totalAvailable   // CM feed covers all active-sale items; use available count
+        : facebookCount,   // Marketplace: only items with fbExportedAt stamped
       limit: null,
       limitSource: 'UNKNOWN',
       overLimit: false,
       utilizationPct: null,
-      note: 'EXPORT_ONLY',
+      note: (org as any).fbCatalogEnabled ? 'COMMERCE_MANAGER' : 'EXPORT_ONLY',
     },
 
     shopify: {

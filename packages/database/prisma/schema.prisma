@@ -432,6 +432,9 @@ model Organizer {
   googlePlaceId               String?                        @unique
   facebookPageId              String?
   yelpBusinessId              String?
+  // FB Commerce Manager catalog feed registration (migration 20260616000001)
+  fbCatalogEnabled            Boolean   @default(false)
+  fbCatalogRegisteredAt       DateTime?
   stripeIdentitySessionId     String?
   // ADR-073 Phase 2: ESN enrichment fields (migration 20260502000001)
   esnOrgId                    Int?

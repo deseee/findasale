@@ -60,6 +60,9 @@ const OrganizerSettingsPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [timezone, setTimezone] = useState('');
   const [byAppointment, setByAppointment] = useState(false);
+  const [fbCatalogEnabled, setFbCatalogEnabled] = useState(false);
+  const [fbCatalogOrganizerId, setFbCatalogOrganizerId] = useState<string | null>(null);
+  const [fbCatalogSaving, setFbCatalogSaving] = useState(false);
   const [hours, setHours] = useState<Array<{ dayOfWeek: number; openTime: string; closeTime: string }>>(
     Array.from({ length: 7 }, (_, i) => ({ dayOfWeek: i, openTime: '09:00', closeTime: '17:00' }))
   );
@@ -390,6 +393,8 @@ const OrganizerSettingsPage = () => {
           setTimezone(response.data.timezone || '');
           setByAppointment(response.data.byAppointment || false);
           setOrganizerTypes(response.data.organizerTypes || []);
+          setFbCatalogEnabled(response.data.fbCatalogEnabled || false);
+          setFbCatalogOrganizerId(response.data.id || null);
         }
         // Fetch hours
         try {
@@ -1517,6 +1522,61 @@ const OrganizerSettingsPage = () => {
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://facebook.com/yourpage"
                   />
+                </div>
+
+                {/* Facebook Commerce Manager catalog feed */}
+                <div className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 bg-warm-50 dark:bg-gray-800/50">
+                  <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Facebook Commerce Manager Feed</p>
+                  <p className="text-xs text-warm-600 dark:text-gray-400 mb-3">
+                    Paste this URL into Facebook Commerce Manager as a data feed source. Once Facebook
+                    confirms the feed, toggle this on so your listings appear active in your platform dashboard.
+                  </p>
+                  {fbCatalogOrganizerId ? (
+                    <div className="mb-3">
+                      <label className="block text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Your catalog feed URL</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={`${typeof window !== 'undefined' ? window.location.origin : 'https://finda.sale'}/api/organizers/${fbCatalogOrganizerId}/export/commerce-feed`}
+                          className="flex-1 px-3 py-2 text-xs border border-warm-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-warm-900 dark:text-gray-100 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`https://finda.sale/api/organizers/${fbCatalogOrganizerId}/export/commerce-feed`);
+                            showToast('Feed URL copied!', 'success');
+                          }}
+                          className="px-3 py-2 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <div
+                      onClick={async () => {
+                        const next = !fbCatalogEnabled;
+                        setFbCatalogSaving(true);
+                        try {
+                          await api.patch('/organizers/me', { fbCatalogEnabled: next });
+                          setFbCatalogEnabled(next);
+                          showToast(next ? 'Commerce Manager feed enabled' : 'Commerce Manager feed disabled', 'success');
+                        } catch {
+                          showToast('Failed to update setting', 'error');
+                        } finally {
+                          setFbCatalogSaving(false);
+                        }
+                      }}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${fbCatalogEnabled ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'} ${fbCatalogSaving ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${fbCatalogEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </div>
+                    <span className="text-sm text-warm-700 dark:text-gray-300">
+                      {fbCatalogEnabled ? "I've registered this feed with Facebook" : "I haven't registered this feed yet"}
+                    </span>
+                  </label>
                 </div>
 
                 <div>

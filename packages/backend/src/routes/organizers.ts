@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { prisma } from '../index';
 import { authenticate, AuthRequest, checkTierLapse } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
-import { exportOrganizer } from '../controllers/exportController';
+import { exportOrganizer, exportOrganizerCommerceManagerFeed } from '../controllers/exportController';
 import { getCsvExportHandler } from '../controllers/csvExportController';
 import { getPosTierStatus } from '../controllers/posTiersController';
 import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, getTearOffFlyer, getHangTagKit, getFullSignKitPDF, getPriceSheet } from '../controllers/printKitController';
@@ -72,6 +72,8 @@ const organizerProfileSchema = z.object({
   skuAppendLocation: z.boolean().optional(),
   // Feature #358: Follower count visibility toggle
   showFollowerCount: z.boolean().optional(),
+  // FB Commerce Manager catalog feed toggle
+  fbCatalogEnabled: z.boolean().optional(),
 }).strict();
 
 const awardBadgesSchema = z.object({
@@ -87,6 +89,9 @@ const claimRequestSchema = z.object({
 }).strict();
 
 // Platform stats: per-platform listing counts, coverage score, eBay queue management
+// Public: FB Commerce Manager catalog feed (no auth — crawled by Facebook bot)
+router.get('/:organizerId/export/commerce-feed', exportOrganizerCommerceManagerFeed);
+
 router.get('/me/platform-stats', authenticate, getPlatformStats);
 router.get('/me/platform-gap', authenticate, getPlatformGap);
 router.patch('/me/ebay-queue-settings', authenticate, updateEbayQueueSettings);
@@ -337,7 +342,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address, skuAppendDate, skuAppendCost, skuAppendLocation, showFollowerCount } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address, skuAppendDate, skuAppendCost, skuAppendLocation, showFollowerCount, fbCatalogEnabled } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -384,6 +389,10 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(skuAppendCost !== undefined && { skuAppendCost }),
         ...(skuAppendLocation !== undefined && { skuAppendLocation }),
         ...(showFollowerCount !== undefined && { showFollowerCount }),
+        ...(fbCatalogEnabled !== undefined && {
+          fbCatalogEnabled,
+          ...(fbCatalogEnabled ? { fbCatalogRegisteredAt: new Date() } : {}),
+        }),
       },
     });
 
@@ -553,6 +562,7 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       zelleHandle: (organizer as any).zelleHandle || null,
       ebayStoreUrl: (organizer as any).ebayStoreUrl || null,
       foundingOrgBadge: (organizer as any).foundingOrgBadge ?? false,
+      fbCatalogEnabled: (organizer as any).fbCatalogEnabled ?? false,
       address: organizer.address || null,
       pickupWindows: (organizer as any).pickupWindows || null,
       timezone: (organizer as any).timezone || null,

@@ -39,6 +39,7 @@ interface Sale {
   endDate: string;
   saleType?: string;
   organizer: {
+    id: string;
     userId: string;
     phone: string;
     email: string;
@@ -658,6 +659,38 @@ export default function PromotePage(): JSX.Element {
                   </button>
                 </div>
               </div>
+
+              {/* Facebook Commerce Manager — stable organizer-level catalog feed */}
+              {sale?.organizer && (
+                <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
+                  <div className="text-4xl mb-3">🏪</div>
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">Facebook Commerce Manager</h3>
+                  <p className="text-warm-700 dark:text-warm-300 text-sm mb-4">
+                    Submit your catalog feed URL to Facebook Commerce Manager. This URL covers all
+                    your active sales automatically — you only need to register it once.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={`https://finda.sale/api/organizers/${sale.organizer.id}/export/commerce-feed`}
+                      className="flex-1 px-3 py-2 text-xs border border-warm-300 dark:border-gray-700 rounded-lg bg-warm-50 dark:bg-gray-900 text-warm-900 dark:text-gray-100 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://finda.sale/api/organizers/${sale!.organizer!.id}/export/commerce-feed`);
+                      }}
+                      className="px-3 py-2 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition whitespace-nowrap"
+                    >
+                      Copy URL
+                    </button>
+                  </div>
+                  <p className="text-xs text-warm-500 dark:text-gray-500 mt-2">
+                    In Commerce Manager: Catalog → Data sources → Add data feed → Scheduled feed → paste this URL.
+                  </p>
+                </div>
+              )}
 
               <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
                 <div className="text-4xl mb-3">🏠</div>
