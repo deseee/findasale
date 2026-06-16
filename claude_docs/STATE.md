@@ -8,6 +8,14 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S993 — BUG/DATA (2026-06-16). Outreach pipeline root-cause fix — ARCHIVED rows + Prisma NULL-exclusion bug.**
+- **Why ARCHIVED?** No application code ever sets DCE.status='ARCHIVED'. All rows were set via direct SQL in past maintenance sessions. Undocumented unofficial status.
+- **Root cause of auto-seed underperformance (Prisma NULL bug):** `autoSeedOutreachCron.ts` used `NOT: [{ emailDiscoveryConfidence: 0.0 }]` → SQL `NOT (col = 0.0)` → PostgreSQL NULL comparison returns NULL (not true) → 12,136 organizers with NULL confidence (scraped emails, labeled "trusted" in comments) silently excluded. Only ~329 positive-confidence orgs ever passed. This is why the pipeline only sent 848 emails despite 80,852 organizer records.
+- **Data fix (SQL):** Reset 2,276 ARCHIVED rows (0 attempts, valid biz categories, non-junk domains) back to PENDING. Kept 422 ARCHIVED (government, Canadian, mall cos., tech/font/junk). Queue after: PENDING 2,292, SENT 699, ARCHIVED 422, OPTED_OUT 1.
+- **Code fix — autoSeedOutreachCron.ts:** (1) Null-safe Prisma filter: `AND:[{OR:[{emailDiscoveryConfidence:null},{emailDiscoveryConfidence:{gt:0}}]}]` + Canada NOT appended separately. (2) Email dedup query now excludes ARCHIVED rows so an ARCHIVED email can't permanently block a new seed.
+- **Code fix — seedDirectoryClaimEmails.ts:** Same null-safe Prisma filter (was identical bug in the manual seed script).
+- TypeScript: 0 errors. 2 files changed. 6,077 novel organizers now eligible to seed (up from ~329).
+
 **S992 — SEO/DEV (2026-06-16). Analytics OAuth restored + city SEO framework built + estate-sales landing pages upgraded.**
 - Analytics pipeline: created `claude_docs/scripts/oauth_setup2.py` (missing file referenced by scheduled task), repaired truncated `.analytics-creds.json`, ran weekly report successfully. OAuth re-auth flow documented.
 - New file: `packages/frontend/lib/seo/cityData.ts` — reusable SEO framework for all city/category landing pages:
@@ -251,7 +259,7 @@ _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared
 
 ## Next Session
 
-### S993 → S994
+### S994 onward
 
 **Records pass (first action):**
 Apply #465 PCVs from S990 to roadmap.md — update Chrome QA col from `⏳ 3/4 Chr verified S984` to `✅ S990` (all 4 events verified). Evidence:
@@ -259,6 +267,8 @@ Apply #465 PCVs from S990 to roadmap.md — update Chrome QA col from `⏳ 3/4 C
 - checkout_initiated ✅: same item, Buy It Now click, gtag interceptor (ss_0216lvvsn)
 - first_item_published ✅: empty test sale (deleted post-test), Manual Entry first item save, gtag interceptor (ss_7000y2s0t ss_3418eo8gk)
 5-element gate: URL ✅, user ✅, element ✅, outcome ✅, screenshot IDs ✅.
+
+**Push S993 wrap:** push block — `packages/backend/src/jobs/autoSeedOutreachCron.ts` + `packages/backend/src/scripts/seedDirectoryClaimEmails.ts` + wrap docs.
 
 **Push S992 wrap (if not yet pushed):** push block below — `packages/frontend/lib/seo/cityData.ts` (new) + `packages/frontend/pages/estate-sales/[city-slug].tsx` (updated) + `claude_docs/scripts/oauth_setup2.py` (new) + wrap docs.
 

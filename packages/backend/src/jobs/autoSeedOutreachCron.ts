@@ -116,7 +116,17 @@ export async function runAutoSeedOutreach(): Promise<void> {
         contactEmail: { not: null },
         claimStatus: { notIn: ['CLAIMED', 'OPTED_OUT'] },
         suppressOutreach: false,
-        NOT: [{ emailDiscoveryConfidence: 0.0 }, ...canadaExclusions],
+        // Null-safe confidence filter: NULL = scraped email (trusted), 0.0 = junk (blocked), >0 = verified.
+      // Cannot use NOT:[{emailDiscoveryConfidence:0.0}] — Prisma NOT excludes NULLs in SQL.
+      AND: [
+        {
+          OR: [
+            { emailDiscoveryConfidence: null },
+            { emailDiscoveryConfidence: { gt: 0 } },
+          ],
+        },
+      ],
+      ...(canadaExclusions.length > 0 ? { NOT: canadaExclusions } : {}),
       },
       select: {
         id: true,
@@ -158,6 +168,7 @@ export async function runAutoSeedOutreach(): Promise<void> {
     // We also need to check the DB for emails already present in existing rows
     // (different organizers may share sam@gmail.com across 48 rows, etc.).
     const existingClaimEmails = await prisma.directoryClaimEmail.findMany({
+      where: { status: { not: 'ARCHIVED' } }, // Don't block seeds because an ARCHIVED row holds this email
       select: { emailAddress: true },
       distinct: ['emailAddress'],
     });

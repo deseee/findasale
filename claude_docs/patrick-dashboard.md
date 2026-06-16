@@ -6,7 +6,9 @@
 
 The big story this week was eBay shipping accuracy — the preview tool was computing from a null location instead of the sale's ZIP code, so it showed $28 while the live listing correctly charged $32. That's now fixed: preview matches the listing. We also overhauled the confusing "minimum price" widget (it now shows a quiet amber warning only when you're pricing too low). A P1 bug was caught and fixed: new organizer accounts weren't getting their ORGANIZER role properly. QA is fully caught up — #358 Follower Count Toggle, #318 affiliate tab filter, #313 HAUL_POST_LIKES XP idempotency, and #465 GA4 Tier 2 events are all Chrome-verified. BQ is at 1 (GSC indexing — see below).
 
-**S992 (today — SEO):** Analytics OAuth pipeline restored (Google token had expired; created the missing `oauth_setup2.py` helper, ran the weekly report). Built a reusable city SEO framework (`lib/seo/cityData.ts`) covering 50+ cities with unique content per city. Upgraded the estate-sales city landing pages: Birmingham AL and Long Beach CA are now pre-rendered (they had GSC impressions but no clicks because the pages weren't building at deploy time), FAQPage schema added, city-specific "About" content replaces the identical boilerplate, and a Nearby Cities section creates internal link equity across pages.
+**S993 (today — Outreach pipeline fix):** Found and fixed the reason the outreach pipeline only ever sent 848 emails despite 80k organizers. Root cause: a Prisma ORM quirk where `NOT: [{emailDiscoveryConfidence: 0.0}]` silently excludes NULL values in SQL — blocking 12,136 scraped-email organizers that the code explicitly labelled "trusted". Only ~329 orgs with confirmed email-discovery scores were ever passing the filter. Also found 2,276 ARCHIVED rows (from past maintenance SQL) permanently dead-ending out of the queue. Fixed both: reset valid ARCHIVED rows to PENDING, fixed the null-safe filter in two files. Queue: 2,292 PENDING. Pipeline should start seeding 500 new rows/day.
+
+**S992 (yesterday — SEO):** Analytics OAuth pipeline restored (Google token had expired; created the missing `oauth_setup2.py` helper, ran the weekly report). Built a reusable city SEO framework (`lib/seo/cityData.ts`) covering 50+ cities with unique content per city. Upgraded the estate-sales city landing pages: Birmingham AL and Long Beach CA are now pre-rendered (they had GSC impressions but no clicks because the pages weren't building at deploy time), FAQPage schema added, city-specific "About" content replaces the identical boilerplate, and a Nearby Cities section creates internal link equity across pages.
 
 ---
 
@@ -32,15 +34,27 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 ## This Week's Priority
 
-1. **Push S992 code + wrap docs** (push block below).
+1. **Push S993 code + wrap docs** (push block below — 2 backend files).
+2. **Push S992 code + wrap docs** (separate commit — 2 frontend files + SEO framework).
 2. **GSC indexing (BQ P1):** 2,071 pages discovered-not-indexed since 5/23. S991 shipped 3 root-cause fixes — monitoring required. Expect improvement over next 1–2 weeks as Googlebot recrawls.
-3. **S993: Extend city SEO framework to yard-sales pages** — `Skill('findasale-dev')` dispatch ready in STATE.md Next Session.
-4. **S993 records pass:** Apply #465 PCVs to roadmap.md (5-element evidence confirmed S990).
+4. **S994: Extend city SEO framework to yard-sales pages** — `Skill('findasale-dev')` dispatch ready in STATE.md Next Session.
+3. **S994 records pass:** Apply #465 PCVs to roadmap.md (5-element evidence confirmed S990).
 5. **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket, 3 press pitches).
 
 ---
 
 ## Action Items for Patrick
+
+- [ ] **Push S993 outreach fix:**
+  ```powershell
+  cd C:\Users\desee\ClaudeProjects\FindaSale
+  git add packages/backend/src/jobs/autoSeedOutreachCron.ts
+  git add packages/backend/src/scripts/seedDirectoryClaimEmails.ts
+  git add claude_docs/STATE.md
+  git add claude_docs/patrick-dashboard.md
+  git commit -m "S993: fix outreach pipeline — null-safe Prisma confidence filter + ARCHIVED→PENDING reset"
+  .\push.ps1
+  ```
 
 - [ ] **Push S992 code + wrap (combine into one commit):**
   ```powershell
