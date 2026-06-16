@@ -4,9 +4,11 @@
 
 ## What Happened This Week
 
-The big story this week was eBay shipping accuracy — the preview tool was computing from a null location instead of the sale's ZIP code, so it showed $28 while the live listing correctly charged $32. That's now fixed: preview matches the listing. We also overhauled the confusing "minimum price" widget (it now shows a quiet amber warning only when you're pricing too low). A P1 bug was caught and fixed: new organizer accounts weren't getting their ORGANIZER role properly. QA is fully caught up — #358 Follower Count Toggle, #318 affiliate tab filter, #313 HAUL_POST_LIKES XP idempotency, and #465 GA4 Tier 2 events are all Chrome-verified. BQ is 0.
+The big story this week was eBay shipping accuracy — the preview tool was computing from a null location instead of the sale's ZIP code, so it showed $28 while the live listing correctly charged $32. That's now fixed: preview matches the listing. We also overhauled the confusing "minimum price" widget (it now shows a quiet amber warning only when you're pricing too low). A P1 bug was caught and fixed: new organizer accounts weren't getting their ORGANIZER role properly. QA is fully caught up — #358 Follower Count Toggle, #318 affiliate tab filter, #313 HAUL_POST_LIKES XP idempotency, and #465 GA4 Tier 2 events are all Chrome-verified. BQ is at 1 (GSC indexing — see below).
 
-**S991 (today):** Fixed the "Could not estimate shipping right now" error in the Celestion Vintage item shipping preview. Root cause: items created through the sale flow had a null `organizerId` field, so the ownership check silently failed and returned a 404 with no log entry. Two-line fix — both preview endpoints now verify ownership through the sale instead of the item directly. Push block below.
+**S991 (today):** Fixed the "Could not estimate shipping right now" error in the Celestion Vintage item shipping preview. Root cause: items created through the sale flow had a null `organizerId` field, so the ownership check silently failed and returned a 404 with no log entry. Two-line fix — both preview endpoints now verify ownership through the sale instead of the item directly.
+
+**S992 (today):** Facebook Commerce Manager is live for Artifact MI. Commerce feed verified (103 products imported). Built and verified the `/checkout` page Facebook requires before allowing Marketplace connection — it reads Facebook's `products` query param, fetches all items in parallel, puts them in the FindA.Sale cart at correct prices, and redirects to the sale page. Patrick tested with two items — both landed in cart at the right prices.
 
 ---
 
@@ -23,6 +25,8 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 ---
 
 ## Beta Tester Impact
+
+**Facebook Commerce Manager (S992):** Artifact MI's 103 items are now in a Facebook catalog. Shoppers clicking "Buy on Website" from Facebook/Instagram land on the correct FindA.Sale sale page with those items already in their cart.
 
 **Better for eBay sellers (S991):** The shipping preview now works when entering weight/dimensions for items whose sale was created before the `organizerId` backfill. The Celestion Vintage item is unblocked.
 
@@ -42,20 +46,21 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 ## This Week's Priority
 
-1. **Push S991 fix** (ebayController.ts + wrap docs — see push block below).
-2. **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket, 3 press pitches).
+1. **Push S991+S992 wrap docs** (see push block below — `ebayController.ts` + `STATE.md` + `patrick-dashboard.md`). Note: `checkout.tsx` was already pushed during S992.
+2. **GSC indexing (BQ P1):** 2,071 pages discovered-not-indexed since 5/23. Next session should audit: noindex metas on core nav pages, SSR output, internal links from indexed pages, sitemap quality.
+3. **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket, 3 press pitches).
 
 ---
 
 ## Action Items for Patrick
 
-- [ ] **Push S991 fix + wrap docs:**
+- [ ] **Push S991+S992 wrap:**
   ```powershell
   cd C:\Users\desee\ClaudeProjects\FindaSale
   git add packages/backend/src/controllers/ebayController.ts
   git add claude_docs/STATE.md
   git add claude_docs/patrick-dashboard.md
-  git commit -m "S991: fix shipping preview 404 on items with null organizerId; wrap"
+  git commit -m "S991: fix shipping preview 404 on null organizerId; S992: wrap"
   .\push.ps1
   ```
 - [ ] **Send the 4 Gmail drafts** sitting in your inbox: eBay developer ticket reply, Rapid Growth pitch, Second Wave pitch, Crain's GR pitch.
