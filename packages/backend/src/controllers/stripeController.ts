@@ -483,9 +483,9 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const basePaymentIntentData = {
       amount: finalPriceCents,
       currency: 'usd',
-      // NOTE: automatic_tax removed — Stripe rejects it on raw PaymentIntents
-      // ("Received unknown parameter: automatic_tax"). Tax on direct Buy Now would
-      // require a Customer with address; Checkout Sessions (cart) keep automatic_tax.
+      // Tax collection intentionally OFF (Patrick decision S1006 — don't collect until
+      // FindA.Sale must register in nexus states). Also: Stripe rejects automatic_tax on
+      // raw PaymentIntents ("Received unknown parameter: automatic_tax") regardless.
       metadata: {
         itemId: item.id,
         saleId: item.sale!.id,
@@ -2426,12 +2426,11 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
     }
 
     // Create Checkout Session
-    // Patrick: enable Stripe Tax in Stripe Dashboard (Stripe Tax product) for this to take effect
+    // Tax collection intentionally OFF until FindA.Sale registers in nexus states (Patrick decision S1006)
     const session = await stripe().checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'subscription',
       customer: stripeCustomerId,
-      automatic_tax: { enabled: true },
       line_items: [
         {
           price: priceId,
@@ -2527,12 +2526,11 @@ export const createAlaCarteCheckout = async (req: AuthRequest, res: Response) =>
     }
 
     // Create one-time checkout for $9.99
-    // Patrick: enable Stripe Tax in Stripe Dashboard (Stripe Tax product) for this to take effect
+    // Tax collection intentionally OFF until FindA.Sale registers in nexus states (Patrick decision S1006)
     const session = await stripe().checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
       customer: customerId,
-      automatic_tax: { enabled: true },
       line_items: [
         {
           price_data: {
