@@ -8,6 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1002 — DEV/RECORDS (2026-06-16). Records pass + ISR conversion for /items/[id].tsx.**
+- **Records pass:** SEO4 Claude QA col → ✅ S997. New roadmap rows 548 (Platform Dashboard+Widget ✅ S1001), 549 (eBay Queue Mode ⚠️ S1001), 550 (FB Commerce Manager ✅/✅ S1001) added to Building section. All 7 PCV entries cleared from PCV table.
+- **BQ 4→2:** Item 1 (ISR conversion) FIXED this session. Item 2 (FB CM feed link 404) already pushed S1001 (git 392976b2) — cleared. Items 3 (eBay Queue Mode live flip) + 4 (fbCatalogEnabled flag-ON) remain.
+- **ISR conversion — packages/frontend/pages/items/[id].tsx** (1392→1398 lines): GetServerSidePropsContext→GetStaticPropsContext+GetStaticPathsResult. getServerSideProps→getStaticProps + getStaticPaths ({paths:[], fallback:'blocking'}). revalidate:3600 on all 5 return paths. context.params was already used. Structurally identical to estate-sales/[city-slug].tsx ISR pattern. 0 import/structural errors.
+
 **S1001 — QA (2026-06-16, Opus). QA pass on S999 + S1000 (Facebook flagged by Patrick). Parallel code audits + live API + Chrome. Found+fixed 1 P1 FB bug.**
 - **FB `link` 404 — FOUND + FIXED (severity corrected by live evidence):** S1000's CM feed `link` built `/sales/${saleId}/items/${item.id}` (exportController.ts L981 per-sale + L1093 org-level) → **HTTP 404 proven live** (correct `/items/${id}` → 200). Audit claimed FB would reject every item — **WRONG**: Patrick's live Commerce Manager shows all **103 products Active/in-stock** (catalog ingested fine). Real impact is **click-through** only: a shopper tapping a product in a FB Shop/ad lands on a 404. Downgraded P1→**P2** (click-through correctness, not catalog-blocking). Fixed both lines → `/items/${item.id}`; backend tsc 0 errors. Still worth shipping (non-urgent).
 - **Migrations confirmed applied on Railway:** 20260616000001_ebay_queue_mode + 20260616000002_add_organizer_fb_catalog_enabled both present; all 6 columns exist.
@@ -290,8 +295,6 @@ _S1001 QA: 5 of 8 S999/S1000 CODE-ONLY rows Chrome-verified ✅ (FB CM settings,
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| GSC: /items/[id].tsx uses SSR (getServerSideProps) — no CDN caching, slow TTFB | P1 — every Googlebot hit on /items/{id} hits Railway live; deprioritizes crawl after sitemap fix | Convert to getStaticProps + ISR revalidate:3600 with fallback:blocking | S994 |
-| FB CM feed `link` 404 on click-through (P2 — FIXED S1001, needs push) | exportController.ts L981/L1093 built `link` as /sales/:saleId/items/:itemId → HTTP 404 (proven live). NOT catalog-blocking — Patrick's live Commerce Manager shows 103 products Active. Impact = shopper click-through from FB Shop/ad lands on 404. | Fix applied locally (→ /items/${item.id}, 200; backend tsc 0 errors). PUSH exportController.ts → redeploy → re-curl feed, confirm link 200s. Non-urgent. | S1001 |
 | eBay Queue Mode enable-path + ebayListingQueueCron live fire | Render-verified S1001 (toggle + "Enable Queue Mode" btn + explainer render). NOT flipped on Artifact's real acct (would start auto-listing cron). Cron code-verified + registered index.ts:786 (*/30) but not log-confirmed firing. | Flip ebayQueueMode on a throwaway org (or Patrick confirms) → verify queued count updates; confirm cron Phase A fire in Railway logs. | S999 |
 | Platform stats — fbCatalogEnabled=true connected/listed path | Render-verified S1001 with flag OFF (Facebook card = "41 exported / Not connected" correct). The flag-ON path (facebook.connected=true, listed=all AVAILABLE) not live-tested — toggle not flipped on real acct. | Toggle fbCatalogEnabled on a test org → reload /organizer/platforms → verify facebook.connected=true + listed count = AVAILABLE items. | S1000 |
 
@@ -327,81 +330,49 @@ _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Exp
 _(S925 PCV rows — logout flow Chr✅, #463 CODE-ONLY, #462 CSRF partial — applied to roadmap.md in S930 records pass — cleared.)
 _(S927 PCV rows #79/#164/#316 applied to roadmap.md in S928 records pass — cleared.)
 _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared.)_
-| FB-CM-Live-Ingest | FB Commerce Manager LIVE feed ingestion (S1000 quantity fix) | Patrick registered the org-level feed in FB Commerce Manager (Artifact MI Sale catalog). Live screenshot: 103 products / 103 variants, ALL Active + In stock w/ images+prices, Issues=0. Confirms quantity_to_sell_on_facebook fix end-to-end (the original S1000 "not visible in Shops" blocker) + org-level feed URL works into real Facebook. Full ✅ (real-platform, not CODE-ONLY). | S1001 |
-| FB-CM-Settings | FB Commerce Manager settings section (S1000) | Navigated /organizer/settings?tab=profile as Artifact MI. "Facebook Commerce Manager Feed" section: heading + explainer + feed URL=https://finda.sale/api/organizers/cmnxueoas0005tfv8brnc0kky/export/commerce-feed (correct org-level endpoint) + Copy btn + "I haven't registered this feed yet" toggle. Dark mode clean. ss_6614rpneu. Apply roadmap Claude QA col → ✅ S1001. | S1001 |
-| FB-CM-Promote | FB Commerce Manager promote section (S1000) | Navigated /organizer/promote/cmpt2oq6q00138cehpgqx3huk as Artifact MI. "List on Other Sites" → "Facebook Commerce Manager" card: org-level feed URL + "Copy URL" btn + register-once instructions (Catalog→Data sources→Add data feed→Scheduled feed). ss_799354zpz. ✅ S1001. | S1001 |
-| FB-CM-Feed-API | Org-level CM feed endpoint (S1000) | curl GET /api/organizers/cmnxueoas0005tfv8brnc0kky/export/commerce-feed → HTTP 200, 11 cols incl quantity_to_sell_on_facebook (1=avail/0=sold verified), brand='' empty, availability in/out-stock. Public (no auth). ✅ S1001. | S1001 |
-| Platform-Dashboard | /organizer/platforms page (S999) | Navigated /organizer/platforms as Artifact MI (clean reload). Coverage ring 40/100 ("41 of 103 items listed"); eBay 1 listed/250 limit (connected); Google Merchant 84 eligible; Facebook 41 exported; Shopify 0/TEAMS. ss_68954s71x. ✅ S1001. | S1001 |
-| Platform-Widget | PlatformHighlightsWidget on dashboard (S999) | Navigated /organizer/dashboard as Artifact MI. "Platform Reach" widget: 40% | eBay 1 | Google 84 | Unlisted 62 (matches platforms page); placed between Search Engine Visibility + What-Shoppers-Are-Looking-For; "View Details →" → /organizer/platforms. ss_86419jwe2. ✅ S1001. | S1001 |
-| SEO4-YardSalesAbout | yard-sales About + FAQ + nearby cities Chrome-verified S997 | Navigated https://finda.sale/yard-sales/grand-rapids-mi as logged-in user. H1 = "Yard Sales in Grand Rapids, MI". About body = yard-sale copy (NOT Dutch heritage text). 7 yard-sale FAQs rendered. 5 nearby city links. 7 sale listings. FAQPage JSON-LD confirmed (BreadcrumbList + ItemList + FAQPage). Screenshots: ss_14861obk4, ss_59206270m, ss_6493n5xfp. Apply to roadmap.md SEO4 Chr col → ✅ S997. | S997 |
+_(S1001 PCVs FB-CM-Live-Ingest/FB-CM-Settings/FB-CM-Promote/FB-CM-Feed-API/Platform-Dashboard/Platform-Widget all ✅ S1001 — applied to roadmap.md rows 548/549/550 in S1002 records pass — cleared. S997 PCV SEO4-YardSalesAbout ✅ S997 — applied to roadmap.md SEO4 Chr col → ✅ S997 in S1002 records pass — cleared.)_
 ---
 
 
 ## Next Session
 
-### S1000 onward
+### S1002 onward
 
-**Patrick MUST do BEFORE starting (migration required):**
+**Patrick MUST push before starting next session:**
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="[Railway DB URL from Railway dashboard — Variables tab]"
-npx prisma migrate deploy
-npx prisma generate
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/pages/items/[id].tsx
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S1002: ISR conversion /items/[id].tsx; roadmap rows 548/549/550; SEO4 QA applied"
+.\push.ps1
 ```
-Backend will error on startup until migration is applied (4 new columns on Item + Organizer).
+Note: exportController.ts (FB CM feed link fix) already pushed S1001 (git 392976b2).
 
-**Session type: QA**
+**No migration required.** Both S999+S1000 migrations confirmed applied on Railway.
 
-**First action — roadmap Chrome column update (records pass):**
-Apply SEO4 PCV from PCV table above to roadmap.md:
-- SEO4 row (line ~141): change Chr column from `⬜` to `✅ S997`
-- Evidence gate passes: URL ✅, user ✅ (logged-in), element ✅ (H1/About/FAQ/cities/JSON-LD), outcome ✅, screenshot IDs ✅ (ss_14861obk4, ss_59206270m, ss_6493n5xfp)
-- Then clear the SEO4 PCV row from the PCV table.
+**Session type: QA (BQ=2)**
 
-**QA dispatch order (SEQUENTIAL — one at a time, Chrome agents conflict if parallel):**
+**First action — smoke test ISR conversion:**
+Navigate https://finda.sale/items/[any item id] in Chrome. Verify page loads without 500. Check response headers for `x-nextjs-cache: HIT` on second load (CDN cache working). Evidence required.
 
-**Dispatch 1 — Platform page structure:**
-`Skill('findasale-qa')` → Navigate to https://finda.sale/organizer/platforms as test organizer. Verify: page loads without error, 4 platform cards render (eBay, Google Merchant, Facebook, Shopify), coverage score ring displays a number 0-100, each card shows a listed count. Evidence required: screenshot IDs + "Navigated to [URL] as [user]. Clicked [element]. Saw [outcome]."
+**BQ items remaining (2):**
 
-**Dispatch 2 — Platform gap panel:**
-`Skill('findasale-qa')` → On /organizer/platforms, click "View X not listed →" on the eBay card. Verify: gap panel slides in from right, shows a list of items not on eBay (or "All items listed" empty state), each item shows thumbnail + title + price. For Google panel: verify reason filter tabs (All / No Photo / No Price / Auction) appear and are clickable.
+1. **eBay Queue Mode live flip + cron fire** — roadmap row 549 ⚠️ S1001. Flip ebayQueueMode on test org → verify queued count updates + Railway logs show cron firing.
 
-**Dispatch 3 — Dashboard widget:**
-`Skill('findasale-qa')` → Navigate to https://finda.sale/organizer/dashboard as test organizer. Verify: PlatformHighlightsWidget appears in the active-sale dashboard view, shows coverage score badge + 3 platform stats + link to /organizer/platforms. Click the link — verify it navigates to /organizer/platforms.
-
-**Dispatch 4 — eBay Queue Mode UI:**
-`Skill('findasale-qa')` → On /organizer/platforms, scroll to eBay Queue Mode section. Verify: "Enable Queue Mode" button is visible (queue mode starts OFF). Click it — verify toggle fires PATCH /api/organizers/me/ebay-queue-settings. Verify queue panel state changes to show queue management UI. Check Railway logs for PATCH route hit.
+2. **Platform stats fbCatalogEnabled=true path** — roadmap row 550 BQ item. Toggle fbCatalogEnabled on test org → reload /organizer/platforms → verify facebook.connected=true + listed count = AVAILABLE items.
 
 **Other carry-forward items:**
 
-**Push block (S997+S998 changes — if not yet pushed):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/server-sitemap.xml.tsx
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/database/prisma/seed.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S997+S998: GSC sitemap itemUrls removed; eBay bidirectional sync fix; seed user1 ADMIN removed"
-.\push.ps1
-```
-
 **4 UNPUBLISHED eBay items (optional follow-up):**
-These items have FAS- SKUs + offers on eBay but no `ebayListingId` in DB — they show "Pending Publish" in edit-item but can't be actioned:
+Items have FAS- SKUs + offers on eBay but no `ebayListingId` in DB:
 - Loy Norrix Choirs: offerId=166668232011, listing=137309862925
 - Kirkland Pepper: offerId=166412704011, listing=137308308467
 - Whip-It Butane: offerId=151850469011
 - Contigo Travel Mug: offerId=151769728011, listing=137227039608
-To fix: backfill `ebayOfferId` (and `ebayListingId` where known) on each Item. Can do via psycopg2 or dispatch to findasale-dev.
 
-**GSC P1 remaining: /items/[id].tsx ISR conversion (BQ item)**
-After sitemap fix is live and indexed (allow 1–2 weeks for GSC crawl budget to reset):
-`Skill('findasale-dev')` → Convert `pages/items/[id].tsx` from getServerSideProps to getStaticProps + ISR revalidate:3600 + fallback:blocking. This is the second BQ P1 item.
-
-**eBay carry-forward:**
-When eBay Buy-API grant lands: ebayCatalog provider activates — verify identifiers/dims return.
-
-**BQ = 5** (1 GSC P1 item + 4 new Platform Dashboard / Queue Mode CODE-ONLY items)
+**BQ = 2**
 
 
 ### S974 — Carry-forward (eBay FVF flat-rate — Chrome verify + tier-ID investigation)

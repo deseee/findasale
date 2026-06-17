@@ -1,8 +1,10 @@
-# Patrick's Dashboard — Week of June 16, 2026 (Updated S1001)
+# Patrick's Dashboard — Week of June 16, 2026 (Updated S1002)
 
 ---
 
 ## What Happened This Week
+
+**S1002 (today — Records pass + ISR conversion for /items/[id].tsx):** Records pass applied 7 Chrome verifications from S1001 to roadmap.md — added roadmap rows 548 (Platform Dashboard ✅), 549 (eBay Queue Mode ⚠️), 550 (FB Commerce Manager ✅/✅). Cleared the PCV table. Also converted `/items/[id].tsx` from SSR (`getServerSideProps`) to ISR (`getStaticProps` + `revalidate:3600` + `fallback:'blocking'`). This is the GSC P1 fix — every Googlebot hit on `/items/{id}` was hitting Railway live; now first hit is server-rendered then CDN-cached for 1hr. **BQ: 4→2** — ISR fix shipped, FB feed link fix already pushed (S1001 git 392976b2). Two BQ items remain: eBay Queue Mode live flip, and FB fbCatalogEnabled=true path test.
 
 **S1001 (today — QA pass on S999 + S1000, Facebook flagged):** You were right to be wary of the Facebook work. Ran parallel code audits + live API + Chrome QA. **Found and fixed a bug Sonnet missed (severity corrected after your live check):** the Commerce Manager feed's product `link` points to a page that 404s (`/sales/.../items/...` instead of `/items/...`). I first called this a P1 that would block the whole catalog — but your live Commerce Manager screenshot proved that wrong: all **103 products ingested fine and are Active/in-stock**. The real impact is **click-through** only — a shopper tapping a product in a Facebook Shop or ad would land on a 404. So it's a **P2 click-through fix**, not urgent. The S1000 `quantity_to_sell_on_facebook` fix (the actual original blocker) is confirmed working end-to-end. Link fix is applied locally, backend type-check clean — ship it whenever. Everything else in S1000 (8 issues) and S999 (platform dashboard, queue mode) checked out: settings + promote Facebook sections, the org-level feed endpoint (live HTTP 200 with the right columns), the /organizer/platforms page, and the dashboard widget all verified in the browser as your real Artifact MI account. Both database migrations confirmed already applied on Railway. One minor UX note: the platforms page shows a misleading "Not connected" if its data call gets rate-limited — recommend an error/retry state.
 
@@ -20,16 +22,17 @@
 
 ## REQUIRED ACTION BEFORE NEXT SESSION
 
-**1. Push the Facebook feed `link` fix (S1001) — NON-URGENT (catalog is live with 103 products; this only fixes shopper click-through 404s):**
+**Push this session's changes:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/exportController.ts claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git commit -m "S1001: fix FB Commerce Manager feed link 404 (/sales/.../items -> /items); QA docs"
+git add packages/frontend/pages/items/[id].tsx
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S1002: ISR conversion /items/[id].tsx; roadmap rows 548/549/550; SEO4 QA applied"
 .\push.ps1
 ```
-After Railway redeploys, the feed's `link` field returns 200 so product click-throughs land on the real item page instead of a 404.
-
-**2. Database migrations — ALREADY DONE ✅** (both confirmed applied on Railway this session: `20260616000001_ebay_queue_mode` + `20260616000002_add_organizer_fb_catalog_enabled`; all 6 columns present). No action needed.
+Note: `exportController.ts` (FB CM feed link fix) was already pushed in S1001 (git 392976b2). No further action needed for migrations — both S999+S1000 migrations confirmed applied.
 
 ---
 
@@ -56,7 +59,7 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 1. **Push the S1001 FB link fix** (non-urgent — push block in REQUIRED ACTION above).
 2. **Migrations + S999/S1000 QA — DONE this session** (platforms page, dashboard widget, FB CM settings/promote/feed all Chrome-verified; catalog live with 103 products).
 3. **Still open:** flip eBay Queue Mode on a test org to confirm the enable-path + cron fire (didn't flip on your real account).
-4. **GSC P1 remaining (wait 1–2 weeks):** After sitemap fix is indexed, dispatch ISR conversion for `/items/[id].tsx`.
+4. **GSC P1 — ISR conversion SHIPPED S1002 ✅:** `/items/[id].tsx` converted to ISR (getStaticProps + revalidate:3600 + fallback:blocking). Both GSC P1 items now done (sitemap fix S997 + ISR conversion S1002).
 5. **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket, 3 press pitches).
 
 ---
