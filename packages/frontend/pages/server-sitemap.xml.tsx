@@ -143,6 +143,24 @@ export async function getServerSideProps(ctx: any) {
       priority: 0.70,
     }));
 
+    // /auctions/{city-slug} — dedicated auctions city landing pages
+    // Targets GSC cluster: "auctions in [city]" / "auction houses [city]"
+    const auctionsUrls = canonicalCitySlugs.map((slug: string) => ({
+      loc: `${baseUrl}/auctions/${slug}`,
+      lastmod: new Date().toISOString(),
+      changefreq: 'daily',
+      priority: 0.70,
+    }));
+
+    // /flea-markets/{city-slug} — dedicated flea markets city landing pages
+    // Targets GSC cluster: "flea markets in [city]" / "flea market near me [city]"
+    const fleaMarketsUrls = canonicalCitySlugs.map((slug: string) => ({
+      loc: `${baseUrl}/flea-markets/${slug}`,
+      lastmod: new Date().toISOString(),
+      changefreq: 'daily',
+      priority: 0.70,
+    }));
+
     // Generate neighborhood URLs
     const neighborhoodUrls = neighborhoods.map((neighborhood: string) => ({
       loc: `${baseUrl}/neighborhoods/${neighborhood}`,
@@ -221,6 +239,8 @@ export async function getServerSideProps(ctx: any) {
       ...thisWeekendUrls,
       ...estateSalesUrls,
       ...yardSalesUrls,
+      ...auctionsUrls,
+      ...fleaMarketsUrls,
       ...neighborhoodUrls,
       ...zipUrls,
       ...tagUrls,
