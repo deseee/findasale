@@ -38,6 +38,7 @@ interface TagRecord {
   price: number;
   itemId?: string;
   position: number;
+  blank?: boolean; // leading skip-slot for partially-used Avery sheets (no QR / no price rendered)
 }
 
 interface StoredBatch {
@@ -184,9 +185,10 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
     const auth = await authorizeOrganizerForSale(req, saleId);
     if (!auth.ok) return res.status(auth.status).json({ message: auth.error });
 
-    const { items, leftoverFill } = req.body as {
+    const { items, leftoverFill, startPosition } = req.body as {
       items: Array<{ price: number; qty: number; source: { kind: string; itemId?: string } }>;
       leftoverFill?: number | null;
+      startPosition?: number | null;
     };
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -196,6 +198,18 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
     const batchId = generateId(12);
     const tags: TagRecord[] = [];
     let position = 0;
+
+    // Partial-sheet support: pad the first sheet with leading blank slots so the
+    // first real label lands at `startPosition` (1 = top-left / normal, no offset).
+    const startSlot = Math.max(1, Math.min(Number(startPosition) || 1, LABELS_PER_PAGE));
+    for (let i = 0; i < startSlot - 1; i++) {
+      tags.push({
+        tagId: generateId(10),
+        price: 0,
+        position: position++,
+        blank: true,
+      });
+    }
 
     for (const item of items) {
       const qty = Math.max(1, Math.min(item.qty, 300)); // cap at 300 per row
@@ -268,6 +282,10 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
     // Generate all QR codes upfront as data URLs
     const qrDataUrls: string[] = [];
     for (const tag of batch.tags) {
+      if (tag.blank) {
+        qrDataUrls.push(''); // leading skip-slot — no QR, keeps index aligned with tags
+        continue;
+      }
       const qrUrl = `${FRONTEND_URL}/t/${tag.tagId}`;
       const qrDataUrl = await QRCode.toDataURL(qrUrl, {
         type: 'image/png',
@@ -346,6 +364,11 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
       for (let i = pageStart; i < pageEnd; i++) {
         const tag = batch.tags[i];
         const qrDataUrl = qrDataUrls[i];
+
+        if (tag.blank) {
+          htmlContent += '<div class="label"></div>';
+          continue;
+        }
 
         htmlContent += `
           <div class="label">

@@ -2107,6 +2107,12 @@ const AddItemsDetailPage = () => {
                   >
                     👁 Buyer Preview
                   </Link>
+                  <Link
+                    href={`/organizer/label-composer/${saleId}`}
+                    className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline px-2 py-1 border border-amber-300 dark:border-amber-700 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                  >
+                    🏷️ Label Sheets
+                  </Link>
                 </div>
               </div>
 
