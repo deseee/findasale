@@ -297,6 +297,8 @@ export default function LabelComposerPage() {
   const [initialized, setInitialized] = useState(false);
   const [savedBatches, setSavedBatches] = useState<Array<{ key: string; name: string; itemCount: number }>>([]);
   const [showSavedBatches, setShowSavedBatches] = useState(false);
+  // Partial-sheet support: first usable label slot (1–30, 1 = top-left / normal).
+  const [startPosition, setStartPosition] = useState(1);
 
   // Refresh saved batches list from localStorage
   const refreshSavedBatches = useCallback(() => {
@@ -371,6 +373,7 @@ export default function LabelComposerPage() {
             : { kind: 'preset' },
         })),
         leftoverFill: state.leftoverFill,
+        startPosition,
       });
       return res.data;
     },
@@ -421,7 +424,7 @@ export default function LabelComposerPage() {
 
   // Derived values
   const totalLabels = getTotalLabels(state.items);
-  const totalPages = Math.max(1, Math.ceil(totalLabels / LABELS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil((totalLabels + (startPosition - 1)) / LABELS_PER_PAGE));
   const currentPageLabels = useMemo(() => {
     // Flatten batch into individual label entries in insertion order
     const flat: Array<{ price: number; source: BatchItem['source'] }> = [];
@@ -916,6 +919,54 @@ export default function LabelComposerPage() {
                     {totalPages === 1 ? 'single sheet' : `${totalPages} sheets`}
                   </span>
                 </div>
+              </div>
+
+              {/* Starting position — for partially-used Avery sheets */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-4">
+                <h2 className="text-sm font-semibold text-warm-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                  Starting position
+                </h2>
+                <p className="text-xs text-warm-400 dark:text-gray-500 mb-3">
+                  Already peeled a few labels off this sheet? Tap the first blank slot — labels before it are skipped so your printout lines up. (Counts left-to-right, top-to-bottom.)
+                </p>
+                <div className="grid grid-cols-3 gap-1 w-32 mb-2">
+                  {Array.from({ length: LABELS_PER_PAGE }).map((_, i) => {
+                    const slot = i + 1;
+                    const isSkipped = slot < startPosition;
+                    const isStart = slot === startPosition;
+                    return (
+                      <button
+                        key={slot}
+                        type="button"
+                        onClick={() => setStartPosition(slot)}
+                        title={`Start at slot ${slot}`}
+                        className={`h-5 rounded-sm border text-[8px] flex items-center justify-center transition-colors ${
+                          isStart
+                            ? 'bg-amber-500 border-amber-600 text-white font-bold'
+                            : isSkipped
+                            ? 'bg-warm-200 dark:bg-gray-600 border-warm-300 dark:border-gray-500 text-warm-400 dark:text-gray-400'
+                            : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40'
+                        }`}
+                      >
+                        {slot}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-warm-600 dark:text-gray-300">
+                  {startPosition === 1
+                    ? 'Starting at the top-left (full sheet).'
+                    : `Skipping ${startPosition - 1} used slot${startPosition - 1 !== 1 ? 's' : ''} — printing starts at position ${startPosition}.`}
+                  {startPosition !== 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setStartPosition(1)}
+                      className="ml-2 underline text-amber-700 dark:text-amber-400"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </p>
               </div>
 
               {/* Leftovers */}

@@ -510,7 +510,12 @@ const EditItemPage = () => {
     },
     onSuccess: () => {
       showToast('Item updated', 'success');
-      router.push(`/organizer/dashboard`);
+      const saleId = item?.saleId;
+      if (saleId) {
+        router.push(`/organizer/add-items/${saleId}`);
+      } else {
+        router.push('/organizer/dashboard');
+      }
     },
     onError: (error: any) => {
       const status = error.response?.status;
@@ -706,6 +711,14 @@ const EditItemPage = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                   Share
                 </button>
+              )}
+              {item?.saleId && (
+                <Link
+                  href={`/organizer/label-composer/${item.saleId}`}
+                  className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-medium py-2 px-3 rounded-lg transition-colors text-sm flex items-center gap-1.5"
+                >
+                  🏷️ Label Sheets
+                </Link>
               )}
               {id && (
                 <button
