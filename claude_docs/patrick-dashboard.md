@@ -31,19 +31,18 @@
 
 ## REQUIRED ACTION NOW
 
-S1005 is already pushed (live). **Push the S1006 Buy It Now fix (PowerShell):**
+The automatic_tax fix is already pushed + live, and I confirmed Buy It Now now works against your real Artifact account (200 OK). **Push the graceful-error fix (so bad seller accounts show a clear message instead of "Try Again"):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/controllers/stripeController.ts
+git add packages/frontend/components/CheckoutModal.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S1006: fix Buy It Now 400 — remove automatic_tax from raw PaymentIntent"
+git commit -m "S1006b: graceful Buy Now error for unusable seller Connect accounts + render error message in CheckoutModal"
 .\push.ps1
 ```
 
-**No migration required.**
-
-After Railway deploys (~3-5 min): open any item, click Buy It Now → Continue to Pay. It should reach the Stripe payment step with NO "Try Again". (Don't finish a real charge — it's live Stripe.)
+**No migration required.** After deploy, the Kelly's QA test item will show "This seller isn't set up to accept online payments yet" instead of "Try Again"; real-organizer items complete normally.
 
 ---
 

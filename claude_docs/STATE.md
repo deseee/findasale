@@ -16,6 +16,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - **QA-3 Buy It Now ❌→FIXED CODE-ONLY** — REPRODUCED the "Try Again" error as BOTH user5 (Star Raiders) AND artifactmi (QA Test First Item S983, item cmqer8m8w00x5me4oqoabaulh, sale cmpfplxqbxwtucltmbouvz0os owned by Kelly's Estate Sales — NOT a self-purchase). Live replay: `POST /api/stripe/create-payment-intent` → **400 `{"error":"Received unknown parameter: automatic_tax"}`**. ROOT CAUSE (evidence-first): Buy Now PaymentIntent passed `automatic_tax:{enabled:true}` which the installed Stripe API version rejects on raw PaymentIntents; it's NOT a Connect error so the S1005 Connect-fallback never caught it (S1005 patched the wrong cause). Cart works because Checkout Sessions support automatic_tax + collect a buyer address. **FIX (S1006):** removed `automatic_tax` from createPaymentIntent basePaymentIntentData (stripeController.ts ~L487); the 2 Checkout-Session automatic_tax usages kept. Backend tsc 0 errors (pnpm-store 5.9.3). CODE-ONLY — needs deploy + Chrome re-test.
 - **FINDING (Patrick-flagged): production runs Stripe LIVE keys.** All real Buy Now / cart purchases are real charges; QA cannot use Stripe test cards on prod. (Patrick asked this be noted.)
 - **TAX DECISION (Patrick, S1006): do NOT collect sales tax until FindA.Sale must register in nexus states.** All 3 `automatic_tax` sites removed from stripeController.ts: createPaymentIntent (Buy Now), createCheckoutSession (PRO/TEAMS subscription), createAlaCarteCheckout ($9.99). Cart checkout never had it. Reason: marketplace-facilitator tax not yet triggered at beta volume; collecting w/o registration is its own liability. Flip back on (per-state) when a tax pro / nexus thresholds say so. Backend tsc 0 errors.
+- **Buy Now valid-account path VERIFIED ✅ (deployed fix):** After Patrick pushed+deployed (commit 45829dd), replayed `POST /api/stripe/create-payment-intent` as user5 shopper for an Artifact item (cmo3esog, Artifact's VALID live Connect acct) → **HTTP 200** with clientSecret + purchaseId + totalAmount 3.49. automatic_tax fix confirmed end-to-end. (Did NOT complete the charge — live keys.)
+- **Buy Now invalid-account path → GRACEFUL FIX (S1006, CODE-ONLY):** The QA test item (Kelly's Estate Sales, connectId `acct_1T6f2DLlmra0eowv`) failed post-deploy with `400 "No such destination"` — Kelly's is a seed org whose Connect acct doesn't exist on live Stripe. Root cause of the cryptic UX: (a) backend fallback didn't match "No such destination" so it threw raw; (b) **CheckoutModal.tsx never rendered the error message — only a bare "Try Again" link**, so every failure looked identical. FIX (2 files): stripeController.ts createPaymentIntent catch now detects seller-account-unusable errors (No such destination / No such account / account_invalid / account_closed / insufficient_capabilities) and returns 409 with a friendly message "This seller isn't set up to accept online payments yet…" (REMOVED the old silent platform-capture fallback — capturing buyer money you can't route to the seller is wrong; valid accounts never reach this branch so unaffected). CheckoutModal.tsx now renders `{loadError}` text + dark-mode classes. Backend tsc 0 errors; frontend not VM-tsc-verifiable (corrupt node_modules) — change is a trivial render of an existing string. Needs deploy + Chrome re-test.
 - **BQ: 0→2** (Buy Now fix CODE-ONLY pending deploy+retest; cart payment-completion path unverified).
 
 **S1005 — DEV (2026-06-17). Google Merchant feed quality fix + cart checkout regression fix + return policy page.**
@@ -333,7 +335,7 @@ _S1004: BQ item 1 (eBay Queue cron) RESOLVED — Railway logs confirmed */30 fir
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| Buy It Now (create-payment-intent) | FIXED CODE-ONLY S1006 — `automatic_tax` removed from PaymentIntent; was 400 "unknown parameter: automatic_tax". Not yet deployed. | Patrick push S1006 block → Railway deploy → Chrome re-test Buy Now (expect modal→payment, no "Try Again") | S1006 |
+| Buy It Now | automatic_tax fix DEPLOYED + valid-account path VERIFIED ✅ (200 as user5 vs Artifact item). Graceful invalid-account handling (friendly 409 + CheckoutModal renders error) CODE-ONLY, not yet deployed. | Patrick push S1006b block (stripeController.ts + CheckoutModal.tsx) → deploy → Chrome confirm invalid-seller shows friendly message, valid item completes | S1006 |
 | Cart multi-item checkout — payment completion | Session creation ✅ but ?checkout=success + items-SOLD webhook UNVERIFIED (prod = Stripe LIVE keys; no real charge in QA) | Patrick (or a real low-value purchase) confirms end-to-end, OR a Stripe test-mode path for QA | S1006 |
 
 
@@ -381,9 +383,10 @@ _(SEO4 ✅ S1003 Human QA applied — roadmap.md Human QA col already ✅ S1003 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/controllers/stripeController.ts
+git add packages/frontend/components/CheckoutModal.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S1006: fix Buy It Now 400 — remove automatic_tax from raw PaymentIntent (Stripe rejects it; Checkout Sessions keep it)"
+git commit -m "S1006b: graceful Buy Now error for unusable seller Connect accounts + render error in CheckoutModal"
 .\push.ps1
 ```
 **No migration required.**
