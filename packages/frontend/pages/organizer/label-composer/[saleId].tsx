@@ -33,7 +33,7 @@ interface BatchItem {
   qty: number;
   source:
     | { kind: 'preset' }
-    | { kind: 'item'; itemId: string; itemCode: string; itemName: string };
+    | { kind: 'item'; itemId: string; itemCode: string; itemName: string; room?: string | null };
 }
 
 interface BatchState {
@@ -50,6 +50,7 @@ interface CatalogItem {
   name: string;
   price: number;
   category: string | null;
+  room: string | null;
   needsTag: boolean;
 }
 
@@ -98,7 +99,7 @@ type Action =
   | { type: 'ADD_QTY'; delta: number }
   | { type: 'ADD_TO_BATCH' }
   | { type: 'FILL_REST' }
-  | { type: 'ADD_ITEMS'; items: Array<{ itemId: string; code: string; name: string; price: number; qty: number }> }
+  | { type: 'ADD_ITEMS'; items: Array<{ itemId: string; code: string; name: string; price: number; qty: number; room?: string | null }> }
   | { type: 'REMOVE_ROW'; id: string }
   | { type: 'UPDATE_ROW_QTY'; id: string; delta: number }
   | { type: 'REORDER'; fromIndex: number; toIndex: number }
@@ -198,7 +199,7 @@ function batchReducer(state: BatchState, action: Action): BatchState {
             id: generateId(),
             price: item.price,
             qty: item.qty,
-            source: { kind: 'item', itemId: item.itemId, itemCode: item.code, itemName: item.name },
+            source: { kind: 'item', itemId: item.itemId, itemCode: item.code, itemName: item.name, room: item.room ?? null },
           });
         }
       }
@@ -428,10 +429,11 @@ export default function LabelComposerPage() {
   const totalPages = Math.max(1, Math.ceil((totalLabels + (startPosition - 1)) / LABELS_PER_PAGE));
   const currentPageLabels = useMemo(() => {
     // Flatten batch into individual label entries in insertion order
-    const flat: Array<{ price: number; source: BatchItem['source'] }> = [];
+    const flat: Array<{ price: number; source: BatchItem['source']; room: string | null }> = [];
     for (const item of state.items) {
+      const room = item.source.kind === 'item' ? (item.source.room ?? null) : null;
       for (let i = 0; i < item.qty; i++) {
-        flat.push({ price: item.price, source: item.source });
+        flat.push({ price: item.price, source: item.source, room });
       }
     }
     const start = state.currentPage * LABELS_PER_PAGE;
@@ -552,6 +554,7 @@ export default function LabelComposerPage() {
         code: i.code,
         name: i.name,
         price: i.price,
+        room: i.room ?? null,
         qty: catalogQtys[i.id] || 1,
       }));
     if (toAdd.length === 0) return;
@@ -949,14 +952,20 @@ export default function LabelComposerPage() {
                         >
                           {/* Mini QR placeholder */}
                           <div className="absolute left-[3px] top-[3px] w-[10px] h-[10px] bg-gray-800 opacity-40 rounded-[1px]" />
+                          {/* Date — moved to top-right corner */}
+                          <span className="absolute top-[2px] right-[3px] text-[6px] opacity-50 font-mono">
+                            {saleDateRange}
+                          </span>
                           {/* Price */}
                           <span className="font-bold text-[11px] leading-none">
                             {formatPrice(label.price)}
                           </span>
-                          {/* Date */}
-                          <span className="absolute bottom-[2px] right-[3px] text-[6px] opacity-50 font-mono">
-                            {saleDateRange}
-                          </span>
+                          {/* Room — per-item; rendered where the date used to be */}
+                          {label.room ? (
+                            <span className="absolute bottom-[2px] right-[3px] left-[3px] text-[6px] opacity-60 font-mono truncate text-right">
+                              {label.room}
+                            </span>
+                          ) : null}
                         </div>
                       );
                     })}
