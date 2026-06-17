@@ -254,7 +254,6 @@ import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase
 // websiteEnrichmentJob, organizerWebsiteAddressCron removed — no longer scheduled in-process.
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
-import { scheduleGeocodeBacklogCron } from './jobs/geocodeBacklogJob'; // ADR-073: Geocode backlog — fills lat/lng on PUBLISHED sales (every 2h)
 import { scheduleOutwardEmailAutomationsCron } from './jobs/outwardEmailAutomationsJob'; // Outward Email Automations: recap + review/testimonial asks (daily 10:00 UTC)
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
@@ -803,8 +802,14 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // ADR-073: Geocoding success rate audit cron (daily at 6 AM UTC)
   scheduleGeocodingAuditCron();
 
-  // ADR-073: Geocode backlog — geocode PUBLISHED sales missing lat/lng (every 2 hours)
-  scheduleGeocodeBacklogCron();
+  // ADR-073: Geocode backlog — defensive require() so a missing/corrupt compiled file
+  // can't crash-loop the entire server at startup (Sentry FINDASALE-NODEJS-1A pattern).
+  try {
+    const { scheduleGeocodeBacklogCron } = require('./jobs/geocodeBacklogJob');
+    scheduleGeocodeBacklogCron();
+  } catch (err: any) {
+    console.error('[Geocode Backlog] Non-fatal startup error — cron not scheduled:', err?.message);
+  }
 
   // Feature #75: Tier grace period finalization cron
   startTierGraceCron();
