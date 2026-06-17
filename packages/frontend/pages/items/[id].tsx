@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { GetServerSidePropsContext } from 'next';
+import { GetStaticPropsContext, GetStaticPathsResult } from 'next';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client'; // type-only — prevents SSR module crash
 import api from '../../lib/api';
@@ -576,7 +576,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
           canonicalUrl={`https://finda.sale/items/${item.id}`}
         />
       ) : (
-        // CSR fallback — used only when getServerSideProps didn't return ogData
+        // CSR fallback — used only when getStaticProps didn't return ogData
         <ItemOGMeta
           item={{ ...item, photos: item.photoUrls.map(url => ({ url })) }}
           saleName={item.sale?.title || 'FindA.Sale'}
@@ -1326,7 +1326,13 @@ export default ItemDetail;
  * before client-side React hydration. This is required for Facebook/Twitter bots
  * which do not execute JavaScript when scraping pages.
  */
-export async function getServerSideProps(context: GetServerSidePropsContext) {
+export async function getStaticPaths(): Promise<GetStaticPathsResult> {
+  // Empty paths — no pages pre-built at build time.
+  // fallback: 'blocking' means first hit is server-rendered and then CDN-cached.
+  return { paths: [], fallback: 'blocking' };
+}
+
+export async function getStaticProps(context: GetStaticPropsContext) {
   const { id } = context.params as { id: string };
   // Use INTERNAL_API_URL (server-only) if set; fall back to NEXT_PUBLIC_API_URL.
   // Never falls back to localhost — that hangs and kills the Vercel function timeout.
@@ -1336,7 +1342,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     null;
 
   if (!apiUrl) {
-    return { props: { ogData: null, initialData: null } };
+    return { props: { ogData: null, initialData: null }, revalidate: 3600 };
   }
 
   try {
@@ -1347,13 +1353,13 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     clearTimeout(timeout);
 
     if (!res.ok) {
-      return { props: { ogData: null, initialData: null } };
+      return { props: { ogData: null, initialData: null }, revalidate: 3600 };
     }
     const item = await res.json();
 
     // Safeguard: check that item has required fields for OG data
     if (!item?.id || !item?.title) {
-      return { props: { ogData: null, initialData: null } };
+      return { props: { ogData: null, initialData: null }, revalidate: 3600 };
     }
 
     const ogData: OGItemData = {
@@ -1384,10 +1390,10 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       status: item.status || 'AVAILABLE',
     };
 
-    return { props: { ogData, initialData } };
+    return { props: { ogData, initialData }, revalidate: 3600 };
   } catch (error) {
     // Fail open — page still works, OG tags fall back to CSR version
-    console.error('[items/[id] getServerSideProps error]', error);
-    return { props: { ogData: null, initialData: null } };
+    console.error('[items/[id] getStaticProps error]', error);
+    return { props: { ogData: null, initialData: null }, revalidate: 3600 };
   }
 }
