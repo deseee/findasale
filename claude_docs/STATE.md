@@ -8,6 +8,14 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1003 — QA/DEV (2026-06-17). Chrome QA (ISR smoke test + SEO4 human QA + BQ item 2) + Auction/flea-market SEO pages built.**
+- **ISR smoke test ✅:** Navigated https://finda.sale/items/cmnzf780a0009pf19ru5qppqn as guest. Full item detail rendered (title, price $285.00, photos, condition). Reloaded — still loaded cleanly (ISR cache serving). Screenshots ss_8940sbrut, ss_03897mqk5.
+- **SEO4 Human QA ✅ (PCV staged for next-session roadmap apply):** Navigated https://finda.sale/yard-sales/grand-rapids-mi as guest. H1: "Yard Sales in Grand Rapids, MI". FAQPage JSON-LD present (7 Q&As confirmed via JS). Nearby cities: Detroit MI, Kalamazoo MI, Lansing MI, Chicago IL, Toledo OH. 7 sales shown. Meta: "7 Yard Sales in Grand Rapids, MI — Find Local Sales | FindA.Sale". BreadcrumbList + ItemList + FAQPage all confirmed. Screenshots ss_3207v3q1s, ss_4548wcacx, ss_4234cbvhi.
+- **BQ item 2 — fbCatalogEnabled ⚠️ P2:** Tested as user1 via DB flag. Data layer ✅ — "Not connected" badge disappears, count updates (3→4), copy changes to "Updates when you export from your sale". P2 cosmetic gap: no positive "Connected" badge when flag is ON. Replaced BQ entry with badge-specific P2 fix.
+- **BQ item 1 — eBay Queue Mode UNVERIFIED:** Railway backend logs empty this session — could not confirm */30 cron fires. BQ item remains.
+- **New SEO pages CODE-ONLY:** /pages/auctions/[city-slug].tsx + /pages/flea-markets/[city-slug].tsx built. ISR: revalidate:86400, 47-city prerender, fallback:blocking. Auction: category=auctions (AUCTION saleType). Flea: category=flea-markets (FLEA_MARKET saleType). Full FAQPage JSON-LD, BreadcrumbList, ItemList, nearby city links, empty/error/loading states. cityData.ts extended (getAuctionMeta/Faqs, getFleaMarketMeta/Faqs). server-sitemap.xml.tsx updated (auctionsUrls + fleaMarketsUrls priority 0.70). TypeScript: 0 errors. SEO5+SEO6 rows added to roadmap.md.
+- **BQ: 2→2** (fbCatalogEnabled replaced with Facebook Connected badge P2; eBay Queue Mode remains UNVERIFIED).
+
 **S1002 — DEV/RECORDS (2026-06-16). Records pass + ISR conversion for /items/[id].tsx.**
 - **Records pass:** SEO4 Claude QA col → ✅ S997. New roadmap rows 548 (Platform Dashboard+Widget ✅ S1001), 549 (eBay Queue Mode ⚠️ S1001), 550 (FB Commerce Manager ✅/✅ S1001) added to Building section. All 7 PCV entries cleared from PCV table.
 - **BQ 4→2:** Item 1 (ISR conversion) FIXED this session. Item 2 (FB CM feed link 404) already pushed S1001 (git 392976b2) — cleared. Items 3 (eBay Queue Mode live flip) + 4 (fbCatalogEnabled flag-ON) remain.
@@ -293,10 +301,12 @@ _S991 SEO MONITOR: GSC discovered-not-indexed 2,071 pages (core nav never crawle
 _S997: GSC sitemap itemUrls CLEARED — removed itemUrls block from server-sitemap.xml.tsx (255→241 lines, TS 0 errors). BQ: 3→2._
 _S1001 QA: 5 of 8 S999/S1000 CODE-ONLY rows Chrome-verified ✅ (FB CM settings, FB CM promote, FB org-level feed API, /organizer/platforms page, PlatformHighlightsWidget) — REMOVED, staged in PCV for roadmap apply. Found+fixed FB feed `link` 404 bug — severity corrected P1→P2 after Patrick's live Commerce Manager showed 103 products Active (catalog ingests fine; link only affects click-through). In BQ, needs push. 3 rows reworded (render-verified; live toggle/cron path still open). BQ: 9→4._
 
+_S1003: fbCatalogEnabled data-layer VERIFIED (badge disappears, count updates, copy changes ✅). P2 badge gap → replaced with new BQ entry. Railway logs empty → eBay Queue Mode UNVERIFIED, reworded. BQ: 2→2._
+
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| eBay Queue Mode enable-path + ebayListingQueueCron live fire | Render-verified S1001 (toggle + "Enable Queue Mode" btn + explainer render). NOT flipped on Artifact's real acct (would start auto-listing cron). Cron code-verified + registered index.ts:786 (*/30) but not log-confirmed firing. | Flip ebayQueueMode on a throwaway org (or Patrick confirms) → verify queued count updates; confirm cron Phase A fire in Railway logs. | S999 |
-| Platform stats — fbCatalogEnabled=true connected/listed path | Render-verified S1001 with flag OFF (Facebook card = "41 exported / Not connected" correct). The flag-ON path (facebook.connected=true, listed=all AVAILABLE) not live-tested — toggle not flipped on real acct. | Toggle fbCatalogEnabled on a test org → reload /organizer/platforms → verify facebook.connected=true + listed count = AVAILABLE items. | S1000 |
+| eBay Queue Mode enable-path + ebayListingQueueCron live fire | Render-verified S1001 (toggle + "Enable Queue Mode" btn + explainer render). NOT flipped on Artifact's real acct (would start auto-listing cron). Cron code-verified + registered index.ts:786 (*/30) Railway logs EMPTY S1003 — could not confirm cron fires. | Flip ebayQueueMode on a throwaway org (or Patrick confirms) + confirm cron fire in Railway logs after queue activity. | S999 |
+| Facebook platform card: no "Connected" badge when fbCatalogEnabled=true | S1003 QA: fbCatalogEnabled=true via DB — "Not connected" badge disappears, count updates, copy changes ✅. No positive "Connected" badge appears. Users cannot confirm FB is active at a glance. P2 cosmetic gap. | Dev fix: platforms.tsx Facebook card — add Connected badge state when fbCatalogEnabled=true (mirror eBay/Shopify card pattern). | S1003 |
 
 
 
@@ -331,46 +341,47 @@ _(S925 PCV rows — logout flow Chr✅, #463 CODE-ONLY, #462 CSRF partial — ap
 _(S927 PCV rows #79/#164/#316 applied to roadmap.md in S928 records pass — cleared.)
 _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared.)_
 _(S1001 PCVs FB-CM-Live-Ingest/FB-CM-Settings/FB-CM-Promote/FB-CM-Feed-API/Platform-Dashboard/Platform-Widget all ✅ S1001 — applied to roadmap.md rows 548/549/550 in S1002 records pass — cleared. S997 PCV SEO4-YardSalesAbout ✅ S997 — applied to roadmap.md SEO4 Chr col → ✅ S997 in S1002 records pass — cleared.)_
+| SEO4 Human QA — /yard-sales/grand-rapids-mi | Navigated https://finda.sale/yard-sales/grand-rapids-mi as guest. H1: "Yard Sales in Grand Rapids, MI" ✅. FAQPage JSON-LD present (7 Q&As confirmed via JS) ✅. Nearby cities (Detroit MI, Kalamazoo MI, Lansing MI, Chicago IL, Toledo OH) ✅. 7 sales shown ✅. Meta: "7 Yard Sales in Grand Rapids, MI — Find Local Sales | FindA.Sale" ✅. BreadcrumbList + ItemList + FAQPage confirmed ✅. Screenshots ss_3207v3q1s, ss_4548wcacx, ss_4234cbvhi. | S1003 |
 ---
 
 
 ## Next Session
 
-### S1002 onward
+### S1003 onward
 
-**Patrick MUST push before starting next session:**
+**S1003 push block (Patrick):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/items/[id].tsx
+git add "packages/frontend/pages/auctions/[city-slug].tsx"
+git add "packages/frontend/pages/flea-markets/[city-slug].tsx"
+git add packages/frontend/lib/seo/cityData.ts
+git add packages/frontend/pages/api/server-sitemap.xml.tsx
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S1002: ISR conversion /items/[id].tsx; roadmap rows 548/549/550; SEO4 QA applied"
+git commit -m "S1003: Auction + flea-market SEO city pages; cityData + sitemap updated; SEO5+SEO6 roadmap rows"
 .\push.ps1
 ```
-Note: exportController.ts (FB CM feed link fix) already pushed S1001 (git 392976b2).
 
-**No migration required.** Both S999+S1000 migrations confirmed applied on Railway.
+**No migration required.**
 
-**Session type: QA (BQ=2)**
+**Session type: DEV (BQ=2 — below ceiling)**
 
-**First action — smoke test ISR conversion:**
-Navigate https://finda.sale/items/[any item id] in Chrome. Verify page loads without 500. Check response headers for `x-nextjs-cache: HIT` on second load (CDN cache working). Evidence required.
+**Records pass (first action next session):**
+Apply S1003 PCV (SEO4 Human QA ✅ S1003) to roadmap.md Human QA column. Evidence in PCV table above: H1 ✅, FAQPage JSON-LD ✅, nearby cities ✅, 7 sales ✅, screenshots ss_3207v3q1s/ss_4548wcacx/ss_4234cbvhi.
 
 **BQ items remaining (2):**
 
-1. **eBay Queue Mode live flip + cron fire** — roadmap row 549 ⚠️ S1001. Flip ebayQueueMode on test org → verify queued count updates + Railway logs show cron firing.
+1. **eBay Queue Mode live flip + cron fire** — roadmap row 549. Railway logs empty S1003. Confirm cron fires via logs after queue activity.
 
-2. **Platform stats fbCatalogEnabled=true path** — roadmap row 550 BQ item. Toggle fbCatalogEnabled on test org → reload /organizer/platforms → verify facebook.connected=true + listed count = AVAILABLE items.
+2. **Facebook platform card: no "Connected" badge** — P2. Dev fix: platforms.tsx Facebook card — add Connected badge state when fbCatalogEnabled=true.
 
-**Other carry-forward items:**
+**QA needed after S1003 push (CODE-ONLY → verify):**
+- /auctions/grand-rapids-mi — H1 "Auctions in Grand Rapids, MI", auction FAQs, ISR serving
+- /flea-markets/grand-rapids-mi — H1 "Flea Markets in Grand Rapids, MI", flea-market FAQs, ISR serving
 
-**4 UNPUBLISHED eBay items (optional follow-up):**
-Items have FAS- SKUs + offers on eBay but no `ebayListingId` in DB:
-- Loy Norrix Choirs: offerId=166668232011, listing=137309862925
-- Kirkland Pepper: offerId=166412704011, listing=137308308467
-- Whip-It Butane: offerId=151850469011
-- Contigo Travel Mug: offerId=151769728011, listing=137227039608
+**Optional carry-forward:**
+- 4 unpublished eBay items backfill (Loy Norrix Choirs offerId=166668232011, Kirkland Pepper offerId=166412704011, Whip-It Butane offerId=151850469011, Contigo Travel Mug offerId=151769728011)
 
 **BQ = 2**
 

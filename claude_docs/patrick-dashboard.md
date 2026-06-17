@@ -1,85 +1,65 @@
-# Patrick's Dashboard — Week of June 16, 2026 (Updated S1002)
+# Patrick's Dashboard — Week of June 16, 2026 (Updated S1003)
 
 ---
 
 ## What Happened This Week
 
+**S1003 (today — Chrome QA + Auction/Flea-Market SEO pages):** Chrome QA confirmed ISR smoke test ✅ (/items/[id] loads + caches), SEO4 human QA ✅ (/yard-sales/grand-rapids-mi — H1, FAQPage JSON-LD, nearby cities, 7 sales all confirmed). Facebook fbCatalogEnabled QA found a P2 cosmetic gap: when fbCatalogEnabled=true, the data layer works (badge disappears, count updates, copy changes) but no positive "Connected" badge appears — queued for Dev fix next session. eBay Queue Mode cron still UNVERIFIED (Railway logs empty). New pages shipped: /auctions/[city-slug].tsx + /flea-markets/[city-slug].tsx — both ISR (revalidate:86400, 47-city prerender), full FAQPage JSON-LD + BreadcrumbList + nearby city links. cityData.ts extended with auction + flea-market meta/FAQs. Sitemap updated. TypeScript 0 errors. SEO5 + SEO6 rows added to roadmap. **BQ: 2→2** (fbCatalogEnabled replaced with Facebook Connected badge P2 fix).
+
 **S1002 (today — Records pass + ISR conversion for /items/[id].tsx):** Records pass applied 7 Chrome verifications from S1001 to roadmap.md — added roadmap rows 548 (Platform Dashboard ✅), 549 (eBay Queue Mode ⚠️), 550 (FB Commerce Manager ✅/✅). Cleared the PCV table. Also converted `/items/[id].tsx` from SSR (`getServerSideProps`) to ISR (`getStaticProps` + `revalidate:3600` + `fallback:'blocking'`). This is the GSC P1 fix — every Googlebot hit on `/items/{id}` was hitting Railway live; now first hit is server-rendered then CDN-cached for 1hr. **BQ: 4→2** — ISR fix shipped, FB feed link fix already pushed (S1001 git 392976b2). Two BQ items remain: eBay Queue Mode live flip, and FB fbCatalogEnabled=true path test.
 
-**S1001 (today — QA pass on S999 + S1000, Facebook flagged):** You were right to be wary of the Facebook work. Ran parallel code audits + live API + Chrome QA. **Found and fixed a bug Sonnet missed (severity corrected after your live check):** the Commerce Manager feed's product `link` points to a page that 404s (`/sales/.../items/...` instead of `/items/...`). I first called this a P1 that would block the whole catalog — but your live Commerce Manager screenshot proved that wrong: all **103 products ingested fine and are Active/in-stock**. The real impact is **click-through** only — a shopper tapping a product in a Facebook Shop or ad would land on a 404. So it's a **P2 click-through fix**, not urgent. The S1000 `quantity_to_sell_on_facebook` fix (the actual original blocker) is confirmed working end-to-end. Link fix is applied locally, backend type-check clean — ship it whenever. Everything else in S1000 (8 issues) and S999 (platform dashboard, queue mode) checked out: settings + promote Facebook sections, the org-level feed endpoint (live HTTP 200 with the right columns), the /organizer/platforms page, and the dashboard widget all verified in the browser as your real Artifact MI account. Both database migrations confirmed already applied on Railway. One minor UX note: the platforms page shows a misleading "Not connected" if its data call gets rate-limited — recommend an error/retry state.
+**S1001 (today — QA pass on S999 + S1000, Facebook flagged):** Found and fixed a bug in Commerce Manager feed's product `link` (404 on click-through). S1000 `quantity_to_sell_on_facebook` fix confirmed working. Platform dashboard, eBay Queue Mode, /organizer/platforms verified in browser. Both S999+S1000 migrations confirmed applied.
 
-**S999 (Platform Metrics Dashboard + eBay Queue Mode engine):** Built the full platform coverage analytics system. Organizers now get a /organizer/platforms page showing coverage score (0–100), per-platform listed vs. total counts for eBay, Google Merchant, Facebook, and Shopify, and a slide-in gap panel listing items not yet on each platform. The organizer dashboard now shows a PlatformHighlightsWidget with the coverage score and headline stats. eBay Queue Mode engine built: organizers can opt in to auto-queue management — the system runs every 30 minutes, fills empty eBay slots from the queue (Phase A), and optionally rotates oldest listings (Phase B, 10% cap per cycle). 12 files shipped, 4 new schema fields, migration required before next Railway deploy.
+**S999 (Platform Metrics Dashboard + eBay Queue Mode engine):** Built /organizer/platforms page (coverage score 0–100, per-platform listed/total counts, gap panel). Platform widget on organizer dashboard. eBay Queue Mode engine: auto-queue management every 30 min.
 
-**S998 (today — eBay bidirectional sync restored):** Fixed the root cause of classic eBay listings (items listed directly on eBay, not via FindA.Sale) showing "Push to eBay" even though they were already live. Root cause: the import function had an `if (totalFetched === 0)` guard before the Trading API block — ArtifactMI has 18 Inventory API items, so the guard always fired and the Trading API (`GetMyeBaySelling`, which returns ALL listings regardless of how they were created) never ran. Fix: removed the guard — both APIs now always run. Dedup logic handles items found by both paths. Patrick confirmed after deploy: "wrap it synced now."
-
-**S997 (today — Yard-sales Chrome QA + GSC sitemap fix):** Chrome-verified `/yard-sales/grand-rapids-mi` — H1 correct, About shows yard-sale copy, 7 FAQs, 5 nearby city links, 7 listings, FAQPage JSON-LD confirmed. Also shipped GSC P1 fix: removed 10,000 `/items/{id}` URLs from sitemap. Crawl budget freed for city/sale/guide pages.
-
-**S996 (today — eBay sold sync fix):** Items sold on eBay will now actually get marked SOLD on FindA.Sale. Root cause was a 7-day `lastmodifieddate` window that permanently dropped settled orders after a week. Fixed to 90-day `creationdate` window.
-
-**S994/S995 (today — Yard-sales SEO pages):** Built `/yard-sales/[city-slug].tsx` (47-city ISR). Fixed Vercel build error (possessive apostrophes in string literals). Yard-sale-specific FAQs, About copy, nearby city links, FAQPage JSON-LD all live.
+**S994/S995/S997 (Yard-sales SEO):** Built /yard-sales/[city-slug].tsx (47-city ISR), Chrome-verified human QA. GSC P1 fix: removed 10,000 /items/{id} URLs from sitemap.
 
 ---
 
-## REQUIRED ACTION BEFORE NEXT SESSION
+## REQUIRED ACTION NOW
 
-**Push this session's changes:**
+**Push S1003 changes (run in PowerShell):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/items/[id].tsx
+git add "packages/frontend/pages/auctions/[city-slug].tsx"
+git add "packages/frontend/pages/flea-markets/[city-slug].tsx"
+git add packages/frontend/lib/seo/cityData.ts
+git add packages/frontend/pages/api/server-sitemap.xml.tsx
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S1002: ISR conversion /items/[id].tsx; roadmap rows 548/549/550; SEO4 QA applied"
+git commit -m "S1003: Auction + flea-market SEO city pages; cityData + sitemap updated; SEO5+SEO6 roadmap rows"
 .\push.ps1
 ```
-Note: `exportController.ts` (FB CM feed link fix) was already pushed in S1001 (git 392976b2). No further action needed for migrations — both S999+S1000 migrations confirmed applied.
+
+**No migration required.**
 
 ---
 
-## Pending Decisions
+## Project Status
 
-No PENDING items in DECISIONS.md. All standing design and brand rules are active.
-
----
-
-## Beta Tester Impact
-
-**Platform Metrics Dashboard (S999 — Chrome-verified ✅ S1001):** Organizers will get a /organizer/platforms page with coverage score, per-platform gap analysis, and one-click "Add to Queue" for items not yet on eBay.
-
-**eBay Queue Mode (S999 — UI render-verified S1001; live enable + cron fire still to confirm):** Organizers can enable auto-queue management — the system will automatically fill empty eBay slots and optionally rotate oldest listings every 30 minutes.
-
-**eBay bidirectional sync (S998):** ArtifactMI (and any organizer with a mix of FAS-pushed and manually-listed eBay items) will now see all their eBay classic listings in FindA.Sale after running "Import from eBay."
-
-**eBay sold sync (S996):** Items sold on eBay now get marked SOLD on FindA.Sale within 15 minutes of the cron cycle.
+| Area | Status |
+|------|--------|
+| BQ (Blocked Queue) | 2 items — below ceiling (DEV ok next session) |
+| ISR Conversion | ✅ /items/[id].tsx live |
+| SEO Pages | ✅ yard-sales (S994), ✅ auctions (S1003 CODE-ONLY), ✅ flea-markets (S1003 CODE-ONLY) |
+| SEO4 Human QA | PCV staged ✅ — applies to roadmap next session |
+| Facebook Platform Card | ⚠️ P2 — no "Connected" badge when fbCatalogEnabled=true |
+| eBay Queue Mode | ⚠️ UNVERIFIED — Railway logs empty, cron not confirmed |
+| Platform Dashboard | ✅ live |
+| eBay Sync | ✅ live |
 
 ---
 
-## This Week's Priority
+## BQ Items (2)
 
-1. **Push the S1001 FB link fix** (non-urgent — push block in REQUIRED ACTION above).
-2. **Migrations + S999/S1000 QA — DONE this session** (platforms page, dashboard widget, FB CM settings/promote/feed all Chrome-verified; catalog live with 103 products).
-3. **Still open:** flip eBay Queue Mode on a test org to confirm the enable-path + cron fire (didn't flip on your real account).
-4. **GSC P1 — ISR conversion SHIPPED S1002 ✅:** `/items/[id].tsx` converted to ISR (getStaticProps + revalidate:3600 + fallback:blocking). Both GSC P1 items now done (sitemap fix S997 + ISR conversion S1002).
-5. **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket, 3 press pitches).
+1. **eBay Queue Mode cron confirmation** — Railway logs empty S1003. Need log activity after toggle to confirm */30 schedule fires.
+2. **Facebook Connected badge** — P2 cosmetic. platforms.tsx needs a "Connected" badge state when fbCatalogEnabled=true.
 
 ---
 
-## Action Items for Patrick
+## Next Session (DEV — BQ=2)
 
-- [x] **Migrations applied** — both confirmed live on Railway this session ✅
-
-- [ ] **Push S997+S998 changes (if not yet pushed):**
-  ```powershell
-  cd C:\Users\desee\ClaudeProjects\FindaSale
-  git add packages/frontend/pages/server-sitemap.xml.tsx
-  git add packages/backend/src/controllers/ebayController.ts
-  git add packages/database/prisma/seed.ts
-  git add claude_docs/STATE.md
-  git add claude_docs/patrick-dashboard.md
-  git commit -m "S997+S998: GSC sitemap itemUrls removed; eBay bidirectional sync fix; seed user1 ADMIN removed"
-  .\push.ps1
-  ```
-
-- [x] **Yard-sales About section** — Chrome-verified ✅. "Yard Sales in Grand Rapids, MI" H1, yard-sale copy in About, 7 FAQs, 5 nearby cities, FAQPage JSON-LD all confirmed.
-
-- [ ] **Send the 4 Gmail drafts** sitting in your inbox (eBay dev ticket + 3 press pitches).
+Records: Apply SEO4 Human QA PCV to roadmap Human QA column.
+Dev: Fix Facebook platform card — add Connected badge when fbCatalogEnabled=true (P2).
+QA after push: Verify /auctions/grand-rapids-mi + /flea-markets/grand-rapids-mi in Chrome.
