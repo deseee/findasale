@@ -9,6 +9,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 ## Current Status
 
 **S1006 — QA/BUG (2026-06-17). QA of S1005 cart/checkout/GMC fixes. Found + fixed a P1: Buy It Now broken by `automatic_tax` on raw PaymentIntent.**
+- **NEW FEATURE (Patrick request, S1006c CODE-ONLY): item search on add-items page.** `add-items/[saleId].tsx` — added a live client-side search box above the saved-items list (filters by title/category/tags, case-insensitive), "Showing X of Y" count, clear button, and a no-match empty state. Helps organizers with 100+ items. Additive; selection/bulk untouched. Frontend not VM-tsc-verifiable (corrupt node_modules); needs deploy + Chrome verify.
 - **QA-5 Return policy ✅** Chrome — finda.sale/return-policy live, marketplace language ("each seller", "no single blanket return policy"), dark mode clean. (ss_2020ezr74)
 - **QA-4 Google Merchant feed ✅** Live feed (67 rows): `image_link` col = 8 Cloudinary, 23 eBay-thumbnail FALLBACK (items w/ no Cloudinary photo), rest full-size/other. **0 rows** where a thumbnail beat an available Cloudinary URL — `isEbayThumbnail` filter works on deployed backend.
 - **QA-1 Cart item links ✅** Chrome (user5 shopper) — added Star Raiders to cart, opened CartDrawer, clicked thumbnail in "Saved in Cart (1)" (href=/items/cmo3esog…) → navigated to that item page + drawer closed. (ss_8070oi6kv→ss_670035opy). NOTE: open CartDrawer reliably freezes CDP screenshot capture (overlay quirk) — DOM tools + URL change used for evidence.
