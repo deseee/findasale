@@ -8,6 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1006 — QA/BUG (2026-06-17). QA of S1005 cart/checkout/GMC fixes. Found + fixed a P1: Buy It Now broken by `automatic_tax` on raw PaymentIntent.**
+- **QA-5 Return policy ✅** Chrome — finda.sale/return-policy live, marketplace language ("each seller", "no single blanket return policy"), dark mode clean. (ss_2020ezr74)
+- **QA-4 Google Merchant feed ✅** Live feed (67 rows): `image_link` col = 8 Cloudinary, 23 eBay-thumbnail FALLBACK (items w/ no Cloudinary photo), rest full-size/other. **0 rows** where a thumbnail beat an available Cloudinary URL — `isEbayThumbnail` filter works on deployed backend.
+- **QA-1 Cart item links ✅** Chrome (user5 shopper) — added Star Raiders to cart, opened CartDrawer, clicked thumbnail in "Saved in Cart (1)" (href=/items/cmo3esog…) → navigated to that item page + drawer closed. (ss_8070oi6kv→ss_670035opy). NOTE: open CartDrawer reliably freezes CDP screenshot capture (overlay quirk) — DOM tools + URL change used for evidence.
+- **QA-2 Cart multi-item checkout ⚠️ PARTIAL** — 2 same-sale items ($3.49+$3.99=$7.48 subtotal ✅), "Go to Checkout" replaced the coming-soon toast with a REAL Stripe Checkout Session (redirect to `checkout.stripe.com/c/pay/cs_live_…`, merchant "Patrick Desmond" = Connect routing worked). **Payment-completion → ?checkout=success → items-SOLD webhook UNVERIFIED**: prod is on **Stripe LIVE keys (cs_live_)**, so test card 4242 is rejected and a real charge won't be made in QA; Stripe domain also blocked in QA browser.
+- **QA-3 Buy It Now ❌→FIXED CODE-ONLY** — REPRODUCED the "Try Again" error as BOTH user5 (Star Raiders) AND artifactmi (QA Test First Item S983, item cmqer8m8w00x5me4oqoabaulh, sale cmpfplxqbxwtucltmbouvz0os owned by Kelly's Estate Sales — NOT a self-purchase). Live replay: `POST /api/stripe/create-payment-intent` → **400 `{"error":"Received unknown parameter: automatic_tax"}`**. ROOT CAUSE (evidence-first): Buy Now PaymentIntent passed `automatic_tax:{enabled:true}` which the installed Stripe API version rejects on raw PaymentIntents; it's NOT a Connect error so the S1005 Connect-fallback never caught it (S1005 patched the wrong cause). Cart works because Checkout Sessions support automatic_tax + collect a buyer address. **FIX (S1006):** removed `automatic_tax` from createPaymentIntent basePaymentIntentData (stripeController.ts ~L487); the 2 Checkout-Session automatic_tax usages kept. Backend tsc 0 errors (pnpm-store 5.9.3). CODE-ONLY — needs deploy + Chrome re-test.
+- **FINDING (Patrick-flagged): production runs Stripe LIVE keys.** All real Buy Now / cart purchases are real charges; QA cannot use Stripe test cards on prod. (Patrick asked this be noted.)
+- **BQ: 0→2** (Buy Now fix CODE-ONLY pending deploy+retest; cart payment-completion path unverified).
+
 **S1005 — DEV (2026-06-17). Google Merchant feed quality fix + cart checkout regression fix + return policy page.**
 - **Google Merchant feed (image_link quality):** `googleMerchantFeed.ts` — added `isEbayThumbnail()` filter. eBay CDN thumbnails (`i.ebayimg.com/$_N.JPG` ~180px) excluded from `image_link`/`additional_image_link`. Cloudinary URLs preferred; falls back to any eBay URL only if no Cloudinary photo. Fixes 0% high-res images causing Google "FAIR" store quality score.
 - **Cart item links (CartDrawer.tsx):** "Saved in Cart" section — wrapped item thumbnail + title in `<Link href="/items/${item.id}" onClick={closeCart}>`. Cart items now navigate to item page on click, matching the "On Hold" section pattern.
@@ -323,7 +332,8 @@ _S1004: BQ item 1 (eBay Queue cron) RESOLVED — Railway logs confirmed */30 fir
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-_No items in queue — BQ cleared to 0 in S1004._
+| Buy It Now (create-payment-intent) | FIXED CODE-ONLY S1006 — `automatic_tax` removed from PaymentIntent; was 400 "unknown parameter: automatic_tax". Not yet deployed. | Patrick push S1006 block → Railway deploy → Chrome re-test Buy Now (expect modal→payment, no "Try Again") | S1006 |
+| Cart multi-item checkout — payment completion | Session creation ✅ but ?checkout=success + items-SOLD webhook UNVERIFIED (prod = Stripe LIVE keys; no real charge in QA) | Patrick (or a real low-value purchase) confirms end-to-end, OR a Stripe test-mode path for QA | S1006 |
 
 
 
@@ -363,6 +373,27 @@ _(SEO4 ✅ S1003 Human QA applied — roadmap.md Human QA col already ✅ S1003 
 
 
 ## Next Session
+
+### S1007 — re-test Buy Now after deploy (Buy Now fix + live-keys note)
+
+**S1006 push block (Patrick):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/stripeController.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S1006: fix Buy It Now 400 — remove automatic_tax from raw PaymentIntent (Stripe rejects it; Checkout Sessions keep it)"
+.\push.ps1
+```
+**No migration required.**
+
+**After Railway deploy — Chrome re-test (S1007):**
+1. As a shopper (user5@example.com / Seedy2025!) OR artifactmi: open any AVAILABLE Buy-Now item, click Buy It Now → Continue to Pay. Expect the Stripe payment step to load (redirect to checkout.stripe.com / payment element) — NO "Try Again". Evidence: network `POST /api/stripe/create-payment-intent` → 200 with clientSecret (replay in-page is fine).
+2. Do NOT complete a real charge — prod is on **Stripe LIVE keys**. Verifying the 200 + payment step loads = the fix; payment completion stays a Patrick/real-purchase check.
+
+**Open carry-forward:**
+- Cart multi-item checkout payment-completion + items-SOLD webhook still UNVERIFIED (live keys; needs a real purchase or a QA test-mode path).
+- Pending fee-rate question (feeCalculator.ts 8% vs CLAUDE.md/Stack 10% locked S106) — Patrick decision before touching feeCalculator.
 
 ### S1005 onward — QA session
 

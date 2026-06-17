@@ -483,8 +483,9 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const basePaymentIntentData = {
       amount: finalPriceCents,
       currency: 'usd',
-      // Patrick: enable Stripe Tax in Stripe Dashboard (Stripe Tax product) for this to take effect
-      automatic_tax: { enabled: true },
+      // NOTE: automatic_tax removed — Stripe rejects it on raw PaymentIntents
+      // ("Received unknown parameter: automatic_tax"). Tax on direct Buy Now would
+      // require a Customer with address; Checkout Sessions (cart) keep automatic_tax.
       metadata: {
         itemId: item.id,
         saleId: item.sale!.id,

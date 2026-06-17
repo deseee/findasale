@@ -1,8 +1,16 @@
-# Patrick's Dashboard — Week of June 16, 2026 (Updated S1005)
+# Patrick's Dashboard — Week of June 16, 2026 (Updated S1006)
 
 ---
 
 ## What Happened This Week
+
+**S1006 (today — QA of the S1005 cart/checkout/feed fixes; found + fixed a real Buy Now bug):**
+- ✅ **Return policy page** — live and correct.
+- ✅ **Google Merchant feed** — confirmed live: it now uses your full-size Cloudinary photos, not the tiny eBay thumbnails. Fixes the Merchant Center "FAIR" image issue for every item that has a Cloudinary photo.
+- ✅ **Cart item links** — clicking an item in the cart now opens that item's page and closes the cart.
+- ⚠️ **Cart "Go to Checkout"** — WORKS: it now builds a real Stripe checkout for multiple items (correct $7.48 total in my test) instead of the "coming soon" message. I could NOT finish the payment because your site runs **real (live) Stripe** — a test card won't work and I won't make a real charge. So the "purchase completes + items marked sold" step still needs one real (small) purchase to confirm.
+- ❌→🔧 **Buy It Now was broken** (the "Try Again" error you hit on your phone). I proved the real cause: the Buy Now code sent Stripe a `automatic_tax` setting that Stripe rejects on this kind of charge → every Buy It Now failed (for shoppers AND for you on the QA item — it was NOT because you own the item). The S1005 attempt fixed the wrong thing. **I fixed it for real this session** (removed that setting; the cart checkout keeps tax because it collects an address). Needs your push + a quick re-test.
+- 🔎 **Note:** your production site is on **live Stripe keys** — real Buy Now / cart purchases are real money, and QA can't use test cards on the live site.
 
 **S1005 (today — Cart checkout + Buy Now fixes + Google Merchant feed + return policy):** Diagnosed and fixed two cart regressions Patrick found after deploy. Also fixed Google Merchant Center "FAIR" store quality issue (eBay thumbnail URLs were too small for Google's 800×800 minimum).
 - **Google Merchant feed:** eBay CDN thumbnails now filtered out; Cloudinary photos used instead. Fixes 0% high-res images in Merchant Center.
@@ -22,27 +30,19 @@
 
 ## REQUIRED ACTION NOW
 
-**Push S1003 + S1004 + S1005 changes (run in PowerShell):**
+S1005 is already pushed (live). **Push the S1006 Buy It Now fix (PowerShell):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add "packages/frontend/pages/auctions/[city-slug].tsx"
-git add "packages/frontend/pages/flea-markets/[city-slug].tsx"
-git add packages/frontend/lib/seo/cityData.ts
-git add packages/frontend/pages/api/server-sitemap.xml.tsx
-git add packages/frontend/pages/organizer/platforms.tsx
-git add packages/frontend/components/CartDrawer.tsx
 git add packages/backend/src/controllers/stripeController.ts
-git add packages/backend/src/routes/stripe.ts
-git add packages/backend/src/utils/googleMerchantFeed.ts
-git add packages/frontend/pages/return-policy.tsx
-git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S1003-S1005: Auction+flea-market SEO pages; FB Connected badge; cart checkout fix; Google Merchant feed; return policy"
+git commit -m "S1006: fix Buy It Now 400 — remove automatic_tax from raw PaymentIntent"
 .\push.ps1
 ```
 
 **No migration required.**
+
+After Railway deploys (~3-5 min): open any item, click Buy It Now → Continue to Pay. It should reach the Stripe payment step with NO "Try Again". (Don't finish a real charge — it's live Stripe.)
 
 ---
 
