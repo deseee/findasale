@@ -7,6 +7,7 @@ import {
   createRefund,
   recoverPaymentIntent,
   createCheckoutSession,
+  createCartCheckoutSession,
   testTransaction,
   testCheckoutSession,
   testInAppPayment,
@@ -41,6 +42,9 @@ router.post('/refund/:purchaseId', authenticate, createRefund);
 
 // Subscription checkout (#23: Pricing page)
 router.post('/checkout-session', authenticate, paymentLimiter, createCheckoutSession);
+
+// Shopper cart checkout — multi-item purchase via Stripe Checkout
+router.post('/create-cart-checkout-session', authenticate, paymentLimiter, createCartCheckoutSession);
 
 // V2: Instant payouts — balance + on-demand payouts + schedule management
 router.get('/balance', authenticate, getBalance);

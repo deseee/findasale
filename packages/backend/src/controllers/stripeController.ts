@@ -1850,6 +1850,80 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.log(`[pos] Payment link completed via checkout: ${stripePaymentLinkId}`);
         }
       }
+
+      // Cart Checkout: multi-item shopper purchase via CartDrawer
+      if (session.metadata?.type === 'cart_checkout' && session.metadata?.itemIds) {
+        const cartItemIds = session.metadata.itemIds.split(',').filter(Boolean);
+        const cartSaleId = session.metadata.saleId ?? null;
+        const cartBuyerUserId = session.metadata.buyerUserId ?? null;
+
+        if (cartItemIds.length > 0) {
+          try {
+            await prisma.$transaction(async (tx) => {
+              // Fetch items to get current price and confirm they're still AVAILABLE
+              const cartItems = await tx.item.findMany({
+                where: { id: { in: cartItemIds } },
+                select: { id: true, title: true, price: true, status: true, saleId: true },
+              });
+
+              // Determine organizer fee rate from sale
+              const cartSale = cartSaleId
+                ? await tx.sale.findUnique({
+                    where: { id: cartSaleId },
+                    select: { organizer: { select: { subscriptionTier: true } } },
+                  })
+                : null;
+              const cartFeeRate = getPlatformFeeRate(
+                (cartSale?.organizer?.subscriptionTier ?? null) as SubscriptionTier
+              );
+
+              // Mark all items SOLD
+              await tx.item.updateMany({
+                where: { id: { in: cartItemIds } },
+                data: { status: 'SOLD' },
+              });
+
+              // Create a Purchase record per item
+              for (const cartItem of cartItems) {
+                await tx.purchase.create({
+                  data: {
+                    itemId: cartItem.id,
+                    saleId: cartSaleId ?? cartItem.saleId,
+                    userId: cartBuyerUserId,
+                    amount: cartItem.price ?? 0,
+                    platformFeeAmount: parseFloat(
+                      (((cartItem.price ?? 0) * cartFeeRate)).toFixed(2)
+                    ),
+                    status: 'PAID',
+                    source: 'ONLINE',
+                    stripePaymentIntentId:
+                      typeof session.payment_intent === 'string'
+                        ? session.payment_intent
+                        : (session.payment_intent as any)?.id ?? null,
+                  },
+                });
+              }
+            });
+
+            // Fire-and-forget: end eBay listings for all sold items
+            setImmediate(() => {
+              Promise.allSettled(
+                cartItemIds.map((itemId: string) => endEbayListingIfExists(itemId))
+              ).catch(() => {});
+              Promise.allSettled(
+                cartItemIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
+              ).catch(() => {});
+            });
+
+            console.log(
+              `[cart-checkout] Completed — ${cartItemIds.length} items marked SOLD, saleId=${cartSaleId}`
+            );
+          } catch (cartErr) {
+            console.error('[cart-checkout] Webhook handler error:', cartErr);
+          }
+        }
+      }
+
       break;
     }
     case 'charge.succeeded': {
@@ -2728,5 +2802,148 @@ export const testInAppIntent = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error('[test-in-app-intent] error:', error);
     return res.status(500).json({ message: 'Could not create test payment session', details: error.message });
+  }
+};
+
+// POST /api/stripe/create-cart-checkout-session
+// Shopper multi-item cart checkout via Stripe Checkout.
+// Accepts { itemIds: string[] }. All items must belong to the same sale.
+// Creates a Stripe Checkout Session and returns { url }.
+// On completion, the webhook handler (checkout.session.completed, type='cart_checkout')
+// marks all items SOLD and creates Purchase records.
+export const createCartCheckoutSession = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const { itemIds } = req.body as { itemIds?: string[] };
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ error: 'itemIds must be a non-empty array' });
+    }
+    if (itemIds.length > 50) {
+      return res.status(400).json({ error: 'Cart cannot exceed 50 items' });
+    }
+
+    // Fetch all items with sale + organizer Stripe account in one query
+    const items = await prisma.item.findMany({
+      where: { id: { in: itemIds } },
+      select: {
+        id: true,
+        title: true,
+        price: true,
+        status: true,
+        saleId: true,
+        sale: {
+          select: {
+            id: true,
+            title: true,
+            organizerId: true,
+            organizer: {
+              select: {
+                stripeConnectId: true,
+                subscriptionTier: true,
+                userId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Verify all requested items were found
+    if (items.length !== itemIds.length) {
+      const foundIds = new Set(items.map((i) => i.id));
+      const missing = itemIds.filter((id) => !foundIds.has(id));
+      return res.status(404).json({ error: `Items not found: ${missing.join(', ')}` });
+    }
+
+    // Validate all items belong to the same sale
+    const saleIds = [...new Set(items.map((i) => i.saleId).filter(Boolean))];
+    if (saleIds.length !== 1) {
+      return res.status(400).json({ error: 'All cart items must belong to the same sale' });
+    }
+    const saleId = saleIds[0]!;
+
+    // Prevent organizer from buying their own items
+    const organizer = items[0].sale?.organizer;
+    if (organizer?.userId === req.user.id) {
+      return res.status(400).json({ error: 'You cannot purchase items from your own sale' });
+    }
+
+    // Validate all items are AVAILABLE
+    const unavailable = items.filter((i) => i.status !== 'AVAILABLE');
+    if (unavailable.length > 0) {
+      return res.status(409).json({
+        error: `Some items are no longer available: ${unavailable.map((i) => i.title).join(', ')}`,
+      });
+    }
+
+    // Validate all items have a price
+    const noPriceItems = items.filter((i) => i.price == null || i.price <= 0);
+    if (noPriceItems.length > 0) {
+      return res.status(400).json({
+        error: `Some items have no price set: ${noPriceItems.map((i) => i.title).join(', ')}`,
+      });
+    }
+
+    // Build Stripe line_items (price in cents)
+    const lineItems = items.map((item) => ({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: item.title.substring(0, 127), // Stripe 128-char limit
+        },
+        unit_amount: Math.round((item.price as number) * 100),
+      },
+      quantity: 1,
+    }));
+
+    const stripeConnectId = organizer?.stripeConnectId;
+    const tier = (organizer?.subscriptionTier ?? null) as SubscriptionTier;
+    const feeRate = getPlatformFeeRate(tier);
+
+    // Compute application_fee_amount across all items (summed)
+    const totalCents = items.reduce((sum, i) => sum + Math.round((i.price as number) * 100), 0);
+    const platformFeeAmount = Math.round(totalCents * feeRate);
+
+    const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://finda.sale';
+    const successUrl = `${frontendUrl}/sales/${saleId}?checkout=success`;
+    const cancelUrl = `${frontendUrl}/sales/${saleId}`;
+
+    const sessionParams: Parameters<ReturnType<typeof stripe>['checkout']['sessions']['create']>[0] = {
+      mode: 'payment',
+      automatic_payment_methods: { enabled: true },
+      line_items: lineItems,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: {
+        type: 'cart_checkout',
+        itemIds: itemIds.join(','),
+        saleId,
+        buyerUserId: req.user.id,
+      },
+    };
+
+    // Apply Connect routing if organizer has a valid Stripe Connect account
+    const shouldUseConnect = stripeConnectId && !stripeConnectId.startsWith('acct_test_');
+    if (shouldUseConnect) {
+      (sessionParams as any).payment_intent_data = {
+        application_fee_amount: platformFeeAmount,
+        on_behalf_of: stripeConnectId,
+        transfer_data: { destination: stripeConnectId },
+      };
+    }
+
+    const session = await stripe().checkout.sessions.create(sessionParams);
+
+    if (!session.url) {
+      return res.status(500).json({ error: 'Failed to create checkout session' });
+    }
+
+    return res.json({ url: session.url });
+  } catch (error: unknown) {
+    console.error('[cart-checkout] Error creating cart checkout session:', error);
+    return res.status(500).json({ error: 'Failed to create checkout session' });
   }
 };

@@ -44,6 +44,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
   const queryClient = useQueryClient();
   const cart = useShopperCart(user?.id);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'shared' | 'error'>('idle');
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrExpanded, setQrExpanded] = useState(false);
@@ -128,6 +129,25 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
     cart.clearCart();
     showToast('Cart cleared', 'info');
     setConfirmingClear(false);
+  };
+
+  const handleCheckout = async () => {
+    if (cart.cartCount === 0) return;
+    setCheckoutLoading(true);
+    try {
+      const itemIds = cart.items.map((item) => item.id);
+      const res = await api.post('/stripe/create-cart-checkout-session', { itemIds });
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        showToast(res.data?.error || 'Checkout failed — please try again', 'error');
+      }
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err?.response?.data?.message || 'Checkout failed — please try again';
+      showToast(message, 'error');
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
   const handleShareWithCashier = async () => {
@@ -349,24 +369,30 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
                         {/* Item Thumbnail & Details */}
                         <div className="flex gap-3 mb-3">
                           <div className="flex-shrink-0 w-20">
-                            <div className="w-20 h-20 bg-warm-100 dark:bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
-                              {item.photoUrl ? (
-                                <img
-                                  src={getThumbnailUrl(item.photoUrl)}
-                                  alt={item.title}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-warm-400 dark:text-gray-600 text-xs text-center px-1">No image</span>
-                              )}
-                            </div>
+                            <Link href={`/items/${item.id}`} onClick={onClose}>
+                              <div className="w-20 h-20 bg-warm-100 dark:bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
+                                {item.photoUrl ? (
+                                  <img
+                                    src={getThumbnailUrl(item.photoUrl)}
+                                    alt={item.title}
+                                    className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                                  />
+                                ) : (
+                                  <span className="text-warm-400 dark:text-gray-600 text-xs text-center px-1">No image</span>
+                                )}
+                              </div>
+                            </Link>
                           </div>
 
                           <div className="flex-1 min-w-0 flex flex-col justify-between">
                             <div>
-                              <h4 className="font-semibold text-warm-900 dark:text-gray-50 line-clamp-2 text-sm">
+                              <Link
+                                href={`/items/${item.id}`}
+                                onClick={onClose}
+                                className="font-semibold text-warm-900 dark:text-gray-50 hover:text-amber-600 dark:hover:text-amber-400 line-clamp-2 text-sm"
+                              >
                                 {item.title}
-                              </h4>
+                              </Link>
                               {item.price !== null && (
                                 <p className="text-sm font-bold text-amber-700 dark:text-amber-400 mt-1">
                                   ${(item.price / 100).toFixed(2)}
@@ -437,12 +463,11 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
             <div className="space-y-2 pt-2">
               {/* Go to Checkout */}
               <button
-                onClick={() => {
-                  showToast('Checkout feature coming soon', 'info');
-                }}
-                className="w-full bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                onClick={handleCheckout}
+                disabled={checkoutLoading || cart.cartCount === 0}
+                className="w-full bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Go to Checkout
+                {checkoutLoading ? 'Processing…' : 'Go to Checkout'}
               </button>
 
               {/* Share with cashier */}

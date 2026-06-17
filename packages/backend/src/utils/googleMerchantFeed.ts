@@ -199,9 +199,21 @@ export function buildFeedRow(item: FeedItem): string[] | null {
   const description = tsvCell(strippedDescription || item.title);
 
   const link = `${SITE_BASE_URL}/items/${item.id}`;
-  const imageLink = tsvCell(item.photoUrls[0] || '');
-  // additional_image_link: photoUrls[1..10], comma-joined (Merchant allows up to 10)
-  const additionalImages = (item.photoUrls.slice(1, 11) || [])
+  // Image URL selection: prefer Cloudinary URLs (full-res, Google-compliant 800x800+).
+  // eBay CDN thumbnail URLs (i.ebayimg.com with $_1 suffix) are ~180px — below Google's
+  // 800x800 minimum. Filter them out so only Cloudinary or other full-res URLs are used.
+  // If an item has no qualifying image after filtering, skip it (isFeedEligible already
+  // requires photoUrls.length > 0, but the FIRST URL may still be a low-res eBay thumb).
+  const isEbayThumbnail = (url: string): boolean =>
+    /i\.ebayimg\.com/.test(url) && /\$_\d+\.JPG/i.test(url);
+
+  const qualifiedPhotoUrls = item.photoUrls.filter((u) => u && !isEbayThumbnail(u));
+  // Fall back to any eBay URL if no Cloudinary URL exists (better than no image)
+  const allPhotoUrls = qualifiedPhotoUrls.length > 0 ? qualifiedPhotoUrls : item.photoUrls;
+
+  const imageLink = tsvCell(allPhotoUrls[0] || '');
+  // additional_image_link: up to 10 extra images, Cloudinary-preferred
+  const additionalImages = (allPhotoUrls.slice(1, 11) || [])
     .filter(Boolean)
     .map((u) => tsvCell(u))
     .join(',');
