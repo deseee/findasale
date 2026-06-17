@@ -306,6 +306,8 @@ const AddItemsDetailPage = () => {
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  // Client-side search/filter for the saved-items list (helps when a sale has 100+ items)
+  const [itemSearch, setItemSearch] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmTitle, setDeleteConfirmTitle] = useState<string>('');
   const [bulkPrice, setBulkPrice] = useState('');
@@ -471,6 +473,21 @@ const AddItemsDetailPage = () => {
     },
     enabled: !!saleId && !inMutationFlight.current,
   });
+
+  // Client-side filtered view of the saved-items list (search by name, category, or tag).
+  // When the query is empty, this is the identical array reference behavior as `items`.
+  const filteredItems = useMemo(() => {
+    const q = itemSearch.trim().toLowerCase();
+    if (!q) return items as any[];
+    return (items as any[]).filter((it: any) => {
+      const title = (it?.title || '').toString().toLowerCase();
+      const category = (it?.category || '').toString().toLowerCase();
+      const tags = Array.isArray(it?.tags)
+        ? it.tags.join(' ').toLowerCase()
+        : (it?.tags || '').toString().toLowerCase();
+      return title.includes(q) || category.includes(q) || tags.includes(q);
+    });
+  }, [items, itemSearch]);
 
   // #403: Fetch existing bundles for this sale
   const { data: bundles = [], refetch: refetchBundles } = useQuery({
@@ -1494,7 +1511,10 @@ const AddItemsDetailPage = () => {
             <p className="text-warm-600 dark:text-warm-400 mb-1">
               {items.length > 0 && (
                 <>
-                  {items.length} item{items.length !== 1 ? 's' : ''} {' '}
+                  {itemSearch.trim()
+                    ? `Showing ${filteredItems.length} of ${items.length} items`
+                    : `${items.length} item${items.length !== 1 ? 's' : ''} `}
+                  {' '}
                   {publishedCount > 0 && `• ${publishedCount} published`}
                   {draftCount > 0 && `• ${draftCount} draft`}
                 </>
@@ -2047,7 +2067,7 @@ const AddItemsDetailPage = () => {
                     className="rounded cursor-pointer flex-shrink-0"
                   />
                   <h2 className="font-semibold text-warm-900 dark:text-warm-100 flex-shrink-0">
-                    {items.length} Item{items.length !== 1 ? 's' : ''}
+                    {itemSearch.trim() ? `${filteredItems.length} of ${items.length}` : `${items.length}`} Item{items.length !== 1 ? 's' : ''}
                   </h2>
                   <Link
                     href={`/organizer/add-items/${saleId}/review`}
@@ -2087,6 +2107,30 @@ const AddItemsDetailPage = () => {
                   >
                     👁 Buyer Preview
                   </Link>
+                </div>
+              </div>
+
+              {/* Search / filter the saved-items list (handy for 100+ item sales) */}
+              <div className="p-4 border-b border-warm-200 dark:border-gray-700">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={itemSearch}
+                    onChange={(e) => setItemSearch(e.target.value)}
+                    placeholder="Search items by name, category, or tag…"
+                    aria-label="Search items by name, category, or tag"
+                    className="w-full px-3 py-2 pr-9 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                  />
+                  {itemSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setItemSearch('')}
+                      aria-label="Clear search"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-warm-400 hover:text-warm-700 dark:text-warm-500 dark:hover:text-warm-200 text-lg leading-none"
+                    >
+                      &times;
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2198,7 +2242,7 @@ const AddItemsDetailPage = () => {
 
               {/* Card-based expandable items list */}
               <div className="divide-y divide-warm-100 dark:divide-gray-700">
-                {getSortedItems(items).map((item: any) => {
+                {getSortedItems(filteredItems).map((item: any) => {
                   const draftStatus = computeDraftStatus(item);
                   const isExpanded = expandedItemId === item.id;
                   const editState = getItemEditState(item);
@@ -2396,6 +2440,20 @@ const AddItemsDetailPage = () => {
                     </div>
                   );
                 })}
+                {itemSearch.trim() && filteredItems.length === 0 && (
+                  <div className="text-center py-10 px-4">
+                    <p className="text-warm-600 dark:text-warm-400 mb-3">
+                      No items match &ldquo;{itemSearch.trim()}&rdquo;
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setItemSearch('')}
+                      className="text-sm font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 hover:underline"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
