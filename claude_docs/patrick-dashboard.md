@@ -1,10 +1,12 @@
-# Patrick's Dashboard — Week of June 16, 2026 (Updated S999)
+# Patrick's Dashboard — Week of June 16, 2026 (Updated S1001)
 
 ---
 
 ## What Happened This Week
 
-**S999 (today — Platform Metrics Dashboard + eBay Queue Mode engine):** Built the full platform coverage analytics system. Organizers now get a /organizer/platforms page showing coverage score (0–100), per-platform listed vs. total counts for eBay, Google Merchant, Facebook, and Shopify, and a slide-in gap panel listing items not yet on each platform. The organizer dashboard now shows a PlatformHighlightsWidget with the coverage score and headline stats. eBay Queue Mode engine built: organizers can opt in to auto-queue management — the system runs every 30 minutes, fills empty eBay slots from the queue (Phase A), and optionally rotates oldest listings (Phase B, 10% cap per cycle). 12 files shipped, 4 new schema fields, migration required before next Railway deploy.
+**S1001 (today — QA pass on S999 + S1000, Facebook flagged):** You were right to be wary of the Facebook work. Ran parallel code audits + live API + Chrome QA. **Found and fixed one P1 bug Sonnet missed:** the Facebook Commerce Manager feed's product `link` pointed to a page that 404s (`/sales/.../items/...` instead of `/items/...`). Facebook validates that `link` returns 200, so it would have **rejected every single item** in both feeds — the feature shipped data but was functionally dead. Fixed both lines; backend type-check clean; **needs a push + redeploy.** Everything else in S1000 (8 issues) and S999 (platform dashboard, queue mode) checked out: settings + promote Facebook sections, the org-level feed endpoint (live HTTP 200 with the right columns), the /organizer/platforms page, and the dashboard widget all verified in the browser as your real Artifact MI account. Both database migrations confirmed already applied on Railway. One minor UX note: the platforms page shows a misleading "Not connected" if its data call gets rate-limited — recommend an error/retry state.
+
+**S999 (Platform Metrics Dashboard + eBay Queue Mode engine):** Built the full platform coverage analytics system. Organizers now get a /organizer/platforms page showing coverage score (0–100), per-platform listed vs. total counts for eBay, Google Merchant, Facebook, and Shopify, and a slide-in gap panel listing items not yet on each platform. The organizer dashboard now shows a PlatformHighlightsWidget with the coverage score and headline stats. eBay Queue Mode engine built: organizers can opt in to auto-queue management — the system runs every 30 minutes, fills empty eBay slots from the queue (Phase A), and optionally rotates oldest listings (Phase B, 10% cap per cycle). 12 files shipped, 4 new schema fields, migration required before next Railway deploy.
 
 **S998 (today — eBay bidirectional sync restored):** Fixed the root cause of classic eBay listings (items listed directly on eBay, not via FindA.Sale) showing "Push to eBay" even though they were already live. Root cause: the import function had an `if (totalFetched === 0)` guard before the Trading API block — ArtifactMI has 18 Inventory API items, so the guard always fired and the Trading API (`GetMyeBaySelling`, which returns ALL listings regardless of how they were created) never ran. Fix: removed the guard — both APIs now always run. Dedup logic handles items found by both paths. Patrick confirmed after deploy: "wrap it synced now."
 
@@ -18,14 +20,16 @@
 
 ## REQUIRED ACTION BEFORE NEXT SESSION
 
-**Run the database migration — backend will error on startup without it:**
+**1. Push the Facebook feed `link` fix (S1001) — the Facebook catalog is broken until this ships:**
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="[Railway DB URL — copy from Railway dashboard → your DB service → Variables tab]"
-npx prisma migrate deploy
-npx prisma generate
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/exportController.ts claude_docs/STATE.md claude_docs/patrick-dashboard.md
+git commit -m "S1001: fix FB Commerce Manager feed link 404 (/sales/.../items -> /items); QA docs"
+.\push.ps1
 ```
-This adds 4 new columns: `Item.ebayQueuedAt`, `Item.ebayListedAt`, `Organizer.ebayQueueMode`, `Organizer.ebayQueueRotation`.
+After Railway redeploys, the feed's `link` field will return 200 and Facebook will accept the catalog items.
+
+**2. Database migrations — ALREADY DONE ✅** (both confirmed applied on Railway this session: `20260616000001_ebay_queue_mode` + `20260616000002_add_organizer_fb_catalog_enabled`; all 6 columns present). No action needed.
 
 ---
 
@@ -37,9 +41,9 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 ## Beta Tester Impact
 
-**Platform Metrics Dashboard (S999 — CODE-ONLY, pending QA):** Organizers will get a /organizer/platforms page with coverage score, per-platform gap analysis, and one-click "Add to Queue" for items not yet on eBay.
+**Platform Metrics Dashboard (S999 — Chrome-verified ✅ S1001):** Organizers will get a /organizer/platforms page with coverage score, per-platform gap analysis, and one-click "Add to Queue" for items not yet on eBay.
 
-**eBay Queue Mode (S999 — CODE-ONLY, pending QA):** Organizers can enable auto-queue management — the system will automatically fill empty eBay slots and optionally rotate oldest listings every 30 minutes.
+**eBay Queue Mode (S999 — UI render-verified S1001; live enable + cron fire still to confirm):** Organizers can enable auto-queue management — the system will automatically fill empty eBay slots and optionally rotate oldest listings every 30 minutes.
 
 **eBay bidirectional sync (S998):** ArtifactMI (and any organizer with a mix of FAS-pushed and manually-listed eBay items) will now see all their eBay classic listings in FindA.Sale after running "Import from eBay."
 
@@ -75,21 +79,4 @@ No PENDING items in DECISIONS.md. All standing design and brand rules are active
 
 - [x] **Yard-sales About section** — Chrome-verified ✅. "Yard Sales in Grand Rapids, MI" H1, yard-sale copy in About, 7 FAQs, 5 nearby cities, FAQPage JSON-LD all confirmed.
 
-- [ ] **Send 4 Gmail drafts** (eBay dev ticket reply + 3 press pitches — review before sending)
-
-- [ ] **Directory quick-wins (~1–2 hrs, all free):** Bing Places, Apple Business Connect, Yelp, Foursquare, Appsco.pe, findPWA, eBay Partner Network, Alignable, Paw Paw Chamber.
-
----
-
-## BQ Status
-
-**Count: 5** — below QA ceiling (≥8 triggers QA mode). Next session QA recommended to clear the 4 new CODE-ONLY items.
-
-| Feature | Status |
-|---------|--------|
-| GSC: /items/[id].tsx SSR, no CDN caching (P1) | Sitemap fix shipped S997 — wait 1–2 weeks for GSC crawl reset, then convert to ISR revalidate:3600 |
-| GSC discovered-not-indexed monitor | Sitemap itemUrls fix live; crawl budget improving |
-| Platform Metrics Dashboard — /organizer/platforms | CODE-ONLY S999 — pending Chrome QA next session |
-| PlatformHighlightsWidget on dashboard | CODE-ONLY S999 — pending Chrome QA next session |
-| eBay Queue Mode toggle + queue management | CODE-ONLY S999 — pending Chrome QA next session |
-| ebayListingQueueCron Phase A + B | CODE-ONLY S999 — verify in Railway logs next session |
+- [ ] **Send 4 Gma

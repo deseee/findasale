@@ -8,6 +8,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1001 — QA (2026-06-16, Opus). QA pass on S999 + S1000 (Facebook flagged by Patrick). Parallel code audits + live API + Chrome. Found+fixed 1 P1 FB bug.**
+- **PATRICK'S FB CONCERN VINDICATED — P1 BUG FOUND + FIXED:** S1000's CM feed `link` field built `https://finda.sale/sales/${saleId}/items/${item.id}` (exportController.ts L981 per-sale + L1093 org-level) → **HTTP 404 proven live** (correct `/items/${id}` → 200). `link` is a REQUIRED FB catalog field; FB validates it returns 200 → would have **rejected every item in both feeds**. Fixed both lines → `/items/${item.id}`. Backend tsc 0 errors. **NEEDS PUSH + redeploy + re-verify.**
+- **Migrations confirmed applied on Railway:** 20260616000001_ebay_queue_mode + 20260616000002_add_organizer_fb_catalog_enabled both present; all 6 columns exist.
+- **Parallel code audits (2 read-only agents):** S1000 — all 8 claims implemented correctly, only the `link` scope-miss. S999 — 6 core claims verified, cron genuinely publishes to eBay (not a stub); minor: claimed ebayController queue edits NOT FOUND (no queue code there — harmless); design boundary: queue only publishes items that already have an ebayOfferId (doesn't create offers from scratch — confirm intent).
+- **Live API:** GET /api/organizers/cmnxueoas.../export/commerce-feed → HTTP 200, 11 cols incl quantity_to_sell_on_facebook (1=avail/0=sold ✅), brand='' ✅, public (no auth) ✅.
+- **Chrome QA (as Artifact MI, real acct) — 5 ✅:** FB CM settings section (ss_6614rpneu), FB CM promote section (ss_799354zpz), /organizer/platforms cards+coverage 40/100 (ss_68954s71x), eBay Listing Queue + PlatformGapPanel "Invisible Inventory 62 items", PlatformHighlightsWidget on dashboard 40%/eBay 1/Google 84/Unlisted 62 (ss_86419jwe2).
+- **⚠️ UX finding (minor):** /organizer/platforms first load hit a 429 rate-limit → degraded to MISLEADING state (eBay falsely "Not connected", coverage ring stuck "Loading…" with no error/retry). Clean reload = correct. Recommend an error/retry state on stats failure.
+- **Did NOT flip** fbCatalogEnabled or ebayQueueMode on Patrick's real account (persistent side-effects); both render + PATCH/cron code-verified — flip on a test org or Patrick confirms.
+- **BQ: 9→4.** Staged 5 PCVs for next-session roadmap apply.
+
 **S1000 — DEV (2026-06-16). Facebook Commerce Manager overhaul — 8 issues fixed.**
 - **Root cause (ArtifactMI error report):** All 10 CM items "Not visible in Shops" — single missing field `quantity_to_sell_on_facebook`. Audit surfaced 7 additional FB integration gaps.
 - **Issue 1 (CRITICAL):** Added `quantity_to_sell_on_facebook` to `exportCommerceManagerFeed` — `1` for AVAILABLE, `0` for SOLD.
@@ -276,18 +286,14 @@ _S987: #318 tab filter FIXED CODE-ONLY (affiliate.tsx useState<string> active st
 _S989: #313 HAUL_POST_LIKES Chrome-verified ✅ (user1 reaction→ user5 XP 416→421 +5 once; user2 reaction→ user5 XP stays 421, no re-award). BQ: 1→0._
 _S991 SEO MONITOR: GSC discovered-not-indexed 2,071 pages (core nav never crawled since 5/23/26) added as P1 per §10a mandatory trigger. BQ: 0→1._
 _S997: GSC sitemap itemUrls CLEARED — removed itemUrls block from server-sitemap.xml.tsx (255→241 lines, TS 0 errors). BQ: 3→2._
+_S1001 QA: 5 of 8 S999/S1000 CODE-ONLY rows Chrome-verified ✅ (FB CM settings, FB CM promote, FB org-level feed API, /organizer/platforms page, PlatformHighlightsWidget) — REMOVED, staged in PCV for roadmap apply. Found+fixed P1 FB feed `link` 404 bug (added to BQ, needs push). 3 rows reworded (render-verified; live toggle/cron path still open). BQ: 9→4._
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | GSC: /items/[id].tsx uses SSR (getServerSideProps) — no CDN caching, slow TTFB | P1 — every Googlebot hit on /items/{id} hits Railway live; deprioritizes crawl after sitemap fix | Convert to getStaticProps + ISR revalidate:3600 with fallback:blocking | S994 |
-| Platform Metrics Dashboard — /organizer/platforms page | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: navigate to /organizer/platforms, verify 4 platform cards load, coverage score renders, gap panel opens | S999 |
-| PlatformHighlightsWidget on dashboard | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: verify widget appears on dashboard between SmartSearchViewsCard and DemandSignalsCard, stats load, link to /organizer/platforms works | S999 |
-| eBay Queue Mode toggle + queue management | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: enable Queue Mode via PATCH endpoint, verify queue panel appears, add item to queue, verify queued count updates | S999 |
-| ebayListingQueueCron Phase A + B | CODE-ONLY: not browser-verified | Verify cron starts in Railway logs, verify Phase A fills slots on next 30-min cycle (requires organizer with ebayQueueMode=true and items in queue) | S999 |
-| FB Commerce Manager — settings FM toggle + feed URL | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: navigate to /organizer/settings, verify CM section renders, copy feed URL, toggle fbCatalogEnabled on | S1000 |
-| FB Commerce Manager — promote page CM section | CODE-ONLY: not browser-verified | Chrome QA as ORGANIZER: navigate to /organizer/promote/[saleId], verify CM section renders with organizer-level feed URL | S1000 |
-| FB organizer-level CM feed endpoint | CODE-ONLY: not browser-verified | Hit GET /api/organizers/:organizerId/export/commerce-feed — verify CSV with quantity_to_sell_on_facebook column returns correctly | S1000 |
-| Platform stats — fbCatalogEnabled connected/listed logic | CODE-ONLY: not browser-verified | Toggle fbCatalogEnabled then reload /organizer/platforms — verify facebook.connected=true and listed count = total AVAILABLE items | S1000 |
+| FB CM feed `link` field 404 (P1 BUG — FIXED S1001, needs push+redeploy) | exportController.ts L981/L1093 built `link` as /sales/:saleId/items/:itemId → HTTP 404 (proven live). `link` is a REQUIRED FB catalog field FB validates returns 200 → FB would reject EVERY item in both feeds. Sonnet missed this in S1000. | Fix applied locally (→ /items/${item.id}, returns 200; backend tsc 0 errors). PUSH exportController.ts → redeploy → re-curl feed, confirm a link 200s. | S1001 |
+| eBay Queue Mode enable-path + ebayListingQueueCron live fire | Render-verified S1001 (toggle + "Enable Queue Mode" btn + explainer render). NOT flipped on Artifact's real acct (would start auto-listing cron). Cron code-verified + registered index.ts:786 (*/30) but not log-confirmed firing. | Flip ebayQueueMode on a throwaway org (or Patrick confirms) → verify queued count updates; confirm cron Phase A fire in Railway logs. | S999 |
+| Platform stats — fbCatalogEnabled=true connected/listed path | Render-verified S1001 with flag OFF (Facebook card = "41 exported / Not connected" correct). The flag-ON path (facebook.connected=true, listed=all AVAILABLE) not live-tested — toggle not flipped on real acct. | Toggle fbCatalogEnabled on a test org → reload /organizer/platforms → verify facebook.connected=true + listed count = AVAILABLE items. | S1000 |
 
 
 
@@ -321,6 +327,11 @@ _(S930 PCV rows — organizer dashboard, HTML entity fix, shopper dashboard, Exp
 _(S925 PCV rows — logout flow Chr✅, #463 CODE-ONLY, #462 CSRF partial — applied to roadmap.md in S930 records pass — cleared.)
 _(S927 PCV rows #79/#164/#316 applied to roadmap.md in S928 records pass — cleared.)
 _(S920/S921/S922 PCV rows applied to roadmap.md in S923 records pass — cleared.)_
+| FB-CM-Settings | FB Commerce Manager settings section (S1000) | Navigated /organizer/settings?tab=profile as Artifact MI. "Facebook Commerce Manager Feed" section: heading + explainer + feed URL=https://finda.sale/api/organizers/cmnxueoas0005tfv8brnc0kky/export/commerce-feed (correct org-level endpoint) + Copy btn + "I haven't registered this feed yet" toggle. Dark mode clean. ss_6614rpneu. Apply roadmap Claude QA col → ✅ S1001. | S1001 |
+| FB-CM-Promote | FB Commerce Manager promote section (S1000) | Navigated /organizer/promote/cmpt2oq6q00138cehpgqx3huk as Artifact MI. "List on Other Sites" → "Facebook Commerce Manager" card: org-level feed URL + "Copy URL" btn + register-once instructions (Catalog→Data sources→Add data feed→Scheduled feed). ss_799354zpz. ✅ S1001. | S1001 |
+| FB-CM-Feed-API | Org-level CM feed endpoint (S1000) | curl GET /api/organizers/cmnxueoas0005tfv8brnc0kky/export/commerce-feed → HTTP 200, 11 cols incl quantity_to_sell_on_facebook (1=avail/0=sold verified), brand='' empty, availability in/out-stock. Public (no auth). ✅ S1001. | S1001 |
+| Platform-Dashboard | /organizer/platforms page (S999) | Navigated /organizer/platforms as Artifact MI (clean reload). Coverage ring 40/100 ("41 of 103 items listed"); eBay 1 listed/250 limit (connected); Google Merchant 84 eligible; Facebook 41 exported; Shopify 0/TEAMS. ss_68954s71x. ✅ S1001. | S1001 |
+| Platform-Widget | PlatformHighlightsWidget on dashboard (S999) | Navigated /organizer/dashboard as Artifact MI. "Platform Reach" widget: 40% | eBay 1 | Google 84 | Unlisted 62 (matches platforms page); placed between Search Engine Visibility + What-Shoppers-Are-Looking-For; "View Details →" → /organizer/platforms. ss_86419jwe2. ✅ S1001. | S1001 |
 | SEO4-YardSalesAbout | yard-sales About + FAQ + nearby cities Chrome-verified S997 | Navigated https://finda.sale/yard-sales/grand-rapids-mi as logged-in user. H1 = "Yard Sales in Grand Rapids, MI". About body = yard-sale copy (NOT Dutch heritage text). 7 yard-sale FAQs rendered. 5 nearby city links. 7 sale listings. FAQPage JSON-LD confirmed (BreadcrumbList + ItemList + FAQPage). Screenshots: ss_14861obk4, ss_59206270m, ss_6493n5xfp. Apply to roadmap.md SEO4 Chr col → ✅ S997. | S997 |
 ---
 

@@ -978,7 +978,7 @@ export const exportCommerceManagerFeed = async (
       const availability = item.status === 'SOLD' ? 'out of stock' : 'in stock';
       const condition = mapConditionForCommerceManager(item.condition);
       const price = item.price != null ? `${Number(item.price).toFixed(2)} USD` : '0.00 USD';
-      const link = `https://finda.sale/sales/${saleId}/items/${item.id}`;
+      const link = `https://finda.sale/items/${item.id}`;
 
       // photoUrls[0] is image_link; remaining (up to 19 more) are additional_image_link
       const [primaryPhoto, ...extraPhotos] = item.photoUrls;
@@ -1090,7 +1090,7 @@ export const exportOrganizerCommerceManagerFeed = async (
       const availability = item.status === 'SOLD' ? 'out of stock' : 'in stock';
       const condition = mapConditionForCommerceManager(item.condition);
       const price = item.price != null ? `${Number(item.price).toFixed(2)} USD` : '0.00 USD';
-      const link = `https://finda.sale/sales/${item.saleId}/items/${item.id}`;
+      const link = `https://finda.sale/items/${item.id}`;
 
       const [primaryPhoto, ...extraPhotos] = item.photoUrls;
       const additionalPhotos = extraPhotos.slice(0, 19).join('|');
